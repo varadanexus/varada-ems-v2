@@ -1,0 +1,227 @@
+import { getSupabaseClient } from "../config/supabase.js";
+
+function debugLog(message, data = null) {
+  if (!window.EMS_DEBUG_AUTH_FLOW) return;
+  if (data === null) {
+    console.info(`[EMS_DEBUG] ${message}`);
+    return;
+  }
+  console.info(`[EMS_DEBUG] ${message}`, data);
+}
+
+export async function getAppUserByAuthId(authUserId) {
+  debugLog("lookup app_users by auth_user_id", { authUserId });
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("app_users")
+    .select("id,auth_user_id,email,display_name,status,tenant_id")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+  if (error) throw error;
+  debugLog("app_users lookup result", {
+    found: Boolean(data),
+    appUserId: data?.id || null,
+    status: data?.status || null,
+    email: data?.email || null
+  });
+  return data;
+}
+
+export async function getUserRoleCodes(appUserId) {
+  debugLog("lookup user_roles", { appUserId });
+  const client = getSupabaseClient();
+  const { data: userRoles, error } = await client
+    .from("user_roles")
+    .select("role_id")
+    .eq("user_id", appUserId);
+  if (error) throw error;
+
+  const roleIds = (userRoles || []).map((x) => x.role_id).filter((v) => v !== null && v !== undefined);
+  if (!roleIds.length) {
+    debugLog("roles lookup result", { roleCodes: [] });
+    return [];
+  }
+
+  const { data: roles, error: roleErr } = await client
+    .from("roles")
+    .select("id,code")
+    .in("id", roleIds);
+  if (roleErr) throw roleErr;
+
+  const roleCodes = (roles || []).map((r) => r.code).filter(Boolean);
+  debugLog("roles lookup result", { roleCodes });
+  return roleCodes;
+}
+
+export async function getAllowedModulesForRoles(roleCodes) {
+  if (!roleCodes?.length) return [];
+  debugLog("lookup permissions for role codes", { roleCodes });
+  const client = getSupabaseClient();
+
+  const { data: roles, error: roleErr } = await client
+    .from("roles")
+    .select("id,code")
+    .in("code", roleCodes);
+  if (roleErr) throw roleErr;
+
+  const roleIds = (roles || []).map((r) => r.id);
+  if (!roleIds.length) return [];
+
+  const { data: grants, error: grantErr } = await client
+    .from("role_permissions")
+    .select("allow, permission_id")
+    .in("role_id", roleIds)
+    .eq("allow", true);
+  if (grantErr) throw grantErr;
+
+  const permissionIds = (grants || [])
+    .map((g) => g.permission_id)
+    .filter((v) => v !== null && v !== undefined);
+  if (!permissionIds.length) {
+    debugLog("permissions lookup result", { allowedModules: [] });
+    return [];
+  }
+
+  const { data: permissions, error: permErr } = await client
+    .from("permissions")
+    .select("id,module_code,action_code")
+    .in("id", permissionIds);
+  if (permErr) throw permErr;
+
+  const moduleSet = new Set();
+  (permissions || []).forEach((p) => {
+    if (p?.action_code === "view" && p?.module_code) moduleSet.add(p.module_code);
+  });
+  const allowedModules = Array.from(moduleSet);
+  debugLog("permissions lookup result", { allowedModules });
+  return allowedModules;
+}
+
+export async function listUsers() {
+  const client = getSupabaseClient();
+  const { data: users, error } = await client
+    .from("app_users")
+    .select("id,email,display_name,status")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  const userIds = (users || []).map((u) => u.id);
+  if (!userIds.length) return [];
+
+  const [{ data: userRoleRows, error: urErr }, { data: userDivisionRows, error: udErr }] = await Promise.all([
+    client.from("user_roles").select("user_id,role_id").in("user_id", userIds),
+    client.from("user_divisions").select("user_id,division_id").in("user_id", userIds)
+  ]);
+  if (urErr) throw urErr;
+  if (udErr) throw udErr;
+
+  const roleIds = Array.from(new Set((userRoleRows || []).map((r) => r.role_id).filter((v) => v !== null && v !== undefined)));
+  const divisionIds = Array.from(new Set((userDivisionRows || []).map((d) => d.division_id).filter((v) => v !== null && v !== undefined)));
+
+  const [{ data: roles, error: rErr }, { data: divisions, error: dErr }] = await Promise.all([
+    roleIds.length ? client.from("roles").select("id,code,name").in("id", roleIds) : Promise.resolve({ data: [], error: null }),
+    divisionIds.length ? client.from("divisions").select("id,code,name").in("id", divisionIds) : Promise.resolve({ data: [], error: null })
+  ]);
+  if (rErr) throw rErr;
+  if (dErr) throw dErr;
+
+  const roleById = new Map((roles || []).map((r) => [String(r.id), r]));
+  const divisionById = new Map((divisions || []).map((d) => [String(d.id), d]));
+
+  return (users || []).map((u) => {
+    const userRoles = (userRoleRows || [])
+      .filter((ur) => ur.user_id === u.id)
+      .map((ur) => ({ roles: roleById.get(String(ur.role_id)) || null }));
+
+    const userDivisions = (userDivisionRows || [])
+      .filter((ud) => ud.user_id === u.id)
+      .map((ud) => ({ divisions: divisionById.get(String(ud.division_id)) || null }));
+
+    return {
+      ...u,
+      user_roles: userRoles,
+      user_divisions: userDivisions
+    };
+  });
+}
+
+export async function updateUserStatus(userId, status) {
+  const client = getSupabaseClient();
+  const { error } = await client
+    .from("app_users")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) throw error;
+}
+
+export async function listRoles() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("roles").select("id,code,name,is_active").order("name");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listPermissions() {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("permissions")
+    .select("id,module_code,action_code,label,is_active")
+    .order("module_code");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function listRolePermissions() {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("role_permissions")
+    .select("id,allow,role_id,permission_id")
+    .eq("allow", true);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function setRolePermission(roleId, permissionId, allow) {
+  const client = getSupabaseClient();
+  const { data: existing, error: checkErr } = await client
+    .from("role_permissions")
+    .select("id")
+    .eq("role_id", roleId)
+    .eq("permission_id", permissionId)
+    .maybeSingle();
+  if (checkErr) throw checkErr;
+
+  if (existing?.id) {
+    const { error } = await client.from("role_permissions").update({ allow }).eq("id", existing.id);
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await client.from("role_permissions").insert({ role_id: roleId, permission_id: permissionId, allow });
+  if (error) throw error;
+}
+
+export async function listSystemSettings() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("system_settings").select("id,key,value,updated_at").order("key");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function upsertSystemSetting(key, value, updatedBy = null) {
+  const client = getSupabaseClient();
+  const payload = { key, value, updated_by: updatedBy, updated_at: new Date().toISOString() };
+  const { error } = await client.from("system_settings").upsert(payload, { onConflict: "key" });
+  if (error) throw error;
+}
+
+export async function listAuditLogs(limit = 50) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("audit_logs")
+    .select("id,event_type,module_code,entity_type,entity_id,details,created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}

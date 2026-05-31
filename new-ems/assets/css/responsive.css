@@ -1,0 +1,26 @@
+@media (max-width: 1200px) {
+  .card { grid-column: span 6; }
+}
+
+@media (max-width: 920px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .app-sidebar {
+    position: fixed;
+    left: -280px;
+    width: 260px;
+    z-index: 60;
+    transition: left 0.2s ease;
+  }
+  .app-sidebar.open { left: 0; }
+  .card { grid-column: span 12; }
+  .navbar-actions { gap: 0.35rem; }
+  .user-chip { display: none; }
+}
+
+@media (max-width: 640px) {
+  .app-navbar { padding: 0 0.7rem; }
+  .page-head, .page-content { padding: 0.75rem; }
+  .btn, .icon-btn { min-height: 40px; }
+  table { min-width: 620px; }
+  .login-card { padding: 0.95rem; }
+}
