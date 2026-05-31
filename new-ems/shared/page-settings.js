@@ -31,12 +31,14 @@ async function init() {
       </article>
       <article class="card">
         <h3>Audit Activity</h3>
+        <input id="auditSearch" type="text" placeholder="Filter by event/module/entity" style="margin-bottom:0.6rem;" />
         <div id="auditList" class="empty-state">Loading audit logs...</div>
       </article>
     </div>
   `);
 
   bindSettingsForm();
+  qs("#auditSearch")?.addEventListener("input", () => loadAudit());
   await Promise.all([loadSettings(), loadAudit()]);
 }
 
@@ -76,18 +78,30 @@ async function loadSettings() {
     box.innerHTML = "No settings saved yet.";
     return;
   }
-  box.innerHTML = rows.map((s) => `<div><strong>${s.key}</strong><br/><code>${JSON.stringify(s.value)}</code></div>`).join("<hr/>");
+  box.innerHTML = rows.map((s) => `<div><strong>${s.key}</strong><br/><code>${JSON.stringify(s.value, null, 2)}</code></div>`).join("<hr/>");
 }
 
 async function loadAudit() {
   const box = qs("#auditList");
   const rows = await listAuditLogs(20);
+  const q = (qs("#auditSearch")?.value || "").trim().toLowerCase();
   if (!box) return;
-  if (!rows.length) {
+  const filtered = (rows || []).filter((a) => {
+    if (!q) return true;
+    return `${a.event_type || ""} ${a.module_code || ""} ${a.entity_type || ""} ${a.entity_id || ""}`.toLowerCase().includes(q);
+  });
+
+  if (!filtered.length) {
     box.innerHTML = "No audit records yet.";
     return;
   }
-  box.innerHTML = rows.map((a) => `<div><strong>${a.event_type}</strong> · ${a.module_code || "-"}<br/><small>${new Date(a.created_at).toLocaleString()}</small></div>`).join("<hr/>");
+  box.innerHTML = filtered.map((a) => `
+    <div>
+      <strong>${a.event_type}</strong> · ${a.module_code || "-"} · ${a.action || "-"}<br/>
+      <small>${new Date(a.created_at).toLocaleString()}</small><br/>
+      <small>Entity: ${a.entity_type || "-"} / ${a.entity_id || "-"}</small>
+    </div>
+  `).join("<hr/>");
 }
 
 init();

@@ -161,6 +161,52 @@ export async function listRoles() {
   return data || [];
 }
 
+export async function listDivisions() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("divisions").select("id,code,name,is_active").order("name");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function assignUserRole(userId, roleId) {
+  const client = getSupabaseClient();
+  const { error: delErr } = await client.from("user_roles").delete().eq("user_id", userId);
+  if (delErr) throw delErr;
+  const { error } = await client.from("user_roles").insert({ user_id: userId, role_id: roleId });
+  if (error) throw error;
+}
+
+export async function assignUserDivision(userId, divisionId) {
+  const client = getSupabaseClient();
+  const { error: delErr } = await client.from("user_divisions").delete().eq("user_id", userId);
+  if (delErr) throw delErr;
+  if (!divisionId) return;
+  const { error } = await client.from("user_divisions").insert({ user_id: userId, division_id: divisionId, scope: "assigned" });
+  if (error) throw error;
+}
+
+export async function provisionUserViaEdge({ email, password, displayName, roleCode, divisionCode }) {
+  const client = getSupabaseClient();
+  const { data } = await client.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("Missing session token");
+
+  const fnUrl = `${window.EMS_RUNTIME_CONFIG?.supabaseUrl}/functions/v1/admin-provision-user`;
+  const res = await fetch(fnUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || ""
+    },
+    body: JSON.stringify({ email, password, displayName, roleCode, divisionCode })
+  });
+
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error || "Provisioning failed");
+  return json;
+}
+
 export async function listPermissions() {
   const client = getSupabaseClient();
   const { data, error } = await client
@@ -219,7 +265,7 @@ export async function listAuditLogs(limit = 50) {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from("audit_logs")
-    .select("id,event_type,module_code,entity_type,entity_id,details,created_at")
+    .select("id,event_type,action,module_code,entity_type,entity_id,details,before_data,after_data,user_agent,ip_address,created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;

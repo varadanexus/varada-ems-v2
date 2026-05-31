@@ -11,7 +11,13 @@ async function init() {
     pageDescription: "RBAC foundation shell with module-level permission matrix placeholder"
   });
 
-  renderModuleContent(`<div class="table-shell"><table><thead><tr><th>Role</th><th>Module</th><th>Action</th><th>Allow</th></tr></thead><tbody id="permBody"></tbody></table></div>`);
+  renderModuleContent(`
+    <div class="card" style="margin-bottom:1rem;">
+      <input id="permSearch" type="text" placeholder="Filter by role/module/action" />
+    </div>
+    <div class="table-shell"><table><thead><tr><th>Role</th><th>Module</th><th>Action</th><th>Allow</th></tr></thead><tbody id="permBody"></tbody></table></div>
+  `);
+  qs("#permSearch")?.addEventListener("input", () => loadPermissionMatrix());
   await loadPermissionMatrix();
 }
 
@@ -21,9 +27,12 @@ async function loadPermissionMatrix() {
   if (!body) return;
 
   const grantSet = new Set((grants || []).map((g) => `${g.role_id}:${g.permission_id}`));
+  const q = (qs("#permSearch")?.value || "").trim().toLowerCase();
   const rows = [];
   roles.forEach((r) => {
     permissions.forEach((p) => {
+      const hay = `${r.name} ${p.module_code} ${p.action_code}`.toLowerCase();
+      if (q && !hay.includes(q)) return;
       const key = `${r.id}:${p.id}`;
       rows.push(`
         <tr>
