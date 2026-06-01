@@ -34,22 +34,46 @@ const MENU_BY_WORKSPACE = {
   ],
   [WORKSPACES.TRANSPORTATION]: [
     {
-      title: "Transportation Workspace",
+      title: "Home",
       items: [
-        { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD }
+      ]
+    },
+    {
+      title: "Operations",
+      items: [
         { module: MODULES.TRANSPORTATION, label: "Transportation Dashboard", href: ROUTES.TRANSPORT_DASHBOARD },
+        { module: MODULES.TRANSPORT_TRIPS, label: "Trips", href: ROUTES.TRANSPORT_TRIPS }
+      ]
+    },
+    {
+      title: "Masters",
+      items: [
         { module: MODULES.TRANSPORT_TRUCK_OWNERS, label: "Truck Owners", href: ROUTES.TRANSPORT_TRUCK_OWNERS },
         { module: MODULES.TRANSPORT_TRUCKS, label: "Trucks", href: ROUTES.TRANSPORT_TRUCKS },
         { module: MODULES.TRANSPORT_DRIVERS, label: "Drivers", href: ROUTES.TRANSPORT_DRIVERS },
+        { module: MODULES.TRANSPORT_CLIENTS, label: "Clients", href: ROUTES.MASTER_CLIENTS },
+        { module: MODULES.TRANSPORT_TRANSPORTERS, label: "Transporters", href: ROUTES.MASTER_TRANSPORTERS },
+        { module: MODULES.TRANSPORT_AGENTS, label: "Agents", href: ROUTES.MASTER_AGENTS },
+        { module: MODULES.TRANSPORT_ROUTES, label: "Routes", href: ROUTES.TRANSPORT_ROUTE_MASTER },
+        { module: MODULES.TRANSPORT_COMMODITIES, label: "Commodities", href: ROUTES.MASTER_COMMODITIES }
+      ]
+    },
+    {
+      title: "Rates & Mapping",
+      items: [
         { module: MODULES.TRANSPORT_RATE_MASTER, label: "Rate Master", href: ROUTES.TRANSPORT_RATE_MASTER },
-        { module: MODULES.TRANSPORT_ROUTE_MASTER, label: "Route Master", href: ROUTES.TRANSPORT_ROUTE_MASTER },
         { module: MODULES.TRANSPORT_CLIENT_MAPPING, label: "Client Mapping", href: ROUTES.TRANSPORT_CLIENT_MAPPING },
         { module: MODULES.TRANSPORT_TRANSPORTER_MAPPING, label: "Transporter Mapping", href: ROUTES.TRANSPORT_TRANSPORTER_MAPPING },
-        { module: MODULES.TRANSPORT_TRIP_DASHBOARD, label: "Trip Dashboard", href: ROUTES.TRANSPORT_TRIP_DASHBOARD },
-        { module: MODULES.TRANSPORT_CREATE_TRIP, label: "Create Trip", href: ROUTES.TRANSPORT_CREATE_TRIP },
-        { module: MODULES.TRANSPORT_TRIP_LIST, label: "Trip List", href: ROUTES.TRANSPORT_TRIP_LIST },
-        { module: MODULES.TRANSPORT_TRIP_DETAILS, label: "Trip Details", href: ROUTES.TRANSPORT_TRIP_DETAILS },
-        { module: MODULES.TRANSPORT_STATUS_TIMELINE, label: "Status Timeline", href: ROUTES.TRANSPORT_STATUS_TIMELINE }
+        { module: MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING, label: "Truck-Agent Commission Mapping", href: ROUTES.TRANSPORT_TRUCK_AGENT_COMMISSION }
+      ]
+    },
+    {
+      title: "Future / Disabled",
+      items: [
+        { module: MODULES.TRANSPORT_EXPENSES_PLACEHOLDER, label: "Expenses", href: ROUTES.TRANSPORT_DASHBOARD },
+        { module: MODULES.TRANSPORT_DOCUMENTS_PLACEHOLDER, label: "Documents", href: ROUTES.TRANSPORT_DASHBOARD },
+        { module: MODULES.TRANSPORT_REPORTS_PLACEHOLDER, label: "Reports", href: ROUTES.TRANSPORT_DASHBOARD }
       ]
     }
   ]

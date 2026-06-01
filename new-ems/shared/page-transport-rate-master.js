@@ -43,10 +43,10 @@ initMasterDataPage({
     { key: "code", label: "Code", required: true },
     { key: "name", label: "Name", required: true },
     { key: "rate_type", label: "Rate Type", required: true },
-    { key: "client_id", label: "Client", type: "select", optionTable: "master_clients", optionLabel: "name", divisionScoped: true },
-    { key: "transporter_id", label: "Transporter", type: "select", optionTable: "master_transporters", optionLabel: "name", divisionScoped: true },
+    { key: "client_id", label: "Client", type: "select", optionTable: "transport_clients", optionLabel: "name", divisionScoped: true },
+    { key: "transporter_id", label: "Transporter", type: "select", optionTable: "transport_transporters", optionLabel: "name", divisionScoped: true },
     { key: "route_id", label: "Route", type: "select", optionTable: "transport_route_master", optionLabel: "name", divisionScoped: true },
-    { key: "commodity_id", label: "Commodity", type: "select", optionTable: "master_commodities", optionLabel: "name", divisionScoped: true },
+    { key: "commodity_id", label: "Commodity", type: "select", optionTable: "transport_commodities", optionLabel: "name", divisionScoped: true },
     { key: "rate_per_mt", label: "Rate Per MT" },
     { key: "effective_from", label: "Effective From (YYYY-MM-DD)" },
     { key: "effective_to", label: "Effective To (YYYY-MM-DD)" }

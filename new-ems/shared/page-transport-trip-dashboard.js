@@ -15,11 +15,17 @@ async function init() {
   const divisionId = divisionScope !== "all" ? divisionScope : null;
   const { rows } = await listTrips({ divisionId, page: 1, pageSize: 500 });
   const counts = TRIP_STATUS_FLOW.reduce((acc, s) => ({ ...acc, [s]: rows.filter((r) => r.status === s).length }), {});
+  const total = rows.length;
 
   renderModuleContent(`
     <section class="card">
       <h3>Trip Lifecycle Overview</h3>
       <div class="hero-kpis">
+        <span class="meta-pill">Total Trips: ${total}</span>
+        <span class="meta-pill">Draft Trips: ${counts.draft || 0}</span>
+        <span class="meta-pill">In Transit Trips: ${counts.in_transit || 0}</span>
+        <span class="meta-pill">Completed Trips: ${counts.completed || 0}</span>
+        <span class="meta-pill">Financial Review Trips: ${counts.financial_review || 0}</span>
         ${TRIP_STATUS_FLOW.map((s) => `<span class="meta-pill">${s.replace(/_/g, " ")}: ${counts[s] || 0}</span>`).join("")}
       </div>
       <div class="module-card-grid" style="margin-top:1rem;">
