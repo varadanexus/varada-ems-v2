@@ -24,9 +24,10 @@ initMasterDataPage({
       {
         division_id: payload.division_id,
         route_id: payload.route_id,
-        commodity_id: payload.commodity_id,
-        client_id: payload.client_id,
-        transporter_id: payload.transporter_id,
+        transport_commodity_id: payload.transport_commodity_id,
+        transport_client_id: payload.transport_client_id,
+        transport_transporter_id: payload.transport_transporter_id,
+        transport_agent_id: payload.transport_agent_id,
         effective_from: payload.effective_from
       },
       context?.id || null
@@ -43,10 +44,11 @@ initMasterDataPage({
     { key: "code", label: "Code", required: true },
     { key: "name", label: "Name", required: true },
     { key: "rate_type", label: "Rate Type", required: true },
-    { key: "client_id", label: "Client", type: "select", optionTable: "transport_clients", optionLabel: "name", divisionScoped: true },
-    { key: "transporter_id", label: "Transporter", type: "select", optionTable: "transport_transporters", optionLabel: "name", divisionScoped: true },
+    { key: "transport_client_id", label: "Client", type: "select", optionTable: "transport_clients", optionLabel: "name", divisionScoped: true },
+    { key: "transport_transporter_id", label: "Transporter", type: "select", optionTable: "transport_transporters", optionLabel: "name", divisionScoped: true },
+    { key: "transport_agent_id", label: "Agent", type: "select", optionTable: "transport_agents", optionLabel: "name", divisionScoped: true },
     { key: "route_id", label: "Route", type: "select", optionTable: "transport_route_master", optionLabel: "name", divisionScoped: true },
-    { key: "commodity_id", label: "Commodity", type: "select", optionTable: "transport_commodities", optionLabel: "name", divisionScoped: true },
+    { key: "transport_commodity_id", label: "Commodity", type: "select", optionTable: "transport_commodities", optionLabel: "name", divisionScoped: true },
     { key: "rate_per_mt", label: "Rate Per MT" },
     { key: "effective_from", label: "Effective From (YYYY-MM-DD)" },
     { key: "effective_to", label: "Effective To (YYYY-MM-DD)" }

@@ -10,11 +10,11 @@ initMasterDataPage({
   table: MASTER_TABLES.transportTruckAgentCommissionMapping,
   searchColumns: ["name", "code", "commission_type"],
   uniqueChecks: [
-    { keys: ["division_id", "truck_id", "agent_id", "commission_type", "effective_from"], message: "Duplicate active mapping exists for same truck/agent/type/effective date." }
+    { keys: ["division_id", "truck_id", "transport_agent_id", "commission_type", "effective_from"], message: "Duplicate active mapping exists for same truck/agent/type/effective date." }
   ],
   validate: async (payload, context) => {
     if (!payload.truck_id) return "Truck is required.";
-    if (!payload.agent_id) return "Agent is required.";
+    if (!payload.transport_agent_id) return "Agent is required.";
     if (!payload.commission_type) return "Commission type is required.";
     if (payload.commission_value === undefined || payload.commission_value === null || payload.commission_value === "") return "Commission value is required.";
     if (Number(payload.commission_value) < 0) return "Commission value must be zero or positive.";
@@ -26,7 +26,7 @@ initMasterDataPage({
       {
         division_id: payload.division_id,
         truck_id: payload.truck_id,
-        agent_id: payload.agent_id,
+        transport_agent_id: payload.transport_agent_id,
         commission_type: payload.commission_type,
         effective_from: payload.effective_from
       },
@@ -44,7 +44,7 @@ initMasterDataPage({
     { key: "code", label: "Code" },
     { key: "name", label: "Name" },
     { key: "truck_id", label: "Truck", required: true, type: "select", optionTable: "transport_trucks", optionLabel: "name", divisionScoped: true },
-    { key: "agent_id", label: "Agent", required: true, type: "select", optionTable: "transport_agents", optionLabel: "name", divisionScoped: true },
+    { key: "transport_agent_id", label: "Agent", required: true, type: "select", optionTable: "transport_agents", optionLabel: "name", divisionScoped: true },
     {
       key: "commission_type",
       label: "Commission Type",
