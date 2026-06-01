@@ -362,7 +362,24 @@ async function init() {
       await load();
     }));
     body.querySelectorAll("button[data-d]").forEach((b)=>b.addEventListener("click", async ()=>{
-      const id = b.getAttribute("data-d"); await softDeleteTrip(id); await load();
+      const id = b.getAttribute("data-d");
+      const before = rows.find((x)=>x.id===id);
+      await softDeleteTrip(id);
+      const appUser = await getCurrentAppUser();
+      await addTripTimeline({
+        trip_id: id,
+        status: before?.status || "draft",
+        remarks: "Trip soft-deleted with linked support/deductions and documents",
+        changed_by: appUser?.id || null
+      });
+      await logAuditEvent("trip_soft_delete_cascade", {
+        moduleCode: MODULES.TRANSPORT_TRIPS,
+        entityType: "transport_trips",
+        entityId: id,
+        beforeData: before,
+        action: "soft_delete"
+      });
+      await load();
     }));
   }
 

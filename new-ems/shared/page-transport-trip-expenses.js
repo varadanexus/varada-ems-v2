@@ -10,8 +10,8 @@ const PAID_BY_OPTIONS = ["Company", "Transporter", "Driver", "Client", "Other"];
 async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.TRANSPORT_TRIP_EXPENSES,
-    pageTitle: "Trip Expenses",
-    pageDescription: "Trip-linked expense capture",
+    pageTitle: "Trip Support / Deductions",
+    pageDescription: "Trip-linked support and deductions capture",
     workspace: WORKSPACES.TRANSPORTATION
   });
   if (!boot) return;
@@ -30,12 +30,12 @@ async function init() {
     </section>
 
     <section class="card" style="margin-top:1rem;">
-      <h3>Add Expense</h3>
+      <h3>Add Support / Deduction</h3>
       <form id="teForm" class="form-row"></form>
     </section>
 
     <section class="card" style="margin-top:1rem;">
-      <h3>Trip Expense List</h3>
+      <h3>Trip Support / Deductions List</h3>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
         <input id="teSearch" placeholder="Search expense no/notes" />
         <select id="teCategory"><option value="">All Categories</option>${EXPENSE_CATEGORIES.map((x) => `<option value="${x}">${x}</option>`).join("")}</select>
@@ -70,7 +70,7 @@ async function init() {
     <label>Amount *</label><input data-f="amount" type="number" min="0" step="0.01" disabled />
     <label>Paid By *</label><select data-f="paid_by" disabled><option value="">Select...</option>${PAID_BY_OPTIONS.map((x)=>`<option value="${x}">${x}</option>`).join("")}</select>
     <label>Notes</label><input data-f="notes" disabled />
-    <button class="btn" type="submit" disabled id="teSaveBtn">Save Expense</button>
+    <button class="btn" type="submit" disabled id="teSaveBtn">Save Support / Deduction</button>
   `;
 
   function setFormEnabled(enabled) {

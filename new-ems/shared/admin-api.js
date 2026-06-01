@@ -462,8 +462,23 @@ export async function updateTrip(id, payload) {
 
 export async function softDeleteTrip(id) {
   const client = getSupabaseClient();
-  const { error } = await client.from("transport_trips").update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id);
-  if (error) throw error;
+  const now = new Date().toISOString();
+  const { error: tripErr } = await client.from("transport_trips").update({ deleted_at: now, updated_at: now }).eq("id", id);
+  if (tripErr) throw tripErr;
+
+  const { error: expErr } = await client
+    .from("transport_trip_expenses")
+    .update({ deleted_at: now, updated_at: now, is_active: false })
+    .eq("trip_id", id)
+    .is("deleted_at", null);
+  if (expErr) throw expErr;
+
+  const { error: docErr } = await client
+    .from("transport_trip_documents")
+    .update({ deleted_at: now, updated_at: now, is_active: false })
+    .eq("trip_id", id)
+    .is("deleted_at", null);
+  if (docErr) throw docErr;
 }
 
 export async function addTripTimeline(payload) {
@@ -505,8 +520,9 @@ export async function listTripExpenses({ tripId, divisionId = null, search = "",
   const client = getSupabaseClient();
   let query = client
     .from("transport_trip_expenses")
-    .select("*", { count: "exact" })
+    .select("*,transport_trips!inner(id,deleted_at)", { count: "exact" })
     .is("deleted_at", null)
+    .is("transport_trips.deleted_at", null)
     .eq("trip_id", tripId)
     .order("expense_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -538,7 +554,7 @@ export async function softDeleteTripExpense(id) {
   const client = getSupabaseClient();
   const { error } = await client
     .from("transport_trip_expenses")
-    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_active: false })
     .eq("id", id);
   if (error) throw error;
 }
