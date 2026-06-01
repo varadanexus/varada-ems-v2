@@ -36,6 +36,52 @@ body {
   line-height: 1.5;
 }
 
+body.page-transition-active {
+  overflow: hidden;
+}
+
+#app {
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 180ms ease, transform 220ms ease;
+}
+
+#app.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(11, 18, 32, 0.92);
+  backdrop-filter: blur(2px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+body.page-transition-active .page-transition-overlay {
+  display: flex;
+}
+
+.page-transition-loader {
+  width: min(360px, 72vw);
+  height: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: linear-gradient(90deg, rgba(255,255,255,0.05) 10%, rgba(212,178,106,0.45) 40%, rgba(255,255,255,0.05) 80%);
+  background-size: 220% 100%;
+  animation: page-loader-shimmer 1.1s linear infinite;
+  box-shadow: 0 0 0 1px rgba(212,178,106,0.08), 0 10px 30px rgba(2,8,23,0.4);
+}
+
+@keyframes page-loader-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -120% 0; }
+}
+
 .app-shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; transition: grid-template-columns .25s ease; }
 .app-shell.sidebar-collapsed { grid-template-columns: 84px 1fr; }
 .app-sidebar {

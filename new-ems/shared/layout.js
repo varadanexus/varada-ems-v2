@@ -6,6 +6,34 @@ import { renderSidebar } from "./sidebar.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 
+const NAV_TRANSITION_KEY = "ems_nav_pending";
+
+function ensureGlobalTransitionOverlay() {
+  let overlay = document.getElementById("globalPageTransition");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "globalPageTransition";
+  overlay.className = "page-transition-overlay";
+  overlay.innerHTML = `<div class="page-transition-loader"></div>`;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function startNavigationTransition() {
+  try { sessionStorage.setItem(NAV_TRANSITION_KEY, "1"); } catch {}
+  document.body.classList.add("page-transition-active");
+  ensureGlobalTransitionOverlay();
+}
+
+function finishNavigationTransition() {
+  document.body.classList.remove("page-transition-active");
+  try { sessionStorage.removeItem(NAV_TRANSITION_KEY); } catch {}
+}
+
+function shouldShowInitialTransition() {
+  try { return sessionStorage.getItem(NAV_TRANSITION_KEY) === "1"; } catch { return false; }
+}
+
 function debugLog(message, data = null) {
   if (!window.EMS_DEBUG_AUTH_FLOW) return;
   if (data === null) {
@@ -22,6 +50,10 @@ function resolveUserDivisionScope() {
 
 export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, sidebarless = false, workspace = WORKSPACES.ADMIN }) {
   initTheme();
+  if (shouldShowInitialTransition()) {
+    document.body.classList.add("page-transition-active");
+    ensureGlobalTransitionOverlay();
+  }
 
   const session = await requireAuth();
   if (!session) return;
@@ -83,6 +115,10 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   `;
 
   bindGlobalActions();
+  requestAnimationFrame(() => {
+    app.classList.add("page-enter-active");
+    finishNavigationTransition();
+  });
   return { appUser, roleCodes, allowedModules, primaryRole };
 }
 
@@ -118,8 +154,23 @@ function bindGlobalActions() {
   });
 
   adminMenuBtn?.addEventListener("click", () => {
+    startNavigationTransition();
     window.location.assign(ROUTES.SETTINGS);
   });
+
+  document.addEventListener("click", (e) => {
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest("a[href]");
+    if (!anchor) return;
+    const href = anchor.getAttribute("href") || "";
+    if (!href || href.startsWith("#") || anchor.getAttribute("target") === "_blank") return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const to = new URL(href, window.location.origin);
+    if (to.origin !== window.location.origin) return;
+    if (to.pathname === window.location.pathname && to.search === window.location.search) return;
+    startNavigationTransition();
+  }, { capture: true });
 
   document.addEventListener("click", (e) => {
     if (!isMobile() || !sidebar?.classList.contains("open")) return;
