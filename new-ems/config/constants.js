@@ -113,7 +113,8 @@ export const CONTROL_CENTER_MODULES = [
 export const TOAST_TYPES = {
   SUCCESS: "success",
   ERROR: "error",
-  INFO: "info"
+  INFO: "info",
+  WARNING: "warning"
 };
 
 export const WORKSPACES = {

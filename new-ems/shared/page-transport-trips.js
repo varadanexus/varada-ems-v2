@@ -1,5 +1,5 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, getTripById, listActiveOptions, listTripDocuments, listTripTimeline, listTrips, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
+import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, getTripById, listActiveOptions, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { getCurrentAppUser } from "./auth.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
@@ -42,6 +42,9 @@ async function init() {
     <label>Commodity *</label><select data-f="transport_commodity_id"></select>
     <label>Quantity (KG) *</label><input data-f="quantity_kg" type="number" min="1" step="1" />
     <label>Quantity (MT)</label><input data-f="quantity_mt" type="number" step="0.001" readonly />
+    <label>Client Rate / MT *</label><input data-f="client_rate_per_mt" type="number" min="0" step="0.001" />
+    <label>Transporter Rate / MT *</label><input data-f="transporter_rate_per_mt" type="number" min="0" step="0.001" />
+    <div id="tripCreateFinancialPreview" class="meta-pill" style="grid-column:1/-1;background:#f3f4f6;color:#111827;">Preview: Qty MT 0.000 | Client Gross ₹0.00 | Transporter Gross ₹0.00 | Estimated Margin ₹0.00</div>
     <label>Notes</label><input data-f="notes" />
     <div style="grid-column:1/-1;margin-top:.5rem;"><h4 style="margin:.25rem 0;">Trip Documents</h4><div id="tripDocCreateRows"></div></div>
     <button class="btn" type="submit">Create Trip</button>`;
@@ -86,7 +89,7 @@ async function init() {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const payload = { status: "draft", is_active: true };
-    ["division_id","trip_date","transport_client_id","transport_transporter_id","truck_id","driver_id","route_id","transport_commodity_id","quantity_kg","quantity_mt","notes"].forEach((k)=>{ const v = qs(`[data-f='${k}']`)?.value?.trim(); if (v) payload[k]=v; });
+    ["division_id","trip_date","transport_client_id","transport_transporter_id","truck_id","driver_id","route_id","transport_commodity_id","quantity_kg","quantity_mt","client_rate_per_mt","transporter_rate_per_mt","notes"].forEach((k)=>{ const v = qs(`[data-f='${k}']`)?.value?.trim(); if (v) payload[k]=v; });
     if (!fixedDivisionId) return showToast("Canonical Transportation division not found", TOAST_TYPES.ERROR);
     payload.division_id = fixedDivisionId;
     delete payload.client_id;
@@ -94,7 +97,14 @@ async function init() {
     delete payload.commodity_id;
     if (!payload.trip_date || !payload.transport_client_id || !payload.transport_transporter_id || !payload.truck_id || !payload.driver_id || !payload.route_id || !payload.transport_commodity_id) return showToast("Fill all required fields", TOAST_TYPES.ERROR);
     if (Number(payload.quantity_kg || 0) <= 0) return showToast("Quantity KG must be > 0", TOAST_TYPES.ERROR);
+    if (Number(payload.client_rate_per_mt || 0) < 0) return showToast("Client rate must be >= 0", TOAST_TYPES.ERROR);
+    if (Number(payload.transporter_rate_per_mt || 0) < 0) return showToast("Transporter rate must be >= 0", TOAST_TYPES.ERROR);
     payload.quantity_mt = (Number(payload.quantity_kg) / 1000).toFixed(3);
+    payload.client_rate_source = "MANUAL_OVERRIDE";
+    payload.transporter_rate_source = "MANUAL_OVERRIDE";
+    if (Number(payload.transporter_rate_per_mt || 0) > Number(payload.client_rate_per_mt || 0)) {
+      showToast("Warning: transporter rate is higher than client rate. This trip will create negative margin.", TOAST_TYPES.WARNING);
+    }
     try {
       const created = await createTrip(payload);
       const appUser = await getCurrentAppUser();
@@ -121,6 +131,19 @@ async function init() {
     const trip = await getTripById(id);
     const timeline = await listTripTimeline(id);
     const docs = await listTripDocuments(id);
+    const { rows: supportRows } = await listTripExpenses({ tripId: id, divisionId: fixedDivisionId, page: 1, pageSize: 1000 });
+    const supportTotal = (supportRows || []).reduce((sum, r) => sum + Number(r.amount || 0), 0);
+    const clientGross = Number(trip?.client_gross_amount || 0);
+    const transporterGross = Number(trip?.transporter_gross_amount || 0);
+    const margin = Number(trip?.company_margin || (clientGross - transporterGross));
+    const clientNetReceivable = clientGross - supportTotal;
+    const transporterNetPayable = transporterGross - supportTotal;
+    const marginState = margin > 0 ? "positive" : margin < 0 ? "negative" : "zero";
+    const marginBadge = marginState === "positive"
+      ? "<span class='meta-pill' style='background:#dcfce7;color:#166534;'>Margin Positive</span>"
+      : marginState === "negative"
+        ? "<span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Margin Negative</span>"
+        : "<span class='meta-pill' style='background:#fef3c7;color:#92400e;'>Margin Zero</span>";
     const statusOf = (d) => d.is_uploaded ? "Uploaded" : "Pending Upload";
     const hasWeightBill = docs.some((d) => d.document_type === "WEIGHT_BILL" && d.deleted_at == null && d.is_active !== false);
     const hasTripSheet = docs.some((d) => d.document_type === "TRIP_SHEET" && d.deleted_at == null && d.is_active !== false);
@@ -137,6 +160,23 @@ async function init() {
           <span class="meta-pill">Qty: ${(trip?.quantity_kg ?? "-")} KG (${trip?.quantity_mt ?? "-"} MT)</span>
         </div>
         <div class="muted">Notes: ${trip?.notes || "-"}</div>
+      </div>
+      <div class="card" style="padding:.75rem;margin-bottom:.75rem;">
+        <h4 style="margin:0 0 .5rem 0;">Financial Snapshot</h4>
+        <div class="hero-kpis" style="margin-bottom:.5rem;display:flex;gap:.5rem;flex-wrap:wrap;">${marginBadge}</div>
+        <div class="table-shell"><table><tbody>
+          <tr><th style="text-align:left;">Trip No</th><td>${trip?.trip_no || "-"}</td></tr>
+          <tr><th style="text-align:left;">Quantity KG</th><td>${Number(trip?.quantity_kg || 0).toFixed(3)}</td></tr>
+          <tr><th style="text-align:left;">Quantity MT</th><td>${Number(trip?.quantity_mt || 0).toFixed(3)}</td></tr>
+          <tr><th style="text-align:left;">Client Rate / MT</th><td>₹${Number(trip?.client_rate_per_mt || 0).toFixed(3)}</td></tr>
+          <tr><th style="text-align:left;">Transporter Rate / MT</th><td>₹${Number(trip?.transporter_rate_per_mt || 0).toFixed(3)}</td></tr>
+          <tr><th style="text-align:left;">Client Gross</th><td>₹${clientGross.toFixed(2)}</td></tr>
+          <tr><th style="text-align:left;">Transporter Gross</th><td>₹${transporterGross.toFixed(2)}</td></tr>
+          <tr><th style="text-align:left;">Company Margin</th><td>₹${margin.toFixed(2)}</td></tr>
+          <tr><th style="text-align:left;">Support Deductions</th><td>₹${supportTotal.toFixed(2)}</td></tr>
+          <tr><th style="text-align:left;">Client Net Receivable</th><td>₹${clientNetReceivable.toFixed(2)}</td></tr>
+          <tr><th style="text-align:left;">Transporter Net Payable</th><td>₹${transporterNetPayable.toFixed(2)}</td></tr>
+        </tbody></table></div>
       </div>
       <h4 style="margin:.5rem 0;">Documents ${weightMissing ? "<span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Weight Bill Missing</span>" : ""}</h4>
       <div style="margin:.5rem 0;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
@@ -204,8 +244,34 @@ async function init() {
       <label>Commodity</label><select data-e="transport_commodity_id" ${isCompleted ? "disabled" : ""}></select>
       <label>Quantity (KG)</label><input data-e="quantity_kg" type="number" min="1" step="1" value="${row.quantity_kg || ""}" ${isCompleted ? "disabled" : ""} />
       <label>Quantity (MT)</label><input data-e="quantity_mt" type="number" step="0.001" value="${row.quantity_mt || ""}" readonly />
+      <label>Client Rate / MT</label><input data-e="client_rate_per_mt" type="number" min="0" step="0.001" value="${row.client_rate_per_mt || ""}" ${isCompleted ? "disabled" : ""} />
+      <label>Transporter Rate / MT</label><input data-e="transporter_rate_per_mt" type="number" min="0" step="0.001" value="${row.transporter_rate_per_mt || ""}" ${isCompleted ? "disabled" : ""} />
+      <div id="tripEditFinancialPreview" class="meta-pill" style="grid-column:1/-1;background:#f3f4f6;color:#111827;">Preview: Qty MT 0.000 | Client Gross ₹0.00 | Transporter Gross ₹0.00 | Estimated Margin ₹0.00</div>
       <label>Notes</label><input data-e="notes" value="${row.notes || ""}" />
     `;
+
+    const renderFinancialPreview = (mode = "create") => {
+      const kg = Number(qs(mode === "create" ? "[data-f='quantity_kg']" : "[data-e='quantity_kg']")?.value || 0);
+      const mt = kg > 0 ? (kg / 1000) : Number(qs(mode === "create" ? "[data-f='quantity_mt']" : "[data-e='quantity_mt']")?.value || 0);
+      const clientRate = Number(qs(mode === "create" ? "[data-f='client_rate_per_mt']" : "[data-e='client_rate_per_mt']")?.value || 0);
+      const transporterRate = Number(qs(mode === "create" ? "[data-f='transporter_rate_per_mt']" : "[data-e='transporter_rate_per_mt']")?.value || 0);
+      const clientGross = mt * clientRate;
+      const transporterGross = mt * transporterRate;
+      const margin = clientGross - transporterGross;
+      const host = qs(mode === "create" ? "#tripCreateFinancialPreview" : "#tripEditFinancialPreview");
+      if (!host) return;
+      host.textContent = `Preview: Qty MT ${mt.toFixed(3)} | Client Gross ₹${clientGross.toFixed(2)} | Transporter Gross ₹${transporterGross.toFixed(2)} | Estimated Margin ₹${margin.toFixed(2)}`;
+      if (margin > 0) {
+        host.style.background = "#dcfce7";
+        host.style.color = "#166534";
+      } else if (margin < 0) {
+        host.style.background = "#fee2e2";
+        host.style.color = "#991b1b";
+      } else {
+        host.style.background = "#fef3c7";
+        host.style.color = "#92400e";
+      }
+    };
 
     const bindOptions = async (field, table, selectedValue) => {
       const sel = qs(`[data-e='${field}']`); if (!sel) return;
@@ -222,7 +288,11 @@ async function init() {
       const kg = Number(qs("[data-e='quantity_kg']")?.value || 0);
       const mtField = qs("[data-e='quantity_mt']");
       if (mtField) mtField.value = kg > 0 ? (kg / 1000).toFixed(3) : "";
+      renderFinancialPreview("edit");
     });
+    qs("[data-e='client_rate_per_mt']")?.addEventListener("input", () => renderFinancialPreview("edit"));
+    qs("[data-e='transporter_rate_per_mt']")?.addEventListener("input", () => renderFinancialPreview("edit"));
+    renderFinancialPreview("edit");
 
     qs("#tripEditSave").onclick = async () => {
       try {
@@ -234,9 +304,21 @@ async function init() {
           payload.route_id = qs("[data-e='route_id']")?.value || null;
           payload.transport_commodity_id = qs("[data-e='transport_commodity_id']")?.value || null;
           payload.quantity_kg = Number(qs("[data-e='quantity_kg']")?.value || 0);
+          payload.client_rate_per_mt = Number(qs("[data-e='client_rate_per_mt']")?.value || 0);
+          payload.transporter_rate_per_mt = Number(qs("[data-e='transporter_rate_per_mt']")?.value || 0);
+          payload.client_rate_source = "MANUAL_OVERRIDE";
+          payload.transporter_rate_source = "MANUAL_OVERRIDE";
           if (!payload.trip_date || !payload.truck_id || !payload.driver_id || !payload.route_id || !payload.transport_commodity_id) return showToast("Fill required edit fields", TOAST_TYPES.ERROR);
           if (payload.quantity_kg <= 0) return showToast("Quantity KG must be > 0", TOAST_TYPES.ERROR);
+          if (payload.client_rate_per_mt < 0) return showToast("Client rate must be >= 0", TOAST_TYPES.ERROR);
+          if (payload.transporter_rate_per_mt < 0) return showToast("Transporter rate must be >= 0", TOAST_TYPES.ERROR);
           payload.quantity_mt = (payload.quantity_kg / 1000).toFixed(3);
+          if (payload.transporter_rate_per_mt > payload.client_rate_per_mt) {
+            showToast("Warning: transporter rate is higher than client rate. This trip will create negative margin.", TOAST_TYPES.WARNING);
+          }
+          if ((payload.client_rate_per_mt - payload.transporter_rate_per_mt) < 0) {
+            showToast("Warning: Calculated margin is negative", TOAST_TYPES.WARNING);
+          }
         }
         const updated = await updateTrip(row.id, payload);
         const appUser = await getCurrentAppUser();
@@ -290,6 +372,48 @@ async function init() {
     const kg = Number(qs("[data-f='quantity_kg']")?.value || 0);
     const mtField = qs("[data-f='quantity_mt']");
     if (mtField) mtField.value = kg > 0 ? (kg / 1000).toFixed(3) : "";
+    const clientRate = Number(qs("[data-f='client_rate_per_mt']")?.value || 0);
+    const transporterRate = Number(qs("[data-f='transporter_rate_per_mt']")?.value || 0);
+    const mt = kg > 0 ? (kg / 1000) : 0;
+    const clientGross = mt * clientRate;
+    const transporterGross = mt * transporterRate;
+    const margin = clientGross - transporterGross;
+    const host = qs("#tripCreateFinancialPreview");
+    if (host) {
+      host.textContent = `Preview: Qty MT ${mt.toFixed(3)} | Client Gross ₹${clientGross.toFixed(2)} | Transporter Gross ₹${transporterGross.toFixed(2)} | Estimated Margin ₹${margin.toFixed(2)}`;
+      host.style.background = margin > 0 ? "#dcfce7" : (margin < 0 ? "#fee2e2" : "#fef3c7");
+      host.style.color = margin > 0 ? "#166534" : (margin < 0 ? "#991b1b" : "#92400e");
+    }
+  });
+  qs("[data-f='client_rate_per_mt']")?.addEventListener("input", () => {
+    const kg = Number(qs("[data-f='quantity_kg']")?.value || 0);
+    const mt = kg > 0 ? (kg / 1000) : 0;
+    const clientRate = Number(qs("[data-f='client_rate_per_mt']")?.value || 0);
+    const transporterRate = Number(qs("[data-f='transporter_rate_per_mt']")?.value || 0);
+    const clientGross = mt * clientRate;
+    const transporterGross = mt * transporterRate;
+    const margin = clientGross - transporterGross;
+    const host = qs("#tripCreateFinancialPreview");
+    if (host) {
+      host.textContent = `Preview: Qty MT ${mt.toFixed(3)} | Client Gross ₹${clientGross.toFixed(2)} | Transporter Gross ₹${transporterGross.toFixed(2)} | Estimated Margin ₹${margin.toFixed(2)}`;
+      host.style.background = margin > 0 ? "#dcfce7" : (margin < 0 ? "#fee2e2" : "#fef3c7");
+      host.style.color = margin > 0 ? "#166534" : (margin < 0 ? "#991b1b" : "#92400e");
+    }
+  });
+  qs("[data-f='transporter_rate_per_mt']")?.addEventListener("input", () => {
+    const kg = Number(qs("[data-f='quantity_kg']")?.value || 0);
+    const mt = kg > 0 ? (kg / 1000) : 0;
+    const clientRate = Number(qs("[data-f='client_rate_per_mt']")?.value || 0);
+    const transporterRate = Number(qs("[data-f='transporter_rate_per_mt']")?.value || 0);
+    const clientGross = mt * clientRate;
+    const transporterGross = mt * transporterRate;
+    const margin = clientGross - transporterGross;
+    const host = qs("#tripCreateFinancialPreview");
+    if (host) {
+      host.textContent = `Preview: Qty MT ${mt.toFixed(3)} | Client Gross ₹${clientGross.toFixed(2)} | Transporter Gross ₹${transporterGross.toFixed(2)} | Estimated Margin ₹${margin.toFixed(2)}`;
+      host.style.background = margin > 0 ? "#dcfce7" : (margin < 0 ? "#fee2e2" : "#fef3c7");
+      host.style.color = margin > 0 ? "#166534" : (margin < 0 ? "#991b1b" : "#92400e");
+    }
   });
   qs("#tripPrev")?.addEventListener("click", async ()=>{ if (page > 1) { page -= 1; await load(); } });
   qs("#tripNext")?.addEventListener("click", async ()=>{ page += 1; await load(); });
