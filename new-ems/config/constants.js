@@ -32,15 +32,15 @@ export const MODULES = {
   SETTINGS: "settings",
   AUDIT: "audit",
   DIVISIONS: "divisions",
-  MASTER_CLIENTS: "master_clients",
-  MASTER_CONTRACTORS: "master_contractors",
-  MASTER_TRANSPORTERS: "master_transporters",
-  MASTER_AGENTS: "master_agents",
-  MASTER_COMMODITIES: "master_commodities",
-  MASTER_ROUTES: "master_routes",
-  MASTER_UNITS: "master_units",
-  MASTER_TAX_CODES: "master_tax_codes",
-  MASTER_DOCUMENT_TYPES: "master_document_types"
+  MASTER_CLIENTS: "master-clients",
+  MASTER_CONTRACTORS: "master-contractors",
+  MASTER_TRANSPORTERS: "master-transporters",
+  MASTER_AGENTS: "master-agents",
+  MASTER_COMMODITIES: "master-commodities",
+  MASTER_ROUTES: "master-routes",
+  MASTER_UNITS: "master-units",
+  MASTER_TAX_CODES: "master-tax-codes",
+  MASTER_DOCUMENT_TYPES: "master-document-types"
 };
 
 export const TOAST_TYPES = {
