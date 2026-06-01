@@ -27,6 +27,17 @@ export const STORAGE_KEYS = {
 
 export const MODULES = {
   DASHBOARD: "dashboard",
+  TRANSPORTATION: "transportation",
+  CONSTRUCTION: "construction",
+  INTERIORS: "interiors",
+  HOSPITAL_PROJECTS: "hospital-projects",
+  HOSPITAL_CONSULTANCY: "hospital-consultancy",
+  IMPORTS_EXPORTS: "imports-exports",
+  TRADING: "trading",
+  HR_PR: "hr-pr",
+  ARBITRAGE: "arbitrage",
+  ECOMMERCE: "e-commerce",
+  ACCOUNTS: "accounts",
   USERS: "users",
   ROLES: "roles",
   SETTINGS: "settings",
@@ -42,6 +53,22 @@ export const MODULES = {
   MASTER_TAX_CODES: "master-tax-codes",
   MASTER_DOCUMENT_TYPES: "master-document-types"
 };
+
+export const CONTROL_CENTER_MODULES = [
+  { module: MODULES.TRANSPORTATION, title: "Transportation & Minerals Logistics", subtitle: "Dispatch, trips, challans, settlements", href: null },
+  { module: MODULES.CONSTRUCTION, title: "Construction", subtitle: "Site operations and execution", href: null },
+  { module: MODULES.INTERIORS, title: "Interiors", subtitle: "Project planning and vendor flow", href: null },
+  { module: MODULES.HOSPITAL_PROJECTS, title: "Hospital Projects", subtitle: "Infrastructure programs", href: null },
+  { module: MODULES.HOSPITAL_CONSULTANCY, title: "Hospital Consultancy", subtitle: "Advisory workflow", href: null },
+  { module: MODULES.IMPORTS_EXPORTS, title: "Imports & Exports", subtitle: "Shipment and compliance desk", href: null },
+  { module: MODULES.TRADING, title: "Trading", subtitle: "Order and margin ops", href: null },
+  { module: MODULES.HR_PR, title: "HR & PR", subtitle: "People and communications", href: null },
+  { module: MODULES.ARBITRAGE, title: "Arbitrage", subtitle: "Opportunity and risk desk", href: null },
+  { module: MODULES.ECOMMERCE, title: "E-Commerce", subtitle: "Storefront operations", href: null },
+  { module: MODULES.ACCOUNTS, title: "Accounts", subtitle: "Finance operations cockpit", href: null },
+  { module: MODULES.SETTINGS, title: "Administration", subtitle: "System controls and policy", href: ROUTES.SETTINGS },
+  { module: MODULES.MASTER_CLIENTS, title: "Master Data", subtitle: "Reference entities and codes", href: ROUTES.MASTER_CLIENTS }
+];
 
 export const TOAST_TYPES = {
   SUCCESS: "success",
