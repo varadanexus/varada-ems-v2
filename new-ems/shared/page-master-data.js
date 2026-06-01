@@ -1,4 +1,4 @@
-import { TOAST_TYPES } from "../config/constants.js";
+import { TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { createMasterRecord, listMasterRecords, softDeleteMasterRecord, updateMasterRecord } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
@@ -8,6 +8,7 @@ export async function initMasterDataPage({
   moduleCode,
   pageTitle,
   pageDescription,
+  workspace = WORKSPACES.MASTER_DATA,
   table,
   fields
 }) {
@@ -15,7 +16,7 @@ export async function initMasterDataPage({
   const pageSize = 10;
   let currentRows = [];
 
-  await bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription });
+  await bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, workspace });
 
   renderModuleContent(`
     <div class="card" style="margin-bottom:1rem;">

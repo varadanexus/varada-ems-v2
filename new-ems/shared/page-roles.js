@@ -1,4 +1,4 @@
-import { MODULES } from "../config/constants.js";
+import { MODULES, WORKSPACES } from "../config/constants.js";
 import { listPermissions, listRolePermissions, listRoles, setRolePermission } from "./admin-api.js";
 import { logUserRoleEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
@@ -8,7 +8,8 @@ async function init() {
   await bootstrapProtectedPage({
     moduleCode: MODULES.ROLES,
     pageTitle: "Roles & Permissions",
-    pageDescription: "RBAC foundation shell with module-level permission matrix placeholder"
+    pageDescription: "RBAC foundation shell with module-level permission matrix placeholder",
+    workspace: WORKSPACES.ADMIN
   });
 
   renderModuleContent(`

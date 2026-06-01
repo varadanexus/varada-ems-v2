@@ -5,6 +5,7 @@
 
 @media (max-width: 920px) {
   .app-shell { grid-template-columns: 1fr; }
+  .app-shell.sidebar-collapsed { grid-template-columns: 1fr; }
   .app-sidebar {
     position: fixed;
     left: -280px;
@@ -13,18 +14,22 @@
     transition: left 0.2s ease;
   }
   .app-sidebar.open { left: 0; }
+  .app-sidebar { max-width: calc(100vw - 24px); }
+  .app-sidebar { box-shadow: 0 24px 50px rgba(0,0,0,0.4); }
   .card { grid-column: span 12; }
   .control-grid > .card { grid-column: span 12; }
   .module-card { grid-column: span 12; }
   .navbar-actions { gap: 0.35rem; }
+  .global-search { display: none; }
   .user-chip { display: none; }
 }
 
 @media (max-width: 640px) {
   .app-navbar { padding: 0 0.7rem; }
   .page-head, .page-content { padding: 0.75rem; }
+  .page-head h1 { font-size: 1.28rem; }
   .btn, .icon-btn { min-height: 40px; }
   .module-card { min-height: 120px; }
-  table { min-width: 620px; }
+  table { min-width: 520px; }
   .login-card { padding: 0.95rem; }
 }

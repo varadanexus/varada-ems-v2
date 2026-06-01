@@ -1,4 +1,53 @@
-import { MODULES, ROUTES } from "../config/constants.js";
+import { MODULES, ROUTES, WORKSPACES } from "../config/constants.js";
+
+const MENU_BY_WORKSPACE = {
+  [WORKSPACES.ADMIN]: [
+    {
+      title: "Admin Workspace",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.USERS, label: "Users", href: ROUTES.USERS },
+        { module: MODULES.ROLES, label: "Roles", href: ROUTES.ROLES },
+        { module: MODULES.DIVISIONS, label: "Divisions", href: ROUTES.DIVISIONS },
+        { module: MODULES.SETTINGS, label: "Settings", href: ROUTES.SETTINGS },
+        { module: MODULES.AUDIT, label: "Audit Logs", href: ROUTES.SETTINGS }
+      ]
+    }
+  ],
+  [WORKSPACES.MASTER_DATA]: [
+    {
+      title: "Master Data Workspace",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.MASTER_CLIENTS, label: "Master Data Overview", href: ROUTES.MASTER_CLIENTS },
+        { module: MODULES.MASTER_CLIENTS, label: "Clients", href: ROUTES.MASTER_CLIENTS },
+        { module: MODULES.MASTER_CONTRACTORS, label: "Contractors", href: ROUTES.MASTER_CONTRACTORS },
+        { module: MODULES.MASTER_TRANSPORTERS, label: "Transporters", href: ROUTES.MASTER_TRANSPORTERS },
+        { module: MODULES.MASTER_AGENTS, label: "Agents", href: ROUTES.MASTER_AGENTS },
+        { module: MODULES.MASTER_COMMODITIES, label: "Commodities", href: ROUTES.MASTER_COMMODITIES },
+        { module: MODULES.MASTER_ROUTES, label: "Routes", href: ROUTES.MASTER_ROUTES },
+        { module: MODULES.MASTER_UNITS, label: "Units", href: ROUTES.MASTER_UNITS },
+        { module: MODULES.MASTER_TAX_CODES, label: "Tax Codes", href: ROUTES.MASTER_TAX_CODES },
+        { module: MODULES.MASTER_DOCUMENT_TYPES, label: "Document Types", href: ROUTES.MASTER_DOCUMENT_TYPES }
+      ]
+    }
+  ],
+  [WORKSPACES.TRANSPORTATION]: [
+    {
+      title: "Transportation Workspace",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.TRANSPORTATION, label: "Transportation Dashboard", href: ROUTES.DASHBOARD },
+        { module: MODULES.TRANSPORTATION, label: "Trips", href: ROUTES.DASHBOARD },
+        { module: MODULES.TRANSPORTATION, label: "Trucks", href: ROUTES.DASHBOARD },
+        { module: MODULES.MASTER_ROUTES, label: "Routes", href: ROUTES.MASTER_ROUTES },
+        { module: MODULES.TRANSPORTATION, label: "Rate Master", href: ROUTES.DASHBOARD },
+        { module: MODULES.TRANSPORTATION, label: "Documents", href: ROUTES.DASHBOARD },
+        { module: MODULES.TRANSPORTATION, label: "Reports", href: ROUTES.DASHBOARD }
+      ]
+    }
+  ]
+};
 
 const MENU_SECTIONS = [
   {
@@ -47,13 +96,15 @@ const MENU_SECTIONS = [
   }
 ];
 
-export function renderSidebar(allowedModules, currentPath) {
-  const sections = MENU_SECTIONS.map((section) => {
+export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACES.ADMIN) {
+  const sectionsForWorkspace = MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN];
+  const sections = sectionsForWorkspace.map((section) => {
     const items = section.items
       .filter((item) => (allowedModules || []).includes(item.module))
       .map((item) => {
         const active = currentPath.includes(item.href) ? "active" : "";
-        return `<a class="nav-link ${active}" href="${item.href}">${item.label}</a>`;
+        const icon = item.label.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase();
+        return `<a class="nav-link ${active}" href="${item.href}" title="${item.label}"><span class="nav-icon">${icon}</span><span class="nav-text">${item.label}</span></a>`;
       })
       .join("");
     if (!items) return "";

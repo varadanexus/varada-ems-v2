@@ -1,4 +1,4 @@
-import { MODULES } from "../config/constants.js";
+import { MODULES, WORKSPACES } from "../config/constants.js";
 import { logUserRoleEvent } from "./audit.js";
 import { assignUserDivision, assignUserRole, listDivisions, listRoles, listUsers, provisionUserViaEdge, updateUserStatus } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
@@ -18,7 +18,8 @@ async function init() {
   await bootstrapProtectedPage({
     moduleCode: MODULES.USERS,
     pageTitle: "User Management",
-    pageDescription: "Admin-only foundation shell for user lifecycle management"
+    pageDescription: "Admin-only foundation shell for user lifecycle management",
+    workspace: WORKSPACES.ADMIN
   });
 
   const me = await getCurrentAppUser();
