@@ -1,4 +1,5 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
+import { markUserLogin } from "./admin-api.js";
 import { loginWithPassword, redirectIfAuthenticated } from "./auth.js";
 import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
@@ -31,7 +32,10 @@ async function init() {
     }
 
     try {
-      await loginWithPassword(email, password);
+      const loginData = await loginWithPassword(email, password);
+      if (loginData?.user?.id) {
+        await markUserLogin(loginData.user.id);
+      }
       localStorage.setItem("ems_role", "admin"); // Sprint 1 placeholder role bootstrap.
       debugLog("redirect reason", { reason: "login_success", to: ROUTES.DASHBOARD });
       showToast("Login successful", TOAST_TYPES.SUCCESS);
