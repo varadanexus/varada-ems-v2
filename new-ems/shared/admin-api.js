@@ -484,7 +484,7 @@ export async function listTripOptions({ divisionId = null, limit = 200 } = {}) {
   const client = getSupabaseClient();
   let query = client
     .from("transport_trips")
-    .select("id,trip_no,trip_date,status,transport_client_id,transport_transporter_id,truck_id,driver_id,route_id,transport_commodity_id,quantity_mt")
+    .select("id,trip_no,trip_date,status,transport_client_id,transport_transporter_id,truck_id,driver_id,route_id,transport_commodity_id,quantity_kg,quantity_mt,client_rate_per_mt,transporter_rate_per_mt,client_gross_amount,transporter_gross_amount,company_margin")
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);

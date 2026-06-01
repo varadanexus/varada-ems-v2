@@ -358,3 +358,58 @@ Key entity clusters from schema:
 ---
 
 This document is reverse-engineered from the specified legacy scope and intended as migration/reference documentation.
+
+---
+
+## Addendum: Transportation Financial Model Correction for EMS 2.0
+
+### A) Old-EMS logic summary (observed)
+- Old EMS computes trip financials with expense deduction on both client and transporter sides.
+- From `modules/logistics/financial-dashboard.html`:
+  - `clientFinal = (company_rate * mt) - expense`
+  - `transporterFinal = (transporter_rate * mt) - expense`
+  - `profit = clientFinal - transporterFinal`
+- From `modules/logistics/admin-payments.html` and `js/statement-utils.js`:
+  - transporter gross per trip is based on `transporter_rate * mt`
+  - trip `expenses` are deducted to get transporter net for statement/invoice totals.
+- From `js/invoice-utils.js`:
+  - client invoice trip rows apply expense-adjusted contract/freight presentation.
+
+### B) Correct interpretation carried into EMS 2.0
+- These items are treated as **Trip Support/Deductions**, not company expense in this stage:
+  - Diesel, Toll, Advance, Loading, Unloading, RTO, Other.
+- They reduce both sides:
+  - client receivable
+  - transporter payable
+- Margin identity remains rate-spread driven:
+  - `company_margin = quantity_mt * (client_rate_per_mt - transporter_rate_per_mt)`
+
+### C) Corrected canonical formulas
+- `client_gross_amount = quantity_mt * client_rate_per_mt`
+- `transporter_gross_amount = quantity_mt * transporter_rate_per_mt`
+- `support_deduction_amount = sum(trip_support_deductions.amount)`
+- `client_net_receivable = client_gross_amount - support_deduction_amount`
+- `transporter_net_payable = transporter_gross_amount - support_deduction_amount`
+- `company_margin = client_net_receivable - transporter_net_payable`
+
+### D) EMS 2.0 schema/terminology direction (pre-coding)
+- Rename conceptual model from **Trip Expenses** to **Trip Support/Deductions**.
+- Add/relabel trip financial columns:
+  - `client_rate_per_mt`, `transporter_rate_per_mt`, `quantity_mt`
+  - `client_gross_amount`, `transporter_gross_amount`
+  - `support_deduction_amount`
+  - `client_net_receivable`, `transporter_net_payable`, `company_margin`
+
+### E) Pages affected in EMS 2.0 planning
+- `modules/transport-trips` + `shared/page-transport-trips.js`
+- `modules/transport-trip-expenses` + `shared/page-transport-trip-expenses.js` (rename semantics)
+- `modules/transport-trip-dashboard` + `shared/page-transport-trip-dashboard.js`
+- future client billing selection workflow pages (not implemented yet)
+- future transporter statement selection workflow pages (not implemented yet)
+
+### F) Risks before implementation
+1. Terminology drift (`expenses` vs `support_deductions`) across UI/API/DB.
+2. Double counting risk if both legacy and new deduction fields coexist during migration.
+3. Historical backfill ambiguity where old expense categories mixed true cost vs pass-through support.
+4. Rounding drift across trip-level and aggregated totals unless standardized precision rules are enforced.
+5. Event contract mismatch with future billing engine if gross/net fields are not explicitly versioned.
