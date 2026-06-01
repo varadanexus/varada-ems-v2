@@ -334,15 +334,40 @@ export async function listMasterRecords(table, { search = "", page = 1, pageSize
   const client = getSupabaseClient();
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+  const divisionId = arguments?.[1]?.divisionId || null;
+  const searchColumns = arguments?.[1]?.searchColumns || ["name", "code"];
 
   let query = client.from(table).select("*", { count: "exact" }).is("deleted_at", null).order("created_at", { ascending: false });
+  if (divisionId) query = query.eq("division_id", divisionId);
   if (search) {
-    query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%`);
+    const orExpr = searchColumns.map((c) => `${c}.ilike.%${search}%`).join(",");
+    query = query.or(orExpr);
   }
 
   const { data, error, count } = await query.range(from, to);
   if (error) throw error;
   return { rows: data || [], count: count || 0 };
+}
+
+export async function listActiveOptions(table, { labelField = "name", valueField = "id", divisionId = null } = {}) {
+  const client = getSupabaseClient();
+  let query = client.from(table).select(`${valueField},${labelField},division_id`).is("deleted_at", null).eq("is_active", true).order(labelField);
+  if (divisionId) query = query.eq("division_id", divisionId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map((row) => ({ value: row[valueField], label: row[labelField] }));
+}
+
+export async function existsActiveDuplicate(table, filters = {}, excludeId = null) {
+  const client = getSupabaseClient();
+  let query = client.from(table).select("id", { count: "exact", head: true }).is("deleted_at", null);
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") query = query.eq(k, v);
+  });
+  if (excludeId) query = query.neq("id", excludeId);
+  const { count, error } = await query;
+  if (error) throw error;
+  return (count || 0) > 0;
 }
 
 export async function createMasterRecord(table, payload) {
