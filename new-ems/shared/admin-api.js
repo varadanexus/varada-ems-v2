@@ -101,7 +101,7 @@ export async function listUsers() {
   const client = getSupabaseClient();
   const { data: users, error } = await client
     .from("app_users")
-    .select("id,email,display_name,status")
+    .select("id,email,display_name,status,is_locked,last_login_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
 
@@ -151,6 +151,22 @@ export async function updateUserStatus(userId, status) {
     .from("app_users")
     .update({ status, updated_at: new Date().toISOString() })
     .eq("id", userId);
+  if (error) throw error;
+}
+
+export async function updateUserSecurity(userId, updates = {}) {
+  const client = getSupabaseClient();
+  const payload = { ...updates, updated_at: new Date().toISOString() };
+  const { error } = await client.from("app_users").update(payload).eq("id", userId);
+  if (error) throw error;
+}
+
+export async function markUserLogin(authUserId) {
+  const client = getSupabaseClient();
+  const { error } = await client
+    .from("app_users")
+    .update({ last_login_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("auth_user_id", authUserId);
   if (error) throw error;
 }
 
@@ -270,4 +286,52 @@ export async function listAuditLogs(limit = 50) {
     .limit(limit);
   if (error) throw error;
   return data || [];
+}
+
+export const MASTER_TABLES = {
+  clients: "master_clients",
+  contractors: "master_contractors",
+  transporters: "master_transporters",
+  agents: "master_agents",
+  commodities: "master_commodities",
+  routes: "master_routes",
+  units: "master_units",
+  taxCodes: "master_tax_codes",
+  documentTypes: "master_document_types",
+  divisions: "divisions"
+};
+
+export async function listMasterRecords(table, { search = "", page = 1, pageSize = 10 } = {}) {
+  const client = getSupabaseClient();
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = client.from(table).select("*", { count: "exact" }).is("deleted_at", null).order("created_at", { ascending: false });
+  if (search) {
+    query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%`);
+  }
+
+  const { data, error, count } = await query.range(from, to);
+  if (error) throw error;
+  return { rows: data || [], count: count || 0 };
+}
+
+export async function createMasterRecord(table, payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from(table).insert(payload).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateMasterRecord(table, id, payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from(table).update({ ...payload, updated_at: new Date().toISOString() }).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function softDeleteMasterRecord(table, id) {
+  const client = getSupabaseClient();
+  const { error } = await client.from(table).update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
 }

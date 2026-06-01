@@ -3,6 +3,7 @@ import { logUserRoleEvent } from "./audit.js";
 import { assignUserDivision, assignUserRole, listDivisions, listRoles, listUsers, provisionUserViaEdge, updateUserStatus } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
+import { updateUserSecurity } from "./admin-api.js";
 
 let allUsers = [];
 let allRoles = [];
@@ -35,7 +36,7 @@ async function init() {
     <div class="table-shell">
       <table>
         <thead>
-          <tr><th>User</th><th>Role</th><th>Status</th><th>Division Scope</th><th>Actions</th></tr>
+          <tr><th>User</th><th>Role</th><th>Status</th><th>Last Login</th><th>Division Scope</th><th>Actions</th></tr>
         </thead>
         <tbody id="usersBody"></tbody>
       </table>
@@ -99,9 +100,12 @@ function renderUsers() {
         <td>${u.display_name || u.email}</td>
         <td>${role}</td>
         <td>${u.status}</td>
+        <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "Never"}</td>
         <td>${divisions}</td>
         <td>
           <button class="btn" data-user-id="${u.id}" data-next-status="${nextStatus}">${nextStatus === "active" ? "Enable" : "Disable"}</button>
+          <button class="btn" data-lock-user-id="${u.id}" data-next-lock="${u.is_locked ? "false" : "true"}">${u.is_locked ? "Unlock" : "Lock"}</button>
+          <button class="btn" data-reset-user-id="${u.id}">Reset Password*</button>
           <select data-role-user-id="${u.id}">${renderRoleOptions((u.user_roles || [])[0]?.roles?.id)}</select>
           <select data-division-user-id="${u.id}">${renderDivisionOptions((u.user_divisions || [])[0]?.divisions?.id)}</select>
           <button class="btn" data-save-user-id="${u.id}">Save</button>
@@ -139,6 +143,29 @@ function renderUsers() {
       } catch (error) {
         showToast(error?.message || "Failed to save mappings", "error");
       }
+    });
+  });
+
+  body.querySelectorAll("button[data-lock-user-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.getAttribute("data-lock-user-id");
+      const nextLock = (btn.getAttribute("data-next-lock") || "false") === "true";
+      try {
+        await updateUserSecurity(userId, { is_locked: nextLock });
+        await logUserRoleEvent("user_lock_toggle", { entityType: "app_users", entityId: userId, is_locked: nextLock });
+        showToast(nextLock ? "User locked" : "User unlocked", "success");
+        await loadUsers();
+      } catch (error) {
+        showToast(error?.message || "Failed to update lock state", "error");
+      }
+    });
+  });
+
+  body.querySelectorAll("button[data-reset-user-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.getAttribute("data-reset-user-id");
+      await logUserRoleEvent("password_reset_placeholder", { entityType: "app_users", entityId: userId });
+      showToast("Password reset placeholder logged (Edge Function integration pending)", "info");
     });
   });
 }
