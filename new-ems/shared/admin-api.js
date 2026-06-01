@@ -479,3 +479,66 @@ export async function listTripTimeline(tripId) {
   if (error) throw error;
   return data || [];
 }
+
+export async function listTripOptions({ divisionId = null, limit = 200 } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_trips")
+    .select("id,trip_no,trip_date,status,transport_client_id,transport_transporter_id,truck_id,driver_id,route_id,transport_commodity_id,quantity_mt")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (divisionId) query = query.eq("division_id", divisionId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createTripExpense(payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("transport_trip_expenses").insert(payload).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listTripExpenses({ tripId, divisionId = null, search = "", category = "", fromDate = "", toDate = "", page = 1, pageSize = 20 } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_trip_expenses")
+    .select("*", { count: "exact" })
+    .is("deleted_at", null)
+    .eq("trip_id", tripId)
+    .order("expense_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (divisionId) query = query.eq("division_id", divisionId);
+  if (category) query = query.eq("category", category);
+  if (fromDate) query = query.gte("expense_date", fromDate);
+  if (toDate) query = query.lte("expense_date", toDate);
+  if (search) query = query.or(`expense_no.ilike.%${search}%,notes.ilike.%${search}%`);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await query.range(from, to);
+  if (error) throw error;
+  return { rows: data || [], count: count || 0 };
+}
+
+export async function updateTripExpense(id, payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("transport_trip_expenses")
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function softDeleteTripExpense(id) {
+  const client = getSupabaseClient();
+  const { error } = await client
+    .from("transport_trip_expenses")
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}

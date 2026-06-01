@@ -43,7 +43,8 @@ const MENU_BY_WORKSPACE = {
       title: "Operations",
       items: [
         { module: MODULES.TRANSPORTATION, label: "Transportation Dashboard", href: ROUTES.TRANSPORT_DASHBOARD },
-        { module: MODULES.TRANSPORT_TRIPS, label: "Trips", href: ROUTES.TRANSPORT_TRIPS }
+        { module: MODULES.TRANSPORT_TRIPS, label: "Trips", href: ROUTES.TRANSPORT_TRIPS },
+        { module: MODULES.TRANSPORT_TRIP_EXPENSES, label: "Trip Expenses", href: ROUTES.TRANSPORT_TRIP_EXPENSES }
       ]
     },
     {
