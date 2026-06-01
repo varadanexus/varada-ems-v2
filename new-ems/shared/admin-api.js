@@ -351,7 +351,7 @@ export async function listMasterRecords(table, { search = "", page = 1, pageSize
 
 export async function listActiveOptions(table, { labelField = "name", valueField = "id", divisionId = null } = {}) {
   const client = getSupabaseClient();
-  let query = client.from(table).select(`${valueField},${labelField},division_id`).is("deleted_at", null).eq("is_active", true).order(labelField);
+  let query = client.from(table).select(`${valueField},${labelField}`).is("deleted_at", null).eq("is_active", true).order(labelField);
   if (divisionId) query = query.eq("division_id", divisionId);
   const { data, error } = await query;
   if (error) throw error;
@@ -388,4 +388,70 @@ export async function softDeleteMasterRecord(table, id) {
   const client = getSupabaseClient();
   const { error } = await client.from(table).update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id);
   if (error) throw error;
+}
+
+export const TRIP_STATUS_FLOW = [
+  "draft",
+  "assigned",
+  "dispatched",
+  "loading",
+  "loaded",
+  "in_transit",
+  "unloading",
+  "completed",
+  "financial_review"
+];
+
+export async function createTrip(payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("transport_trips").insert(payload).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listTrips({ search = "", status = "", divisionId = null, page = 1, pageSize = 10 } = {}) {
+  const client = getSupabaseClient();
+  let query = client.from("transport_trips").select("*", { count: "exact" }).is("deleted_at", null).order("created_at", { ascending: false });
+  if (divisionId) query = query.eq("division_id", divisionId);
+  if (status) query = query.eq("status", status);
+  if (search) query = query.or(`trip_no.ilike.%${search}%,notes.ilike.%${search}%`);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await query.range(from, to);
+  if (error) throw error;
+  return { rows: data || [], count: count || 0 };
+}
+
+export async function getTripById(id) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("transport_trips").select("*").eq("id", id).is("deleted_at", null).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTrip(id, payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("transport_trips").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function softDeleteTrip(id) {
+  const client = getSupabaseClient();
+  const { error } = await client.from("transport_trips").update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function addTripTimeline(payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("transport_trip_timeline").insert(payload).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listTripTimeline(tripId) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("transport_trip_timeline").select("*").eq("trip_id", tripId).order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
 }

@@ -14,7 +14,12 @@ export async function initMasterDataPage({
   searchColumns = ["name", "code"],
   divisionScoped = true,
   uniqueChecks = [],
-  validate = null
+  validate = null,
+  normalize = null,
+  cardTitle = null,
+  emptyStateTitle = "No records yet",
+  emptyStateText = "Create your first record using the form above.",
+  showFriendlyValue = null
 }) {
   let page = 1;
   const pageSize = 10;
@@ -25,11 +30,11 @@ export async function initMasterDataPage({
   const divisionId = divisionScope !== "all" ? divisionScope : null;
 
   renderModuleContent(`
-    <div class="card" style="margin-bottom:1rem;">
-      <h3>${pageTitle} - Create</h3><p class="muted">Division scope: ${divisionScope}</p>
+    <div class="card transport-form-card" style="margin-bottom:1rem;">
+      <h3>${cardTitle || `Create ${pageTitle}`}</h3><p class="muted">Division scope: ${divisionScope}</p>
       <form id="masterCreateForm" class="form-row"></form>
     </div>
-    <div class="card" style="margin-bottom:1rem;">
+    <div class="card transport-search-card" style="margin-bottom:1rem;">
        <input id="masterSearch" type="text" placeholder="Search records" />
     </div>
     <div class="table-shell">
@@ -55,7 +60,7 @@ export async function initMasterDataPage({
     if (!form) return;
     form.innerHTML = `${formFields.map((f) => renderField(f, null, "create")).join("")}
       <div id="masterFormError" class="muted"></div>
-      <button class="btn" type="submit">Create</button>`;
+      <button class="btn" type="submit">Save Record</button>`;
     hydrateSelectOptions("create", null);
   }
 
@@ -86,8 +91,9 @@ export async function initMasterDataPage({
       const payload = { is_active: true };
       fields.forEach((f) => {
         const value = qs(`[data-field='${f.key}']`)?.value?.trim();
-        if (value) payload[f.key] = value;
+      if (value) payload[f.key] = value;
       });
+      if (normalize) normalize(payload, { mode: "create" });
       if (divisionScoped && divisionId && !payload.division_id) payload.division_id = divisionId;
 
       const validationError = await validatePayload(payload);
@@ -152,23 +158,23 @@ export async function initMasterDataPage({
     const body = qs("#masterBody");
     if (!body) return;
     if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="${fields.length + 2}">No active records found for current filters.</td></tr>`;
+      body.innerHTML = `<tr><td colspan="${fields.length + 2}"><div class="empty-state"><strong>${emptyStateTitle}</strong><div>${emptyStateText}</div></div></td></tr>`;
       return;
     }
 
     body.innerHTML = rows.map((row) => {
       return `
         <tr>
-          ${fields.map((f) => `<td>${f.type === "select" ? `<select data-edit-${f.key}="${row.id}"></select>` : `<input data-edit-${f.key}="${row.id}" value="${row[f.key] || ""}" />`}</td>`).join("")}
+          ${fields.map((f) => `<td>${f.type === "select" ? `<select data-edit-${f.key}="${row.id}"></select>` : `<input data-edit-${f.key}="${row.id}" value="${showFriendlyValue ? (showFriendlyValue(f, row[f.key], row) ?? row[f.key] ?? "") : (row[f.key] || "")}" />`}</td>`).join("")}
           <td>
-            <select data-edit-status="${row.id}">
+            <select data-edit-status="${row.id}" class="status-select">
               <option value="true" ${row.is_active ? "selected" : ""}>Active</option>
               <option value="false" ${!row.is_active ? "selected" : ""}>Inactive</option>
             </select>
           </td>
           <td>
-            <button class="btn" data-save-id="${row.id}">Save</button>
-            <button class="btn btn-danger" data-delete-id="${row.id}">Delete</button>
+            <div class="action-group"><button class="btn" data-save-id="${row.id}">Save</button>
+            <button class="btn btn-danger" data-delete-id="${row.id}">Delete</button></div>
           </td>
         </tr>
       `;
@@ -198,6 +204,7 @@ export async function initMasterDataPage({
             payload[f.key] = raw;
           }
         });
+        if (normalize) normalize(payload, { mode: "update", before });
         const validationError = await validatePayload(payload, { id, before });
         if (validationError) {
           showToast(validationError, TOAST_TYPES.ERROR);

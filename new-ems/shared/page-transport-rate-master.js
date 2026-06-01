@@ -10,6 +10,12 @@ initMasterDataPage({
   table: MASTER_TABLES.transportRateMaster,
   validate: async (payload, context) => {
     if (!payload.effective_from) return "Effective From is required.";
+    if (payload.rate_per_mt !== undefined && payload.rate_per_mt !== null && payload.rate_per_mt !== "" && Number(payload.rate_per_mt) < 0) {
+      return "Rate per MT must be zero or positive.";
+    }
+    if (payload.effective_to && payload.effective_from && new Date(payload.effective_to) < new Date(payload.effective_from)) {
+      return "Effective To cannot be before Effective From.";
+    }
     if (payload.rate_type === "company" && payload.rate_per_mt && payload.transporter_rate_per_mt && Number(payload.rate_per_mt) < Number(payload.transporter_rate_per_mt)) {
       return "Company rate must be greater than or equal to transporter rate.";
     }
@@ -27,6 +33,10 @@ initMasterDataPage({
     );
     if (dup) return "Duplicate active rate exists for same route/commodity/client/transporter/effective date.";
     return null;
+  },
+  normalize: (payload) => {
+    if (payload.code) payload.code = String(payload.code).toUpperCase().trim();
+    if (payload.rate_type) payload.rate_type = String(payload.rate_type).toLowerCase().trim();
   },
   fields: [
     { key: "division_id", label: "Division", required: true, type: "select", optionTable: "divisions", optionLabel: "name", divisionScoped: false },

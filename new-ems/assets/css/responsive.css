@@ -32,4 +32,7 @@
   .module-card { min-height: 120px; }
   table { min-width: 520px; }
   .login-card { padding: 0.95rem; }
+  .transport-form-card .form-row { grid-template-columns: 1fr; }
+  .action-group { width: 100%; }
+  .action-group .btn { flex: 1; }
 }
