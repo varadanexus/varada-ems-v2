@@ -184,6 +184,25 @@ export async function listDivisions() {
   return data || [];
 }
 
+export async function getDivisionByCode(code) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("divisions")
+    .select("id,code,name,is_active")
+    .eq("code", code)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function resolveWorkspaceDivision(workspace) {
+  if (workspace === "transportation") {
+    return await getDivisionByCode("TRANSPORT");
+  }
+  return null;
+}
+
 export async function assignUserRole(userId, roleId) {
   const client = getSupabaseClient();
   const { error: delErr } = await client.from("user_roles").delete().eq("user_id", userId);
@@ -322,12 +341,17 @@ export const MASTER_TABLES = {
   documentTypes: "master_document_types",
   divisions: "divisions",
   transportTruckOwners: "transport_truck_owners",
+  transportClients: "transport_clients",
+  transportTransporters: "transport_transporters",
+  transportAgents: "transport_agents",
+  transportCommodities: "transport_commodities",
   transportTrucks: "transport_trucks",
   transportDrivers: "transport_drivers",
   transportRateMaster: "transport_rate_master",
   transportRouteMaster: "transport_route_master",
   transportClientMapping: "transport_client_mapping",
-  transportTransporterMapping: "transport_transporter_mapping"
+  transportTransporterMapping: "transport_transporter_mapping",
+  transportTruckAgentCommissionMapping: "transport_truck_agent_commission_mapping"
 };
 
 export async function listMasterRecords(table, { search = "", page = 1, pageSize = 10 } = {}) {

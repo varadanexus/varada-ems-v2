@@ -13,9 +13,9 @@ initMasterDataPage({
     { key: "division_id", label: "Division", required: true, type: "select", optionTable: "divisions", optionLabel: "name", divisionScoped: false },
     { key: "code", label: "Code", required: true },
     { key: "name", label: "Name", required: true },
-    { key: "transporter_id", label: "Transporter", required: true, type: "select", optionTable: "master_transporters", optionLabel: "name", divisionScoped: true },
+    { key: "transporter_id", label: "Transporter", required: true, type: "select", optionTable: "transport_transporters", optionLabel: "name", divisionScoped: true },
     { key: "truck_id", label: "Truck", type: "select", optionTable: "transport_trucks", optionLabel: "name", divisionScoped: true },
     { key: "route_id", label: "Route", type: "select", optionTable: "transport_route_master", optionLabel: "name", divisionScoped: true },
-    { key: "commodity_id", label: "Commodity", type: "select", optionTable: "master_commodities", optionLabel: "name", divisionScoped: true }
+    { key: "commodity_id", label: "Commodity", type: "select", optionTable: "transport_commodities", optionLabel: "name", divisionScoped: true }
   ]
 });

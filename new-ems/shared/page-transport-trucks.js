@@ -32,7 +32,7 @@ initMasterDataPage({
     { key: "code", label: "Code", required: true },
     { key: "name", label: "Name", required: true },
     { key: "owner_id", label: "Truck Owner", type: "select", optionTable: "transport_truck_owners", optionLabel: "name", divisionScoped: true },
-    { key: "transporter_id", label: "Transporter", type: "select", optionTable: "master_transporters", optionLabel: "name", divisionScoped: true },
+    { key: "transporter_id", label: "Transporter", type: "select", optionTable: "transport_transporters", optionLabel: "name", divisionScoped: true },
     { key: "registration_no", label: "Registration No" },
     { key: "capacity_mt", label: "Capacity MT" },
     { key: "permit_expiry", label: "Permit Expiry (YYYY-MM-DD)" }

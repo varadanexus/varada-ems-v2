@@ -1,5 +1,5 @@
 import { TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { createMasterRecord, existsActiveDuplicate, listActiveOptions, listMasterRecords, softDeleteMasterRecord, updateMasterRecord } from "./admin-api.js";
+import { createMasterRecord, existsActiveDuplicate, getDivisionByCode, listActiveOptions, listMasterRecords, softDeleteMasterRecord, updateMasterRecord } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
@@ -27,11 +27,22 @@ export async function initMasterDataPage({
 
   await bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, workspace });
   const divisionScope = localStorage.getItem("ems_division_scope") || "all";
-  const divisionId = divisionScope !== "all" ? divisionScope : null;
+  let divisionId = divisionScope !== "all" ? divisionScope : null;
+  let divisionLabel = divisionScope;
+  if (workspace === WORKSPACES.TRANSPORTATION) {
+    const canonical = await getDivisionByCode("TRANSPORT");
+    if (canonical?.id) {
+      divisionId = canonical.id;
+      divisionLabel = canonical.name || "Transportation";
+    }
+  }
+  const effectiveFields = workspace === WORKSPACES.TRANSPORTATION
+    ? fields.filter((f) => f.key !== "division_id")
+    : fields;
 
   renderModuleContent(`
     <div class="card transport-form-card" style="margin-bottom:1rem;">
-      <h3>${cardTitle || `Create ${pageTitle}`}</h3><p class="muted">Division scope: ${divisionScope}</p>
+      <h3>${cardTitle || `Create ${pageTitle}`}</h3><p class="muted">Transportation Division: ${divisionLabel}</p>
       <form id="masterCreateForm" class="form-row"></form>
     </div>
     <div class="card transport-search-card" style="margin-bottom:1rem;">
@@ -39,7 +50,7 @@ export async function initMasterDataPage({
     </div>
     <div class="table-shell">
       <table>
-        <thead><tr>${fields.map((f) => `<th>${f.label}</th>`).join("")}<th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr>${effectiveFields.map((f) => `<th>${f.label}</th>`).join("")}<th>Status</th><th>Actions</th></tr></thead>
         <tbody id="masterBody"></tbody>
       </table>
     </div>
@@ -50,7 +61,7 @@ export async function initMasterDataPage({
     </div>
   `);
 
-  renderCreateForm(fields);
+  renderCreateForm(effectiveFields);
   bindCreate();
   bindListControls();
   await loadList();
@@ -72,9 +83,13 @@ export async function initMasterDataPage({
   }
 
   async function hydrateSelectOptions(mode, rowId) {
-    for (const f of fields.filter((x) => x.type === "select")) {
+    for (const f of effectiveFields.filter((x) => x.type === "select")) {
       const sel = mode === "create" ? qs(`[data-field='${f.key}']`) : qs(`[data-edit-${f.key}='${rowId}']`);
       if (!sel) continue;
+      if (Array.isArray(f.options) && f.options.length) {
+        sel.innerHTML = `<option value="">Select ${f.label}</option>${f.options.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}`;
+        continue;
+      }
       const opts = await listActiveOptions(f.optionTable, {
         labelField: f.optionLabel || "name",
         valueField: f.optionValue || "id",
@@ -89,7 +104,7 @@ export async function initMasterDataPage({
     form?.addEventListener("submit", async (event) => {
       event.preventDefault();
       const payload = { is_active: true };
-      fields.forEach((f) => {
+      effectiveFields.forEach((f) => {
         const value = qs(`[data-field='${f.key}']`)?.value?.trim();
       if (value) payload[f.key] = value;
       });
@@ -144,7 +159,7 @@ export async function initMasterDataPage({
 
   async function loadList() {
     const search = qs("#masterSearch")?.value?.trim() || "";
-    const { rows, count } = await listMasterRecords(table, { search, page, pageSize, divisionId: divisionScoped ? divisionId : null, searchColumns });
+    const { rows, count } = await listMasterRecords(table, { search, page, pageSize, divisionId: (workspace === WORKSPACES.TRANSPORTATION || divisionScoped) ? divisionId : null, searchColumns });
     currentRows = rows;
     const totalPages = Math.max(1, Math.ceil((count || 0) / pageSize));
     if (page > totalPages) {
@@ -158,14 +173,14 @@ export async function initMasterDataPage({
     const body = qs("#masterBody");
     if (!body) return;
     if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="${fields.length + 2}"><div class="empty-state"><strong>${emptyStateTitle}</strong><div>${emptyStateText}</div></div></td></tr>`;
+      body.innerHTML = `<tr><td colspan="${effectiveFields.length + 2}"><div class="empty-state"><strong>${emptyStateTitle}</strong><div>${emptyStateText}</div></div></td></tr>`;
       return;
     }
 
     body.innerHTML = rows.map((row) => {
       return `
         <tr>
-          ${fields.map((f) => `<td>${f.type === "select" ? `<select data-edit-${f.key}="${row.id}"></select>` : `<input data-edit-${f.key}="${row.id}" value="${showFriendlyValue ? (showFriendlyValue(f, row[f.key], row) ?? row[f.key] ?? "") : (row[f.key] || "")}" />`}</td>`).join("")}
+          ${effectiveFields.map((f) => `<td>${f.type === "select" ? `<select data-edit-${f.key}="${row.id}"></select>` : `<input data-edit-${f.key}="${row.id}" value="${showFriendlyValue ? (showFriendlyValue(f, row[f.key], row) ?? row[f.key] ?? "") : (row[f.key] || "")}" />`}</td>`).join("")}
           <td>
             <select data-edit-status="${row.id}" class="status-select">
               <option value="true" ${row.is_active ? "selected" : ""}>Active</option>
@@ -182,7 +197,7 @@ export async function initMasterDataPage({
 
     bindRowActions();
     for (const row of rows) {
-      for (const f of fields.filter((x) => x.type === "select")) {
+      for (const f of effectiveFields.filter((x) => x.type === "select")) {
         await hydrateSelectOptions("edit", row.id);
         const sel = qs(`[data-edit-${f.key}='${row.id}']`);
         if (sel) sel.value = row[f.key] || "";
@@ -196,7 +211,7 @@ export async function initMasterDataPage({
         const id = btn.getAttribute("data-save-id");
         const before = currentRows.find((r) => String(r.id) === String(id)) || {};
         const payload = { is_active: (qs(`[data-edit-status='${id}']`)?.value || "true") === "true" };
-        fields.forEach((f) => {
+        effectiveFields.forEach((f) => {
           const raw = qs(`[data-edit-${f.key}='${id}']`)?.value?.trim() || null;
           if (raw && ["distance_km", "cgst_rate", "sgst_rate", "igst_rate"].includes(f.key)) {
             payload[f.key] = Number(raw);
@@ -254,7 +269,7 @@ export async function initMasterDataPage({
   }
 
   async function validatePayload(payload, context = null) {
-    for (const f of fields) {
+    for (const f of effectiveFields) {
       if (f.required && !payload[f.key]) return `${f.label} is required.`;
       if (f.validator) {
         const result = await f.validator(payload[f.key], payload, context);

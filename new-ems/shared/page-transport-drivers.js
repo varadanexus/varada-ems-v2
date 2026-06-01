@@ -25,6 +25,6 @@ initMasterDataPage({
     { key: "phone", label: "Phone" },
     { key: "license_no", label: "License No" },
     { key: "license_expiry", label: "License Expiry (YYYY-MM-DD)" },
-    { key: "transporter_id", label: "Transporter", type: "select", optionTable: "master_transporters", optionLabel: "name", divisionScoped: true }
+    { key: "transporter_id", label: "Transporter", type: "select", optionTable: "transport_transporters", optionLabel: "name", divisionScoped: true }
   ]
 });
