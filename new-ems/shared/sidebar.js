@@ -37,13 +37,14 @@ const MENU_BY_WORKSPACE = {
       title: "Transportation Workspace",
       items: [
         { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
-        { module: MODULES.TRANSPORTATION, label: "Transportation Dashboard", href: ROUTES.DASHBOARD },
-        { module: MODULES.TRANSPORTATION, label: "Trips", href: ROUTES.DASHBOARD },
-        { module: MODULES.TRANSPORTATION, label: "Trucks", href: ROUTES.DASHBOARD },
-        { module: MODULES.MASTER_ROUTES, label: "Routes", href: ROUTES.MASTER_ROUTES },
-        { module: MODULES.TRANSPORTATION, label: "Rate Master", href: ROUTES.DASHBOARD },
-        { module: MODULES.TRANSPORTATION, label: "Documents", href: ROUTES.DASHBOARD },
-        { module: MODULES.TRANSPORTATION, label: "Reports", href: ROUTES.DASHBOARD }
+        { module: MODULES.TRANSPORT_DASHBOARD, label: "Transportation Dashboard", href: ROUTES.TRANSPORT_DASHBOARD },
+        { module: MODULES.TRANSPORT_TRUCK_OWNERS, label: "Truck Owners", href: ROUTES.TRANSPORT_TRUCK_OWNERS },
+        { module: MODULES.TRANSPORT_TRUCKS, label: "Trucks", href: ROUTES.TRANSPORT_TRUCKS },
+        { module: MODULES.TRANSPORT_DRIVERS, label: "Drivers", href: ROUTES.TRANSPORT_DRIVERS },
+        { module: MODULES.TRANSPORT_RATE_MASTER, label: "Rate Master", href: ROUTES.TRANSPORT_RATE_MASTER },
+        { module: MODULES.TRANSPORT_ROUTE_MASTER, label: "Route Master", href: ROUTES.TRANSPORT_ROUTE_MASTER },
+        { module: MODULES.TRANSPORT_CLIENT_MAPPING, label: "Client Mapping", href: ROUTES.TRANSPORT_CLIENT_MAPPING },
+        { module: MODULES.TRANSPORT_TRANSPORTER_MAPPING, label: "Transporter Mapping", href: ROUTES.TRANSPORT_TRANSPORTER_MAPPING }
       ]
     }
   ]

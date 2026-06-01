@@ -17,6 +17,14 @@ export const ROUTES = {
   MASTER_UNITS: "/new-ems/modules/master-units/index.html",
   MASTER_TAX_CODES: "/new-ems/modules/master-tax-codes/index.html",
   MASTER_DOCUMENT_TYPES: "/new-ems/modules/master-document-types/index.html"
+  ,TRANSPORT_DASHBOARD: "/new-ems/modules/transportation-dashboard/index.html"
+  ,TRANSPORT_TRUCK_OWNERS: "/new-ems/modules/transport-truck-owners/index.html"
+  ,TRANSPORT_TRUCKS: "/new-ems/modules/transport-trucks/index.html"
+  ,TRANSPORT_DRIVERS: "/new-ems/modules/transport-drivers/index.html"
+  ,TRANSPORT_RATE_MASTER: "/new-ems/modules/transport-rate-master/index.html"
+  ,TRANSPORT_ROUTE_MASTER: "/new-ems/modules/transport-route-master/index.html"
+  ,TRANSPORT_CLIENT_MAPPING: "/new-ems/modules/transport-client-mapping/index.html"
+  ,TRANSPORT_TRANSPORTER_MAPPING: "/new-ems/modules/transport-transporter-mapping/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -52,10 +60,18 @@ export const MODULES = {
   MASTER_UNITS: "master-units",
   MASTER_TAX_CODES: "master-tax-codes",
   MASTER_DOCUMENT_TYPES: "master-document-types"
+  ,TRANSPORT_DASHBOARD: "transport-dashboard"
+  ,TRANSPORT_TRUCK_OWNERS: "transport-truck-owners"
+  ,TRANSPORT_TRUCKS: "transport-trucks"
+  ,TRANSPORT_DRIVERS: "transport-drivers"
+  ,TRANSPORT_RATE_MASTER: "transport-rate-master"
+  ,TRANSPORT_ROUTE_MASTER: "transport-route-master"
+  ,TRANSPORT_CLIENT_MAPPING: "transport-client-mapping"
+  ,TRANSPORT_TRANSPORTER_MAPPING: "transport-transporter-mapping"
 };
 
 export const CONTROL_CENTER_MODULES = [
-  { module: MODULES.TRANSPORTATION, title: "Transportation & Minerals Logistics", subtitle: "Dispatch, trips, challans, settlements", href: null },
+  { module: MODULES.TRANSPORTATION, title: "Transportation & Minerals Logistics", subtitle: "Dispatch, trips, challans, settlements", href: ROUTES.TRANSPORT_DASHBOARD },
   { module: MODULES.CONSTRUCTION, title: "Construction", subtitle: "Site operations and execution", href: null },
   { module: MODULES.INTERIORS, title: "Interiors", subtitle: "Project planning and vendor flow", href: null },
   { module: MODULES.HOSPITAL_PROJECTS, title: "Hospital Projects", subtitle: "Infrastructure programs", href: null },

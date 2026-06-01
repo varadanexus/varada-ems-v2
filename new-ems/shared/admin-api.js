@@ -320,7 +320,14 @@ export const MASTER_TABLES = {
   units: "master_units",
   taxCodes: "master_tax_codes",
   documentTypes: "master_document_types",
-  divisions: "divisions"
+  divisions: "divisions",
+  transportTruckOwners: "transport_truck_owners",
+  transportTrucks: "transport_trucks",
+  transportDrivers: "transport_drivers",
+  transportRateMaster: "transport_rate_master",
+  transportRouteMaster: "transport_route_master",
+  transportClientMapping: "transport_client_mapping",
+  transportTransporterMapping: "transport_transporter_mapping"
 };
 
 export async function listMasterRecords(table, { search = "", page = 1, pageSize = 10 } = {}) {
