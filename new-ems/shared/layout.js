@@ -1,6 +1,6 @@
 import { APP_NAME, MODULES, ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getAllowedModulesForRoles, getUserRoleCodes } from "./admin-api.js";
-import { logout, requireAuth, getCurrentAppUser } from "./auth.js";
+import { logout, requireAuth, getCurrentAppUser, validateActiveUnlockedUser } from "./auth.js";
 import { renderNavbar } from "./navbar.js";
 import { renderSidebar } from "./sidebar.js";
 import { initTheme, toggleTheme } from "./theme.js";
@@ -25,6 +25,16 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
 
   const session = await requireAuth();
   if (!session) return;
+
+  try {
+    await validateActiveUnlockedUser();
+  } catch (error) {
+    const message = error?.message || "Access blocked. Contact administrator.";
+    debugLog("auth validation result", { ok: false, reason: "validation_exception", message });
+    showToast(message, TOAST_TYPES.ERROR);
+    await logout();
+    return;
+  }
 
   const appUser = await getCurrentAppUser();
   debugLog("app_users status check", {

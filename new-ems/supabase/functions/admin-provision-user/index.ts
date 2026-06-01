@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 type Payload = {
+  action?: "provision" | "reset_password";
   email: string;
   password?: string;
   displayName?: string;
@@ -44,8 +45,37 @@ Deno.serve(async (req) => {
     }
 
     const body = (await req.json()) as Payload;
-    if (!body?.email || !body?.roleCode) {
-      return new Response(JSON.stringify({ error: "email and roleCode are required" }), { status: 400, headers: corsHeaders });
+    if (!body?.email) {
+      return new Response(JSON.stringify({ error: "email is required" }), { status: 400, headers: corsHeaders });
+    }
+
+    if ((body.action || "provision") === "reset_password") {
+      const { error: resetErr } = await admin.auth.resetPasswordForEmail(body.email, {
+        redirectTo: `${supabaseUrl.replace('.supabase.co', '.supabase.co')}/auth/v1/verify`
+      });
+      if (resetErr) return new Response(JSON.stringify({ error: resetErr.message }), { status: 400, headers: corsHeaders });
+
+      await admin.from("audit_logs").insert({
+        event_type: "user_password_reset",
+        action: "reset_password_requested",
+        module_code: "users",
+        actor_auth_user_id: callerAuthUserId,
+        entity_type: "app_users",
+        entity_id: body.email,
+        details: { email: body.email },
+        after_data: { email: body.email },
+        user_agent: req.headers.get("user-agent") || null,
+        ip_address: req.headers.get("x-forwarded-for") || null
+      });
+
+      return new Response(JSON.stringify({ success: true, message: "Password reset initiated" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (!body?.roleCode) {
+      return new Response(JSON.stringify({ error: "roleCode is required for provisioning" }), { status: 400, headers: corsHeaders });
     }
 
     const { data: createdAuth, error: createErr } = await admin.auth.admin.createUser({

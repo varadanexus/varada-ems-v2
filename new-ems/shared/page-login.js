@@ -1,6 +1,6 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { markUserLogin } from "./admin-api.js";
-import { loginWithPassword, redirectIfAuthenticated } from "./auth.js";
+import { loginWithPassword, redirectIfAuthenticated, signOutSessionOnly, validateActiveUnlockedUser } from "./auth.js";
 import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 
@@ -33,6 +33,7 @@ async function init() {
 
     try {
       const loginData = await loginWithPassword(email, password);
+      await validateActiveUnlockedUser();
       if (loginData?.user?.id) {
         await markUserLogin(loginData.user.id);
       }
@@ -41,6 +42,7 @@ async function init() {
       showToast("Login successful", TOAST_TYPES.SUCCESS);
       window.location.replace(ROUTES.DASHBOARD);
     } catch (error) {
+      await signOutSessionOnly();
       showToast(error?.message || "Login failed", TOAST_TYPES.ERROR);
     }
   });

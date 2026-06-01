@@ -4,12 +4,15 @@ import { assignUserDivision, assignUserRole, listDivisions, listRoles, listUsers
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
 import { updateUserSecurity } from "./admin-api.js";
+import { getCurrentAppUser } from "./auth.js";
+import { requestUserPasswordReset } from "./admin-api.js";
 
 let allUsers = [];
 let allRoles = [];
 let allDivisions = [];
 let currentPage = 1;
 const PAGE_SIZE = 10;
+let currentAppUserId = null;
 
 async function init() {
   await bootstrapProtectedPage({
@@ -17,6 +20,9 @@ async function init() {
     pageTitle: "User Management",
     pageDescription: "Admin-only foundation shell for user lifecycle management"
   });
+
+  const me = await getCurrentAppUser();
+  currentAppUserId = me?.id || null;
 
   renderModuleContent(`
     <div class="card" style="margin-bottom:1rem;">
@@ -99,7 +105,10 @@ function renderUsers() {
       <tr>
         <td>${u.display_name || u.email}</td>
         <td>${role}</td>
-        <td>${u.status}</td>
+        <td>
+          <span class="meta-pill">${u.status === "active" ? "Active" : "Disabled"}</span>
+          ${u.is_locked ? '<span class="meta-pill" style="margin-left:0.4rem;">Locked</span>' : '<span class="meta-pill" style="margin-left:0.4rem;">Unlocked</span>'}
+        </td>
         <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "Never"}</td>
         <td>${divisions}</td>
         <td>
@@ -119,12 +128,16 @@ function renderUsers() {
       const userId = btn.getAttribute("data-user-id");
       const nextStatus = btn.getAttribute("data-next-status");
       try {
+        if (String(userId) === String(currentAppUserId)) {
+          const ok = window.confirm("You are modifying your own account status. Continue?");
+          if (!ok) return;
+        }
         await updateUserStatus(userId, nextStatus);
         await logUserRoleEvent("user_status_change", { entityType: "app_users", entityId: userId, status: nextStatus });
-        showToast("User status updated", "success");
+        showToast(nextStatus === "active" ? "User activated" : "User disabled", "success");
         await loadUsers();
       } catch (error) {
-        showToast(error?.message || "Failed to update user", "error");
+        showToast(error?.message || "Failed to update user status", "error");
       }
     });
   });
@@ -151,6 +164,10 @@ function renderUsers() {
       const userId = btn.getAttribute("data-lock-user-id");
       const nextLock = (btn.getAttribute("data-next-lock") || "false") === "true";
       try {
+        if (String(userId) === String(currentAppUserId)) {
+          const ok = window.confirm("You are changing your own lock state. Continue?");
+          if (!ok) return;
+        }
         await updateUserSecurity(userId, { is_locked: nextLock });
         await logUserRoleEvent("user_lock_toggle", { entityType: "app_users", entityId: userId, is_locked: nextLock });
         showToast(nextLock ? "User locked" : "User unlocked", "success");
@@ -164,8 +181,18 @@ function renderUsers() {
   body.querySelectorAll("button[data-reset-user-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.getAttribute("data-reset-user-id");
-      await logUserRoleEvent("password_reset_placeholder", { entityType: "app_users", entityId: userId });
-      showToast("Password reset placeholder logged (Edge Function integration pending)", "info");
+      const user = allUsers.find((x) => String(x.id) === String(userId));
+      if (!user?.email) {
+        showToast("Cannot reset password: user email missing", "error");
+        return;
+      }
+      try {
+        await requestUserPasswordReset(user.email);
+        await logUserRoleEvent("password_reset_requested", { entityType: "app_users", entityId: userId, email: user.email });
+        showToast("Password reset email triggered", "success");
+      } catch (error) {
+        showToast(error?.message || "Failed to request password reset", "error");
+      }
     });
   });
 }

@@ -29,6 +29,46 @@ export async function getCurrentAppUser() {
   return getAppUserByAuthId(session.user.id);
 }
 
+export async function validateActiveUnlockedUser() {
+  const session = await getSession();
+  if (!session?.user?.id) {
+    debugLog("auth validation result", { ok: false, reason: "not_authenticated" });
+    throw new Error("Please login");
+  }
+  const client = getSupabaseClient();
+  const { data: appUser, error } = await client
+    .from("app_users")
+    .select("id,status,is_locked")
+    .eq("auth_user_id", session.user.id)
+    .maybeSingle();
+
+  if (error) {
+    debugLog("auth validation result", { ok: false, reason: "app_user_lookup_error", message: error.message });
+    throw error;
+  }
+
+  debugLog("auth validation status", {
+    appUserId: appUser?.id || null,
+    status: appUser?.status || null,
+    is_locked: appUser?.is_locked ?? null
+  });
+
+  if (!appUser) {
+    debugLog("auth validation result", { ok: false, reason: "not_provisioned" });
+    throw new Error("User is not provisioned. Contact administrator.");
+  }
+  if (appUser.status !== "active") {
+    debugLog("auth validation result", { ok: false, reason: "inactive", status: appUser.status });
+    throw new Error("Your account is disabled. Contact administrator.");
+  }
+  if (appUser.is_locked) {
+    debugLog("auth validation result", { ok: false, reason: "locked", is_locked: appUser.is_locked });
+    throw new Error("Your account is locked. Contact administrator.");
+  }
+  debugLog("auth validation result", { ok: true, reason: "active_unlocked" });
+  return appUser;
+}
+
 export async function requireAuth() {
   const session = await getSession();
   if (!session) {
@@ -42,7 +82,7 @@ export async function redirectIfAuthenticated() {
   const session = await getSession();
   if (session) {
     const appUser = await getAppUserByAuthId(session.user.id);
-    if (!appUser || appUser.status !== "active") {
+    if (!appUser || appUser.status !== "active" || appUser.is_locked) {
       debugLog("redirect blocked", { reason: "authenticated_but_app_user_missing_or_inactive" });
       await getSupabaseClient().auth.signOut();
       return false;
@@ -73,14 +113,37 @@ export async function loginWithPassword(email, password) {
     email: data?.user?.email || null,
     hasSession: Boolean(data?.session)
   });
+  const appUser = await getAppUserByAuthId(data?.user?.id);
+  if (!appUser) {
+    await client.auth.signOut();
+    throw new Error("User is not provisioned. Contact administrator.");
+  }
+  if (appUser.status !== "active") {
+    await client.auth.signOut();
+    throw new Error("Your account is disabled. Contact administrator.");
+  }
+  if (appUser.is_locked) {
+    await client.auth.signOut();
+    throw new Error("Your account is locked. Contact administrator.");
+  }
   await logAuthEvent("login", data?.user?.id || null);
   return data;
 }
 
 export async function logout() {
+  const isLoginPage = window.location.pathname.endsWith("/new-ems/login.html") || window.location.pathname.endsWith("login.html");
   const client = getSupabaseClient();
   const session = await getSession();
   await client.auth.signOut();
   await logAuthEvent("logout", session?.user?.id || null);
+  if (isLoginPage) return;
+  await new Promise((resolve) => setTimeout(resolve, 2200));
   window.location.replace(ROUTES.LOGIN);
+}
+
+export async function signOutSessionOnly() {
+  const client = getSupabaseClient();
+  const session = await getSession();
+  await client.auth.signOut();
+  await logAuthEvent("logout", session?.user?.id || null);
 }
