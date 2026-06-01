@@ -83,6 +83,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   `;
 
   bindGlobalActions();
+  return { appUser, roleCodes, allowedModules, primaryRole };
 }
 
 function bindGlobalActions() {
