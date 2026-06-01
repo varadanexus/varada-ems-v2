@@ -542,3 +542,43 @@ export async function softDeleteTripExpense(id) {
     .eq("id", id);
   if (error) throw error;
 }
+
+export async function createTripDocument(payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("transport_trip_documents").insert(payload).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTripDocument(id, payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("transport_trip_documents")
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTripDocument(id) {
+  const client = getSupabaseClient();
+  const { error } = await client
+    .from("transport_trip_documents")
+    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_active: false })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function listTripDocuments(tripId) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("transport_trip_documents")
+    .select("*")
+    .eq("trip_id", tripId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
