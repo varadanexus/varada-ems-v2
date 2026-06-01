@@ -32,6 +32,7 @@ export const ROUTES = {
   ,TRANSPORT_TRIP_LIST: "/new-ems/modules/transport-trip-list/index.html"
   ,TRANSPORT_TRIP_DETAILS: "/new-ems/modules/transport-trip-details/index.html"
   ,TRANSPORT_STATUS_TIMELINE: "/new-ems/modules/transport-status-timeline/index.html"
+  ,TRANSPORT_TRIP_EXPENSES: "/new-ems/modules/transport-trip-expenses/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -90,6 +91,7 @@ export const MODULES = {
   ,TRANSPORT_TRIP_LIST: "transport-trip-list"
   ,TRANSPORT_TRIP_DETAILS: "transport-trip-details"
   ,TRANSPORT_STATUS_TIMELINE: "transport-status-timeline"
+  ,TRANSPORT_TRIP_EXPENSES: "transport-trip-expenses"
 };
 
 export const CONTROL_CENTER_MODULES = [
