@@ -25,6 +25,11 @@ export const ROUTES = {
   ,TRANSPORT_ROUTE_MASTER: "/new-ems/modules/transport-route-master/index.html"
   ,TRANSPORT_CLIENT_MAPPING: "/new-ems/modules/transport-client-mapping/index.html"
   ,TRANSPORT_TRANSPORTER_MAPPING: "/new-ems/modules/transport-transporter-mapping/index.html"
+  ,TRANSPORT_TRIP_DASHBOARD: "/new-ems/modules/transport-trip-dashboard/index.html"
+  ,TRANSPORT_CREATE_TRIP: "/new-ems/modules/transport-create-trip/index.html"
+  ,TRANSPORT_TRIP_LIST: "/new-ems/modules/transport-trip-list/index.html"
+  ,TRANSPORT_TRIP_DETAILS: "/new-ems/modules/transport-trip-details/index.html"
+  ,TRANSPORT_STATUS_TIMELINE: "/new-ems/modules/transport-status-timeline/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -68,6 +73,11 @@ export const MODULES = {
   ,TRANSPORT_ROUTE_MASTER: "transport-route-master"
   ,TRANSPORT_CLIENT_MAPPING: "transport-client-mapping"
   ,TRANSPORT_TRANSPORTER_MAPPING: "transport-transporter-mapping"
+  ,TRANSPORT_TRIP_DASHBOARD: "transport-trip-dashboard"
+  ,TRANSPORT_CREATE_TRIP: "transport-create-trip"
+  ,TRANSPORT_TRIP_LIST: "transport-trip-list"
+  ,TRANSPORT_TRIP_DETAILS: "transport-trip-details"
+  ,TRANSPORT_STATUS_TIMELINE: "transport-status-timeline"
 };
 
 export const CONTROL_CENTER_MODULES = [

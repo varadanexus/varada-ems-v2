@@ -11,7 +11,12 @@ initMasterDataPage({
   searchColumns: ["name", "code", "phone", "license_no"],
   validate: async (payload) => {
     if (payload.phone && !/^[6-9]\d{9}$/.test(payload.phone)) return "Driver mobile number must be a valid 10-digit Indian mobile.";
+    if (payload.license_expiry && Number.isNaN(new Date(payload.license_expiry).getTime())) return "License expiry must be a valid date.";
     return null;
+  },
+  normalize: (payload) => {
+    if (payload.phone) payload.phone = String(payload.phone).replace(/\D/g, "").slice(-10);
+    if (payload.code) payload.code = String(payload.code).toUpperCase().trim();
   },
   fields: [
     { key: "division_id", label: "Division", required: true, type: "select", optionTable: "divisions", optionLabel: "name", divisionScoped: false },

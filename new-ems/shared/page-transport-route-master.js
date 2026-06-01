@@ -12,7 +12,13 @@ initMasterDataPage({
   validate: async (payload) => {
     if (!payload.from_location) return "Source is required.";
     if (!payload.to_location) return "Destination is required.";
+    if (payload.distance_km && Number(payload.distance_km) < 0) return "Distance must be zero or positive.";
     return null;
+  },
+  normalize: (payload) => {
+    if (payload.code) payload.code = String(payload.code).toUpperCase().trim();
+    if (payload.from_location) payload.from_location = String(payload.from_location).trim();
+    if (payload.to_location) payload.to_location = String(payload.to_location).trim();
   },
   fields: [
     { key: "division_id", label: "Division", required: true, type: "select", optionTable: "divisions", optionLabel: "name", divisionScoped: false },
