@@ -37,7 +37,7 @@ const MENU_BY_WORKSPACE = {
       title: "Transportation Workspace",
       items: [
         { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
-        { module: MODULES.TRANSPORT_DASHBOARD, label: "Transportation Dashboard", href: ROUTES.TRANSPORT_DASHBOARD },
+        { module: MODULES.TRANSPORTATION, label: "Transportation Dashboard", href: ROUTES.TRANSPORT_DASHBOARD },
         { module: MODULES.TRANSPORT_TRUCK_OWNERS, label: "Truck Owners", href: ROUTES.TRANSPORT_TRUCK_OWNERS },
         { module: MODULES.TRANSPORT_TRUCKS, label: "Trucks", href: ROUTES.TRANSPORT_TRUCKS },
         { module: MODULES.TRANSPORT_DRIVERS, label: "Drivers", href: ROUTES.TRANSPORT_DRIVERS },
