@@ -223,6 +223,28 @@ export async function provisionUserViaEdge({ email, password, displayName, roleC
   return json;
 }
 
+export async function requestUserPasswordReset(targetEmail) {
+  const client = getSupabaseClient();
+  const { data } = await client.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("Missing session token");
+
+  const fnUrl = `${window.EMS_RUNTIME_CONFIG?.supabaseUrl}/functions/v1/admin-provision-user`;
+  const res = await fetch(fnUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || ""
+    },
+    body: JSON.stringify({ action: "reset_password", email: targetEmail })
+  });
+
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error || "Password reset request failed");
+  return json;
+}
+
 export async function listPermissions() {
   const client = getSupabaseClient();
   const { data, error } = await client
