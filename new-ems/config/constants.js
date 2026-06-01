@@ -75,3 +75,9 @@ export const TOAST_TYPES = {
   ERROR: "error",
   INFO: "info"
 };
+
+export const WORKSPACES = {
+  ADMIN: "admin",
+  MASTER_DATA: "master-data",
+  TRANSPORTATION: "transportation"
+};

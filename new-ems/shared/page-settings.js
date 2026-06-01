@@ -1,4 +1,4 @@
-import { MODULES } from "../config/constants.js";
+import { MODULES, WORKSPACES } from "../config/constants.js";
 import { listAuditLogs, listSystemSettings, upsertSystemSetting } from "./admin-api.js";
 import { getCurrentAppUser } from "./auth.js";
 import { logAuditEvent } from "./audit.js";
@@ -9,7 +9,8 @@ async function init() {
   await bootstrapProtectedPage({
     moduleCode: MODULES.SETTINGS,
     pageTitle: "Settings & Audit",
-    pageDescription: "System settings shell with audit framework placeholders"
+    pageDescription: "System settings shell with audit framework placeholders",
+    workspace: WORKSPACES.ADMIN
   });
 
   renderModuleContent(`

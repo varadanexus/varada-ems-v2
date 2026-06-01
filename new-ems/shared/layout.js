@@ -1,4 +1,4 @@
-import { APP_NAME, MODULES, ROUTES, TOAST_TYPES } from "../config/constants.js";
+import { APP_NAME, MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getAllowedModulesForRoles, getUserRoleCodes } from "./admin-api.js";
 import { logout, requireAuth, getCurrentAppUser, validateActiveUnlockedUser } from "./auth.js";
 import { renderNavbar } from "./navbar.js";
@@ -20,7 +20,7 @@ function resolveUserDivisionScope() {
   return localStorage.getItem("ems_division_scope") || "all";
 }
 
-export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription }) {
+export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, sidebarless = false, workspace = WORKSPACES.ADMIN }) {
   initTheme();
 
   const session = await requireAuth();
@@ -67,10 +67,10 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   if (!app) return;
 
   app.innerHTML = `
-    <div class="app-shell">
-      ${renderSidebar(allowedModules, window.location.pathname)}
+    <div class="app-shell ${sidebarless ? "sidebarless" : ""}">
+      ${sidebarless ? "" : renderSidebar(allowedModules, window.location.pathname, workspace)}
       <div class="app-main">
-        ${renderNavbar(session?.user?.email || "", primaryRole)}
+        ${renderNavbar(session?.user?.email || "", primaryRole, { sidebarless })}
         <section class="page-head">
           <h1>${pageTitle}</h1>
           <p>${pageDescription}</p>
@@ -87,13 +87,59 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
 }
 
 function bindGlobalActions() {
+  const shell = qs(".app-shell");
   const menuToggle = qs("#menuToggle");
   const sidebar = qs("#appSidebar");
   const themeButton = qs("#themeToggle");
   const logoutButton = qs("#logoutBtn");
+  const adminMenuBtn = qs("#adminMenuBtn");
+
+  const KEY = "ems_sidebar_state";
+  const isMobile = () => window.matchMedia("(max-width: 920px)").matches;
+  const applyState = (state) => {
+    if (!shell || !sidebar) return;
+    shell.classList.toggle("sidebar-collapsed", state === "collapsed" && !isMobile());
+    sidebar.classList.toggle("open", state === "open" && isMobile());
+  };
+
+  const saved = localStorage.getItem(KEY) || "expanded";
+  applyState(saved);
 
   menuToggle?.addEventListener("click", () => {
-    sidebar?.classList.toggle("open");
+    if (isMobile()) {
+      const next = sidebar?.classList.contains("open") ? "closed" : "open";
+      localStorage.setItem(KEY, next);
+      applyState(next);
+      return;
+    }
+    const next = shell?.classList.contains("sidebar-collapsed") ? "expanded" : "collapsed";
+    localStorage.setItem(KEY, next);
+    applyState(next);
+  });
+
+  adminMenuBtn?.addEventListener("click", () => {
+    window.location.assign(ROUTES.SETTINGS);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!isMobile() || !sidebar?.classList.contains("open")) return;
+    const t = e.target;
+    if (t instanceof Element && !sidebar.contains(t) && !menuToggle?.contains(t)) {
+      localStorage.setItem(KEY, "closed");
+      applyState("closed");
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && isMobile() && sidebar?.classList.contains("open")) {
+      localStorage.setItem(KEY, "closed");
+      applyState("closed");
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    const state = localStorage.getItem(KEY) || "expanded";
+    applyState(state);
   });
 
   themeButton?.addEventListener("click", () => {

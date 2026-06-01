@@ -6,7 +6,8 @@ async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.DASHBOARD,
     pageTitle: "EMS Control Center",
-    pageDescription: "Launch modules, review activity, and operate from a single workspace"
+    pageDescription: "Launch modules, review activity, and operate from a single workspace",
+    sidebarless: true
   });
   if (!boot) return;
 
@@ -16,16 +17,53 @@ async function init() {
     const visibleCards = CONTROL_CENTER_MODULES.filter((m) => (boot.allowedModules || []).includes(m.module));
     const cardsHtml = visibleCards.map((m) => `
       <a class="module-card" href="${m.href || ROUTES.DASHBOARD}">
+        <div class="module-top"><span class="module-dot"></span><span class="module-open">→</span></div>
         <div class="module-card-title">${m.title}</div>
         <p class="muted">${m.subtitle}</p>
         <span class="meta-pill">${m.href ? "Open" : "Coming soon"}</span>
       </a>
     `).join("");
 
+    const adminCards = [
+      { module: MODULES.USERS, title: "Users", href: ROUTES.USERS },
+      { module: MODULES.ROLES, title: "Roles", href: ROUTES.ROLES },
+      { module: MODULES.DIVISIONS, title: "Divisions", href: ROUTES.DIVISIONS },
+      { module: MODULES.SETTINGS, title: "Settings", href: ROUTES.SETTINGS },
+      { module: MODULES.AUDIT, title: "Audit Logs", href: ROUTES.SETTINGS }
+    ].filter((x) => (boot.allowedModules || []).includes(x.module));
+
+    const masterCards = [
+      { module: MODULES.MASTER_CLIENTS, title: "Clients", href: ROUTES.MASTER_CLIENTS },
+      { module: MODULES.MASTER_CONTRACTORS, title: "Contractors", href: ROUTES.MASTER_CONTRACTORS },
+      { module: MODULES.MASTER_TRANSPORTERS, title: "Transporters", href: ROUTES.MASTER_TRANSPORTERS },
+      { module: MODULES.MASTER_AGENTS, title: "Agents", href: ROUTES.MASTER_AGENTS },
+      { module: MODULES.MASTER_COMMODITIES, title: "Commodities", href: ROUTES.MASTER_COMMODITIES },
+      { module: MODULES.MASTER_ROUTES, title: "Routes", href: ROUTES.MASTER_ROUTES },
+      { module: MODULES.MASTER_UNITS, title: "Units", href: ROUTES.MASTER_UNITS },
+      { module: MODULES.MASTER_TAX_CODES, title: "Tax Codes", href: ROUTES.MASTER_TAX_CODES },
+      { module: MODULES.MASTER_DOCUMENT_TYPES, title: "Document Types", href: ROUTES.MASTER_DOCUMENT_TYPES }
+    ].filter((x) => (boot.allowedModules || []).includes(x.module));
+
     renderModuleContent(`
       <section class="control-hero card">
         <h2>Welcome to EMS Control Center</h2>
         <p class="muted">Access only what your role permits. Use quick actions to manage users, roles, and master data.</p>
+        <div class="hero-kpis">
+          <span class="meta-pill">Active Modules: ${visibleCards.length}</span>
+          <span class="meta-pill">Users: --</span>
+          <span class="meta-pill">Pending Actions: --</span>
+          <span class="meta-pill">System Health: Healthy</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Administration</h3>
+        <div class="module-card-grid">${adminCards.map((m) => `<a class="quick-action" href="${m.href}">${m.title}</a>`).join("") || '<div class="empty-state">No administration access.</div>'}</div>
+      </section>
+
+      <section class="card" style="margin-top:1rem;">
+        <h3>Master Data</h3>
+        <div class="module-card-grid">${masterCards.map((m) => `<a class="quick-action" href="${m.href}">${m.title}</a>`).join("") || '<div class="empty-state">No master data access.</div>'}</div>
       </section>
 
       <section class="control-grid">
