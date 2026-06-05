@@ -36,37 +36,33 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Home",
       items: [
-        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD }
+        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.TRANSPORTATION, label: "Transportation Dashboard", href: ROUTES.TRANSPORT_DASHBOARD }
       ]
     },
     {
       title: "Operations",
       items: [
-        { module: MODULES.TRANSPORTATION, label: "Transportation Dashboard", href: ROUTES.TRANSPORT_DASHBOARD },
         { module: MODULES.TRANSPORT_TRIPS, label: "Trips", href: ROUTES.TRANSPORT_TRIPS },
-        { module: MODULES.TRANSPORT_TRIP_EXPENSES, label: "Trip Expenses", href: ROUTES.TRANSPORT_TRIP_EXPENSES }
+        { module: MODULES.TRANSPORT_TRIP_EXPENSES, label: "Expenses", href: ROUTES.TRANSPORT_TRIP_EXPENSES }
       ]
     },
     {
-      title: "Masters",
+      title: "Master Data",
       items: [
-        { module: MODULES.TRANSPORT_TRUCK_OWNERS, label: "Truck Owners", href: ROUTES.TRANSPORT_TRUCK_OWNERS },
-        { module: MODULES.TRANSPORT_TRUCKS, label: "Trucks", href: ROUTES.TRANSPORT_TRUCKS },
+        { module: MODULES.TRANSPORT_COMMODITIES, label: "Commodities", href: ROUTES.TRANSPORT_COMMODITIES },
+        { module: MODULES.TRANSPORT_ROUTE_MASTER, label: "Routes", href: ROUTES.TRANSPORT_ROUTE_MASTER },
+        { module: MODULES.TRANSPORT_CLIENTS, label: "Clients", href: ROUTES.TRANSPORT_CLIENTS },
+        { module: MODULES.TRANSPORT_TRANSPORTERS, label: "Transporters", href: ROUTES.TRANSPORT_TRANSPORTERS },
         { module: MODULES.TRANSPORT_DRIVERS, label: "Drivers", href: ROUTES.TRANSPORT_DRIVERS },
-        { module: MODULES.TRANSPORT_CLIENTS, label: "Clients", href: ROUTES.MASTER_CLIENTS },
-        { module: MODULES.TRANSPORT_TRANSPORTERS, label: "Transporters", href: ROUTES.MASTER_TRANSPORTERS },
-        { module: MODULES.TRANSPORT_AGENTS, label: "Agents", href: ROUTES.MASTER_AGENTS },
-        { module: MODULES.TRANSPORT_ROUTES, label: "Routes", href: ROUTES.TRANSPORT_ROUTE_MASTER },
-        { module: MODULES.TRANSPORT_COMMODITIES, label: "Commodities", href: ROUTES.MASTER_COMMODITIES }
+        { module: MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING, label: "Agents / Truck Mapping", href: ROUTES.TRANSPORT_TRUCK_AGENT_COMMISSION },
+        { module: MODULES.TRANSPORT_TRUCKS, label: "Trucks", href: ROUTES.TRANSPORT_TRUCKS }
       ]
     },
     {
-      title: "Rates & Mapping",
+      title: "Commercials",
       items: [
-        { module: MODULES.TRANSPORT_RATE_MASTER, label: "Rate Master", href: ROUTES.TRANSPORT_RATE_MASTER },
-        { module: MODULES.TRANSPORT_CLIENT_MAPPING, label: "Client Mapping", href: ROUTES.TRANSPORT_CLIENT_MAPPING },
-        { module: MODULES.TRANSPORT_TRANSPORTER_MAPPING, label: "Transporter Mapping", href: ROUTES.TRANSPORT_TRANSPORTER_MAPPING },
-        { module: MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING, label: "Truck-Agent Commission Mapping", href: ROUTES.TRANSPORT_TRUCK_AGENT_COMMISSION }
+        { module: MODULES.TRANSPORT_RATE_MASTER, label: "Rate Master", href: ROUTES.TRANSPORT_RATE_MASTER }
       ]
     },
     {

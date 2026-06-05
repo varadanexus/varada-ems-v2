@@ -24,13 +24,10 @@ async function init() {
     transporters: await getCount(MASTER_TABLES.transportTransporters),
     agents: await getCount(MASTER_TABLES.transportAgents),
     commodities: await getCount(MASTER_TABLES.transportCommodities),
-    owners: await getCount(MASTER_TABLES.transportTruckOwners),
     trucks: await getCount(MASTER_TABLES.transportTrucks),
     drivers: await getCount(MASTER_TABLES.transportDrivers),
     routes: await getCount(MASTER_TABLES.transportRouteMaster),
-    rates: await getCount(MASTER_TABLES.transportRateMaster),
-    clientMappings: await getCount(MASTER_TABLES.transportClientMapping),
-    transporterMappings: await getCount(MASTER_TABLES.transportTransporterMapping)
+    rates: await getCount(MASTER_TABLES.transportRateMaster)
   };
 
   let tripKpis = { total: "—", draft: "—", inTransit: "—", completed: "—" };
@@ -50,7 +47,7 @@ async function init() {
     <section class="card">
       <h3>Transportation Operations Hub</h3>
       <p class="muted">Workspace: Transportation</p>
-      <p class="muted">Manage owners, fleet, drivers, routes, rates, and mappings from one workspace.</p>
+      <p class="muted">Manage fleet, parties, routes, and commercial rates from one workspace.</p>
       <h4 style="margin:.5rem 0;">Operations</h4>
       <div class="hero-kpis">
         <span class="meta-pill">Total Trips: ${tripKpis.total}</span>
@@ -67,27 +64,20 @@ async function init() {
         <span class="meta-pill">Transporters: ${counts.transporters}</span>
         <span class="meta-pill">Agents: ${counts.agents}</span>
         <span class="meta-pill">Commodities: ${counts.commodities}</span>
-        <span class="meta-pill">Truck Owners: ${counts.owners}</span>
         <span class="meta-pill">Trucks: ${counts.trucks}</span>
         <span class="meta-pill">Drivers: ${counts.drivers}</span>
         <span class="meta-pill">Active Routes: ${counts.routes}</span>
         <span class="meta-pill">Rate Contracts: ${counts.rates}</span>
-        <span class="meta-pill">Client Mappings: ${counts.clientMappings}</span>
-        <span class="meta-pill">Transporter Mappings: ${counts.transporterMappings}</span>
       </div>
       <div class="module-card-grid">
-        <a class="quick-action" href="${ROUTES.MASTER_CLIENTS}">Clients</a>
-        <a class="quick-action" href="${ROUTES.MASTER_TRANSPORTERS}">Transporters</a>
-        <a class="quick-action" href="${ROUTES.MASTER_AGENTS}">Agents</a>
-        <a class="quick-action" href="${ROUTES.MASTER_COMMODITIES}">Commodities</a>
-        ${canView(MODULES.TRANSPORT_TRUCK_OWNERS) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_TRUCK_OWNERS}">Truck Owners</a>` : ""}
-        ${canView(MODULES.TRANSPORT_TRUCKS) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_TRUCKS}">Trucks</a>` : ""}
+        ${canView(MODULES.TRANSPORT_COMMODITIES) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_COMMODITIES}">Commodities</a>` : ""}
+        ${canView(MODULES.TRANSPORT_ROUTE_MASTER) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_ROUTE_MASTER}">Routes</a>` : ""}
+        ${canView(MODULES.TRANSPORT_CLIENTS) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_CLIENTS}">Clients</a>` : ""}
+        ${canView(MODULES.TRANSPORT_TRANSPORTERS) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_TRANSPORTERS}">Transporters</a>` : ""}
         ${canView(MODULES.TRANSPORT_DRIVERS) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_DRIVERS}">Drivers</a>` : ""}
-        ${canView(MODULES.TRANSPORT_ROUTE_MASTER) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_ROUTE_MASTER}">Route Master</a>` : ""}
+        ${canView(MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_TRUCK_AGENT_COMMISSION}">Agents / Truck Mapping</a>` : ""}
+        ${canView(MODULES.TRANSPORT_TRUCKS) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_TRUCKS}">Trucks</a>` : ""}
         ${canView(MODULES.TRANSPORT_RATE_MASTER) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_RATE_MASTER}">Rate Master</a>` : ""}
-        ${canView(MODULES.TRANSPORT_CLIENT_MAPPING) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_CLIENT_MAPPING}">Client Mapping</a>` : ""}
-        ${canView(MODULES.TRANSPORT_TRANSPORTER_MAPPING) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_TRANSPORTER_MAPPING}">Transporter Mapping</a>` : ""}
-        ${canView(MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_TRUCK_AGENT_COMMISSION}">Truck-Agent Commission Mapping</a>` : ""}
       </div>
     </section>
   `);

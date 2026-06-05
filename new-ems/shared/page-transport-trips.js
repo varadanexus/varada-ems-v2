@@ -1,5 +1,5 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, getTripById, listActiveOptions, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
+import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, findTransportRateForTrip, getActiveAgentByTruck, getTransporterByTruck, getTripById, listActiveOptions, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { getCurrentAppUser } from "./auth.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
@@ -32,20 +32,30 @@ async function init() {
   form.innerHTML = `
     <div class="meta-pill">Workspace: Transportation</div>
     <input type="hidden" data-f="division_id" value="${fixedDivisionId || ""}" />
+    <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 1: Movement</h4>
+    <label>Commodity *</label><select data-f="transport_commodity_id"></select>
+    <label>Route *</label><select data-f="route_id"></select>
+    <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 2: Party</h4>
+    <label>Client *</label><select data-f="transport_client_id"></select>
+    <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 3: Vehicle</h4>
+    <label>Truck *</label><select data-f="truck_id"></select>
+    <label>Transporter (Auto)</label><input data-f="transporter_name_ro" readonly placeholder="Derived from selected truck" />
+    <label id="tripCreateManualTransporterWrap" style="display:none;">Fallback Transporter * <select data-f="transport_transporter_id"></select></label>
+    <label>Agent (Auto)</label><input data-f="agent_name_ro" readonly placeholder="Derived from truck-agent mapping" />
+    <input type="hidden" data-f="transport_agent_id" />
+    <label>Driver *</label><select data-f="driver_id"></select>
+    <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 4: Trip Details</h4>
     <label>Trip No</label><input disabled placeholder="Auto-generated (TRYYMM###)" />
     <label>Trip Date *</label><input data-f="trip_date" type="date" required />
-    <label>Client *</label><select data-f="transport_client_id"></select>
-    <label>Transporter *</label><select data-f="transport_transporter_id"></select>
-    <label>Truck *</label><select data-f="truck_id"></select>
-    <label>Driver *</label><select data-f="driver_id"></select>
-    <label>Route *</label><select data-f="route_id"></select>
-    <label>Commodity *</label><select data-f="transport_commodity_id"></select>
     <label>Quantity (KG) *</label><input data-f="quantity_kg" type="number" min="1" step="1" />
     <label>Quantity (MT)</label><input data-f="quantity_mt" type="number" step="0.001" readonly />
-    <label>Client Rate / MT *</label><input data-f="client_rate_per_mt" type="number" min="0" step="0.001" />
-    <label>Transporter Rate / MT *</label><input data-f="transporter_rate_per_mt" type="number" min="0" step="0.001" />
+    <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 5: Commercials</h4>
+    <label>Client Rate / MT * <span id="tripCreateClientRateSourceBadge" class="meta-pill" style="background:#fef3c7;color:#92400e;">MANUAL OVERRIDE</span></label><input data-f="client_rate_per_mt" type="number" min="0" step="0.001" />
+    <label>Transporter Rate / MT * <span id="tripCreateTransporterRateSourceBadge" class="meta-pill" style="background:#fef3c7;color:#92400e;">MANUAL OVERRIDE</span></label><input data-f="transporter_rate_per_mt" type="number" min="0" step="0.001" />
+    <div id="tripCreateRateStatus" class="meta-pill" style="grid-column:1/-1;background:#f3f4f6;color:#111827;">Rate status: waiting for trip parameters</div>
     <div id="tripCreateFinancialPreview" class="meta-pill" style="grid-column:1/-1;background:#f3f4f6;color:#111827;">Preview: Qty MT 0.000 | Client Gross ₹0.00 | Transporter Gross ₹0.00 | Estimated Margin ₹0.00</div>
     <label>Notes</label><input data-f="notes" />
+    <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 6: Documents</h4>
     <div style="grid-column:1/-1;margin-top:.5rem;"><h4 style="margin:.25rem 0;">Trip Documents</h4><div id="tripDocCreateRows"></div></div>
     <button class="btn" type="submit">Create Trip</button>`;
 
@@ -86,6 +96,42 @@ async function init() {
     sel.innerHTML = `<option value="">Select...</option>${opts.map((o)=>`<option value="${o.value}">${o.label}</option>`).join("")}`;
   }
 
+  async function derivePartiesFromTruckCreate() {
+    const truckId = qs("[data-f='truck_id']")?.value || "";
+    const tripDate = qs("[data-f='trip_date']")?.value || "";
+    const tName = qs("[data-f='transporter_name_ro']");
+    const aName = qs("[data-f='agent_name_ro']");
+    const tId = qs("[data-f='transport_transporter_id']");
+    const aId = qs("[data-f='transport_agent_id']");
+    const tWrap = qs("#tripCreateManualTransporterWrap");
+    if (!truckId) {
+      if (tName) tName.value = ""; if (aName) aName.value = "";
+      if (tId) tId.value = ""; if (aId) aId.value = "";
+      if (tWrap) tWrap.style.display = "none";
+      return;
+    }
+    const transporter = await getTransporterByTruck(truckId);
+    if (transporter?.transporter_id) {
+      if (tName) tName.value = transporter.transporter_name || "";
+      if (tId) tId.value = transporter.transporter_id;
+      if (tWrap) tWrap.style.display = "none";
+    } else {
+      if (tName) tName.value = "Not mapped";
+      if (tId) tId.value = "";
+      if (tWrap) tWrap.style.display = "block";
+      showToast("No transporter mapped for selected truck. Select Fallback Transporter.", TOAST_TYPES.WARNING);
+    }
+    const agent = await getActiveAgentByTruck(truckId, tripDate || null);
+    if (agent?.transport_agent_id) {
+      if (aName) aName.value = agent.transport_agent_name || "";
+      if (aId) aId.value = agent.transport_agent_id;
+    } else {
+      if (aName) aName.value = "Not mapped";
+      if (aId) aId.value = "";
+      showToast("No active agent mapping found for selected truck.", TOAST_TYPES.WARNING);
+    }
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const payload = { status: "draft", is_active: true };
@@ -95,13 +141,14 @@ async function init() {
     delete payload.client_id;
     delete payload.transporter_id;
     delete payload.commodity_id;
-    if (!payload.trip_date || !payload.transport_client_id || !payload.transport_transporter_id || !payload.truck_id || !payload.driver_id || !payload.route_id || !payload.transport_commodity_id) return showToast("Fill all required fields", TOAST_TYPES.ERROR);
+    if (!payload.trip_date || !payload.transport_client_id || !payload.truck_id || !payload.driver_id || !payload.route_id || !payload.transport_commodity_id) return showToast("Fill all required fields", TOAST_TYPES.ERROR);
+    if (!payload.transport_transporter_id) return showToast("Transporter required (mapped from truck or fallback)", TOAST_TYPES.ERROR);
     if (Number(payload.quantity_kg || 0) <= 0) return showToast("Quantity KG must be > 0", TOAST_TYPES.ERROR);
     if (Number(payload.client_rate_per_mt || 0) < 0) return showToast("Client rate must be >= 0", TOAST_TYPES.ERROR);
     if (Number(payload.transporter_rate_per_mt || 0) < 0) return showToast("Transporter rate must be >= 0", TOAST_TYPES.ERROR);
     payload.quantity_mt = (Number(payload.quantity_kg) / 1000).toFixed(3);
-    payload.client_rate_source = "MANUAL_OVERRIDE";
-    payload.transporter_rate_source = "MANUAL_OVERRIDE";
+    payload.client_rate_source = qs("[data-f='client_rate_source']")?.value || "MANUAL_OVERRIDE";
+    payload.transporter_rate_source = qs("[data-f='transporter_rate_source']")?.value || "MANUAL_OVERRIDE";
     if (Number(payload.transporter_rate_per_mt || 0) > Number(payload.client_rate_per_mt || 0)) {
       showToast("Warning: transporter rate is higher than client rate. This trip will create negative margin.", TOAST_TYPES.WARNING);
     }
@@ -237,18 +284,95 @@ async function init() {
     const isCompleted = row.status === "completed";
     ef.innerHTML = `
       <div class="meta-pill">Trip No: ${row.trip_no || "-"} (Locked)</div>
-      <label>Trip Date</label><input data-e="trip_date" type="date" value="${row.trip_date || ""}" ${isCompleted ? "disabled" : ""} />
-      <label>Truck</label><select data-e="truck_id" ${isCompleted ? "disabled" : ""}></select>
-      <label>Driver</label><select data-e="driver_id" ${isCompleted ? "disabled" : ""}></select>
-      <label>Route</label><select data-e="route_id" ${isCompleted ? "disabled" : ""}></select>
+      <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 1: Movement</h4>
       <label>Commodity</label><select data-e="transport_commodity_id" ${isCompleted ? "disabled" : ""}></select>
+      <label>Route</label><select data-e="route_id" ${isCompleted ? "disabled" : ""}></select>
+      <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 2: Party</h4>
+      <label>Client</label><select data-e="transport_client_id" ${isCompleted ? "disabled" : ""}></select>
+      <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 3: Vehicle</h4>
+      <label>Truck</label><select data-e="truck_id" ${isCompleted ? "disabled" : ""}></select>
+      <label>Transporter (Auto)</label><input data-e="transporter_name_ro" readonly placeholder="Derived from selected truck" />
+      <label id="tripEditManualTransporterWrap" style="display:none;">Fallback Transporter <select data-e="transport_transporter_id" ${isCompleted ? "disabled" : ""}></select></label>
+      <label>Agent (Auto)</label><input data-e="agent_name_ro" readonly placeholder="Derived from truck-agent mapping" />
+      <input type="hidden" data-e="transport_agent_id" />
+      <label>Driver</label><select data-e="driver_id" ${isCompleted ? "disabled" : ""}></select>
+      <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 4: Trip Details</h4>
+      <label>Trip Date</label><input data-e="trip_date" type="date" value="${row.trip_date || ""}" ${isCompleted ? "disabled" : ""} />
       <label>Quantity (KG)</label><input data-e="quantity_kg" type="number" min="1" step="1" value="${row.quantity_kg || ""}" ${isCompleted ? "disabled" : ""} />
       <label>Quantity (MT)</label><input data-e="quantity_mt" type="number" step="0.001" value="${row.quantity_mt || ""}" readonly />
-      <label>Client Rate / MT</label><input data-e="client_rate_per_mt" type="number" min="0" step="0.001" value="${row.client_rate_per_mt || ""}" ${isCompleted ? "disabled" : ""} />
-      <label>Transporter Rate / MT</label><input data-e="transporter_rate_per_mt" type="number" min="0" step="0.001" value="${row.transporter_rate_per_mt || ""}" ${isCompleted ? "disabled" : ""} />
+      <label>Client Rate / MT <span id="tripEditClientRateSourceBadge" class="meta-pill" style="background:#fef3c7;color:#92400e;">MANUAL OVERRIDE</span></label><input data-e="client_rate_per_mt" type="number" min="0" step="0.001" value="${row.client_rate_per_mt || ""}" ${isCompleted ? "disabled" : ""} />
+      <label>Transporter Rate / MT <span id="tripEditTransporterRateSourceBadge" class="meta-pill" style="background:#fef3c7;color:#92400e;">MANUAL OVERRIDE</span></label><input data-e="transporter_rate_per_mt" type="number" min="0" step="0.001" value="${row.transporter_rate_per_mt || ""}" ${isCompleted ? "disabled" : ""} />
+      <div id="tripEditRateStatus" class="meta-pill" style="grid-column:1/-1;background:#f3f4f6;color:#111827;">Rate status: waiting for trip parameters</div>
       <div id="tripEditFinancialPreview" class="meta-pill" style="grid-column:1/-1;background:#f3f4f6;color:#111827;">Preview: Qty MT 0.000 | Client Gross ₹0.00 | Transporter Gross ₹0.00 | Estimated Margin ₹0.00</div>
       <label>Notes</label><input data-e="notes" value="${row.notes || ""}" />
     `;
+
+    const setRateStatus = (mode, text, kind = "info") => {
+      const host = qs(mode === "create" ? "#tripCreateRateStatus" : "#tripEditRateStatus");
+      if (!host) return;
+      host.textContent = text;
+      if (kind === "success") { host.style.background = "#dcfce7"; host.style.color = "#166534"; }
+      else if (kind === "warn") { host.style.background = "#fef3c7"; host.style.color = "#92400e"; }
+      else { host.style.background = "#f3f4f6"; host.style.color = "#111827"; }
+    };
+
+    const setRateSourceBadges = (mode, clientSource, transporterSource) => {
+      const cBadge = qs(mode === "create" ? "#tripCreateClientRateSourceBadge" : "#tripEditClientRateSourceBadge");
+      const tBadge = qs(mode === "create" ? "#tripCreateTransporterRateSourceBadge" : "#tripEditTransporterRateSourceBadge");
+      const paint = (badge, source) => {
+        if (!badge) return;
+        const isRateMaster = String(source || "").toUpperCase() === "RATE_MASTER";
+        badge.textContent = isRateMaster ? "RATE MASTER" : "MANUAL OVERRIDE";
+        badge.style.background = isRateMaster ? "#dcfce7" : "#fef3c7";
+        badge.style.color = isRateMaster ? "#166534" : "#92400e";
+      };
+      paint(cBadge, clientSource);
+      paint(tBadge, transporterSource);
+    };
+
+    const loadRateForMode = async (mode = "create") => {
+      const tripDate = qs(mode === "create" ? "[data-f='trip_date']" : "[data-e='trip_date']")?.value || "";
+      const transportClientId = qs(mode === "create" ? "[data-f='transport_client_id']" : "[data-e='transport_client_id']")?.value || "";
+      const transportTransporterId = qs(mode === "create" ? "[data-f='transport_transporter_id']" : "[data-e='transport_transporter_id']")?.value || row.transport_transporter_id || "";
+      const routeId = qs(mode === "create" ? "[data-f='route_id']" : "[data-e='route_id']")?.value || "";
+      const transportCommodityId = qs(mode === "create" ? "[data-f='transport_commodity_id']" : "[data-e='transport_commodity_id']")?.value || "";
+      const truckId = qs(mode === "create" ? "[data-f='truck_id']" : "[data-e='truck_id']")?.value || "";
+      const truckOwnerId = null;
+      if (!tripDate || !transportClientId || !transportTransporterId || !routeId || !transportCommodityId) {
+        setRateStatus(mode, "Rate status: waiting for trip parameters", "info");
+        return;
+      }
+      const rate = await findTransportRateForTrip({
+        divisionId: fixedDivisionId,
+        tripDate,
+        transportClientId,
+        transportTransporterId,
+        routeId,
+        transportCommodityId,
+        truckOwnerId,
+        truckId
+      });
+      if (rate) {
+        const c = qs(mode === "create" ? "[data-f='client_rate_per_mt']" : "[data-e='client_rate_per_mt']");
+        const t = qs(mode === "create" ? "[data-f='transporter_rate_per_mt']" : "[data-e='transporter_rate_per_mt']");
+        if (c) c.value = Number(rate.client_rate_per_mt || 0).toFixed(3);
+        if (t) t.value = Number(rate.transporter_rate_per_mt || 0).toFixed(3);
+        const cSrc = qs(mode === "create" ? "[data-f='client_rate_source']" : "[data-e='client_rate_source']");
+        const tSrc = qs(mode === "create" ? "[data-f='transporter_rate_source']" : "[data-e='transporter_rate_source']");
+        if (cSrc) cSrc.value = "RATE_MASTER";
+        if (tSrc) tSrc.value = "RATE_MASTER";
+        setRateSourceBadges(mode, "RATE_MASTER", "RATE_MASTER");
+        setRateStatus(mode, "Rate loaded from Rate Master", "success");
+        renderFinancialPreview(mode === "create" ? "create" : "edit");
+      } else {
+        const cSrc = qs(mode === "create" ? "[data-f='client_rate_source']" : "[data-e='client_rate_source']");
+        const tSrc = qs(mode === "create" ? "[data-f='transporter_rate_source']" : "[data-e='transporter_rate_source']");
+        if (cSrc) cSrc.value = "MANUAL_OVERRIDE";
+        if (tSrc) tSrc.value = "MANUAL_OVERRIDE";
+        setRateSourceBadges(mode, "MANUAL_OVERRIDE", "MANUAL_OVERRIDE");
+        setRateStatus(mode, "No matching rate found. Enter rates manually.", "warn");
+      }
+    };
 
     const renderFinancialPreview = (mode = "create") => {
       const kg = Number(qs(mode === "create" ? "[data-f='quantity_kg']" : "[data-e='quantity_kg']")?.value || 0);
@@ -283,6 +407,39 @@ async function init() {
     bindOptions("driver_id", "transport_drivers", row.driver_id);
     bindOptions("route_id", "transport_route_master", row.route_id);
     bindOptions("transport_commodity_id", "transport_commodities", row.transport_commodity_id);
+    bindOptions("transport_client_id", "transport_clients", row.transport_client_id);
+    bindOptions("transport_transporter_id", "transport_transporters", row.transport_transporter_id);
+
+    const derivePartiesFromTruckEdit = async () => {
+      const truckId = qs("[data-e='truck_id']")?.value || "";
+      const tripDate = qs("[data-e='trip_date']")?.value || row.trip_date || "";
+      const tName = qs("[data-e='transporter_name_ro']");
+      const aName = qs("[data-e='agent_name_ro']");
+      const tId = qs("[data-e='transport_transporter_id']");
+      const aId = qs("[data-e='transport_agent_id']");
+      const tWrap = qs("#tripEditManualTransporterWrap");
+      if (!truckId) return;
+      const transporter = await getTransporterByTruck(truckId);
+      if (transporter?.transporter_id) {
+        if (tName) tName.value = transporter.transporter_name || "";
+        if (tId) tId.value = transporter.transporter_id;
+        if (tWrap) tWrap.style.display = "none";
+      } else {
+        if (tName) tName.value = "Not mapped";
+        if (tId) tId.value = "";
+        if (tWrap) tWrap.style.display = "block";
+        showToast("No transporter mapped for selected truck. Select Fallback Transporter.", TOAST_TYPES.WARNING);
+      }
+      const agent = await getActiveAgentByTruck(truckId, tripDate || null);
+      if (agent?.transport_agent_id) {
+        if (aName) aName.value = agent.transport_agent_name || "";
+        if (aId) aId.value = agent.transport_agent_id;
+      } else {
+        if (aName) aName.value = "Not mapped";
+        if (aId) aId.value = "";
+        showToast("No active agent mapping found for selected truck.", TOAST_TYPES.WARNING);
+      }
+    };
 
     qs("[data-e='quantity_kg']")?.addEventListener("input", () => {
       const kg = Number(qs("[data-e='quantity_kg']")?.value || 0);
@@ -292,6 +449,13 @@ async function init() {
     });
     qs("[data-e='client_rate_per_mt']")?.addEventListener("input", () => renderFinancialPreview("edit"));
     qs("[data-e='transporter_rate_per_mt']")?.addEventListener("input", () => renderFinancialPreview("edit"));
+    const cSrcE = document.createElement("input"); cSrcE.type = "hidden"; cSrcE.setAttribute("data-e", "client_rate_source"); cSrcE.value = row.client_rate_source || "MANUAL_OVERRIDE"; ef.appendChild(cSrcE);
+    const tSrcE = document.createElement("input"); tSrcE.type = "hidden"; tSrcE.setAttribute("data-e", "transporter_rate_source"); tSrcE.value = row.transporter_rate_source || "MANUAL_OVERRIDE"; ef.appendChild(tSrcE);
+    setRateSourceBadges("edit", cSrcE.value, tSrcE.value);
+    ["trip_date","truck_id","route_id","transport_commodity_id","transport_client_id","transport_transporter_id"].forEach((k) => qs(`[data-e='${k}']`)?.addEventListener("change", async () => { if (k === "truck_id" || k === "trip_date") await derivePartiesFromTruckEdit(); await loadRateForMode("edit"); }));
+    qs("[data-e='client_rate_per_mt']")?.addEventListener("input", () => { const s=qs("[data-e='client_rate_source']"); if (s) s.value="MANUAL_OVERRIDE"; setRateSourceBadges("edit", "MANUAL_OVERRIDE", qs("[data-e='transporter_rate_source']")?.value || "MANUAL_OVERRIDE"); setRateStatus("edit", "Manual Override", "warn"); });
+    qs("[data-e='transporter_rate_per_mt']")?.addEventListener("input", () => { const s=qs("[data-e='transporter_rate_source']"); if (s) s.value="MANUAL_OVERRIDE"; setRateSourceBadges("edit", qs("[data-e='client_rate_source']")?.value || "MANUAL_OVERRIDE", "MANUAL_OVERRIDE"); setRateStatus("edit", "Manual Override", "warn"); });
+    derivePartiesFromTruckEdit().then(() => loadRateForMode("edit"));
     renderFinancialPreview("edit");
 
     qs("#tripEditSave").onclick = async () => {
@@ -300,15 +464,18 @@ async function init() {
         if (!isCompleted) {
           payload.trip_date = qs("[data-e='trip_date']")?.value || null;
           payload.truck_id = qs("[data-e='truck_id']")?.value || null;
+          payload.transport_client_id = qs("[data-e='transport_client_id']")?.value || null;
+          payload.transport_transporter_id = qs("[data-e='transport_transporter_id']")?.value || null;
+          payload.transport_agent_id = qs("[data-e='transport_agent_id']")?.value || null;
           payload.driver_id = qs("[data-e='driver_id']")?.value || null;
           payload.route_id = qs("[data-e='route_id']")?.value || null;
           payload.transport_commodity_id = qs("[data-e='transport_commodity_id']")?.value || null;
           payload.quantity_kg = Number(qs("[data-e='quantity_kg']")?.value || 0);
           payload.client_rate_per_mt = Number(qs("[data-e='client_rate_per_mt']")?.value || 0);
           payload.transporter_rate_per_mt = Number(qs("[data-e='transporter_rate_per_mt']")?.value || 0);
-          payload.client_rate_source = "MANUAL_OVERRIDE";
-          payload.transporter_rate_source = "MANUAL_OVERRIDE";
-          if (!payload.trip_date || !payload.truck_id || !payload.driver_id || !payload.route_id || !payload.transport_commodity_id) return showToast("Fill required edit fields", TOAST_TYPES.ERROR);
+          payload.client_rate_source = qs("[data-e='client_rate_source']")?.value || "MANUAL_OVERRIDE";
+          payload.transporter_rate_source = qs("[data-e='transporter_rate_source']")?.value || "MANUAL_OVERRIDE";
+          if (!payload.trip_date || !payload.transport_client_id || !payload.transport_transporter_id || !payload.truck_id || !payload.driver_id || !payload.route_id || !payload.transport_commodity_id) return showToast("Fill required edit fields", TOAST_TYPES.ERROR);
           if (payload.quantity_kg <= 0) return showToast("Quantity KG must be > 0", TOAST_TYPES.ERROR);
           if (payload.client_rate_per_mt < 0) return showToast("Client rate must be >= 0", TOAST_TYPES.ERROR);
           if (payload.transporter_rate_per_mt < 0) return showToast("Transporter rate must be >= 0", TOAST_TYPES.ERROR);
@@ -385,6 +552,59 @@ async function init() {
 
   qs("#tripSearch")?.addEventListener("input", async ()=>{ page = 1; await load(); });
   qs("#tripStatus")?.addEventListener("change", async ()=>{ page = 1; await load(); });
+  const cSrc = document.createElement("input"); cSrc.type = "hidden"; cSrc.setAttribute("data-f", "client_rate_source"); cSrc.value = "MANUAL_OVERRIDE"; form.appendChild(cSrc);
+  const tSrc = document.createElement("input"); tSrc.type = "hidden"; tSrc.setAttribute("data-f", "transporter_rate_source"); tSrc.value = "MANUAL_OVERRIDE"; form.appendChild(tSrc);
+  const setCreateRateStatus = (text, kind = "info") => {
+    const host = qs("#tripCreateRateStatus"); if (!host) return; host.textContent = text;
+    if (kind === "success") { host.style.background = "#dcfce7"; host.style.color = "#166534"; }
+    else if (kind === "warn") { host.style.background = "#fef3c7"; host.style.color = "#92400e"; }
+    else { host.style.background = "#f3f4f6"; host.style.color = "#111827"; }
+  };
+  const setCreateRateSourceBadges = (clientSource, transporterSource) => {
+    const cBadge = qs("#tripCreateClientRateSourceBadge");
+    const tBadge = qs("#tripCreateTransporterRateSourceBadge");
+    const paint = (badge, source) => {
+      if (!badge) return;
+      const isRateMaster = String(source || "").toUpperCase() === "RATE_MASTER";
+      badge.textContent = isRateMaster ? "RATE MASTER" : "MANUAL OVERRIDE";
+      badge.style.background = isRateMaster ? "#dcfce7" : "#fef3c7";
+      badge.style.color = isRateMaster ? "#166534" : "#92400e";
+    };
+    paint(cBadge, clientSource);
+    paint(tBadge, transporterSource);
+  };
+  setCreateRateSourceBadges("MANUAL_OVERRIDE", "MANUAL_OVERRIDE");
+  const loadCreateRate = async () => {
+    const tripDate = qs("[data-f='trip_date']")?.value || "";
+    const transportClientId = qs("[data-f='transport_client_id']")?.value || "";
+    const transportTransporterId = qs("[data-f='transport_transporter_id']")?.value || "";
+    const routeId = qs("[data-f='route_id']")?.value || "";
+    const transportCommodityId = qs("[data-f='transport_commodity_id']")?.value || "";
+    const truckId = qs("[data-f='truck_id']")?.value || "";
+    if (!tripDate || !transportClientId || !transportTransporterId || !routeId || !transportCommodityId || !truckId) {
+      setCreateRateStatus("Select commodity, route, client, truck, and date to load rate.", "info");
+      return;
+    }
+    const rate = await findTransportRateForTrip({ divisionId: fixedDivisionId, tripDate, transportClientId, transportTransporterId, routeId, transportCommodityId, truckOwnerId: null, truckId });
+    if (rate) {
+      const c = qs("[data-f='client_rate_per_mt']"); const t = qs("[data-f='transporter_rate_per_mt']");
+      if (c) c.value = Number(rate.client_rate_per_mt || 0).toFixed(3);
+      if (t) t.value = Number(rate.transporter_rate_per_mt || 0).toFixed(3);
+      const cs = qs("[data-f='client_rate_source']"); const ts = qs("[data-f='transporter_rate_source']");
+      if (cs) cs.value = "RATE_MASTER"; if (ts) ts.value = "RATE_MASTER";
+      setCreateRateSourceBadges("RATE_MASTER", "RATE_MASTER");
+      setCreateRateStatus("Rate loaded from Rate Master", "success");
+    } else {
+      const cs = qs("[data-f='client_rate_source']"); const ts = qs("[data-f='transporter_rate_source']");
+      if (cs) cs.value = "MANUAL_OVERRIDE"; if (ts) ts.value = "MANUAL_OVERRIDE";
+      setCreateRateSourceBadges("MANUAL_OVERRIDE", "MANUAL_OVERRIDE");
+      setCreateRateStatus("No matching rate found. Enter rates manually.", "warn");
+      showToast("No matching rate found. Enter rates manually.", TOAST_TYPES.WARNING);
+    }
+  };
+  ["trip_date","transport_client_id","transport_transporter_id","route_id","transport_commodity_id","truck_id"].forEach((k)=>qs(`[data-f='${k}']`)?.addEventListener("change", loadCreateRate));
+  qs("[data-f='truck_id']")?.addEventListener("change", async () => { await derivePartiesFromTruckCreate(); await loadCreateRate(); });
+  qs("[data-f='trip_date']")?.addEventListener("change", async () => { await derivePartiesFromTruckCreate(); await loadCreateRate(); });
   qs("[data-f='quantity_kg']")?.addEventListener("input", () => {
     const kg = Number(qs("[data-f='quantity_kg']")?.value || 0);
     const mtField = qs("[data-f='quantity_mt']");
@@ -403,6 +623,9 @@ async function init() {
     }
   });
   qs("[data-f='client_rate_per_mt']")?.addEventListener("input", () => {
+    const s = qs("[data-f='client_rate_source']"); if (s) s.value = "MANUAL_OVERRIDE";
+    setCreateRateSourceBadges("MANUAL_OVERRIDE", qs("[data-f='transporter_rate_source']")?.value || "MANUAL_OVERRIDE");
+    setCreateRateStatus("Manual Override", "warn");
     const kg = Number(qs("[data-f='quantity_kg']")?.value || 0);
     const mt = kg > 0 ? (kg / 1000) : 0;
     const clientRate = Number(qs("[data-f='client_rate_per_mt']")?.value || 0);
@@ -418,6 +641,9 @@ async function init() {
     }
   });
   qs("[data-f='transporter_rate_per_mt']")?.addEventListener("input", () => {
+    const s = qs("[data-f='transporter_rate_source']"); if (s) s.value = "MANUAL_OVERRIDE";
+    setCreateRateSourceBadges(qs("[data-f='client_rate_source']")?.value || "MANUAL_OVERRIDE", "MANUAL_OVERRIDE");
+    setCreateRateStatus("Manual Override", "warn");
     const kg = Number(qs("[data-f='quantity_kg']")?.value || 0);
     const mt = kg > 0 ? (kg / 1000) : 0;
     const clientRate = Number(qs("[data-f='client_rate_per_mt']")?.value || 0);

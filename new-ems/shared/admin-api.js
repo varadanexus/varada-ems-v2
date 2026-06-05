@@ -382,6 +382,117 @@ export async function listActiveOptions(table, { labelField = "name", valueField
   return (data || []).map((row) => ({ value: row[valueField], label: row[labelField] }));
 }
 
+export async function getTransporterByTruck(truckId) {
+  if (!truckId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("transport_trucks")
+    .select("id,transporter_id,transport_transporter_id")
+    .eq("id", truckId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  const resolvedTransporterId = data?.transport_transporter_id || data?.transporter_id || null;
+  if (!resolvedTransporterId) return null;
+  let transporterName = null;
+  if (data?.transport_transporter_id) {
+    const { data: transporterRow, error: transporterErr } = await client
+      .from("transport_transporters")
+      .select("id,name")
+      .eq("id", data.transport_transporter_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (transporterErr) throw transporterErr;
+    transporterName = transporterRow?.name || null;
+  }
+  return {
+    transporter_id: resolvedTransporterId,
+    transporter_name: transporterName
+  };
+}
+
+export async function getActiveAgentByTruck(truckId, tripDate = null) {
+  if (!truckId) return null;
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_truck_agent_commission_mapping")
+    .select("id,truck_id,transport_agent_id,effective_from,effective_to,transport_agents(id,name)")
+    .eq("truck_id", truckId)
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .order("effective_from", { ascending: false })
+    .limit(50);
+  if (tripDate) {
+    query = query.lte("effective_from", tripDate).or(`effective_to.is.null,effective_to.gte.${tripDate}`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  const row = (data || [])[0];
+  if (!row?.transport_agent_id) return null;
+  return {
+    transport_agent_id: row.transport_agent_id,
+    transport_agent_name: row.transport_agents?.name || null
+  };
+}
+
+export async function findTransportRateForTrip({
+  divisionId,
+  tripDate,
+  transportClientId,
+  transportTransporterId,
+  routeId,
+  transportCommodityId,
+  truckOwnerId = null,
+  truckId = null
+} = {}) {
+  if (!divisionId || !tripDate || !transportClientId || !transportTransporterId || !routeId || !transportCommodityId) return null;
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_rate_master")
+    .select("id,division_id,transport_client_id,transport_transporter_id,route_id,transport_commodity_id,truck_owner_id,truck_id,client_rate_per_mt,transporter_rate_per_mt,rate_per_mt,effective_from,effective_to,is_active,deleted_at")
+    .is("deleted_at", null)
+    .eq("is_active", true)
+    .eq("division_id", divisionId)
+    .eq("transport_client_id", transportClientId)
+    .eq("transport_transporter_id", transportTransporterId)
+    .eq("route_id", routeId)
+    .eq("transport_commodity_id", transportCommodityId)
+    .lte("effective_from", tripDate)
+    .or(`effective_to.is.null,effective_to.gte.${tripDate}`);
+
+  const { data, error } = await query.limit(500);
+  if (error) throw error;
+  const rows = data || [];
+  if (!rows.length) return null;
+
+  const candidates = rows.filter((r) => {
+    const truckMatch = !r.truck_id || String(r.truck_id) === String(truckId || "");
+    const ownerMatch = !r.truck_owner_id || String(r.truck_owner_id) === String(truckOwnerId || "");
+    return truckMatch && ownerMatch;
+  });
+  if (!candidates.length) return null;
+
+  const score = (r) => (r.truck_id ? 3 : 0) + (r.truck_owner_id ? 2 : 0);
+  candidates.sort((a, b) => {
+    const sa = score(a), sb = score(b);
+    if (sa !== sb) return sb - sa;
+    const da = new Date(a.effective_from || "1970-01-01").getTime();
+    const db = new Date(b.effective_from || "1970-01-01").getTime();
+    return db - da;
+  });
+
+  const best = candidates[0];
+  const clientRate = best.client_rate_per_mt ?? best.rate_per_mt ?? null;
+  const transporterRate = best.transporter_rate_per_mt ?? best.rate_per_mt ?? null;
+  if (clientRate === null || transporterRate === null) return null;
+  return {
+    id: best.id,
+    client_rate_per_mt: Number(clientRate),
+    transporter_rate_per_mt: Number(transporterRate),
+    source: "RATE_MASTER"
+  };
+}
+
 export async function existsActiveDuplicate(table, filters = {}, excludeId = null) {
   const client = getSupabaseClient();
   let query = client.from(table).select("id", { count: "exact", head: true }).is("deleted_at", null);
