@@ -33,6 +33,9 @@ export const ROUTES = {
   ,TRANSPORT_TRIP_DETAILS: "/new-ems/modules/transport-trip-details/index.html"
   ,TRANSPORT_STATUS_TIMELINE: "/new-ems/modules/transport-status-timeline/index.html"
   ,TRANSPORT_TRIP_EXPENSES: "/new-ems/modules/transport-trip-expenses/index.html"
+  ,TRANSPORT_CLIENTS: "/new-ems/modules/transport-clients/index.html"
+  ,TRANSPORT_TRANSPORTERS: "/new-ems/modules/transport-transporters/index.html"
+  ,TRANSPORT_COMMODITIES: "/new-ems/modules/transport-commodities/index.html"
 };
 
 export const STORAGE_KEYS = {
