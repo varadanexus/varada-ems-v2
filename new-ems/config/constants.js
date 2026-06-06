@@ -36,6 +36,12 @@ export const ROUTES = {
   ,TRANSPORT_CLIENTS: "/new-ems/modules/transport-clients/index.html"
   ,TRANSPORT_TRANSPORTERS: "/new-ems/modules/transport-transporters/index.html"
   ,TRANSPORT_COMMODITIES: "/new-ems/modules/transport-commodities/index.html"
+  ,TRANSPORT_CLIENT_BILLING: "/new-ems/modules/transport-client-billing/index.html"
+  ,TRANSPORT_TRANSPORTER_STATEMENTS: "/new-ems/modules/transport-transporter-statements/index.html"
+  ,TRANSPORT_GST_INVOICES: "/new-ems/modules/transport-gst-invoices/index.html"
+  ,TRANSPORT_CLIENT_RECEIPTS: "/new-ems/modules/transport-client-receipts/index.html"
+  ,TRANSPORT_TRANSPORTER_PAYMENTS: "/new-ems/modules/transport-transporter-payments/index.html"
+  ,TRANSPORT_LEDGER: "/new-ems/modules/transport-ledger/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -95,6 +101,12 @@ export const MODULES = {
   ,TRANSPORT_TRIP_DETAILS: "transport-trip-details"
   ,TRANSPORT_STATUS_TIMELINE: "transport-status-timeline"
   ,TRANSPORT_TRIP_EXPENSES: "transport-trip-expenses"
+  ,TRANSPORT_CLIENT_BILLING: "transport-client-billing"
+  ,TRANSPORT_TRANSPORTER_STATEMENTS: "transport-transporter-statements"
+  ,TRANSPORT_GST_INVOICES: "transport-gst-invoices"
+  ,TRANSPORT_CLIENT_RECEIPTS: "transport-client-receipts"
+  ,TRANSPORT_TRANSPORTER_PAYMENTS: "transport-transporter-payments"
+  ,TRANSPORT_LEDGER: "transport-ledger"
 };
 
 export const CONTROL_CENTER_MODULES = [

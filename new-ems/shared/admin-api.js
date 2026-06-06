@@ -348,6 +348,15 @@ export const MASTER_TABLES = {
   transportTrucks: "transport_trucks",
   transportDrivers: "transport_drivers",
   transportRateMaster: "transport_rate_master",
+  transportClientBills: "transport_client_bills",
+  transportClientBillTrips: "transport_client_bill_trips",
+  transportTransporterStatements: "transport_transporter_statements",
+  transportTransporterStatementTrips: "transport_transporter_statement_trips",
+  transportGstInvoices: "transport_gst_invoices",
+  transportClientReceipts: "transport_client_receipts",
+  transportTransporterPayments: "transport_transporter_payments",
+  transportLedgerAccounts: "transport_ledger_accounts",
+  transportLedgerEntries: "transport_ledger_entries",
   transportRouteMaster: "transport_route_master",
   transportClientMapping: "transport_client_mapping",
   transportTransporterMapping: "transport_transporter_mapping",
@@ -647,6 +656,628 @@ export async function listTripExpenses({ tripId, divisionId = null, search = "",
   const { data, error, count } = await query.range(from, to);
   if (error) throw error;
   return { rows: data || [], count: count || 0 };
+}
+
+export async function listTransportClientBillableTrips({ divisionId = null, transportClientId = null } = {}) {
+  if (!divisionId || !transportClientId) return [];
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("list_transport_client_billable_trips", {
+    p_division_id: divisionId,
+    p_transport_client_id: transportClientId
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createTransportClientBill({ divisionId = null, transportClientId = null, billDate = null, remarks = null, tripIds = [] } = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("create_transport_client_bill", {
+    p_division_id: divisionId,
+    p_transport_client_id: transportClientId,
+    p_bill_date: billDate,
+    p_remarks: remarks,
+    p_trip_ids: tripIds
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function listTransportClientBills({ divisionId = null, transportClientId = "", status = "", fromDate = "", toDate = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_client_bills")
+    .select("id,bill_no,transport_client_id,bill_date,status,gross_total,support_deduction_total,net_receivable,remarks,created_at,updated_at,approved_at,transport_clients(id,name,company_name)")
+    .is("deleted_at", null)
+    .order("bill_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (divisionId) query = query.eq("division_id", divisionId);
+  if (transportClientId) query = query.eq("transport_client_id", transportClientId);
+  if (status) query = query.eq("status", status);
+  if (fromDate) query = query.gte("bill_date", fromDate);
+  if (toDate) query = query.lte("bill_date", toDate);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getTransportClientBillDetails(billId) {
+  if (!billId) return null;
+  const client = getSupabaseClient();
+  const { data: bill, error: billError } = await client
+    .from("transport_client_bills")
+    .select("id,bill_no,transport_client_id,bill_date,status,gross_total,support_deduction_total,net_receivable,remarks,created_at,updated_at,approved_at,transport_clients(id,name,company_name)")
+    .eq("id", billId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (billError) throw billError;
+  if (!bill) return null;
+  const { data: trips, error: tripsError } = await client
+    .from("transport_client_bill_trips")
+    .select("id,bill_id,trip_id,trip_no,trip_date,quantity_mt,client_rate_per_mt,client_gross_amount,support_deduction_amount,client_net_receivable,created_at")
+    .eq("bill_id", billId)
+    .is("deleted_at", null)
+    .order("trip_date", { ascending: true })
+    .order("trip_no", { ascending: true });
+  if (tripsError) throw tripsError;
+  return { ...bill, trip_lines: trips || [] };
+}
+
+export async function cancelTransportClientBill(billId) {
+  if (!billId) throw new Error("billId is required");
+  const client = getSupabaseClient();
+  const { data: current, error: currentError } = await client
+    .from("transport_client_bills")
+    .select("id,status")
+    .eq("id", billId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (currentError) throw currentError;
+  if (!current) return null;
+  if (current.status === "approved") throw new Error("Approved bill cannot be cancelled.");
+  if (current.status === "cancelled") return null;
+  const { data, error } = await client
+    .from("transport_client_bills")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", billId)
+    .is("deleted_at", null)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function approveTransportClientBill(billId) {
+  if (!billId) throw new Error("billId is required");
+  const client = getSupabaseClient();
+  const { data: bill, error: billError } = await client
+    .from("transport_client_bills")
+    .select("id,status,gross_total,net_receivable")
+    .eq("id", billId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (billError) throw billError;
+  if (!bill) throw new Error("Bill not found.");
+  if (bill.status === "cancelled") throw new Error("Cancelled bill cannot be approved.");
+  if (bill.status === "approved") throw new Error("Bill is already approved.");
+  const { count, error: countError } = await client
+    .from("transport_client_bill_trips")
+    .select("id", { count: "exact", head: true })
+    .eq("bill_id", billId)
+    .is("deleted_at", null);
+  if (countError) throw countError;
+  if (!count) throw new Error("Cannot approve empty bill.");
+  if (Number(bill.gross_total || 0) <= 0 || Number(bill.net_receivable || 0) <= 0) throw new Error("Cannot approve bill with zero total.");
+  const now = new Date().toISOString();
+  const { data, error } = await client
+    .from("transport_client_bills")
+    .update({ status: "approved", approved_at: now, updated_at: now })
+    .eq("id", billId)
+    .eq("status", "draft")
+    .is("deleted_at", null)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Only draft bills can be approved.");
+  return data;
+}
+
+export async function listTransporterStatementableTrips({ divisionId = null, transportTransporterId = null } = {}) {
+  if (!divisionId || !transportTransporterId) return [];
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("list_transport_transporter_statementable_trips", {
+    p_division_id: divisionId,
+    p_transport_transporter_id: transportTransporterId
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createTransporterStatement({ divisionId = null, transportTransporterId = null, statementDate = null, remarks = null, tripIds = [] } = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("create_transport_transporter_statement", {
+    p_division_id: divisionId,
+    p_transport_transporter_id: transportTransporterId,
+    p_statement_date: statementDate,
+    p_remarks: remarks,
+    p_trip_ids: tripIds
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function listTransporterStatements({ divisionId = null, transportTransporterId = "", status = "", fromDate = "", toDate = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_transporter_statements")
+    .select("id,statement_no,transport_transporter_id,statement_date,status,gross_payable_total,support_deduction_total,net_payable_total,remarks,created_at,updated_at,approved_at,transport_transporters(id,name)")
+    .is("deleted_at", null)
+    .order("statement_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (divisionId) query = query.eq("division_id", divisionId);
+  if (transportTransporterId) query = query.eq("transport_transporter_id", transportTransporterId);
+  if (status) query = query.eq("status", status);
+  if (fromDate) query = query.gte("statement_date", fromDate);
+  if (toDate) query = query.lte("statement_date", toDate);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getTransporterStatementDetails(statementId) {
+  if (!statementId) return null;
+  const client = getSupabaseClient();
+  const { data: header, error: headerError } = await client
+    .from("transport_transporter_statements")
+    .select("id,statement_no,transport_transporter_id,statement_date,status,gross_payable_total,support_deduction_total,net_payable_total,remarks,created_at,updated_at,approved_at,transport_transporters(id,name)")
+    .eq("id", statementId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (headerError) throw headerError;
+  if (!header) return null;
+  const { data: lines, error: linesError } = await client
+    .from("transport_transporter_statement_trips")
+    .select("id,statement_id,trip_id,trip_no,trip_date,quantity_mt,transporter_rate_per_mt,transporter_gross_payable,support_deduction_amount,transporter_net_payable,created_at")
+    .eq("statement_id", statementId)
+    .is("deleted_at", null)
+    .order("trip_date", { ascending: true })
+    .order("trip_no", { ascending: true });
+  if (linesError) throw linesError;
+  return { ...header, trip_lines: lines || [] };
+}
+
+export async function approveTransporterStatement(statementId) {
+  if (!statementId) throw new Error("statementId is required");
+  const client = getSupabaseClient();
+  const { data: statement, error: statementError } = await client
+    .from("transport_transporter_statements")
+    .select("id,status,gross_payable_total,net_payable_total")
+    .eq("id", statementId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (statementError) throw statementError;
+  if (!statement) throw new Error("Statement not found.");
+  if (statement.status === "cancelled") throw new Error("Cancelled statement cannot be approved.");
+  if (statement.status === "approved") throw new Error("Statement is already approved.");
+  const { count, error: countError } = await client
+    .from("transport_transporter_statement_trips")
+    .select("id", { count: "exact", head: true })
+    .eq("statement_id", statementId)
+    .is("deleted_at", null);
+  if (countError) throw countError;
+  if (!count) throw new Error("Cannot approve empty statement.");
+  if (Number(statement.gross_payable_total || 0) <= 0 || Number(statement.net_payable_total || 0) <= 0) throw new Error("Cannot approve statement with zero total.");
+  const now = new Date().toISOString();
+  const { data, error } = await client
+    .from("transport_transporter_statements")
+    .update({ status: "approved", approved_at: now, updated_at: now })
+    .eq("id", statementId)
+    .eq("status", "draft")
+    .is("deleted_at", null)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Only draft statements can be approved.");
+  return data;
+}
+
+export async function cancelTransporterStatement(statementId) {
+  if (!statementId) throw new Error("statementId is required");
+  const client = getSupabaseClient();
+  const { data: current, error: currentError } = await client
+    .from("transport_transporter_statements")
+    .select("id,status")
+    .eq("id", statementId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (currentError) throw currentError;
+  if (!current) return null;
+  if (current.status === "approved") throw new Error("Approved statement cannot be cancelled.");
+  if (current.status === "cancelled") return null;
+  const { data, error } = await client
+    .from("transport_transporter_statements")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", statementId)
+    .is("deleted_at", null)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function listEligibleClientBillsForInvoice({ divisionId = null } = {}) {
+  if (!divisionId) return [];
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("list_transport_gst_invoice_eligible_bills", {
+    p_division_id: divisionId
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createTransportGstInvoice({ divisionId = null, clientBillId = null, invoiceDate = null, gstMode = null, gstPercentage = null, remarks = null } = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("create_transport_gst_invoice", {
+    p_division_id: divisionId,
+    p_client_bill_id: clientBillId,
+    p_invoice_date: invoiceDate,
+    p_gst_mode: gstMode,
+    p_gst_percentage: gstPercentage,
+    p_remarks: remarks
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function listTransportGstInvoices({ divisionId = null, status = "", fromDate = "", toDate = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_gst_invoices")
+    .select("id,invoice_no,client_bill_id,transport_client_id,invoice_date,taxable_value,gst_percentage,gst_amount,invoice_total,status,remarks,created_at,updated_at,transport_client_bills(id,bill_no),transport_clients(id,name,company_name)")
+    .is("deleted_at", null)
+    .order("invoice_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (divisionId) query = query.eq("division_id", divisionId);
+  if (status) query = query.eq("status", status);
+  if (fromDate) query = query.gte("invoice_date", fromDate);
+  if (toDate) query = query.lte("invoice_date", toDate);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getTransportGstInvoiceDetails(invoiceId) {
+  if (!invoiceId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("transport_gst_invoices")
+    .select("id,invoice_no,client_bill_id,transport_client_id,invoice_date,taxable_value,gst_percentage,gst_amount,invoice_total,status,remarks,created_at,updated_at,transport_client_bills(id,bill_no,gross_total,support_deduction_total,net_receivable),transport_clients(id,name,company_name)")
+    .eq("id", invoiceId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function approveTransportGstInvoice(invoiceId) {
+  if (!invoiceId) throw new Error("invoiceId is required");
+  const client = getSupabaseClient();
+  const { data: invoice, error: invoiceError } = await client
+    .from("transport_gst_invoices")
+    .select("id,status,invoice_total")
+    .eq("id", invoiceId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (invoiceError) throw invoiceError;
+  if (!invoice) throw new Error("Invoice not found.");
+  if (invoice.status === "cancelled") throw new Error("Cancelled invoice cannot be approved.");
+  if (invoice.status === "approved") throw new Error("Invoice is already approved.");
+  if (Number(invoice.invoice_total || 0) <= 0) throw new Error("Invoice total must be greater than zero.");
+  const { data, error } = await client
+    .from("transport_gst_invoices")
+    .update({ status: "approved", updated_at: new Date().toISOString() })
+    .eq("id", invoiceId)
+    .eq("status", "draft")
+    .is("deleted_at", null)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Only draft invoices can be approved.");
+  return data;
+}
+
+export async function cancelTransportGstInvoice(invoiceId) {
+  if (!invoiceId) throw new Error("invoiceId is required");
+  const client = getSupabaseClient();
+  const { data: current, error: currentError } = await client
+    .from("transport_gst_invoices")
+    .select("id,status")
+    .eq("id", invoiceId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (currentError) throw currentError;
+  if (!current) return null;
+  if (current.status === "approved") throw new Error("Approved invoice cannot be cancelled.");
+  if (current.status === "cancelled") return null;
+  const { data, error } = await client
+    .from("transport_gst_invoices")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", invoiceId)
+    .eq("status", "draft")
+    .is("deleted_at", null)
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function listClientReceiptBillOptions({ divisionId = null, transportClientId = null } = {}) {
+  if (!divisionId || !transportClientId) return [];
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("list_transport_client_receipt_bill_options", {
+    p_division_id: divisionId,
+    p_transport_client_id: transportClientId
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getClientReceiptOutstanding({ divisionId = null, transportClientId = null, clientBillId = null } = {}) {
+  if (!divisionId || !transportClientId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_transport_client_receipt_outstanding", {
+    p_division_id: divisionId,
+    p_transport_client_id: transportClientId,
+    p_client_bill_id: clientBillId || null
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function createTransportClientReceipt({ divisionId = null, transportClientId = null, clientBillId = null, receiptDate = null, amountReceived = null, paymentMode = null, referenceNo = null, remarks = null } = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("create_transport_client_receipt", {
+    p_division_id: divisionId,
+    p_transport_client_id: transportClientId,
+    p_client_bill_id: clientBillId || null,
+    p_receipt_date: receiptDate,
+    p_amount_received: amountReceived,
+    p_payment_mode: paymentMode,
+    p_reference_no: referenceNo,
+    p_remarks: remarks
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function listTransportClientReceipts({ divisionId = null, transportClientId = "", status = "", fromDate = "", toDate = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_client_receipts")
+    .select("id,receipt_no,transport_client_id,client_bill_id,receipt_date,amount_received,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_clients(id,name,company_name),transport_client_bills(id,bill_no)")
+    .is("deleted_at", null)
+    .order("receipt_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (divisionId) query = query.eq("division_id", divisionId);
+  if (transportClientId) query = query.eq("transport_client_id", transportClientId);
+  if (status) query = query.eq("status", status);
+  if (fromDate) query = query.gte("receipt_date", fromDate);
+  if (toDate) query = query.lte("receipt_date", toDate);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getTransportClientReceiptDetails(receiptId) {
+  if (!receiptId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("transport_client_receipts")
+    .select("id,receipt_no,transport_client_id,client_bill_id,receipt_date,amount_received,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_clients(id,name,company_name),transport_client_bills(id,bill_no,net_receivable)")
+    .eq("id", receiptId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function confirmTransportClientReceipt(receiptId) {
+  if (!receiptId) throw new Error("receiptId is required");
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("confirm_transport_client_receipt", { p_receipt_id: receiptId });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function cancelTransportClientReceipt(receiptId) {
+  if (!receiptId) throw new Error("receiptId is required");
+  const client = getSupabaseClient();
+  const { data: current, error: currentError } = await client.from("transport_client_receipts").select("id,status").eq("id", receiptId).is("deleted_at", null).maybeSingle();
+  if (currentError) throw currentError;
+  if (!current) return null;
+  if (current.status === "confirmed") throw new Error("Confirmed receipt cannot be cancelled.");
+  if (current.status === "cancelled") return null;
+  const { data, error } = await client.from("transport_client_receipts").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", receiptId).eq("status", "draft" ).is("deleted_at", null).select("*").maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function listTransporterPaymentStatementOptions({ divisionId = null, transportTransporterId = null } = {}) {
+  if (!divisionId || !transportTransporterId) return [];
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("list_transport_transporter_payment_statement_options", {
+    p_division_id: divisionId,
+    p_transport_transporter_id: transportTransporterId
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getTransporterPaymentOutstanding({ divisionId = null, transportTransporterId = null, transporterStatementId = null } = {}) {
+  if (!divisionId || !transportTransporterId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_transport_transporter_payment_outstanding", {
+    p_division_id: divisionId,
+    p_transport_transporter_id: transportTransporterId,
+    p_transporter_statement_id: transporterStatementId || null
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function createTransporterPayment({ divisionId = null, transportTransporterId = null, transporterStatementId = null, paymentDate = null, amountPaid = null, paymentMode = null, referenceNo = null, remarks = null } = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("create_transport_transporter_payment", {
+    p_division_id: divisionId,
+    p_transport_transporter_id: transportTransporterId,
+    p_transporter_statement_id: transporterStatementId || null,
+    p_payment_date: paymentDate,
+    p_amount_paid: amountPaid,
+    p_payment_mode: paymentMode,
+    p_reference_no: referenceNo,
+    p_remarks: remarks
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function listTransporterPayments({ divisionId = null, transportTransporterId = "", status = "", fromDate = "", toDate = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_transporter_payments")
+    .select("id,payment_no,transport_transporter_id,transporter_statement_id,payment_date,amount_paid,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_transporters(id,name),transport_transporter_statements(id,statement_no)")
+    .is("deleted_at", null)
+    .order("payment_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (divisionId) query = query.eq("division_id", divisionId);
+  if (transportTransporterId) query = query.eq("transport_transporter_id", transportTransporterId);
+  if (status) query = query.eq("status", status);
+  if (fromDate) query = query.gte("payment_date", fromDate);
+  if (toDate) query = query.lte("payment_date", toDate);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getTransporterPaymentDetails(paymentId) {
+  if (!paymentId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("transport_transporter_payments")
+    .select("id,payment_no,transport_transporter_id,transporter_statement_id,payment_date,amount_paid,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_transporters(id,name),transport_transporter_statements(id,statement_no,net_payable_total)")
+    .eq("id", paymentId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function confirmTransporterPayment(paymentId) {
+  if (!paymentId) throw new Error("paymentId is required");
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("confirm_transport_transporter_payment", { p_payment_id: paymentId });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function cancelTransporterPayment(paymentId) {
+  if (!paymentId) throw new Error("paymentId is required");
+  const client = getSupabaseClient();
+  const { data: current, error: currentError } = await client.from("transport_transporter_payments").select("id,status").eq("id", paymentId).is("deleted_at", null).maybeSingle();
+  if (currentError) throw currentError;
+  if (!current) return null;
+  if (current.status === "confirmed") throw new Error("Confirmed payment cannot be cancelled.");
+  if (current.status === "cancelled") return null;
+  const { data, error } = await client.from("transport_transporter_payments").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", paymentId).eq("status", "draft").is("deleted_at", null).select("*").maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function listPendingLedgerEvents({ divisionId = null, sourceType = "" } = {}) {
+  if (!divisionId || !sourceType) return [];
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("list_transport_pending_ledger_events", {
+    p_division_id: divisionId,
+    p_source_type: sourceType
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+async function postTransportLedgerSource(divisionId, sourceType, sourceId) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("post_transport_ledger_source", {
+    p_division_id: divisionId,
+    p_source_type: sourceType,
+    p_source_id: sourceId
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function postClientBillLedger({ divisionId = null, sourceId = null } = {}) {
+  return await postTransportLedgerSource(divisionId, "CLIENT_BILL", sourceId);
+}
+
+export async function postGstInvoiceLedger({ divisionId = null, sourceId = null } = {}) {
+  return await postTransportLedgerSource(divisionId, "GST_INVOICE", sourceId);
+}
+
+export async function postClientReceiptLedger({ divisionId = null, sourceId = null } = {}) {
+  return await postTransportLedgerSource(divisionId, "CLIENT_RECEIPT", sourceId);
+}
+
+export async function postTransporterStatementLedger({ divisionId = null, sourceId = null } = {}) {
+  return await postTransportLedgerSource(divisionId, "TRANSPORTER_STATEMENT", sourceId);
+}
+
+export async function postTransporterPaymentLedger({ divisionId = null, sourceId = null } = {}) {
+  return await postTransportLedgerSource(divisionId, "TRANSPORTER_PAYMENT", sourceId);
+}
+
+export async function listLedgerEntries({ divisionId = null, sourceType = "", accountCode = "", fromDate = "", toDate = "", entryNo = "" } = {}) {
+  if (!divisionId) return [];
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("list_transport_ledger_entries", {
+    p_division_id: divisionId,
+    p_source_type: sourceType || null,
+    p_account_code: accountCode || null,
+    p_from_date: fromDate || null,
+    p_to_date: toDate || null,
+    p_entry_no: entryNo || null
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getLedgerEntryDetails({ divisionId = null, entryNo = "" } = {}) {
+  if (!divisionId || !entryNo) return [];
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_transport_ledger_entry_details", {
+    p_division_id: divisionId,
+    p_entry_no: entryNo
+  });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getTransportClientFinancialReconciliation({ divisionId = null } = {}) {
+  if (!divisionId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_transport_client_financial_reconciliation", {
+    p_division_id: divisionId
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function getTransporterFinancialReconciliation({ divisionId = null } = {}) {
+  if (!divisionId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_transport_transporter_financial_reconciliation", {
+    p_division_id: divisionId
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
 }
 
 export async function updateTripExpense(id, payload) {
