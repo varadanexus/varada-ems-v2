@@ -62,7 +62,13 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Commercials",
       items: [
-        { module: MODULES.TRANSPORT_RATE_MASTER, label: "Rate Master", href: ROUTES.TRANSPORT_RATE_MASTER }
+        { module: MODULES.TRANSPORT_RATE_MASTER, label: "Rate Master", href: ROUTES.TRANSPORT_RATE_MASTER },
+        { module: MODULES.TRANSPORT_CLIENT_BILLING, label: "Client Billing", href: ROUTES.TRANSPORT_CLIENT_BILLING },
+        { module: MODULES.TRANSPORT_TRANSPORTER_STATEMENTS, label: "Transporter Statements", href: ROUTES.TRANSPORT_TRANSPORTER_STATEMENTS },
+        { module: MODULES.TRANSPORT_GST_INVOICES, label: "GST Invoices", href: ROUTES.TRANSPORT_GST_INVOICES },
+        { module: MODULES.TRANSPORT_CLIENT_RECEIPTS, label: "Client Receipts", href: ROUTES.TRANSPORT_CLIENT_RECEIPTS },
+        { module: MODULES.TRANSPORT_TRANSPORTER_PAYMENTS, label: "Transporter Payments", href: ROUTES.TRANSPORT_TRANSPORTER_PAYMENTS },
+        { module: MODULES.TRANSPORT_LEDGER, label: "Ledger", href: ROUTES.TRANSPORT_LEDGER }
       ]
     },
     {

@@ -1,5 +1,5 @@
 import { MODULES, ROUTES, WORKSPACES } from "../config/constants.js";
-import { MASTER_TABLES, listMasterRecords, listTrips, resolveWorkspaceDivision } from "./admin-api.js";
+import { MASTER_TABLES, getTransportClientFinancialReconciliation, getTransporterFinancialReconciliation, listMasterRecords, listTrips, resolveWorkspaceDivision } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 
 async function init() {
@@ -43,6 +43,28 @@ async function init() {
     tripKpis = { total: "—", draft: "—", inTransit: "—", completed: "—" };
   }
 
+  let clientFinance = null;
+  let transporterFinance = null;
+  try {
+    clientFinance = await getTransportClientFinancialReconciliation({ divisionId });
+  } catch {
+    clientFinance = null;
+  }
+  try {
+    transporterFinance = await getTransporterFinancialReconciliation({ divisionId });
+  } catch {
+    transporterFinance = null;
+  }
+
+  const revenue = Number(clientFinance?.total_approved_bills || 0);
+  const totalGst = Number(clientFinance?.total_approved_gst || 0);
+  const totalReceipts = Number(clientFinance?.total_confirmed_receipts || 0);
+  const clientOutstanding = Number(clientFinance?.outstanding_receivable || 0);
+  const totalStatements = Number(transporterFinance?.total_approved_statements || 0);
+  const totalPayments = Number(transporterFinance?.total_confirmed_payments || 0);
+  const transporterOutstanding = Number(transporterFinance?.outstanding_payable || 0);
+  const grossMargin = revenue - totalStatements;
+
   renderModuleContent(`
     <section class="card">
       <h3>Transportation Operations Hub</h3>
@@ -78,6 +100,19 @@ async function init() {
         ${canView(MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_TRUCK_AGENT_COMMISSION}">Agents / Truck Mapping</a>` : ""}
         ${canView(MODULES.TRANSPORT_TRUCKS) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_TRUCKS}">Trucks</a>` : ""}
         ${canView(MODULES.TRANSPORT_RATE_MASTER) ? `<a class="quick-action" href="${ROUTES.TRANSPORT_RATE_MASTER}">Rate Master</a>` : ""}
+      </div>
+      <h4 style="margin:1rem 0 .5rem;">Finance Snapshot</h4>
+      <div class="hero-kpis">
+        <span class="meta-pill">Total Billed: ₹${revenue.toFixed(2)}</span>
+        <span class="meta-pill">Total GST: ₹${totalGst.toFixed(2)}</span>
+        <span class="meta-pill">Total Receipts: ₹${totalReceipts.toFixed(2)}</span>
+        <span class="meta-pill">Client Outstanding: ₹${clientOutstanding.toFixed(2)}</span>
+        <span class="meta-pill">Total Statements: ₹${totalStatements.toFixed(2)}</span>
+        <span class="meta-pill">Total Payments: ₹${totalPayments.toFixed(2)}</span>
+        <span class="meta-pill">Transporter Outstanding: ₹${transporterOutstanding.toFixed(2)}</span>
+        <span class="meta-pill">Revenue: ₹${revenue.toFixed(2)}</span>
+        <span class="meta-pill">Cost: ₹${totalStatements.toFixed(2)}</span>
+        <span class="meta-pill">Gross Margin: ₹${grossMargin.toFixed(2)}</span>
       </div>
     </section>
   `);
