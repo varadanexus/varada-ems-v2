@@ -1,4 +1,5 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
+import { getSupabaseClient } from "../config/supabase.js";
 import { getLedgerEntryDetails, listLedgerEntries, listPendingLedgerEvents, postClientBillLedger, postClientReceiptLedger, postGstInvoiceLedger, postTransporterPaymentLedger, postTransporterStatementLedger, resolveWorkspaceDivision } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
@@ -35,7 +36,7 @@ function renderShell(divisionLabel) {
       .ledger-pending-grid{display:grid;grid-template-columns:1fr;gap:1rem}.ledger-table th,.ledger-table td,.ledger-entry-table th,.ledger-entry-table td,.ledger-detail-table th,.ledger-detail-table td{padding:.65rem .5rem;text-align:left;border-bottom:1px solid rgba(148,163,184,.16)}
       .ledger-table th,.ledger-entry-table th,.ledger-detail-table th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280)}
       .ledger-filter-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.85rem 1rem;align-items:end}
-      .ledger-modal[hidden]{display:none}.ledger-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}.ledger-modal-panel{width:min(900px,100%);max-height:85vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}.ledger-modal-panel .table-shell{overflow-x:auto}
+      .ledger-modal[hidden]{display:none}.ledger-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}.ledger-modal-panel{width:min(1200px,95vw);max-height:85vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}.ledger-modal-panel .table-shell{max-height:300px;overflow:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px}.ledger-modal-panel table{background:#fff;color:#111827}.ledger-modal-panel th,.ledger-modal-panel td{color:#111827;background:#fff}.ledger-modal-panel thead th{position:sticky;top:0;background:#f3f4f6;z-index:1}.ledger-modal-panel tbody tr:nth-child(even) td{background:#f9fafb}.ledger-modal-panel tbody tr:nth-child(odd) td{background:#fff}
       @media(max-width:980px){.ledger-filter-grid{grid-template-columns:1fr}}
     </style>
     <section class="card" style="margin-bottom:1rem;"><h3>Post Pending Events</h3><p class="muted">Transportation Division: ${divisionLabel}</p><div id="ledgerPendingSections" class="ledger-pending-grid"></div></section>
@@ -109,10 +110,44 @@ async function openDetailsModal(entryNo) {
   const rows = await getLedgerEntryDetails({ divisionId: PAGE_STATE.divisionId, entryNo });
   const host = qs("#ledgerDetailsBody");
   if (!host) return;
-  host.innerHTML = `<div class="table-shell"><table class="ledger-detail-table"><thead><tr><th>Entry No</th><th>Date</th><th>Source Type</th><th>Source Id</th><th>Account</th><th>Debit</th><th>Credit</th><th>Remarks</th></tr></thead><tbody>${rows.length ? rows.map((row) => `<tr><td>${escapeHtml(row.entry_no || "—")}</td><td>${escapeHtml(row.entry_date || "—")}</td><td>${escapeHtml(row.source_type || "—")}</td><td>${escapeHtml(row.source_id || "—")}</td><td>${escapeHtml(row.account_code || "—")}</td><td>${formatMoney(row.debit_amount)}</td><td>${formatMoney(row.credit_amount)}</td><td>${escapeHtml(row.remarks || "—")}</td></tr>`).join("") : `<tr><td colspan="8">No ledger detail rows found.</td></tr>`}</tbody></table></div>`;
+  const sourceNo = await resolveLedgerSourceNo(rows);
+  host.innerHTML = `<div class="table-shell"><table class="ledger-detail-table"><thead><tr><th>Entry No</th><th>Date</th><th>Source Type</th><th>Source No</th><th>Account</th><th>Debit</th><th>Credit</th><th>Remarks</th></tr></thead><tbody>${rows.length ? rows.map((row) => `<tr><td>${escapeHtml(row.entry_no || "—")}</td><td>${escapeHtml(row.entry_date || "—")}</td><td>${escapeHtml(row.source_type || "—")}</td><td>${escapeHtml(sourceNo)}</td><td>${escapeHtml(row.account_code || "—")}</td><td>${formatMoney(row.debit_amount)}</td><td>${formatMoney(row.credit_amount)}</td><td>${escapeHtml(row.remarks || "—")}</td></tr>`).join("") : `<tr><td colspan="8">No ledger detail rows found.</td></tr>`}</tbody></table></div>`;
   qs("#ledgerDetailsModal")?.removeAttribute("hidden");
 }
 
 function closeDetailsModal() { PAGE_STATE.viewingEntryNo = null; qs("#ledgerDetailsModal")?.setAttribute("hidden", "hidden"); }
+
+async function resolveLedgerSourceNo(rows) {
+  const firstRow = rows?.[0] || null;
+  const sourceType = firstRow?.source_type || "";
+  const sourceId = firstRow?.source_id || null;
+  if (!sourceType || !sourceId) return "—";
+
+  const sourceConfig = {
+    CLIENT_BILL: { table: "transport_client_bills", field: "bill_no" },
+    GST_INVOICE: { table: "transport_gst_invoices", field: "invoice_no" },
+    CLIENT_RECEIPT: { table: "transport_client_receipts", field: "receipt_no" },
+    TRANSPORTER_STATEMENT: { table: "transport_transporter_statements", field: "statement_no" },
+    TRANSPORTER_PAYMENT: { table: "transport_transporter_payments", field: "payment_no" }
+  }[sourceType];
+
+  if (!sourceConfig) return "—";
+
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from(sourceConfig.table)
+    .select(sourceConfig.field)
+    .eq("id", sourceId)
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Failed to resolve ledger source number", { sourceType, sourceId, error });
+    return "—";
+  }
+
+  return data?.[sourceConfig.field] || "—";
+}
+
 function formatMoney(value) { return `₹${Number(value || 0).toFixed(2)}`; }
 function escapeHtml(value) { return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;"); }

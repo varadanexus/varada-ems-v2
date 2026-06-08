@@ -54,7 +54,12 @@ function renderShell(divisionLabel) {
       .billing-list-table th,.billing-detail-table th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280)}
       .billing-modal[hidden]{display:none}.billing-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}
       .billing-modal-panel{width:min(900px,100%);max-height:85vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}
-      .billing-modal-panel .table-shell{overflow-x:auto}
+      .billing-modal-panel .table-shell{max-height:300px;overflow:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px}
+      .billing-modal-panel table{background:#fff;color:#111827}
+      .billing-modal-panel th,.billing-modal-panel td{color:#111827;background:#fff}
+      .billing-modal-panel thead th{position:sticky;top:0;background:#f3f4f6;z-index:1}
+      .billing-modal-panel tbody tr:nth-child(even) td{background:#f9fafb}
+      .billing-modal-panel tbody tr:nth-child(odd) td{background:#fff}
       .billing-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem}
       .billing-detail-box{padding:.75rem;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb}.billing-detail-box label{display:block;font-size:.78rem;text-transform:uppercase;color:#6b7280;margin-bottom:.35rem}.billing-detail-box strong{color:#111827}
       .billing-status-pill{display:inline-flex;align-items:center;justify-content:center;padding:.3rem .65rem;border-radius:999px;font-size:.8rem;font-weight:700}.billing-status-pill.draft{background:rgba(245,158,11,.16);color:#b45309}.billing-status-pill.approved{background:rgba(34,197,94,.14);color:#15803d}.billing-status-pill.cancelled{background:rgba(239,68,68,.14);color:#b91c1c}
