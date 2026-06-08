@@ -31,7 +31,7 @@ function renderShell(divisionLabel) {
       .pay-list-table th,.pay-list-table td{padding:.65rem .5rem;text-align:left;border-bottom:1px solid rgba(148,163,184,.16)}
       .pay-list-table th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280)}
       .pay-status-pill{display:inline-flex;align-items:center;justify-content:center;padding:.3rem .65rem;border-radius:999px;font-size:.8rem;font-weight:700}.pay-status-pill.draft{background:rgba(245,158,11,.16);color:#b45309}.pay-status-pill.confirmed{background:rgba(34,197,94,.14);color:#15803d}.pay-status-pill.cancelled{background:rgba(239,68,68,.14);color:#b91c1c}
-      .pay-modal[hidden]{display:none}.pay-modal{position:fixed;inset:0;z-index:1000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.55)}.pay-modal-panel{width:min(860px,100%);max-height:90vh;overflow:auto;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}
+      .pay-modal[hidden]{display:none}.pay-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}.pay-modal-panel{width:min(900px,100%);max-height:85vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}.pay-modal-panel .table-shell{overflow-x:auto}
       .pay-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem}
       @media(max-width:980px){.pay-grid,.pay-kpis,.pay-detail-grid{grid-template-columns:1fr}}
     </style>
@@ -115,7 +115,10 @@ function renderPaymentList() {
   }
   body.innerHTML = PAGE_STATE.payments.map((row) => {
     const statusClass = String(row.status || "draft").toLowerCase();
-    return `<tr><td>${escapeHtml(row.payment_no || "—")}</td><td>${escapeHtml(resolveTransporterLabel(row))}</td><td>${escapeHtml(row.transport_transporter_statements?.statement_no || "—")}</td><td>${escapeHtml(row.payment_date || "—")}</td><td>${formatMoney(row.amount_paid)}</td><td>${escapeHtml(row.payment_mode || "—")}</td><td><span class="pay-status-pill ${statusClass}">${escapeHtml(row.status || "—")}</span></td><td><button class="btn" type="button" data-tp-view="${row.id}">View Details</button> <button class="btn" type="button" data-tp-confirm="${row.id}" ${statusClass === "draft" ? "" : "disabled"}>Confirm</button> <button class="btn btn-danger" type="button" data-tp-cancel="${row.id}" ${statusClass === "draft" ? "" : "disabled"}>Cancel</button></td></tr>`;
+    const actionButtons = statusClass === "draft"
+      ? `<button class="btn" type="button" data-tp-confirm="${row.id}">Confirm</button> <button class="btn btn-danger" type="button" data-tp-cancel="${row.id}">Cancel</button>`
+      : "";
+    return `<tr><td>${escapeHtml(row.payment_no || "—")}</td><td>${escapeHtml(resolveTransporterLabel(row))}</td><td>${escapeHtml(row.transport_transporter_statements?.statement_no || "—")}</td><td>${escapeHtml(row.payment_date || "—")}</td><td>${formatMoney(row.amount_paid)}</td><td>${escapeHtml(row.payment_mode || "—")}</td><td><span class="pay-status-pill ${statusClass}">${escapeHtml(row.status || "—")}</span></td><td><button class="btn" type="button" data-tp-view="${row.id}">View Details</button>${actionButtons ? ` ${actionButtons}` : ""}</td></tr>`;
   }).join("");
   body.querySelectorAll("button[data-tp-view]").forEach((button) => button.addEventListener("click", async () => openDetailsModal(button.getAttribute("data-tp-view"))));
   body.querySelectorAll("button[data-tp-confirm]").forEach((button) => button.addEventListener("click", async () => {

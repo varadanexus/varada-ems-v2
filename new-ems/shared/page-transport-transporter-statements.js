@@ -44,8 +44,9 @@ function renderShell(divisionLabel) {
       .stmt-kpi,.stmt-detail-box{padding:.85rem 1rem;border-radius:14px;background:#f8fafc;border:1px solid #e5e7eb}.stmt-kpi label,.stmt-detail-box label{display:block;font-size:.78rem;color:#6b7280;text-transform:uppercase;margin-bottom:.35rem}.stmt-kpi strong,.stmt-detail-box strong{font-size:1.05rem;color:#111827}
       .stmt-actions{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
       .stmt-status-pill{display:inline-flex;align-items:center;justify-content:center;padding:.3rem .65rem;border-radius:999px;font-size:.8rem;font-weight:700}.stmt-status-pill.draft{background:rgba(245,158,11,.16);color:#b45309}.stmt-status-pill.approved{background:rgba(34,197,94,.14);color:#15803d}.stmt-status-pill.cancelled{background:rgba(239,68,68,.14);color:#b91c1c}
-      .stmt-modal[hidden]{display:none}.stmt-modal{position:fixed;inset:0;z-index:1000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.55)}
-      .stmt-modal-panel{width:min(980px,100%);max-height:90vh;overflow:auto;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}
+      .stmt-modal[hidden]{display:none}.stmt-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}
+      .stmt-modal-panel{width:min(900px,100%);max-height:85vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}
+      .stmt-modal-panel .table-shell{overflow-x:auto}
       .stmt-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem}.stmt-warning{padding:.8rem 1rem;border-radius:14px;background:#fef3c7;color:#92400e;font-weight:700;margin-bottom:1rem}
       @media(max-width:980px){.stmt-grid,.stmt-kpis,.stmt-detail-grid{grid-template-columns:1fr}}
     </style>
@@ -183,7 +184,10 @@ function renderStatementList() {
   }
   body.innerHTML = PAGE_STATE.statements.map((row) => {
     const statusClass = String(row.status || "draft").toLowerCase();
-    return `<tr><td>${escapeHtml(row.statement_no || "—")}</td><td>${escapeHtml(resolveTransporterLabel(row))}</td><td>${escapeHtml(row.statement_date || "—")}</td><td>${formatMoney(row.gross_payable_total)}</td><td>${formatMoney(row.support_deduction_total)}</td><td>${formatMoney(row.net_payable_total)}</td><td><span class="stmt-status-pill ${statusClass}">${escapeHtml(row.status || "—")}</span></td><td><button class="btn" type="button" data-ts-view="${row.id}">View Details</button> <button class="btn" type="button" data-ts-approve="${row.id}" ${statusClass === "draft" ? "" : "disabled"}>Approve Statement</button> <button class="btn btn-danger" type="button" data-ts-cancel="${row.id}" ${statusClass === "draft" ? "" : "disabled"}>Cancel Statement</button></td></tr>`;
+    const actionButtons = statusClass === "draft"
+      ? `<button class="btn" type="button" data-ts-approve="${row.id}">Approve Statement</button> <button class="btn btn-danger" type="button" data-ts-cancel="${row.id}">Cancel Statement</button>`
+      : "";
+    return `<tr><td>${escapeHtml(row.statement_no || "—")}</td><td>${escapeHtml(resolveTransporterLabel(row))}</td><td>${escapeHtml(row.statement_date || "—")}</td><td>${formatMoney(row.gross_payable_total)}</td><td>${formatMoney(row.support_deduction_total)}</td><td>${formatMoney(row.net_payable_total)}</td><td><span class="stmt-status-pill ${statusClass}">${escapeHtml(row.status || "—")}</span></td><td><button class="btn" type="button" data-ts-view="${row.id}">View Details</button>${actionButtons ? ` ${actionButtons}` : ""}</td></tr>`;
   }).join("");
   body.querySelectorAll("button[data-ts-view]").forEach((button) => button.addEventListener("click", async () => openDetailsModal(button.getAttribute("data-ts-view"))));
   body.querySelectorAll("button[data-ts-approve]").forEach((button) => button.addEventListener("click", async () => {
@@ -245,7 +249,7 @@ async function openDetailsModal(statementId) {
       ${renderDetailBox("Approved At", formatDateTime(details.approved_at))}
       ${renderDetailBox("Created By", details.created_by || details.created_by_name || "—")}
     </div>
-    <div class="stmt-actions" style="margin-bottom:1rem;"><button class="btn" type="button" id="tsApproveInModal" ${details.status === "draft" ? "" : "disabled"}>Approve Statement</button></div>
+    ${details.status === "draft" ? `<div class="stmt-actions" style="margin-bottom:1rem;"><button class="btn" type="button" id="tsApproveInModal">Approve Statement</button></div>` : ""}
     <div class="table-shell"><table class="stmt-detail-table"><thead><tr><th>Trip No</th><th>Trip Date</th><th>Quantity MT</th><th>Transporter Rate / MT</th><th>Gross Payable</th><th>Support Deduction</th><th>Net Payable</th></tr></thead><tbody>${(details.trip_lines || []).length ? details.trip_lines.map((line) => `<tr><td>${escapeHtml(line.trip_no || "—")}</td><td>${escapeHtml(line.trip_date || "—")}</td><td>${formatQty(line.quantity_mt)}</td><td>${formatMoney(line.transporter_rate_per_mt, 3)}</td><td>${formatMoney(line.transporter_gross_payable)}</td><td>${formatMoney(line.support_deduction_amount)}</td><td>${formatMoney(line.transporter_net_payable)}</td></tr>`).join("") : `<tr><td colspan="7">No trip lines found.</td></tr>`}</tbody></table></div>`;
   qs("#tsApproveInModal")?.addEventListener("click", async () => {
     if (!window.confirm("Approve this statement? Approved statements cannot be cancelled.")) return;

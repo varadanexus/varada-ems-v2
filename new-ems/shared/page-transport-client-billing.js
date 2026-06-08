@@ -52,8 +52,9 @@ function renderShell(divisionLabel) {
       .billing-result{padding:.8rem 1rem;border-radius:14px;background:#dcfce7;color:#166534;font-weight:700}
       .billing-list-table th,.billing-list-table td,.billing-detail-table th,.billing-detail-table td{padding:.65rem .5rem;text-align:left;border-bottom:1px solid rgba(148,163,184,.16)}
       .billing-list-table th,.billing-detail-table th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280)}
-      .billing-modal[hidden]{display:none}.billing-modal{position:fixed;inset:0;z-index:1000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.55)}
-      .billing-modal-panel{width:min(980px,100%);max-height:90vh;overflow:auto;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}
+      .billing-modal[hidden]{display:none}.billing-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}
+      .billing-modal-panel{width:min(900px,100%);max-height:85vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}
+      .billing-modal-panel .table-shell{overflow-x:auto}
       .billing-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem}
       .billing-detail-box{padding:.75rem;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb}.billing-detail-box label{display:block;font-size:.78rem;text-transform:uppercase;color:#6b7280;margin-bottom:.35rem}.billing-detail-box strong{color:#111827}
       .billing-status-pill{display:inline-flex;align-items:center;justify-content:center;padding:.3rem .65rem;border-radius:999px;font-size:.8rem;font-weight:700}.billing-status-pill.draft{background:rgba(245,158,11,.16);color:#b45309}.billing-status-pill.approved{background:rgba(34,197,94,.14);color:#15803d}.billing-status-pill.cancelled{background:rgba(239,68,68,.14);color:#b91c1c}
@@ -279,7 +280,9 @@ function renderBillList() {
   }
   body.innerHTML = PAGE_STATE.bills.map((bill) => {
     const statusClass = String(bill.status || "generated").toLowerCase();
-    const canCancel = statusClass !== "cancelled";
+    const actionButtons = statusClass === "draft"
+      ? `<button class="btn" type="button" data-bill-approve="${bill.id}">Approve Bill</button> <button class="btn btn-danger" type="button" data-bill-cancel="${bill.id}">Cancel Bill</button>`
+      : "";
     return `<tr>
       <td>${escapeHtml(bill.bill_no || "—")}</td>
       <td>${escapeHtml(resolveClientLabel(bill))}</td>
@@ -288,7 +291,7 @@ function renderBillList() {
       <td>${formatMoney(bill.support_deduction_total)}</td>
       <td>${formatMoney(bill.net_receivable)}</td>
       <td><span class="billing-status-pill ${statusClass}">${escapeHtml(bill.status || "—")}</span></td>
-      <td><button class="btn" type="button" data-bill-view="${bill.id}">View Details</button> <button class="btn" type="button" data-bill-approve="${bill.id}" ${statusClass === "draft" ? "" : "disabled"}>Approve Bill</button> <button class="btn btn-danger" type="button" data-bill-cancel="${bill.id}" ${statusClass === "draft" ? "" : "disabled"}>Cancel Bill</button></td>
+      <td><button class="btn" type="button" data-bill-view="${bill.id}">View Details</button>${actionButtons ? ` ${actionButtons}` : ""}</td>
     </tr>`;
   }).join("");
   body.querySelectorAll("button[data-bill-view]").forEach((button) => button.addEventListener("click", async () => {
@@ -370,9 +373,7 @@ async function openBillDetailsModal(billId) {
       ${renderDetailBox("Created By", createdBy)}
       ${renderDetailBox("Approved At", formatDateTime(details.approved_at))}
     </div>
-    <div class="billing-actions" style="margin-bottom:1rem;">
-      <button class="btn" type="button" id="clientBillApproveInModal" ${details.status === "draft" ? "" : "disabled"}>Approve Bill</button>
-    </div>
+    ${details.status === "draft" ? `<div class="billing-actions" style="margin-bottom:1rem;"><button class="btn" type="button" id="clientBillApproveInModal">Approve Bill</button></div>` : ""}
     <div class="table-shell">
       <table class="billing-detail-table">
         <thead>

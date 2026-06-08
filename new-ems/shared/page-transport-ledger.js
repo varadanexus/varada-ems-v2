@@ -35,7 +35,7 @@ function renderShell(divisionLabel) {
       .ledger-pending-grid{display:grid;grid-template-columns:1fr;gap:1rem}.ledger-table th,.ledger-table td,.ledger-entry-table th,.ledger-entry-table td,.ledger-detail-table th,.ledger-detail-table td{padding:.65rem .5rem;text-align:left;border-bottom:1px solid rgba(148,163,184,.16)}
       .ledger-table th,.ledger-entry-table th,.ledger-detail-table th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280)}
       .ledger-filter-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.85rem 1rem;align-items:end}
-      .ledger-modal[hidden]{display:none}.ledger-modal{position:fixed;inset:0;z-index:1000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.55)}.ledger-modal-panel{width:min(980px,100%);max-height:90vh;overflow:auto;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}
+      .ledger-modal[hidden]{display:none}.ledger-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}.ledger-modal-panel{width:min(900px,100%);max-height:85vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}.ledger-modal-panel .table-shell{overflow-x:auto}
       @media(max-width:980px){.ledger-filter-grid{grid-template-columns:1fr}}
     </style>
     <section class="card" style="margin-bottom:1rem;"><h3>Post Pending Events</h3><p class="muted">Transportation Division: ${divisionLabel}</p><div id="ledgerPendingSections" class="ledger-pending-grid"></div></section>
