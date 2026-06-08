@@ -914,13 +914,14 @@ export async function listEligibleClientBillsForInvoice({ divisionId = null } = 
   return data || [];
 }
 
-export async function createTransportGstInvoice({ divisionId = null, clientBillId = null, invoiceDate = null, gstMode = null, gstPercentage = null, remarks = null } = {}) {
+export async function createTransportGstInvoice({ divisionId = null, clientBillId = null, invoiceDate = null, gstMode = null, gstBase = null, gstPercentage = null, remarks = null } = {}) {
   const client = getSupabaseClient();
   const { data, error } = await client.rpc("create_transport_gst_invoice", {
     p_division_id: divisionId,
     p_client_bill_id: clientBillId,
     p_invoice_date: invoiceDate,
     p_gst_mode: gstMode,
+    p_gst_base: gstBase,
     p_gst_percentage: gstPercentage,
     p_remarks: remarks
   });
@@ -932,7 +933,7 @@ export async function listTransportGstInvoices({ divisionId = null, status = "",
   const client = getSupabaseClient();
   let query = client
     .from("transport_gst_invoices")
-    .select("id,invoice_no,client_bill_id,transport_client_id,invoice_date,taxable_value,gst_percentage,gst_amount,invoice_total,status,remarks,created_at,updated_at,transport_client_bills(id,bill_no),transport_clients(id,name,company_name)")
+    .select("id,invoice_no,client_bill_id,transport_client_id,invoice_date,taxable_value,gst_base,margin_amount,gst_percentage,gst_amount,invoice_total,status,remarks,created_at,updated_at,transport_client_bills(id,bill_no,net_receivable),transport_clients(id,name,company_name)")
     .is("deleted_at", null)
     .order("invoice_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -950,7 +951,7 @@ export async function getTransportGstInvoiceDetails(invoiceId) {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from("transport_gst_invoices")
-    .select("id,invoice_no,client_bill_id,transport_client_id,invoice_date,taxable_value,gst_percentage,gst_amount,invoice_total,status,remarks,created_at,updated_at,transport_client_bills(id,bill_no,gross_total,support_deduction_total,net_receivable),transport_clients(id,name,company_name)")
+    .select("id,invoice_no,client_bill_id,transport_client_id,invoice_date,taxable_value,gst_base,margin_amount,gst_percentage,gst_amount,invoice_total,status,remarks,created_at,updated_at,transport_client_bills(id,bill_no,gross_total,support_deduction_total,net_receivable),transport_clients(id,name,company_name)")
     .eq("id", invoiceId)
     .is("deleted_at", null)
     .maybeSingle();
