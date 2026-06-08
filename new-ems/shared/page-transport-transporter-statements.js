@@ -46,7 +46,12 @@ function renderShell(divisionLabel) {
       .stmt-status-pill{display:inline-flex;align-items:center;justify-content:center;padding:.3rem .65rem;border-radius:999px;font-size:.8rem;font-weight:700}.stmt-status-pill.draft{background:rgba(245,158,11,.16);color:#b45309}.stmt-status-pill.approved{background:rgba(34,197,94,.14);color:#15803d}.stmt-status-pill.cancelled{background:rgba(239,68,68,.14);color:#b91c1c}
       .stmt-modal[hidden]{display:none}.stmt-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}
       .stmt-modal-panel{width:min(900px,100%);max-height:85vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}
-      .stmt-modal-panel .table-shell{overflow-x:auto}
+      .stmt-modal-panel .table-shell{max-height:300px;overflow:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px}
+      .stmt-modal-panel table{background:#fff;color:#111827}
+      .stmt-modal-panel th,.stmt-modal-panel td{color:#111827;background:#fff}
+      .stmt-modal-panel thead th{position:sticky;top:0;background:#f3f4f6;z-index:1}
+      .stmt-modal-panel tbody tr:nth-child(even) td{background:#f9fafb}
+      .stmt-modal-panel tbody tr:nth-child(odd) td{background:#fff}
       .stmt-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem}.stmt-warning{padding:.8rem 1rem;border-radius:14px;background:#fef3c7;color:#92400e;font-weight:700;margin-bottom:1rem}
       @media(max-width:980px){.stmt-grid,.stmt-kpis,.stmt-detail-grid{grid-template-columns:1fr}}
     </style>
