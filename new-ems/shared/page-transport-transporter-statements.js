@@ -2,6 +2,7 @@ import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { approveTransporterStatement, cancelTransporterStatement, createTransporterStatement, getTransporterStatementDetails, listActiveOptions, listTransporterStatementableTrips, listTransporterStatements, resolveWorkspaceDivision } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { addBankDetailsSection, addDetailsSection, addDocumentFooter, addDocumentHeader, addSignatureSection, addSummarySection, addTable, createPdfDocument, formatPdfCurrency, formatPdfDate, formatPdfFilename, formatPdfQuantity, savePdf } from "./pdf-utils.js";
 import { qs, showToast } from "./utils.js";
 
 const PAGE_STATE = {
@@ -10,7 +11,8 @@ const PAGE_STATE = {
   rows: [],
   statements: [],
   selectedTripIds: new Set(),
-  viewingStatement: null
+  viewingStatement: null,
+  penaltyAmount: 0
 };
 
 initTransporterStatementsPage();
@@ -40,7 +42,7 @@ function renderShell(divisionLabel) {
       .stmt-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem 1rem;align-items:end}
       .stmt-table th,.stmt-table td,.stmt-list-table th,.stmt-list-table td,.stmt-detail-table th,.stmt-detail-table td{padding:.65rem .5rem;text-align:left;border-bottom:1px solid rgba(148,163,184,.16)}
       .stmt-table th,.stmt-list-table th,.stmt-detail-table th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280)}
-      .stmt-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem}
+      .stmt-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.85rem}
       .stmt-kpi,.stmt-detail-box{padding:.85rem 1rem;border-radius:14px;background:#f8fafc;border:1px solid #e5e7eb}.stmt-kpi label,.stmt-detail-box label{display:block;font-size:.78rem;color:#6b7280;text-transform:uppercase;margin-bottom:.35rem}.stmt-kpi strong,.stmt-detail-box strong{font-size:1.05rem;color:#111827}
       .stmt-actions{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
       .stmt-status-pill{display:inline-flex;align-items:center;justify-content:center;padding:.3rem .65rem;border-radius:999px;font-size:.8rem;font-weight:700}.stmt-status-pill.draft{background:rgba(245,158,11,.16);color:#b45309}.stmt-status-pill.approved{background:rgba(34,197,94,.14);color:#15803d}.stmt-status-pill.cancelled{background:rgba(239,68,68,.14);color:#b91c1c}
@@ -63,7 +65,7 @@ function renderShell(divisionLabel) {
         <div><label for="tsDate">Statement Date *</label><input id="tsDate" type="date" /></div>
         <div><button class="btn" id="tsLoadTrips" type="button">Load Eligible Trips</button></div>
       </div>
-      <div style="margin-top:1rem;"><label for="tsRemarks">Remarks</label><input id="tsRemarks" type="text" placeholder="Optional remarks for statement header" /></div>
+      <div class="stmt-grid" style="margin-top:1rem;"><div><label for="tsPenaltyAmount">Penalty Amount</label><input id="tsPenaltyAmount" type="number" min="0" step="0.01" value="0" /></div><div style="grid-column:span 2;"><label for="tsPenaltyReason">Penalty Reason</label><input id="tsPenaltyReason" type="text" placeholder="Required if penalty amount is greater than zero" /></div></div><div style="margin-top:1rem;"><label for="tsRemarks">Remarks</label><input id="tsRemarks" type="text" placeholder="Optional remarks for statement header" /></div>
     </section>
     <section class="card" style="margin-bottom:1rem;">
       <div class="stmt-actions" style="margin-bottom:.75rem;"><strong>Eligible Trips</strong><span class="meta-pill">Statuses: completed / financial_review</span><span class="meta-pill" id="tsTripCount">Trips: 0</span></div>
@@ -71,7 +73,7 @@ function renderShell(divisionLabel) {
     </section>
     <section class="card" style="margin-bottom:1rem;">
       <h3>Statement Preview</h3>
-      <div class="stmt-kpis"><div class="stmt-kpi"><label>Gross Payable Total</label><strong id="tsGrossTotal">₹0.00</strong></div><div class="stmt-kpi"><label>Support Deduction Total</label><strong id="tsSupportTotal">₹0.00</strong></div><div class="stmt-kpi"><label>Net Payable Total</label><strong id="tsNetTotal">₹0.00</strong></div></div>
+      <div class="stmt-kpis"><div class="stmt-kpi"><label>Gross Payable Total</label><strong id="tsGrossTotal">₹0.00</strong></div><div class="stmt-kpi"><label>Support Deduction Total</label><strong id="tsSupportTotal">₹0.00</strong></div><div class="stmt-kpi"><label>Penalty Amount</label><strong id="tsPenaltyPreview">₹0.00</strong></div><div class="stmt-kpi"><label>Net Payable Total</label><strong id="tsNetTotal">₹0.00</strong></div></div>
       <div class="stmt-actions" style="margin-top:1rem;"><button class="btn" id="tsCreateBtn" type="button">Create Statement</button><span class="muted" id="tsSelectionMeta">No trips selected.</span></div>
       <div id="tsResult" style="margin-top:1rem;"></div>
     </section>
@@ -84,7 +86,7 @@ function renderShell(divisionLabel) {
         <div><label for="tsListToDate">To Date</label><input id="tsListToDate" type="date" /></div>
         <div style="display:flex;align-items:end;gap:.5rem;"><button class="btn" id="tsListApply" type="button">Apply Filters</button></div>
       </div>
-      <div class="table-shell"><table class="stmt-list-table"><thead><tr><th>Statement No</th><th>Transporter</th><th>Statement Date</th><th>Gross Payable Total</th><th>Support Deduction Total</th><th>Net Payable Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="tsListBody"><tr><td colspan="8">No transporter statements found.</td></tr></tbody></table></div>
+      <div class="table-shell"><table class="stmt-list-table"><thead><tr><th>Statement No</th><th>Transporter</th><th>Statement Date</th><th>Gross Payable Total</th><th>Support Deduction Total</th><th>Penalty Amount</th><th>Net Payable Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="tsListBody"><tr><td colspan="9">No transporter statements found.</td></tr></tbody></table></div>
     </section>
     <div id="tsDetailsModal" class="stmt-modal" hidden><div class="stmt-modal-panel"><div class="stmt-actions" style="justify-content:space-between;margin-bottom:1rem;"><div><h3 style="margin:0;">Statement Details</h3><p class="muted" style="margin:.25rem 0 0;">Review statement header and trip-level payable lines.</p></div><button class="btn" type="button" id="tsDetailsClose">Close</button></div><div id="tsDetailsBody"></div></div></div>
   `;
@@ -106,6 +108,11 @@ function bindEvents() {
     if (!statementDate) return showToast("Statement date is required.", TOAST_TYPES.ERROR);
     await loadEligibleTrips(transporterId);
   });
+  qs("#tsPenaltyAmount")?.addEventListener("input", () => {
+    PAGE_STATE.penaltyAmount = Number(qs("#tsPenaltyAmount")?.value || 0);
+    updatePreview();
+  });
+  qs("#tsPenaltyReason")?.addEventListener("input", () => updatePreview());
   qs("#tsSelectAll")?.addEventListener("change", (event) => {
     const checked = Boolean(event.target?.checked);
     PAGE_STATE.selectedTripIds = checked ? new Set(PAGE_STATE.rows.map((row) => String(row.trip_id))) : new Set();
@@ -116,13 +123,22 @@ function bindEvents() {
     const transporterId = qs("#tsTransporter")?.value || "";
     const statementDate = qs("#tsDate")?.value || "";
     const remarks = qs("#tsRemarks")?.value?.trim() || null;
+    const penaltyAmount = Number(qs("#tsPenaltyAmount")?.value || 0);
+    const penaltyReason = qs("#tsPenaltyReason")?.value?.trim() || null;
     const tripIds = Array.from(PAGE_STATE.selectedTripIds);
     if (!transporterId) return showToast("Transporter is required.", TOAST_TYPES.ERROR);
     if (!statementDate) return showToast("Statement date is required.", TOAST_TYPES.ERROR);
     if (!tripIds.length) return showToast("Select at least one eligible trip.", TOAST_TYPES.ERROR);
+    const selectedRows = PAGE_STATE.rows.filter((row) => PAGE_STATE.selectedTripIds.has(String(row.trip_id)));
+    const grossTotal = selectedRows.reduce((sum, row) => sum + Number(row.transporter_gross_payable || 0), 0);
+    const supportTotal = selectedRows.reduce((sum, row) => sum + Number(row.support_deduction_amount || 0), 0);
+    const maxPenalty = Number((grossTotal - supportTotal).toFixed(2));
+    if (penaltyAmount < 0) return showToast("Penalty amount cannot be negative.", TOAST_TYPES.ERROR);
+    if (penaltyAmount > maxPenalty) return showToast("Penalty amount cannot exceed gross payable less support deduction.", TOAST_TYPES.ERROR);
+    if (penaltyAmount > 0 && !penaltyReason) return showToast("Penalty reason is required when penalty amount is greater than zero.", TOAST_TYPES.ERROR);
     try {
-      const result = await createTransporterStatement({ divisionId: PAGE_STATE.divisionId, transportTransporterId: transporterId, statementDate, remarks, tripIds });
-      await logAuditEvent("transport_transporter_statement_create", { moduleCode: MODULES.TRANSPORT_TRANSPORTER_STATEMENTS, entityType: "transport_transporter_statements", entityId: result?.statement_id, afterData: result, details: { trip_ids: tripIds, remarks }, action: "create" });
+      const result = await createTransporterStatement({ divisionId: PAGE_STATE.divisionId, transportTransporterId: transporterId, statementDate, remarks, tripIds, penaltyAmount, penaltyReason });
+      await logAuditEvent("transport_transporter_statement_create", { moduleCode: MODULES.TRANSPORT_TRANSPORTER_STATEMENTS, entityType: "transport_transporter_statements", entityId: result?.statement_id, afterData: result, details: { trip_ids: tripIds, remarks, penalty_amount: penaltyAmount, penalty_reason: penaltyReason }, action: "create" });
       const resultNode = qs("#tsResult");
       if (resultNode) resultNode.innerHTML = `<div class="stmt-warning" style="background:#dcfce7;color:#166534;">Generated Statement No: ${escapeHtml(result?.statement_no || "—")}</div>`;
       showToast(`Transporter statement created: ${result?.statement_no || "(generated)"}`, TOAST_TYPES.SUCCESS);
@@ -140,8 +156,11 @@ function bindEvents() {
 async function loadEligibleTrips(transporterId) {
   PAGE_STATE.rows = await listTransporterStatementableTrips({ divisionId: PAGE_STATE.divisionId, transportTransporterId: transporterId });
   PAGE_STATE.selectedTripIds = new Set();
+  PAGE_STATE.penaltyAmount = 0;
   const selectAll = qs("#tsSelectAll");
   if (selectAll) selectAll.checked = false;
+  if (qs("#tsPenaltyAmount")) qs("#tsPenaltyAmount").value = "0";
+  if (qs("#tsPenaltyReason")) qs("#tsPenaltyReason").value = "";
   renderTripRows();
   updatePreview();
 }
@@ -184,17 +203,20 @@ function renderStatementList() {
   const body = qs("#tsListBody");
   if (!body) return;
   if (!PAGE_STATE.statements.length) {
-    body.innerHTML = `<tr><td colspan="8">No transporter statements found.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9">No transporter statements found.</td></tr>`;
     return;
   }
   body.innerHTML = PAGE_STATE.statements.map((row) => {
     const statusClass = String(row.status || "draft").toLowerCase();
     const actionButtons = statusClass === "draft"
       ? `<button class="btn" type="button" data-ts-approve="${row.id}">Approve Statement</button> <button class="btn btn-danger" type="button" data-ts-cancel="${row.id}">Cancel Statement</button>`
-      : "";
-    return `<tr><td>${escapeHtml(row.statement_no || "—")}</td><td>${escapeHtml(resolveTransporterLabel(row))}</td><td>${escapeHtml(row.statement_date || "—")}</td><td>${formatMoney(row.gross_payable_total)}</td><td>${formatMoney(row.support_deduction_total)}</td><td>${formatMoney(row.net_payable_total)}</td><td><span class="stmt-status-pill ${statusClass}">${escapeHtml(row.status || "—")}</span></td><td><button class="btn" type="button" data-ts-view="${row.id}">View Details</button>${actionButtons ? ` ${actionButtons}` : ""}</td></tr>`;
+      : statusClass === "approved"
+        ? `<button class="btn" type="button" data-ts-pdf="${row.id}">Download PDF</button>`
+        : "";
+    return `<tr><td>${escapeHtml(row.statement_no || "—")}</td><td>${escapeHtml(resolveTransporterLabel(row))}</td><td>${escapeHtml(row.statement_date || "—")}</td><td>${formatMoney(row.gross_payable_total)}</td><td>${formatMoney(row.support_deduction_total)}</td><td>${formatMoney(row.penalty_amount || 0)}</td><td>${formatMoney(row.net_payable_total)}</td><td><span class="stmt-status-pill ${statusClass}">${escapeHtml(row.status || "—")}</span></td><td><button class="btn" type="button" data-ts-view="${row.id}">View Details</button>${actionButtons ? ` ${actionButtons}` : ""}</td></tr>`;
   }).join("");
   body.querySelectorAll("button[data-ts-view]").forEach((button) => button.addEventListener("click", async () => openDetailsModal(button.getAttribute("data-ts-view"))));
+  body.querySelectorAll("button[data-ts-pdf]").forEach((button) => button.addEventListener("click", async () => downloadStatementPdf(button.getAttribute("data-ts-pdf"))));
   body.querySelectorAll("button[data-ts-approve]").forEach((button) => button.addEventListener("click", async () => {
     const statementId = button.getAttribute("data-ts-approve");
     if (!statementId) return;
@@ -247,6 +269,8 @@ async function openDetailsModal(statementId) {
       ${renderDetailBox("Status", details.status)}
       ${renderDetailBox("Gross Payable Total", formatMoney(details.gross_payable_total))}
       ${renderDetailBox("Support Deduction Total", formatMoney(details.support_deduction_total))}
+      ${renderDetailBox("Penalty Amount", formatMoney(details.penalty_amount || 0))}
+      ${renderDetailBox("Penalty Reason", details.penalty_reason || "—")}
       ${renderDetailBox("Net Payable Total", formatMoney(details.net_payable_total))}
       ${renderDetailBox("Remarks", details.remarks || "—")}
       ${renderDetailBox("Created At", formatDateTime(details.created_at))}
@@ -254,7 +278,7 @@ async function openDetailsModal(statementId) {
       ${renderDetailBox("Approved At", formatDateTime(details.approved_at))}
       ${renderDetailBox("Created By", details.created_by || details.created_by_name || "—")}
     </div>
-    ${details.status === "draft" ? `<div class="stmt-actions" style="margin-bottom:1rem;"><button class="btn" type="button" id="tsApproveInModal">Approve Statement</button></div>` : ""}
+    <div class="stmt-actions" style="margin-bottom:1rem;">${details.status === "draft" ? `<button class="btn" type="button" id="tsApproveInModal">Approve Statement</button>` : ""}${details.status === "approved" ? `<button class="btn" type="button" id="tsPdfInModal">Download PDF</button>` : ""}</div>
     <div class="table-shell"><table class="stmt-detail-table"><thead><tr><th>Trip No</th><th>Trip Date</th><th>Quantity MT</th><th>Transporter Rate / MT</th><th>Gross Payable</th><th>Support Deduction</th><th>Net Payable</th></tr></thead><tbody>${(details.trip_lines || []).length ? details.trip_lines.map((line) => `<tr><td>${escapeHtml(line.trip_no || "—")}</td><td>${escapeHtml(line.trip_date || "—")}</td><td>${formatQty(line.quantity_mt)}</td><td>${formatMoney(line.transporter_rate_per_mt, 3)}</td><td>${formatMoney(line.transporter_gross_payable)}</td><td>${formatMoney(line.support_deduction_amount)}</td><td>${formatMoney(line.transporter_net_payable)}</td></tr>`).join("") : `<tr><td colspan="7">No trip lines found.</td></tr>`}</tbody></table></div>`;
   qs("#tsApproveInModal")?.addEventListener("click", async () => {
     if (!window.confirm("Approve this statement? Approved statements cannot be cancelled.")) return;
@@ -268,7 +292,72 @@ async function openDetailsModal(statementId) {
       showToast(error?.message || "Statement approve failed", TOAST_TYPES.ERROR);
     }
   });
+  qs("#tsPdfInModal")?.addEventListener("click", async () => {
+    await downloadStatementPdf(statementId, details);
+  });
   qs("#tsDetailsModal")?.removeAttribute("hidden");
+}
+
+async function downloadStatementPdf(statementId, details = null) {
+  const resolved = details || await getTransporterStatementDetails(statementId);
+  if (!resolved || resolved.status !== "approved") return showToast("PDF is available only for approved statements.", TOAST_TYPES.WARNING);
+  try {
+    const doc = await createPdfDocument();
+    let y = await addDocumentHeader(doc, {
+      title: "Transporter Statement",
+      fields: [
+        { label: "Statement No", value: resolved.statement_no || "—" },
+        { label: "Statement Date", value: formatPdfDate(resolved.statement_date) },
+        { label: "Transporter Name", value: resolveTransporterLabel(resolved) },
+        { label: "Status", value: resolved.status || "—" }
+      ]
+    });
+    y = addDetailsSection(doc, "TRANSPORTER DETAILS", [
+      { label: "Transporter Name", value: resolveTransporterLabel(resolved) },
+      { label: "Address", value: resolved?.transport_transporters?.address || "N/A" },
+      { label: "GSTIN", value: resolved?.transport_transporters?.gstin || resolved?.transport_transporters?.gst_number || "N/A" },
+      { label: "Mobile", value: resolved?.transport_transporters?.mobile || resolved?.transport_transporters?.phone || "N/A" },
+      { label: "Vehicle Count", value: resolved?.transport_transporters?.vehicle_count || "N/A" }
+    ], y + 2);
+    y = addTable(doc, {
+      startY: y + 4,
+      head: ["Trip No", "Trip Date", "Truck No", "Quantity MT", "Transporter Rate / MT", "Gross Payable", "Support Deduction", "Net Payable"],
+      body: (resolved.trip_lines || []).map((line) => [
+        line.trip_no || "—",
+        formatPdfDate(line.trip_date),
+        line.truck_no || "N/A",
+        formatPdfQuantity(line.quantity_mt),
+        formatPdfCurrency(line.transporter_rate_per_mt),
+        formatPdfCurrency(line.transporter_gross_payable),
+        formatPdfCurrency(line.support_deduction_amount),
+        formatPdfCurrency(line.transporter_net_payable)
+      ]),
+      foot: [
+        "TOTAL",
+        "",
+        "",
+        formatPdfQuantity((resolved.trip_lines || []).reduce((sum, line) => sum + Number(line.quantity_mt || 0), 0)),
+        "",
+        formatPdfCurrency(resolved.gross_payable_total),
+        formatPdfCurrency(resolved.support_deduction_total),
+        formatPdfCurrency(resolved.net_payable_total)
+      ]
+    });
+    const summaryStartY = y + 6;
+    const summaryEndY = addSummarySection(doc, "SUMMARY", [
+      { label: "Gross Payable Total", value: formatPdfCurrency(resolved.gross_payable_total) },
+      { label: "Support Deduction Total", value: formatPdfCurrency(resolved.support_deduction_total) },
+      { label: "Penalty Amount", value: formatPdfCurrency(resolved.penalty_amount || 0) },
+      { label: "Net Payable Total", value: formatPdfCurrency(resolved.net_payable_total) },
+      { label: "Penalty Reason", value: resolved.penalty_reason || "N/A" }
+    ], summaryStartY, { marginLeft: 110, tableWidth: 86 });
+    const bankEndY = addBankDetailsSection(doc, summaryStartY, { marginLeft: 14, tableWidth: 90 });
+    await addSignatureSection(doc, Math.max(summaryEndY, bankEndY) + 2);
+    await addDocumentFooter(doc);
+    savePdf(doc, formatPdfFilename("TS", resolved.statement_no || "transporter-statement"));
+  } catch (error) {
+    showToast(error?.message || "Transporter statement PDF generation failed", TOAST_TYPES.ERROR);
+  }
 }
 
 function closeDetailsModal() {
@@ -280,13 +369,17 @@ function updatePreview() {
   const selectedRows = PAGE_STATE.rows.filter((row) => PAGE_STATE.selectedTripIds.has(String(row.trip_id)));
   const grossTotal = selectedRows.reduce((sum, row) => sum + Number(row.transporter_gross_payable || 0), 0);
   const supportTotal = selectedRows.reduce((sum, row) => sum + Number(row.support_deduction_amount || 0), 0);
-  const netTotal = selectedRows.reduce((sum, row) => sum + Number(row.transporter_net_payable || 0), 0);
+  const baseNetTotal = selectedRows.reduce((sum, row) => sum + Number(row.transporter_net_payable || 0), 0);
+  const penaltyAmount = Number(qs("#tsPenaltyAmount")?.value || 0);
+  const netTotal = Number((baseNetTotal - penaltyAmount).toFixed(2));
   const grossNode = qs("#tsGrossTotal");
   const supportNode = qs("#tsSupportTotal");
+  const penaltyNode = qs("#tsPenaltyPreview");
   const netNode = qs("#tsNetTotal");
   const meta = qs("#tsSelectionMeta");
   if (grossNode) grossNode.textContent = formatMoney(grossTotal);
   if (supportNode) supportNode.textContent = formatMoney(supportTotal);
+  if (penaltyNode) penaltyNode.textContent = formatMoney(penaltyAmount);
   if (netNode) netNode.textContent = formatMoney(netTotal);
   if (meta) meta.textContent = selectedRows.length ? `${selectedRows.length} trip(s) selected.` : "No trips selected.";
 }
