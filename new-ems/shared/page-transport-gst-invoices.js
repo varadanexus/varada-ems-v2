@@ -2,6 +2,7 @@ import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { approveTransportGstInvoice, cancelTransportGstInvoice, createTransportGstInvoice, getTransportGstInvoiceDetails, listEligibleClientBillsForInvoice, listTransportGstInvoices, resolveWorkspaceDivision } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { addBankDetailsSection, addDeclarationSection, addDetailsSection, addDocumentFooter, addDocumentHeader, addSignatureSection, addSummarySection, createPdfDocument, formatPdfCurrency, formatPdfDate, formatPdfFilename, savePdf } from "./pdf-utils.js";
 import { qs, showToast } from "./utils.js";
 
 const GST_RATES = [0, 5, 12, 18, 28];
@@ -149,10 +150,13 @@ function renderInvoiceList() {
     const statusClass = String(row.status || "draft").toLowerCase();
     const actionButtons = statusClass === "draft"
       ? `<button class="btn" type="button" data-inv-approve="${row.id}">Approve Invoice</button> <button class="btn btn-danger" type="button" data-inv-cancel="${row.id}">Cancel Invoice</button>`
-      : "";
+      : statusClass === "approved"
+        ? `<button class="btn" type="button" data-inv-pdf="${row.id}">Download PDF</button>`
+        : "";
     return `<tr><td>${escapeHtml(row.invoice_no || "—")}</td><td>${escapeHtml(row.transport_client_bills?.bill_no || "—")}</td><td>${escapeHtml(resolveClientLabel(row))}</td><td>${escapeHtml(row.invoice_date || "—")}</td><td>${formatMoney(row.taxable_value)}</td><td>${escapeHtml(row.gst_base || "ENTIRE_BILL")}</td><td>${escapeHtml(String(row.gst_percentage ?? 0))}%</td><td>${formatMoney(row.gst_amount)}</td><td>${formatMoney(row.invoice_total)}</td><td><span class="inv-status-pill ${statusClass}">${escapeHtml(row.status || "—")}</span></td><td><button class="btn" type="button" data-inv-view="${row.id}">View Details</button>${actionButtons ? ` ${actionButtons}` : ""}</td></tr>`;
   }).join("");
   body.querySelectorAll("button[data-inv-view]").forEach((button) => button.addEventListener("click", async () => openDetailsModal(button.getAttribute("data-inv-view"))));
+  body.querySelectorAll("button[data-inv-pdf]").forEach((button) => button.addEventListener("click", async () => downloadInvoicePdf(button.getAttribute("data-inv-pdf"))));
   body.querySelectorAll("button[data-inv-approve]").forEach((button) => button.addEventListener("click", async () => {
     const invoiceId = button.getAttribute("data-inv-approve");
     if (!invoiceId) return;
@@ -196,7 +200,7 @@ async function openDetailsModal(invoiceId) {
   const billAmount = Number(details.transport_client_bills?.net_receivable || 0);
   const marginAmount = Number(details.margin_amount || 0);
   const transporterCost = Math.max(0, Number((billAmount - marginAmount).toFixed(2)));
-  host.innerHTML = `<div class="inv-detail-grid"><div class="inv-detail-box"><label>Invoice No</label><strong>${escapeHtml(details.invoice_no || "—")}</strong></div><div class="inv-detail-box"><label>Bill No</label><strong>${escapeHtml(details.transport_client_bills?.bill_no || "—")}</strong></div><div class="inv-detail-box"><label>Client</label><strong>${escapeHtml(resolveClientLabel(details))}</strong></div><div class="inv-detail-box"><label>Invoice Date</label><strong>${escapeHtml(details.invoice_date || "—")}</strong></div><div class="inv-detail-box"><label>GST Base</label><strong>${escapeHtml(details.gst_base || "ENTIRE_BILL")}</strong></div><div class="inv-detail-box"><label>Bill Amount</label><strong>${formatMoney(billAmount)}</strong></div><div class="inv-detail-box"><label>Transporter Cost</label><strong>${formatMoney(transporterCost)}</strong></div><div class="inv-detail-box"><label>Margin Amount</label><strong>${formatMoney(marginAmount)}</strong></div><div class="inv-detail-box"><label>Taxable Value</label><strong>${formatMoney(details.taxable_value)}</strong></div><div class="inv-detail-box"><label>GST Percentage</label><strong>${escapeHtml(String(details.gst_percentage ?? 0))}%</strong></div><div class="inv-detail-box"><label>GST Amount</label><strong>${formatMoney(details.gst_amount)}</strong></div><div class="inv-detail-box"><label>Invoice Total</label><strong>${formatMoney(details.invoice_total)}</strong></div><div class="inv-detail-box"><label>Status</label><strong>${escapeHtml(details.status || "—")}</strong></div><div class="inv-detail-box"><label>Remarks</label><strong>${escapeHtml(details.remarks || "—")}</strong></div><div class="inv-detail-box"><label>Created At</label><strong>${formatDateTime(details.created_at)}</strong></div></div>${details.status === "draft" ? `<div class="inv-actions" style="margin-top:1rem;"><button class="btn" type="button" id="gstApproveInModal">Approve Invoice</button></div>` : ""}`;
+  host.innerHTML = `<div class="inv-detail-grid"><div class="inv-detail-box"><label>Invoice No</label><strong>${escapeHtml(details.invoice_no || "—")}</strong></div><div class="inv-detail-box"><label>Bill No</label><strong>${escapeHtml(details.transport_client_bills?.bill_no || "—")}</strong></div><div class="inv-detail-box"><label>Client</label><strong>${escapeHtml(resolveClientLabel(details))}</strong></div><div class="inv-detail-box"><label>Invoice Date</label><strong>${escapeHtml(details.invoice_date || "—")}</strong></div><div class="inv-detail-box"><label>GST Base</label><strong>${escapeHtml(details.gst_base || "ENTIRE_BILL")}</strong></div><div class="inv-detail-box"><label>Bill Amount</label><strong>${formatMoney(billAmount)}</strong></div><div class="inv-detail-box"><label>Transporter Cost</label><strong>${formatMoney(transporterCost)}</strong></div><div class="inv-detail-box"><label>Margin Amount</label><strong>${formatMoney(marginAmount)}</strong></div><div class="inv-detail-box"><label>Taxable Value</label><strong>${formatMoney(details.taxable_value)}</strong></div><div class="inv-detail-box"><label>GST Percentage</label><strong>${escapeHtml(String(details.gst_percentage ?? 0))}%</strong></div><div class="inv-detail-box"><label>GST Amount</label><strong>${formatMoney(details.gst_amount)}</strong></div><div class="inv-detail-box"><label>Invoice Total</label><strong>${formatMoney(details.invoice_total)}</strong></div><div class="inv-detail-box"><label>Status</label><strong>${escapeHtml(details.status || "—")}</strong></div><div class="inv-detail-box"><label>Remarks</label><strong>${escapeHtml(details.remarks || "—")}</strong></div><div class="inv-detail-box"><label>Created At</label><strong>${formatDateTime(details.created_at)}</strong></div></div><div class="inv-actions" style="margin-top:1rem;">${details.status === "draft" ? `<button class="btn" type="button" id="gstApproveInModal">Approve Invoice</button>` : ""}${details.status === "approved" ? `<button class="btn" type="button" id="gstPdfInModal">Download PDF</button>` : ""}</div>`;
   qs("#gstApproveInModal")?.addEventListener("click", async () => {
     if (!window.confirm("Approve this invoice? Approved invoices cannot be cancelled.")) return;
     try {
@@ -209,7 +213,83 @@ async function openDetailsModal(invoiceId) {
       showToast(error?.message || "Invoice approve failed", TOAST_TYPES.ERROR);
     }
   });
+  qs("#gstPdfInModal")?.addEventListener("click", async () => {
+    await downloadInvoicePdf(invoiceId, details);
+  });
   qs("#gstInvoiceDetailsModal")?.removeAttribute("hidden");
+}
+
+async function downloadInvoicePdf(invoiceId, details = null) {
+  const resolved = details || await getTransportGstInvoiceDetails(invoiceId);
+  if (!resolved || resolved.status !== "approved") return showToast("PDF is available only for approved invoices.", TOAST_TYPES.WARNING);
+  try {
+    const doc = await createPdfDocument();
+    const billAmount = Number(resolved.transport_client_bills?.net_receivable || 0);
+    const marginAmount = Number(resolved.margin_amount || 0);
+    const transporterCost = Math.max(0, Number((billAmount - marginAmount).toFixed(2)));
+    const clientInfo = normalizeTransportClient(resolved?.transport_clients);
+    const clientStateCode = clientInfo.stateCode;
+    const isIntraState = String(clientStateCode) === "37";
+    const gstAmount = Number(resolved.gst_amount || 0);
+    const freightCharges = billAmount - marginAmount;
+    let y = await addDocumentHeader(doc, {
+      title: "GST Invoice",
+      fields: [
+        { label: "Invoice No", value: resolved.invoice_no || "—" },
+        { label: "Invoice Date", value: formatPdfDate(resolved.invoice_date) },
+        { label: "Place of Supply", value: clientInfo.state },
+        { label: "State Code", value: clientStateCode },
+        { label: "Invoice Type", value: resolved.gst_base === "MARGIN_ONLY" ? "Service Invoice" : "Tax Invoice" },
+        { label: "Status", value: resolved.status || "—" }
+      ]
+    });
+    y = addDetailsSection(doc, "CLIENT DETAILS", [
+      { label: "Name", value: clientInfo.displayName },
+      { label: "Address", value: clientInfo.address },
+      { label: "GSTIN", value: clientInfo.gstNumber },
+      { label: "State", value: clientInfo.state }
+    ], y + 2);
+    const pdfInvoiceTotal = resolved.gst_base === "MARGIN_ONLY"
+      ? (resolved.gst_mode === "inclusive"
+        ? billAmount
+        : billAmount + Number(resolved.gst_amount || 0))
+      : Number(resolved.invoice_total || 0);
+    y = addSummarySection(doc, "SERVICE CHARGES SUMMARY", [
+      { label: "Margin Amount", value: formatPdfCurrency(marginAmount) },
+      { label: "Taxable Value", value: formatPdfCurrency(resolved.taxable_value) },
+      { label: "GST %", value: `${resolved.gst_percentage ?? 0}%` },
+      { label: "GST Amount", value: formatPdfCurrency(gstAmount) }
+    ], y + 1);
+    y = addSummarySection(doc, "TAX SUMMARY", [
+      ...(isIntraState
+        ? [
+            { label: "CGST", value: formatPdfCurrency(gstAmount / 2) },
+            { label: "SGST", value: formatPdfCurrency(gstAmount / 2) }
+          ]
+        : [{ label: "IGST", value: formatPdfCurrency(gstAmount) }]),
+      { label: "Subtotal", value: formatPdfCurrency(marginAmount) },
+      { label: "Freight Charges", value: formatPdfCurrency(freightCharges) },
+      { label: "Total Invoice Value", value: formatPdfCurrency(pdfInvoiceTotal) }
+    ], y + 1);
+    if (resolved.gst_base === "MARGIN_ONLY") {
+      y = addDeclarationSection(doc, "PURE AGENT DECLARATION", [
+        "Freight charges are recovered by Varada Nexus",
+        "as a Pure Agent.",
+        "",
+        "GST is charged only on logistics coordination",
+        "service charges retained by Varada Nexus.",
+        "",
+        "Accordingly GST is not levied on the freight",
+        "component recovered on behalf of transporters."
+      ], y + 2);
+    }
+    y = addBankDetailsSection(doc, y + 2);
+    await addSignatureSection(doc, y + 1);
+    await addDocumentFooter(doc);
+    savePdf(doc, formatPdfFilename("INV", resolved.invoice_no || "gst-invoice"));
+  } catch (error) {
+    showToast(error?.message || "GST invoice PDF generation failed", TOAST_TYPES.ERROR);
+  }
 }
 
 function closeDetailsModal() {
@@ -252,7 +332,21 @@ function calculateGstPreview({ billAmount, transporterCost, marginAmount, gstPer
 }
 
 function resolveClientLabel(record) {
-  return record?.transport_clients?.company_name || record?.transport_clients?.name || "—";
+  return normalizeTransportClient(record?.transport_clients).displayName;
+}
+
+function normalizeTransportClient(client) {
+  return {
+    displayName: client?.company_name || client?.name || "N/A",
+    companyName: client?.company_name || client?.name || "N/A",
+    contactPerson: client?.contact_person_name || "N/A",
+    phone: client?.phone_number || client?.contact_no || "N/A",
+    address: client?.address || "N/A",
+    email: client?.email || "N/A",
+    gstNumber: client?.gst_number || client?.gstin || "N/A",
+    state: "N/A",
+    stateCode: "N/A"
+  };
 }
 
 function formatMoney(value) { return `₹${Number(value || 0).toFixed(2)}`; }
