@@ -797,7 +797,18 @@ export async function listTransporterStatementableTrips({ divisionId = null, tra
   return data || [];
 }
 
-export async function createTransporterStatement({ divisionId = null, transportTransporterId = null, statementDate = null, remarks = null, tripIds = [], penaltyAmount = 0, penaltyReason = null } = {}) {
+export async function createTransporterStatement({
+  divisionId = null,
+  transportTransporterId = null,
+  statementDate = null,
+  remarks = null,
+  tripIds = [],
+  penaltyAmount = 0,
+  penaltyReason = null,
+  gstInputApplicable = false,
+  gstInputMode = null,
+  gstInputPercentage = null
+} = {}) {
   const client = getSupabaseClient();
   const { data, error } = await client.rpc("create_transport_transporter_statement", {
     p_division_id: divisionId,
@@ -806,7 +817,10 @@ export async function createTransporterStatement({ divisionId = null, transportT
     p_remarks: remarks,
     p_trip_ids: tripIds,
     p_penalty_amount: penaltyAmount,
-    p_penalty_reason: penaltyReason
+    p_penalty_reason: penaltyReason,
+    p_gst_input_applicable: gstInputApplicable,
+    p_gst_input_mode: gstInputMode,
+    p_gst_input_percentage: gstInputPercentage
   });
   if (error) throw error;
   return Array.isArray(data) ? (data[0] || null) : data;
@@ -816,7 +830,7 @@ export async function listTransporterStatements({ divisionId = null, transportTr
   const client = getSupabaseClient();
   let query = client
     .from("transport_transporter_statements")
-    .select("id,statement_no,transport_transporter_id,statement_date,status,gross_payable_total,support_deduction_total,penalty_amount,penalty_reason,net_payable_total,remarks,created_at,updated_at,approved_at,transport_transporters(id,name)")
+    .select("id,statement_no,transport_transporter_id,statement_date,status,gross_payable_total,support_deduction_total,penalty_amount,penalty_reason,gst_input_applicable,gst_input_mode,gst_input_percentage,gst_input_amount,net_payable_total,remarks,created_at,updated_at,approved_at,transport_transporters(id,name,phone_number,address,email,gst_number,pan_number,aadhaar_number,bank_name,account_number,ifsc_code,contact_no,gstin)")
     .is("deleted_at", null)
     .order("statement_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -835,7 +849,7 @@ export async function getTransporterStatementDetails(statementId) {
   const client = getSupabaseClient();
   const { data: header, error: headerError } = await client
     .from("transport_transporter_statements")
-    .select("id,statement_no,transport_transporter_id,statement_date,status,gross_payable_total,support_deduction_total,penalty_amount,penalty_reason,net_payable_total,remarks,created_at,updated_at,approved_at,transport_transporters(id,name)")
+    .select("id,statement_no,transport_transporter_id,statement_date,status,gross_payable_total,support_deduction_total,penalty_amount,penalty_reason,gst_input_applicable,gst_input_mode,gst_input_percentage,gst_input_amount,net_payable_total,remarks,created_at,updated_at,approved_at,transport_transporters(id,name,phone_number,address,email,gst_number,pan_number,aadhaar_number,bank_name,account_number,ifsc_code,contact_no,gstin)")
     .eq("id", statementId)
     .is("deleted_at", null)
     .maybeSingle();
