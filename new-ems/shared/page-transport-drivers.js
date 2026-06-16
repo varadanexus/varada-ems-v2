@@ -26,18 +26,18 @@ const PAGE_STATE = {
 initTransportDriverPage();
 
 async function initTransportDriverPage() {
-  await bootstrapProtectedPage({
+  const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.TRANSPORT_DRIVERS,
     pageTitle: "Drivers",
     pageDescription: "Transportation drivers master",
     workspace: WORKSPACES.TRANSPORTATION
   });
+  if (!boot) return;
 
-  const division = await getDivisionByCode("TRANSPORT");
-  PAGE_STATE.divisionId = division?.id || null;
+  PAGE_STATE.divisionId = boot.divisionId || null;
   await hydrateTransporterOptions();
 
-  renderModuleContent(renderPageShell(division?.name || "Transportation"));
+  renderModuleContent(renderPageShell(boot.divisionLabel || "Transportation"));
   renderCreateTransporterOptions();
   bindCreateForm();
   bindListControls();

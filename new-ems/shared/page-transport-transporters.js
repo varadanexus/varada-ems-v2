@@ -55,17 +55,17 @@ const EDITABLE_FIELDS = [
 initTransportTransportersPage();
 
 async function initTransportTransportersPage() {
-  await bootstrapProtectedPage({
+  const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.TRANSPORT_TRANSPORTERS,
     pageTitle: "Transporters",
     pageDescription: "Transportation transporters master",
     workspace: WORKSPACES.TRANSPORTATION
   });
+  if (!boot) return;
 
-  const division = await getDivisionByCode("TRANSPORT");
-  PAGE_STATE.divisionId = division?.id || null;
+  PAGE_STATE.divisionId = boot.divisionId || null;
 
-  renderModuleContent(renderPageShell(division?.name || "Transportation"));
+  renderModuleContent(renderPageShell(boot.divisionLabel || "Transportation"));
   bindCreateForm();
   bindListControls();
   bindModalControls();

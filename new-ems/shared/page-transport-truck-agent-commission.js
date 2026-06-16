@@ -43,16 +43,16 @@ const STATE = {
 initPage();
 
 async function initPage() {
-  await bootstrapProtectedPage({
+  const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING,
     pageTitle: "Agents / Truck Mapping",
     pageDescription: "Manage agents and configure truck-agent commission mapping",
     workspace: WORKSPACES.TRANSPORTATION
   });
-  const division = await getDivisionByCode("TRANSPORT");
-  STATE.divisionId = division?.id || null;
+  if (!boot) return;
+  STATE.divisionId = boot.divisionId || null;
   await hydrateOptions();
-  renderModuleContent(renderShell(division?.name || "Transportation"));
+  renderModuleContent(renderShell(boot.divisionLabel || "Transportation"));
   renderCreateMappingSelects();
   bindAgentCreate();
   bindAgentControls();

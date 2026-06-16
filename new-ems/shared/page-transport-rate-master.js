@@ -16,11 +16,11 @@ const SELECT_SOURCES = {
 initTransportRateMasterPage();
 
 async function initTransportRateMasterPage() {
-  await bootstrapProtectedPage({ moduleCode: MODULES.TRANSPORT_RATE_MASTER, pageTitle: "Rate Master", pageDescription: "Transportation commercial rate master", workspace: WORKSPACES.TRANSPORTATION });
-  const division = await getDivisionByCode("TRANSPORT");
-  PAGE_STATE.divisionId = division?.id || null;
+  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.TRANSPORT_RATE_MASTER, pageTitle: "Rate Master", pageDescription: "Transportation commercial rate master", workspace: WORKSPACES.TRANSPORTATION });
+  if (!boot) return;
+  PAGE_STATE.divisionId = boot.divisionId || null;
   await hydrateOptions();
-  renderModuleContent(renderPageShell(division?.name || "Transportation"));
+  renderModuleContent(renderPageShell(boot.divisionLabel || "Transportation"));
   renderCreateSelectOptions();
   bindCreateForm();
   bindListControls();

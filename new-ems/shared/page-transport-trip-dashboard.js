@@ -11,8 +11,7 @@ async function init() {
   });
   if (!boot) return;
 
-  const divisionScope = localStorage.getItem("ems_division_scope") || "all";
-  const divisionId = divisionScope !== "all" ? divisionScope : null;
+  const divisionId = boot.divisionId || null;
   const { rows } = await listTrips({ divisionId, page: 1, pageSize: 500 });
   const counts = TRIP_STATUS_FLOW.reduce((acc, s) => ({ ...acc, [s]: rows.filter((r) => r.status === s).length }), {});
   const total = rows.length;

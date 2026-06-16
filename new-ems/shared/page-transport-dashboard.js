@@ -10,14 +10,13 @@ async function init() {
     workspace: WORKSPACES.TRANSPORTATION
   });
   if (!boot) return;
-  const allowedModules = boot?.allowedModules || [];
+  const allowedModules = boot?.accessibleModules || boot?.allowedModules || [];
   const canView = (moduleCode) => allowedModules.includes(moduleCode);
 
-  const division = await resolveWorkspaceDivision(WORKSPACES.TRANSPORTATION);
-  const divisionId = division?.id || null;
+  const divisionId = boot.divisionId || null;
 
   const getCount = async (table) => {
-    try { const { count } = await listMasterRecords(table, { page: 1, pageSize: 1 }); return count || 0; } catch { return "—"; }
+    try { const { count } = await listMasterRecords(table, { page: 1, pageSize: 1, divisionId }); return count || 0; } catch { return "—"; }
   };
   const counts = {
     clients: await getCount(MASTER_TABLES.transportClients),

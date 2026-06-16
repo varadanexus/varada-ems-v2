@@ -29,11 +29,10 @@ async function initTransporterStatementsPage() {
     workspace: WORKSPACES.TRANSPORTATION
   });
   if (!boot) return;
-  const division = await resolveWorkspaceDivision(WORKSPACES.TRANSPORTATION);
-  PAGE_STATE.divisionId = division?.id || null;
+  PAGE_STATE.divisionId = boot.divisionId || null;
   if (!PAGE_STATE.divisionId) return showToast("Canonical Transportation division not found", TOAST_TYPES.ERROR);
   PAGE_STATE.transporters = await listActiveOptions("transport_transporters", { divisionId: PAGE_STATE.divisionId });
-  renderModuleContent(renderShell(division?.name || "Transportation"));
+  renderModuleContent(renderShell(boot.divisionLabel || "Transportation"));
   renderTransporterOptions();
   bindEvents();
   updatePreview();

@@ -26,7 +26,15 @@ export async function getSession() {
 export async function getCurrentAppUser() {
   const session = await getSession();
   if (!session?.user?.id) return null;
-  return getAppUserByAuthId(session.user.id);
+  const appUser = await getAppUserByAuthId(session.user.id);
+  if (!appUser?.id) return appUser;
+  const client = getSupabaseClient();
+  const { data: userDivisions, error } = await client
+    .from("user_divisions")
+    .select("division_id,scope,divisions(id,code,name)")
+    .eq("user_id", appUser.id);
+  if (error) throw error;
+  return { ...appUser, user_divisions: userDivisions || [] };
 }
 
 export async function validateActiveUnlockedUser() {

@@ -9,8 +9,7 @@ async function init() {
   const DOC_TYPES = ["WEIGHT_BILL", "TRIP_SHEET", "INVOICE_COPY", "EWAY_BILL", "POD", "LOADING_SLIP", "UNLOADING_SLIP", "OTHER"];
   const boot = await bootstrapProtectedPage({ moduleCode: MODULES.TRANSPORT_TRIPS, pageTitle: "Trips", pageDescription: "Create, track, and update transportation trips", workspace: WORKSPACES.TRANSPORTATION });
   if (!boot) return;
-  const division = await resolveWorkspaceDivision(WORKSPACES.TRANSPORTATION);
-  const fixedDivisionId = division?.id || null;
+  const fixedDivisionId = boot.divisionId || null;
   let page = 1; const pageSize = 10; let rows = [];
 
   renderModuleContent(`<section class="card"><h3>Create Trip</h3><form id="tripCreateForm" class="form-row"></form><div id="tripCreateMeta" class="muted" style="margin-top:.5rem;"></div></section>

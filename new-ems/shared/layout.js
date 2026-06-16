@@ -1,7 +1,9 @@
 import { APP_NAME, MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { getAllowedModulesForRoles, getUserRoleCodes } from "./admin-api.js";
+import { getAllowedModulesForRoles, getUserRoleCodes, resolveWorkspaceDivision } from "./admin-api.js";
 import { logout, requireAuth, getCurrentAppUser, validateActiveUnlockedUser } from "./auth.js";
+import { PERMISSIONS } from "../config/roles.js";
 import { renderNavbar } from "./navbar.js";
+import { getAccessibleModules, getUserDivisionAccessContext, hasAnyRolePermission } from "./permissions.js";
 import { renderSidebar } from "./sidebar.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
@@ -48,6 +50,59 @@ function resolveUserDivisionScope() {
   return localStorage.getItem("ems_division_scope") || "all";
 }
 
+function storeDivisionScopePreference(scopeValue) {
+  if (!scopeValue) return;
+  try {
+    localStorage.setItem("ems_division_scope", String(scopeValue));
+  } catch {}
+}
+
+async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace }) {
+  if (workspace !== WORKSPACES.TRANSPORTATION) {
+    return {
+      allowed: true,
+      divisionId: null,
+      divisionLabel: resolveUserDivisionScope(),
+      scopeLabel: resolveUserDivisionScope(),
+      accessReason: "workspace_not_division_locked"
+    };
+  }
+
+  const division = await resolveWorkspaceDivision(workspace);
+  const divisionId = division?.id || null;
+  if (!divisionId) {
+    return {
+      allowed: false,
+      divisionId: null,
+      divisionLabel: null,
+      scopeLabel: "Unavailable",
+      accessReason: "workspace_division_not_found"
+    };
+  }
+
+  const accessContext = getUserDivisionAccessContext(appUser, divisionId, { roleCodes });
+  if (!accessContext.allowed) {
+    return {
+      allowed: false,
+      divisionId,
+      divisionLabel: division?.name || "Transportation",
+      scopeLabel: division?.name || "Transportation",
+      accessReason: accessContext.reason,
+      accessContext
+    };
+  }
+
+  storeDivisionScopePreference(divisionId);
+  return {
+    allowed: true,
+    divisionId,
+    divisionLabel: division?.name || "Transportation",
+    scopeLabel: division?.name || "Transportation",
+    accessReason: accessContext.reason,
+    accessContext
+  };
+}
+
 export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, sidebarless = false, workspace = WORKSPACES.ADMIN }) {
   initTheme();
   if (shouldShowInitialTransition()) {
@@ -84,13 +139,22 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
 
   const roleCodes = await getUserRoleCodes(appUser.id);
   const allowedModules = await getAllowedModulesForRoles(roleCodes);
+  const accessibleModules = getAccessibleModules(roleCodes, allowedModules);
   debugLog("rbac resolution", { roleCodes, allowedModules, moduleCode });
   const primaryRole = roleCodes[0] || "user";
-  const canView = allowedModules.includes(moduleCode);
+  const canView = hasAnyRolePermission(roleCodes, moduleCode, PERMISSIONS.VIEW, { allowedModules });
 
   if (!canView && moduleCode !== MODULES.DASHBOARD) {
     debugLog("redirect reason", { reason: "missing_module_view_permission", to: ROUTES.DASHBOARD, moduleCode });
     showToast("Access denied for this module", TOAST_TYPES.ERROR);
+    window.location.replace(ROUTES.DASHBOARD);
+    return;
+  }
+
+  const divisionContext = await resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace });
+  if (!divisionContext.allowed) {
+    debugLog("division access denied", { moduleCode, workspace, reason: divisionContext.accessReason, divisionId: divisionContext.divisionId });
+    showToast("Access denied for this division", TOAST_TYPES.ERROR);
     window.location.replace(ROUTES.DASHBOARD);
     return;
   }
@@ -100,13 +164,13 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
 
   app.innerHTML = `
     <div class="app-shell ${sidebarless ? "sidebarless" : ""}">
-      ${sidebarless ? "" : renderSidebar(allowedModules, window.location.pathname, workspace)}
+      ${sidebarless ? "" : renderSidebar(accessibleModules, window.location.pathname, workspace)}
       <div class="app-main">
         ${renderNavbar(session?.user?.email || "", primaryRole, { sidebarless })}
         <section class="page-head">
           <h1>${pageTitle}</h1>
           <p>${pageDescription}</p>
-          <span class="meta-pill">Division Scope: ${resolveUserDivisionScope()}</span>
+          <span class="meta-pill">Division Scope: ${divisionContext?.scopeLabel || resolveUserDivisionScope()}</span>
         </section>
         <section id="pageContent" class="page-content"></section>
       </div>
@@ -119,7 +183,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
     app.classList.add("page-enter-active");
     finishNavigationTransition();
   });
-  return { appUser, roleCodes, allowedModules, primaryRole };
+  return { appUser, roleCodes, allowedModules, accessibleModules, primaryRole, divisionContext, divisionId: divisionContext?.divisionId || null, divisionLabel: divisionContext?.divisionLabel || null };
 }
 
 function bindGlobalActions() {
