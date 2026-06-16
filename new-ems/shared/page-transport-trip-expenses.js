@@ -16,8 +16,7 @@ async function init() {
   });
   if (!boot) return;
 
-  const division = await resolveWorkspaceDivision(WORKSPACES.TRANSPORTATION);
-  const divisionId = division?.id || null;
+  const divisionId = boot.divisionId || null;
   if (!divisionId) return showToast("Canonical Transportation division not found", TOAST_TYPES.ERROR);
 
   renderModuleContent(`

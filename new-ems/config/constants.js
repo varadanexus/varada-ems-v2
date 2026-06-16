@@ -110,6 +110,7 @@ export const MODULES = {
   ,TRANSPORT_CLIENT_RECEIPTS: "transport-client-receipts"
   ,TRANSPORT_TRANSPORTER_PAYMENTS: "transport-transporter-payments"
   ,TRANSPORT_FINANCE_APPROVAL: "transport-finance-approval"
+  ,TRANSPORT_FINANCE_POSTING: "transport-finance-posting"
   ,TRANSPORT_LEDGER: "transport-ledger"
 };
 

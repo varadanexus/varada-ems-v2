@@ -1142,7 +1142,7 @@ export async function listTransportClientReceipts({ divisionId = null, transport
   const client = getSupabaseClient();
   let query = client
     .from("transport_client_receipts")
-    .select("id,receipt_no,transport_client_id,client_bill_id,receipt_date,amount_received,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_clients(id,name,company_name),transport_client_bills(id,bill_no,billing_type,net_receivable,invoice_total)")
+    .select("id,receipt_no,transport_client_id,client_bill_id,receipt_date,amount_received,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_clients(id,name,company_name,address,gst_number,gstin),transport_client_bills(id,bill_no,bill_date,billing_type,net_receivable,invoice_total,gst_amount)")
     .is("deleted_at", null)
     .order("receipt_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -1161,7 +1161,7 @@ export async function getTransportClientReceiptDetails(receiptId) {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from("transport_client_receipts")
-    .select("id,receipt_no,transport_client_id,client_bill_id,receipt_date,amount_received,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_clients(id,name,company_name),transport_client_bills(id,bill_no,billing_type,net_receivable,invoice_total,gst_amount)")
+    .select("id,receipt_no,transport_client_id,client_bill_id,receipt_date,amount_received,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_clients(id,name,company_name,address,gst_number,gstin),transport_client_bills(id,bill_no,bill_date,billing_type,net_receivable,invoice_total,gst_amount)")
     .eq("id", receiptId)
     .is("deleted_at", null)
     .maybeSingle();
@@ -1233,7 +1233,7 @@ export async function listTransporterPayments({ divisionId = null, transportTran
   const client = getSupabaseClient();
   let query = client
     .from("transport_transporter_payments")
-    .select("id,payment_no,transport_transporter_id,transporter_statement_id,payment_date,amount_paid,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_transporters(id,name),transport_transporter_statements(id,statement_no)")
+    .select("id,payment_no,transport_transporter_id,transporter_statement_id,payment_date,amount_paid,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_transporters(id,name,address,phone_number,contact_no,gst_number,gstin),transport_transporter_statements(id,statement_no,statement_date,penalty_amount,gst_input_amount,net_payable_total)")
     .is("deleted_at", null)
     .order("payment_date", { ascending: false })
     .order("created_at", { ascending: false });
@@ -1252,7 +1252,7 @@ export async function getTransporterPaymentDetails(paymentId) {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from("transport_transporter_payments")
-    .select("id,payment_no,transport_transporter_id,transporter_statement_id,payment_date,amount_paid,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_transporters(id,name),transport_transporter_statements(id,statement_no,net_payable_total)")
+    .select("id,payment_no,transport_transporter_id,transporter_statement_id,payment_date,amount_paid,payment_mode,reference_no,remarks,status,created_at,updated_at,transport_transporters(id,name,address,phone_number,contact_no,gst_number,gstin),transport_transporter_statements(id,statement_no,statement_date,penalty_amount,gst_input_amount,net_payable_total)")
     .eq("id", paymentId)
     .is("deleted_at", null)
     .maybeSingle();

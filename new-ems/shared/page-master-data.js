@@ -25,16 +25,14 @@ export async function initMasterDataPage({
   const pageSize = 10;
   let currentRows = [];
 
-  await bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, workspace });
-  const divisionScope = localStorage.getItem("ems_division_scope") || "all";
+  const boot = await bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, workspace });
+  if (!boot) return;
+  const divisionScope = boot?.divisionContext?.divisionId || localStorage.getItem("ems_division_scope") || "all";
   let divisionId = divisionScope !== "all" ? divisionScope : null;
   let divisionLabel = divisionScope;
   if (workspace === WORKSPACES.TRANSPORTATION) {
-    const canonical = await getDivisionByCode("TRANSPORT");
-    if (canonical?.id) {
-      divisionId = canonical.id;
-      divisionLabel = canonical.name || "Transportation";
-    }
+    divisionId = boot.divisionId || null;
+    divisionLabel = boot.divisionLabel || "Transportation";
   }
   const effectiveFields = workspace === WORKSPACES.TRANSPORTATION
     ? fields.filter((f) => f.key !== "division_id")

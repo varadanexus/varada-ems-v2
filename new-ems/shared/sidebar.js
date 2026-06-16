@@ -68,7 +68,7 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.TRANSPORT_TRANSPORTER_STATEMENTS, label: "Transporter Statements", href: ROUTES.TRANSPORT_TRANSPORTER_STATEMENTS },
         { module: MODULES.TRANSPORT_CLIENT_RECEIPTS, label: "Client Receipts", href: ROUTES.TRANSPORT_CLIENT_RECEIPTS },
         { module: MODULES.TRANSPORT_TRANSPORTER_PAYMENTS, label: "Transporter Payments", href: ROUTES.TRANSPORT_TRANSPORTER_PAYMENTS },
-        { module: MODULES.TRANSPORT_LEDGER, label: "Finance Approval", href: ROUTES.TRANSPORT_FINANCE_APPROVAL },
+        { module: MODULES.TRANSPORT_FINANCE_APPROVAL, label: "Finance Approval", href: ROUTES.TRANSPORT_FINANCE_APPROVAL },
         { module: MODULES.TRANSPORT_LEDGER, label: "Ledger", href: ROUTES.TRANSPORT_LEDGER }
       ]
     },

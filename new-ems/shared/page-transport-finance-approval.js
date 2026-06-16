@@ -1,7 +1,9 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
+import { PERMISSIONS } from "../config/roles.js";
 import { listPendingLedgerEvents, postClientBillLedger, postClientCreditNoteLedger, postClientReceiptLedger, postGstInvoiceLedger, postTransporterPaymentLedger, postTransporterStatementLedger, resolveWorkspaceDivision } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { hasAnyRolePermission } from "./permissions.js";
 import { qs, showToast } from "./utils.js";
 
 const SOURCE_TYPES = ["CLIENT_BILL", "GST_INVOICE", "CLIENT_RECEIPT", "CREDIT_NOTE", "TRANSPORTER_STATEMENT", "TRANSPORTER_PAYMENT"];
@@ -22,17 +24,19 @@ const POSTERS = {
   TRANSPORTER_PAYMENT: postTransporterPaymentLedger
 };
 
-const PAGE_STATE = { divisionId: null, pending: new Map(), activeSourceType: null };
+const PAGE_STATE = { divisionId: null, pending: new Map(), activeSourceType: null, roleCodes: [], allowedModules: [], canPost: false };
 
 initTransportFinanceApprovalPage();
 
 async function initTransportFinanceApprovalPage() {
-  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.TRANSPORT_LEDGER, pageTitle: "Finance Approval", pageDescription: "Approve and post finance documents to ledger", workspace: WORKSPACES.TRANSPORTATION });
+  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.TRANSPORT_FINANCE_APPROVAL, pageTitle: "Finance Approval", pageDescription: "Approve and post finance documents to ledger", workspace: WORKSPACES.TRANSPORTATION });
   if (!boot) return;
-  const division = await resolveWorkspaceDivision(WORKSPACES.TRANSPORTATION);
-  PAGE_STATE.divisionId = division?.id || null;
+  PAGE_STATE.roleCodes = boot.roleCodes || [];
+  PAGE_STATE.allowedModules = boot.allowedModules || [];
+  PAGE_STATE.canPost = hasAnyRolePermission(PAGE_STATE.roleCodes, MODULES.TRANSPORT_FINANCE_POSTING, PERMISSIONS.POST, { allowedModules: PAGE_STATE.allowedModules });
+  PAGE_STATE.divisionId = boot.divisionId || null;
   if (!PAGE_STATE.divisionId) return showToast("Canonical Transportation division not found", TOAST_TYPES.ERROR);
-  renderModuleContent(renderShell(division?.name || "Transportation"));
+  renderModuleContent(renderShell(boot.divisionLabel || "Transportation"));
   bindEvents();
   await refreshPending();
 }
@@ -50,7 +54,7 @@ function renderShell(divisionLabel) {
       @media(max-width:980px){.approval-modal-summary{grid-template-columns:1fr}}
     </style>
     <section class="card" style="margin-bottom:1rem;"><h3>Finance Approval Center</h3><p class="muted">Transportation Division: ${divisionLabel}</p><div id="financeApprovalCards" class="approval-grid"></div></section>
-    <div id="financeApprovalModal" class="approval-modal" hidden><div class="approval-modal-panel"><div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:1rem;"><div><h3 style="margin:0;">Finance Approval</h3><p class="muted" style="margin:.25rem 0 0;">Review documents waiting to be posted to ledger.</p></div><button class="btn" type="button" id="financeApprovalClose">Close</button></div><div class="approval-modal-summary"><div class="approval-box"><label>Source Type</label><strong id="financeApprovalSourceType">—</strong></div><div class="approval-box"><label>Count</label><strong id="financeApprovalCount">0</strong></div><div class="approval-box"><label>Total Amount</label><strong id="financeApprovalTotal">₹0.00</strong></div></div><div class="approval-actions"><button class="btn" type="button" id="financeApprovalPostAll">Approve All Visible</button></div><div class="table-shell"><table class="approval-table"><thead><tr><th>Source No</th><th>Date</th><th>Party</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody id="financeApprovalBody"><tr><td colspan="6">No pending events.</td></tr></tbody></table></div></div></div>
+    <div id="financeApprovalModal" class="approval-modal" hidden><div class="approval-modal-panel"><div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:1rem;"><div><h3 style="margin:0;">Finance Approval</h3><p class="muted" style="margin:.25rem 0 0;">Review documents waiting to be posted to ledger.</p></div><button class="btn" type="button" id="financeApprovalClose">Close</button></div><div class="approval-modal-summary"><div class="approval-box"><label>Source Type</label><strong id="financeApprovalSourceType">—</strong></div><div class="approval-box"><label>Count</label><strong id="financeApprovalCount">0</strong></div><div class="approval-box"><label>Total Amount</label><strong id="financeApprovalTotal">₹0.00</strong></div></div><div class="approval-actions">${PAGE_STATE.canPost ? '<button class="btn" type="button" id="financeApprovalPostAll">Approve All Visible</button>' : '<span class="muted">Posting access required to approve and post visible documents.</span>'}</div><div class="table-shell"><table class="approval-table"><thead><tr><th>Source No</th><th>Date</th><th>Party</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody id="financeApprovalBody"><tr><td colspan="6">No pending events.</td></tr></tbody></table></div></div></div>
   `;
 }
 
@@ -99,7 +103,7 @@ function renderApprovalModal() {
   qs("#financeApprovalTotal").textContent = formatMoney(totalAmount);
   const body = qs("#financeApprovalBody");
   if (!body) return;
-  body.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(row.source_no || "—")}</td><td>${escapeHtml(row.event_date || "—")}</td><td>${escapeHtml(row.party_name || "—")}</td><td>${formatMoney(row.amount)}</td><td>${escapeHtml(row.status || "—")}</td><td><button class="btn" type="button" data-approval-post="${sourceType}|${row.source_id}">Approve & Post</button></td></tr>`).join("") : `<tr><td colspan="6">No pending events.</td></tr>`;
+  body.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(row.source_no || "—")}</td><td>${escapeHtml(row.event_date || "—")}</td><td>${escapeHtml(row.party_name || "—")}</td><td>${formatMoney(row.amount)}</td><td>${escapeHtml(row.status || "—")}</td><td>${PAGE_STATE.canPost ? `<button class="btn" type="button" data-approval-post="${sourceType}|${row.source_id}">Approve & Post</button>` : `<span class="muted">No posting access</span>`}</td></tr>`).join("") : `<tr><td colspan="6">No pending events.</td></tr>`;
   body.querySelectorAll("button[data-approval-post]").forEach((button) => button.addEventListener("click", async () => {
     const [type, sourceId] = String(button.getAttribute("data-approval-post") || "").split("|");
     if (!type || !sourceId) return;
@@ -110,10 +114,11 @@ function renderApprovalModal() {
 }
 
 async function postOne(sourceType, sourceId) {
+  if (!PAGE_STATE.canPost) return showToast("You do not have finance posting permission.", TOAST_TYPES.ERROR);
   if (!window.confirm("Approve and post this document to ledger?")) return;
   try {
     const result = await POSTERS[sourceType]?.({ divisionId: PAGE_STATE.divisionId, sourceId });
-    await logAuditEvent("transport_finance_approval_post", { moduleCode: MODULES.TRANSPORT_LEDGER, entityType: "transport_ledger_entries", entityId: result?.entry_no || sourceId, details: { source_type: sourceType, source_id: sourceId }, afterData: result, action: "create" });
+    await logAuditEvent("transport_finance_approval_post", { moduleCode: MODULES.TRANSPORT_FINANCE_POSTING, entityType: "transport_ledger_entries", entityId: result?.entry_no || sourceId, details: { source_type: sourceType, source_id: sourceId }, afterData: result, action: "create" });
     showToast(`Posted to ledger: ${result?.entry_no || ""}`, TOAST_TYPES.SUCCESS);
     await refreshPending();
   } catch (error) {
@@ -122,6 +127,7 @@ async function postOne(sourceType, sourceId) {
 }
 
 async function postAllVisible() {
+  if (!PAGE_STATE.canPost) return showToast("You do not have finance posting permission.", TOAST_TYPES.ERROR);
   const sourceType = PAGE_STATE.activeSourceType;
   const rows = sourceType ? (PAGE_STATE.pending.get(sourceType) || []) : [];
   if (!sourceType || !rows.length) return;
@@ -129,7 +135,7 @@ async function postAllVisible() {
   for (const row of rows) {
     try {
       const result = await POSTERS[sourceType]?.({ divisionId: PAGE_STATE.divisionId, sourceId: row.source_id });
-      await logAuditEvent("transport_finance_approval_post", { moduleCode: MODULES.TRANSPORT_LEDGER, entityType: "transport_ledger_entries", entityId: result?.entry_no || row.source_id, details: { source_type: sourceType, source_id: row.source_id }, afterData: result, action: "create" });
+      await logAuditEvent("transport_finance_approval_post", { moduleCode: MODULES.TRANSPORT_FINANCE_POSTING, entityType: "transport_ledger_entries", entityId: result?.entry_no || row.source_id, details: { source_type: sourceType, source_id: row.source_id }, afterData: result, action: "create" });
     } catch (error) {
       showToast(error?.message || `Ledger posting failed for ${sourceType}`, TOAST_TYPES.ERROR);
       break;
