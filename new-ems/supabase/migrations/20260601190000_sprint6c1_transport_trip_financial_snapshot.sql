@@ -53,43 +53,109 @@ end;
 $$;
 
 drop trigger if exists trg_recalc_transport_trip_financials on public.transport_trips;
-create trigger trg_recalc_transport_trip_financials
-before insert or update of quantity_kg, quantity_mt, client_rate_per_mt, transporter_rate_per_mt
-on public.transport_trips
-for each row execute function public.recalc_transport_trip_financials();
+do $$
+begin
+  if to_regclass('public.transport_trips') is not null
+     and exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'transport_trips' and column_name = 'quantity_kg'
+     )
+     and exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'transport_trips' and column_name = 'quantity_mt'
+     )
+     and exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'transport_trips' and column_name = 'client_rate_per_mt'
+     )
+     and exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'transport_trips' and column_name = 'transporter_rate_per_mt'
+     ) then
+    create trigger trg_recalc_transport_trip_financials
+    before insert or update of quantity_kg, quantity_mt, client_rate_per_mt, transporter_rate_per_mt
+    on public.transport_trips
+    for each row execute function public.recalc_transport_trip_financials();
+  else
+    raise notice 'Skipping trg_recalc_transport_trip_financials creation: transport_trips or required trigger columns are missing';
+  end if;
+end $$;
 
 -- Backfill existing rows safely
 do $$
 begin
-  if exists (
+  if to_regclass('public.transport_trips') is not null and exists (
     select 1
     from information_schema.columns
     where table_schema = 'public'
       and table_name = 'transport_trips'
       and column_name = 'company_rate_per_mt'
+  ) and exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'transport_trips' and column_name = 'client_rate_per_mt'
   ) then
     execute $sql$
       update public.transport_trips
       set client_rate_per_mt = coalesce(client_rate_per_mt, company_rate_per_mt)
       where client_rate_per_mt is null
     $sql$;
+  else
+    raise notice 'Skipping transport_trips client rate backfill: required columns are missing';
   end if;
 end $$;
 
-update public.transport_trips
-set client_rate_source = coalesce(client_rate_source, 'RATE_MASTER')
-where client_rate_source is null;
+do $$
+begin
+  if to_regclass('public.transport_trips') is not null
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='client_rate_source') then
+    update public.transport_trips
+    set client_rate_source = coalesce(client_rate_source, 'RATE_MASTER')
+    where client_rate_source is null;
+  else
+    raise notice 'Skipping transport_trips client_rate_source backfill: required column is missing';
+  end if;
+end $$;
 
-update public.transport_trips
-set transporter_rate_source = coalesce(transporter_rate_source, 'RATE_MASTER')
-where transporter_rate_source is null;
+do $$
+begin
+  if to_regclass('public.transport_trips') is not null
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='transporter_rate_source') then
+    update public.transport_trips
+    set transporter_rate_source = coalesce(transporter_rate_source, 'RATE_MASTER')
+    where transporter_rate_source is null;
+  else
+    raise notice 'Skipping transport_trips transporter_rate_source backfill: required column is missing';
+  end if;
+end $$;
 
-update public.transport_trips
-set quantity_kg = quantity_mt * 1000
-where quantity_kg is null and quantity_mt is not null;
+do $$
+begin
+  if to_regclass('public.transport_trips') is not null
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='quantity_kg')
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='quantity_mt') then
+    update public.transport_trips
+    set quantity_kg = quantity_mt * 1000
+    where quantity_kg is null and quantity_mt is not null;
+  else
+    raise notice 'Skipping transport_trips quantity_kg backfill: required columns are missing';
+  end if;
+end $$;
 
-update public.transport_trips
-set client_gross_amount = round((coalesce(quantity_mt,0) * coalesce(client_rate_per_mt,0))::numeric, 2),
-    transporter_gross_amount = round((coalesce(quantity_mt,0) * coalesce(transporter_rate_per_mt,0))::numeric, 2),
-    company_margin = round(((coalesce(quantity_mt,0) * coalesce(client_rate_per_mt,0)) - (coalesce(quantity_mt,0) * coalesce(transporter_rate_per_mt,0)))::numeric, 2)
-where true;
+do $$
+begin
+  if to_regclass('public.transport_trips') is not null
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='quantity_mt')
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='client_rate_per_mt')
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='transporter_rate_per_mt')
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='client_gross_amount')
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='transporter_gross_amount')
+     and exists (select 1 from information_schema.columns where table_schema='public' and table_name='transport_trips' and column_name='company_margin') then
+    update public.transport_trips
+    set client_gross_amount = round((coalesce(quantity_mt,0) * coalesce(client_rate_per_mt,0))::numeric, 2),
+        transporter_gross_amount = round((coalesce(quantity_mt,0) * coalesce(transporter_rate_per_mt,0))::numeric, 2),
+        company_margin = round(((coalesce(quantity_mt,0) * coalesce(client_rate_per_mt,0)) - (coalesce(quantity_mt,0) * coalesce(transporter_rate_per_mt,0)))::numeric, 2)
+    where true;
+  else
+    raise notice 'Skipping transport_trips financial snapshot backfill: required columns are missing';
+  end if;
+end $$;

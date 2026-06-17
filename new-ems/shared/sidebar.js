@@ -106,6 +106,32 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.CENTRAL_ACCOUNTS_TREASURY, label: "Treasury", href: ROUTES.CENTRAL_ACCOUNTS_TREASURY }
       ]
     }
+  ],
+  [WORKSPACES.INTERIORS]: [
+    {
+      title: "Home",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.INTERIORS_DASHBOARD, label: "Dashboard", href: ROUTES.INTERIORS_DASHBOARD }
+      ]
+    },
+    {
+      title: "Foundation",
+      items: [
+        { module: MODULES.INTERIORS_SPACES, label: "Spaces", href: ROUTES.INTERIORS_SPACES },
+        { module: MODULES.INTERIORS_DESIGN_PACKAGES, label: "Design Packages", href: ROUTES.INTERIORS_DESIGN_PACKAGES },
+        { module: MODULES.INTERIORS_FINISH_SCHEDULES, label: "Finish Schedules", href: ROUTES.INTERIORS_FINISH_SCHEDULES },
+        { module: MODULES.INTERIORS_MATERIAL_SPECS, label: "Material Specifications", href: ROUTES.INTERIORS_MATERIAL_SPECS }
+      ]
+    },
+    {
+      title: "Commercial",
+      items: [
+        { module: MODULES.INTERIORS_BOQ, label: "BOQ", href: ROUTES.INTERIORS_BOQ },
+        { module: MODULES.INTERIORS_ESTIMATES, label: "Estimates", href: ROUTES.INTERIORS_ESTIMATES },
+        { module: MODULES.INTERIORS_QUOTATIONS, label: "Quotations", href: ROUTES.INTERIORS_QUOTATIONS }
+      ]
+    }
   ]
 };
 

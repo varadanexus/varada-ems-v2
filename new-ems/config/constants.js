@@ -52,6 +52,18 @@ export const ROUTES = {
   ,TRANSPORT_TRANSPORTER_PAYMENTS: "/new-ems/modules/transport-transporter-payments/index.html"
   ,TRANSPORT_FINANCE_APPROVAL: "/new-ems/modules/transport-finance-approval/index.html"
   ,TRANSPORT_LEDGER: "/new-ems/modules/transport-ledger/index.html"
+  ,PROJECT_ENGINE_DASHBOARD: "/new-ems/modules/project-engine-dashboard/index.html"
+  ,PROJECT_ENGINE_PROJECTS: "/new-ems/modules/project-engine-projects/index.html"
+  ,PROJECT_ENGINE_APPROVALS: "/new-ems/modules/project-engine-approvals/index.html"
+  ,PROJECT_ENGINE_PROJECT_DETAILS: "/new-ems/modules/project-engine-project-details/index.html"
+  ,INTERIORS_DASHBOARD: "/new-ems/modules/interiors-dashboard/index.html"
+  ,INTERIORS_SPACES: "/new-ems/modules/interiors-spaces/index.html"
+  ,INTERIORS_DESIGN_PACKAGES: "/new-ems/modules/interiors-design-packages/index.html"
+  ,INTERIORS_FINISH_SCHEDULES: "/new-ems/modules/interiors-finish-schedules/index.html"
+  ,INTERIORS_MATERIAL_SPECS: "/new-ems/modules/interiors-material-specs/index.html"
+  ,INTERIORS_BOQ: "/new-ems/modules/interiors-boq/index.html"
+  ,INTERIORS_ESTIMATES: "/new-ems/modules/interiors-estimates/index.html"
+  ,INTERIORS_QUOTATIONS: "/new-ems/modules/interiors-quotations/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -128,12 +140,24 @@ export const MODULES = {
   ,TRANSPORT_FINANCE_APPROVAL: "transport-finance-approval"
   ,TRANSPORT_FINANCE_POSTING: "transport-finance-posting"
   ,TRANSPORT_LEDGER: "transport-ledger"
+  ,PROJECT_ENGINE_DASHBOARD: "project-engine-dashboard"
+  ,PROJECT_ENGINE_PROJECTS: "project-engine-projects"
+  ,PROJECT_ENGINE_APPROVALS: "project-engine-approvals"
+  ,PROJECT_ENGINE_PROJECT_DETAILS: "project-engine-project-details"
+  ,INTERIORS_DASHBOARD: "interiors-dashboard"
+  ,INTERIORS_SPACES: "interiors-spaces"
+  ,INTERIORS_DESIGN_PACKAGES: "interiors-design-packages"
+  ,INTERIORS_FINISH_SCHEDULES: "interiors-finish-schedules"
+  ,INTERIORS_MATERIAL_SPECS: "interiors-material-specs"
+  ,INTERIORS_BOQ: "interiors-boq"
+  ,INTERIORS_ESTIMATES: "interiors-estimates"
+  ,INTERIORS_QUOTATIONS: "interiors-quotations"
 };
 
 export const CONTROL_CENTER_MODULES = [
   { module: MODULES.TRANSPORTATION, title: "Transportation & Minerals Logistics", subtitle: "Dispatch, trips, challans, settlements", href: ROUTES.TRANSPORT_DASHBOARD },
   { module: MODULES.CONSTRUCTION, title: "Construction", subtitle: "Site operations and execution", href: null },
-  { module: MODULES.INTERIORS, title: "Interiors", subtitle: "Project planning and vendor flow", href: null },
+  { module: MODULES.INTERIORS, title: "Interiors", subtitle: "Spatial structure, design, finish, and specification control", href: ROUTES.INTERIORS_DASHBOARD },
   { module: MODULES.HOSPITAL_PROJECTS, title: "Hospital Projects", subtitle: "Infrastructure programs", href: null },
   { module: MODULES.HOSPITAL_CONSULTANCY, title: "Hospital Consultancy", subtitle: "Advisory workflow", href: null },
   { module: MODULES.IMPORTS_EXPORTS, title: "Imports & Exports", subtitle: "Shipment and compliance desk", href: null },
@@ -157,5 +181,6 @@ export const WORKSPACES = {
   ADMIN: "admin",
   MASTER_DATA: "master-data",
   TRANSPORTATION: "transportation",
-  ACCOUNTS: "accounts"
+  ACCOUNTS: "accounts",
+  INTERIORS: "interiors"
 };

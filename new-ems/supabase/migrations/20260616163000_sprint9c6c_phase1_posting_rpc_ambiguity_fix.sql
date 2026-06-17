@@ -3,6 +3,8 @@
 -- execute_central_accounts_transport_posting(p_financial_document_id uuid)
 -- No Transportation logic changes. No security weakening.
 
+drop function if exists public.execute_central_accounts_transport_posting(uuid);
+
 create or replace function public.execute_central_accounts_transport_posting(
   p_financial_document_id uuid
 )
