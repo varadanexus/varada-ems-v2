@@ -1373,6 +1373,278 @@ export async function getTransporterFinancialReconciliation({ divisionId = null 
   return Array.isArray(data) ? (data[0] || null) : data;
 }
 
+export async function getCentralAccountsDashboardMetrics() {
+  const client = getSupabaseClient();
+  const [
+    readyToPostRes,
+    postedRes,
+    failedRes,
+    docsRes,
+    receivablesRes,
+    payablesRes
+  ] = await Promise.all([
+    client.from("posting_queue").select("id", { count: "exact", head: true }).eq("queue_status", "ready_to_post"),
+    client.from("posting_queue").select("id", { count: "exact", head: true }).eq("queue_status", "posted"),
+    client.from("posting_queue").select("id", { count: "exact", head: true }).eq("queue_status", "failed"),
+    client.from("financial_documents").select("id", { count: "exact", head: true }),
+    client.from("receivable_open_items").select("open_amount"),
+    client.from("payable_open_items").select("open_amount")
+  ]);
+  [readyToPostRes, postedRes, failedRes, docsRes, receivablesRes, payablesRes].forEach((res) => {
+    if (res.error) throw res.error;
+  });
+  return {
+    readyToPost: readyToPostRes.count || 0,
+    posted: postedRes.count || 0,
+    failed: failedRes.count || 0,
+    financialDocuments: docsRes.count || 0,
+    receivables: (receivablesRes.data || []).reduce((sum, row) => sum + Number(row.open_amount || 0), 0),
+    payables: (payablesRes.data || []).reduce((sum, row) => sum + Number(row.open_amount || 0), 0)
+  };
+}
+
+export async function listCentralFinancialDocuments({ status = "", family = "", search = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("financial_documents")
+    .select(`
+      id, document_family, source_module, source_table, source_document_id, source_document_no,
+      status, document_date, effective_date, gross_amount, taxable_amount, tax_amount, net_amount,
+      finance_approved_at, posted_at, created_at,
+      reporting_dimensions!financial_documents_counterparty_dimension_id_fkey(id, code, name)
+    `)
+    .order("created_at", { ascending: false });
+  if (status) query = query.eq("status", status);
+  if (family) query = query.eq("document_family", family);
+  if (search) query = query.or(`source_document_no.ilike.%${search}%,document_family.ilike.%${search}%`);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getCentralFinancialDocumentDetails(documentId) {
+  if (!documentId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("financial_documents")
+    .select(`
+      *,
+      reporting_dimensions!financial_documents_counterparty_dimension_id_fkey(id, code, name),
+      posting_queue(id, queue_status, queue_attempt, last_error, processed_at, created_at),
+      document_postings(id, posting_sequence, posting_status, failure_reason, posted_at, failed_at, created_at)
+    `)
+    .eq("id", documentId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function listCentralPostingQueue({ status = "", search = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("posting_queue")
+    .select(`
+      id, financial_document_id, queue_status, queue_attempt, last_error, created_at, updated_at, processed_at,
+      financial_documents(
+        id, document_family, source_module, source_table, source_document_id, source_document_no, status, net_amount,
+        document_postings(id, posting_sequence, posting_status, posted_at, failed_at)
+      )
+    `)
+    .order("created_at", { ascending: false });
+  if (status) query = query.eq("queue_status", status);
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data || []).filter((row) => {
+    if (!search) return true;
+    const haystack = [
+      row.queue_status,
+      row.financial_documents?.document_family,
+      row.financial_documents?.source_document_no,
+      row.financial_documents?.source_module,
+      row.financial_documents?.source_table,
+      row.financial_documents?.document_postings?.[0]?.posting_sequence
+    ].join(" ").toLowerCase();
+    return haystack.includes(String(search).toLowerCase());
+  });
+  return rows;
+}
+
+export async function postCentralAccountsTransportDocument(financialDocumentId) {
+  if (!financialDocumentId) throw new Error("Financial document id is required");
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("execute_central_accounts_transport_posting", {
+    p_financial_document_id: financialDocumentId
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
+export async function listCentralJournals({ search = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("journal_entries")
+    .select("id,journal_no,posting_sequence,entry_date,source_module,source_document_family,status,posted_at,financial_document_id,source_document_id,created_at")
+    .order("posted_at", { ascending: false })
+    .order("created_at", { ascending: false });
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = data || [];
+  if (!search) return rows;
+  const needle = String(search).toLowerCase();
+  return rows.filter((row) => [row.journal_no, row.posting_sequence, row.source_module, row.source_document_family, row.status].join(" ").toLowerCase().includes(needle));
+}
+
+export async function getCentralJournalDetails(journalEntryId) {
+  if (!journalEntryId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("journal_entries")
+    .select(`
+      id,journal_no,posting_sequence,entry_date,source_module,source_document_id,source_document_family,financial_document_id,division_id,status,posted_at,created_at,
+      financial_documents(id,source_document_no,document_family,status,net_amount),
+      journal_lines(id,line_no,debit_amount,credit_amount,line_memo,ledger_account_id,division_id,counterparty_dimension_id,project_dimension_id,profit_center_dimension_id)
+    `)
+    .eq("id", journalEntryId)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function listCentralAuditEvents({ search = "" } = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("central_accounts_audit_events")
+    .select(`
+      id,event_type,entity_type,entity_id,actor_app_user_id,financial_document_id,journal_entry_id,details,created_at,
+      financial_documents(id,source_document_no,document_family),
+      journal_entries(id,journal_no,posting_sequence),
+      app_users!central_accounts_audit_events_actor_app_user_id_fkey(id,display_name,email)
+    `)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const rows = data || [];
+  if (!search) return rows;
+  const needle = String(search).toLowerCase();
+  return rows.filter((row) => [row.event_type, row.entity_type, row.entity_id, row.financial_documents?.source_document_no, row.journal_entries?.journal_no, row.app_users?.display_name, row.app_users?.email].join(" ").toLowerCase().includes(needle));
+}
+
+export async function listCentralReceivables({ search = "" } = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("receivable_open_items")
+    .select(`
+      id,financial_document_id,due_date,original_amount,open_amount,status,created_at,updated_at,
+      financial_documents(id,source_document_no,document_family,document_date),
+      reporting_dimensions!receivable_open_items_counterparty_dimension_id_fkey(id,code,name)
+    `)
+    .order("due_date", { ascending: true })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const rows = data || [];
+  if (!search) return rows;
+  const needle = String(search).toLowerCase();
+  return rows.filter((row) => [row.financial_documents?.source_document_no, row.financial_documents?.document_family, row.reporting_dimensions?.name, row.reporting_dimensions?.code, row.status].join(" ").toLowerCase().includes(needle));
+}
+
+export async function listCentralPayables({ search = "" } = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("payable_open_items")
+    .select(`
+      id,financial_document_id,due_date,original_amount,open_amount,status,created_at,updated_at,
+      financial_documents(id,source_document_no,document_family,document_date),
+      reporting_dimensions!payable_open_items_counterparty_dimension_id_fkey(id,code,name)
+    `)
+    .order("due_date", { ascending: true })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const rows = data || [];
+  if (!search) return rows;
+  const needle = String(search).toLowerCase();
+  return rows.filter((row) => [row.financial_documents?.source_document_no, row.financial_documents?.document_family, row.reporting_dimensions?.name, row.reporting_dimensions?.code, row.status].join(" ").toLowerCase().includes(needle));
+}
+
+export async function listCentralTreasuryAccounts({ search = "" } = {}) {
+  const client = getSupabaseClient();
+  const [cashRes, bankRes] = await Promise.all([
+    client
+      .from("cash_accounts")
+      .select(`
+        id, code, name, ledger_account_id, is_active, created_at,
+        coa_accounts:ledger_account_id(id, code, name)
+      `)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
+    client
+      .from("bank_accounts")
+      .select(`
+        id, code, bank_name, account_title, masked_account_number, ifsc_code, ledger_account_id, is_active, created_at,
+        coa_accounts:ledger_account_id(id, code, name)
+      `)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+  ]);
+  if (cashRes.error) throw cashRes.error;
+  if (bankRes.error) throw bankRes.error;
+
+  const ledgerAccountIds = Array.from(new Set([
+    ...(cashRes.data || []).map((row) => row.ledger_account_id).filter(Boolean),
+    ...(bankRes.data || []).map((row) => row.ledger_account_id).filter(Boolean)
+  ]));
+
+  let balanceByLedgerAccountId = new Map();
+  if (ledgerAccountIds.length) {
+    const { data: journalLineRows, error: journalLinesError } = await client
+      .from("journal_lines")
+      .select("ledger_account_id,debit_amount,credit_amount")
+      .in("ledger_account_id", ledgerAccountIds);
+    if (journalLinesError) throw journalLinesError;
+
+    balanceByLedgerAccountId = (journalLineRows || []).reduce((map, row) => {
+      const key = String(row.ledger_account_id || "");
+      if (!key) return map;
+      const nextBalance = (map.get(key) || 0) + Number(row.debit_amount || 0) - Number(row.credit_amount || 0);
+      map.set(key, nextBalance);
+      return map;
+    }, new Map());
+  }
+
+  const cashRows = (cashRes.data || []).map((row) => ({
+    id: row.id,
+    source_type: "cash",
+    account_code: row.code || row.coa_accounts?.code || "—",
+    account_name: row.name || row.coa_accounts?.name || "—",
+    account_type: "Cash",
+    current_balance: getCentralTreasuryBalance(balanceByLedgerAccountId, row.ledger_account_id),
+    status: row.is_active ? "active" : "inactive",
+    created_at: row.created_at,
+    raw: row
+  }));
+
+  const bankRows = (bankRes.data || []).map((row) => ({
+    id: row.id,
+    source_type: "bank",
+    account_code: row.code || row.coa_accounts?.code || "—",
+    account_name: row.account_title || row.bank_name || row.coa_accounts?.name || "—",
+    account_type: "Bank",
+    current_balance: getCentralTreasuryBalance(balanceByLedgerAccountId, row.ledger_account_id),
+    status: row.is_active ? "active" : "inactive",
+    created_at: row.created_at,
+    raw: row
+  }));
+
+  const rows = [...cashRows, ...bankRows];
+  if (!search) return rows;
+  const needle = String(search).toLowerCase();
+  return rows.filter((row) => [row.account_code, row.account_name, row.account_type, row.status].join(" ").toLowerCase().includes(needle));
+}
+
+function getCentralTreasuryBalance(balanceByLedgerAccountId, ledgerAccountId) {
+  if (!ledgerAccountId) return null;
+  const key = String(ledgerAccountId);
+  return balanceByLedgerAccountId.has(key) ? balanceByLedgerAccountId.get(key) : null;
+}
+
 export async function updateTripExpense(id, payload) {
   const client = getSupabaseClient();
   const { data, error } = await client

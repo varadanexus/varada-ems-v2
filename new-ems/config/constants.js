@@ -4,6 +4,14 @@ export const ROUTES = {
   ROOT: "/new-ems/index.html",
   LOGIN: "/new-ems/login.html",
   DASHBOARD: "/new-ems/modules/dashboard/index.html",
+  CENTRAL_ACCOUNTS_DASHBOARD: "/new-ems/modules/central-accounts-dashboard/index.html",
+  CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS: "/new-ems/modules/central-accounts-financial-documents/index.html",
+  CENTRAL_ACCOUNTS_POSTING_QUEUE: "/new-ems/modules/central-accounts-posting-queue/index.html",
+  CENTRAL_ACCOUNTS_JOURNALS: "/new-ems/modules/central-accounts-journals/index.html",
+  CENTRAL_ACCOUNTS_AUDIT: "/new-ems/modules/central-accounts-audit/index.html",
+  CENTRAL_ACCOUNTS_RECEIVABLES: "/new-ems/modules/central-accounts-receivables/index.html",
+  CENTRAL_ACCOUNTS_PAYABLES: "/new-ems/modules/central-accounts-payables/index.html",
+  CENTRAL_ACCOUNTS_TREASURY: "/new-ems/modules/central-accounts-treasury/index.html",
   USERS: "/new-ems/modules/users/index.html",
   ROLES: "/new-ems/modules/roles/index.html",
   SETTINGS: "/new-ems/modules/settings/index.html",
@@ -65,6 +73,14 @@ export const MODULES = {
   ARBITRAGE: "arbitrage",
   ECOMMERCE: "e-commerce",
   ACCOUNTS: "accounts",
+  CENTRAL_ACCOUNTS_DASHBOARD: "central-accounts-dashboard",
+  CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS: "central-accounts-financial-documents",
+  CENTRAL_ACCOUNTS_POSTING_QUEUE: "central-accounts-posting-queue",
+  CENTRAL_ACCOUNTS_JOURNALS: "central-accounts-journals",
+  CENTRAL_ACCOUNTS_AUDIT: "central-accounts-audit",
+  CENTRAL_ACCOUNTS_RECEIVABLES: "central-accounts-receivables",
+  CENTRAL_ACCOUNTS_PAYABLES: "central-accounts-payables",
+  CENTRAL_ACCOUNTS_TREASURY: "central-accounts-treasury",
   USERS: "users",
   ROLES: "roles",
   SETTINGS: "settings",
@@ -125,7 +141,7 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.HR_PR, title: "HR & PR", subtitle: "People and communications", href: null },
   { module: MODULES.ARBITRAGE, title: "Arbitrage", subtitle: "Opportunity and risk desk", href: null },
   { module: MODULES.ECOMMERCE, title: "E-Commerce", subtitle: "Storefront operations", href: null },
-  { module: MODULES.ACCOUNTS, title: "Accounts", subtitle: "Finance operations cockpit", href: null },
+  { module: MODULES.ACCOUNTS, title: "Accounts", subtitle: "Finance operations cockpit", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
   { module: MODULES.SETTINGS, title: "Administration", subtitle: "System controls and policy", href: ROUTES.SETTINGS },
   { module: MODULES.MASTER_CLIENTS, title: "Master Data", subtitle: "Reference entities and codes", href: ROUTES.MASTER_CLIENTS }
 ];
@@ -140,5 +156,6 @@ export const TOAST_TYPES = {
 export const WORKSPACES = {
   ADMIN: "admin",
   MASTER_DATA: "master-data",
-  TRANSPORTATION: "transportation"
+  TRANSPORTATION: "transportation",
+  ACCOUNTS: "accounts"
 };

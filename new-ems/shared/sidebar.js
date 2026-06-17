@@ -80,6 +80,32 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.TRANSPORT_REPORTS_PLACEHOLDER, label: "Reports", href: ROUTES.TRANSPORT_DASHBOARD }
       ]
     }
+  ],
+  [WORKSPACES.ACCOUNTS]: [
+    {
+      title: "Home",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.CENTRAL_ACCOUNTS_DASHBOARD, label: "Central Accounts Dashboard", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
+        { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, label: "Audit Events", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT }
+      ]
+    },
+    {
+      title: "Accounting Operations",
+      items: [
+        { module: MODULES.CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS, label: "Financial Documents", href: ROUTES.CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS },
+        { module: MODULES.CENTRAL_ACCOUNTS_POSTING_QUEUE, label: "Posting Queue", href: ROUTES.CENTRAL_ACCOUNTS_POSTING_QUEUE },
+        { module: MODULES.CENTRAL_ACCOUNTS_JOURNALS, label: "Journals", href: ROUTES.CENTRAL_ACCOUNTS_JOURNALS }
+      ]
+    },
+    {
+      title: "Working Books",
+      items: [
+        { module: MODULES.CENTRAL_ACCOUNTS_RECEIVABLES, label: "Receivables", href: ROUTES.CENTRAL_ACCOUNTS_RECEIVABLES },
+        { module: MODULES.CENTRAL_ACCOUNTS_PAYABLES, label: "Payables", href: ROUTES.CENTRAL_ACCOUNTS_PAYABLES },
+        { module: MODULES.CENTRAL_ACCOUNTS_TREASURY, label: "Treasury", href: ROUTES.CENTRAL_ACCOUNTS_TREASURY }
+      ]
+    }
   ]
 };
 

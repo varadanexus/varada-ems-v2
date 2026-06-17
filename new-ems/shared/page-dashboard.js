@@ -14,7 +14,7 @@ async function init() {
   renderModuleContent(renderAppSkeleton("Dashboard loading"));
 
   window.setTimeout(() => {
-    const visibleCards = CONTROL_CENTER_MODULES.filter((m) => (boot.allowedModules || []).includes(m.module));
+    const visibleCards = CONTROL_CENTER_MODULES.filter((m) => (boot.accessibleModules || boot.allowedModules || []).includes(m.module));
     const cardsHtml = visibleCards.map((m) => `
       <a class="module-card" href="${m.href || ROUTES.DASHBOARD}">
         <div class="module-top"><span class="module-dot"></span><span class="module-open">→</span></div>
