@@ -1,6 +1,9 @@
 import { MODULES, ROUTES, TOAST_TYPES } from "../config/constants.js";
+import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
+
+const client = getSupabaseClient();
 
 const PAGE_STATE = {
   boot: null,
@@ -49,11 +52,11 @@ async function loadData() {
 
   try {
     const [typesRes, templatesRes, projectsRes, divisionsRes, clientsRes] = await Promise.all([
-      window.supabase.from("project_types").select("id,code,name").eq("is_active", true).order("name"),
-      window.supabase.from("project_templates").select("id,project_type_id,template_code,template_name").eq("is_active", true).order("template_name"),
-      window.supabase.from("projects").select("*").is("deleted_at", null).order("created_at", { ascending: false }),
-      window.supabase.from("divisions").select("id,code,name").eq("is_active", true).order("name"),
-      window.supabase.from("master_clients").select("id,name").eq("is_active", true).is("deleted_at", null).order("name")
+      client.from("project_types").select("id,code,name").eq("is_active", true).order("name"),
+      client.from("project_templates").select("id,project_type_id,template_code,template_name").eq("is_active", true).order("template_name"),
+      client.from("projects").select("*").is("deleted_at", null).order("created_at", { ascending: false }),
+      client.from("divisions").select("id,code,name").eq("is_active", true).order("name"),
+      client.from("master_clients").select("id,name").eq("is_active", true).is("deleted_at", null).order("name")
     ]);
 
     if (typesRes.error) throw typesRes.error;
@@ -185,7 +188,7 @@ function bindEvents() {
       if (action === "delete") {
         if (!window.confirm("Are you sure you want to delete this project?")) return;
         try {
-          const { error } = await window.supabase.from("projects").update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", projectId);
+          const { error } = await client.from("projects").update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", projectId);
           if (error) throw error;
           showToast("Project deleted successfully", TOAST_TYPES.SUCCESS);
           await loadData();
@@ -238,7 +241,7 @@ async function handleCreateProject() {
       owner_app_user_id: PAGE_STATE.boot?.appUser?.id || null,
       project_manager_app_user_id: PAGE_STATE.boot?.appUser?.id || null
     };
-    const { data: createdProject, error: createError } = await window.supabase.from("projects").insert(insertPayload).select("*").single();
+    const { data: createdProject, error: createError } = await client.from("projects").insert(insertPayload).select("*").single();
     if (createError) throw createError;
     await seedProjectFromTemplate(createdProject, payload.project_template_id);
     showToast("Project created successfully", TOAST_TYPES.SUCCESS);
@@ -281,7 +284,7 @@ function validateCreatePayload(payload) {
 
 async function resolveProjectCode(divisionId, projectTypeId) {
   try {
-    const { data, error } = await window.supabase.rpc("next_project_code", {
+    const { data, error } = await client.rpc("next_project_code", {
       p_division_id: divisionId,
       p_project_type_id: projectTypeId,
       p_created_by: PAGE_STATE.boot?.appUser?.id || null
@@ -298,26 +301,26 @@ async function resolveProjectCode(divisionId, projectTypeId) {
 async function seedProjectFromTemplate(project, projectTemplateId) {
   if (!project?.id || !projectTemplateId) return;
   const appUserId = PAGE_STATE.boot?.appUser?.id || null;
-  const { data: templateStages, error: stagesError } = await window.supabase.from("project_template_stages").select("id,stage_code,stage_name,stage_order").eq("project_template_id", projectTemplateId).order("stage_order");
+  const { data: templateStages, error: stagesError } = await client.from("project_template_stages").select("id,stage_code,stage_name,stage_order").eq("project_template_id", projectTemplateId).order("stage_order");
   if (stagesError) throw stagesError;
   const stageRows = (templateStages || []).map((stage) => ({ project_id: project.id, stage_code: stage.stage_code, stage_name: stage.stage_name, stage_order: stage.stage_order, status: "planned", created_by: appUserId, updated_by: appUserId, owner_app_user_id: appUserId }));
   let createdStages = [];
   if (stageRows.length) {
-    const { data, error } = await window.supabase.from("project_stages").insert(stageRows).select("id,stage_code");
+    const { data, error } = await client.from("project_stages").insert(stageRows).select("id,stage_code");
     if (error) throw error;
     createdStages = data || [];
   }
   const stageIdByCode = new Map(createdStages.map((row) => [String(row.stage_code), row.id]));
   const [{ data: templateTasks, error: tasksError }, { data: templateMilestones, error: milestonesError }] = await Promise.all([
-    window.supabase.from("project_template_tasks").select("task_code,task_name,task_type,default_priority,project_template_stages(stage_code)").eq("project_template_id", projectTemplateId),
-    window.supabase.from("project_template_milestones").select("milestone_code,milestone_name,milestone_type,approval_required,project_template_stages(stage_code)").eq("project_template_id", projectTemplateId)
+    client.from("project_template_tasks").select("task_code,task_name,task_type,default_priority,project_template_stages(stage_code)").eq("project_template_id", projectTemplateId),
+    client.from("project_template_milestones").select("milestone_code,milestone_name,milestone_type,approval_required,project_template_stages(stage_code)").eq("project_template_id", projectTemplateId)
   ]);
   if (tasksError) throw tasksError;
   if (milestonesError) throw milestonesError;
   const taskRows = (templateTasks || []).map((task) => ({ project_id: project.id, stage_id: stageIdByCode.get(String(task.project_template_stages?.stage_code || "")) || null, task_code: task.task_code, task_name: task.task_name, task_type: task.task_type, status: "open", priority: task.default_priority || "medium", created_by: appUserId, updated_by: appUserId }));
   const milestoneRows = (templateMilestones || []).map((milestone) => ({ project_id: project.id, stage_id: stageIdByCode.get(String(milestone.project_template_stages?.stage_code || "")) || null, milestone_code: milestone.milestone_code, milestone_name: milestone.milestone_name, milestone_type: milestone.milestone_type, approval_required: Boolean(milestone.approval_required), status: "draft", created_by: appUserId, updated_by: appUserId }));
-  if (taskRows.length) { const { error } = await window.supabase.from("project_tasks").insert(taskRows); if (error) throw error; }
-  if (milestoneRows.length) { const { error } = await window.supabase.from("project_milestones").insert(milestoneRows); if (error) throw error; }
+  if (taskRows.length) { const { error } = await client.from("project_tasks").insert(taskRows); if (error) throw error; }
+  if (milestoneRows.length) { const { error } = await client.from("project_milestones").insert(milestoneRows); if (error) throw error; }
 }
 
 function setCreateError(message) {

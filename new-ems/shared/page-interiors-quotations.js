@@ -1,6 +1,9 @@
 import { MODULES, WORKSPACES, TOAST_TYPES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
+import { getSupabaseClient } from "../config/supabase.js";
+
+const client = getSupabaseClient();
 
 const PAGE_STATE = {
   boot: null,
@@ -10,7 +13,8 @@ const PAGE_STATE = {
   estimateLines: [],
   projects: [],
   spaces: [],
-  selectedHeaderId: ""
+  selectedHeaderId: "",
+  draftProjectId: ""
 };
 
 async function init() {
@@ -29,25 +33,33 @@ async function init() {
 
 async function loadData() {
   const [headersRes, linesRes, estimatesRes, estimateLinesRes, projectsRes, spacesRes] = await Promise.all([
-    window.supabase.from("interior_quotation_headers").select("id, project_id, quotation_code, quotation_name, revision_no, status, valid_until, total_amount, projects(project_code, project_name)").order("created_at", { ascending: false }),
-    window.supabase.from("interior_quotation_lines").select("*").order("line_no", { ascending: true }),
-    window.supabase.from("interior_estimate_headers").select("id, project_id, estimate_code, estimate_name, revision_no, total_amount").order("created_at", { ascending: false }),
-    window.supabase.from("interior_estimate_lines").select("*").order("line_no", { ascending: true }),
-    window.supabase.from("projects").select("id, project_code, project_name").is("deleted_at", null).order("project_name"),
-    window.supabase.from("interior_spaces").select("id, project_id, space_code, space_name").order("space_name")
+    client.from("interior_quotation_headers").select("id, project_id, quotation_code, quotation_name, revision_no, status, valid_until, total_amount, projects(project_code, project_name)").order("created_at", { ascending: false }),
+    client.from("interior_quotation_lines").select("*").order("line_no", { ascending: true }),
+    client.from("interior_estimate_headers").select("id, project_id, estimate_code, estimate_name, revision_no, total_amount").order("created_at", { ascending: false }),
+    client.from("interior_estimate_lines").select("*").order("line_no", { ascending: true }),
+    client.from("interior_projects").select("id, shared_project_id, project_code, project_name, project_title, interior_clients(client_name)").order("project_name"),
+    client.from("interior_spaces").select("id, project_id, space_code, space_name").order("space_name")
   ]);
 
   PAGE_STATE.headers = headersRes.data || [];
   PAGE_STATE.lines = linesRes.data || [];
   PAGE_STATE.estimates = estimatesRes.data || [];
   PAGE_STATE.estimateLines = estimateLinesRes.data || [];
-  PAGE_STATE.projects = projectsRes.data || [];
+  PAGE_STATE.projects = (projectsRes.data || []).filter((row) => row.shared_project_id).map((row) => ({
+    id: row.id,
+    shared_project_id: row.shared_project_id,
+    project_code: row.project_code,
+    project_name: row.project_name,
+    project_title: row.project_title,
+    client_name: row.interior_clients?.client_name || null
+  }));
   PAGE_STATE.spaces = spacesRes.data || [];
   if (!PAGE_STATE.selectedHeaderId && PAGE_STATE.headers[0]?.id) PAGE_STATE.selectedHeaderId = PAGE_STATE.headers[0].id;
 }
 
 function render() {
   const selectedHeader = PAGE_STATE.headers.find((row) => row.id === PAGE_STATE.selectedHeaderId) || null;
+  const activeProjectId = selectedHeader?.project_id || PAGE_STATE.draftProjectId || "";
   const selectedLines = PAGE_STATE.lines.filter((row) => row.quotation_header_id === PAGE_STATE.selectedHeaderId);
   renderModuleContent(`
     <section class="card">
@@ -71,8 +83,8 @@ function render() {
         <h4>Header</h4>
         <div class="int-grid">
           <div class="full"><label for="quotationHeaderSelect">Open Header</label><select id="quotationHeaderSelect"><option value="">Create New Quotation</option>${PAGE_STATE.headers.map((row) => `<option value="${row.id}" ${row.id === PAGE_STATE.selectedHeaderId ? 'selected' : ''}>${escapeHtml(row.quotation_code)} - ${escapeHtml(row.quotation_name)}</option>`).join('')}</select></div>
-          <div><label for="quotationProjectId">Project *</label><select id="quotationProjectId">${renderProjectOptions(selectedHeader?.project_id)}</select></div>
-          <div><label for="quotationFromEstimateId">Create from Estimate</label><select id="quotationFromEstimateId">${renderEstimateOptions(selectedHeader?.project_id)}</select></div>
+          <div><label for="quotationProjectId">Project *</label><select id="quotationProjectId">${renderProjectOptions(activeProjectId)}</select></div>
+          <div><label for="quotationFromEstimateId">Create from Estimate</label><select id="quotationFromEstimateId">${renderEstimateOptions(activeProjectId)}</select></div>
           <div><label for="quotationCode">Quotation Code *</label><input id="quotationCode" type="text" value="${escapeAttr(selectedHeader?.quotation_code || '')}" /></div>
           <div><label for="quotationName">Quotation Name *</label><input id="quotationName" type="text" value="${escapeAttr(selectedHeader?.quotation_name || '')}" /></div>
           <div><label for="quotationRevision">Revision *</label><input id="quotationRevision" type="number" min="1" step="1" value="${escapeAttr(String(selectedHeader?.revision_no || 1))}" /></div>
@@ -125,10 +137,13 @@ function render() {
 function bindEvents() {
   document.getElementById('quotationHeaderSelect')?.addEventListener('change', (event) => {
     PAGE_STATE.selectedHeaderId = event.target.value || '';
+    const selectedHeader = PAGE_STATE.headers.find((row) => row.id === PAGE_STATE.selectedHeaderId) || null;
+    PAGE_STATE.draftProjectId = selectedHeader?.project_id || '';
     render();
     bindEvents();
   });
   document.getElementById('quotationProjectId')?.addEventListener('change', () => {
+    PAGE_STATE.draftProjectId = document.getElementById('quotationProjectId')?.value || '';
     render();
     bindEvents();
   });
@@ -182,11 +197,11 @@ async function saveHeader() {
   }
   try {
     if (PAGE_STATE.selectedHeaderId) {
-      const { error } = await window.supabase.from('interior_quotation_headers').update(payload).eq('id', PAGE_STATE.selectedHeaderId);
+      const { error } = await client.from('interior_quotation_headers').update(payload).eq('id', PAGE_STATE.selectedHeaderId);
       if (error) throw error;
       showToast('Quotation header updated.', TOAST_TYPES.SUCCESS);
     } else {
-      const { data, error } = await window.supabase.from('interior_quotation_headers').insert(payload).select('id').single();
+      const { data, error } = await client.from('interior_quotation_headers').insert(payload).select('id').single();
       if (error) throw error;
       PAGE_STATE.selectedHeaderId = data.id;
       showToast('Quotation header created.', TOAST_TYPES.SUCCESS);
@@ -209,7 +224,7 @@ async function createFromEstimate() {
   const estimate = PAGE_STATE.estimates.find((row) => row.id === estimateHeaderId);
   const estimateLines = PAGE_STATE.estimateLines.filter((row) => row.estimate_header_id === estimateHeaderId);
   try {
-    const { data: header, error: headerError } = await window.supabase.from('interior_quotation_headers').insert({
+    const { data: header, error: headerError } = await client.from('interior_quotation_headers').insert({
       project_id: projectId,
       quotation_code: `${estimate?.estimate_code || 'QTN'}-QTN`,
       quotation_name: `${estimate?.estimate_name || 'Estimate'} Quotation`,
@@ -222,7 +237,7 @@ async function createFromEstimate() {
     }).select('id').single();
     if (headerError) throw headerError;
     if (estimateLines.length) {
-      const { error: lineError } = await window.supabase.from('interior_quotation_lines').insert(estimateLines.map((row, index) => ({
+      const { error: lineError } = await client.from('interior_quotation_lines').insert(estimateLines.map((row, index) => ({
         project_id: projectId,
         quotation_header_id: header.id,
         estimate_line_id: row.id,
@@ -271,7 +286,7 @@ async function addLine() {
     return;
   }
   try {
-    const { error } = await window.supabase.from('interior_quotation_lines').insert(payload);
+    const { error } = await client.from('interior_quotation_lines').insert(payload);
     if (error) throw error;
     showToast('Quotation line added.', TOAST_TYPES.SUCCESS);
     await loadData();
@@ -286,7 +301,7 @@ async function deleteLine(event) {
   const id = event.currentTarget.dataset.quotationDelete;
   if (!id || !window.confirm('Delete this quotation line?')) return;
   try {
-    const { error } = await window.supabase.from('interior_quotation_lines').delete().eq('id', id);
+    const { error } = await client.from('interior_quotation_lines').delete().eq('id', id);
     if (error) throw error;
     showToast('Quotation line deleted.', TOAST_TYPES.SUCCESS);
     await loadData();
@@ -325,7 +340,7 @@ function editLine(event) {
         remarks: document.getElementById('quotationLineRemarks')?.value?.trim() || null,
         updated_by: PAGE_STATE.boot?.appUser?.id || null
       };
-      const { error } = await window.supabase.from('interior_quotation_lines').update(payload).eq('id', id);
+      const { error } = await client.from('interior_quotation_lines').update(payload).eq('id', id);
       if (error) throw error;
       showToast('Quotation line updated.', TOAST_TYPES.SUCCESS);
       button.textContent = 'Add Line';
@@ -342,7 +357,7 @@ function editLine(event) {
 async function updateStatus(status) {
   if (!PAGE_STATE.selectedHeaderId) return;
   try {
-    const { error } = await window.supabase.from('interior_quotation_headers').update({ status, updated_by: PAGE_STATE.boot?.appUser?.id || null }).eq('id', PAGE_STATE.selectedHeaderId);
+    const { error } = await client.from('interior_quotation_headers').update({ status, updated_by: PAGE_STATE.boot?.appUser?.id || null }).eq('id', PAGE_STATE.selectedHeaderId);
     if (error) throw error;
     showToast(`Quotation marked ${status}.`, TOAST_TYPES.SUCCESS);
     await loadData();
@@ -354,7 +369,7 @@ async function updateStatus(status) {
 }
 
 function renderProjectOptions(selectedId) {
-  return `<option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.id}" ${String(selectedId||'')===String(row.id)?'selected':''}>${escapeHtml(row.project_code)} - ${escapeHtml(row.project_name)}</option>`).join('')}`;
+  return `<option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.shared_project_id}" ${String(selectedId||'')===String(row.shared_project_id)?'selected':''}>${escapeHtml(row.project_code || '')} - ${escapeHtml(row.project_title || row.project_name || '')}${row.client_name ? ` (${escapeHtml(row.client_name)})` : ''}</option>`).join('')}`;
 }
 
 function renderEstimateOptions(projectId) {

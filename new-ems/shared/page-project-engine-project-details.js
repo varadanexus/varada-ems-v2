@@ -1,6 +1,9 @@
 import { MODULES, ROUTES, TOAST_TYPES } from "../config/constants.js";
+import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
+
+const client = getSupabaseClient();
 
 const STATUS_COLORS = {
   draft: "gray",
@@ -59,16 +62,16 @@ async function init() {
 async function loadProject(projectId) {
   try {
     const [projectRes, stagesRes, tasksRes, milestonesRes, assignmentsRes, divisionsRes, typesRes, templatesRes, clientsRes, usersRes] = await Promise.all([
-      window.supabase.from("projects").select("*").eq("id", projectId).is("deleted_at", null).maybeSingle(),
-      window.supabase.from("project_stages").select("*").eq("project_id", projectId).order("stage_order"),
-      window.supabase.from("project_tasks").select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
-      window.supabase.from("project_milestones").select("*").eq("project_id", projectId).order("due_date", { ascending: true }),
-      window.supabase.from("project_assignments").select("*").eq("project_id", projectId).eq("is_active", true).order("assigned_at", { ascending: false }),
-      window.supabase.from("divisions").select("id,name"),
-      window.supabase.from("project_types").select("id,name"),
-      window.supabase.from("project_templates").select("id,template_name"),
-      window.supabase.from("master_clients").select("id,name").is("deleted_at", null),
-      window.supabase.from("app_users").select("id,display_name,email")
+      client.from("projects").select("*").eq("id", projectId).is("deleted_at", null).maybeSingle(),
+      client.from("project_stages").select("*").eq("project_id", projectId).order("stage_order"),
+      client.from("project_tasks").select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
+      client.from("project_milestones").select("*").eq("project_id", projectId).order("due_date", { ascending: true }),
+      client.from("project_assignments").select("*").eq("project_id", projectId).eq("is_active", true).order("assigned_at", { ascending: false }),
+      client.from("divisions").select("id,name"),
+      client.from("project_types").select("id,name"),
+      client.from("project_templates").select("id,template_name"),
+      client.from("master_clients").select("id,name").is("deleted_at", null),
+      client.from("app_users").select("id,display_name,email")
     ]);
     if (projectRes.error) throw projectRes.error;
     if (stagesRes.error) throw stagesRes.error;
@@ -138,7 +141,7 @@ function bindEvents(projectId) {
 async function createApprovalRequest(projectId) {
   const remarks = window.prompt("Enter approval request remarks (optional):", "Lifecycle approval request") ?? "";
   try {
-    const { data, error } = await window.supabase.from("project_approval_requests").insert({ project_id: projectId, reference_entity_type: "project", reference_entity_id: projectId, approval_category: "lifecycle", approval_type: "project_status", requested_by_app_user_id: PAGE_STATE.boot?.appUser?.id || null, assigned_approver_app_user_id: PAGE_STATE.project?.project_manager_app_user_id || PAGE_STATE.project?.owner_app_user_id || null, status: "pending", remarks: remarks || null }).select("id").single();
+    const { data, error } = await client.from("project_approval_requests").insert({ project_id: projectId, reference_entity_type: "project", reference_entity_id: projectId, approval_category: "lifecycle", approval_type: "project_status", requested_by_app_user_id: PAGE_STATE.boot?.appUser?.id || null, assigned_approver_app_user_id: PAGE_STATE.project?.project_manager_app_user_id || PAGE_STATE.project?.owner_app_user_id || null, status: "pending", remarks: remarks || null }).select("id").single();
     if (error) throw error;
     document.getElementById("projectDetailActionResult").textContent = `Approval request created: ${data?.id || "success"}`;
     showToast("Approval request created", TOAST_TYPES.SUCCESS);

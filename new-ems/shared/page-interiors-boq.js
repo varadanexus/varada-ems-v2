@@ -1,13 +1,18 @@
 import { MODULES, WORKSPACES, TOAST_TYPES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
+import { getSupabaseClient } from "../config/supabase.js";
+
+const client = getSupabaseClient();
 
 const PAGE_STATE = {
   boot: null,
   headers: [],
   lines: [],
   selectedHeaderId: "",
+  draftProjectId: "",
   projects: [],
+  projectLookup: new Map(),
   documents: [],
   spaces: [],
   packages: [],
@@ -31,19 +36,27 @@ async function init() {
 
 async function loadData() {
   const [headersRes, linesRes, projectsRes, documentsRes, spacesRes, packagesRes, finishesRes, specsRes] = await Promise.all([
-    window.supabase.from("interior_boq_headers").select("id, project_id, boq_code, boq_name, revision_no, status, total_amount, primary_document_id, approval_request_id, projects(project_code, project_name)").order("created_at", { ascending: false }),
-    window.supabase.from("interior_boq_lines").select("*").order("line_no", { ascending: true }),
-    window.supabase.from("projects").select("id, project_code, project_name").is("deleted_at", null).order("project_name"),
-    window.supabase.from("project_documents").select("id, project_id, title").is("deleted_at", null).order("created_at", { ascending: false }).limit(200),
-    window.supabase.from("interior_spaces").select("id, project_id, space_code, space_name").order("space_name"),
-    window.supabase.from("interior_design_packages").select("id, project_id, package_code, package_name").order("package_name"),
-    window.supabase.from("interior_finish_schedules").select("id, project_id, schedule_code, schedule_name").order("schedule_name"),
-    window.supabase.from("interior_material_specs").select("id, project_id, spec_code, spec_name").order("spec_name")
+    client.from("interior_boq_headers").select("id, project_id, boq_code, boq_name, revision_no, status, total_amount, primary_document_id, approval_request_id, projects(project_code, project_name)").order("created_at", { ascending: false }),
+    client.from("interior_boq_lines").select("*").order("line_no", { ascending: true }),
+    client.from("interior_projects").select("id, shared_project_id, project_code, project_name, project_title, interior_clients(client_name)").order("project_name"),
+    client.from("project_documents").select("id, project_id, title").is("deleted_at", null).order("created_at", { ascending: false }).limit(200),
+    client.from("interior_spaces").select("id, project_id, space_code, space_name").order("space_name"),
+    client.from("interior_design_packages").select("id, project_id, package_code, package_name").order("package_name"),
+    client.from("interior_finish_schedules").select("id, project_id, schedule_code, schedule_name").order("schedule_name"),
+    client.from("interior_material_specs").select("id, project_id, spec_code, spec_name").order("spec_name")
   ]);
 
   PAGE_STATE.headers = headersRes.data || [];
   PAGE_STATE.lines = linesRes.data || [];
-  PAGE_STATE.projects = projectsRes.data || [];
+  PAGE_STATE.projects = (projectsRes.data || []).filter((row) => row.shared_project_id).map((row) => ({
+    id: row.id,
+    shared_project_id: row.shared_project_id,
+    project_code: row.project_code,
+    project_name: row.project_name,
+    project_title: row.project_title,
+    client_name: row.interior_clients?.client_name || null
+  }));
+  PAGE_STATE.projectLookup = new Map(PAGE_STATE.projects.map((row) => [String(row.shared_project_id), row]));
   PAGE_STATE.documents = documentsRes.data || [];
   PAGE_STATE.spaces = spacesRes.data || [];
   PAGE_STATE.packages = packagesRes.data || [];
@@ -54,6 +67,7 @@ async function loadData() {
 
 function render() {
   const selectedHeader = PAGE_STATE.headers.find((row) => row.id === PAGE_STATE.selectedHeaderId) || null;
+  const activeProjectId = selectedHeader?.project_id || PAGE_STATE.draftProjectId || "";
   const selectedLines = PAGE_STATE.lines.filter((row) => row.boq_header_id === PAGE_STATE.selectedHeaderId);
   renderModuleContent(`
     <section class="card">
@@ -77,8 +91,8 @@ function render() {
         <h4>Header</h4>
         <div class="int-grid">
           <div class="full"><label for="boqHeaderSelect">Open Header</label><select id="boqHeaderSelect"><option value="">Create New Header</option>${PAGE_STATE.headers.map((row) => `<option value="${row.id}" ${row.id === PAGE_STATE.selectedHeaderId ? 'selected' : ''}>${escapeHtml(row.boq_code)} - ${escapeHtml(row.boq_name)}</option>`).join('')}</select></div>
-          <div><label for="boqProjectId">Project *</label><select id="boqProjectId">${renderProjectOptions(selectedHeader?.project_id)}</select></div>
-          <div><label for="boqDocumentId">Primary Document</label><select id="boqDocumentId">${renderDocumentOptions(selectedHeader?.project_id, selectedHeader?.primary_document_id)}</select></div>
+          <div><label for="boqProjectId">Project *</label><select id="boqProjectId">${renderProjectOptions(activeProjectId)}</select></div>
+          <div><label for="boqDocumentId">Primary Document</label><select id="boqDocumentId">${renderDocumentOptions(activeProjectId, selectedHeader?.primary_document_id)}</select></div>
           <div><label for="boqCode">BOQ Code *</label><input id="boqCode" type="text" value="${escapeAttr(selectedHeader?.boq_code || '')}" /></div>
           <div><label for="boqName">BOQ Name *</label><input id="boqName" type="text" value="${escapeAttr(selectedHeader?.boq_name || '')}" /></div>
           <div><label for="boqRevision">Revision *</label><input id="boqRevision" type="number" min="1" step="1" value="${escapeAttr(String(selectedHeader?.revision_no || 1))}" /></div>
@@ -132,12 +146,15 @@ function render() {
 function bindEvents() {
   document.getElementById('boqHeaderSelect')?.addEventListener('change', async (event) => {
     PAGE_STATE.selectedHeaderId = event.target.value || '';
+    const selectedHeader = PAGE_STATE.headers.find((row) => row.id === PAGE_STATE.selectedHeaderId) || null;
+    PAGE_STATE.draftProjectId = selectedHeader?.project_id || '';
     render();
     bindEvents();
   });
   document.getElementById('boqProjectId')?.addEventListener('change', () => {
     const selectedHeader = PAGE_STATE.headers.find((row) => row.id === PAGE_STATE.selectedHeaderId) || null;
     const projectId = document.getElementById('boqProjectId')?.value || selectedHeader?.project_id || null;
+    PAGE_STATE.draftProjectId = projectId || '';
     const docSelect = document.getElementById('boqDocumentId');
     if (docSelect) docSelect.innerHTML = renderDocumentOptions(projectId, docSelect.value);
   });
@@ -174,11 +191,11 @@ async function saveHeader() {
   }
   try {
     if (PAGE_STATE.selectedHeaderId) {
-      const { error } = await window.supabase.from('interior_boq_headers').update(payload).eq('id', PAGE_STATE.selectedHeaderId);
+      const { error } = await client.from('interior_boq_headers').update(payload).eq('id', PAGE_STATE.selectedHeaderId);
       if (error) throw error;
       showToast('BOQ header updated.', TOAST_TYPES.SUCCESS);
     } else {
-      const { data, error } = await window.supabase.from('interior_boq_headers').insert(payload).select('id').single();
+      const { data, error } = await client.from('interior_boq_headers').insert(payload).select('id').single();
       if (error) throw error;
       PAGE_STATE.selectedHeaderId = data.id;
       showToast('BOQ header created.', TOAST_TYPES.SUCCESS);
@@ -217,7 +234,7 @@ async function addLine() {
     return;
   }
   try {
-    const { error } = await window.supabase.from('interior_boq_lines').insert(payload);
+    const { error } = await client.from('interior_boq_lines').insert(payload);
     if (error) throw error;
     showToast('BOQ line added.', TOAST_TYPES.SUCCESS);
     await loadData();
@@ -232,7 +249,7 @@ async function deleteLine(event) {
   const lineId = event.currentTarget.dataset.boqDelete;
   if (!lineId || !window.confirm('Delete this BOQ line?')) return;
   try {
-    const { error } = await window.supabase.from('interior_boq_lines').delete().eq('id', lineId);
+    const { error } = await client.from('interior_boq_lines').delete().eq('id', lineId);
     if (error) throw error;
     showToast('BOQ line deleted.', TOAST_TYPES.SUCCESS);
     await loadData();
@@ -279,7 +296,7 @@ function editLine(event) {
         remarks: document.getElementById('boqLineRemarks')?.value?.trim() || null,
         updated_by: PAGE_STATE.boot?.appUser?.id || null
       };
-      const { error } = await window.supabase.from('interior_boq_lines').update(payload).eq('id', lineId);
+      const { error } = await client.from('interior_boq_lines').update(payload).eq('id', lineId);
       if (error) throw error;
       showToast('BOQ line updated.', TOAST_TYPES.SUCCESS);
       button.textContent = 'Add Line';
@@ -294,7 +311,7 @@ function editLine(event) {
 }
 
 function renderProjectOptions(selectedId) {
-  return `<option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.id}" ${String(selectedId||'')===String(row.id)?'selected':''}>${escapeHtml(row.project_code)} - ${escapeHtml(row.project_name)}</option>`).join('')}`;
+  return `<option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.shared_project_id}" ${String(selectedId||'')===String(row.shared_project_id)?'selected':''}>${escapeHtml(row.project_code || '')} - ${escapeHtml(row.project_title || row.project_name || '')}${row.client_name ? ` (${escapeHtml(row.client_name)})` : ''}</option>`).join('')}`;
 }
 
 function renderDocumentOptions(projectId, selectedId) {

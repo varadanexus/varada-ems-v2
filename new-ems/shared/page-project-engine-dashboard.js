@@ -1,7 +1,9 @@
 import { MODULES, ROUTES } from "../config/constants.js";
+import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 
 async function init() {
+  const client = getSupabaseClient();
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.PROJECT_ENGINE_DASHBOARD,
     pageTitle: "Project Engine Dashboard",
@@ -16,7 +18,7 @@ async function init() {
   // Get project statistics
   let projectStats = { total: 0, draft: 0, active: 0, completed: 0, onHold: 0 };
   try {
-    const { data, error } = await window.supabase
+    const { data, error } = await client
       .from('projects')
       .select('status')
       .eq('deleted_at', null);
@@ -35,7 +37,7 @@ async function init() {
   // Get approval statistics
   let approvalStats = { pending: 0, approved: 0, rejected: 0 };
   try {
-    const { data, error } = await window.supabase
+    const { data, error } = await client
       .from('project_approval_requests')
       .select('status')
       .eq('deleted_at', null);

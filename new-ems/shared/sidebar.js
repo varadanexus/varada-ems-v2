@@ -6,6 +6,10 @@ const MENU_BY_WORKSPACE = {
       title: "Admin Workspace",
       items: [
         { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.INTERIORS_DASHBOARD, label: "Dashboard", href: ROUTES.INTERIORS_DASHBOARD },
+        { module: MODULES.INTERIORS_CLIENTS, label: "Interior Clients", href: ROUTES.INTERIORS_CLIENTS },
+        { module: MODULES.PROJECT_ENGINE_PROJECTS, label: "Projects", href: ROUTES.PROJECT_ENGINE_PROJECTS },
+        { module: MODULES.PROJECT_ENGINE_APPROVALS, label: "Project Approvals", href: ROUTES.PROJECT_ENGINE_APPROVALS },
         { module: MODULES.USERS, label: "Users", href: ROUTES.USERS },
         { module: MODULES.ROLES, label: "Roles", href: ROUTES.ROLES },
         { module: MODULES.DIVISIONS, label: "Divisions", href: ROUTES.DIVISIONS },
@@ -112,24 +116,29 @@ const MENU_BY_WORKSPACE = {
       title: "Home",
       items: [
         { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
-        { module: MODULES.INTERIORS_DASHBOARD, label: "Dashboard", href: ROUTES.INTERIORS_DASHBOARD }
+        { module: MODULES.INTERIORS_DASHBOARD, label: "Dashboard", href: ROUTES.INTERIORS_DASHBOARD },
+        { module: MODULES.INTERIORS_LEADS, label: "Leads", href: ROUTES.INTERIORS_LEADS },
+        { module: MODULES.INTERIORS_CLIENTS, label: "Clients", href: ROUTES.INTERIORS_CLIENTS },
+        { module: MODULES.INTERIORS_PROJECTS, label: "Projects", href: ROUTES.INTERIORS_PROJECTS }
       ]
     },
     {
-      title: "Foundation",
+      title: "Workflow",
       items: [
-        { module: MODULES.INTERIORS_SPACES, label: "Spaces", href: ROUTES.INTERIORS_SPACES },
-        { module: MODULES.INTERIORS_DESIGN_PACKAGES, label: "Design Packages", href: ROUTES.INTERIORS_DESIGN_PACKAGES },
-        { module: MODULES.INTERIORS_FINISH_SCHEDULES, label: "Finish Schedules", href: ROUTES.INTERIORS_FINISH_SCHEDULES },
-        { module: MODULES.INTERIORS_MATERIAL_SPECS, label: "Material Specifications", href: ROUTES.INTERIORS_MATERIAL_SPECS }
+        { module: MODULES.INTERIORS_DESIGNS, label: "Designs", href: ROUTES.INTERIORS_DESIGNS },
+        { module: MODULES.INTERIORS_TEAM_WORKFORCE, label: "Team & Workforce", href: ROUTES.INTERIORS_TEAM_WORKFORCE },
+        { module: MODULES.INTERIORS_MATERIALS, label: "Materials", href: ROUTES.INTERIORS_MATERIALS },
+        { module: MODULES.INTERIORS_SITE_UPDATES, label: "Site Updates", href: ROUTES.INTERIORS_SITE_UPDATES },
+        { module: MODULES.INTERIORS_APPROVALS, label: "Approvals", href: ROUTES.INTERIORS_APPROVALS },
+        { module: MODULES.INTERIORS_BILLING, label: "Billing", href: ROUTES.INTERIORS_BILLING }
       ]
     },
     {
-      title: "Commercial",
+      title: "Insights",
       items: [
-        { module: MODULES.INTERIORS_BOQ, label: "BOQ", href: ROUTES.INTERIORS_BOQ },
-        { module: MODULES.INTERIORS_ESTIMATES, label: "Estimates", href: ROUTES.INTERIORS_ESTIMATES },
-        { module: MODULES.INTERIORS_QUOTATIONS, label: "Quotations", href: ROUTES.INTERIORS_QUOTATIONS }
+        { module: MODULES.INTERIORS_REPORTS, label: "Reports", href: ROUTES.INTERIORS_REPORTS },
+        { module: MODULES.INTERIORS_CLIENT_PORTAL, label: "Client Portal", href: ROUTES.INTERIORS_CLIENT_PORTAL },
+        { module: MODULES.INTERIORS_SETTINGS, label: "Settings", href: ROUTES.INTERIORS_SETTINGS }
       ]
     }
   ]

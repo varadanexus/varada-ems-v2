@@ -1,6 +1,9 @@
 import { MODULES, ROUTES, TOAST_TYPES } from "../config/constants.js";
+import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
+
+const client = getSupabaseClient();
 
 const PAGE_STATE = { boot: null, approvalRequests: [] };
 const STATUS_COLORS = { pending: "orange", approved: "green", rejected: "red", returned: "purple", cancelled: "gray" };
@@ -17,14 +20,14 @@ async function init() {
 
 async function loadApprovals() {
   try {
-    const { data: requests, error } = await window.supabase.from("project_approval_requests").select("*").order("created_at", { ascending: false });
+    const { data: requests, error } = await client.from("project_approval_requests").select("*").order("created_at", { ascending: false });
     if (error) throw error;
     const rows = requests || [];
     const projectIds = [...new Set(rows.map((row) => row.project_id).filter(Boolean))];
     const userIds = [...new Set(rows.flatMap((row) => [row.requested_by_app_user_id, row.assigned_approver_app_user_id, row.acted_by_app_user_id]).filter(Boolean))];
     const [projectRes, userRes] = await Promise.all([
-      projectIds.length ? window.supabase.from("projects").select("id,project_code,project_name").in("id", projectIds) : Promise.resolve({ data: [], error: null }),
-      userIds.length ? window.supabase.from("app_users").select("id,display_name,email").in("id", userIds) : Promise.resolve({ data: [], error: null })
+      projectIds.length ? client.from("projects").select("id,project_code,project_name").in("id", projectIds) : Promise.resolve({ data: [], error: null }),
+      userIds.length ? client.from("app_users").select("id,display_name,email").in("id", userIds) : Promise.resolve({ data: [], error: null })
     ]);
     if (projectRes.error) throw projectRes.error;
     if (userRes.error) throw userRes.error;
@@ -79,7 +82,7 @@ function bindEvents() {
 
 async function awaitUpdate(requestId, status, remarks) {
   try {
-    const { error } = await window.supabase.from("project_approval_requests").update({ status, acted_by_app_user_id: PAGE_STATE.boot?.appUser?.id || null, acted_at: new Date().toISOString(), remarks: remarks || null, updated_at: new Date().toISOString() }).eq("id", requestId);
+    const { error } = await client.from("project_approval_requests").update({ status, acted_by_app_user_id: PAGE_STATE.boot?.appUser?.id || null, acted_at: new Date().toISOString(), remarks: remarks || null, updated_at: new Date().toISOString() }).eq("id", requestId);
     if (error) throw error;
     showToast(`Request ${status} successfully`, TOAST_TYPES.SUCCESS);
     document.getElementById("approvalActionResult").textContent = `Request ${requestId} updated to ${status}`;

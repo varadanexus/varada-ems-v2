@@ -1705,3 +1705,37 @@ export async function listTripDocuments(tripId) {
   if (error) throw error;
   return data || [];
 }
+
+export async function listCentralPostingQueue({ status = "", search = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("posting_queue")
+    .select(`
+      id,queue_status,queue_attempt,requested_by,processed_by,last_error,created_at,updated_at,processed_at,
+      financial_documents(id,document_family,source_module,source_table,source_document_id,source_document_no,status,net_amount,gross_amount,document_postings(id,posting_sequence,posting_status))
+    `)
+    .order("created_at", { ascending: false });
+  if (status) query = query.eq("queue_status", status);
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = data || [];
+  if (!search) return rows;
+  const needle = String(search).toLowerCase();
+  return rows.filter((row) => [row.financial_documents?.source_document_no, row.financial_documents?.document_family, row.financial_documents?.source_module, row.queue_status].join(" ").toLowerCase().includes(needle));
+}
+
+export async function postCentralAccountsTransportDocument(financialDocumentId) {
+  if (!financialDocumentId) throw new Error("Financial document id is required");
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("execute_central_accounts_transport_posting", { p_financial_document_id: financialDocumentId });
+  if (error) throw error;
+  return data;
+}
+
+export async function postCentralAccountsInteriorsDocument(financialDocumentId) {
+  if (!financialDocumentId) throw new Error("Financial document id is required");
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("execute_central_accounts_interiors_posting", { p_financial_document_id: financialDocumentId });
+  if (error) throw error;
+  return data;
+}

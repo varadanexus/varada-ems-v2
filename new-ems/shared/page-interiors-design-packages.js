@@ -1,5 +1,8 @@
 import { MODULES, WORKSPACES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { getSupabaseClient } from "../config/supabase.js";
+
+const client = getSupabaseClient();
 
 async function init() {
   const boot = await bootstrapProtectedPage({
@@ -12,7 +15,7 @@ async function init() {
 
   let rows = [];
   try {
-    const { data } = await window.supabase
+    const { data } = await client
       .from("interior_design_packages")
       .select("id, package_code, package_name, package_type, status, revision_no, projects(project_code, project_name)")
       .order("created_at", { ascending: false })

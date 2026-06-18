@@ -1,5 +1,8 @@
 import { MODULES, WORKSPACES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { getSupabaseClient } from "../config/supabase.js";
+
+const client = getSupabaseClient();
 
 async function init() {
   const boot = await bootstrapProtectedPage({
@@ -15,7 +18,7 @@ async function init() {
 async function renderRegister() {
   let rows = [];
   try {
-    const { data } = await window.supabase
+    const { data } = await client
       .from("interior_spaces")
       .select("id, project_id, space_code, space_name, space_type, level_path, status, space_order, projects(project_code, project_name)")
       .order("created_at", { ascending: false })

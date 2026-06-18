@@ -25,7 +25,6 @@ export const ROUTES = {
   MASTER_UNITS: "/new-ems/modules/master-units/index.html",
   MASTER_TAX_CODES: "/new-ems/modules/master-tax-codes/index.html",
   MASTER_DOCUMENT_TYPES: "/new-ems/modules/master-document-types/index.html"
-  ,TRANSPORT_DASHBOARD: "/new-ems/modules/transportation-dashboard/index.html"
   ,TRANSPORT_TRUCK_OWNERS: "/new-ems/modules/transport-truck-owners/index.html"
   ,TRANSPORT_TRUCKS: "/new-ems/modules/transport-trucks/index.html"
   ,TRANSPORT_DRIVERS: "/new-ems/modules/transport-drivers/index.html"
@@ -57,6 +56,19 @@ export const ROUTES = {
   ,PROJECT_ENGINE_APPROVALS: "/new-ems/modules/project-engine-approvals/index.html"
   ,PROJECT_ENGINE_PROJECT_DETAILS: "/new-ems/modules/project-engine-project-details/index.html"
   ,INTERIORS_DASHBOARD: "/new-ems/modules/interiors-dashboard/index.html"
+  ,INTERIORS_LEADS: "/new-ems/modules/interiors-leads/index.html"
+  ,INTERIORS_CLIENTS: "/new-ems/modules/interiors-clients/index.html"
+  ,INTERIORS_PROJECTS: "/new-ems/modules/interiors-projects/index.html"
+  ,INTERIORS_PROJECT_DETAIL: "/new-ems/modules/interiors-project-detail/index.html"
+  ,INTERIORS_DESIGNS: "/new-ems/modules/interiors-designs/index.html"
+  ,INTERIORS_TEAM_WORKFORCE: "/new-ems/modules/interiors-team-workforce/index.html"
+  ,INTERIORS_MATERIALS: "/new-ems/modules/interiors-materials/index.html"
+  ,INTERIORS_SITE_UPDATES: "/new-ems/modules/interiors-site-updates/index.html"
+  ,INTERIORS_APPROVALS: "/new-ems/modules/interiors-approvals/index.html"
+  ,INTERIORS_BILLING: "/new-ems/modules/interiors-billing/index.html"
+  ,INTERIORS_REPORTS: "/new-ems/modules/interiors-reports/index.html"
+  ,INTERIORS_CLIENT_PORTAL: "/new-ems/modules/interiors-client-portal/index.html"
+  ,INTERIORS_SETTINGS: "/new-ems/modules/interiors-settings/index.html"
   ,INTERIORS_SPACES: "/new-ems/modules/interiors-spaces/index.html"
   ,INTERIORS_DESIGN_PACKAGES: "/new-ems/modules/interiors-design-packages/index.html"
   ,INTERIORS_FINISH_SCHEDULES: "/new-ems/modules/interiors-finish-schedules/index.html"
@@ -64,6 +76,8 @@ export const ROUTES = {
   ,INTERIORS_BOQ: "/new-ems/modules/interiors-boq/index.html"
   ,INTERIORS_ESTIMATES: "/new-ems/modules/interiors-estimates/index.html"
   ,INTERIORS_QUOTATIONS: "/new-ems/modules/interiors-quotations/index.html"
+  ,INTERIORS_VARIATION_REQUESTS: "/new-ems/modules/interiors-variation-requests/index.html"
+  ,INTERIORS_CHANGE_ORDERS: "/new-ems/modules/interiors-change-orders/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -145,6 +159,19 @@ export const MODULES = {
   ,PROJECT_ENGINE_APPROVALS: "project-engine-approvals"
   ,PROJECT_ENGINE_PROJECT_DETAILS: "project-engine-project-details"
   ,INTERIORS_DASHBOARD: "interiors-dashboard"
+  ,INTERIORS_LEADS: "interiors-leads"
+  ,INTERIORS_CLIENTS: "interiors-clients"
+  ,INTERIORS_PROJECTS: "interiors-projects"
+  ,INTERIORS_PROJECT_DETAIL: "interiors-project-detail"
+  ,INTERIORS_DESIGNS: "interiors-designs"
+  ,INTERIORS_TEAM_WORKFORCE: "interiors-team-workforce"
+  ,INTERIORS_MATERIALS: "interiors-materials"
+  ,INTERIORS_SITE_UPDATES: "interiors-site-updates"
+  ,INTERIORS_APPROVALS: "interiors-approvals"
+  ,INTERIORS_BILLING: "interiors-billing"
+  ,INTERIORS_REPORTS: "interiors-reports"
+  ,INTERIORS_CLIENT_PORTAL: "interiors-client-portal"
+  ,INTERIORS_SETTINGS: "interiors-settings"
   ,INTERIORS_SPACES: "interiors-spaces"
   ,INTERIORS_DESIGN_PACKAGES: "interiors-design-packages"
   ,INTERIORS_FINISH_SCHEDULES: "interiors-finish-schedules"
@@ -152,6 +179,8 @@ export const MODULES = {
   ,INTERIORS_BOQ: "interiors-boq"
   ,INTERIORS_ESTIMATES: "interiors-estimates"
   ,INTERIORS_QUOTATIONS: "interiors-quotations"
+  ,INTERIORS_VARIATION_REQUESTS: "interiors-variation-requests"
+  ,INTERIORS_CHANGE_ORDERS: "interiors-change-orders"
 };
 
 export const CONTROL_CENTER_MODULES = [

@@ -1,6 +1,6 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { PERMISSIONS } from "../config/roles.js";
-import { listCentralPostingQueue, postCentralAccountsTransportDocument } from "./admin-api.js";
+import { listCentralPostingQueue, postCentralAccountsInteriorsDocument, postCentralAccountsTransportDocument } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { hasAnyRolePermission } from "./permissions.js";
 import { qs, showToast } from "./utils.js";
@@ -93,7 +93,14 @@ async function postDocument(financialDocumentId) {
   if (!PAGE_STATE.canPost) return showToast("You do not have posting permission.", TOAST_TYPES.ERROR);
   if (!window.confirm("Execute posting for this financial document?")) return;
   try {
-    await postCentralAccountsTransportDocument(financialDocumentId);
+    const row = PAGE_STATE.rows.find((item) => String(item.financial_documents?.id) === String(financialDocumentId));
+    const sourceModule = row?.financial_documents?.source_module || "";
+    const family = row?.financial_documents?.document_family || "";
+    if (sourceModule === "interiors" || family === "INTERIOR_BILL") {
+      await postCentralAccountsInteriorsDocument(financialDocumentId);
+    } else {
+      await postCentralAccountsTransportDocument(financialDocumentId);
+    }
     showToast("Posting executed successfully.", TOAST_TYPES.SUCCESS);
     await loadQueue();
   } catch (error) {
