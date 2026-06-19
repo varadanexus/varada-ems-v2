@@ -1,0 +1,83 @@
+{
+  "token": "20260619101506",
+  "startedAt": "2026-06-19T04:45:06.127Z",
+  "steps": [
+    {
+      "step": "p2-design-approval",
+      "status": "PASS",
+      "result": {
+        "version": "11"
+      },
+      "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b-resolution\\p2-design-approval.png"
+    },
+    {
+      "step": "p1-central-accounts-posting",
+      "status": "PASS",
+      "result": {
+        "financialDocumentId": "a399f0cd-a32a-48b5-9b29-3fdf89d0a128",
+        "sourceDocumentNo": "INT-BILL-26-27-000011",
+        "rpcCheck": {
+          "data": {
+            "id": "a399f0cd-a32a-48b5-9b29-3fdf89d0a128",
+            "status": "posted",
+            "posting_queue": [
+              {
+                "queue_status": "posted"
+              }
+            ],
+            "document_postings": [
+              {
+                "posting_status": "posted",
+                "journal_entry_id": "569544d1-39ac-43df-9ce0-13f735a5dea4"
+              }
+            ],
+            "journal_entries": [
+              {
+                "id": "569544d1-39ac-43df-9ce0-13f735a5dea4",
+                "journal_no": "POST-202606-000020"
+              }
+            ]
+          },
+          "error": null
+        },
+        "duplicatePost": {
+          "data": null,
+          "error": {
+            "message": "Financial document already posted",
+            "details": null,
+            "code": "P0001"
+          }
+        }
+      },
+      "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b-resolution\\p1-central-accounts-posting.png"
+    },
+    {
+      "step": "p3-create-transport-trip",
+      "status": "PASS",
+      "result": {
+        "note": "TEST_TRANSPORT_TRIP_20260619101506",
+        "tripId": "d9d37a68-6071-4034-9553-894e30a02332",
+        "tripNo": "TR2606014",
+        "verifySql": "┌──────────────────────────────────────┬───────────┬───────────┬────────────────────────────────────┐\n│                  id                  │  trip_no  │  status   │               notes                │\n├──────────────────────────────────────┼───────────┼───────────┼────────────────────────────────────┤\n│ d9d37a68-6071-4034-9553-894e30a02332 │ TR2606014 │ completed │ TEST_TRANSPORT_TRIP_20260619101506 │\n└──────────────────────────────────────┴───────────┴───────────┴────────────────────────────────────┘\n"
+      },
+      "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b-resolution\\p3-create-transport-trip.png"
+    },
+    {
+      "step": "p3-p4-transport-bill-credit",
+      "status": "PASS",
+      "result": {
+        "billId": "97443ff2-3329-4ca7-966f-4e1b956c3e34"
+      },
+      "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b-resolution\\p3-p4-transport-bill-credit.png"
+    },
+    {
+      "step": "p5-transporter-statement-payment",
+      "status": "PASS",
+      "result": {
+        "statementId": "058f52be-4b0d-4860-8d02-12223911dc42"
+      },
+      "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b-resolution\\p5-transporter-statement-payment.png"
+    }
+  ],
+  "finishedAt": "2026-06-19T04:46:58.078Z"
+}

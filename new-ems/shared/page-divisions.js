@@ -8,6 +8,7 @@ initMasterDataPage({
   pageDescription: "Division management",
   workspace: WORKSPACES.ADMIN,
   table: MASTER_TABLES.divisions,
+  divisionScoped: false,
   fields: [
     { key: "code", label: "Code", required: true },
     { key: "name", label: "Name", required: true }

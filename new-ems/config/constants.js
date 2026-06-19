@@ -25,6 +25,7 @@ export const ROUTES = {
   MASTER_UNITS: "/new-ems/modules/master-units/index.html",
   MASTER_TAX_CODES: "/new-ems/modules/master-tax-codes/index.html",
   MASTER_DOCUMENT_TYPES: "/new-ems/modules/master-document-types/index.html"
+  ,TRANSPORT_DASHBOARD: "/new-ems/modules/transportation-dashboard/index.html"
   ,TRANSPORT_TRUCK_OWNERS: "/new-ems/modules/transport-truck-owners/index.html"
   ,TRANSPORT_TRUCKS: "/new-ems/modules/transport-trucks/index.html"
   ,TRANSPORT_DRIVERS: "/new-ems/modules/transport-drivers/index.html"

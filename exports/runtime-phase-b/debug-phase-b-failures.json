@@ -1,0 +1,45 @@
+{
+  "startedAt": "2026-06-18T19:25:02.894Z",
+  "centralAccounts": {
+    "sessionUserId": "82729e6c-95df-483b-a984-2e1cd3ab693a",
+    "appUser": {
+      "id": "ad80fadd-088a-4b73-81fd-1a64d6443300",
+      "auth_user_id": "82729e6c-95df-483b-a984-2e1cd3ab693a",
+      "email": "admin@varadanexus.com",
+      "status": "active",
+      "is_locked": false
+    },
+    "appUserError": null,
+    "currentAppUser": "ad80fadd-088a-4b73-81fd-1a64d6443300",
+    "currentAppUserError": null,
+    "canManage": true,
+    "canManageError": null,
+    "canView": true,
+    "canViewError": null,
+    "postData": null,
+    "postError": {
+      "message": "new row for relation \"journal_lines\" violates check constraint \"journal_lines_check\"",
+      "details": "Failing row contains (f04dd961-050f-4073-b8bd-eca6e6ed733d, ac440cc7-51bf-41bb-a752-366ac11b18bb, 1, af366298-119c-455a-bc88-02d97ec628e7, d0e57bcf-b81c-47a9-b334-5dbe9379dc39, 5021a7de-b522-40af-a379-3f437a5acecc, 78b31faa-e1d3-4e36-96c8-c0a02f70bec2, b88461e5-b426-46d6-aaf5-16822de2db55, 0.00, 0.00, Interior bill receivable, 2026-06-18 19:25:09.284921+00).",
+      "hint": null,
+      "code": "23514"
+    }
+  },
+  "designVersion1": {
+    "bodyText": "EMS 2.0\nHOME\nCC\nControl Center\nD\nDashboard\nL\nLeads\nC\nClients\nP\nProjects\nWORKFLOW\nD\nDesigns\nT&\nTeam & Workforce\nM\nMaterials\nSU\nSite Updates\nA\nApprovals\nB\nBilling\nINSIGHTS\nR\nReports\nCP\nClient Portal\nS\nSettings\n☰\nEMS 2.0\nSearch modules, users, settings...\nAdmin\n◐\nadmin@varadanexus.com\nSUPER_ADMIN\nLogout\nDesigns\n\nManage design versions and client approval workflow for interior projects.\n\nDivision Scope: all\nDesigns\n\nClient design reviews move from draft to submitted, approved, rejected, or revision requested.\n\nProject *\nAll Projects\nPRJ-00006 - WEFWF\nPRJ-00007 - TEST_INTERIOR_TITLE_20260619003038\nDesign Version *\nTitle *\nStatus *\ndraft\nsubmitted\napproved\nrejected\nrevision_requested\nDescription\nDesign File URL\nUpload Design\nDesign Versions\nPROJECT\tDESIGN VERSION\tTITLE\tSTATUS\tUPLOADED DATE\tACTIONS\nPRJ-00006 - WEFWF\tVersion 1\tLA FLORA\nHG\tsubmitted\t18/06/2026, 16:38:58\tView Design Approve Request Changes Reject\nduplicate key value violates unique constraint \"uq_interior_designs_project_version\"",
+    "submitButtons": [],
+    "rows": [
+      "PRJ-00006 - WEFWF\tVersion 1\tLA FLORA\nHG\tsubmitted\t18/06/2026, 16:38:58\tView Design Approve Request Changes Reject"
+    ]
+  },
+  "designVersion2": {
+    "bodyText": "EMS 2.0\nHOME\nCC\nControl Center\nD\nDashboard\nL\nLeads\nC\nClients\nP\nProjects\nWORKFLOW\nD\nDesigns\nT&\nTeam & Workforce\nM\nMaterials\nSU\nSite Updates\nA\nApprovals\nB\nBilling\nINSIGHTS\nR\nReports\nCP\nClient Portal\nS\nSettings\n☰\nEMS 2.0\nSearch modules, users, settings...\nAdmin\n◐\nadmin@varadanexus.com\nSUPER_ADMIN\nLogout\nDesigns\n\nManage design versions and client approval workflow for interior projects.\n\nDivision Scope: all\nDesigns\n\nClient design reviews move from draft to submitted, approved, rejected, or revision requested.\n\nProject *\nAll Projects\nPRJ-00006 - WEFWF\nPRJ-00007 - TEST_INTERIOR_TITLE_20260619003038\nDesign Version *\nTitle *\nStatus *\ndraft\nsubmitted\napproved\nrejected\nrevision_requested\nDescription\nDesign File URL\nUpload Design\nDesign Versions\nPROJECT\tDESIGN VERSION\tTITLE\tSTATUS\tUPLOADED DATE\tACTIONS\nPRJ-00006 - WEFWF\tVersion 2\tTEST_INTERIOR_DEBUG_DESIGN_V2\ndebug version 2 probe\tdraft\t19/06/2026, 00:55:14\tView Design Submit For Approval\nPRJ-00006 - WEFWF\tVersion 1\tLA FLORA\nHG\tsubmitted\t18/06/2026, 16:38:58\tView Design Approve Request Changes Reject\nDesign uploaded.",
+    "submitButtons": [
+      "386e4fec-643d-468b-8dd7-7e25c3eac4fb"
+    ],
+    "rows": [
+      "PRJ-00006 - WEFWF\tVersion 2\tTEST_INTERIOR_DEBUG_DESIGN_V2\ndebug version 2 probe\tdraft\t19/06/2026, 00:55:14\tView Design Submit For Approval",
+      "PRJ-00006 - WEFWF\tVersion 1\tLA FLORA\nHG\tsubmitted\t18/06/2026, 16:38:58\tView Design Approve Request Changes Reject"
+    ]
+  },
+  "finishedAt": "2026-06-18T19:25:16.015Z"
+}

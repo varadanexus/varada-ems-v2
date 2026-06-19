@@ -4,11 +4,11 @@ create or replace function public.execute_central_accounts_interiors_posting(
   p_financial_document_id uuid
 )
 returns table (
-  financial_document_id uuid,
-  posting_id uuid,
-  posting_sequence text,
-  journal_entry_id uuid,
-  posting_status text
+  result_financial_document_id uuid,
+  result_posting_id uuid,
+  result_posting_sequence text,
+  result_journal_entry_id uuid,
+  result_posting_status text
 )
 language plpgsql
 security definer

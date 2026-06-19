@@ -48,6 +48,14 @@ async function loadData() {
   PAGE_STATE.designs = designsRes.data || [];
 }
 
+function resolveNextVersionNo(projectId) {
+  const versionNumbers = PAGE_STATE.designs
+    .filter((row) => String(row.project_id) === String(projectId))
+    .map((row) => Number(row.version_no || 0))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return versionNumbers.length ? Math.max(...versionNumbers) + 1 : 1;
+}
+
 function render() {
   const rows = PAGE_STATE.designs.filter((row) => !PAGE_STATE.selectedProjectId || String(row.project_id) === String(PAGE_STATE.selectedProjectId));
   renderModuleContent(`
@@ -96,12 +104,20 @@ function bindEvents() {
     PAGE_STATE.selectedProjectId = event.target.value || "";
     render();
     bindEvents();
+    syncSuggestedVersion();
   });
   document.getElementById("uploadDesignBtn")?.addEventListener("click", createDesign);
   document.querySelectorAll("[data-design-submit]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designSubmit, "submitted")));
   document.querySelectorAll("[data-design-approve]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designApprove, "approved")));
   document.querySelectorAll("[data-design-revision]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designRevision, "revision_requested")));
   document.querySelectorAll("[data-design-reject]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designReject, "rejected")));
+}
+
+function syncSuggestedVersion() {
+  const projectId = document.getElementById("designProjectId")?.value || "";
+  const versionInput = document.getElementById("designVersionNo");
+  if (!versionInput || !projectId) return;
+  versionInput.value = String(resolveNextVersionNo(projectId));
 }
 
 async function createDesign() {
@@ -135,8 +151,15 @@ async function createDesign() {
     await loadData();
     render();
     bindEvents();
+    syncSuggestedVersion();
   } catch (error) {
-    showToast(error?.message || "Failed to upload design.", TOAST_TYPES.ERROR);
+    const message = error?.message || "Failed to upload design.";
+    if (String(message).toLowerCase().includes("uq_interior_designs_project_version") || String(message).toLowerCase().includes("duplicate key value")) {
+      showToast("Design version already exists for this project. Use the suggested next version number.", TOAST_TYPES.ERROR);
+      syncSuggestedVersion();
+      return;
+    }
+    showToast(message, TOAST_TYPES.ERROR);
   } finally {
     PAGE_STATE.isSaving = false;
   }

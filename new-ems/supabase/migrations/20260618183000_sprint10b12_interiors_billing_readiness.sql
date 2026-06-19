@@ -71,10 +71,23 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_amount numeric(14,2);
+  v_tax_amount numeric(14,2);
 begin
+  select
+    coalesce(round(sum(coalesce(l.amount, 0))::numeric, 2), 0),
+    coalesce(h.tax_amount, 0)
+  into v_amount, v_tax_amount
+  from public.interior_billing_headers h
+  left join public.interior_billing_lines l
+    on l.billing_header_id = h.id
+  where h.id = p_billing_header_id
+  group by h.tax_amount;
+
   update public.interior_billing_headers h
-  set amount = coalesce((select round(sum(coalesce(l.amount, 0))::numeric, 2) from public.interior_billing_lines l where l.billing_header_id = h.id), 0),
-      total_amount = round(coalesce(amount, 0) + coalesce(tax_amount, 0), 2),
+  set amount = coalesce(v_amount, 0),
+      total_amount = round(coalesce(v_amount, 0) + coalesce(v_tax_amount, 0), 2),
       updated_at = now()
   where h.id = p_billing_header_id;
 end;

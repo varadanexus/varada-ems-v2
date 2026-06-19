@@ -87,7 +87,7 @@ async function createBill() {
   const projectId = document.getElementById("billProjectId")?.value || "";
   const billType = document.getElementById("billType")?.value || "advance";
   const billDate = document.getElementById("billDate")?.value || new Date().toISOString().slice(0,10);
-  const status = document.getElementById("billStatus")?.value || "draft";
+  const requestedStatus = document.getElementById("billStatus")?.value || "draft";
   const taxAmount = Number(document.getElementById("billTaxAmount")?.value || 0);
   const remarks = String(document.getElementById("billRemarks")?.value || "").trim() || null;
   const lineDescription = String(document.getElementById("billLineDescription")?.value || "").trim();
@@ -106,7 +106,7 @@ async function createBill() {
       bill_type: billType,
       bill_date: billDate,
       tax_amount: taxAmount,
-      status,
+      status: requestedStatus === "ready_for_accounts" ? "draft" : requestedStatus,
       remarks,
       created_by: PAGE_STATE.boot?.appUser?.id || null
     }).select("id").single();
@@ -119,9 +119,14 @@ async function createBill() {
       source_type: lineSourceType
     });
     if (lineError) throw lineError;
-    if (taxAmount > 0) {
-      const { error: recalcError } = await client.rpc("recalc_interior_billing_header_total", { p_billing_header_id: header.id });
-      if (recalcError) throw recalcError;
+    const { error: recalcError } = await client.rpc("recalc_interior_billing_header_total", { p_billing_header_id: header.id });
+    if (recalcError) throw recalcError;
+    if (requestedStatus === "ready_for_accounts") {
+      const { error: readyError } = await client
+        .from("interior_billing_headers")
+        .update({ status: "ready_for_accounts" })
+        .eq("id", header.id);
+      if (readyError) throw readyError;
     }
     showToast("Bill created.", TOAST_TYPES.SUCCESS);
     await loadData();
@@ -160,5 +165,6 @@ function labelForBillType(value) { return ({ advance: "Advance Bill", progress: 
 function projectName(sharedProjectId) { const row = PAGE_STATE.projects.find((item) => String(item.shared_project_id) === String(sharedProjectId)); return row ? `${row.project_code || ""} - ${row.project_title || row.project_name || "Project"}` : String(sharedProjectId || "-"); }
 function projectClientName(sharedProjectId) { const row = PAGE_STATE.projects.find((item) => String(item.shared_project_id) === String(sharedProjectId)); return row?.interior_clients?.client_name || "-"; }
 function formatMoney(value) { return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(Number(value || 0)); }
+function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char])); }
 
 init().catch((error) => { console.error(error); showToast(error?.message || "Failed to load Billing page.", TOAST_TYPES.ERROR); });

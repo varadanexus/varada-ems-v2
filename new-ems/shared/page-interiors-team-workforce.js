@@ -41,7 +41,10 @@ async function init() {
 async function loadData() {
   const [projectsRes, assignmentsRes, vendorsRes, usersRes] = await Promise.all([
     client.from("interior_projects").select("id, shared_project_id, project_code, project_name, project_title, status").order("project_name"),
-    client.from("interior_project_team").select("*, app_users(id, display_name, email), interior_vendors(id, vendor_name, vendor_type, phone)").order("assigned_at", { ascending: false }),
+    client
+      .from("interior_project_team")
+      .select("*, app_users!interior_project_team_app_user_id_fkey(id, display_name, email), interior_vendors(id, vendor_name, vendor_type, phone)")
+      .order("assigned_at", { ascending: false }),
     PAGE_STATE.divisionId
       ? client.from("interior_vendors").select("*").eq("division_id", PAGE_STATE.divisionId).order("vendor_name")
       : Promise.resolve({ data: [], error: null }),

@@ -1,0 +1,179 @@
+{
+  "token": "20260619003038",
+  "startedAt": "2026-06-18T19:00:38.841Z",
+  "fixtures": {
+    "transportClientId": "cd9e6da9-c5d3-4fff-8cf9-169981191d24",
+    "transportTransporterId": "dd7845a8-1928-4698-a9ec-9320b8c37f90",
+    "approvedTransporterStatementId": "fd26ce9d-9ede-4c18-ad4b-4ce8f32c745f",
+    "interiorClientId": "7565127c-e86f-4e37-b104-9e25d7c4e68c",
+    "existingInteriorProjectId": "bc846cb6-74d7-49e1-9aa6-b644308d4c9c"
+  },
+  "steps": [
+    {
+      "step": "interiors-client-create",
+      "status": "PASS",
+      "evidence": {
+        "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b\\interiors-client-create.png",
+        "sql": "┌──────────────────────────────────────┬─────────────────────────────────────┬─────────────┐\n│                  id                  │             client_name             │ client_code │\n├──────────────────────────────────────┼─────────────────────────────────────┼─────────────┤\n│ e118b2ec-cbe8-4362-9060-f4849689b68b │ TEST_INTERIOR_CLIENT_20260619003038 │ TI003038    │\n└──────────────────────────────────────┴─────────────────────────────────────┴─────────────┘\n",
+        "console": {
+          "console": [
+            {
+              "type": "log",
+              "text": "Live reload enabled."
+            }
+          ],
+          "pageErrors": [],
+          "responses": [],
+          "requestFailures": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "step": "interiors-project-create",
+      "status": "PASS",
+      "evidence": {
+        "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b\\interiors-project-create.png",
+        "sql": "┌──────────────────────────────────────┬──────────────┬──────────────────────────────────────┬────────────────────────────────────┐\n│                  id                  │ project_code │             project_name             │           project_title            │\n├──────────────────────────────────────┼──────────────┼──────────────────────────────────────┼────────────────────────────────────┤\n│ a53225f1-bdf1-4ab5-b729-158f46f1575e │ PRJ-00007    │ TEST_INTERIOR_PROJECT_20260619003038 │ TEST_INTERIOR_TITLE_20260619003038 │\n└──────────────────────────────────────┴──────────────┴──────────────────────────────────────┴────────────────────────────────────┘\n",
+        "console": {
+          "console": [
+            {
+              "type": "log",
+              "text": "Live reload enabled."
+            }
+          ],
+          "pageErrors": [],
+          "responses": [],
+          "requestFailures": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "step": "interiors-design-submit-approve",
+      "status": "FAIL",
+      "evidence": {},
+      "errors": [
+        "page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button[data-design-submit]')\u001b[22m\n\n    at createDesignAndApprove (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:155:14)\n    at async D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:299:7\n    at async recordStep (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:86:5)\n    at async main (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:297:5)"
+      ]
+    },
+    {
+      "step": "interiors-site-update",
+      "status": "PASS",
+      "evidence": {
+        "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b\\interiors-site-update.png",
+        "sql": "┌──────────────────────────────────────┬──────────────────────────────────────────┬──────────────────┐\n│                  id                  │               update_title               │ progress_percent │\n├──────────────────────────────────────┼──────────────────────────────────────────┼──────────────────┤\n│ b35c5bdc-614e-4249-8d86-341fa1598137 │ TEST_INTERIOR_SITE_UPDATE_20260619003038 │ 12.50            │\n└──────────────────────────────────────┴──────────────────────────────────────────┴──────────────────┘\n",
+        "console": {
+          "console": [
+            {
+              "type": "log",
+              "text": "Live reload enabled."
+            }
+          ],
+          "pageErrors": [],
+          "responses": [],
+          "requestFailures": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "step": "interiors-bill-bridge",
+      "status": "PASS",
+      "evidence": {
+        "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b\\interiors-bill-bridge.png",
+        "sql": "┌──────────────────────────────────────┬───────────────────────┬────────────────────┬──────────────────────────────────────┬───────────────┐\n│                  id                  │      bill_number      │       status       │        financial_document_id         │ queue_status  │\n├──────────────────────────────────────┼───────────────────────┼────────────────────┼──────────────────────────────────────┼───────────────┤\n│ 7f6b682f-4fac-481f-bad4-700e9fed893a │ INT-BILL-26-27-000002 │ ready_for_accounts │ 523d939d-b2d0-4ff9-8165-8bf3522a2c6b │ ready_to_post │\n└──────────────────────────────────────┴───────────────────────┴────────────────────┴──────────────────────────────────────┴───────────────┘\n",
+        "console": {
+          "console": [
+            {
+              "type": "log",
+              "text": "Live reload enabled."
+            }
+          ],
+          "pageErrors": [],
+          "responses": [],
+          "requestFailures": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "step": "central-accounts-post",
+      "status": "PASS",
+      "evidence": {
+        "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b\\central-accounts-post.png",
+        "sql": "┌───────────────────────┬───────────────────┬───────────────┬──────────────────┬────────────────┬────────────┐\n│  source_document_no   │      status       │ queue_status  │ posting_sequence │ posting_status │ journal_no │\n├───────────────────────┼───────────────────┼───────────────┼──────────────────┼────────────────┼────────────┤\n│ INT-BILL-26-27-000002 │ ready_for_posting │ ready_to_post │ NULL             │ NULL           │ NULL       │\n│ INT-BILL-26-27-000001 │ ready_for_posting │ ready_to_post │ NULL             │ NULL           │ NULL       │\n└───────────────────────┴───────────────────┴───────────────┴──────────────────┴────────────────┴────────────┘\n",
+        "console": {
+          "console": [
+            {
+              "type": "log",
+              "text": "Live reload enabled."
+            },
+            {
+              "type": "error",
+              "text": "Failed to load resource: the server responded with a status of 400 ()"
+            }
+          ],
+          "pageErrors": [],
+          "responses": [
+            {
+              "url": "https://ftejxcycoiagbslnzaab.supabase.co/rest/v1/rpc/execute_central_accounts_interiors_posting",
+              "status": 400,
+              "method": "POST"
+            }
+          ],
+          "requestFailures": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "step": "transport-master-create",
+      "status": "PASS",
+      "evidence": {
+        "screenshot": "D:\\Varada EMS 2.0\\exports\\runtime-phase-b\\transport-master-create.png",
+        "sql": [
+          "┌──────────────────────────────────────┬──────────────────────────────────────┐\n│                  id                  │             company_name             │\n├──────────────────────────────────────┼──────────────────────────────────────┤\n│ a4b69d9f-dc55-4daa-b70b-60706ad3bc04 │ TEST_TRANSPORT_CLIENT_20260619003038 │\n└──────────────────────────────────────┴──────────────────────────────────────┘\n",
+          "┌──────────────────────────────────────┬───────────────────────────────────────────┐\n│                  id                  │                   name                    │\n├──────────────────────────────────────┼───────────────────────────────────────────┤\n│ 48a92e0a-230f-4c99-bdb5-1b19baec1f76 │ TEST_TRANSPORT_TRANSPORTER_20260619003038 │\n└──────────────────────────────────────┴───────────────────────────────────────────┘\n"
+        ],
+        "console": {
+          "console": [
+            {
+              "type": "log",
+              "text": "Live reload enabled."
+            }
+          ],
+          "pageErrors": [],
+          "responses": [],
+          "requestFailures": []
+        }
+      },
+      "errors": []
+    },
+    {
+      "step": "transport-bill-approve",
+      "status": "FAIL",
+      "evidence": {},
+      "errors": [
+        "Error: No eligible transport trips found for client billing.\n    at createAndApproveTransportBill (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:226:21)\n    at async D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:347:7\n    at async recordStep (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:86:5)\n    at async main (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:345:5)"
+      ]
+    },
+    {
+      "step": "transport-credit-note-approve",
+      "status": "FAIL",
+      "evidence": {},
+      "errors": [
+        "Error: No approved bill available for credit note.\n    at createAndApproveCreditNote (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:240:30)\n    at async D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:356:7\n    at async recordStep (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:86:5)\n    at async main (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:354:5)"
+      ]
+    },
+    {
+      "step": "transport-payment-confirm",
+      "status": "FAIL",
+      "evidence": {},
+      "errors": [
+        "page.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button[data-tp-confirm]')\u001b[22m\n\n    at clickAndAcceptDialog (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:111:14)\n    at createAndConfirmTransporterPayment (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:265:9)\n    at async D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:365:7\n    at async recordStep (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:86:5)\n    at async main (D:\\Varada EMS 2.0\\scripts\\runtime-phase-b-playwright.cjs:363:5)"
+      ]
+    }
+  ],
+  "finishedAt": "2026-06-18T19:04:15.966Z"
+}

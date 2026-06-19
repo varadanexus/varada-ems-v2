@@ -14,7 +14,7 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.ROLES, label: "Roles", href: ROUTES.ROLES },
         { module: MODULES.DIVISIONS, label: "Divisions", href: ROUTES.DIVISIONS },
         { module: MODULES.SETTINGS, label: "Settings", href: ROUTES.SETTINGS },
-        { module: MODULES.AUDIT, label: "Audit Logs", href: ROUTES.SETTINGS }
+        { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, label: "Audit Events", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT }
       ]
     }
   ],

@@ -1,0 +1,127 @@
+{
+  "beforeSubmitUrl": "http://127.0.0.1:5500/new-ems/login.html",
+  "runtimeConfig": null,
+  "localStorageBefore": {
+    "ems_theme": "light"
+  },
+  "sessionStorageBefore": {
+    "IsThisFirstTime_Log_From_LiveServer": "true"
+  },
+  "fieldValuesBeforeSubmit": {
+    "email": "",
+    "passwordLength": 0
+  },
+  "domValuesImmediatelyBeforeSubmit": {
+    "email": "",
+    "passwordLength": 0
+  },
+  "afterSubmitUrl": "http://127.0.0.1:5500/new-ems/modules/dashboard/index.html",
+  "localStorageAfter": {
+    "ems_role": "admin",
+    "ems_theme": "light",
+    "sb-ftejxcycoiagbslnzaab-auth-token": "{\"access_token\":\"eyJhbGciOiJFUzI1NiIsImtpZCI6IjExN2YzNjk5LWU2NWEtNDVkNy1iZGQwLTQ2YmFlMTBmMThjZCIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2Z0ZWp4Y3ljb2lhZ2JzbG56YWFiLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI4MjcyOWU2Yy05NWRmLTQ4M2ItYTk4NC0yZTFjZDNhYjY5M2EiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgxODExNDgyLCJpYXQiOjE3ODE4MDc4ODIsImVtYWlsIjoiYWRtaW5AdmFyYWRhbmV4dXMuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbF92ZXJpZmllZCI6dHJ1ZX0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3ODE4MDc4ODJ9XSwic2Vzc2lvbl9pZCI6ImY5NmU0OWFhLTlkZTktNDBjZi04NzdlLWJmODgzNjU5YjliYiIsImlzX2Fub255bW91cyI6ZmFsc2V9.bep32k1V9_cKlv7Xb7DgfWCYgBqGU1cA4eS8ucJpMvRR9PDuhRz5HkhWzJzSO7klnGFPz0B_lnQs2GY3KLDP7w\",\"token_type\":\"bearer\",\"expires_in\":3600,\"expires_at\":1781811482,\"refresh_token\":\"t7hy6k52s4ig\",\"user\":{\"id\":\"82729e6c-95df-483b-a984-2e1cd3ab693a\",\"aud\":\"authenticated\",\"role\":\"authenticated\",\"email\":\"admin@varadanexus.com\",\"email_confirmed_at\":\"2026-05-31T18:45:29.229956Z\",\"phone\":\"\",\"confirmed_at\":\"2026-05-31T18:45:29.229956Z\",\"last_sign_in_at\":\"2026-06-18T18:38:02.791418538Z\",\"app_metadata\":{\"provider\":\"email\",\"providers\":[\"email\"]},\"user_metadata\":{\"email_verified\":true},\"identities\":[{\"identity_id\":\"55fc01b0-7ef7-4271-ad5f-6b41b21345c0\",\"id\":\"82729e6c-95df-483b-a984-2e1cd3ab693a\",\"user_id\":\"82729e6c-95df-483b-a984-2e1cd3ab693a\",\"identity_data\":{\"email\":\"admin@varadanexus.com\",\"email_verified\":false,\"phone_verified\":false,\"sub\":\"82729e6c-95df-483b-a984-2e1cd3ab693a\"},\"provider\":\"email\",\"last_sign_in_at\":\"2026-05-31T18:45:29.22751Z\",\"created_at\":\"2026-05-31T18:45:29.22757Z\",\"updated_at\":\"2026-05-31T18:45:29.22757Z\",\"email\":\"admin@varadanexus.com\"}],\"created_at\":\"2026-05-31T18:45:29.204353Z\",\"updated_at\":\"2026-06-18T18:38:02.849427Z\",\"is_anonymous\":false},\"weak_password\":null}"
+  },
+  "sessionStorageAfter": {
+    "IsThisFirstTime_Log_From_LiveServer": "true"
+  },
+  "bodyTextAfter": "",
+  "hasAuthTokenAfter": true,
+  "loginSucceeded": true,
+  "consoleMessages": [
+    {
+      "type": "log",
+      "text": "Live reload enabled."
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] current session {hasSession: false, userId: null, email: null}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] current session {hasSession: false, userId: null, email: null}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] login submit payload {email: admin@varadanexus.com, emailLength: 21, passwordLength: 10, activeElementId: null, formPresent: true}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] login step {step: before_loginWithPassword}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] signIn result {hasUser: true, userId: 82729e6c-95df-483b-a984-2e1cd3ab693a, email: admin@varadanexus.com, hasSession: true}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] lookup app_users by auth_user_id {authUserId: 82729e6c-95df-483b-a984-2e1cd3ab693a}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] app_users lookup result {found: true, appUserId: ad80fadd-088a-4b73-81fd-1a64d6443300, status: active, email: admin@varadanexus.com}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] login step {step: after_loginWithPassword, hasSession: true, userId: 82729e6c-95df-483b-a984-2e1cd3ab693a}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] login step {step: before_validateActiveUnlockedUser}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] current session {hasSession: true, userId: 82729e6c-95df-483b-a984-2e1cd3ab693a, email: admin@varadanexus.com}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] auth validation status {appUserId: ad80fadd-088a-4b73-81fd-1a64d6443300, status: active, is_locked: false}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] auth validation result {ok: true, reason: active_unlocked}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] login step {step: after_validateActiveUnlockedUser}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] login step {step: before_markUserLogin, userId: 82729e6c-95df-483b-a984-2e1cd3ab693a}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] login step {step: after_markUserLogin, userId: 82729e6c-95df-483b-a984-2e1cd3ab693a}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] redirect reason {reason: login_success, to: /new-ems/modules/dashboard/index.html}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] current session {hasSession: true, userId: 82729e6c-95df-483b-a984-2e1cd3ab693a, email: admin@varadanexus.com}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] current session {hasSession: true, userId: 82729e6c-95df-483b-a984-2e1cd3ab693a, email: admin@varadanexus.com}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] auth validation status {appUserId: ad80fadd-088a-4b73-81fd-1a64d6443300, status: active, is_locked: false}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] auth validation result {ok: true, reason: active_unlocked}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] current session {hasSession: true, userId: 82729e6c-95df-483b-a984-2e1cd3ab693a, email: admin@varadanexus.com}"
+    },
+    {
+      "type": "info",
+      "text": "[EMS_DEBUG] lookup app_users by auth_user_id {authUserId: 82729e6c-95df-483b-a984-2e1cd3ab693a}"
+    }
+  ],
+  "pageErrors": [],
+  "requestFailures": [],
+  "responseFailures": []
+}

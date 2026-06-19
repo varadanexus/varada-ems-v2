@@ -518,14 +518,23 @@ async function init() {
       openEditModal(row);
     }));
     body.querySelectorAll("button[data-u]").forEach((b)=>b.addEventListener("click", async ()=>{
-      const id = b.getAttribute("data-u"); const before = rows.find((x)=>x.id===id); const status = qs(`[data-s='${id}']`)?.value;
-      const nextIdx = TRIP_STATUS_FLOW.indexOf(status); const prevIdx = TRIP_STATUS_FLOW.indexOf(before?.status);
+      const id = b.getAttribute("data-u");
+      const before = rows.find((x)=>x.id===id);
+      const status = qs(`[data-s='${id}']`)?.value;
+      const nextIdx = TRIP_STATUS_FLOW.indexOf(status);
+      const prevIdx = TRIP_STATUS_FLOW.indexOf(before?.status);
       if (nextIdx < prevIdx) return showToast("Backward status transition not allowed", TOAST_TYPES.ERROR);
-      const updated = await updateTrip(id, { status });
-      const appUser = await getCurrentAppUser();
-      await addTripTimeline({ trip_id: id, status, remarks: "Status updated", changed_by: appUser?.id || null });
-      await logAuditEvent("trip_status_update", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trips", entityId: id, beforeData: before, afterData: updated, action: "update" });
-      await load();
+      try {
+        const updated = await updateTrip(id, { status });
+        const appUser = await getCurrentAppUser();
+        await addTripTimeline({ trip_id: id, status, remarks: "Status updated", changed_by: appUser?.id || null });
+        await logAuditEvent("trip_status_update", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trips", entityId: id, beforeData: before, afterData: updated, action: "update" });
+        showToast(`Trip marked ${status}.`, TOAST_TYPES.SUCCESS);
+        await load();
+      } catch (error) {
+        console.error("trip_status_update_failed", { id, status, error });
+        showToast(error?.message || `Failed to update trip status to ${status}.`, TOAST_TYPES.ERROR);
+      }
     }));
     body.querySelectorAll("button[data-d]").forEach((b)=>b.addEventListener("click", async ()=>{
       const id = b.getAttribute("data-d");
