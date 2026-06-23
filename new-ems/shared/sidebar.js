@@ -79,9 +79,9 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Future / Disabled",
       items: [
-        { module: MODULES.TRANSPORT_EXPENSES_PLACEHOLDER, label: "Expenses", href: ROUTES.TRANSPORT_DASHBOARD },
-        { module: MODULES.TRANSPORT_DOCUMENTS_PLACEHOLDER, label: "Documents", href: ROUTES.TRANSPORT_DASHBOARD },
-        { module: MODULES.TRANSPORT_REPORTS_PLACEHOLDER, label: "Reports", href: ROUTES.TRANSPORT_DASHBOARD }
+        { module: MODULES.TRANSPORT_EXPENSES_PLACEHOLDER, label: "Expenses", href: null, disabled: true },
+        { module: MODULES.TRANSPORT_DOCUMENTS_PLACEHOLDER, label: "Documents", href: null, disabled: true },
+        { module: MODULES.TRANSPORT_REPORTS_PLACEHOLDER, label: "Reports", href: null, disabled: true }
       ]
     }
   ],
@@ -148,8 +148,12 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
   const sectionsForWorkspace = MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN];
   const sections = sectionsForWorkspace.map((section) => {
     const items = section.items
-      .filter((item) => (allowedModules || []).includes(item.module))
+      .filter((item) => item.disabled || (allowedModules || []).includes(item.module))
       .map((item) => {
+        if (item.disabled) {
+          const icon = item.label.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase();
+          return `<span class="nav-link disabled" aria-disabled="true" title="${item.label} (Coming soon)"><span class="nav-icon">${icon}</span><span class="nav-text">${item.label}</span></span>`;
+        }
         const active = currentPath.includes(item.href) ? "active" : "";
         const icon = item.label.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase();
         return `<a class="nav-link ${active}" href="${item.href}" title="${item.label}"><span class="nav-icon">${icon}</span><span class="nav-text">${item.label}</span></a>`;

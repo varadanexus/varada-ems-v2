@@ -1,6 +1,6 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { markUserLogin } from "./admin-api.js";
-import { loginWithPassword, redirectIfAuthenticated, signOutSessionOnly, validateActiveUnlockedUser } from "./auth.js";
+import { loginWithPassword, redirectIfAuthenticated, redirectToResolvedPortal, signOutSessionOnly, validateActiveUnlockedUser } from "./auth.js";
 import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 
@@ -56,10 +56,9 @@ async function init() {
         await markUserLogin(loginData.user.id);
         debugLog("login step", { step: "after_markUserLogin", userId: loginData.user.id });
       }
-      localStorage.setItem("ems_role", "admin"); // Sprint 1 placeholder role bootstrap.
-      debugLog("redirect reason", { reason: "login_success", to: ROUTES.DASHBOARD });
+      debugLog("redirect reason", { reason: "login_success", to: "resolved_portal" });
       showToast("Login successful", TOAST_TYPES.SUCCESS);
-      window.location.replace(ROUTES.DASHBOARD);
+      await redirectToResolvedPortal();
     } catch (error) {
       debugLog("login error", {
         message: error?.message || "Login failed",
@@ -68,10 +67,17 @@ async function init() {
         code: error?.code || null,
         status: error?.status || null
       });
-      await signOutSessionOnly();
+      if (!loginDataIndicatesSuccess(error)) {
+        await signOutSessionOnly();
+      }
       showToast(error?.message || "Login failed", TOAST_TYPES.ERROR);
     }
   });
+}
+
+function loginDataIndicatesSuccess(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("no portal access") || message.includes("portal") || message.includes("role_lookup_unavailable");
 }
 
 init();

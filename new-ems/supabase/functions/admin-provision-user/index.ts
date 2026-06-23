@@ -50,9 +50,7 @@ Deno.serve(async (req) => {
     }
 
     if ((body.action || "provision") === "reset_password") {
-      const { error: resetErr } = await admin.auth.resetPasswordForEmail(body.email, {
-        redirectTo: `${supabaseUrl.replace('.supabase.co', '.supabase.co')}/auth/v1/verify`
-      });
+      const { error: resetErr } = await admin.auth.resetPasswordForEmail(body.email);
       if (resetErr) return new Response(JSON.stringify({ error: resetErr.message }), { status: 400, headers: corsHeaders });
 
       await admin.from("audit_logs").insert({

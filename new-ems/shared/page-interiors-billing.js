@@ -5,12 +5,13 @@ import { showToast } from "./utils.js";
 
 const client = getSupabaseClient();
 
-const PAGE_STATE = { boot: null, projects: [], bills: [], lines: [], clients: [], isSavingHeader: false };
+const PAGE_STATE = { boot: null, projects: [], bills: [], lines: [], clients: [], selectedProjectId: "", isSavingHeader: false };
 
 async function init() {
   const boot = await bootstrapProtectedPage({ moduleCode: MODULES.INTERIORS_BILLING, pageTitle: "Billing", pageDescription: "Prepare business billing workflow without any posting, GST, or accounting integration.", workspace: WORKSPACES.INTERIORS });
   if (!boot) return;
   PAGE_STATE.boot = boot;
+  PAGE_STATE.selectedProjectId = new URLSearchParams(window.location.search).get("project_id") || "";
   await loadData();
   render();
   bindEvents();
@@ -31,6 +32,10 @@ async function loadData() {
   PAGE_STATE.bills = billsRes.data || [];
   PAGE_STATE.lines = linesRes.data || [];
   PAGE_STATE.clients = clientsRes.data || [];
+}
+
+function resolveProjectByAnyId(projectId) {
+  return PAGE_STATE.projects.find((row) => String(row.id) === String(projectId) || String(row.shared_project_id) === String(projectId)) || null;
 }
 
 function render() {
@@ -54,7 +59,7 @@ function render() {
     <section class="card" style="margin-top:1rem;">
       <h4>Create Bill</h4>
       <div class="bl-grid" style="margin-top:1rem;">
-        <div><label for="billProjectId">Project *</label><select id="billProjectId"><option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.shared_project_id}">${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
+        <div><label for="billProjectId">Project *</label><select id="billProjectId"><option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.id}" ${String(PAGE_STATE.selectedProjectId) === String(row.id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
         <div><label for="billType">Bill Type *</label><select id="billType">${renderOptions(["advance", "progress", "change", "final"], "advance")}</select></div>
         <div><label for="billDate">Bill Date *</label><input id="billDate" type="date" value="${new Date().toISOString().slice(0,10)}" /></div>
         <div><label for="billStatus">Status *</label><select id="billStatus">${renderOptions(["draft", "submitted", "approved", "rejected", "ready_for_accounts"], "draft")}</select></div>
@@ -77,6 +82,9 @@ function render() {
 }
 
 function bindEvents() {
+  document.getElementById("billProjectId")?.addEventListener("change", (event) => {
+    PAGE_STATE.selectedProjectId = event.target.value || "";
+  });
   document.getElementById("createBillBtn")?.addEventListener("click", createBill);
   document.querySelectorAll("[data-submit-bill]").forEach((btn) => btn.addEventListener("click", () => updateBillStatus(btn.dataset.submitBill, "submitted")));
   document.querySelectorAll("[data-view-bill]").forEach((btn) => btn.addEventListener("click", () => showBillDetails(btn.dataset.viewBill)));
@@ -84,7 +92,8 @@ function bindEvents() {
 
 async function createBill() {
   if (PAGE_STATE.isSavingHeader) return;
-  const projectId = document.getElementById("billProjectId")?.value || "";
+  const selectedProject = resolveProjectByAnyId(document.getElementById("billProjectId")?.value || "");
+  const projectId = selectedProject?.shared_project_id || "";
   const billType = document.getElementById("billType")?.value || "advance";
   const billDate = document.getElementById("billDate")?.value || new Date().toISOString().slice(0,10);
   const requestedStatus = document.getElementById("billStatus")?.value || "draft";
@@ -163,7 +172,7 @@ function showBillDetails(id) {
 function renderOptions(options, selected) { return options.map((value) => `<option value="${value}" ${value === selected ? "selected" : ""}>${value}</option>`).join(""); }
 function labelForBillType(value) { return ({ advance: "Advance Bill", progress: "Progress Bill", change: "Change Bill", final: "Final Bill" }[value] || value); }
 function projectName(sharedProjectId) { const row = PAGE_STATE.projects.find((item) => String(item.shared_project_id) === String(sharedProjectId)); return row ? `${row.project_code || ""} - ${row.project_title || row.project_name || "Project"}` : String(sharedProjectId || "-"); }
-function projectClientName(sharedProjectId) { const row = PAGE_STATE.projects.find((item) => String(item.shared_project_id) === String(sharedProjectId)); return row?.interior_clients?.client_name || "-"; }
+function projectClientName(sharedProjectId) { const row = resolveProjectByAnyId(sharedProjectId); return row?.interior_clients?.client_name || "-"; }
 function formatMoney(value) { return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(Number(value || 0)); }
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char])); }
 

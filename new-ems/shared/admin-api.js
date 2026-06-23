@@ -14,7 +14,7 @@ export async function getAppUserByAuthId(authUserId) {
   const client = getSupabaseClient();
   const { data, error } = await client
     .from("app_users")
-    .select("id,auth_user_id,email,display_name,status,tenant_id")
+    .select("id,auth_user_id,email,display_name,status,is_locked,tenant_id")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
   if (error) throw error;
@@ -22,6 +22,7 @@ export async function getAppUserByAuthId(authUserId) {
     found: Boolean(data),
     appUserId: data?.id || null,
     status: data?.status || null,
+    is_locked: data?.is_locked ?? null,
     email: data?.email || null
   });
   return data;
@@ -101,7 +102,7 @@ export async function listUsers() {
   const client = getSupabaseClient();
   const { data: users, error } = await client
     .from("app_users")
-    .select("id,email,display_name,status,is_locked,last_login_at")
+    .select("id,auth_user_id,email,display_name,status,is_locked,last_login_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
 
@@ -203,20 +204,18 @@ export async function resolveWorkspaceDivision(workspace) {
   return null;
 }
 
-export async function assignUserRole(userId, roleId) {
+export async function syncUserAccessMappings(userId, roleIds = [], divisionIds = []) {
   const client = getSupabaseClient();
-  const { error: delErr } = await client.from("user_roles").delete().eq("user_id", userId);
-  if (delErr) throw delErr;
-  const { error } = await client.from("user_roles").insert({ user_id: userId, role_id: roleId });
-  if (error) throw error;
-}
-
-export async function assignUserDivision(userId, divisionId) {
-  const client = getSupabaseClient();
-  const { error: delErr } = await client.from("user_divisions").delete().eq("user_id", userId);
-  if (delErr) throw delErr;
-  if (!divisionId) return;
-  const { error } = await client.from("user_divisions").insert({ user_id: userId, division_id: divisionId, scope: "assigned" });
+  const normalizedRoleIds = Array.from(new Set((roleIds || []).filter(Boolean).map((value) => String(value))));
+  const normalizedDivisionIds = Array.from(new Set((divisionIds || []).filter(Boolean).map((value) => String(value))));
+  if (!normalizedRoleIds.length) {
+    throw new Error("At least one role is required");
+  }
+  const { error } = await client.rpc("sync_user_access_mappings", {
+    p_user_id: userId,
+    p_role_ids: normalizedRoleIds,
+    p_division_ids: normalizedDivisionIds
+  });
   if (error) throw error;
 }
 

@@ -31,16 +31,25 @@ async function loadData() {
   PAGE_STATE.photos = photosRes.data || [];
 }
 
+function resolveProjectByAnyId(projectId) {
+  return PAGE_STATE.projects.find((row) => String(row.id) === String(projectId) || String(row.shared_project_id) === String(projectId)) || null;
+}
+
+function resolveSelectedSharedProjectId() {
+  return resolveProjectByAnyId(PAGE_STATE.selectedProjectId)?.shared_project_id || "";
+}
+
 function render() {
-  const updates = PAGE_STATE.updates.filter((row) => !PAGE_STATE.selectedProjectId || String(row.project_id) === String(PAGE_STATE.selectedProjectId));
-  const photos = PAGE_STATE.photos.filter((row) => !PAGE_STATE.selectedProjectId || String(row.project_id) === String(PAGE_STATE.selectedProjectId));
+  const selectedSharedProjectId = resolveSelectedSharedProjectId();
+  const updates = PAGE_STATE.updates.filter((row) => !selectedSharedProjectId || String(row.project_id) === String(selectedSharedProjectId));
+  const photos = PAGE_STATE.photos.filter((row) => !selectedSharedProjectId || String(row.project_id) === String(selectedSharedProjectId));
   renderModuleContent(`
     <section class="card">
       <style>.su-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem 1rem}.su-grid .full{grid-column:1/-1}.su-grid label{display:block;font-weight:600;margin-bottom:.35rem}.su-grid input,.su-grid select,.su-grid textarea{width:100%}@media (max-width:980px){.su-grid{grid-template-columns:1fr}}</style>
       <h3>Site Updates</h3>
       <p class="muted">Managers can record progress updates and upload project photos for client-ready visibility later.</p>
       <div class="su-grid" style="margin-top:1rem;">
-        <div class="full"><label for="suProjectId">Project *</label><select id="suProjectId"><option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.shared_project_id}" ${String(PAGE_STATE.selectedProjectId) === String(row.shared_project_id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
+        <div class="full"><label for="suProjectId">Project *</label><select id="suProjectId"><option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.id}" ${String(PAGE_STATE.selectedProjectId) === String(row.id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
         <div><label for="suDate">Update Date *</label><input id="suDate" type="date" value="${new Date().toISOString().slice(0,10)}" /></div>
         <div><label for="suProgress">Progress % *</label><input id="suProgress" type="number" min="0" max="100" step="0.01" value="0" /></div>
         <div><label for="suTitle">Update Title *</label><input id="suTitle" type="text" /></div>
@@ -83,8 +92,9 @@ function bindEvents() {
 
 async function addSiteUpdate() {
   if (PAGE_STATE.isSavingUpdate || !PAGE_STATE.selectedProjectId) return;
+  const sharedProjectId = resolveSelectedSharedProjectId();
   const payload = {
-    project_id: PAGE_STATE.selectedProjectId,
+    project_id: sharedProjectId,
     update_date: document.getElementById("suDate")?.value || new Date().toISOString().slice(0,10),
     progress_percent: Number(document.getElementById("suProgress")?.value || 0),
     update_title: String(document.getElementById("suTitle")?.value || "").trim(),
@@ -105,8 +115,9 @@ async function addSiteUpdate() {
 
 async function uploadPhoto() {
   if (PAGE_STATE.isSavingPhoto || !PAGE_STATE.selectedProjectId) return;
+  const sharedProjectId = resolveSelectedSharedProjectId();
   const payload = {
-    project_id: PAGE_STATE.selectedProjectId,
+    project_id: sharedProjectId,
     site_update_id: document.getElementById("photoSiteUpdateId")?.value || null,
     photo_title: String(document.getElementById("photoTitle")?.value || "").trim(),
     photo_url: String(document.getElementById("photoUrl")?.value || "").trim() || null,
@@ -140,7 +151,7 @@ async function togglePhotoVisibility(id) {
 }
 
 function projectName(projectId) {
-  const row = PAGE_STATE.projects.find((item) => String(item.shared_project_id) === String(projectId));
+  const row = resolveProjectByAnyId(projectId);
   return row ? `${row.project_code || ""} - ${row.project_title || row.project_name || "Project"}` : String(projectId || "-");
 }
 

@@ -33,6 +33,7 @@ async function init() {
 
   PAGE_STATE.boot = boot;
   PAGE_STATE.divisionId = boot?.divisionId || boot?.currentDivisionId || boot?.divisionContext?.divisionId || boot?.appUser?.user_divisions?.[0]?.division_id || null;
+  PAGE_STATE.selectedProjectId = new URLSearchParams(window.location.search).get("project_id") || "";
   await loadData();
   render();
   bindEvents();
@@ -59,6 +60,14 @@ async function loadData() {
   PAGE_STATE.assignments = assignmentsRes.data || [];
   PAGE_STATE.vendors = vendorsRes.data || [];
   PAGE_STATE.appUsers = usersRes.data || [];
+}
+
+function resolveProjectByAnyId(projectId) {
+  return PAGE_STATE.projects.find((row) => String(row.id) === String(projectId) || String(row.shared_project_id) === String(projectId)) || null;
+}
+
+function resolveSelectedSharedProjectId() {
+  return resolveProjectByAnyId(PAGE_STATE.selectedProjectId)?.shared_project_id || "";
 }
 
 function render() {
@@ -95,7 +104,7 @@ function render() {
     <section class="card" style="margin-top:1rem;">
       <h4>Assign Member</h4>
       <div class="tw-grid" style="margin-top:1rem;">
-        <div><label for="teamProjectId">Project *</label><select id="teamProjectId"><option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.shared_project_id}" ${String(PAGE_STATE.selectedProjectId) === String(row.shared_project_id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
+        <div><label for="teamProjectId">Project *</label><select id="teamProjectId"><option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.id}" ${String(PAGE_STATE.selectedProjectId) === String(row.id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
         <div><label for="teamRole">Team Role *</label><select id="teamRole">${ALL_ROLES.map((role) => `<option value="${role}">${escapeHtml(labelForRole(role))}</option>`).join("")}</select></div>
         <div><label for="teamMemberType">Assignment Type *</label><select id="teamMemberType"><option value="app_user">Internal Team Member</option><option value="vendor">Vendor / External Team</option></select></div>
         <div><label for="teamAppUserId">Internal Member</label><select id="teamAppUserId"><option value="">Select Member</option>${PAGE_STATE.appUsers.map((row) => `<option value="${row.id}">${escapeHtml(row.display_name || row.email || row.id)}</option>`).join("")}</select></div>
@@ -156,7 +165,8 @@ function bindEvents() {
 
 async function assignMember() {
   if (PAGE_STATE.isSavingAssignment) return;
-  const projectId = document.getElementById("teamProjectId")?.value || "";
+  const selectedProject = resolveProjectByAnyId(document.getElementById("teamProjectId")?.value || "");
+  const projectId = selectedProject?.shared_project_id || "";
   const teamRole = document.getElementById("teamRole")?.value || "";
   const memberType = document.getElementById("teamMemberType")?.value || "app_user";
   const appUserId = document.getElementById("teamAppUserId")?.value || null;

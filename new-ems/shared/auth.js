@@ -1,4 +1,4 @@
-import { ROUTES } from "../config/constants.js";
+import { MODULES, PORTAL_TYPES, ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { getAllowedModulesForRoles, getAppUserByAuthId, getUserRoleCodes } from "./admin-api.js";
 import { logAuthEvent } from "./audit.js";
@@ -86,6 +86,104 @@ export async function requireAuth() {
   return session;
 }
 
+async function resolveInteriorsClientPortal(authUserId) {
+  if (!authUserId) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("interior_client_portal_users")
+    .select("id,interior_client_id,contact_name,email,access_status")
+    .eq("auth_user_id", authUserId)
+    .eq("access_status", "active")
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  if (!data?.length) return null;
+
+  const portalUserIds = data.map((row) => row.id).filter(Boolean);
+  const { data: accessRows, error: accessError } = await client
+    .from("interior_client_project_access")
+    .select("id,portal_user_id,interior_project_id,is_active")
+    .in("portal_user_id", portalUserIds)
+    .eq("is_active", true);
+  if (accessError) throw accessError;
+  if (!accessRows?.length) return null;
+
+  const interiorProjectIds = Array.from(new Set(accessRows.map((row) => row.interior_project_id).filter(Boolean)));
+  const { data: projects, error: projectError } = await client
+    .from("interior_projects")
+    .select("id,shared_project_id")
+    .in("id", interiorProjectIds);
+  if (projectError) throw projectError;
+  const validProjectIds = new Set((projects || []).filter((row) => row?.id && row?.shared_project_id).map((row) => String(row.id)));
+  const eligiblePortalUsers = data.filter((portalUser) => accessRows.some((accessRow) => String(accessRow.portal_user_id) === String(portalUser.id) && validProjectIds.has(String(accessRow.interior_project_id))));
+  if (!eligiblePortalUsers.length) return null;
+
+  return {
+    type: PORTAL_TYPES.INTERIORS_CLIENT,
+    title: "Interiors Client Portal",
+    subtitle: "Track project progress, designs, approvals, bills, and visible updates.",
+    route: ROUTES.INTERIORS_CLIENT_APP,
+    badge: `${eligiblePortalUsers.length} active client link${eligiblePortalUsers.length === 1 ? "" : "s"}`,
+    priority: 20,
+    context: { portalUsers: eligiblePortalUsers, accessRows }
+  };
+}
+
+function resolveInternalPortal(allowedModules = []) {
+  if (!Array.isArray(allowedModules) || !allowedModules.length) return null;
+  if (!allowedModules.includes(MODULES.DASHBOARD)) return null;
+  return {
+    type: PORTAL_TYPES.EMS_ADMIN,
+    title: "EMS Admin",
+    subtitle: "Open the EMS control center, staff modules, and management consoles.",
+    route: ROUTES.DASHBOARD,
+    badge: "Internal Workspace",
+    priority: 10
+  };
+}
+
+async function tryGetInternalPortal(appUserId) {
+  if (!appUserId) return null;
+  try {
+    const roleCodes = await getUserRoleCodes(appUserId);
+    const allowedModules = await getAllowedModulesForRoles(roleCodes);
+    return resolveInternalPortal(allowedModules);
+  } catch (error) {
+    debugLog("internal portal resolution skipped", {
+      reason: "role_lookup_unavailable",
+      message: error?.message || String(error || "")
+    });
+    return null;
+  }
+}
+
+export async function resolveAvailablePortals() {
+  const session = await getSession();
+  if (!session?.user?.id) return [];
+  const appUser = await getAppUserByAuthId(session.user.id);
+  if (!appUser || appUser.status !== "active" || appUser.is_locked) return [];
+  const portals = [];
+  const internalPortal = await tryGetInternalPortal(appUser.id);
+  if (internalPortal) portals.push(internalPortal);
+  const interiorsClientPortal = await resolveInteriorsClientPortal(session.user.id);
+  if (interiorsClientPortal) portals.push(interiorsClientPortal);
+  return portals.sort((a, b) => Number(a.priority || 999) - Number(b.priority || 999));
+}
+
+export async function redirectToResolvedPortal() {
+  const portals = await resolveAvailablePortals();
+  if (!portals.length) {
+    throw new Error("No portal access is assigned to this account. Contact administrator.");
+  }
+  if (portals.length === 1) {
+    debugLog("redirect reason", { reason: "single_portal", to: portals[0].route, portalType: portals[0].type });
+    window.location.replace(portals[0].route);
+    return true;
+  }
+  debugLog("redirect reason", { reason: "multiple_portals", to: ROUTES.PORTAL_SELECTOR, portals: portals.map((portal) => portal.type) });
+  window.location.replace(ROUTES.PORTAL_SELECTOR);
+  return true;
+}
+
 export async function redirectIfAuthenticated() {
   const session = await getSession();
   if (session) {
@@ -96,16 +194,21 @@ export async function redirectIfAuthenticated() {
       return false;
     }
 
-    const roleCodes = await getUserRoleCodes(appUser.id);
-    const allowedModules = await getAllowedModulesForRoles(roleCodes);
-    if (!allowedModules.includes("dashboard")) {
-      debugLog("redirect blocked", { reason: "authenticated_but_no_dashboard_permission", roleCodes, allowedModules });
+    const portals = await resolveAvailablePortals();
+    if (!portals.length) {
+      debugLog("redirect blocked", { reason: "authenticated_but_no_portal_access" });
       await getSupabaseClient().auth.signOut();
       return false;
     }
 
-    debugLog("redirect reason", { reason: "already_authenticated", to: ROUTES.DASHBOARD });
-    window.location.replace(ROUTES.DASHBOARD);
+    if (portals.length === 1) {
+      debugLog("redirect reason", { reason: "already_authenticated_single_portal", to: portals[0].route, portalType: portals[0].type });
+      window.location.replace(portals[0].route);
+      return true;
+    }
+
+    debugLog("redirect reason", { reason: "already_authenticated_multiple_portals", to: ROUTES.PORTAL_SELECTOR });
+    window.location.replace(ROUTES.PORTAL_SELECTOR);
     return true;
   }
   return false;
@@ -143,7 +246,7 @@ export async function logout() {
   const client = getSupabaseClient();
   const session = await getSession();
   await client.auth.signOut();
-  await logAuthEvent("logout", session?.user?.id || null);
+  if (session?.user?.id) await logAuthEvent("logout", session.user.id);
   if (isLoginPage) return;
   await new Promise((resolve) => setTimeout(resolve, 2200));
   window.location.replace(ROUTES.LOGIN);
@@ -153,5 +256,5 @@ export async function signOutSessionOnly() {
   const client = getSupabaseClient();
   const session = await getSession();
   await client.auth.signOut();
-  await logAuthEvent("logout", session?.user?.id || null);
+  if (session?.user?.id) await logAuthEvent("logout", session.user.id);
 }

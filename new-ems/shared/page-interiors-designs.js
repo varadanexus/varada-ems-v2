@@ -56,8 +56,17 @@ function resolveNextVersionNo(projectId) {
   return versionNumbers.length ? Math.max(...versionNumbers) + 1 : 1;
 }
 
+function resolveProjectByAnyId(projectId) {
+  return PAGE_STATE.projects.find((row) => String(row.interior_project_id) === String(projectId) || String(row.shared_project_id) === String(projectId)) || null;
+}
+
+function resolveSelectedSharedProjectId() {
+  return resolveProjectByAnyId(PAGE_STATE.selectedProjectId)?.shared_project_id || "";
+}
+
 function render() {
-  const rows = PAGE_STATE.designs.filter((row) => !PAGE_STATE.selectedProjectId || String(row.project_id) === String(PAGE_STATE.selectedProjectId));
+  const selectedSharedProjectId = resolveSelectedSharedProjectId();
+  const rows = PAGE_STATE.designs.filter((row) => !selectedSharedProjectId || String(row.project_id) === String(selectedSharedProjectId));
   renderModuleContent(`
     <section class="card">
       <style>
@@ -68,7 +77,7 @@ function render() {
       <h3>Designs</h3>
       <p class="muted">Client design reviews move from draft to submitted, approved, rejected, or revision requested.</p>
       <div class="ds-grid" style="margin-top:1rem;">
-        <div><label for="designProjectId">Project *</label><select id="designProjectId"><option value="">All Projects</option>${PAGE_STATE.projects.map((row) => `<option value="${row.shared_project_id}" ${String(PAGE_STATE.selectedProjectId) === String(row.shared_project_id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
+        <div><label for="designProjectId">Project *</label><select id="designProjectId"><option value="">All Projects</option>${PAGE_STATE.projects.map((row) => `<option value="${row.interior_project_id}" ${String(PAGE_STATE.selectedProjectId) === String(row.interior_project_id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
         <div><label for="designVersionNo">Design Version *</label><input id="designVersionNo" type="number" min="1" step="1" value="1" /></div>
         <div><label for="designTitle">Title *</label><input id="designTitle" type="text" maxlength="200" /></div>
         <div><label for="designStatus">Status *</label><select id="designStatus">${renderOptions(["draft", "submitted", "approved", "rejected", "revision_requested"], "draft")}</select></div>
@@ -114,7 +123,7 @@ function bindEvents() {
 }
 
 function syncSuggestedVersion() {
-  const projectId = document.getElementById("designProjectId")?.value || "";
+  const projectId = resolveProjectByAnyId(document.getElementById("designProjectId")?.value || "")?.shared_project_id || "";
   const versionInput = document.getElementById("designVersionNo");
   if (!versionInput || !projectId) return;
   versionInput.value = String(resolveNextVersionNo(projectId));
@@ -122,7 +131,8 @@ function syncSuggestedVersion() {
 
 async function createDesign() {
   if (PAGE_STATE.isSaving) return;
-  const projectId = document.getElementById("designProjectId")?.value || "";
+  const selectedProject = resolveProjectByAnyId(document.getElementById("designProjectId")?.value || "");
+  const projectId = selectedProject?.shared_project_id || "";
   const title = String(document.getElementById("designTitle")?.value || "").trim();
   const versionNo = Number(document.getElementById("designVersionNo")?.value || 0);
   const status = document.getElementById("designStatus")?.value || "draft";
@@ -180,7 +190,7 @@ async function updateDesignStatus(id, status) {
 }
 
 function projectName(projectId) {
-  const row = PAGE_STATE.projects.find((item) => String(item.shared_project_id) === String(projectId));
+  const row = resolveProjectByAnyId(projectId);
   return row ? `${row.project_code || ""} - ${row.project_title || row.project_name || "Project"}` : String(projectId || "-");
 }
 

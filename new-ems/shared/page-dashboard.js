@@ -29,7 +29,7 @@ async function init() {
       { module: MODULES.ROLES, title: "Roles", href: ROUTES.ROLES },
       { module: MODULES.DIVISIONS, title: "Divisions", href: ROUTES.DIVISIONS },
       { module: MODULES.SETTINGS, title: "Settings", href: ROUTES.SETTINGS },
-      { module: MODULES.AUDIT, title: "Audit Logs", href: ROUTES.SETTINGS }
+      { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, title: "Audit Logs", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT }
     ].filter((x) => (boot.allowedModules || []).includes(x.module));
 
     const masterCards = [

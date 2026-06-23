@@ -3,7 +3,9 @@ export const APP_NAME = "EMS 2.0";
 export const ROUTES = {
   ROOT: "/new-ems/index.html",
   LOGIN: "/new-ems/login.html",
+  PORTAL_SELECTOR: "/new-ems/modules/portal-selector/index.html",
   DASHBOARD: "/new-ems/modules/dashboard/index.html",
+  INTERIORS_CLIENT_APP: "/new-ems/modules/interiors-client-app/index.html",
   CENTRAL_ACCOUNTS_DASHBOARD: "/new-ems/modules/central-accounts-dashboard/index.html",
   CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS: "/new-ems/modules/central-accounts-financial-documents/index.html",
   CENTRAL_ACCOUNTS_POSTING_QUEUE: "/new-ems/modules/central-accounts-posting-queue/index.html",
@@ -111,7 +113,6 @@ export const MODULES = {
   USERS: "users",
   ROLES: "roles",
   SETTINGS: "settings",
-  AUDIT: "audit",
   DIVISIONS: "divisions",
   MASTER_CLIENTS: "master-clients",
   MASTER_CONTRACTORS: "master-contractors",
@@ -153,7 +154,6 @@ export const MODULES = {
   ,TRANSPORT_CLIENT_RECEIPTS: "transport-client-receipts"
   ,TRANSPORT_TRANSPORTER_PAYMENTS: "transport-transporter-payments"
   ,TRANSPORT_FINANCE_APPROVAL: "transport-finance-approval"
-  ,TRANSPORT_FINANCE_POSTING: "transport-finance-posting"
   ,TRANSPORT_LEDGER: "transport-ledger"
   ,PROJECT_ENGINE_DASHBOARD: "project-engine-dashboard"
   ,PROJECT_ENGINE_PROJECTS: "project-engine-projects"
@@ -213,4 +213,13 @@ export const WORKSPACES = {
   TRANSPORTATION: "transportation",
   ACCOUNTS: "accounts",
   INTERIORS: "interiors"
+};
+
+export const PORTAL_TYPES = {
+  EMS_ADMIN: "ems-admin",
+  INTERIORS_CLIENT: "interiors-client",
+  TRANSPORT_CLIENT: "transport-client",
+  VENDOR: "vendor",
+  EMPLOYEE: "employee",
+  ACCOUNTS: "accounts"
 };

@@ -1,0 +1,557 @@
+{
+  "timestamp": "2026-06-19T06:10:52.346Z",
+  "passes": [
+    {
+      "module": "auth",
+      "label": "Login succeeded — landed at http://127.0.0.1:5500/new-ems/login"
+    },
+    {
+      "module": "transport-dashboard",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-trips",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-trip-list",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-trip-details",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-create-trip",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-trip-dashboard",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-status-timeline",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-trip-expenses",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-client-billing",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-client-credit-notes",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-client-receipts",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-transporter-statements",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-transporter-payments",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-gst-invoices",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-finance-approval",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-ledger",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-truck-owners",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-trucks",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-drivers",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-transporters",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-clients",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-commodities",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-rate-master",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-route-master",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-client-mapping",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-transporter-mapping",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "transport-truck-agent-commission",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-dashboard",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-leads",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-clients",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-projects",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-project-detail",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-designs",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-team-workforce",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-materials",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-site-updates",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-approvals",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-billing",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-client-portal",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-spaces",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-design-packages",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-finish-schedules",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-material-specs",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-boq",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-estimates",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-quotations",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-variation-requests",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-change-orders",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-reports",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "interiors-settings",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "central-accounts-dashboard",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "central-accounts-financial-documents",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "central-accounts-posting-queue",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "central-accounts-journals",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "central-accounts-audit",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "central-accounts-receivables",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "central-accounts-payables",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "central-accounts-treasury",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "users",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "roles",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "divisions",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "settings",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "master-clients",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "master-contractors",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "master-transporters",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "master-agents",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "master-commodities",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "master-routes",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "master-units",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "master-tax-codes",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "master-document-types",
+      "label": "Page loaded clean (131 chars)"
+    },
+    {
+      "module": "central-accounts-dashboard",
+      "label": "Dashboard loaded (2 metric cards found)"
+    },
+    {
+      "module": "transport-trip-list",
+      "label": "Trip list loaded"
+    },
+    {
+      "module": "transport-trip-details",
+      "label": "Trip details handles missing ID gracefully"
+    },
+    {
+      "module": "interiors-projects",
+      "label": "Interiors projects loaded (131 chars)"
+    },
+    {
+      "module": "module-files",
+      "label": "All module index.html files exist"
+    },
+    {
+      "module": "shared-pages",
+      "label": "81 shared page controllers found"
+    }
+  ],
+  "issues": [
+    {
+      "module": "dashboard",
+      "title": "Console error",
+      "detail": "TypeError: Failed to fetch\n    at https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2:7:106655\n    at https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2:7:111638\n    at Nr (https://cdn.jsdelivr.net",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-dashboard",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-dashboard",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-dashboard",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-dashboard",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-dashboard",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/assets/css/app.css — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-dashboard",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/assets/css/responsive.css — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-dashboard",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/shared/page-project-engine-dashboard.js — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-dashboard",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/config/runtime.js — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-dashboard",
+      "title": "Nearly empty page",
+      "detail": "Body only 0 chars",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-projects",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-projects",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-projects",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-projects",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-projects",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/assets/css/app.css — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-projects",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/assets/css/responsive.css — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-projects",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/shared/page-project-engine-projects.js — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-projects",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/config/runtime.js — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-projects",
+      "title": "Nearly empty page",
+      "detail": "Body only 0 chars",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-approvals",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-approvals",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-approvals",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-approvals",
+      "title": "Console error",
+      "detail": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-approvals",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/assets/css/app.css — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-approvals",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/assets/css/responsive.css — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-approvals",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/config/runtime.js — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-approvals",
+      "title": "Failed network request",
+      "detail": "GET http://127.0.0.1:5500/shared/page-project-engine-approvals.js — net::ERR_ABORTED",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "project-engine-approvals",
+      "title": "Nearly empty page",
+      "detail": "Body only 0 chars",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "users",
+      "title": "Users page missing content",
+      "detail": "{\"hasTable\":false,\"hasUsers\":false,\"bodyLen\":131}",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "roles",
+      "title": "Roles page missing content",
+      "detail": "{\"hasRoles\":false,\"bodyLen\":131}",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "central-accounts-posting-queue",
+      "title": "Posting queue appears empty or broken",
+      "detail": "{\"bodyLen\":131,\"hasPostingContent\":false,\"errors\":null}",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "central-accounts-financial-documents",
+      "title": "Financial documents page appears empty",
+      "detail": "{\"bodyLen\":131,\"hasDocContent\":false}",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "transport-client-billing",
+      "title": "Client billing page appears empty or broken",
+      "detail": "{\"hasBillingContent\":false,\"hasTable\":false,\"bodyLen\":131}",
+      "file": null,
+      "fix": null
+    },
+    {
+      "module": "transport-commodities",
+      "title": "Commodity create form not functional",
+      "detail": "{\"result\":\"no-form\",\"detail\":\"No create form found on transport-commodities\"}",
+      "file": null,
+      "fix": null
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 import { MODULES, WORKSPACES } from "../config/constants.js";
 import { logUserRoleEvent } from "./audit.js";
-import { assignUserDivision, assignUserRole, listDivisions, listRoles, listUsers, provisionUserViaEdge, updateUserStatus } from "./admin-api.js";
+import { listDivisions, listRoles, listUsers, provisionUserViaEdge, syncUserAccessMappings, updateUserStatus } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
 import { updateUserSecurity } from "./admin-api.js";
@@ -116,8 +116,10 @@ function renderUsers() {
           <button class="btn" data-user-id="${u.id}" data-next-status="${nextStatus}">${nextStatus === "active" ? "Enable" : "Disable"}</button>
           <button class="btn" data-lock-user-id="${u.id}" data-next-lock="${u.is_locked ? "false" : "true"}">${u.is_locked ? "Unlock" : "Lock"}</button>
           <button class="btn" data-reset-user-id="${u.id}">Reset Password*</button>
-          <select data-role-user-id="${u.id}">${renderRoleOptions((u.user_roles || [])[0]?.roles?.id)}</select>
-          <select data-division-user-id="${u.id}">${renderDivisionOptions((u.user_divisions || [])[0]?.divisions?.id)}</select>
+          <label class="muted" style="display:block;margin-top:.35rem;">Roles</label>
+          <select data-role-user-id="${u.id}" multiple size="4" style="min-width:12rem;">${renderRoleOptions((u.user_roles || []).map((x) => x.roles?.id))}</select>
+          <label class="muted" style="display:block;margin-top:.35rem;">Divisions</label>
+          <select data-division-user-id="${u.id}" multiple size="4" style="min-width:12rem;">${renderDivisionOptions((u.user_divisions || []).map((x) => x.divisions?.id))}</select>
           <button class="btn" data-save-user-id="${u.id}">Save</button>
         </td>
       </tr>
@@ -146,12 +148,11 @@ function renderUsers() {
   body.querySelectorAll("button[data-save-user-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.getAttribute("data-save-user-id");
-      const roleId = qs(`select[data-role-user-id='${userId}']`)?.value || null;
-      const divisionId = qs(`select[data-division-user-id='${userId}']`)?.value || null;
+      const roleIds = getSelectedValues(qs(`select[data-role-user-id='${userId}']`));
+      const divisionIds = getSelectedValues(qs(`select[data-division-user-id='${userId}']`));
       try {
-        if (roleId) await assignUserRole(userId, roleId);
-        await assignUserDivision(userId, divisionId || null);
-        await logUserRoleEvent("user_mapping_change", { entityType: "app_users", entityId: userId, roleId, divisionId });
+        await syncUserAccessMappings(userId, roleIds, divisionIds);
+        await logUserRoleEvent("user_mapping_change", { entityType: "app_users", entityId: userId, roleIds, divisionIds });
         showToast("User mappings saved", "success");
         await loadUsers();
       } catch (error) {
@@ -208,12 +209,19 @@ async function loadMasterLists() {
   if (divisionSelect) divisionSelect.innerHTML = `<option value="">No Division</option>${renderDivisionOptions()}`;
 }
 
-function renderRoleOptions(selected = "") {
-  return allRoles.map((r) => `<option value="${r.id}" ${String(selected) === String(r.id) ? "selected" : ""}>${r.name}</option>`).join("");
+function renderRoleOptions(selected = []) {
+  const selectedSet = new Set((Array.isArray(selected) ? selected : [selected]).filter(Boolean).map((value) => String(value)));
+  return allRoles.map((r) => `<option value="${r.id}" ${selectedSet.has(String(r.id)) ? "selected" : ""}>${r.name}</option>`).join("");
 }
 
 function renderDivisionOptions(selected = "") {
-  return allDivisions.map((d) => `<option value="${d.id}" ${String(selected) === String(d.id) ? "selected" : ""}>${d.name}</option>`).join("");
+  const selectedSet = new Set((Array.isArray(selected) ? selected : [selected]).filter(Boolean).map((value) => String(value)));
+  return allDivisions.map((d) => `<option value="${d.id}" ${selectedSet.has(String(d.id)) ? "selected" : ""}>${d.name}</option>`).join("");
+}
+
+function getSelectedValues(select) {
+  if (!(select instanceof HTMLSelectElement)) return [];
+  return Array.from(select.selectedOptions || []).map((option) => option.value).filter(Boolean);
 }
 
 function bindCreateForm() {

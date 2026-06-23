@@ -245,7 +245,7 @@ function render() {
 
       <div class="ipd-panel ${PAGE_STATE.activeTab === "designs" ? "active" : ""}" id="project-tab-designs">
         <div class="module-card-grid">
-          <a class="quick-action" href="${ROUTES.INTERIORS_DESIGNS}?project_id=${project.shared_project_id || ""}"><strong>Open Designs Workspace</strong><br/><span class="muted">Upload design versions and move them through client approval.</span></a>
+          <a class="quick-action" href="${ROUTES.INTERIORS_DESIGNS}?project_id=${project.id || ""}"><strong>Open Designs Workspace</strong><br/><span class="muted">Upload design versions and move them through client approval.</span></a>
         </div>
         <div class="table-container" style="margin-top:1rem;"><table><thead><tr><th>Version</th><th>Title</th><th>Status</th><th>Uploaded</th><th>Actions</th></tr></thead><tbody>
           ${PAGE_STATE.designs.length ? PAGE_STATE.designs.map((row) => `<tr>
@@ -260,7 +260,7 @@ function render() {
 
       <div class="ipd-panel ${PAGE_STATE.activeTab === "team" ? "active" : ""}" id="project-tab-team">
         <div class="module-card-grid">
-          <a class="quick-action" href="${ROUTES.INTERIORS_TEAM_WORKFORCE}"><strong>Open Team & Workforce</strong><br/><span class="muted">Assign management, design, and execution teams.</span></a>
+          <a class="quick-action" href="${ROUTES.INTERIORS_TEAM_WORKFORCE}?project_id=${project.id || ""}"><strong>Open Team & Workforce</strong><br/><span class="muted">Assign management, design, and execution teams.</span></a>
         </div>
         <div class="module-card-grid" style="margin-top:1rem;">
           <article class="quick-action" style="display:block;cursor:default;text-decoration:none;"><strong>Management Team</strong><br/><span class="muted">${escapeHtml(renderAssignmentGroup(PAGE_STATE.teamAssignments, ["project_manager", "site_supervisor"]))}</span></article>
@@ -280,7 +280,7 @@ function render() {
 
       <div class="ipd-panel ${PAGE_STATE.activeTab === "materials" ? "active" : ""}" id="project-tab-materials">
         <div class="module-card-grid">
-          <a class="quick-action" href="${ROUTES.INTERIORS_MATERIALS}?project_id=${project.shared_project_id || ""}"><strong>Open Materials Workspace</strong><br/><span class="muted">Manage source mode, material plan, deliveries, and procurement tracker.</span></a>
+          <a class="quick-action" href="${ROUTES.INTERIORS_MATERIALS}?project_id=${project.id || ""}"><strong>Open Materials Workspace</strong><br/><span class="muted">Manage source mode, material plan, deliveries, and procurement tracker.</span></a>
         </div>
         <div class="hero-kpis" style="margin-top:1rem;">
           <span class="meta-pill">Project Material Source: ${escapeHtml(project.material_source_type || "company")}</span>
@@ -296,7 +296,7 @@ function render() {
 
       <div class="ipd-panel ${PAGE_STATE.activeTab === "progress" ? "active" : ""}" id="project-tab-progress">
         <div class="module-card-grid">
-          <a class="quick-action" href="${ROUTES.INTERIORS_SITE_UPDATES}?project_id=${project.shared_project_id || ""}"><strong>Open Site Updates</strong><br/><span class="muted">Add progress updates and upload site photos.</span></a>
+          <a class="quick-action" href="${ROUTES.INTERIORS_SITE_UPDATES}?project_id=${project.id || ""}"><strong>Open Site Updates</strong><br/><span class="muted">Add progress updates and upload site photos.</span></a>
         </div>
         <div class="hero-kpis" style="margin-top:1rem;">
           <span class="meta-pill">Current Progress %: ${escapeHtml(String(PAGE_STATE.siteUpdates[0]?.progress_percent ?? 0))}%</span>
@@ -347,7 +347,7 @@ function render() {
 
       <div class="ipd-panel ${PAGE_STATE.activeTab === "bills" ? "active" : ""}" id="project-tab-bills">
         <div class="module-card-grid">
-          <a class="quick-action" href="${ROUTES.INTERIORS_BILLING}"><strong>Open Billing Workspace</strong><br/><span class="muted">Create workflow bills and move them toward accounts readiness.</span></a>
+          <a class="quick-action" href="${ROUTES.INTERIORS_BILLING}?project_id=${project.id || ""}"><strong>Open Billing Workspace</strong><br/><span class="muted">Create workflow bills and move them toward accounts readiness.</span></a>
         </div>
         <div class="hero-kpis" style="margin-top:1rem;">
           <span class="meta-pill">Advance Bills: ${PAGE_STATE.billingHeaders.filter((row) => row.bill_type === "advance").length}</span>

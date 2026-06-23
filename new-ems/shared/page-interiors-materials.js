@@ -51,11 +51,20 @@ async function loadData() {
   PAGE_STATE.vendors = vendorsRes.data || [];
 }
 
+function resolveProjectByAnyId(projectId) {
+  return PAGE_STATE.projects.find((row) => String(row.id) === String(projectId) || String(row.shared_project_id) === String(projectId)) || null;
+}
+
+function resolveSelectedSharedProjectId() {
+  return resolveProjectByAnyId(PAGE_STATE.selectedProjectId)?.shared_project_id || "";
+}
+
 function render() {
-  const selectedProject = PAGE_STATE.projects.find((row) => String(row.shared_project_id) === String(PAGE_STATE.selectedProjectId)) || null;
+  const selectedProject = resolveProjectByAnyId(PAGE_STATE.selectedProjectId);
   const selectedSource = selectedProject?.material_source_type || "company";
-  const filteredPlans = PAGE_STATE.plans.filter((row) => !PAGE_STATE.selectedProjectId || String(row.project_id) === String(PAGE_STATE.selectedProjectId));
-  const filteredProcurements = PAGE_STATE.procurements.filter((row) => !PAGE_STATE.selectedProjectId || String(row.project_id) === String(PAGE_STATE.selectedProjectId));
+  const selectedSharedProjectId = selectedProject?.shared_project_id || "";
+  const filteredPlans = PAGE_STATE.plans.filter((row) => !selectedSharedProjectId || String(row.project_id) === String(selectedSharedProjectId));
+  const filteredProcurements = PAGE_STATE.procurements.filter((row) => !selectedSharedProjectId || String(row.project_id) === String(selectedSharedProjectId));
 
   const companyProjects = PAGE_STATE.projects.filter((row) => row.material_source_type !== "client").length;
   const clientProjects = PAGE_STATE.projects.filter((row) => row.material_source_type === "client").length;
@@ -85,7 +94,7 @@ function render() {
     <section class="card" style="margin-top:1rem;">
       <h4>Project Material Source</h4>
       <div class="mt-grid" style="margin-top:1rem;">
-        <div class="full"><label for="materialsProjectId">Project *</label><select id="materialsProjectId"><option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.shared_project_id}" ${String(PAGE_STATE.selectedProjectId) === String(row.shared_project_id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
+        <div class="full"><label for="materialsProjectId">Project *</label><select id="materialsProjectId"><option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.id}" ${String(PAGE_STATE.selectedProjectId) === String(row.id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
         ${selectedProject ? `<div class="full"><label>Material Source</label><div class="mt-radio"><label><input type="radio" name="materialSourceType" value="company" ${selectedSource === "company" ? "checked" : ""}/> Company Provides Materials</label><label><input type="radio" name="materialSourceType" value="client" ${selectedSource === "client" ? "checked" : ""}/> Client Provides Materials</label><button class="btn btn-sm" id="saveMaterialSourceBtn" type="button">Save Source</button></div></div>` : `<div class="full"><p class="muted">Select a project to manage materials.</p></div>`}
       </div>
     </section>
@@ -173,7 +182,7 @@ function bindEvents() {
 async function saveMaterialSource() {
   if (PAGE_STATE.isSavingSourceMode || !PAGE_STATE.selectedProjectId) return;
   const sourceType = document.querySelector("input[name='materialSourceType']:checked")?.value || "company";
-  const project = PAGE_STATE.projects.find((row) => String(row.shared_project_id) === String(PAGE_STATE.selectedProjectId));
+  const project = resolveProjectByAnyId(PAGE_STATE.selectedProjectId);
   if (!project) return;
   PAGE_STATE.isSavingSourceMode = true;
   try {
@@ -192,13 +201,18 @@ async function saveMaterialSource() {
 
 async function addMaterialPlan() {
   if (PAGE_STATE.isSavingPlan || !PAGE_STATE.selectedProjectId) return;
+  const selectedProject = resolveProjectByAnyId(PAGE_STATE.selectedProjectId) || resolveProjectByAnyId(document.getElementById("materialsProjectId")?.value || "");
+  const sharedProjectId = selectedProject?.shared_project_id || "";
+  const quantity = Number(document.getElementById("materialQuantity")?.value || 0);
+  const estimatedRate = Number(document.getElementById("materialRate")?.value || 0);
   const payload = {
-    project_id: PAGE_STATE.selectedProjectId,
+    project_id: sharedProjectId,
     material_name: String(document.getElementById("materialName")?.value || "").trim(),
     category: optionalValue("materialCategory"),
     unit: optionalValue("materialUnit"),
-    quantity: Number(document.getElementById("materialQuantity")?.value || 0),
-    estimated_rate: Number(document.getElementById("materialRate")?.value || 0),
+    quantity,
+    estimated_rate: estimatedRate,
+    estimated_amount: Number((quantity * estimatedRate).toFixed(2)),
     source_type: document.querySelector("input[name='materialSourceType']:checked")?.value || "company",
     status: document.getElementById("materialStatus")?.value || "planned",
     delivered_date: document.getElementById("materialDeliveredDate")?.value || null,
@@ -206,7 +220,7 @@ async function addMaterialPlan() {
     created_by: PAGE_STATE.boot?.appUser?.id || null,
     updated_by: PAGE_STATE.boot?.appUser?.id || null
   };
-  if (!payload.material_name || payload.quantity <= 0) {
+  if (!payload.project_id || !payload.material_name || payload.quantity <= 0) {
     showToast("Material name and quantity are required.", TOAST_TYPES.ERROR);
     return;
   }
@@ -227,8 +241,10 @@ async function addMaterialPlan() {
 
 async function createProcurement() {
   if (PAGE_STATE.isSavingProcurement || !PAGE_STATE.selectedProjectId) return;
+  const selectedProject = resolveProjectByAnyId(PAGE_STATE.selectedProjectId) || resolveProjectByAnyId(document.getElementById("materialsProjectId")?.value || "");
+  const sharedProjectId = selectedProject?.shared_project_id || "";
   const payload = {
-    project_id: PAGE_STATE.selectedProjectId,
+    project_id: sharedProjectId,
     material_plan_id: document.getElementById("procurementMaterialPlanId")?.value || null,
     vendor_id: document.getElementById("procurementVendorId")?.value || null,
     order_date: document.getElementById("procurementOrderDate")?.value || null,
@@ -238,7 +254,7 @@ async function createProcurement() {
     created_by: PAGE_STATE.boot?.appUser?.id || null,
     updated_by: PAGE_STATE.boot?.appUser?.id || null
   };
-  if (!payload.material_plan_id || payload.quantity <= 0) {
+  if (!payload.project_id || !payload.material_plan_id || payload.quantity <= 0) {
     showToast("Material plan and quantity are required.", TOAST_TYPES.ERROR);
     return;
   }

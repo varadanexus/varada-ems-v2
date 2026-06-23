@@ -33,7 +33,7 @@ async function initTransportFinanceApprovalPage() {
   if (!boot) return;
   PAGE_STATE.roleCodes = boot.roleCodes || [];
   PAGE_STATE.allowedModules = boot.allowedModules || [];
-  PAGE_STATE.canPost = hasAnyRolePermission(PAGE_STATE.roleCodes, MODULES.TRANSPORT_FINANCE_POSTING, PERMISSIONS.POST, { allowedModules: PAGE_STATE.allowedModules });
+  PAGE_STATE.canPost = hasAnyRolePermission(PAGE_STATE.roleCodes, MODULES.TRANSPORT_FINANCE_APPROVAL, PERMISSIONS.POST, { allowedModules: PAGE_STATE.allowedModules });
   PAGE_STATE.divisionId = boot.divisionId || null;
   if (!PAGE_STATE.divisionId) return showToast("Canonical Transportation division not found", TOAST_TYPES.ERROR);
   renderModuleContent(renderShell(boot.divisionLabel || "Transportation"));
@@ -118,7 +118,7 @@ async function postOne(sourceType, sourceId) {
   if (!window.confirm("Approve and post this document to ledger?")) return;
   try {
     const result = await POSTERS[sourceType]?.({ divisionId: PAGE_STATE.divisionId, sourceId });
-    await logAuditEvent("transport_finance_approval_post", { moduleCode: MODULES.TRANSPORT_FINANCE_POSTING, entityType: "transport_ledger_entries", entityId: result?.entry_no || sourceId, details: { source_type: sourceType, source_id: sourceId }, afterData: result, action: "create" });
+      await logAuditEvent("transport_finance_approval_post", { moduleCode: MODULES.TRANSPORT_FINANCE_APPROVAL, entityType: "transport_ledger_entries", entityId: result?.entry_no || sourceId, details: { source_type: sourceType, source_id: sourceId }, afterData: result, action: "create" });
     showToast(`Posted to ledger: ${result?.entry_no || ""}`, TOAST_TYPES.SUCCESS);
     await refreshPending();
   } catch (error) {
@@ -135,7 +135,7 @@ async function postAllVisible() {
   for (const row of rows) {
     try {
       const result = await POSTERS[sourceType]?.({ divisionId: PAGE_STATE.divisionId, sourceId: row.source_id });
-      await logAuditEvent("transport_finance_approval_post", { moduleCode: MODULES.TRANSPORT_FINANCE_POSTING, entityType: "transport_ledger_entries", entityId: result?.entry_no || row.source_id, details: { source_type: sourceType, source_id: row.source_id }, afterData: result, action: "create" });
+      await logAuditEvent("transport_finance_approval_post", { moduleCode: MODULES.TRANSPORT_FINANCE_APPROVAL, entityType: "transport_ledger_entries", entityId: result?.entry_no || row.source_id, details: { source_type: sourceType, source_id: row.source_id }, afterData: result, action: "create" });
     } catch (error) {
       showToast(error?.message || `Ledger posting failed for ${sourceType}`, TOAST_TYPES.ERROR);
       break;
