@@ -1654,6 +1654,49 @@ function getCentralTreasuryBalance(balanceByLedgerAccountId, ledgerAccountId) {
   return balanceByLedgerAccountId.has(key) ? balanceByLedgerAccountId.get(key) : null;
 }
 
+export async function getCentralAccountsReportingDataset() {
+  const client = getSupabaseClient();
+  const [
+    coaRes,
+    fyRes,
+    periodsRes,
+    journalsRes,
+    linesRes,
+    docsRes,
+    postingsRes,
+    recvRes,
+    payRes,
+    cashRes,
+    bankRes
+  ] = await Promise.all([
+    client.from("coa_accounts").select("id,code,name,account_class,account_group,parent_account_id,hierarchy_level,is_posting_allowed,is_control_account,is_active,effective_from,effective_to").is("deleted_at", null).order("code"),
+    client.from("fiscal_years").select("id,code,start_date,end_date,status,is_year_end_locked,closed_at,reopened_at").order("start_date", { ascending: false }),
+    client.from("accounting_periods").select("id,fiscal_year_id,period_code,period_name,period_index,start_date,end_date,status,closed_at,reopened_at").order("start_date", { ascending: false }),
+    client.from("journal_entries").select("id,journal_no,posting_sequence,accounting_period_id,fiscal_year_id,financial_document_id,entry_date,source_module,source_document_id,source_document_family,division_id,status,created_by,posted_by,posted_at,created_at").order("entry_date", { ascending: false }).limit(5000),
+    client.from("journal_lines").select("id,journal_entry_id,line_no,ledger_account_id,division_id,counterparty_dimension_id,project_dimension_id,profit_center_dimension_id,debit_amount,credit_amount,line_memo").limit(20000),
+    client.from("financial_documents").select("id,document_family,source_module,source_table,source_document_id,source_document_no,division_id,counterparty_dimension_id,project_dimension_id,profit_center_dimension_id,status,document_date,effective_date,gross_amount,taxable_amount,tax_amount,net_amount,finance_approved_at,posted_at").order("document_date", { ascending: false }).limit(5000),
+    client.from("document_postings").select("id,financial_document_id,journal_entry_id,posting_sequence,posting_status,accounting_period_id,posted_at,failed_at,failure_reason,created_at").order("created_at", { ascending: false }).limit(5000),
+    client.from("receivable_open_items").select("id,financial_document_id,division_id,counterparty_dimension_id,due_date,original_amount,open_amount,status,created_at,updated_at").limit(5000),
+    client.from("payable_open_items").select("id,financial_document_id,division_id,counterparty_dimension_id,due_date,original_amount,open_amount,status,created_at,updated_at").limit(5000),
+    client.from("cash_accounts").select("id,code,name,ledger_account_id,is_active,created_at").is("deleted_at", null),
+    client.from("bank_accounts").select("id,code,bank_name,account_title,masked_account_number,ifsc_code,ledger_account_id,is_active,created_at").is("deleted_at", null)
+  ]);
+  [coaRes, fyRes, periodsRes, journalsRes, linesRes, docsRes, postingsRes, recvRes, payRes, cashRes, bankRes].forEach((res) => { if (res.error) throw res.error; });
+  return {
+    coaAccounts: coaRes.data || [],
+    fiscalYears: fyRes.data || [],
+    accountingPeriods: periodsRes.data || [],
+    journalEntries: journalsRes.data || [],
+    journalLines: linesRes.data || [],
+    financialDocuments: docsRes.data || [],
+    documentPostings: postingsRes.data || [],
+    receivableOpenItems: recvRes.data || [],
+    payableOpenItems: payRes.data || [],
+    cashAccounts: cashRes.data || [],
+    bankAccounts: bankRes.data || []
+  };
+}
+
 export async function updateTripExpense(id, payload) {
   const client = getSupabaseClient();
   const { data, error } = await client

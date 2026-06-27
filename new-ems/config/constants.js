@@ -14,6 +14,7 @@ export const ROUTES = {
   CENTRAL_ACCOUNTS_RECEIVABLES: "/new-ems/modules/central-accounts-receivables/index.html",
   CENTRAL_ACCOUNTS_PAYABLES: "/new-ems/modules/central-accounts-payables/index.html",
   CENTRAL_ACCOUNTS_TREASURY: "/new-ems/modules/central-accounts-treasury/index.html",
+  CENTRAL_ACCOUNTS_REPORTING: "/new-ems/modules/central-accounts-reporting/index.html",
   USERS: "/new-ems/modules/users/index.html",
   ROLES: "/new-ems/modules/roles/index.html",
   SETTINGS: "/new-ems/modules/settings/index.html",
@@ -81,6 +82,7 @@ export const ROUTES = {
   ,INTERIORS_QUOTATIONS: "/new-ems/modules/interiors-quotations/index.html"
   ,INTERIORS_VARIATION_REQUESTS: "/new-ems/modules/interiors-variation-requests/index.html"
   ,INTERIORS_CHANGE_ORDERS: "/new-ems/modules/interiors-change-orders/index.html"
+  ,INTERIORS_PROJECT_CLOSURE: "/new-ems/modules/interiors-project-closure/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -107,6 +109,7 @@ export const MODULES = {
   CENTRAL_ACCOUNTS_POSTING_QUEUE: "central-accounts-posting-queue",
   CENTRAL_ACCOUNTS_JOURNALS: "central-accounts-journals",
   CENTRAL_ACCOUNTS_AUDIT: "central-accounts-audit",
+  CENTRAL_ACCOUNTS_REPORTING: "central-accounts-reporting",
   CENTRAL_ACCOUNTS_RECEIVABLES: "central-accounts-receivables",
   CENTRAL_ACCOUNTS_PAYABLES: "central-accounts-payables",
   CENTRAL_ACCOUNTS_TREASURY: "central-accounts-treasury",
@@ -182,6 +185,7 @@ export const MODULES = {
   ,INTERIORS_QUOTATIONS: "interiors-quotations"
   ,INTERIORS_VARIATION_REQUESTS: "interiors-variation-requests"
   ,INTERIORS_CHANGE_ORDERS: "interiors-change-orders"
+  ,INTERIORS_PROJECT_CLOSURE: "interiors-project-closure"
 };
 
 export const CONTROL_CENTER_MODULES = [

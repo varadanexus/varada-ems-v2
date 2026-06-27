@@ -28,6 +28,7 @@ async function init() {
       <div class="module-card-grid" style="margin-top:1rem;">
         <a class="quick-action" href="${ROUTES.CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS}">Financial Documents</a>
         <a class="quick-action" href="${ROUTES.CENTRAL_ACCOUNTS_POSTING_QUEUE}">Posting Queue</a>
+        <a class="quick-action" href="${ROUTES.CENTRAL_ACCOUNTS_REPORTING}">Financial Reporting</a>
       </div>
     </section>
   `);

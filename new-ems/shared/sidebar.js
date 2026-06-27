@@ -109,6 +109,12 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.CENTRAL_ACCOUNTS_PAYABLES, label: "Payables", href: ROUTES.CENTRAL_ACCOUNTS_PAYABLES },
         { module: MODULES.CENTRAL_ACCOUNTS_TREASURY, label: "Treasury", href: ROUTES.CENTRAL_ACCOUNTS_TREASURY }
       ]
+    },
+    {
+      title: "Financial Reporting",
+      items: [
+        { module: MODULES.CENTRAL_ACCOUNTS_REPORTING, label: "Reporting", href: ROUTES.CENTRAL_ACCOUNTS_REPORTING }
+      ]
     }
   ],
   [WORKSPACES.INTERIORS]: [
@@ -130,15 +136,15 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.INTERIORS_MATERIALS, label: "Materials", href: ROUTES.INTERIORS_MATERIALS },
         { module: MODULES.INTERIORS_SITE_UPDATES, label: "Site Updates", href: ROUTES.INTERIORS_SITE_UPDATES },
         { module: MODULES.INTERIORS_APPROVALS, label: "Approvals", href: ROUTES.INTERIORS_APPROVALS },
-        { module: MODULES.INTERIORS_BILLING, label: "Billing", href: ROUTES.INTERIORS_BILLING }
+        { module: MODULES.INTERIORS_BILLING, label: "Billing", href: ROUTES.INTERIORS_BILLING },
+        { module: MODULES.INTERIORS_PROJECT_CLOSURE, label: "Project Closure", href: ROUTES.INTERIORS_PROJECT_CLOSURE }
       ]
     },
     {
       title: "Insights",
       items: [
         { module: MODULES.INTERIORS_REPORTS, label: "Reports", href: ROUTES.INTERIORS_REPORTS },
-        { module: MODULES.INTERIORS_CLIENT_PORTAL, label: "Client Portal", href: ROUTES.INTERIORS_CLIENT_PORTAL },
-        { module: MODULES.INTERIORS_SETTINGS, label: "Settings", href: ROUTES.INTERIORS_SETTINGS }
+        { module: MODULES.INTERIORS_CLIENT_PORTAL, label: "Client Portal", href: ROUTES.INTERIORS_CLIENT_PORTAL }
       ]
     }
   ]
