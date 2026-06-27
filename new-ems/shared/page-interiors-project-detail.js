@@ -178,6 +178,7 @@ function render() {
     ["quote", "Quote"],
     ["changes", "Changes"],
     ["bills", "Bills"],
+    ["closure", "Closure"],
     ["documents", "Documents"],
     ["audit", "Audit"]
   ];
@@ -367,6 +368,12 @@ function render() {
           <p class="muted" style="margin-top:.75rem;">Ready For Billing: <strong>${isBillingReady() ? "YES" : "NO"}</strong></p>
         </div>
         <div class="table-container" style="margin-top:1rem;"><table><thead><tr><th>Bill Number</th><th>Bill Type</th><th>Status</th><th>Bill Date</th><th>Total</th><th>Actions</th></tr></thead><tbody>${PAGE_STATE.billingHeaders.length ? PAGE_STATE.billingHeaders.map((row) => `<tr><td>${escapeHtml(row.bill_number || "-")}</td><td>${escapeHtml(labelForBillType(row.bill_type))}</td><td>${escapeHtml(row.status || "draft")}</td><td>${escapeHtml(row.bill_date || "-")}</td><td>${formatMoney(row.total_amount || 0)}</td><td>${row.status === "draft" ? `<button class="btn btn-sm" data-bill-submit="${row.id}" type="button">Submit For Approval</button>` : ""} <a class="btn btn-sm" href="${ROUTES.INTERIORS_BILLING}">View Bill</a></td></tr>`).join("") : `<tr><td colspan="6" style="text-align:center;padding:2rem;">No bills created yet.</td></tr>`}</tbody></table></div>
+      </div>
+
+      <div class="ipd-panel ${PAGE_STATE.activeTab === "closure" ? "active" : ""}" id="project-tab-closure">
+        <div class="module-card-grid">
+          <a class="quick-action" href="${ROUTES.INTERIORS_PROJECT_CLOSURE}?project_id=${project.id || ""}"><strong>Open Project Closure</strong><br/><span class="muted">Closure checklist, snag list, handover, warranty register, completion certificate, and client signoff.</span></a>
+        </div>
       </div>
 
       <div class="ipd-panel ${PAGE_STATE.activeTab === "documents" ? "active" : ""}" id="project-tab-documents">

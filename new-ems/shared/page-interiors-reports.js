@@ -17,7 +17,10 @@ const PAGE_STATE = {
     progressBand: "all"
   },
   clients: [],
+  leads: [],
   projects: [],
+  boqs: [],
+  estimates: [],
   designs: [],
   quotations: [],
   billingHeaders: [],
@@ -28,6 +31,11 @@ const PAGE_STATE = {
   teamAssignments: [],
   approvalRequests: [],
   clientApprovals: [],
+  closures: [],
+  snagItems: [],
+  handoverItems: [],
+  warrantyItems: [],
+  completionCertificates: [],
   financialDocuments: [],
   receivables: []
 };
@@ -62,6 +70,9 @@ async function loadData() {
   const [
     projects,
     clients,
+    leads,
+    boqs,
+    estimates,
     designs,
     quotations,
     billingHeaders,
@@ -72,11 +83,19 @@ async function loadData() {
     teamAssignments,
     approvalRequests,
     clientApprovals,
+    closures,
+    snagItems,
+    handoverItems,
+    warrantyItems,
+    completionCertificates,
     financialDocuments,
     receivables
   ] = await Promise.all([
     safeLoadRows("projects", client.from("interior_projects").select("id, division_id, shared_project_id, project_code, project_name, project_title, status, priority, material_source_type, target_end_date, interior_client_id").eq("division_id", PAGE_STATE.divisionId).order("project_name")),
     safeLoadRows("clients", client.from("interior_clients").select("id, client_name").eq("division_id", PAGE_STATE.divisionId).order("client_name")),
+    safeLoadRows("leads", client.from("interior_leads").select("id, division_id, lead_name, source, status, estimated_budget, converted_client_id, converted_project_id, lost_reason, created_at").eq("division_id", PAGE_STATE.divisionId).order("created_at", { ascending: false })),
+    safeLoadRows("boq headers", client.from("interior_boq_headers").select("id, project_id, boq_code, boq_name, status, total_amount, created_at").order("created_at", { ascending: false })),
+    safeLoadRows("estimate headers", client.from("interior_estimate_headers").select("id, project_id, estimate_code, estimate_name, status, total_amount, created_at").order("created_at", { ascending: false })),
     safeLoadRows("designs", client.from("interior_designs").select("id, project_id, version_no, design_title, status, uploaded_at, updated_at").order("uploaded_at", { ascending: false })),
     safeLoadRows("quotations", client.from("interior_quotation_headers").select("id, project_id, quotation_code, quotation_name, status, total_amount, created_at").order("created_at", { ascending: false })),
     safeLoadRows("billing headers", client.from("interior_billing_headers").select("id, project_id, bill_number, bill_type, status, bill_date, total_amount, created_at").order("created_at", { ascending: false })),
@@ -87,6 +106,11 @@ async function loadData() {
     safeLoadRows("project team", client.from("interior_project_team").select("id, project_id, team_role, status, assigned_at").order("assigned_at", { ascending: false })),
     safeLoadRows("approval requests", client.from("project_approval_requests").select("id, project_id, approval_category, approval_type, status, requested_at, acted_at, remarks, requested_by_app_user_id, acted_by_app_user_id").order("requested_at", { ascending: false })),
     safeLoadRows("client approvals", client.from("interior_client_approvals").select("id, interior_project_id, approval_type, decision, remarks, decided_at, created_at").order("created_at", { ascending: false })),
+    safeLoadRows("project closures", client.from("interior_project_closures").select("id, project_id, status, target_handover_date, actual_handover_date, created_at, updated_at").order("created_at", { ascending: false })),
+    safeLoadRows("snag items", client.from("interior_snag_items").select("id, closure_id, title, severity, status, created_at, resolved_at").order("created_at", { ascending: false })),
+    safeLoadRows("handover items", client.from("interior_handover_items").select("id, closure_id, item_name, category, status, handed_over_at, created_at").order("created_at", { ascending: false })),
+    safeLoadRows("warranty items", client.from("interior_warranty_items").select("id, closure_id, item_name, category, vendor_name, warranty_start_date, warranty_end_date, created_at").order("created_at", { ascending: false })),
+    safeLoadRows("completion certificates", client.from("interior_completion_certificates").select("id, closure_id, certificate_no, issued_date, file_url, created_at").order("created_at", { ascending: false })),
     canViewAccounts
       ? safeLoadRows("financial documents", client.from("financial_documents").select("id, source_module, source_document_id, source_document_no, document_family, status, document_date, net_amount, posted_at").eq("source_module", "interiors").order("created_at", { ascending: false }))
       : Promise.resolve([]),
@@ -97,10 +121,15 @@ async function loadData() {
 
   PAGE_STATE.projects = projects;
   PAGE_STATE.clients = clients;
+  PAGE_STATE.leads = leads || [];
   const sharedProjectIds = new Set(PAGE_STATE.projects.map((row) => String(row.shared_project_id || "")).filter(Boolean));
   const interiorProjectIds = new Set(PAGE_STATE.projects.map((row) => String(row.id || "")).filter(Boolean));
-  const financialDocumentIds = new Set((financialDocuments || []).map((row) => String(row.id || "")).filter(Boolean));
+  const billingHeaderIds = new Set((billingHeaders || []).filter((row) => sharedProjectIds.has(String(row.project_id || ""))).map((row) => String(row.id || "")).filter(Boolean));
 
+  const closureIds = new Set((closures || []).filter((row) => sharedProjectIds.has(String(row.project_id || ""))).map((row) => String(row.id || "")).filter(Boolean));
+
+  PAGE_STATE.boqs = (boqs || []).filter((row) => sharedProjectIds.has(String(row.project_id || "")));
+  PAGE_STATE.estimates = (estimates || []).filter((row) => sharedProjectIds.has(String(row.project_id || "")));
   PAGE_STATE.designs = (designs || []).filter((row) => sharedProjectIds.has(String(row.project_id || "")));
   PAGE_STATE.quotations = (quotations || []).filter((row) => sharedProjectIds.has(String(row.project_id || "")));
   PAGE_STATE.billingHeaders = (billingHeaders || []).filter((row) => sharedProjectIds.has(String(row.project_id || "")));
@@ -111,7 +140,13 @@ async function loadData() {
   PAGE_STATE.teamAssignments = (teamAssignments || []).filter((row) => sharedProjectIds.has(String(row.project_id || "")));
   PAGE_STATE.approvalRequests = (approvalRequests || []).filter((row) => sharedProjectIds.has(String(row.project_id || "")));
   PAGE_STATE.clientApprovals = (clientApprovals || []).filter((row) => interiorProjectIds.has(String(row.interior_project_id || "")));
-  PAGE_STATE.financialDocuments = (financialDocuments || []).filter((row) => sharedProjectIds.has(String(row.source_document_id || "")));
+  PAGE_STATE.closures = (closures || []).filter((row) => sharedProjectIds.has(String(row.project_id || "")));
+  PAGE_STATE.snagItems = (snagItems || []).filter((row) => closureIds.has(String(row.closure_id || "")));
+  PAGE_STATE.handoverItems = (handoverItems || []).filter((row) => closureIds.has(String(row.closure_id || "")));
+  PAGE_STATE.warrantyItems = (warrantyItems || []).filter((row) => closureIds.has(String(row.closure_id || "")));
+  PAGE_STATE.completionCertificates = (completionCertificates || []).filter((row) => closureIds.has(String(row.closure_id || "")));
+  PAGE_STATE.financialDocuments = (financialDocuments || []).filter((row) => billingHeaderIds.has(String(row.source_document_id || "")));
+  const financialDocumentIds = new Set(PAGE_STATE.financialDocuments.map((row) => String(row.id || "")).filter(Boolean));
   PAGE_STATE.receivables = (receivables || []).filter((row) => financialDocumentIds.has(String(row.financial_document_id || "")));
 }
 
@@ -123,6 +158,15 @@ function render() {
   const financialRows = getFinancialRows();
   const resourceRows = getResourceRows();
   const approvalRows = getApprovalRows();
+  const leadRows = getLeadFunnelRows();
+  const clientRows = getClientSummaryRows();
+  const varianceRows = getVarianceRows();
+  const snagRows = getSnagAgingRows();
+  const handoverRows = getHandoverPendingRows();
+  const warrantyRows = getWarrantyExpiryRows();
+  const certificateRows = getCertificateStatusRows();
+  const signoffRows = getFinalSignoffRows();
+  const receivableRows = getReceivablesRows();
   const kpis = getExecutiveKpis(projectRows, financialRows, resourceRows, approvalRows);
 
   renderModuleContent(`
@@ -189,7 +233,7 @@ function render() {
 
     <section class="card ir-section">
       <div class="ir-title">
-        <div><h4>Progress Reports</h4><p class="muted">Project progress, last site update, pending update attention, and client-facing visibility snapshot.</p></div>
+        <div><h4>Progress Reports</h4><p class="muted">Project status, latest site update, visible photo count, and attention label for operations follow-up.</p></div>
         <div class="ir-actions">${renderExportButtons("progress", canExport)}</div>
       </div>
       ${projectRows.length ? `<div class="table-container" style="margin-top:1rem;"><table><thead><tr><th>Project</th><th>Status</th><th>Progress</th><th>Last Update</th><th>Photos</th><th>Attention</th></tr></thead><tbody>${projectRows.map((row) => `<tr><td><strong>${escapeHtml(row.projectLabel)}</strong><br/><span class="muted">${escapeHtml(row.clientName || "-")}</span></td><td>${escapeHtml(row.status)}</td><td>${escapeHtml(String(row.progressPercent))}%</td><td>${escapeHtml(row.lastUpdateTitle || "No updates")}${row.lastUpdateDate ? `<br/><span class="muted">${escapeHtml(formatDate(row.lastUpdateDate))}</span>` : ""}</td><td>${escapeHtml(String(row.totalPhotos))} total / ${escapeHtml(String(row.clientVisiblePhotos))} visible</td><td>${escapeHtml(row.attentionLabel)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="ir-empty">No progress report rows match the current filters.</div>`}
@@ -218,6 +262,16 @@ function render() {
       </div>
       ${approvalRows.length ? `<div class="table-container" style="margin-top:1rem;"><table><thead><tr><th>Project</th><th>Internal Pending</th><th>Design Pending</th><th>Client Pending</th><th>Approved</th><th>Rejected / Sent Back</th></tr></thead><tbody>${approvalRows.map((row) => `<tr><td><strong>${escapeHtml(row.projectLabel)}</strong></td><td>${escapeHtml(String(row.internalPending))}</td><td>${escapeHtml(String(row.designPending))}</td><td>${escapeHtml(String(row.clientPending))}</td><td>${escapeHtml(String(row.approvedCount))}</td><td>${escapeHtml(String(row.rejectedOrReturnedCount))}</td></tr>`).join("")}</tbody></table></div>` : `<div class="ir-empty">No approval report rows match the current filters.</div>`}
     </section>
+
+    ${renderSimpleReportSection("Lead Funnel", "Source, status, conversion, and lost-reason funnel for Interiors leads.", "lead", ["Source", "Status", "Leads", "Budget", "Converted", "Lost"], leadRows.map((row) => [row.source, row.status, row.leadCount, formatMoney(row.estimatedBudget), row.convertedCount, row.lostCount]), canExport)}
+    ${renderSimpleReportSection("Client Summary", "Client-wise projects, billing, receivables, and final signoff exposure.", "client", ["Client", "Projects", "Active", "Billing", "Open Receivables", "Pending Signoff"], clientRows.map((row) => [row.clientName, row.projectCount, row.activeProjects, formatMoney(row.billingTotal), formatMoney(row.openReceivables), row.pendingSignoffs]), canExport)}
+    ${renderSimpleReportSection("BOQ vs Estimate vs Quotation Variance", "Commercial variance by project using existing BOQ, Estimate, and Quotation headers.", "variance", ["Project", "BOQ", "Estimate", "Quotation", "Quote - Estimate", "Estimate - BOQ"], varianceRows.map((row) => [row.projectLabel, formatMoney(row.boqAmount), formatMoney(row.estimateAmount), formatMoney(row.quotationAmount), formatMoney(row.quoteEstimateVariance), formatMoney(row.estimateBoqVariance)]), canExport)}
+    ${renderSimpleReportSection("Snag Aging", "Open snag count and oldest open snag age by project.", "snag", ["Project", "Open Snags", "Resolved", "Verified", "Oldest Open Age"], snagRows.map((row) => [row.projectLabel, row.openSnags, row.resolvedSnags, row.verifiedSnags, `${row.oldestOpenAgeDays} day(s)`]), canExport)}
+    ${renderSimpleReportSection("Handover Pending", "Pending handover item count and target/actual handover dates.", "handover", ["Project", "Pending", "Handed Over", "Target", "Actual"], handoverRows.map((row) => [row.projectLabel, row.pendingItems, row.completedItems, formatDate(row.targetHandoverDate), formatDate(row.actualHandoverDate)]), canExport)}
+    ${renderSimpleReportSection("Warranty Expiry", "Warranty register grouped by project with expired and next-30-day exposure.", "warranty", ["Project", "Warranty Items", "Expired", "Expiring 30 Days", "Next Expiry"], warrantyRows.map((row) => [row.projectLabel, row.itemCount, row.expiredCount, row.expiringSoonCount, formatDate(row.nextExpiryDate)]), canExport)}
+    ${renderSimpleReportSection("Completion Certificate Status", "Completion certificate issued/pending status by project.", "certificate", ["Project", "Certificate Status", "Certificate No", "Issued Date", "File"], certificateRows.map((row) => [row.projectLabel, row.status, row.certificateNo, formatDate(row.issuedDate), row.hasFile ? "Yes" : "No"]), canExport)}
+    ${renderSimpleReportSection("Final Client Signoff Status", "Completion signoff requests and client decision state.", "signoff", ["Project", "Pending", "Approved", "Rejected/Revision", "Latest Decision"], signoffRows.map((row) => [row.projectLabel, row.pending, row.approved, row.rejectedOrRevision, row.latestDecision]), canExport)}
+    ${renderSimpleReportSection("Receivables / Payment Collection", "Posted/ready Interiors receivables and open collection exposure from Central Accounts.", "receivables", ["Bill", "Document Status", "Original", "Open", "Due Date", "Collection Status"], receivableRows.map((row) => [row.billNumber, row.documentStatus, formatMoney(row.originalAmount), formatMoney(row.openAmount), formatDate(row.dueDate), row.collectionStatus]), canExport)}
   `);
 }
 
@@ -238,8 +292,20 @@ function bindEvents() {
     bindEvents();
   });
   document.querySelectorAll("[data-report-export]").forEach((button) => {
-    button.addEventListener("click", () => exportReport(button.dataset.reportExport));
+    button.addEventListener("click", () => exportReport(button.dataset.reportExport, button.dataset.reportFormat || "csv"));
   });
+}
+
+function renderSimpleReportSection(title, description, reportKey, headers, rows, canExport) {
+  return `
+    <section class="card ir-section">
+      <div class="ir-title">
+        <div><h4>${escapeHtml(title)}</h4><p class="muted">${escapeHtml(description)}</p></div>
+        <div class="ir-actions">${renderExportButtons(reportKey, canExport)}</div>
+      </div>
+      ${rows.length ? `<div class="table-container" style="margin-top:1rem;"><table><thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : `<div class="ir-empty">No ${escapeHtml(title.toLowerCase())} rows match the current filters.</div>`}
+    </section>
+  `;
 }
 
 function getProjectReportRows() {
@@ -269,12 +335,15 @@ function getFinancialRows() {
     const sharedProjectId = String(project.shared_project_id || "");
     const quotes = PAGE_STATE.quotations.filter((row) => String(row.project_id) === sharedProjectId);
     const bills = PAGE_STATE.billingHeaders.filter((row) => String(row.project_id) === sharedProjectId);
-    const financialDocs = PAGE_STATE.financialDocuments.filter((row) => String(row.source_document_id) === sharedProjectId);
-    const receivables = PAGE_STATE.receivables.filter((row) => String(row.financial_documents?.source_document_id) === sharedProjectId);
+    const billIds = new Set(bills.map((row) => String(row.id)));
+    const financialDocs = PAGE_STATE.financialDocuments.filter((row) => billIds.has(String(row.source_document_id)));
+    const financialDocIds = new Set(financialDocs.map((row) => String(row.id)));
+    const receivables = PAGE_STATE.receivables.filter((row) => financialDocIds.has(String(row.financial_document_id)));
     const latestQuote = quotes[0] || null;
     const postedDocs = financialDocs.filter((row) => row.status === "posted");
     return {
       projectId: project.id,
+      sharedProjectId,
       projectLabel: projectLabel(project),
       latestQuoteAmount: Number(latestQuote?.total_amount || 0),
       latestQuoteStatus: latestQuote?.status || null,
@@ -330,6 +399,120 @@ function getApprovalRows() {
   });
 }
 
+function getLeadFunnelRows() {
+  const groups = new Map();
+  PAGE_STATE.leads.forEach((lead) => {
+    const key = `${lead.source || "other"}::${lead.status || "new"}`;
+    const row = groups.get(key) || { source: lead.source || "other", status: lead.status || "new", leadCount: 0, estimatedBudget: 0, convertedCount: 0, lostCount: 0 };
+    row.leadCount += 1;
+    row.estimatedBudget += Number(lead.estimated_budget || 0);
+    if (lead.status === "converted" || lead.converted_client_id || lead.converted_project_id) row.convertedCount += 1;
+    if (lead.status === "lost") row.lostCount += 1;
+    groups.set(key, row);
+  });
+  return Array.from(groups.values()).sort((a, b) => a.source.localeCompare(b.source) || a.status.localeCompare(b.status));
+}
+
+function getClientSummaryRows() {
+  const financialRows = getFinancialRows();
+  const signoffRows = getFinalSignoffRows();
+  return PAGE_STATE.clients.map((clientRow) => {
+    const projects = PAGE_STATE.projects.filter((project) => String(project.interior_client_id) === String(clientRow.id));
+    const projectIds = new Set(projects.map((project) => String(project.id)));
+    const sharedIds = new Set(projects.map((project) => String(project.shared_project_id)));
+    return {
+      clientId: clientRow.id,
+      clientName: clientRow.client_name || "-",
+      projectCount: projects.length,
+      activeProjects: projects.filter((project) => ["active", "on_hold"].includes(String(project.status || ""))).length,
+      billingTotal: PAGE_STATE.billingHeaders.filter((bill) => sharedIds.has(String(bill.project_id))).reduce((sum, bill) => sum + Number(bill.total_amount || 0), 0),
+      openReceivables: financialRows.filter((row) => sharedIds.has(String(row.sharedProjectId))).reduce((sum, row) => sum + Number(row.openReceivables || 0), 0),
+      pendingSignoffs: signoffRows.filter((row) => projectIds.has(String(row.interiorProjectId))).reduce((sum, row) => sum + Number(row.pending || 0), 0)
+    };
+  });
+}
+
+function getVarianceRows() {
+  return getScopedProjects().map((project) => {
+    const sharedProjectId = String(project.shared_project_id || "");
+    const boqAmount = latestAmount(PAGE_STATE.boqs.filter((row) => String(row.project_id) === sharedProjectId));
+    const estimateAmount = latestAmount(PAGE_STATE.estimates.filter((row) => String(row.project_id) === sharedProjectId));
+    const quotationAmount = latestAmount(PAGE_STATE.quotations.filter((row) => String(row.project_id) === sharedProjectId));
+    return { projectId: project.id, projectLabel: projectLabel(project), boqAmount, estimateAmount, quotationAmount, quoteEstimateVariance: quotationAmount - estimateAmount, estimateBoqVariance: estimateAmount - boqAmount };
+  });
+}
+
+function getClosureForProject(project) {
+  return PAGE_STATE.closures.find((row) => String(row.project_id) === String(project.shared_project_id)) || null;
+}
+
+function getSnagAgingRows() {
+  return getScopedProjects().map((project) => {
+    const closure = getClosureForProject(project);
+    const snags = closure ? PAGE_STATE.snagItems.filter((row) => String(row.closure_id) === String(closure.id)) : [];
+    const openSnags = snags.filter((row) => !["resolved", "verified"].includes(String(row.status || "")));
+    return { projectId: project.id, projectLabel: projectLabel(project), openSnags: openSnags.length, resolvedSnags: snags.filter((row) => row.status === "resolved").length, verifiedSnags: snags.filter((row) => row.status === "verified").length, oldestOpenAgeDays: oldestAgeDays(openSnags) };
+  });
+}
+
+function getHandoverPendingRows() {
+  return getScopedProjects().map((project) => {
+    const closure = getClosureForProject(project);
+    const items = closure ? PAGE_STATE.handoverItems.filter((row) => String(row.closure_id) === String(closure.id)) : [];
+    return { projectId: project.id, projectLabel: projectLabel(project), pendingItems: items.filter((row) => row.status !== "handed_over").length, completedItems: items.filter((row) => row.status === "handed_over").length, targetHandoverDate: closure?.target_handover_date || null, actualHandoverDate: closure?.actual_handover_date || null };
+  });
+}
+
+function getWarrantyExpiryRows() {
+  const today = startOfDay(new Date());
+  const soon = new Date(today.getTime() + 30 * 86400000);
+  return getScopedProjects().map((project) => {
+    const closure = getClosureForProject(project);
+    const items = closure ? PAGE_STATE.warrantyItems.filter((row) => String(row.closure_id) === String(closure.id)) : [];
+    const dates = items.map((row) => row.warranty_end_date).filter(Boolean).sort();
+    return { projectId: project.id, projectLabel: projectLabel(project), itemCount: items.length, expiredCount: items.filter((row) => row.warranty_end_date && startOfDay(new Date(row.warranty_end_date)) < today).length, expiringSoonCount: items.filter((row) => row.warranty_end_date && startOfDay(new Date(row.warranty_end_date)) >= today && startOfDay(new Date(row.warranty_end_date)) <= soon).length, nextExpiryDate: dates[0] || null };
+  });
+}
+
+function getCertificateStatusRows() {
+  return getScopedProjects().map((project) => {
+    const closure = getClosureForProject(project);
+    const certs = closure ? PAGE_STATE.completionCertificates.filter((row) => String(row.closure_id) === String(closure.id)) : [];
+    const latest = certs[0] || null;
+    return { projectId: project.id, projectLabel: projectLabel(project), status: latest ? "issued" : "pending", certificateNo: latest?.certificate_no || "-", issuedDate: latest?.issued_date || null, hasFile: Boolean(latest?.file_url) };
+  });
+}
+
+function getFinalSignoffRows() {
+  return getScopedProjects().map((project) => {
+    const rows = PAGE_STATE.clientApprovals.filter((row) => String(row.interior_project_id) === String(project.id) && row.approval_type === "completion");
+    const latest = rows[0] || null;
+    return { interiorProjectId: project.id, projectLabel: projectLabel(project), pending: rows.filter((row) => normalizeClientDecision(row.decision) === "pending").length, approved: rows.filter((row) => normalizeClientDecision(row.decision) === "approved").length, rejectedOrRevision: rows.filter((row) => ["rejected", "revision_requested"].includes(normalizeClientDecision(row.decision))).length, latestDecision: normalizeClientDecision(latest?.decision) };
+  });
+}
+
+function getReceivablesRows() {
+  const docMap = new Map(PAGE_STATE.financialDocuments.map((row) => [String(row.id), row]));
+  return PAGE_STATE.receivables.map((row) => {
+    const doc = docMap.get(String(row.financial_document_id)) || {};
+    return { billNumber: doc.source_document_no || doc.id || "-", documentStatus: doc.status || "-", originalAmount: Number(row.original_amount || 0), openAmount: Number(row.open_amount || 0), dueDate: row.due_date || doc.document_date || null, collectionStatus: row.status || (Number(row.open_amount || 0) > 0 ? "open" : "closed") };
+  });
+}
+
+function latestAmount(rows) {
+  return Number((rows || [])[0]?.total_amount || 0);
+}
+
+function oldestAgeDays(rows) {
+  if (!rows.length) return 0;
+  const oldest = rows.reduce((min, row) => Math.min(min, new Date(row.created_at || Date.now()).getTime()), Date.now());
+  return Math.max(0, Math.floor((Date.now() - oldest) / 86400000));
+}
+
+function startOfDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 function getExecutiveKpis(projectRows, financialRows, resourceRows, approvalRows) {
   const activeProjects = projectRows.filter((row) => ["active", "on_hold"].includes(String(row.status || ""))).length;
   const avgProgress = projectRows.length ? Math.round(projectRows.reduce((sum, row) => sum + Number(row.progressPercent || 0), 0) / projectRows.length) : 0;
@@ -382,17 +565,33 @@ function summarizeStatuses(statuses, orderedStatuses) {
 
 function renderExportButtons(reportKey, canExport) {
   if (!canExport) return `<span class="muted">No export access</span>`;
-  return `<button class="btn btn-sm" type="button" data-report-export="${reportKey}">Export View</button>`;
+  return `<button class="btn btn-sm" type="button" data-report-export="${reportKey}" data-report-format="csv">CSV</button><button class="btn btn-sm" type="button" data-report-export="${reportKey}" data-report-format="pdf">PDF</button><button class="btn btn-sm" type="button" data-report-export="${reportKey}" data-report-format="print">Print</button>`;
 }
 
-function exportReport(reportKey) {
-  const payloadMap = {
+function getReportRows(reportKey) {
+  return {
     progress: getProjectReportRows(),
     financial: getFinancialRows(),
     resource: getResourceRows(),
-    approval: getApprovalRows()
-  };
-  const rows = payloadMap[reportKey] || [];
+    approval: getApprovalRows(),
+    lead: getLeadFunnelRows(),
+    client: getClientSummaryRows(),
+    variance: getVarianceRows(),
+    snag: getSnagAgingRows(),
+    handover: getHandoverPendingRows(),
+    warranty: getWarrantyExpiryRows(),
+    certificate: getCertificateStatusRows(),
+    signoff: getFinalSignoffRows(),
+    receivables: getReceivablesRows()
+  }[reportKey] || [];
+}
+
+function exportReport(reportKey, format = "csv") {
+  const rows = getReportRows(reportKey);
+  if (format === "pdf" || format === "print") {
+    openReportPrintWindow(reportKey, rows, { autoPrint: format === "print" });
+    return;
+  }
   const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -403,6 +602,16 @@ function exportReport(reportKey) {
   link.remove();
   URL.revokeObjectURL(url);
   showToast(`${toTitleCase(reportKey)} report export started.`, TOAST_TYPES.SUCCESS);
+}
+
+function openReportPrintWindow(reportKey, rows, { autoPrint = false } = {}) {
+  const headers = rows[0] ? Object.keys(rows[0]) : ["Report", "Status"];
+  const bodyRows = rows.length ? rows.map((row) => headers.map((key) => row[key])) : [[toTitleCase(reportKey), "No data"]];
+  const popup = window.open("", "_blank", "noopener,noreferrer,width=960,height=720");
+  if (!popup) return showToast("Popup blocked. Please allow popups for PDF/Print exports.", TOAST_TYPES.ERROR);
+  popup.document.write(`<!doctype html><html><head><title>Interiors ${escapeHtml(toTitleCase(reportKey))} Report</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#111827}h1{margin:0 0 6px}p{color:#4b5563}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;font-size:11px;vertical-align:top}th{background:#f3f4f6}.stamp{margin-top:16px;font-size:12px;color:#6b7280}@media print{button{display:none}}</style></head><body><h1>Interiors ${escapeHtml(toTitleCase(reportKey))} Report</h1><p>Generated from existing Interiors production data. Use browser Save as PDF for PDF output.</p><button onclick="window.print()">Print / Save PDF</button><table><thead><tr>${headers.map((header) => `<th>${escapeHtml(toTitleCase(header))}</th>`).join("")}</tr></thead><tbody>${bodyRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table><div class="stamp">Generated ${escapeHtml(new Date().toLocaleString())}</div>${autoPrint ? `<script>window.onload=function(){window.print();};</script>` : ""}</body></html>`);
+  popup.document.close();
+  showToast(`${toTitleCase(reportKey)} ${autoPrint ? "print" : "PDF"} view opened.`, TOAST_TYPES.SUCCESS);
 }
 
 function toCsv(rows) {
