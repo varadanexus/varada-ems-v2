@@ -338,7 +338,10 @@ function sectionKeyToTitle(key) {
     billing: "Bills & Payments",
     documents: "Documents",
     timeline: "Timeline",
-    notifications: "Notifications"
+    notifications: "Notifications",
+    profile: "My Profile",
+    payments: "Payment History",
+    support: "Support Center"
   }[key] || "Dashboard");
 }
 
@@ -346,7 +349,8 @@ function sidebarNavGroups() {
   return [
     { title: "Workspace", items: [
       ["dashboard", "Dashboard", "⌂"],
-      ["overview", "Project Overview", "▥"]
+      ["overview", "Project Overview", "▥"],
+      ["profile", "My Profile", "◉"]
     ] },
     { title: "Progress", items: [
       ["designs", "Designs", "✎"],
@@ -355,6 +359,7 @@ function sidebarNavGroups() {
     ] },
     { title: "Financial", items: [
       ["billing", "Bills & Payments", "₹"],
+      ["payments", "Payment History", "◷"],
       ["documents", "Documents", "▤"]
     ] },
     { title: "Client Actions", items: [
@@ -362,7 +367,8 @@ function sidebarNavGroups() {
     ] },
     { title: "Communication", items: [
       ["timeline", "Timeline", "◷"],
-      ["notifications", "Notifications", "🔔"]
+      ["notifications", "Notifications", "🔔"],
+      ["support", "Support Center", "♥"]
     ] }
   ];
 }
@@ -558,6 +564,8 @@ function renderDashboard() {
         <article class="client-surface"><div class="client-surface-head"><h3>Outstanding Bills</h3><button class="btn btn-sm" data-section-tab="billing" type="button">Open Finance</button></div><div class="client-list compact" style="margin-top:1rem;">${activeProjectBills().slice(0, 3).map((row) => `<div class="client-list-item"><strong>${escapeHtml(row.bill_number || "Invoice")}</strong><div class="muted">${escapeHtml(formatDate(row.bill_date || row.created_at))} · ${formatMoney(row.total_amount || 0)}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">💳</div><strong>No outstanding invoices</strong><p class="muted">Visible invoices will appear here.</p></div>`}</div></article>
         <article class="client-surface"><div class="client-surface-head"><h3>Pending Approvals</h3><button class="btn btn-sm" data-section-tab="approvals" type="button">Review</button></div><div class="client-list compact" style="margin-top:1rem;">${activeProjectApprovals().filter((row) => String(row.decision || "pending") === "pending").slice(0, 3).map((row) => `<div class="client-list-item"><strong>${escapeHtml(normalizeStatus(row.approval_type, "Approval"))}</strong><div class="muted">${escapeHtml(formatDateTime(row.created_at))}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">✅</div><strong>Nothing pending</strong><p class="muted">Approval requests will appear here.</p></div>`}</div></article>
         <article class="client-surface"><div class="client-surface-head"><h3>Quick Downloads</h3><button class="btn btn-sm" data-section-tab="documents" type="button">Documents</button></div><div class="client-list compact" style="margin-top:1rem;"><div class="client-list-item"><strong>Project Summary</strong><div class="muted">Current snapshot</div><button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download PDF</button></div>${latestDesign?.file_url ? `<div class="client-list-item"><strong>Latest Design</strong><div class="muted">Current shared package</div><a class="btn btn-sm" href="${latestDesign.file_url}" target="_blank" rel="noopener">Download</a></div>` : ""}</div></article>
+        <article class="client-surface"><div class="client-surface-head"><h3>Latest Documents</h3><button class="btn btn-sm" data-section-tab="documents" type="button">View All</button></div><div class="client-list compact" style="margin-top:1rem;">${activeDocuments().slice(0, 3).map((doc) => `<div class="client-list-item"><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(formatDate(doc.at))}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents yet</strong></div>`}</div></article>
+        <article class="client-surface"><div class="client-surface-head"><h3>Upcoming Milestones</h3><button class="btn btn-sm" data-section-tab="overview" type="button">View Progress</button></div>${renderMilestoneStepper(progress)}</article>
       </section>
       <article class="client-surface">
         <div class="client-surface-head"><h3>Portfolio Snapshot</h3><span class="meta-pill">${PAGE_STATE.projects.length} Project(s)</span></div>
@@ -575,6 +583,9 @@ function renderCurrentView() {
   if (PAGE_STATE.activeSection === "dashboard") return renderDashboard();
   if (PAGE_STATE.activeSection === "timeline") return renderTimelineSection();
   if (PAGE_STATE.activeSection === "notifications") return renderNotificationsSection();
+  if (PAGE_STATE.activeSection === "profile") return renderProfileSection();
+  if (PAGE_STATE.activeSection === "payments") return renderPaymentHistorySection();
+  if (PAGE_STATE.activeSection === "support") return renderSupportSection();
   return renderWorkspaceSection();
 }
 
@@ -615,6 +626,32 @@ function handlePdfAction(action, id) {
   }
 }
 
+const PROJECT_STAGE_MILESTONES = [
+  { key: "planning", label: "Planning", threshold: 0 },
+  { key: "design", label: "Design Phase", threshold: 15 },
+  { key: "execution", label: "Execution", threshold: 45 },
+  { key: "finishing", label: "Finishing", threshold: 85 },
+  { key: "completed", label: "Completed", threshold: 100 }
+];
+
+function renderMilestoneStepper(progress) {
+  const value = numberValue(progress);
+  return `
+    <div class="client-milestone-stepper">
+      ${PROJECT_STAGE_MILESTONES.map((stage, idx) => {
+        const reached = value >= stage.threshold;
+        const isCurrent = reached && (idx === PROJECT_STAGE_MILESTONES.length - 1 || value < PROJECT_STAGE_MILESTONES[idx + 1].threshold);
+        return `
+          <div class="client-milestone-step ${reached ? "reached" : ""} ${isCurrent ? "current" : ""}">
+            <span class="client-milestone-dot">${reached ? "✓" : ""}</span>
+            <label>${escapeHtml(stage.label)}</label>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
 function renderOverviewSection(project) {
   const updates = activeProjectUpdates();
   const recent = buildTimeline().slice(0, 6);
@@ -623,12 +660,14 @@ function renderOverviewSection(project) {
     <section class="client-workspace-grid">
       <article class="client-surface client-surface-lg">
         <div class="client-surface-head"><h3>Project Summary</h3><span class="meta-pill">Completion ${progress}%</span></div>
-        <div class="client-summary-grid">
+        <div class="client-progress-bar" style="margin:.85rem 0;"><span style="width:${progress}%"></span></div>
+        ${renderMilestoneStepper(progress)}
+        <div class="client-summary-grid" style="margin-top:1.1rem;">
           <div><label>Scope</label><strong>Interior design, execution coordination, client approvals, progress updates, and billing visibility.</strong></div>
           <div><label>Current Stage</label><strong>${escapeHtml(projectStageLabel(progress))}</strong></div>
           <div><label>Project Manager</label><strong>${escapeHtml(projectManagerName())}</strong></div>
           <div><label>Budget Summary</label><strong>${formatMoney(activeProjectBills().reduce((sum, row) => sum + numberValue(row.total_amount), 0))}</strong></div>
-          <div><label>Milestones</label><strong>${updates.length} updates shared</strong></div>
+          <div><label>Milestones Logged</label><strong>${updates.length} updates shared</strong></div>
         </div>
       </article>
       <article class="client-surface">
@@ -666,7 +705,7 @@ function renderDesignCards(rows) {
           <div class="client-surface-head"><strong>${escapeHtml(row.design_title || "Design")}</strong>${statusBadgeHtml(row.status)}</div>
           <p class="muted">Version ${escapeHtml(String(row.version_no || 1))} · Designer: Project Team · ${escapeHtml(formatDateTime(row.uploaded_at || row.updated_at))}</p>
           <div class="client-actions">
-            ${row.file_url ? `<a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener">Preview</a><a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener">Download PDF</a>` : `<button class="btn btn-sm" disabled>No File</button>`}
+            ${row.file_url ? `<button class="btn btn-sm" data-lightbox-src="${row.file_url}" type="button">Preview</button><a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener" download>Download PDF</a>` : `<button class="btn btn-sm" disabled>No File</button>`}
             <button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">Details</button>
             <button class="btn btn-sm" data-section-tab="approvals" type="button">Approve</button>
             <button class="btn btn-sm" data-section-tab="approvals" type="button">Request Revision</button>
@@ -684,7 +723,7 @@ function renderDesignsSection() {
   return `
     <section class="client-surface">
       <div class="client-surface-head"><h3>Design Library</h3><div class="client-inline-tools">${renderSearchInput("designs", "Search designs")}${renderDesignViewToggle()}<button class="btn btn-sm" data-pdf-action="project-summary" type="button">Export Summary</button></div></div>
-      ${mode === "cards" ? renderDesignCards(rows) : renderDataTable(["Design Name", "Version", "Uploaded Date", "Status", "Uploaded By", "Actions"], rows.map((row) => `<tr><td><strong>${escapeHtml(row.design_title || "Design")}</strong></td><td>v${escapeHtml(String(row.version_no || 1))}</td><td>${escapeHtml(formatDateTime(row.uploaded_at || row.updated_at))}</td><td>${statusBadgeHtml(row.status)}</td><td>Project Team</td><td><div class="client-actions">${row.file_url ? `<a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener">View</a><a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener">Download</a>` : `<button class="btn btn-sm" disabled>No File</button>`}<button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">PDF</button></div></td></tr>`), "No designs match your search.")}
+      ${mode === "cards" ? renderDesignCards(rows) : renderDataTable(["Design Name", "Version", "Uploaded Date", "Status", "Uploaded By", "Actions"], rows.map((row) => `<tr><td><strong>${escapeHtml(row.design_title || "Design")}</strong></td><td>v${escapeHtml(String(row.version_no || 1))}</td><td>${escapeHtml(formatDateTime(row.uploaded_at || row.updated_at))}</td><td>${statusBadgeHtml(row.status)}</td><td>Project Team</td><td><div class="client-actions">${row.file_url ? `<button class="btn btn-sm" data-lightbox-src="${row.file_url}" type="button">View</button><a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener" download>Download</a>` : `<button class="btn btn-sm" disabled>No File</button>`}<button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">PDF</button></div></td></tr>`), "No designs match your search.")}
       ${renderPagination("designs", allRows.length, 5)}
     </section>
   `;
@@ -776,8 +815,19 @@ function renderApprovalsSection() {
         ${renderPagination("approvals", allRows.length, 5)}
       </article>
       <article class="client-surface">
-        <div class="client-surface-head"><h3>Comments</h3></div>
-        <textarea class="client-textarea" rows="8" placeholder="Client comments and revision notes can be captured here in a future connected release." disabled></textarea>
+        <div class="client-surface-head"><h3>Comments &amp; Revision History</h3></div>
+        <div class="client-list compact" style="margin-top:.75rem;max-height:260px;overflow:auto;">${PAGE_STATE.approvals.filter((row) => row.remarks).slice(0, 12).map((row) => `<div class="client-list-item"><strong>${escapeHtml(normalizeStatus(row.approval_type, "Note"))}</strong><div class="muted">${escapeHtml(row.remarks)}</div><div class="muted" style="margin-top:.3rem;font-size:.78rem;">${escapeHtml(formatDateTime(row.decided_at || row.created_at))}</div></div>`).join("") || `<div class="empty-state">No comments yet.</div>`}</div>
+        <div class="client-surface-head" style="margin-top:1.1rem;"><h3>Raise a Revision Request</h3></div>
+        <form id="revisionRequestForm" style="margin-top:.6rem;display:grid;gap:.6rem;">
+          <select name="approval_type" required>
+            <option value="design">Design Revision</option>
+            <option value="quote">Quote / Billing Query</option>
+            <option value="change">Scope or Schedule Change</option>
+            <option value="completion">Completion / Handover Note</option>
+          </select>
+          <textarea class="client-textarea" name="remarks" rows="4" placeholder="Describe the revision or feedback you'd like the project team to address." required></textarea>
+          <button class="btn btn-sm" type="submit">Submit Revision Request</button>
+        </form>
       </article>
     </section>
   `;
@@ -825,7 +875,7 @@ function renderDocumentsSection() {
       </article>
       <article class="client-surface client-surface-lg">
         <div class="client-surface-head"><h3>Downloads</h3><div class="client-inline-tools">${renderSearchInput("documents", "Search documents")}<button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register PDF</button></div></div>
-        <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((doc) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(doc.subtitle)}</div></div><div class="client-actions">${doc.href ? `<a class="btn btn-sm" href="${doc.href}" target="_blank" rel="noopener">Preview</a><a class="btn btn-sm" href="${doc.href}" target="_blank" rel="noopener">Download</a>` : `<button class="btn btn-sm" disabled>Unavailable</button>`}</div></div></div>`).join("") : `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents found</strong><p class="muted">Shared drawings, invoices, approvals, and reports will appear here.</p><button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register</button></div>`}</div>
+        <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((doc) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(doc.subtitle)}</div></div><div class="client-actions">${doc.href ? `<button class="btn btn-sm" data-lightbox-src="${doc.href}" type="button">Preview</button><a class="btn btn-sm" href="${doc.href}" target="_blank" rel="noopener" download>Download</a>` : `<button class="btn btn-sm" disabled>Unavailable</button>`}</div></div></div>`).join("") : `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents found</strong><p class="muted">Shared drawings, invoices, approvals, and reports will appear here.</p><button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register</button></div>`}</div>
         ${renderPagination("documents", docs.length, 6)}
       </article>
     </section>
@@ -853,20 +903,147 @@ function renderTimelineSection() {
   `;
 }
 
+const NOTIFICATION_CATEGORY_BY_TONE = { warning: "Approvals", info: "Updates", success: "Billing" };
+
+function notificationItemKey(item) {
+  return `${item.title}|${item.at || ""}`;
+}
+
+function getReadNotificationKeys() {
+  try { return new Set(JSON.parse(localStorage.getItem("ems_client_portal_read_notification_keys") || "[]")); } catch { return new Set(); }
+}
+
+function markNotificationKeyRead(key) {
+  try {
+    const keys = getReadNotificationKeys();
+    keys.add(key);
+    localStorage.setItem("ems_client_portal_read_notification_keys", JSON.stringify(Array.from(keys)));
+  } catch {}
+}
+
 function renderNotificationsSection() {
   const seenAt = getNotificationsSeenAt();
   const seenTime = seenAt ? new Date(seenAt).getTime() : 0;
+  const readKeys = getReadNotificationKeys();
   const search = sectionSearchTerm("notifications");
+  const categoryFilter = PAGE_STATE.sectionSearch?.notificationsCategory || "";
   const allItems = notificationItems({ limit: Infinity, perSourceLimit: Infinity })
+    .map((item) => ({ ...item, category: NOTIFICATION_CATEGORY_BY_TONE[item.tone] || "Updates", unread: new Date(item.at || 0).getTime() > seenTime && !readKeys.has(notificationItemKey(item)) }))
     .filter((item) => matchesSearch(search, item.title, item.detail))
-    .map((item) => ({ ...item, unread: new Date(item.at || 0).getTime() > seenTime }));
+    .filter((item) => !categoryFilter || item.category === categoryFilter);
   const rows = paginateRows("notifications", allItems, 8).rows;
+  const categories = ["Approvals", "Updates", "Billing"];
   return `
     <section class="client-surface">
-      <div class="client-surface-head"><h3>Notification Center</h3><div class="client-inline-tools">${renderSearchInput("notifications", "Search notifications")}<span class="meta-pill">${allItems.filter((item) => item.unread).length} Unread</span><button class="btn btn-sm" id="markNotificationsReadBtn" type="button">Mark all read</button></div></div>
-      <div class="client-actions" style="margin-top:.75rem;"><span class="meta-pill">Today</span><span class="meta-pill">Yesterday</span><span class="meta-pill">Earlier</span><span class="meta-pill">${allItems.length} Total</span></div>
-      <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((item) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(item.title)}</strong>${item.unread ? `<span class="client-nav-badge" style="margin-left:.5rem;">New</span>` : ""}<div class="muted">${escapeHtml(item.detail)}</div></div><div><span class="client-notice tone-${item.tone}">${escapeHtml(normalizeStatus(item.tone))}</span><div class="muted" style="margin-top:.35rem;">${escapeHtml(formatDateTime(item.at))}</div></div></div></div>`).join("") : `<div class="empty-state">No notifications match your search.</div>`}</div>
+      <div class="client-surface-head"><h3>Notification Center</h3><div class="client-inline-tools">${renderSearchInput("notifications", "Search notifications")}<select data-notification-category-filter><option value="" ${!categoryFilter ? "selected" : ""}>All Categories</option>${categories.map((cat) => `<option value="${cat}" ${categoryFilter === cat ? "selected" : ""}>${cat}</option>`).join("")}</select><span class="meta-pill">${allItems.filter((item) => item.unread).length} Unread</span><button class="btn btn-sm" id="markNotificationsReadBtn" type="button">Mark all read</button></div></div>
+      <div class="client-actions" style="margin-top:.75rem;">${categories.map((cat) => `<span class="meta-pill">${cat}</span>`).join("")}<span class="meta-pill">${allItems.length} Total</span></div>
+      <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((item) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(item.title)}</strong>${item.unread ? `<span class="client-nav-badge" style="margin-left:.5rem;">New</span>` : ""}<div class="muted">${escapeHtml(item.detail)}</div><span class="meta-pill" style="margin-top:.35rem;">${escapeHtml(item.category)}</span></div><div style="text-align:right;"><span class="client-notice tone-${item.tone}">${escapeHtml(normalizeStatus(item.tone))}</span><div class="muted" style="margin-top:.35rem;">${escapeHtml(formatDateTime(item.at))}</div>${item.unread ? `<button class="btn btn-sm" data-mark-notification-read="${escapeHtml(notificationItemKey(item))}" type="button" style="margin-top:.4rem;">Mark Read</button>` : ""}</div></div></div>`).join("") : `<div class="empty-state">No notifications match your search.</div>`}</div>
       ${renderPagination("notifications", allItems.length, 8)}
+    </section>
+  `;
+}
+
+function renderProfileSection() {
+  const client = PAGE_STATE.clientRecord || {};
+  const portalUser = PAGE_STATE.portalUser || {};
+  const accountStatus = String(portalUser.access_status || "active");
+  return `
+    <section class="client-workspace-grid">
+      <article class="client-surface client-surface-lg">
+        <div class="client-surface-head"><h3>Client Profile</h3>${statusBadgeHtml(accountStatus, "Active")}</div>
+        <div class="client-summary-grid" style="margin-top:1rem;">
+          <div><label>Client Name</label><strong>${escapeHtml(client.client_name || "-")}</strong></div>
+          <div><label>Client Code</label><strong>${escapeHtml(client.client_code || "-")}</strong></div>
+          <div><label>Company</label><strong>${escapeHtml(client.company_name || client.client_name || "-")}</strong></div>
+          <div><label>Contact Person</label><strong>${escapeHtml(portalUser.contact_name || "-")}</strong></div>
+          <div><label>Contact Email</label><strong>${escapeHtml(portalUser.email || PAGE_STATE.appUser?.email || "-")}</strong></div>
+          <div><label>Contact Phone</label><strong>${escapeHtml(portalUser.phone || "-")}</strong></div>
+          <div><label>Account Status</label><strong>${escapeHtml(normalizeStatus(accountStatus))}</strong></div>
+          <div><label>Access Level</label><strong>${escapeHtml(normalizeStatus(PAGE_STATE.access?.[0]?.access_level || "view_only"))}</strong></div>
+        </div>
+      </article>
+      <article class="client-surface">
+        <div class="client-surface-head"><h3>Assigned Projects</h3><span class="meta-pill">${PAGE_STATE.projects.length}</span></div>
+        <div class="client-list compact" style="margin-top:1rem;">${PAGE_STATE.projects.length ? PAGE_STATE.projects.map((project) => `<div class="client-list-item"><strong>${escapeHtml(projectName(project))}</strong><div class="muted">${escapeHtml(normalizeStatus(project.status || "active"))}</div></div>`).join("") : `<div class="empty-state">No projects assigned yet.</div>`}</div>
+      </article>
+    </section>
+  `;
+}
+
+function paymentStatusForBill(row) {
+  const status = String(row.status || "draft");
+  if (status === "ready_for_accounts") return { label: "Posted to Accounts", tone: "success" };
+  if (status === "approved") return { label: "Pending Payment", tone: "warning" };
+  return { label: "Pending Approval", tone: "neutral" };
+}
+
+function renderPaymentHistorySection() {
+  const search = sectionSearchTerm("payments");
+  const allRows = activeProjectBills().filter((row) => matchesSearch(search, row.bill_number, row.status));
+  const rows = paginateRows("payments", allRows, 8).rows;
+  const outstanding = allRows.reduce((sum, row) => sum + numberValue(row.total_amount), 0);
+  return `
+    <section class="client-surface">
+      <div class="client-surface-head"><h3>Payment History</h3><div class="client-inline-tools">${renderSearchInput("payments", "Search invoices")}<span class="meta-pill">Total Outstanding ${formatMoney(outstanding)}</span></div></div>
+      ${renderDataTable(
+        ["Invoice", "Amount", "Paid", "Pending", "Date", "Receipt", "Action"],
+        rows.map((row) => {
+          const status = paymentStatusForBill(row);
+          const isPosted = status.label === "Posted to Accounts";
+          return `<tr>
+            <td><strong>${escapeHtml(row.bill_number || "Invoice")}</strong></td>
+            <td>${escapeHtml(formatMoney(row.total_amount || 0))}</td>
+            <td>${escapeHtml(isPosted ? formatMoney(row.total_amount || 0) : formatMoney(0))}</td>
+            <td>${escapeHtml(isPosted ? formatMoney(0) : formatMoney(row.total_amount || 0))}</td>
+            <td>${escapeHtml(formatDate(row.bill_date || row.created_at))}</td>
+            <td><span class="client-notice tone-${status.tone}">${escapeHtml(status.label)}</span></td>
+            <td><button class="btn btn-sm" data-pdf-action="bill" data-pdf-id="${row.id}" type="button">Download PDF</button></td>
+          </tr>`;
+        }),
+        "No invoices match your search."
+      )}
+      ${renderPagination("payments", allRows.length, 8)}
+      <div class="empty-state" style="margin-top:1rem;"><strong>Note</strong><p class="muted" style="margin:.4rem 0 0;">Paid/Pending split reflects accounting posting status. A dedicated receipt ledger will replace this estimate once connected to Central Accounts receivables.</p></div>
+    </section>
+  `;
+}
+
+const SUPPORT_FAQ = [
+  { q: "How do I check my project's progress?", a: "Open Project Overview or Dashboard to see your completion percentage, current phase, and latest site update." },
+  { q: "How do I approve or request a revision on a design?", a: "Go to Designs, open the design you want to review, then use Approve or Request Revision in the Approvals section." },
+  { q: "Where can I see my outstanding bills?", a: "Open Bills & Payments or Payment History from the sidebar to view invoice status and amounts." },
+  { q: "Who do I contact for urgent site issues?", a: "Use the Emergency Contact below, or raise a support request and mark it urgent in the message." }
+];
+
+function renderSupportSection() {
+  return `
+    <section class="client-workspace-grid">
+      <article class="client-surface client-surface-lg">
+        <div class="client-surface-head"><h3>Raise a Support Request</h3></div>
+        <form id="supportRequestForm" style="margin-top:.75rem;display:grid;gap:.65rem;">
+          <select name="category" required>
+            <option value="General Query">General Query</option>
+            <option value="Design / Site">Design / Site Issue</option>
+            <option value="Billing">Billing / Payment</option>
+            <option value="Urgent">Urgent / Emergency</option>
+          </select>
+          <input type="text" name="subject" placeholder="Subject" required />
+          <textarea class="client-textarea" name="message" rows="5" placeholder="Describe your request" required></textarea>
+          <button class="btn btn-sm" type="submit">Send Request</button>
+        </form>
+        <p class="muted" style="margin-top:.6rem;">Requests are sent to <strong>support@varadanexus.com</strong> with your project context attached.</p>
+      </article>
+      <article class="client-surface">
+        <div class="client-surface-head"><h3>Contact Support</h3></div>
+        <div class="client-list compact" style="margin-top:.85rem;">
+          <div class="client-list-item"><strong>Email Support</strong><div class="muted">support@varadanexus.com</div><a class="btn btn-sm" href="mailto:support@varadanexus.com" style="margin-top:.5rem;">Email Now</a></div>
+          <div class="client-list-item"><strong>Emergency Contact</strong><div class="muted">For urgent site/safety issues only</div><a class="btn btn-sm" href="mailto:support@varadanexus.com?subject=URGENT" style="margin-top:.5rem;">Contact Emergency Line</a></div>
+        </div>
+      </article>
+      <article class="client-surface client-surface-lg">
+        <div class="client-surface-head"><h3>Frequently Asked Questions</h3></div>
+        <div class="client-list" style="margin-top:1rem;">${SUPPORT_FAQ.map((item) => `<div class="client-list-item"><strong>${escapeHtml(item.q)}</strong><div class="muted" style="margin-top:.3rem;">${escapeHtml(item.a)}</div></div>`).join("")}</div>
+      </article>
     </section>
   `;
 }
@@ -1113,6 +1290,20 @@ const CLIENT_APP_STYLES = `
   .client-footer a:hover{color:var(--primary);}
   @keyframes clientFadeUp{from{opacity:.86;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
   @media (max-width:760px){.client-project-hero,.client-feed-card,.client-invoice-card{grid-template-columns:1fr;}.client-project-hero-media{min-height:180px;}.client-surface{padding:1rem;}.page-head .client-actions{align-items:stretch;}.page-head .client-actions>*{max-width:100%;}}
+
+  .client-milestone-stepper{display:flex;justify-content:space-between;gap:.4rem;flex-wrap:wrap;}
+  .client-milestone-step{display:flex;flex-direction:column;align-items:center;gap:.4rem;flex:1;min-width:80px;text-align:center;}
+  .client-milestone-step label{font-size:.74rem;color:var(--muted);}
+  .client-milestone-dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--border);display:grid;place-items:center;font-size:.78rem;color:var(--muted);background:var(--surface-soft);}
+  .client-milestone-step.reached .client-milestone-dot{border-color:var(--primary);background:var(--primary);color:#111827;}
+  .client-milestone-step.current label{color:var(--primary);font-weight:700;}
+
+  #appSidebar.client-sidebar .nav-link:focus-visible,
+  .btn:focus-visible,
+  select:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+  @media (max-width:640px){.client-milestone-stepper{justify-content:flex-start;}.client-milestone-step{min-width:64px;}}
 `;
 
 function renderClientBreadcrumbs() {
@@ -1174,6 +1365,7 @@ function render() {
     <div class="client-lightbox" id="clientLightbox">
       <button class="btn btn-sm client-lightbox-close" id="clientLightboxClose" type="button">✕ Close</button>
       <img id="clientLightboxImg" src="" alt="Preview" />
+      <iframe id="clientLightboxFrame" src="" title="Document preview" style="display:none;width:90vw;height:88vh;border:0;border-radius:12px;background:#fff;"></iframe>
     </div>
     <div id="toastHost" class="toast-host" aria-live="polite"></div>
   `;
@@ -1203,16 +1395,58 @@ function bindClientAppEvents(app) {
 
   const lightbox = qs("#clientLightbox");
   const lightboxImg = qs("#clientLightboxImg");
-  const closeLightbox = () => lightbox?.classList.remove("visible");
+  const lightboxFrame = qs("#clientLightboxFrame");
+  const closeLightbox = () => {
+    lightbox?.classList.remove("visible");
+    if (lightboxFrame) lightboxFrame.style.display = "none";
+    if (lightboxImg) lightboxImg.style.display = "none";
+  };
   app.querySelectorAll("[data-lightbox-src]").forEach((el) => el.addEventListener("click", () => {
-    if (!lightbox || !lightboxImg) return;
-    lightboxImg.src = el.dataset.lightboxSrc;
+    if (!lightbox) return;
+    const src = el.dataset.lightboxSrc || "";
+    const isPdf = /\.pdf($|\?)/i.test(src);
+    if (isPdf && lightboxFrame) {
+      lightboxFrame.src = src;
+      lightboxFrame.style.display = "block";
+      if (lightboxImg) lightboxImg.style.display = "none";
+    } else if (lightboxImg) {
+      lightboxImg.src = src;
+      lightboxImg.style.display = "block";
+      if (lightboxFrame) lightboxFrame.style.display = "none";
+    }
     lightbox.classList.add("visible");
   }));
   lightbox?.addEventListener("click", (event) => {
     if (event.target === lightbox) closeLightbox();
   });
   qs("#clientLightboxClose")?.addEventListener("click", closeLightbox);
+
+  app.querySelectorAll("[data-mark-notification-read]").forEach((button) => button.addEventListener("click", () => {
+    markNotificationKeyRead(button.dataset.markNotificationRead);
+    render();
+  }));
+
+  qs("[data-notification-category-filter]")?.addEventListener("change", (event) => {
+    PAGE_STATE.sectionSearch = PAGE_STATE.sectionSearch || {};
+    PAGE_STATE.sectionSearch.notificationsCategory = event.target.value;
+    PAGE_STATE.sectionPages = PAGE_STATE.sectionPages || {};
+    PAGE_STATE.sectionPages.notifications = 1;
+    render();
+  });
+
+  qs("#revisionRequestForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    submitRevisionRequest(formData.get("approval_type"), formData.get("remarks"));
+  });
+
+  qs("#supportRequestForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    submitSupportRequest(formData.get("category"), formData.get("subject"), formData.get("message"));
+  });
 
   app.querySelectorAll("[data-view-toggle]").forEach((button) => button.addEventListener("click", () => {
     const target = button.dataset.viewToggle;
@@ -1299,6 +1533,53 @@ async function updateApprovalDecision(approvalId, decision) {
   } catch (error) {
     showToast(error?.message || "Failed to update approval.", TOAST_TYPES.ERROR);
   }
+}
+
+async function submitRevisionRequest(approvalType, remarks) {
+  const project = activeProject();
+  if (!project) {
+    showToast("Select a project before submitting a revision request.", TOAST_TYPES.ERROR);
+    return;
+  }
+  if (!String(remarks || "").trim()) {
+    showToast("Please describe the revision request before submitting.", TOAST_TYPES.ERROR);
+    return;
+  }
+  try {
+    const { error } = await getClient()
+      .from("interior_client_approvals")
+      .insert({
+        interior_project_id: project.id,
+        portal_user_id: PAGE_STATE.portalUser?.id || null,
+        approval_type: approvalType || "change",
+        decision: "pending",
+        remarks: String(remarks).trim()
+      });
+    if (error) throw error;
+    showToast("Revision request submitted.", TOAST_TYPES.SUCCESS);
+    await loadData();
+    render();
+  } catch (error) {
+    showToast(error?.message || "Failed to submit revision request.", TOAST_TYPES.ERROR);
+  }
+}
+
+function submitSupportRequest(category, subject, message) {
+  if (!String(subject || "").trim() || !String(message || "").trim()) {
+    showToast("Please provide a subject and message.", TOAST_TYPES.ERROR);
+    return;
+  }
+  const project = activeProject();
+  const body = [
+    `Category: ${category || "General Query"}`,
+    `Client: ${PAGE_STATE.clientRecord?.client_name || "-"}`,
+    `Project: ${project ? projectName(project) : "-"}`,
+    "",
+    message
+  ].join("\n");
+  const mailto = `mailto:support@varadanexus.com?subject=${encodeURIComponent(`[${category || "Support"}] ${subject}`)}&body=${encodeURIComponent(body)}`;
+  window.location.href = mailto;
+  showToast("Opening your email client to send the request.", TOAST_TYPES.INFO);
 }
 
 async function getClientSafeAppUser() {
