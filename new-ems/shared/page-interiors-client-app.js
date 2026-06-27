@@ -28,7 +28,7 @@ const PAGE_STATE = {
   activeSection: "dashboard",
   sectionPages: {},
   sectionSearch: {},
-  designsViewMode: "table",
+  designsViewMode: "cards",
   galleryProjectFilter: "",
   sidebarCollapsed: false
 };
@@ -216,7 +216,11 @@ function canApproveProject(interiorProjectId) {
 
 function statusBadgeHtml(status, fallback = "Draft") {
   const normalized = String(status || fallback).toLowerCase();
-  const tone = normalized === "approved" ? "success" : normalized === "rejected" ? "warning" : normalized === "revision_requested" ? "warning" : normalized === "pending" ? "warning" : "info";
+  const tone = normalized === "completed" || normalized === "approved" || normalized === "ready_for_accounts" ? "success"
+    : normalized === "delayed" || normalized === "rejected" ? "danger"
+    : normalized === "in_progress" || normalized === "revision_requested" || normalized === "pending" || normalized === "submitted" ? "warning"
+    : normalized === "on_hold" ? "neutral"
+    : "info";
   return `<span class="client-notice tone-${tone}">${escapeHtml(normalizeStatus(status, fallback))}</span>`;
 }
 
@@ -282,7 +286,7 @@ function renderSearchInput(sectionKey, placeholder) {
 }
 
 function projectManagerName() {
-  return "Varada Interiors Team";
+  return "Varada Nexus Team";
 }
 
 function projectStageLabel(progress) {
@@ -406,14 +410,17 @@ function renderDataTable(columns, rows, emptyMessage) {
 
 function renderMetricCards() {
   const stats = kpis();
+  const cards = [
+    ["₹", "Outstanding Amount", formatMoney(stats.outstanding), "Across visible invoices"],
+    ["✓", "Pending Approvals", stats.pendingApprovals, "Awaiting your decision"],
+    ["◇", "Visible Designs", stats.designs, "Design packages shared"],
+    ["◎", "Photos Shared", stats.photos, "Gallery uploads"],
+    ["↗", "Site Updates", stats.updates, "Progress logs shared"],
+    ["▣", "Documents", stats.documents, "Available downloads"]
+  ];
   return `
     <section class="client-metric-grid">
-      <article class="client-metric-card"><label>Outstanding Amount</label><strong>${formatMoney(stats.outstanding)}</strong><span>Across visible invoices</span></article>
-      <article class="client-metric-card"><label>Visible Designs</label><strong>${stats.designs}</strong><span>Design packages shared</span></article>
-      <article class="client-metric-card"><label>Photos Shared</label><strong>${stats.photos}</strong><span>Gallery uploads</span></article>
-      <article class="client-metric-card"><label>Pending Approvals</label><strong>${stats.pendingApprovals}</strong><span>Awaiting your decision</span></article>
-      <article class="client-metric-card"><label>Site Updates</label><strong>${stats.updates}</strong><span>Progress logs shared</span></article>
-      <article class="client-metric-card"><label>Documents</label><strong>${stats.documents}</strong><span>Available downloads</span></article>
+      ${cards.map(([icon, label, value, helper]) => `<article class="client-metric-card"><div class="client-metric-icon">${icon}</div><label>${escapeHtml(label)}</label><strong>${escapeHtml(value)}</strong><span>${escapeHtml(helper)}</span></article>`).join("")}
     </section>
   `;
 }
@@ -441,7 +448,7 @@ function renderSidebar() {
       <div class="brand client-brand-row">
         <span class="client-brand-mark">${escapeHtml(clientInitial)}</span>
         <div>
-          <div>Varada Interiors</div>
+          <div>Varada Nexus Client Portal</div>
           <small class="muted" style="font-weight:400;display:block;">${escapeHtml(clientName)}</small>
         </div>
       </div>
@@ -463,10 +470,16 @@ function renderSidebar() {
         `).join("")}
       </nav>
       <div class="client-sidebar-foot">
-        <div class="client-sidebar-foot-row"><span class="muted">Progress</span><strong>${progress}%</strong></div>
+        <div class="client-support-card">
+          <strong>Need Help?</strong>
+          <a class="muted client-support-email" href="mailto:support@varadanexus.com">support@varadanexus.com</a>
+          <a class="btn btn-sm" href="mailto:support@varadanexus.com" style="width:100%;margin-top:.6rem;text-align:center;">Contact Support</a>
+        </div>
+        <div class="client-sidebar-foot-row" style="margin-top:.85rem;"><span class="muted">Progress</span><strong>${progress}%</strong></div>
         <div class="client-progress-bar" style="margin-top:.35rem;"><span style="width:${progress}%"></span></div>
         <div class="client-sidebar-foot-row" style="margin-top:.6rem;"><span class="muted">Current Phase</span><strong>${escapeHtml(projectStageLabel(progress))}</strong></div>
         <button class="btn btn-sm" id="switchPortalBtn" type="button" style="width:100%;margin-top:.75rem;">Return to Selector</button>
+        <button class="btn btn-sm btn-ghost" id="logoutBtnSidebar" type="button" style="width:100%;margin-top:.5rem;">Logout</button>
       </div>
     </aside>
   `;
@@ -514,6 +527,7 @@ function renderDashboard() {
   const pendingCount = activeProjectApprovals().filter((row) => String(row.decision || "pending") === "pending").length;
   const notifications = notificationItems();
   const timeline = buildTimeline().slice(0, 8);
+  const latestDesign = activeProjectDesigns()[0] || null;
   return `
     <section class="client-dashboard-stack">
       <article class="client-surface client-welcome-card">
@@ -535,9 +549,15 @@ function renderDashboard() {
           </div>
         </article>
         <article class="client-surface">
-          <div class="client-surface-head"><h3>Notifications</h3></div>
+          <div class="client-surface-head"><h3>Notifications</h3><button class="btn btn-sm" data-section-tab="notifications" type="button">Open Center</button></div>
           <div class="client-list compact" style="margin-top:1rem;">${notifications.length ? notifications.map((item) => `<div class="client-list-item"><strong>${escapeHtml(item.title)}</strong><div class="muted">${escapeHtml(item.detail)} · ${escapeHtml(formatDateTime(item.at))}</div></div>`).join("") : `<div class="empty-state">No notifications right now.</div>`}</div>
         </article>
+      </section>
+      <section class="client-dashboard-panels">
+        <article class="client-surface"><div class="client-surface-head"><h3>Latest Site Update</h3><button class="btn btn-sm" data-section-tab="updates" type="button">View Updates</button></div>${latestUpdate ? `<div class="client-feed-card"><div class="client-feed-media">${activeProjectPhotos()[0]?.photo_url ? `<img src="${activeProjectPhotos()[0].photo_url}" alt="Site update" loading="lazy" data-lightbox-src="${activeProjectPhotos()[0].photo_url}" />` : `<div class="empty-illustration">🏗️</div>`}</div><div><span class="meta-pill">${numberValue(latestUpdate.progress_percent)}% Progress</span><h3>${escapeHtml(latestUpdate.update_title || "Site Update")}</h3><p class="muted">${escapeHtml(formatDate(latestUpdate.update_date || latestUpdate.created_at))}</p></div></div>` : `<div class="empty-state"><div class="empty-illustration">🏗️</div><strong>No site updates yet</strong><p class="muted">Your project team will share progress updates here.</p></div>`}</article>
+        <article class="client-surface"><div class="client-surface-head"><h3>Outstanding Bills</h3><button class="btn btn-sm" data-section-tab="billing" type="button">Open Finance</button></div><div class="client-list compact" style="margin-top:1rem;">${activeProjectBills().slice(0, 3).map((row) => `<div class="client-list-item"><strong>${escapeHtml(row.bill_number || "Invoice")}</strong><div class="muted">${escapeHtml(formatDate(row.bill_date || row.created_at))} · ${formatMoney(row.total_amount || 0)}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">💳</div><strong>No outstanding invoices</strong><p class="muted">Visible invoices will appear here.</p></div>`}</div></article>
+        <article class="client-surface"><div class="client-surface-head"><h3>Pending Approvals</h3><button class="btn btn-sm" data-section-tab="approvals" type="button">Review</button></div><div class="client-list compact" style="margin-top:1rem;">${activeProjectApprovals().filter((row) => String(row.decision || "pending") === "pending").slice(0, 3).map((row) => `<div class="client-list-item"><strong>${escapeHtml(normalizeStatus(row.approval_type, "Approval"))}</strong><div class="muted">${escapeHtml(formatDateTime(row.created_at))}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">✅</div><strong>Nothing pending</strong><p class="muted">Approval requests will appear here.</p></div>`}</div></article>
+        <article class="client-surface"><div class="client-surface-head"><h3>Quick Downloads</h3><button class="btn btn-sm" data-section-tab="documents" type="button">Documents</button></div><div class="client-list compact" style="margin-top:1rem;"><div class="client-list-item"><strong>Project Summary</strong><div class="muted">Current snapshot</div><button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download PDF</button></div>${latestDesign?.file_url ? `<div class="client-list-item"><strong>Latest Design</strong><div class="muted">Current shared package</div><a class="btn btn-sm" href="${latestDesign.file_url}" target="_blank" rel="noopener">Download</a></div>` : ""}</div></article>
       </section>
       <article class="client-surface">
         <div class="client-surface-head"><h3>Portfolio Snapshot</h3><span class="meta-pill">${PAGE_STATE.projects.length} Project(s)</span></div>
@@ -640,13 +660,16 @@ function renderDesignViewToggle() {
 function renderDesignCards(rows) {
   return `
     <div class="client-gallery-grid" style="margin-top:1rem;">${rows.length ? rows.map((row) => `
-      <article class="client-gallery-card">
+      <article class="client-gallery-card client-design-card">
+        <div class="client-gallery-media client-design-preview"><div class="empty-illustration">📐</div></div>
         <div class="client-gallery-body">
           <div class="client-surface-head"><strong>${escapeHtml(row.design_title || "Design")}</strong>${statusBadgeHtml(row.status)}</div>
-          <p class="muted">Version ${escapeHtml(String(row.version_no || 1))} · ${escapeHtml(formatDateTime(row.uploaded_at || row.updated_at))}</p>
+          <p class="muted">Version ${escapeHtml(String(row.version_no || 1))} · Designer: Project Team · ${escapeHtml(formatDateTime(row.uploaded_at || row.updated_at))}</p>
           <div class="client-actions">
-            ${row.file_url ? `<a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener">Preview</a><a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener">Download</a>` : `<button class="btn btn-sm" disabled>No File</button>`}
-            <button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">PDF</button>
+            ${row.file_url ? `<a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener">Preview</a><a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener">Download PDF</a>` : `<button class="btn btn-sm" disabled>No File</button>`}
+            <button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">Details</button>
+            <button class="btn btn-sm" data-section-tab="approvals" type="button">Approve</button>
+            <button class="btn btn-sm" data-section-tab="approvals" type="button">Request Revision</button>
           </div>
         </div>
       </article>`).join("") : `<div class="empty-state">No designs match your search.</div>`}</div>
@@ -657,7 +680,7 @@ function renderDesignsSection() {
   const search = sectionSearchTerm("designs");
   const allRows = activeProjectDesigns().filter((row) => matchesSearch(search, row.design_title, row.status, row.version_no));
   const rows = paginateRows("designs", allRows, 5).rows;
-  const mode = PAGE_STATE.designsViewMode || "table";
+  const mode = PAGE_STATE.designsViewMode || "cards";
   return `
     <section class="client-surface">
       <div class="client-surface-head"><h3>Design Library</h3><div class="client-inline-tools">${renderSearchInput("designs", "Search designs")}${renderDesignViewToggle()}<button class="btn btn-sm" data-pdf-action="project-summary" type="button">Export Summary</button></div></div>
@@ -681,9 +704,10 @@ function renderUpdatesSection() {
   return `
     <section class="client-surface">
       <div class="client-surface-head"><h3>Site Updates</h3><div class="client-inline-tools">${renderSearchInput("updates", "Search updates")}<span class="meta-pill">${allRows.length} Entries</span></div></div>
-      <div class="client-vtimeline" style="margin-top:1rem;">${rows.length ? rows.map((row) => `
-        <div class="client-vtimeline-item">
-          <div class="client-list-item">
+      <div class="client-feed-stack" style="margin-top:1rem;">${rows.length ? rows.map((row) => `
+        <article class="client-feed-card">
+          <div class="client-feed-media">${activeProjectPhotos()[0]?.photo_url ? `<img src="${activeProjectPhotos()[0].photo_url}" alt="${escapeHtml(row.update_title || "Site update")}" loading="lazy" data-lightbox-src="${activeProjectPhotos()[0].photo_url}" />` : `<div class="empty-illustration">🏗️</div>`}</div>
+          <div class="client-feed-body">
             <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
               <div>
                 <strong>${escapeHtml(row.update_title || "Update")}</strong>
@@ -694,7 +718,7 @@ function renderUpdatesSection() {
               <div class="client-progress-mini"><span>${numberValue(row.progress_percent)}%</span></div>
             </div>
           </div>
-        </div>`).join("") : `<div class="empty-state">No updates match your search.</div>`}</div>
+        </article>`).join("") : `<div class="empty-state"><div class="empty-illustration">🏗️</div><strong>No site updates found</strong><p class="muted">Progress posts from your project team will appear here.</p></div>`}</div>
       ${renderPagination("updates", allRows.length, 5)}
     </section>
   `;
@@ -728,7 +752,7 @@ function renderGallerySection() {
   return `
     <section class="client-surface">
       <div class="client-surface-head"><h3>Photo Gallery</h3><div class="client-inline-tools">${renderSearchInput("gallery", "Search gallery")}${renderGalleryProjectFilter()}<span class="meta-pill">${allRows.length} Photos</span></div></div>
-      <div class="client-gallery-grid" style="margin-top:1rem;">${rows.length ? rows.map((row) => `<article class="client-gallery-card"><div class="client-gallery-media">${row.photo_url ? `<img src="${row.photo_url}" alt="${escapeHtml(row.photo_title || "Photo")}" loading="lazy" data-lightbox-src="${row.photo_url}" style="cursor:zoom-in;" />` : `<div class="client-gallery-placeholder">No Preview</div>`}</div><div class="client-gallery-body"><strong>${escapeHtml(row.photo_title || "Photo")}</strong><p class="muted">${escapeHtml(normalizeStatus(row.photo_category || "site_progress"))}</p><div class="client-actions">${row.photo_url ? `<button class="btn btn-sm" data-lightbox-src="${row.photo_url}" type="button">Preview</button><a class="btn btn-sm" href="${row.photo_url}" target="_blank" rel="noopener">Download</a>` : `<button class="btn btn-sm" disabled>No File</button>`}</div></div></article>`).join("") : `<div class="empty-state">No gallery photos match your search.</div>`}</div>
+      <div class="client-gallery-grid" style="margin-top:1rem;">${rows.length ? rows.map((row) => `<article class="client-gallery-card"><div class="client-gallery-media">${row.photo_url ? `<img src="${row.photo_url}" alt="${escapeHtml(row.photo_title || "Photo")}" loading="lazy" data-lightbox-src="${row.photo_url}" style="cursor:zoom-in;" />` : `<div class="client-gallery-placeholder">No Preview</div>`}</div><div class="client-gallery-body"><strong>${escapeHtml(row.photo_title || "Photo")}</strong><p class="muted">${escapeHtml(normalizeStatus(row.photo_category || "site_progress"))} · ${escapeHtml(formatDate(row.uploaded_at))}</p><div class="client-actions">${row.photo_url ? `<button class="btn btn-sm" data-lightbox-src="${row.photo_url}" type="button">Preview</button><a class="btn btn-sm" href="${row.photo_url}" target="_blank" rel="noopener">Download</a>` : `<button class="btn btn-sm" disabled>No File</button>`}</div></div></article>`).join("") : `<div class="empty-state"><div class="empty-illustration">🖼️</div><strong>No photos found</strong><p class="muted">Shared project photos will appear in this gallery.</p><button class="btn btn-sm" data-section-tab="updates" type="button">View Site Updates</button></div>`}</div>
       ${renderPagination("gallery", allRows.length, 6)}
     </section>
   `;
@@ -771,12 +795,12 @@ function renderBillingSection() {
       <article class="client-surface client-surface-lg">
         <div class="client-surface-head"><h3>Bills & Payments</h3><div class="client-inline-tools">${renderSearchInput("billing", "Search bills")}<button class="btn btn-sm" data-pdf-action="project-summary" type="button">Export Summary</button></div></div>
         <div class="client-bill-grid" style="margin-top:1rem;">
-          <div class="client-bill-card"><label>Outstanding Amount</label><h3>${formatMoney(outstanding)}</h3></div>
-          <div class="client-bill-card"><label>Paid Amount</label><h3>${formatMoney(0)}</h3></div>
-          <div class="client-bill-card"><label>Pending Invoices</label><h3>${pendingInvoiceCount}</h3></div>
-          <div class="client-bill-card"><label>Next Due Amount</label><h3>${formatMoney(rows[0]?.total_amount || 0)}</h3></div>
+          <div class="client-bill-card"><span class="client-bill-icon">✓</span><label>Paid</label><h3>${formatMoney(0)}</h3></div>
+          <div class="client-bill-card"><span class="client-bill-icon">₹</span><label>Outstanding</label><h3>${formatMoney(outstanding)}</h3></div>
+          <div class="client-bill-card"><span class="client-bill-icon">⏱</span><label>Upcoming</label><h3>${formatMoney(rows[0]?.total_amount || 0)}</h3></div>
+          <div class="client-bill-card"><span class="client-bill-icon">▤</span><label>Invoices</label><h3>${pendingInvoiceCount}</h3></div>
         </div>
-        ${renderDataTable(["Invoice Number", "Date", "Amount", "Status", "Actions"], rows.map((row) => `<tr><td>${escapeHtml(row.bill_number || "Invoice")}</td><td>${escapeHtml(formatDate(row.bill_date || row.created_at))}</td><td>${escapeHtml(formatMoney(row.total_amount || 0))}</td><td>${statusBadgeHtml(row.status)}</td><td><div class="client-actions"><button class="btn btn-sm" data-pdf-action="bill-view" data-pdf-id="${row.id}" type="button">View PDF</button><button class="btn btn-sm" data-pdf-action="bill" data-pdf-id="${row.id}" type="button">Download PDF</button></div></td></tr>`), "No invoices available.")}
+        <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((row) => `<div class="client-list-item client-invoice-card"><div><strong>${escapeHtml(row.bill_number || "Invoice")}</strong><div class="muted">${escapeHtml(formatDate(row.bill_date || row.created_at))}</div></div><div><h3>${escapeHtml(formatMoney(row.total_amount || 0))}</h3>${statusBadgeHtml(row.status)}</div><div class="client-actions"><button class="btn btn-sm" data-pdf-action="bill-view" data-pdf-id="${row.id}" type="button">View PDF</button><button class="btn btn-sm" data-pdf-action="bill" data-pdf-id="${row.id}" type="button">Download</button></div></div>`).join("") : `<div class="empty-state"><div class="empty-illustration">💳</div><strong>No invoices available</strong><p class="muted">Client-visible invoices will be listed here.</p></div>`}</div>
         ${renderPagination("billing", allRows.length, 5)}
       </article>
       <article class="client-surface">
@@ -792,16 +816,16 @@ function renderDocumentsSection() {
   const search = sectionSearchTerm("documents");
   const docs = unfilteredDocs.filter((doc) => matchesSearch(search, doc.title, doc.category, doc.subtitle));
   const rows = paginateRows("documents", docs, 6).rows;
-  const folders = ["Design Drawings", "Invoices", "Contracts", "Approvals", "Reports", "Completion Documents"];
+  const folders = ["Drawings", "Invoices", "Contracts", "Approvals", "Reports", "Completion"];
   return `
     <section class="client-workspace-grid">
       <article class="client-surface">
-        <div class="client-surface-head"><h3>Document Categories</h3></div>
-        <div class="client-folder-grid" style="margin-top:1rem;">${folders.map((folder) => `<div class="client-folder-card"><strong>${folder}</strong><div class="muted">${unfilteredDocs.filter((doc) => doc.category === folder).length} item(s)</div></div>`).join("")}</div>
+        <div class="client-surface-head"><h3>Document Folders</h3></div>
+        <div class="client-folder-grid" style="margin-top:1rem;">${folders.map((folder) => { const count = unfilteredDocs.filter((doc) => doc.category === folder || doc.category === `Design ${folder}` || doc.category === `${folder} Documents`).length; return `<div class="client-folder-card"><div class="client-folder-icon">📁</div><strong>${folder}</strong><div class="muted">${count} file(s)</div><div class="muted">Latest update: ${escapeHtml(formatDate(unfilteredDocs[0]?.at || unfilteredDocs[0]?.created_at || null))}</div><div class="client-actions" style="margin-top:.6rem;"><button class="btn btn-sm" data-pdf-action="documents" type="button">Preview</button><button class="btn btn-sm" data-pdf-action="documents" type="button">Download</button></div></div>`; }).join("")}</div>
       </article>
       <article class="client-surface client-surface-lg">
         <div class="client-surface-head"><h3>Downloads</h3><div class="client-inline-tools">${renderSearchInput("documents", "Search documents")}<button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register PDF</button></div></div>
-        <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((doc) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(doc.subtitle)}</div></div><div class="client-actions">${doc.href ? `<a class="btn btn-sm" href="${doc.href}" target="_blank" rel="noopener">Preview</a><a class="btn btn-sm" href="${doc.href}" target="_blank" rel="noopener">Download</a>` : `<button class="btn btn-sm" disabled>Unavailable</button>`}</div></div></div>`).join("") : `<div class="empty-state">No documents match your search.</div>`}</div>
+        <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((doc) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(doc.subtitle)}</div></div><div class="client-actions">${doc.href ? `<a class="btn btn-sm" href="${doc.href}" target="_blank" rel="noopener">Preview</a><a class="btn btn-sm" href="${doc.href}" target="_blank" rel="noopener">Download</a>` : `<button class="btn btn-sm" disabled>Unavailable</button>`}</div></div></div>`).join("") : `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents found</strong><p class="muted">Shared drawings, invoices, approvals, and reports will appear here.</p><button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register</button></div>`}</div>
         ${renderPagination("documents", docs.length, 6)}
       </article>
     </section>
@@ -839,7 +863,8 @@ function renderNotificationsSection() {
   const rows = paginateRows("notifications", allItems, 8).rows;
   return `
     <section class="client-surface">
-      <div class="client-surface-head"><h3>Notifications</h3><div class="client-inline-tools">${renderSearchInput("notifications", "Search notifications")}<span class="meta-pill">${allItems.length} Total</span></div></div>
+      <div class="client-surface-head"><h3>Notification Center</h3><div class="client-inline-tools">${renderSearchInput("notifications", "Search notifications")}<span class="meta-pill">${allItems.filter((item) => item.unread).length} Unread</span><button class="btn btn-sm" id="markNotificationsReadBtn" type="button">Mark all read</button></div></div>
+      <div class="client-actions" style="margin-top:.75rem;"><span class="meta-pill">Today</span><span class="meta-pill">Yesterday</span><span class="meta-pill">Earlier</span><span class="meta-pill">${allItems.length} Total</span></div>
       <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((item) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(item.title)}</strong>${item.unread ? `<span class="client-nav-badge" style="margin-left:.5rem;">New</span>` : ""}<div class="muted">${escapeHtml(item.detail)}</div></div><div><span class="client-notice tone-${item.tone}">${escapeHtml(normalizeStatus(item.tone))}</span><div class="muted" style="margin-top:.35rem;">${escapeHtml(formatDateTime(item.at))}</div></div></div></div>`).join("") : `<div class="empty-state">No notifications match your search.</div>`}</div>
       ${renderPagination("notifications", allItems.length, 8)}
     </section>
@@ -860,6 +885,8 @@ function renderWorkspaceSection() {
         <div class="client-project-hero-copy">
           <div class="client-actions"><span class="meta-pill">${escapeHtml(project.project_code || "Project")}</span>${projectStatusBadge(project)}</div>
           <h2>${escapeHtml(project.project_title || project.project_name || "Project")}</h2>
+          <p class="muted">Client: ${escapeHtml(PAGE_STATE.clientRecord?.client_name || "-")} · Project Manager: ${escapeHtml(projectManagerName())}</p>
+          <div class="client-actions" style="margin-bottom:.4rem;"><strong>${progress}% Complete</strong></div>
           <div class="client-progress-bar"><span style="width:${progress}%"></span></div>
           <div class="client-summary-grid compact-grid" style="margin-top:.85rem;">
             <div><label>Start Date</label><strong>${escapeHtml(formatDate(startDate))}</strong></div>
@@ -869,8 +896,8 @@ function renderWorkspaceSection() {
           </div>
           <div class="client-actions" style="margin-top:.85rem;">
             <button class="btn btn-sm" data-section-tab="designs" type="button">View Designs</button>
-            <button class="btn btn-sm" data-section-tab="gallery" type="button">View Photos</button>
-            <button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download Summary PDF</button>
+            <button class="btn btn-sm" data-section-tab="gallery" type="button">Gallery</button>
+            <button class="btn btn-sm" data-section-tab="documents" type="button">Documents</button>
           </div>
         </div>
       </div>
@@ -915,8 +942,10 @@ function buildTimeline() {
 const CLIENT_APP_STYLES = `
   :root{--bg:#071426 !important;--surface:#0f213f !important;--surface-soft:#13284b !important;--primary:#f5c16c !important;--primary-strong:#f7cf8e !important;--border:rgba(255,255,255,.08) !important;--radius:16px !important;--shadow:0 24px 48px rgba(2,8,23,.45) !important;}
 
-  #appSidebar.client-sidebar{display:flex;flex-direction:column;gap:.85rem;overflow-y:auto;}
-  #appSidebar.client-sidebar .nav-root{max-height:none;flex:1;overflow-y:visible;}
+  #appSidebar.client-sidebar{display:flex;flex-direction:column;gap:1rem;overflow-y:auto;background:linear-gradient(180deg,#08152a,#0b1b34 58%,#071426);border-right:1px solid rgba(255,255,255,.08);}
+  #appSidebar.client-sidebar .nav-root{max-height:none;flex:1;overflow-y:visible;display:grid;gap:.95rem;}
+  #appSidebar.client-sidebar .nav-section{padding:.2rem .15rem .9rem;border-bottom:1px solid rgba(255,255,255,.07);}
+  #appSidebar.client-sidebar .nav-section-title{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#8ea3bd;margin:0 0 .55rem .25rem;}
   .client-brand-row{display:flex;align-items:center;gap:.6rem;}
   .client-brand-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#111827;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;}
   .client-sidebar-foot{margin-top:auto;padding-top:.85rem;border-top:1px solid var(--border);}
@@ -939,7 +968,29 @@ const CLIENT_APP_STYLES = `
   }
 
   .client-nav-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 .3rem;border-radius:999px;background:var(--primary);color:#111827;font-size:.68rem;font-weight:700;margin-left:auto;}
-  .nav-link{position:relative;}
+
+  #appSidebar.client-sidebar .nav-link{
+    position:relative;
+    appearance:none;
+    -webkit-appearance:none;
+    background:transparent;
+    border:1px solid transparent;
+    width:100%;
+    text-align:left;
+    font:inherit;
+    cursor:pointer;
+    color:#d8e2f0;
+    display:flex;align-items:center;gap:.65rem;border-radius:12px;padding:.68rem .75rem;transition:transform .16s ease,background .16s ease,border-color .16s ease,color .16s ease;
+  }
+  #appSidebar.client-sidebar .nav-link:hover{background:rgba(255,255,255,.06);border-color:rgba(245,193,108,.28);color:#eef4ff;transform:translateX(2px);}
+  #appSidebar.client-sidebar .nav-link.active{background:linear-gradient(90deg,rgba(245,193,108,.18),rgba(245,193,108,.06));border-color:rgba(245,193,108,.52);color:#fff;box-shadow:0 0 0 1px rgba(245,193,108,.12);}
+  #appSidebar.client-sidebar .nav-link.active::before{content:"";position:absolute;left:-.15rem;top:.55rem;bottom:.55rem;width:3px;border-radius:999px;background:var(--primary);}
+  #appSidebar.client-sidebar .nav-icon{color:var(--primary);border:1px solid rgba(245,193,108,.35);width:28px;height:28px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  #appSidebar.client-sidebar .nav-link.active .nav-icon{background:rgba(245,193,108,.18);}
+
+  .client-support-card{border:1px solid var(--border);border-radius:var(--radius);padding:.9rem 1rem;background:linear-gradient(160deg,rgba(245,193,108,.1),var(--surface-soft));}
+  .client-support-card strong{display:block;margin-bottom:.3rem;font-weight:700;}
+  .client-support-email{display:block;font-size:.84rem;text-decoration:none;}
 
   .client-view-toggle{display:inline-flex;gap:.3rem;border:1px solid var(--border);border-radius:10px;padding:.2rem;}
   .client-view-toggle .btn{border:none;background:transparent;}
@@ -963,68 +1014,105 @@ const CLIENT_APP_STYLES = `
   .client-inline-tools{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
   .client-download{display:inline-flex;align-items:center;gap:.35rem;}
 
-  .client-dashboard-stack{display:grid;gap:1rem;}
+  .client-dashboard-stack{display:grid;gap:1.15rem;animation:clientFadeUp .22s ease both;}
+  .client-dashboard-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;}
+  @media (max-width:900px){.client-dashboard-panels{grid-template-columns:1fr;}}
   .client-workspace-grid{display:grid;grid-template-columns:1.4fr .9fr;gap:1rem;align-items:start;}
   @media (max-width:1100px){.client-workspace-grid{grid-template-columns:1fr;}}
 
-  .client-surface{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.05rem;box-shadow:var(--shadow);}
+  .client-surface{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015)),var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.35rem 1.45rem;box-shadow:var(--shadow);animation:clientFadeUp .22s ease both;}
   .client-surface-head{display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;}
-  .client-surface-head h3{margin:0;}
+  .client-surface-head h3{margin:0;font-weight:700;}
+  .page-content h1,.page-content h2,.page-content h3{font-weight:700;}
 
-  .client-project-hero{display:flex;gap:1rem;align-items:stretch;flex-wrap:wrap;}
-  .client-project-hero-media{width:160px;min-height:110px;border-radius:var(--radius);overflow:hidden;background:var(--surface-soft);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .client-surface-hero{padding:1.55rem;background:radial-gradient(circle at top right,rgba(245,193,108,.18),transparent 34%),linear-gradient(145deg,#11294e,#0d1e39);}
+  .client-project-hero{display:grid;grid-template-columns:minmax(220px,340px) 1fr;gap:1.45rem;align-items:stretch;}
+  .client-project-hero-media{min-height:230px;border-radius:calc(var(--radius) + 4px);overflow:hidden;background:var(--surface-soft);display:flex;align-items:center;justify-content:center;}
   .client-project-hero-media img{width:100%;height:100%;object-fit:cover;}
   .client-project-hero-placeholder{color:var(--muted);font-weight:700;letter-spacing:.05em;}
   .client-project-hero-copy{flex:1;min-width:200px;}
-  .client-project-hero-copy h2{margin:.35rem 0;}
+  .client-project-hero-copy h2{margin:.5rem 0;font-weight:700;}
+  .client-project-hero-copy .client-progress-bar{height:14px;margin:.75rem 0;}
 
-  .client-metric-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.85rem;}
-  .client-metric-card{border:1px solid var(--border);border-radius:var(--radius);padding:.9rem 1rem;background:var(--surface);}
-  .client-metric-card label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.04em;}
-  .client-metric-card strong{font-size:1.3rem;}
-  .client-metric-card span{display:block;font-size:.78rem;color:var(--muted);margin-top:.2rem;}
+  .client-metric-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1rem;}
+  .client-metric-card{position:relative;border:1px solid var(--border);border-radius:var(--radius);padding:1.35rem 1.35rem;background:linear-gradient(160deg,var(--surface-soft),var(--surface));transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;overflow:hidden;}
+  .client-metric-card:hover{transform:translateY(-3px);border-color:rgba(245,193,108,.4);box-shadow:0 18px 38px rgba(2,8,23,.35);}
+  .client-metric-icon{width:34px;height:34px;border-radius:11px;background:rgba(245,193,108,.14);color:var(--primary);display:grid;place-items:center;margin-bottom:.8rem;font-weight:700;}
+  .client-metric-card label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.04em;}
+  .client-metric-card strong{font-size:1.75rem;font-weight:800;color:var(--primary);letter-spacing:-.03em;}
+  .client-metric-card span{display:block;font-size:.78rem;color:var(--muted);margin-top:.3rem;}
   @media (max-width:1100px){.client-metric-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
   @media (max-width:640px){.client-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 
   .client-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;}
-  .client-project-card{border:1px solid var(--border);border-radius:var(--radius);padding:1rem;background:var(--surface-soft);}
+  .client-project-card{border:1px solid var(--border);border-radius:var(--radius);padding:1.15rem 1.25rem;background:var(--surface-soft);transition:transform .16s ease,border-color .16s ease;}
+  .client-project-card:hover{transform:translateY(-2px);border-color:rgba(245,193,108,.32);}
   .client-project-card.active{border-color:var(--primary);}
+  .client-project-card h3{font-weight:700;}
 
   .client-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;}
   .client-summary-grid.compact-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));}
   .client-summary-grid label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:.25rem;}
   .client-summary-grid strong{font-size:.95rem;}
 
-  .client-list{display:grid;gap:.75rem;}
-  .client-list-item{border:1px solid var(--border);border-radius:var(--radius);padding:.85rem;background:rgba(255,255,255,.02);}
-  .client-list.compact .client-list-item{padding:.6rem .75rem;}
+  .client-list{display:grid;gap:.85rem;}
+  .client-list-item{border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;background:rgba(255,255,255,.02);transition:background .16s ease,border-color .16s ease,transform .16s ease;}
+  .client-list-item:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.14);transform:translateY(-1px);}
+  .client-list-item strong{font-weight:700;}
+  .client-list.compact .client-list-item{padding:.7rem .85rem;}
 
-  .client-notice{display:inline-flex;align-items:center;gap:.4rem;border-radius:999px;padding:.2rem .6rem;font-size:.76rem;}
-  .client-notice.tone-warning{background:rgba(250,204,21,.12);color:#facc15;}
-  .client-notice.tone-success{background:rgba(34,197,94,.12);color:var(--success);}
-  .client-notice.tone-info{background:rgba(96,165,250,.12);color:#60a5fa;}
+  .client-notice{display:inline-flex;align-items:center;gap:.4rem;border-radius:999px;padding:.22rem .65rem;font-size:.76rem;font-weight:600;}
+  .client-notice.tone-warning{background:rgba(250,204,21,.14);color:#facc15;}
+  .client-notice.tone-success{background:rgba(34,197,94,.14);color:var(--success);}
+  .client-notice.tone-danger{background:rgba(248,113,113,.14);color:var(--danger);}
+  .client-notice.tone-info{background:rgba(96,165,250,.14);color:#60a5fa;}
+  .client-notice.tone-neutral{background:rgba(148,163,184,.14);color:#cbd5e1;}
 
-  .client-progress-bar{width:100%;height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;}
+  .client-progress-bar{width:100%;height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.25);}
   .client-progress-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--primary),var(--primary-strong));}
   .client-progress-mini{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;background:var(--surface-soft);border:1px solid var(--border);font-size:.78rem;font-weight:600;}
 
-  .client-gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;}
-  .client-gallery-card{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-soft);}
-  .client-gallery-media{height:140px;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;}
-  .client-gallery-media img{width:100%;height:100%;object-fit:cover;}
+  .client-gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.1rem;}
+  .client-gallery-card{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-soft);transition:transform .18s ease,border-color .18s ease;}
+  .client-gallery-card:hover{transform:translateY(-3px);border-color:rgba(245,193,108,.36);}
+  .client-gallery-media{height:190px;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .client-gallery-media img{width:100%;height:100%;object-fit:cover;transition:transform .24s ease;}
+  .client-gallery-card:hover .client-gallery-media img{transform:scale(1.045);}
   .client-gallery-placeholder{color:var(--muted);font-size:.82rem;}
-  .client-gallery-body{padding:.75rem;}
+  .client-gallery-body{padding:.95rem 1rem;}
+  .client-gallery-body strong{font-weight:700;}
 
   .client-bill-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;}
-  .client-bill-card{border:1px solid var(--border);border-radius:var(--radius);padding:1rem;background:var(--surface-soft);}
-  .client-bill-card label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:.3rem;}
+  .client-bill-card{border:1px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.2rem;background:var(--surface-soft);}
+  .client-bill-icon,.client-folder-icon{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;background:rgba(245,193,108,.14);color:var(--primary);margin-bottom:.55rem;}
+  .client-invoice-card{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:1rem;}
+  .client-bill-card label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:.35rem;}
 
-  .client-folder-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.85rem;}
-  .client-folder-card{border:1px solid var(--border);border-radius:var(--radius);padding:.85rem;background:var(--surface-soft);}
+  .client-folder-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.9rem;}
+  .client-folder-card{border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.05rem;background:var(--surface-soft);transition:transform .16s ease,border-color .16s ease;}
+  .client-folder-card:hover{transform:translateY(-2px);border-color:rgba(245,193,108,.32);}
+  .client-folder-card strong{font-weight:700;}
 
   .client-textarea{width:100%;border:1px solid var(--border);border-radius:10px;padding:.7rem .78rem;background:var(--surface-soft);color:var(--text);resize:vertical;}
 
   .client-pagination{display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;margin-top:1rem;}
+  .client-feed-stack{display:grid;gap:1rem;}
+  .client-feed-card{display:grid;grid-template-columns:minmax(180px,280px) 1fr;gap:1rem;align-items:stretch;}
+  .client-feed-media{min-height:170px;border-radius:var(--radius);background:rgba(255,255,255,.04);overflow:hidden;display:grid;place-items:center;}
+  .client-feed-media img{width:100%;height:100%;object-fit:cover;cursor:zoom-in;}
+  .empty-illustration{font-size:2.1rem;line-height:1;margin-bottom:.5rem;opacity:.88;}
+  .empty-state{border:1px dashed rgba(255,255,255,.14);border-radius:var(--radius);padding:1.5rem;text-align:center;background:rgba(255,255,255,.02);}
+  .table-container{border-radius:var(--radius);overflow:auto;border:1px solid var(--border);}
+  .table-container table{border-collapse:separate;border-spacing:0;width:100%;}
+  .table-container th{position:sticky;top:0;background:var(--surface-soft);z-index:1;}
+  .table-container td,.table-container th{padding:.9rem 1rem;}
+  .table-container tbody tr:nth-child(even){background:rgba(255,255,255,.018);}
+  .table-container tbody tr:hover{background:rgba(245,193,108,.06);}
+  .client-footer{display:flex;flex-wrap:wrap;gap:.85rem;align-items:center;justify-content:center;padding:1.4rem .5rem;color:var(--muted);font-size:.84rem;}
+  .client-footer a{color:var(--muted);text-decoration:none;}
+  .client-footer a:hover{color:var(--primary);}
+  @keyframes clientFadeUp{from{opacity:.86;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  @media (max-width:760px){.client-project-hero,.client-feed-card,.client-invoice-card{grid-template-columns:1fr;}.client-project-hero-media{min-height:180px;}.client-surface{padding:1rem;}.page-head .client-actions{align-items:stretch;}.page-head .client-actions>*{max-width:100%;}}
 `;
 
 function renderClientBreadcrumbs() {
@@ -1079,6 +1167,7 @@ function render() {
         <section class="page-content">
           ${renderCurrentView()}
         </section>
+        <footer class="client-footer"><strong>Varada Nexus Client Portal</strong><span>Version 2.0</span><a href="mailto:support@varadanexus.com">Support</a><a href="#" aria-label="Privacy policy">Privacy</a><a href="#" aria-label="Terms">Terms</a></footer>
       </div>
     </div>
     <div class="client-sidebar-backdrop" id="clientSidebarBackdrop"></div>
@@ -1182,6 +1271,8 @@ function bindClientAppEvents(app) {
 
   qs("#themeToggle")?.addEventListener("click", () => toggleTheme());
   qs("#logoutBtn")?.addEventListener("click", async () => logout());
+  qs("#logoutBtnSidebar")?.addEventListener("click", async () => logout());
+  qs("#markNotificationsReadBtn")?.addEventListener("click", () => { markNotificationsSeenNow(); render(); });
   qs("#switchPortalBtn")?.addEventListener("click", async () => {
     const portals = await resolveAvailablePortals();
     if (portals.length > 1) {
