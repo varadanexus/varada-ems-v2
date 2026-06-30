@@ -1,0 +1,17 @@
+# Generated CLI / debug session logs — never commit these.
+# No log file in this repository is intentionally versioned; all known instances
+# (Supabase CLI session output, db push runs, local static server output) were
+# generated artifacts removed from history during the 2026-06-30 repository cleanup.
+/bootstrap-debug.log
+/interiors-commercial-reset.log
+/interiors-commercial-start.log
+/interiors-commercial-workflow-reset.log
+/prod-db-push.log
+/prod-db-push-include-all.log
+/static-server.log
+
+# General generated-artifact patterns (CLI output, process logs, traces, dumps).
+*.log
+*.out
+*.trace
+*.dump
