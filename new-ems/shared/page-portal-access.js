@@ -70,21 +70,26 @@ function canReveal() {
 
 async function loadDashboard() {
   const [tp, ep, icp] = await Promise.all([
-    client.from("transport_portal_users").select("id,status,is_locked,last_login_at,transport_client_portal_access(transport_client_id),transport_transporter_portal_access(transport_transporter_id)"),
-    client.from("external_portal_users").select("id,status,is_locked,last_login_at,user_type,external_portal_access(source_module)"),
+    client.rpc("portal_access_list_transport_users"),
+    client.rpc("portal_access_list_external_users"),
     client.from("interior_client_portal_users").select("id,access_status,activated_at")
   ]);
+  if (tp.error) throw tp.error;
+  if (ep.error) throw ep.error;
   const tpRows = tp.data || [];
   const epRows = ep.data || [];
   const icpRows = icp.data || [];
 
   const byDivision = { transportation: 0, interiors: 0 };
   tpRows.forEach((u) => { byDivision.transportation += 1; });
-  epRows.forEach((u) => { (u.external_portal_access || []).forEach((a) => { byDivision[a.source_module] = (byDivision[a.source_module] || 0) + 1; }); });
+  epRows.forEach((u) => { (u.access_rows || []).forEach((a) => { byDivision[a.source_module] = (byDivision[a.source_module] || 0) + 1; }); });
   icpRows.forEach(() => { byDivision.interiors += 1; });
 
   const byType = {};
-  tpRows.forEach((u) => { if ((u.transport_client_portal_access || []).length) byType["Transportation Client"] = (byType["Transportation Client"] || 0) + 1; if ((u.transport_transporter_portal_access || []).length) byType["Transportation Transporter"] = (byType["Transportation Transporter"] || 0) + 1; });
+  tpRows.forEach((u) => {
+    if ((u.access_rows || []).some((a) => a.linked_entity_type === "client")) byType["Transportation Client"] = (byType["Transportation Client"] || 0) + 1;
+    if ((u.access_rows || []).some((a) => a.linked_entity_type === "transporter")) byType["Transportation Transporter"] = (byType["Transportation Transporter"] || 0) + 1;
+  });
   epRows.forEach((u) => { const label = capitalize(u.user_type); byType[label] = (byType[label] || 0) + 1; });
   byType["Interiors Client"] = icpRows.length;
 
@@ -102,19 +107,19 @@ async function loadDashboard() {
 
 async function loadAllRows() {
   const [tp, ep] = await Promise.all([
-    client.from("transport_portal_users").select("id,portal_user_code,username,email,phone,display_name,status,is_locked,failed_login_attempts,last_login_at,transport_client_portal_access(id,is_active,access_level,transport_client_id,transport_clients(name)),transport_transporter_portal_access(id,is_active,access_level,transport_transporter_id,transport_transporters(name))"),
-    client.from("external_portal_users").select("id,portal_user_code,username,email,phone,display_name,status,is_locked,failed_login_attempts,last_login_at,user_type,external_portal_access(id,is_active,access_level,source_module,record_type,record_id)")
+    client.rpc("portal_access_list_transport_users"),
+    client.rpc("portal_access_list_external_users")
   ]);
   if (tp.error) throw tp.error;
   if (ep.error) throw ep.error;
 
   const rows = [];
   (tp.data || []).forEach((u) => {
-    (u.transport_client_portal_access || []).filter((a) => a.is_active).forEach((a) => rows.push(baseRow(u, "transport", "Transportation", "Client", a.transport_clients?.name, "Transportation Client Portal", a.access_level, [{ id: a.id, kind: "client" }])));
-    (u.transport_transporter_portal_access || []).filter((a) => a.is_active).forEach((a) => rows.push(baseRow(u, "transport", "Transportation", "Transporter", a.transport_transporters?.name, "Transportation Transporter Portal", a.access_level, [{ id: a.id, kind: "transporter" }])));
+    (u.access_rows || []).filter((a) => a.is_active && a.linked_entity_type === "client").forEach((a) => rows.push(baseRow(u, "transport", "Transportation", "Client", a.linked_entity_name, "Transportation Client Portal", a.access_level, [{ id: a.id, kind: "client" }])));
+    (u.access_rows || []).filter((a) => a.is_active && a.linked_entity_type === "transporter").forEach((a) => rows.push(baseRow(u, "transport", "Transportation", "Transporter", a.linked_entity_name, "Transportation Transporter Portal", a.access_level, [{ id: a.id, kind: "transporter" }])));
   });
   (ep.data || []).forEach((u) => {
-    (u.external_portal_access || []).filter((a) => a.is_active).forEach((a) => rows.push(baseRow(u, "external", a.source_module === "interiors" ? "Interiors" : "Transportation", capitalize(u.user_type), externalLinkedEntityLabel(u, a), portalTypeLabel(u.user_type, a.source_module), a.access_level, [{ id: a.id, kind: "external" }])));
+    (u.access_rows || []).filter((a) => a.is_active).forEach((a) => rows.push(baseRow(u, "external", a.source_module === "interiors" ? "Interiors" : "Transportation", capitalize(u.user_type), externalLinkedEntityLabel(u, a), portalTypeLabel(u.user_type, a.source_module), a.access_level, [{ id: a.id, kind: "external" }])));
   });
   PAGE_STATE.allRows = rows;
 }
