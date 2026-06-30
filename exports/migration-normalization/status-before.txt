@@ -1,0 +1,5 @@
+ M new-ems/supabase/.temp/cli-latest
+?? .claude/settings.json
+?? exports/migration-normalization/
+?? exports/recovery-untracked-before-cleanup.txt
+?? exports/recovery-working-tree-before-cleanup.patch

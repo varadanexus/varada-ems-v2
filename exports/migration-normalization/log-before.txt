@@ -1,0 +1,12 @@
+343110a Sprint 11 central accounts reporting layer
+f37178f Sprint 10E interiors release hardening reports and conversion
+a325601 Sprint 10D interiors leads and project closure foundation
+7bc0c71 Repair Supabase migration source of truth
+fc4c5f7 Sprint 10C.9 client portal approval RLS and UX completion
+008d4e1 stablization
+29b9ec5 Add AI current state context for Varada EMS 2.0
+69fb5b0 Sprint 10C.8 Premium Client Portal UX
+06cb6c8 Sprint 10B.14 stabilization
+f6a1ee8 Pre-production-stabilization-checkpoint
+29f56cc stable
+fde8999 central account stabilization
