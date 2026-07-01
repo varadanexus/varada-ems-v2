@@ -1,14 +1,3 @@
--- Sprint 13B: Portal Access – Sessions tab safe read RPC.
---
--- transport_portal_sessions and external_portal_sessions have NO select policy for
--- authenticated staff (session tokens are bearer credentials — even admins must never
--- read them directly). This SECURITY DEFINER function exposes only safe metadata (no
--- token column) and is gated behind the same permission check used by the existing
--- portal_access_list_transport_users / portal_access_list_external_users list RPCs.
---
--- Results are ordered by created_at desc and limited to 500 rows so the tab is usable
--- immediately after boot; the caller can add additional client-side filtering.
-
 create or replace function public.portal_access_list_sessions()
 returns table(
   session_id        uuid,
@@ -77,4 +66,4 @@ begin
 end;
 $$;
 
-grant execute on function public.portal_access_list_sessions() to authenticated;
+grant execute on function public.portal_access_list_sessions() to authenticated;;
