@@ -157,7 +157,7 @@ function renderGstInvoices() {
   const rows = PAGE_STATE.gstInvoices;
   return renderTable(
     ["Invoice No", "Date", "Status", "Taxable Value", "GST %", "GST Amount", "Invoice Total", "PDF"],
-    rows.map((i) => [i.invoice_no, formatDate(i.invoice_date), statusBadge(i.status), formatMoney(i.taxable_value), i.gst_percentage, formatMoney(i.gst_amount), formatMoney(i.invoice_total), pdfButton("gst", i)]),
+    rows.map((i) => [i.invoice_no, formatDate(i.invoice_date), statusBadge(i.status), formatMoney(i.taxable_value), i.gst_percentage ?? "-", formatMoney(i.gst_amount), formatMoney(i.invoice_total), pdfButton("gst", i)]),
     "No GST invoices found."
   );
 }
@@ -277,21 +277,52 @@ function bindEvents() {
 
 function downloadPdf(kind, id) {
   const c = activeClient();
-  let row, title, fields;
+  let row, title, fields, filename;
   if (kind === "bill") {
     row = PAGE_STATE.bills.find((b) => String(b.id) === String(id));
-    title = `Bill ${row?.bill_no || ""}`;
-    fields = [["Bill No", row?.bill_no], ["Date", formatDate(row?.bill_date)], ["Status", row?.status], ["Gross Total", formatMoney(row?.gross_total)], ["Net Receivable", formatMoney(row?.net_receivable)]];
+    if (!row) return;
+    title = `Bill ${row.bill_no || ""}`;
+    filename = (row.bill_no || "bill").replace(/\//g, "-");
+    fields = [
+      ["Bill No", row.bill_no],
+      ["Date", formatDate(row.bill_date)],
+      ["Type", row.billing_type || "-"],
+      ["Status", row.status],
+      ["Gross Total", formatMoney(row.gross_total)],
+      ["Net Receivable", formatMoney(row.net_receivable)]
+    ];
+    if (row.billing_type === "GST") {
+      fields.push(["Taxable Value", formatMoney(row.taxable_value)]);
+      fields.push(["GST %", row.gst_percentage ?? "-"]);
+      fields.push(["GST Amount", formatMoney(row.gst_amount)]);
+      fields.push(["Invoice Total", formatMoney(row.invoice_total)]);
+    }
   } else {
     row = PAGE_STATE.gstInvoices.find((i) => String(i.id) === String(id));
-    title = `GST Invoice ${row?.invoice_no || ""}`;
-    fields = [["Invoice No", row?.invoice_no], ["Date", formatDate(row?.invoice_date)], ["Status", row?.status], ["Taxable Value", formatMoney(row?.taxable_value)], ["GST Amount", formatMoney(row?.gst_amount)], ["Invoice Total", formatMoney(row?.invoice_total)]];
+    if (!row) return;
+    title = `GST Invoice ${row.invoice_no || ""}`;
+    filename = (row.invoice_no || "gst-invoice").replace(/\//g, "-");
+    fields = [
+      ["Invoice No", row.invoice_no],
+      ["Date", formatDate(row.invoice_date)],
+      ["Status", row.status],
+      ["Taxable Value", formatMoney(row.taxable_value)],
+      ["GST %", row.gst_percentage ?? "-"],
+      ["GST Amount", formatMoney(row.gst_amount)],
+      ["Invoice Total", formatMoney(row.invoice_total)]
+    ];
   }
-  if (!row) return;
-  const popup = window.open("", "_blank", "noopener,noreferrer,width=720,height=600");
-  if (!popup) return showToast("Popup blocked. Allow popups to download.", TOAST_TYPES.ERROR);
-  popup.document.write(`<!doctype html><html><head><title>${escapeHtml(title)}</title><style>body{font-family:Arial,sans-serif;padding:24px;}table{width:100%;border-collapse:collapse;margin-top:16px;}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;}</style></head><body><h2>${escapeHtml(title)}</h2><p>${escapeHtml(c?.name || "")}</p><table>${fields.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(String(v ?? "-"))}</td></tr>`).join("")}</table><script>window.onload=function(){window.print();};<\/script></body></html>`);
-  popup.document.close();
+  // Blob + hidden anchor — direct download, no popup, browser never blocks this.
+  const html = `<!doctype html><html><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title><style>body{font-family:Arial,sans-serif;padding:24px;max-width:720px;margin:auto;}h2{margin-bottom:.25rem;}p{color:#666;margin-top:0;}table{width:100%;border-collapse:collapse;margin-top:1rem;}th,td{border:1px solid #d1d5db;padding:8px 12px;text-align:left;}th{background:#f9fafb;width:40%;}</style></head><body><h2>${escapeHtml(title)}</h2><p>${escapeHtml(c?.name || "")}</p><table>${fields.map(([k, v]) => `<tr><th>${escapeHtml(String(k))}</th><td>${escapeHtml(String(v ?? "-"))}</td></tr>`).join("")}</table></body></html>`;
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${filename}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 init().catch((error) => {
