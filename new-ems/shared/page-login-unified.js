@@ -340,12 +340,48 @@ function capitalize(v) {
 }
 
 // ─── Init ────────────────────────────────────────────────────────────────────
+//
+// Render order is deliberate:
+//   1. initTheme()           — synchronous, sets data-theme attribute
+//   2. render()              — synchronous, injects login form into #app immediately
+//   3. checkExistingSession()— async, runs AFTER form is visible.
+//                              If user is already logged in → redirect.
+//                              If not (or if check fails) → form stays, user can log in.
+//
+// This order guarantees the form is always visible on load regardless of network latency
+// or Supabase client initialisation time.
 
 async function init() {
-  initTheme();
-  PAGE_STATE.loginType = parseTypeFromUrl();
-  await checkExistingSession();
-  render();
+  window.UNIFIED_LOGIN_BOOT = true;
+
+  try {
+    initTheme();
+    PAGE_STATE.loginType = parseTypeFromUrl();
+
+    // Render the login form synchronously FIRST so the page is never blank.
+    render();
+    window.UNIFIED_LOGIN_RENDER = true;
+
+    // Session pre-check runs after the form is visible.
+    // Errors here are intentionally swallowed — a failed session check just means
+    // the user sees the login form (already rendered above) and logs in normally.
+    await checkExistingSession().catch(() => { /* stay on login form */ });
+  } catch (err) {
+    window.UNIFIED_LOGIN_ERROR = err?.message || String(err);
+    console.error("[UNIFIED_LOGIN_ERROR]", err);
+    // Last-resort error UI — should never be reached since render() is synchronous.
+    const app = document.getElementById("app");
+    if (app && !app.innerHTML.trim()) {
+      app.innerHTML = `
+        <style>.ul-err{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b1b34;color:#f5c16c;font-family:sans-serif;padding:2rem;}</style>
+        <div class="ul-err">
+          <div style="max-width:400px;text-align:center;">
+            <strong>Login failed to load.</strong><br/>
+            <span style="color:#8ea3bd;font-size:.875rem;">Reload the page. If this persists contact your administrator.<br/>(${escHtml(window.UNIFIED_LOGIN_ERROR)})</span>
+          </div>
+        </div>`;
+    }
+  }
 }
 
-init().catch(console.error);
+init();
