@@ -2,10 +2,19 @@ export const APP_NAME = "EMS 2.0";
 
 export const ROUTES = {
   ROOT: "/new-ems/index.html",
-  LOGIN: "/new-ems/login.html",
+  // Sprint 13C: unified login page. /new-ems/login.html redirects here.
+  LOGIN: "/new-ems/modules/login/index.html",
+  LOGIN_LEGACY: "/new-ems/login.html",
   PORTAL_SELECTOR: "/new-ems/modules/portal-selector/index.html",
   DASHBOARD: "/new-ems/modules/dashboard/index.html",
+  INTERIORS_PORTAL_LOGIN: "/new-ems/modules/interiors-portal-login/index.html",
   INTERIORS_CLIENT_APP: "/new-ems/modules/interiors-client-app/index.html",
+  PORTAL_MANAGEMENT: "/new-ems/modules/portal-management/index.html"
+  ,PORTAL_ACCESS: "/new-ems/modules/portal-access/index.html"
+  ,TRANSPORT_PORTAL_LOGIN: "/new-ems/modules/transport-portal-login/index.html",
+  TRANSPORT_PORTAL_SELECTOR: "/new-ems/modules/transport-portal-selector/index.html",
+  TRANSPORT_CLIENT_APP: "/new-ems/modules/transport-client-app/index.html",
+  TRANSPORT_TRANSPORTER_APP: "/new-ems/modules/transport-transporter-app/index.html",
   CENTRAL_ACCOUNTS_DASHBOARD: "/new-ems/modules/central-accounts-dashboard/index.html",
   CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS: "/new-ems/modules/central-accounts-financial-documents/index.html",
   CENTRAL_ACCOUNTS_POSTING_QUEUE: "/new-ems/modules/central-accounts-posting-queue/index.html",
@@ -186,6 +195,8 @@ export const MODULES = {
   ,INTERIORS_VARIATION_REQUESTS: "interiors-variation-requests"
   ,INTERIORS_CHANGE_ORDERS: "interiors-change-orders"
   ,INTERIORS_PROJECT_CLOSURE: "interiors-project-closure"
+  ,PORTAL_MANAGEMENT: "portal-management"
+  ,PORTAL_ACCESS: "portal-access"
 };
 
 export const CONTROL_CENTER_MODULES = [

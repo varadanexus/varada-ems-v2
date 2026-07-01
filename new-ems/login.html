@@ -3,33 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login | EMS 2.0</title>
-  <link rel="stylesheet" href="/new-ems/assets/css/app.css" />
-  <link rel="stylesheet" href="/new-ems/assets/css/responsive.css" />
+  <title>Login | Varada EMS 2.0</title>
+  <!-- Sprint 13C: /new-ems/login.html is a permanent alias for EMS Staff login.
+       All auth logic now lives in /new-ems/modules/login/index.html (unified login).
+       This page immediately redirects there with type=ems preselected. -->
+  <meta http-equiv="refresh" content="0;url=/new-ems/modules/login/index.html?type=ems" />
 </head>
 <body>
-  <main class="login-wrap">
-    <section class="login-card">
-      <h1>Welcome back</h1>
-      <p>Sign in to access EMS 2.0</p>
-      <form id="loginForm" novalidate>
-        <div class="form-row">
-          <label for="email">Email</label>
-          <input id="email" type="email" required autocomplete="username" />
-        </div>
-        <div class="form-row">
-          <label for="password">Password</label>
-          <input id="password" type="password" required autocomplete="current-password" />
-        </div>
-        <button class="btn" type="submit">Sign In</button>
-      </form>
-      <div class="empty-state" style="margin-top: 0.8rem;">Configure <code>new-ems/config/runtime.js</code> with Supabase URL and anon key.</div>
-    </section>
-  </main>
-  <div id="toastHost" class="toast-host" aria-live="polite"></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="/new-ems/config/runtime.js"></script>
-  <script type="module" src="/new-ems/shared/page-login.js"></script>
+  <script>window.location.replace("/new-ems/modules/login/index.html?type=ems");</script>
 </body>
 </html>
