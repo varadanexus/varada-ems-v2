@@ -32,6 +32,12 @@ import {
 import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 
+// ─── Boot diagnostics ────────────────────────────────────────────────────────
+// These fire as soon as the module is parsed and linked. Visible in DevTools
+// console before init() runs. Use to confirm the module loaded at all.
+console.log("[UNIFIED_LOGIN_SCRIPT_LOADED]");
+window.UNIFIED_LOGIN_SCRIPT_LOADED = true;
+
 // ─── External portal session ─────────────────────────────────────────────────
 // Stored independently from all other session types.
 // Never accessible from EMS Auth, Transport portal, or Interiors portal code paths.
@@ -78,7 +84,12 @@ function pushTypeToUrl(type) {
 
 function render() {
   const app = qs("#app");
-  if (!app) return;
+  if (!app) {
+    console.error("[UNIFIED_LOGIN] #app element not found — cannot render login form");
+    return;
+  }
+  console.log("[UNIFIED_LOGIN_ROOT_FOUND]");
+  window.UNIFIED_LOGIN_ROOT_FOUND = true;
 
   if (PAGE_STATE.externalLoginSuccess) {
     renderExternalNoDashboard(app);
@@ -136,6 +147,8 @@ function render() {
     </div>
   `;
 
+  console.log("[UNIFIED_LOGIN_RENDER_DONE]");
+  window.UNIFIED_LOGIN_RENDER_DONE = true;
   bindEvents();
 }
 
@@ -342,16 +355,21 @@ function capitalize(v) {
 // ─── Init ────────────────────────────────────────────────────────────────────
 //
 // Render order is deliberate:
-//   1. initTheme()           — synchronous, sets data-theme attribute
-//   2. render()              — synchronous, injects login form into #app immediately
-//   3. checkExistingSession()— async, runs AFTER form is visible.
-//                              If user is already logged in → redirect.
-//                              If not (or if check fails) → form stays, user can log in.
+//   1. initTheme()                  — synchronous, sets data-theme attribute
+//   2. render()                     — synchronous, injects login form into #app
+//   3. app.classList.add(...)       — reveals #app (app.css starts it at opacity:0)
+//   4. checkExistingSession()       — async, runs AFTER form is already visible.
+//                                     If user already logged in → redirect.
+//                                     If not (or check fails) → form stays.
 //
-// This order guarantees the form is always visible on load regardless of network latency
-// or Supabase client initialisation time.
+// WHY opacity:0 / page-enter-active:
+//   app.css sets #app { opacity:0 } for the shared page-transition animation.
+//   Every module using layout.js calls app.classList.add("page-enter-active")
+//   after rendering. The login page bypasses layout.js, so it must do the same.
 
 async function init() {
+  console.log("[UNIFIED_LOGIN_INIT_START]");
+  window.UNIFIED_LOGIN_INIT_START = true;
   window.UNIFIED_LOGIN_BOOT = true;
 
   try {
@@ -362,6 +380,14 @@ async function init() {
     render();
     window.UNIFIED_LOGIN_RENDER = true;
 
+    // Reveal #app. app.css sets #app { opacity:0 } for the page-transition system.
+    // layout.js adds "page-enter-active" after render; the login page must do the same.
+    // Use requestAnimationFrame so the browser paints the new innerHTML first.
+    requestAnimationFrame(() => {
+      const a = document.getElementById("app");
+      if (a) a.classList.add("page-enter-active");
+    });
+
     // Session pre-check runs after the form is visible.
     // Errors here are intentionally swallowed — a failed session check just means
     // the user sees the login form (already rendered above) and logs in normally.
@@ -369,19 +395,28 @@ async function init() {
   } catch (err) {
     window.UNIFIED_LOGIN_ERROR = err?.message || String(err);
     console.error("[UNIFIED_LOGIN_ERROR]", err);
-    // Last-resort error UI — should never be reached since render() is synchronous.
+    // Last-resort error UI. Normally unreachable because render() is synchronous.
     const app = document.getElementById("app");
-    if (app && !app.innerHTML.trim()) {
-      app.innerHTML = `
-        <style>.ul-err{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b1b34;color:#f5c16c;font-family:sans-serif;padding:2rem;}</style>
-        <div class="ul-err">
-          <div style="max-width:400px;text-align:center;">
-            <strong>Login failed to load.</strong><br/>
-            <span style="color:#8ea3bd;font-size:.875rem;">Reload the page. If this persists contact your administrator.<br/>(${escHtml(window.UNIFIED_LOGIN_ERROR)})</span>
-          </div>
-        </div>`;
+    if (app) {
+      if (!app.innerHTML.trim()) {
+        app.innerHTML = `
+          <style>.ul-err{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b1b34;color:#f5c16c;font-family:sans-serif;padding:2rem;}</style>
+          <div class="ul-err">
+            <div style="max-width:400px;text-align:center;">
+              <strong>Login failed to load.</strong><br/>
+              <span style="color:#8ea3bd;font-size:.875rem;">Reload the page. If this persists contact your administrator.<br/>(${escHtml(window.UNIFIED_LOGIN_ERROR)})</span>
+            </div>
+          </div>`;
+      }
+      // Always make app visible even in error state.
+      app.classList.add("page-enter-active");
     }
   }
 }
 
-init();
+// ES modules are always deferred (run after DOM is parsed), but guard explicitly.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
