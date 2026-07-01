@@ -25,6 +25,7 @@ const PAGE_STATE = {
   dashboard: null,
   trips: [],
   statements: [],
+  dieselAdvances: [],
   payments: [],
   loading: false
 };
@@ -64,6 +65,11 @@ async function loadSection() {
       const { data, error } = await client.rpc("transport_transporter_portal_trips", { p_session_token: token, p_transport_transporter_id: transporterId });
       if (error) throw error;
       PAGE_STATE.trips = data || [];
+    }
+    if (PAGE_STATE.activeSection === "diesel-advances") {
+      const { data, error } = await client.rpc("transport_transporter_portal_diesel_advances", { p_session_token: token, p_transport_transporter_id: transporterId });
+      if (error) throw error;
+      PAGE_STATE.dieselAdvances = data || [];
     }
     if (PAGE_STATE.activeSection === "statements" || PAGE_STATE.activeSection === "deductions" || PAGE_STATE.activeSection === "diesel-advances") {
       const { data, error } = await client.rpc("transport_transporter_portal_statements", { p_session_token: token, p_transport_transporter_id: transporterId });
@@ -160,27 +166,66 @@ function renderDeductions() {
 }
 
 function renderDieselAdvances() {
+  const note = `Includes diesel/support expenses recorded against trips.`;
   return `
-    <section class="card">
-      <h3>Diesel Advances</h3>
-      <p class="muted">Itemized diesel advance tracking is not yet linked to the transporter portal — no dedicated diesel-advance ledger exists in the current schema. Support deductions recorded against your statements (visible in the Deductions tab) include any advances adjusted at settlement.</p>
+    <section class="card" style="margin-bottom:1rem;">
+      <h3>Diesel / Advances</h3>
+      <p class="muted">${escapeHtml(note)}</p>
     </section>
+    ${renderTable(
+      ["Expense No", "Trip No", "Date", "Truck", "Driver", "Category", "Amount", "Paid By", "Notes", "Linked Statement"],
+      PAGE_STATE.dieselAdvances.map((r) => [
+        r.expense_no || "-",
+        r.trip_no || "-",
+        formatDate(r.expense_date),
+        resolveTruckDisplay(r),
+        r.driver_name || "-",
+        r.category || "-",
+        formatMoney(r.amount),
+        r.paid_by || "-",
+        r.notes || "-",
+        r.linked_statement_no || "-"
+      ]),
+      "No diesel / advance / support expenses found."
+    )}
   `;
+}
+
+function resolveTruckDisplay(row) {
+  const primary = [row.truck_no, row.vehicle_no, row.registration_no].find((value) => String(value || "").trim());
+  if (primary) return primary;
+  const truckId = String(row.truck_id || "").trim();
+  if (!truckId) return "Unknown Truck";
+  return `Unknown Truck (${truckId.slice(-6)})`;
 }
 
 function renderTruckSummary() {
   const byTruck = new Map();
   for (const t of PAGE_STATE.trips) {
-    const key = t.truck_id || "unassigned";
-    const entry = byTruck.get(key) || { truck_id: key, trip_count: 0, total_gross: 0 };
+    const key = t.truck_id || t.truck_no || t.vehicle_no || t.registration_no || "unassigned";
+    const entry = byTruck.get(key) || {
+      truck_id: t.truck_id || null,
+      truck_no: t.truck_no || null,
+      vehicle_no: t.vehicle_no || null,
+      registration_no: t.registration_no || null,
+      transporter_name: t.transporter_name || null,
+      trip_count: 0,
+      total_gross: 0
+    };
     entry.trip_count += 1;
     entry.total_gross += Number(t.transporter_gross_amount || 0);
     byTruck.set(key, entry);
   }
   const rows = Array.from(byTruck.values());
   return renderTable(
-    ["Truck", "Trip Count", "Total Gross Amount"],
-    rows.map((r) => [r.truck_id === "unassigned" ? "Unassigned" : r.truck_id, r.trip_count, formatMoney(r.total_gross)]),
+    ["Truck", "Registration No", "Transporter", "Trip Count", "Total Gross Amount"],
+    rows.map((r) => [
+      r.truck_id === "unassigned" ? "Unknown Truck" : resolveTruckDisplay(r),
+      r.registration_no || "-",
+      r.transporter_name || activeTransporter()?.name || "-",
+      r.trip_count,
+      formatMoney(r.total_gross)
+    ]),
     "No trips found to summarize."
   );
 }
@@ -271,6 +316,7 @@ function bindEvents() {
   qs("#transporterSelector")?.addEventListener("change", async (e) => {
     PAGE_STATE.activeTransporterId = e.target.value;
     PAGE_STATE.trips = [];
+    PAGE_STATE.dieselAdvances = [];
     await loadSection();
     render();
   });
