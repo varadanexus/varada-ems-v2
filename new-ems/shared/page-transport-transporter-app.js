@@ -90,7 +90,7 @@ function renderNoAccess() {
 
 function renderSidebar() {
   return `
-    <aside class="app-sidebar" id="appSidebar">
+    <aside class="app-sidebar transport-portal-sidebar" id="appSidebar">
       <div class="brand">Transporter Portal</div>
       <nav class="nav-root">
         <div class="nav-section">
@@ -103,7 +103,7 @@ function renderSidebar() {
         </div>
         <div class="nav-section">
           <div class="nav-section-title">Workspace</div>
-          ${SECTIONS.map(([key, label]) => `<button class="nav-link ${PAGE_STATE.activeSection === key ? "active" : ""}" data-section="${key}" type="button" style="width:100%;text-align:left;border:none;cursor:pointer;">${escapeHtml(label)}</button>`).join("")}
+          ${SECTIONS.map(([key, label]) => `<button class="nav-link ${PAGE_STATE.activeSection === key ? "active" : ""}" data-section="${key}" type="button">${escapeHtml(label)}</button>`).join("")}
         </div>
       </nav>
     </aside>
@@ -234,6 +234,14 @@ function render() {
   const app = qs("#app");
   const t = activeTransporter();
   app.innerHTML = `
+    <style>
+      /* Scoped reset: native <button> elements inside the transporter portal sidebar
+         inherit browser-default background-color:ButtonFace (white). Reset to transparent
+         so the dark sidebar background shows through. Scoped to this sidebar only. */
+      #appSidebar.transport-portal-sidebar .nav-link{appearance:none;-webkit-appearance:none;background:transparent;border:1px solid transparent;width:100%;text-align:left;font:inherit;cursor:pointer;color:#d8e2f0;display:flex;align-items:center;gap:.65rem;border-radius:10px;padding:.62rem .78rem;transition:background .18s ease,border-color .18s ease,color .18s ease;}
+      #appSidebar.transport-portal-sidebar .nav-link:hover{background:rgba(255,255,255,.04);box-shadow:0 0 0 1px rgba(212,178,106,.18);}
+      #appSidebar.transport-portal-sidebar .nav-link.active{color:#eef4ff;background:rgba(255,255,255,.04);border-color:rgba(212,178,106,.45);box-shadow:0 0 0 1px rgba(212,178,106,.12),0 8px 20px rgba(212,178,106,.12);}
+    </style>
     <div class="app-shell">
       ${renderSidebar()}
       <div class="app-main">
@@ -286,7 +294,7 @@ function downloadStatementPdf(id) {
     ["Gross Payable", formatMoney(row.gross_payable_total)], ["Support Deductions", formatMoney(row.support_deduction_total)],
     ["Penalty", formatMoney(row.penalty_amount)], ["GST Input", formatMoney(row.gst_input_amount)], ["Net Payable", formatMoney(row.net_payable_total)]
   ];
-  popup.document.write(`<!doctype html><html><head><title>Statement ${escapeHtml(row.statement_no || "")}</title><style>body{font-family:Arial,sans-serif;padding:24px;}table{width:100%;border-collapse:collapse;margin-top:16px;}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;}</style></head><body><h2>Transporter Statement ${escapeHtml(row.statement_no || "")}</h2><p>${escapeHtml(t?.name || "")}</p><table>${fields.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(String(v ?? "-"))}</td></tr>`).join("")}</table><script>window.onload=function(){window.print();};</script></body></html>`);
+  popup.document.write(`<!doctype html><html><head><title>Statement ${escapeHtml(row.statement_no || "")}</title><style>body{font-family:Arial,sans-serif;padding:24px;}table{width:100%;border-collapse:collapse;margin-top:16px;}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;}</style></head><body><h2>Transporter Statement ${escapeHtml(row.statement_no || "")}</h2><p>${escapeHtml(t?.name || "")}</p><table>${fields.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(String(v ?? "-"))}</td></tr>`).join("")}</table><script>window.onload=function(){window.print();};<\/script></body></html>`);
   popup.document.close();
 }
 
