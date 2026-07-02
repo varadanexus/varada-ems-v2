@@ -66,6 +66,29 @@ function renderActionPill(item) {
   return `<a class="cc-action-pill" href="${item.href}">${item.title}</a>`;
 }
 
+function renderSectionBlock(title, description, content, extraClass = "") {
+  return `
+    <section class="cc-section ${extraClass}">
+      <div class="cc-section-head">
+        <div class="cc-section-copy">
+          <strong>${title}</strong>
+          <span>${description}</span>
+        </div>
+      </div>
+      ${content}
+    </section>
+  `;
+}
+
+function renderDoubleColumnSection(leftHtml, rightHtml) {
+  return `
+    <div class="cc-two-up">
+      <div class="cc-stack">${leftHtml}</div>
+      <div class="cc-stack">${rightHtml}</div>
+    </div>
+  `;
+}
+
 async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.DASHBOARD,
@@ -104,22 +127,24 @@ async function init() {
 
     renderModuleContent(`
       <style>
-        .app-shell.sidebarless .page-head,.app-shell.sidebarless .page-content{max-width:min(1680px,calc(100vw - 32px));}
+        .app-shell.sidebarless .page-head,.app-shell.sidebarless .page-content{max-width:min(1880px,calc(100vw - 24px));}
+        .page-head{padding-bottom:.7rem;}
+        .page-content{padding-top:.65rem;}
         .cc-dashboard{display:grid;gap:1rem;}
-        .cc-hero{position:relative;overflow:hidden;padding:1.35rem 1.4rem 1.2rem;background:linear-gradient(135deg,#0f1a2d 0%,#13233d 48%,#101b31 100%);border:1px solid rgba(148,163,184,.18);box-shadow:0 24px 60px rgba(15,23,42,.18);}
+        .cc-hero{position:relative;overflow:hidden;padding:1.25rem 1.35rem 1.1rem;background:linear-gradient(135deg,#0f1a2d 0%,#13233d 48%,#101b31 100%);border:1px solid rgba(148,163,184,.18);box-shadow:0 24px 60px rgba(15,23,42,.18);}
         .cc-hero::after{content:"";position:absolute;inset:auto -10% -35% auto;width:320px;height:320px;background:radial-gradient(circle,rgba(212,178,106,.18),transparent 62%);pointer-events:none;}
-        .cc-hero-grid{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(420px,.95fr);gap:1rem;align-items:start;position:relative;z-index:1;}
+        .cc-hero-grid{display:grid;grid-template-columns:minmax(0,2.15fr) minmax(480px,1fr);gap:1rem;align-items:start;position:relative;z-index:1;}
         .cc-brand{display:flex;align-items:flex-start;gap:1rem;min-width:0;}
-        .cc-brand-logo{width:54px;height:54px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 10px 20px rgba(2,6,23,.28));}
-        .cc-brand-copy h2{margin:0 0 .45rem;font-size:1.85rem;letter-spacing:.01em;color:#f8fbff;}
+        .cc-brand-logo{width:50px;height:50px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 10px 20px rgba(2,6,23,.28));}
+        .cc-brand-copy h2{margin:0 0 .4rem;font-size:1.8rem;letter-spacing:.01em;color:#f8fbff;}
         .cc-brand-copy p{margin:0;color:#b5c4d8;max-width:760px;line-height:1.55;}
         .cc-label{display:inline-flex;align-items:center;gap:.45rem;margin-bottom:.6rem;padding:.35rem .65rem;border-radius:999px;background:rgba(255,255,255,.06);color:#d4b26a;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
-        .cc-overview-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-top:1rem;}
-        .cc-kpi{padding:.9rem 1rem;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.15);min-width:0;}
+        .cc-overview-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin-top:.95rem;}
+        .cc-kpi{padding:.82rem .92rem;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.15);min-width:0;}
         .cc-kpi label{display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:#9fb0c7;margin-bottom:.45rem;}
-        .cc-kpi strong{display:block;font-size:1.2rem;color:#f8fbff;line-height:1.2;}
-        .cc-side-panel{display:grid;gap:.8rem;}
-        .cc-side-card{padding:1rem;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.14);}
+        .cc-kpi strong{display:block;font-size:1.14rem;color:#f8fbff;line-height:1.2;}
+        .cc-side-panel{display:grid;gap:.75rem;}
+        .cc-side-card{padding:.92rem 1rem;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.14);}
         .cc-side-card h3,.cc-section h3{margin:0 0 .4rem;color:#f8fbff;}
         .cc-side-card p,.cc-section-copy{margin:0;color:#94a3b8;line-height:1.5;}
         .cc-chip-row,.cc-action-row{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:.75rem;}
@@ -127,29 +152,26 @@ async function init() {
         .cc-status.tone-active{background:rgba(34,197,94,.12);color:#3ddc84;border-color:rgba(34,197,94,.24);}
         .cc-status.tone-coming{background:rgba(148,163,184,.14);color:#cbd5e1;border-color:rgba(148,163,184,.22);}
         .cc-status.tone-setup{background:rgba(245,158,11,.14);color:#fbbf24;border-color:rgba(245,158,11,.22);}
-        .cc-section{padding:1.05rem 1.1rem;border-radius:18px;background:linear-gradient(180deg,rgba(15,23,42,.98),rgba(11,18,34,.98));border:1px solid rgba(148,163,184,.14);box-shadow:0 16px 34px rgba(15,23,42,.14);}
-        .cc-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.95rem;}
+        .cc-section{padding:1rem 1.05rem;border-radius:18px;background:linear-gradient(180deg,rgba(15,23,42,.98),rgba(11,18,34,.98));border:1px solid rgba(148,163,184,.14);box-shadow:0 16px 34px rgba(15,23,42,.14);}
+        .cc-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.78rem;}
         .cc-section-copy strong{display:block;margin-bottom:.25rem;color:#e5edf8;font-size:1rem;}
-        .cc-dashboard-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(420px,.95fr);gap:1rem;align-items:start;}
+        .cc-dashboard-grid{display:grid;gap:1rem;align-items:start;}
+        .cc-two-up{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1rem;align-items:start;}
         .cc-stack{display:grid;gap:1rem;}
         .cc-tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.9rem;}
         .cc-tile-grid.compact{grid-template-columns:repeat(2,minmax(0,1fr));}
-        .cc-tile{display:flex;flex-direction:column;gap:.7rem;min-height:172px;padding:1rem;border-radius:18px;text-decoration:none;color:inherit;background:linear-gradient(180deg,#13233b,#0f1b2f);border:1px solid rgba(148,163,184,.14);box-shadow:0 12px 28px rgba(15,23,42,.12);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
+        .cc-tile{display:flex;flex-direction:column;gap:.62rem;min-height:164px;padding:1rem;border-radius:18px;text-decoration:none;color:inherit;background:linear-gradient(180deg,#13233b,#0f1b2f);border:1px solid rgba(148,163,184,.14);box-shadow:0 12px 28px rgba(15,23,42,.12);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;min-width:0;}
         .cc-tile:hover{transform:translateY(-2px);border-color:rgba(212,178,106,.32);box-shadow:0 18px 36px rgba(15,23,42,.18);}
         .cc-tile.is-disabled{opacity:.78;cursor:default;}
-        .cc-tile-top{display:flex;align-items:center;justify-content:space-between;gap:.75rem;}
+        .cc-tile-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;}
         .cc-tile-badge{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:12px;background:rgba(212,178,106,.14);color:#d4b26a;font-weight:800;letter-spacing:.06em;}
-        .cc-tile h4{margin:0;color:#f8fbff;font-size:1.02rem;line-height:1.35;}
-        .cc-tile p{margin:0;color:#9fb0c7;line-height:1.5;flex:1;}
+        .cc-tile h4{margin:0;color:#f8fbff;font-size:1.02rem;line-height:1.32;min-height:2.64rem;}
+        .cc-tile p{margin:0;color:#9fb0c7;line-height:1.46;flex:1;min-height:3.8rem;}
         .cc-link-row{font-size:.82rem;font-weight:700;color:#d8e2f0;letter-spacing:.01em;}
         .cc-action-pill{display:inline-flex;align-items:center;justify-content:center;padding:.75rem .95rem;border-radius:12px;background:#13233b;border:1px solid rgba(148,163,184,.14);color:#eef4ff;text-decoration:none;font-weight:700;min-height:46px;}
         .cc-action-pill:hover{border-color:rgba(212,178,106,.32);}
-        .cc-list{display:grid;gap:.7rem;margin-top:.75rem;}
-        .cc-list-item{display:flex;align-items:flex-start;gap:.75rem;padding:.8rem .9rem;border-radius:14px;background:#101b30;border:1px solid rgba(148,163,184,.12);}
-        .cc-list-bullet{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:10px;background:rgba(59,130,246,.14);color:#93c5fd;font-weight:700;flex:0 0 auto;}
-        .cc-list-item strong{display:block;color:#e5edf8;margin-bottom:.15rem;}
-        .cc-list-item span{display:block;color:#94a3b8;line-height:1.45;}
-        @media (max-width: 1320px){.cc-hero-grid,.cc-dashboard-grid{grid-template-columns:1fr;}.cc-tile-grid,.cc-tile-grid.compact,.cc-overview-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media (max-width: 1500px){.cc-overview-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media (max-width: 1320px){.cc-hero-grid,.cc-two-up{grid-template-columns:1fr;}.cc-tile-grid,.cc-tile-grid.compact{grid-template-columns:repeat(2,minmax(0,1fr));}}
         @media (max-width: 760px){.cc-overview-kpis,.cc-tile-grid,.cc-tile-grid.compact{grid-template-columns:1fr;}.cc-hero{padding:1rem;}.cc-section{padding:1rem;}.cc-brand{align-items:flex-start;}.cc-brand-copy h2{font-size:1.55rem;}}
       </style>
 
@@ -191,25 +213,17 @@ async function init() {
         </section>
 
         <div class="cc-dashboard-grid">
-          <div class="cc-stack">
-            <section class="cc-section">
-              <div class="cc-section-head">
-                <div class="cc-section-copy">
-                  <strong>Administration</strong>
-                  <span>Users, roles, divisions, portal access, audit visibility, and core controls grouped into one operational block.</span>
-                </div>
-              </div>
-              <div class="cc-tile-grid">${adminHtml || '<div class="empty-state">No administration access.</div>'}</div>
-            </section>
+          ${renderSectionBlock(
+            "Administration",
+            "Users, roles, divisions, portal access, audit visibility, and core controls grouped into one operational block.",
+            `<div class="cc-tile-grid">${adminHtml || '<div class="empty-state">No administration access.</div>'}</div>`
+          )}
 
-            <section class="cc-section">
-              <div class="cc-section-head">
-                <div class="cc-section-copy">
-                  <strong>Business Modules</strong>
-                  <span>Active module launchers are emphasized, while future business streams remain visible but muted with proper card width and spacing.</span>
-                </div>
-              </div>
-              <div style="display:grid;gap:1rem;">
+          ${renderSectionBlock(
+            "Business Modules",
+            "Active module launchers are emphasized, while future business streams remain visible but muted with proper card width and spacing.",
+            `
+              <div style="display:grid;gap:.95rem;">
                 <div>
                   <h3>Active Modules</h3>
                   <div class="cc-tile-grid">${activeModulesHtml || '<div class="empty-state">No active modules available.</div>'}</div>
@@ -219,40 +233,28 @@ async function init() {
                   <div class="cc-tile-grid">${futureModulesHtml || '<div class="empty-state">No future modules declared.</div>'}</div>
                 </div>
               </div>
-            </section>
-          </div>
+            `,
+            "cc-section-wide"
+          )}
 
-          <div class="cc-stack">
-            <section class="cc-section">
-              <div class="cc-section-head">
-                <div class="cc-section-copy">
-                  <strong>Finance</strong>
-                  <span>Financial cockpit access stays separate from business operations for cleaner ownership.</span>
-                </div>
-              </div>
-              <div class="cc-tile-grid compact">${financeHtml || '<div class="empty-state">No finance workspace access.</div>'}</div>
-            </section>
+          ${renderDoubleColumnSection(
+            renderSectionBlock(
+              "Finance",
+              "Financial cockpit access stays separate from business operations for cleaner ownership.",
+              `<div class="cc-tile-grid compact">${financeHtml || '<div class="empty-state">No finance workspace access.</div>'}</div>`
+            ),
+            renderSectionBlock(
+              "System Configuration",
+              "Only true global configuration references remain visible here. Business entities are intentionally removed from global Master Data.",
+              `<div class="cc-tile-grid compact">${configHtml || '<div class="empty-state">No global configuration access.</div>'}</div>`
+            )
+          )}
 
-            <section class="cc-section">
-              <div class="cc-section-head">
-                <div class="cc-section-copy">
-                  <strong>System Configuration</strong>
-                  <span>Only true global configuration references remain visible here. Business entities are intentionally removed from global Master Data.</span>
-                </div>
-              </div>
-              <div class="cc-tile-grid compact">${configHtml || '<div class="empty-state">No global configuration access.</div>'}</div>
-            </section>
-
-            <section class="cc-section">
-              <div class="cc-section-head">
-                <div class="cc-section-copy">
-                  <strong>Developer / System</strong>
-                  <span>Operational diagnostics, processing queues, and integration-oriented controls.</span>
-                </div>
-              </div>
-              <div class="cc-tile-grid compact">${developerHtml || '<div class="empty-state">No developer/system tools available.</div>'}</div>
-            </section>
-          </div>
+          ${renderSectionBlock(
+            "Developer / System",
+            "Operational diagnostics, processing queues, and integration-oriented controls.",
+            `<div class="cc-tile-grid compact">${developerHtml || '<div class="empty-state">No developer/system tools available.</div>'}</div>`
+          )}
         </div>
       </div>
     `);
