@@ -596,21 +596,20 @@ async function init() {
     body.querySelectorAll("button[data-d]").forEach((b)=>b.addEventListener("click", async ()=>{
       const id = b.getAttribute("data-d");
       const before = rows.find((x)=>x.id===id);
-      await softDeleteTrip(id);
-      const appUser = await getCurrentAppUser();
-      await addTripTimeline({
-        trip_id: id,
-        status: before?.status || "draft",
-        remarks: "Trip soft-deleted with linked support/deductions and documents",
-        changed_by: appUser?.id || null
-      });
-      await logAuditEvent("trip_soft_delete_cascade", {
-        moduleCode: MODULES.TRANSPORT_TRIPS,
-        entityType: "transport_trips",
-        entityId: id,
-        beforeData: before,
-        action: "soft_delete"
-      });
+      if (!window.confirm(`Delete trip ${before?.trip_no || ""}? This permanently removes it along with its documents and expenses.`)) return;
+      try {
+        await softDeleteTrip(id);
+        await logAuditEvent("trip_delete", {
+          moduleCode: MODULES.TRANSPORT_TRIPS,
+          entityType: "transport_trips",
+          entityId: id,
+          beforeData: before,
+          action: "delete"
+        });
+        showToast(`Trip ${before?.trip_no || ""} deleted`, TOAST_TYPES.SUCCESS);
+      } catch (error) {
+        showToast(error?.message || "Delete failed", TOAST_TYPES.ERROR);
+      }
       await load();
     }));
   }

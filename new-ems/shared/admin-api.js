@@ -581,24 +581,26 @@ export async function updateTrip(id, payload) {
 }
 
 export async function softDeleteTrip(id) {
+  // Sprint 13E.8: deletes are hard deletes with a server-side snapshot retained
+  // in a restricted archive (super-admin visibility only).
   const client = getSupabaseClient();
-  const now = new Date().toISOString();
-  const { error: tripErr } = await client.from("transport_trips").update({ deleted_at: now, updated_at: now }).eq("id", id);
-  if (tripErr) throw tripErr;
+  const { data, error } = await client.rpc("purge_transport_trip", { p_trip_id: id });
+  if (error) throw error;
+  return data;
+}
 
-  const { error: expErr } = await client
-    .from("transport_trip_expenses")
-    .update({ deleted_at: now, updated_at: now, is_active: false })
-    .eq("trip_id", id)
-    .is("deleted_at", null);
-  if (expErr) throw expErr;
+export async function purgeTransportGstInvoice(id) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("purge_transport_gst_invoice", { p_invoice_id: id });
+  if (error) throw error;
+  return data;
+}
 
-  const { error: docErr } = await client
-    .from("transport_trip_documents")
-    .update({ deleted_at: now, updated_at: now, is_active: false })
-    .eq("trip_id", id)
-    .is("deleted_at", null);
-  if (docErr) throw docErr;
+export async function listSystemMaintenanceEntries({ entityType = null, limit = 100 } = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("list_system_maintenance_entries", { p_entity_type: entityType, p_limit: limit });
+  if (error) throw error;
+  return data || [];
 }
 
 export async function addTripTimeline(payload) {
