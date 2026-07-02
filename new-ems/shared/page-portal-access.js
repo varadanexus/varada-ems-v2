@@ -16,7 +16,7 @@ const DIVISION_ENTITY_MAP = {
     entities: [
       { key: "client", label: "Client", table: "transport_clients", nameCol: "name", system: "transport_client", portalType: "Transportation Client Portal", portalLoginUrl: ROUTES.TRANSPORT_PORTAL_LOGIN },
       { key: "transporter", label: "Transporter", table: "transport_transporters", nameCol: "name", system: "transport_transporter", portalType: "Transportation Transporter Portal", portalLoginUrl: ROUTES.TRANSPORT_PORTAL_LOGIN },
-      { key: "agent", label: "Agent", table: "transport_agents", nameCol: "name", system: "external", userType: "agent", portalType: "Transportation Agent Portal", portalLoginUrl: ROUTES.TRANSPORT_PORTAL_LOGIN }
+      { key: "agent", label: "Agent", table: "transport_agents", nameCol: "name", system: "transport_agent", portalType: "Transportation Agent Portal", portalLoginUrl: ROUTES.TRANSPORT_PORTAL_LOGIN }
     ]
   },
   interiors: {
@@ -708,6 +708,10 @@ async function findExistingAccess(entityDef, recordId) {
     const { data } = await client.from("transport_transporter_portal_access").select("id,is_active,transport_portal_users(username)").eq("transport_transporter_id", recordId).eq("is_active", true).limit(1);
     return data?.[0] ? { username: data[0].transport_portal_users?.username } : null;
   }
+  if (entityDef.system === "transport_agent") {
+    const { data } = await client.from("transport_agent_portal_access").select("id,is_active,transport_portal_users(username)").eq("transport_agent_id", recordId).eq("is_active", true).limit(1);
+    return data?.[0] ? { username: data[0].transport_portal_users?.username } : null;
+  }
   if (entityDef.system === "external") {
     const { data } = await client.from("external_portal_access").select("id,is_active,record_id,external_portal_users(username)").eq("record_id", recordId).eq("is_active", true).limit(1);
     return data?.[0] ? { username: data[0].external_portal_users?.username } : null;
@@ -733,10 +737,11 @@ async function handleWizardSubmit() {
   if (password.length < 8) return showToast("Password must be at least 8 characters.", TOAST_TYPES.ERROR);
 
   try {
-    if (s.system === "transport_client" || s.system === "transport_transporter") {
+    if (s.system === "transport_client" || s.system === "transport_transporter" || s.system === "transport_agent") {
       const { error } = await client.rpc("transport_portal_provision_user", {
         p_username: username, p_initial_password: password, p_display_name: displayName, p_email: email, p_phone: phone,
         p_client_ids: s.system === "transport_client" ? [s.id] : [], p_transporter_ids: s.system === "transport_transporter" ? [s.id] : [],
+        p_agent_ids: s.system === "transport_agent" ? [s.id] : [],
         p_access_level: accessLevel
       });
       if (error) throw error;
@@ -796,6 +801,7 @@ async function handleRowAction(btn) {
       let fn = "external_portal_admin_revoke_access";
       if (kind === "client") fn = "transport_portal_admin_revoke_client_access";
       else if (kind === "transporter") fn = "transport_portal_admin_revoke_transporter_access";
+      else if (kind === "agent") fn = "transport_portal_admin_revoke_agent_access";
       const { error } = await client.rpc(fn, { p_access_id: accessId });
       if (error) throw error;
     } else if (action === "reveal-password") {

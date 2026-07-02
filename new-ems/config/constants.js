@@ -15,6 +15,7 @@ export const ROUTES = {
   TRANSPORT_PORTAL_SELECTOR: "/new-ems/modules/transport-portal-selector/index.html",
   TRANSPORT_CLIENT_APP: "/new-ems/modules/transport-client-app/index.html",
   TRANSPORT_TRANSPORTER_APP: "/new-ems/modules/transport-transporter-app/index.html",
+  TRANSPORT_AGENT_APP: "/new-ems/modules/transport-agent-app/index.html",
   CENTRAL_ACCOUNTS_DASHBOARD: "/new-ems/modules/central-accounts-dashboard/index.html",
   CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS: "/new-ems/modules/central-accounts-financial-documents/index.html",
   CENTRAL_ACCOUNTS_POSTING_QUEUE: "/new-ems/modules/central-accounts-posting-queue/index.html",
