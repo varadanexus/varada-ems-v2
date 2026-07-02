@@ -148,7 +148,9 @@ async function init() {
     const email = appUser.email || session?.user?.email || "";
     const displayName = appUser.display_name || (email ? email.split("@")[0] : "User");
     const roleLabel = String(boot.primaryRole || "user").replace(/_/g, " ").toUpperCase();
-    const divisionScope = boot.divisionContext?.scopeLabel || boot.divisionLabel || "All Divisions";
+    const rawScope = boot.divisionContext?.scopeLabel || boot.divisionLabel || "";
+    const looksLikeId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(rawScope) || /^\d+$/.test(rawScope);
+    const divisionScope = rawScope && !looksLikeId ? rawScope : "All Divisions";
     const lastSignIn = formatSignIn(session?.user?.last_sign_in_at);
 
     const activeModulesHtml = launchCards.map(renderModuleCard).join("");
@@ -160,6 +162,7 @@ async function init() {
       <style>
         .app-shell.sidebarless .page-head,.app-shell.sidebarless .page-content{max-width:min(1400px,calc(100vw - 32px));}
         .app-shell.sidebarless .page-head{display:none;}
+        .app-shell.sidebarless .app-navbar{padding:0 max(1.1rem,calc((100vw - 1400px) / 2));}
         .page-content{padding-top:.9rem;}
         .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
         .cc-dashboard{display:grid;gap:1rem;color:#e5edf8;}
@@ -168,19 +171,19 @@ async function init() {
         .cc-bar{position:relative;overflow:hidden;padding:1.1rem 1.35rem;border-radius:20px;background:linear-gradient(120deg,#0d1930 0%,#142647 52%,#0e1c34 100%);border:1px solid rgba(148,163,184,.2);box-shadow:0 24px 52px rgba(2,6,23,.4);}
         .cc-bar::before{content:"";position:absolute;top:0;left:8%;right:8%;height:1px;background:var(--pm-hairline);}
         .cc-bar::after{content:"";position:absolute;top:-70%;right:-3%;width:340px;height:340px;background:radial-gradient(circle,rgba(212,178,106,.15),transparent 60%);pointer-events:none;}
-        .cc-bar-grid{display:grid;grid-template-columns:minmax(0,1.25fr) auto minmax(0,auto);gap:1.6rem;align-items:center;position:relative;z-index:1;}
+        .cc-bar-grid{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:1.6rem;align-items:center;position:relative;z-index:1;}
         .cc-ident{display:flex;align-items:center;gap:.95rem;min-width:0;}
         .cc-logo{width:48px;height:48px;object-fit:contain;filter:drop-shadow(0 10px 18px rgba(2,6,23,.45));}
         .cc-ident-copy h2{margin:0;font-size:1.42rem;letter-spacing:.01em;color:#f8fbff;line-height:1.2;white-space:nowrap;}
         .cc-ident-copy p{margin:.22rem 0 0;font-size:.82rem;color:#94a8c3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .cc-kpis{display:flex;align-items:center;gap:1.5rem;}
+        .cc-kpis{display:flex;align-items:center;gap:1.5rem;justify-self:center;}
         .cc-kpi{padding-right:1.5rem;border-right:1px solid rgba(148,163,184,.16);}
         .cc-kpi:last-child{border-right:0;padding-right:0;}
         .cc-kpi label{display:block;font-size:.66rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#8fa3bf;margin-bottom:.3rem;white-space:nowrap;}
         .cc-kpi strong{display:flex;align-items:center;gap:.45rem;font-size:1.3rem;color:#f8fbff;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums;}
 
         /* Identity card */
-        .cc-user{display:flex;align-items:center;gap:.85rem;padding:.7rem .95rem;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(212,178,106,.22);min-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
+        .cc-user{display:flex;align-items:center;gap:.85rem;padding:.7rem .95rem;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(212,178,106,.22);min-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);justify-self:end;max-width:340px;}
         .cc-user-copy{display:grid;gap:.14rem;min-width:0;}
         .cc-user-name{display:flex;align-items:center;gap:.55rem;min-width:0;}
         .cc-user-name strong{font-size:.94rem;color:#f8fbff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -245,7 +248,7 @@ async function init() {
           .cc-bar-grid{grid-template-columns:1fr;gap:.9rem;}
           .cc-ident-copy h2{white-space:normal;font-size:1.22rem;}
           .cc-ident-copy p{white-space:normal;}
-          .cc-user{width:100%;}
+          .cc-user{width:100%;max-width:none;justify-self:stretch;}
           .cc-actions-row{flex-direction:column;align-items:flex-start;gap:.5rem;}
           .cc-modules-grid{grid-template-columns:1fr;}
           .cc-module-card{min-height:112px;}
@@ -304,7 +307,7 @@ async function init() {
 
         <div class="cc-panels">
           ${renderPanel("Finance", "Financial cockpit and reporting", financeCards.map(renderPanelRow).join(""), "No finance workspace access.")}
-          ${renderPanel("System Configuration", "Global references only — business entities live inside their owning modules", configCards.map(renderPanelRow).join(""), "No global configuration access.")}
+          ${renderPanel("System Configuration", "Global references only. Business entities live inside their owning modules.", configCards.map(renderPanelRow).join(""), "No global configuration access.")}
           ${renderPanel("Developer / System", "Diagnostics, queues, and integrations", developerCards.map(renderPanelRow).join(""), "No developer/system tools available.")}
         </div>
       </div>
