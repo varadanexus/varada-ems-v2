@@ -285,3 +285,23 @@ table tbody tr:hover { background: rgba(212, 178, 106, .05); }
 ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, .22); border-radius: 999px; border: 2px solid #0a111f; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(212, 178, 106, .4); }
 ::selection { background: rgba(212, 178, 106, .3); }
+
+/* ---------- Compact form layout (two field-pairs per row) ---------- */
+.card .form-row {
+  grid-template-columns: minmax(150px, max-content) minmax(0, 1fr) minmax(150px, max-content) minmax(0, 1fr);
+  gap: .55rem .9rem;
+  align-items: center;
+}
+.card .form-row > h4,
+.card .form-row > .meta-pill,
+.card .form-row > div,
+.card .form-row > button { grid-column: 1 / -1; }
+.card .form-row > button { justify-self: start; }
+.card .form-row > h4 { margin: .45rem 0 .1rem; padding-bottom: .3rem; border-bottom: 1px solid rgba(148, 163, 184, .1); font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--pm-gold); }
+.card .form-row label { margin: 0; font-size: .78rem; }
+@media (max-width: 980px) {
+  .card .form-row { grid-template-columns: minmax(140px, max-content) minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .card .form-row { grid-template-columns: 1fr; }
+}

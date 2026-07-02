@@ -37,12 +37,13 @@ async function init() {
       <h3>Trip Support / Deductions List</h3>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
         <input id="teSearch" placeholder="Search expense no/notes" />
+        <select id="teTripFilter"><option value="">All Trips</option></select>
         <select id="teCategory"><option value="">All Categories</option>${EXPENSE_CATEGORIES.map((x) => `<option value="${x}">${x}</option>`).join("")}</select>
         <input id="teFromDate" type="date" />
         <input id="teToDate" type="date" />
       </div>
       <div id="teTotal" class="meta-pill" style="margin:.75rem 0;">Total: 0</div>
-      <div class="table-shell"><table><thead><tr><th>No</th><th>Date</th><th>Category</th><th>Amount</th><th>Paid By</th><th>Notes</th><th>Actions</th></tr></thead><tbody id="teBody"></tbody></table></div>
+      <div class="table-shell"><table><thead><tr><th>No</th><th>Trip</th><th>Date</th><th>Category</th><th>Amount</th><th>Paid By</th><th>Notes</th><th>Actions</th></tr></thead><tbody id="teBody"></tbody></table></div>
     </section>
   `);
 
@@ -95,28 +96,28 @@ async function init() {
   async function loadTrips() {
     tripRows = await listTripOptions({ divisionId, limit: 500 });
     tripSel.innerHTML = `<option value="">Select Trip...</option>${tripRows.map((t) => `<option value="${t.id}">${t.trip_no} · ${t.trip_date || ""}</option>`).join("")}`;
+    const tf = qs("#teTripFilter");
+    if (tf) tf.innerHTML = `<option value="">All Trips</option>${tripRows.map((t) => `<option value="${t.id}">${t.trip_no}</option>`).join("")}`;
   }
 
   async function loadExpenses() {
-    if (!selectedTrip?.id) {
-      qs("#teBody").innerHTML = `<tr><td colspan="7">Select a trip first</td></tr>`;
-      qs("#teTotal").textContent = "Total: 0";
-      return;
-    }
+    const tripNoBy = new Map(tripRows.map((t) => [t.id, t.trip_no]));
+    const tripFilter = qs("#teTripFilter")?.value || "";
     const search = qs("#teSearch")?.value?.trim() || "";
     const category = qs("#teCategory")?.value || "";
     const fromDate = qs("#teFromDate")?.value || "";
     const toDate = qs("#teToDate")?.value || "";
-    const { rows } = await listTripExpenses({ tripId: selectedTrip.id, divisionId, search, category, fromDate, toDate, page: 1, pageSize: 300 });
+    const { rows } = await listTripExpenses({ tripId: tripFilter || null, divisionId, search, category, fromDate, toDate, page: 1, pageSize: 300 });
     const total = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-    qs("#teTotal").textContent = `Total: ${total.toFixed(2)}`;
+    qs("#teTotal").textContent = `Total: ${total.toFixed(2)} (${rows.length} entries)`;
     const body = qs("#teBody");
     if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="7">No expenses found for selected trip</td></tr>`;
+      body.innerHTML = `<tr><td colspan="8">No expenses found</td></tr>`;
       return;
     }
     body.innerHTML = rows.map((r) => `<tr>
       <td>${r.expense_no || ""}</td>
+      <td>${tripNoBy.get(r.trip_id) || "-"}</td>
       <td><input data-e-date="${r.id}" type="date" value="${r.expense_date || ""}" /></td>
       <td><select data-e-cat="${r.id}">${EXPENSE_CATEGORIES.map((x) => `<option value="${x}" ${r.category === x ? "selected" : ""}>${x}</option>`).join("")}</select></td>
       <td><input data-e-amt="${r.id}" type="number" min="0" step="0.01" value="${r.amount || 0}" /></td>
@@ -157,7 +158,7 @@ async function init() {
     await loadExpenses();
   });
 
-  ["#teSearch", "#teCategory", "#teFromDate", "#teToDate"].forEach((sel) => {
+  ["#teSearch", "#teTripFilter", "#teCategory", "#teFromDate", "#teToDate"].forEach((sel) => {
     qs(sel)?.addEventListener(sel === "#teSearch" ? "input" : "change", async () => loadExpenses());
   });
 

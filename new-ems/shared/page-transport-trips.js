@@ -14,7 +14,12 @@ async function init() {
 
   renderModuleContent(`<section class="card"><h3>Create Trip</h3><form id="tripCreateForm" class="form-row"></form><div id="tripCreateMeta" class="muted" style="margin-top:.5rem;"></div></section>
   <section class="card" style="margin-top:1rem;"><h3>Trip List</h3><input id="tripSearch" placeholder="Search trip no/notes"/><select id="tripStatus"><option value="">All Status</option>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}">${s}</option>`).join("")}</select><div class="table-shell" style="margin-top:.75rem;"><table><thead><tr><th>Trip No</th><th>Date</th><th>Status</th><th>Qty</th><th>Actions</th></tr></thead><tbody id="tripBody"></tbody></table></div><div style="margin-top:.75rem;display:flex;gap:.5rem;"><button class="btn" id="tripPrev">Prev</button><span id="tripMeta"></span><button class="btn" id="tripNext">Next</button></div></section>
-  <section class="card" style="margin-top:1rem;"><h3>Trip Details & Timeline</h3><div id="tripDetails" class="empty-state">Select a trip from list to view details and timeline.</div></section>
+  <div id="tripDetailsModal" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,.62);backdrop-filter:blur(4px);z-index:70;align-items:center;justify-content:center;">
+    <div class="card" style="width:min(1000px,95vw);max-height:90vh;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.5rem;"><h3 style="margin:0;">Trip Details &amp; Timeline</h3><button class="btn" id="tripDetailsClose" type="button">Close</button></div>
+      <div id="tripDetails" class="empty-state">Select a trip from list to view details and timeline.</div>
+    </div>
+  </div>
   <div id="tripEditModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:60;align-items:center;justify-content:center;">
     <div class="card" style="width:min(900px,95vw);max-height:90vh;overflow:auto;">
       <h3>Edit Trip</h3>
@@ -243,6 +248,8 @@ async function init() {
       <ul class="activity-list">${timeline.map((t)=>`<li><strong>${t.status}</strong> · ${new Date(t.created_at).toLocaleString()}${t.remarks ? ` · ${t.remarks}` : ""}</li>`).join("")}</ul>
     `;
 
+    const dModal = qs("#tripDetailsModal");
+    if (dModal) dModal.style.display = "flex";
     qs("#tripDetails").querySelectorAll("button[data-da]").forEach((b) => b.addEventListener("click", async () => {
       const type = b.getAttribute("data-da");
       const custom = type === "OTHER" ? window.prompt("Document Name (required for OTHER)", "") : null;
@@ -502,6 +509,9 @@ async function init() {
     modal.style.display = "flex";
   }
 
+  qs("#tripDetailsClose")?.addEventListener("click", () => { const m = qs("#tripDetailsModal"); if (m) m.style.display = "none"; });
+  qs("#tripDetailsModal")?.addEventListener("click", (e) => { if (e.target === qs("#tripDetailsModal")) qs("#tripDetailsModal").style.display = "none"; });
+
   async function load() {
     const search = qs("#tripSearch")?.value?.trim() || "";
     const status = qs("#tripStatus")?.value || "";
@@ -510,20 +520,20 @@ async function init() {
     qs("#tripMeta").textContent = `Page ${page}/${Math.max(1, Math.ceil((out.count || 0) / pageSize))}`;
     const body = qs("#tripBody");
     if (!rows.length) { body.innerHTML = `<tr><td colspan="5">No trips found</td></tr>`; return; }
-    body.innerHTML = rows.map((r)=>`<tr><td>${r.trip_no}</td><td>${r.trip_date || ""}</td><td><select data-s="${r.id}">${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}" ${r.status===s?"selected":""}>${s}</option>`).join("")}</select></td><td>${(r.quantity_kg ?? "")} KG (${Number(r.quantity_mt || 0).toFixed(2)} MT)</td><td><button class="btn" data-u="${r.id}">Update Status</button> <button class="btn" data-e="${r.id}">Edit</button> <button class="btn" data-v="${r.id}">Details</button> <button class="btn btn-danger" data-d="${r.id}">Delete</button></td></tr>`).join("");
+    body.innerHTML = rows.map((r)=>`<tr><td>${r.trip_no}</td><td>${r.trip_date || ""}</td><td><select data-s="${r.id}">${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}" ${r.status===s?"selected":""}>${s}</option>`).join("")}</select></td><td>${(r.quantity_kg ?? "")} KG (${Number(r.quantity_mt || 0).toFixed(2)} MT)</td><td><button class="btn" data-e="${r.id}">Edit</button> <button class="btn" data-v="${r.id}">Details</button> <button class="btn btn-danger" data-d="${r.id}">Delete</button></td></tr>`).join("");
     body.querySelectorAll("button[data-v]").forEach((b)=>b.addEventListener("click", ()=>openDetails(b.getAttribute("data-v"))));
     body.querySelectorAll("button[data-e]").forEach((b)=>b.addEventListener("click", ()=>{
       const id = b.getAttribute("data-e");
       const row = rows.find((x)=>x.id===id);
       openEditModal(row);
     }));
-    body.querySelectorAll("button[data-u]").forEach((b)=>b.addEventListener("click", async ()=>{
-      const id = b.getAttribute("data-u");
+    body.querySelectorAll("select[data-s]").forEach((sel)=>sel.addEventListener("change", async ()=>{
+      const id = sel.getAttribute("data-s");
       const before = rows.find((x)=>x.id===id);
-      const status = qs(`[data-s='${id}']`)?.value;
+      const status = sel.value;
       const nextIdx = TRIP_STATUS_FLOW.indexOf(status);
       const prevIdx = TRIP_STATUS_FLOW.indexOf(before?.status);
-      if (nextIdx < prevIdx) return showToast("Backward status transition not allowed", TOAST_TYPES.ERROR);
+      if (nextIdx < prevIdx) { sel.value = before?.status || status; return showToast("Backward status transition not allowed", TOAST_TYPES.ERROR); }
       try {
         const updated = await updateTrip(id, { status });
         const appUser = await getCurrentAppUser();
@@ -534,6 +544,7 @@ async function init() {
       } catch (error) {
         console.error("trip_status_update_failed", { id, status, error });
         showToast(error?.message || `Failed to update trip status to ${status}.`, TOAST_TYPES.ERROR);
+        await load();
       }
     }));
     body.querySelectorAll("button[data-d]").forEach((b)=>b.addEventListener("click", async ()=>{

@@ -643,9 +643,9 @@ export async function listTripExpenses({ tripId, divisionId = null, search = "",
     .select("*,transport_trips!inner(id,deleted_at)", { count: "exact" })
     .is("deleted_at", null)
     .is("transport_trips.deleted_at", null)
-    .eq("trip_id", tripId)
     .order("expense_date", { ascending: false })
     .order("created_at", { ascending: false });
+  if (tripId) query = query.eq("trip_id", tripId);
   if (divisionId) query = query.eq("division_id", divisionId);
   if (category) query = query.eq("category", category);
   if (fromDate) query = query.gte("expense_date", fromDate);
