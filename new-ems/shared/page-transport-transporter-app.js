@@ -116,14 +116,26 @@ function renderNoAccess() {
 function renderSidebar() {
   return `
     <aside class="app-sidebar transport-portal-sidebar" id="appSidebar">
-      <div class="brand">Transporter Portal</div>
+      <div class="portal-brand-block">
+        <div class="portal-brand-lockup">
+          <img src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus" class="portal-brand-logo" />
+          <div class="portal-brand-copy">
+            <div class="portal-brand-name">Varada Nexus</div>
+            <div class="portal-brand-module">Transporter Portal</div>
+          </div>
+        </div>
+      </div>
       <nav class="nav-root">
         <div class="nav-section">
           <div class="nav-section-title">Account</div>
-          <div class="form-row" style="margin-bottom:.75rem;">
-            <select id="transporterSelector" style="width:100%;">
-              ${PAGE_STATE.transporters.map((t) => `<option value="${t.id}" ${t.id === PAGE_STATE.activeTransporterId ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("")}
-            </select>
+          <div class="portal-account-card">
+            <div class="portal-account-eyebrow">Active Transporter</div>
+            <strong class="portal-account-name">${escapeHtml(activeTransporter()?.name || "-")}</strong>
+            <div class="form-row portal-account-selector-row">
+              <select id="transporterSelector" style="width:100%;">
+                ${PAGE_STATE.transporters.map((t) => `<option value="${t.id}" ${t.id === PAGE_STATE.activeTransporterId ? "selected" : ""}>${escapeHtml(t.name)}</option>`).join("")}
+              </select>
+            </div>
           </div>
         </div>
         <div class="nav-section">
@@ -599,9 +611,30 @@ function render() {
       /* Scoped reset: native <button> elements inside the transporter portal sidebar
          inherit browser-default background-color:ButtonFace (white). Reset to transparent
          so the dark sidebar background shows through. Scoped to this sidebar only. */
+      #appSidebar.transport-portal-sidebar{padding:1.1rem .95rem .95rem;}
+      .portal-brand-block{margin-bottom:1rem;padding:.2rem 0 .95rem;border-bottom:1px solid rgba(148,163,184,.18);}
+      .portal-brand-lockup{display:flex;align-items:center;gap:.85rem;min-width:0;}
+      .portal-brand-logo{width:42px;height:42px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 8px 18px rgba(15,23,42,.25));}
+      .portal-brand-copy{min-width:0;display:flex;flex-direction:column;gap:.15rem;}
+      .portal-brand-name{font-size:1rem;font-weight:800;letter-spacing:.01em;color:#f8fbff;line-height:1.15;}
+      .portal-brand-module{font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#d4b26a;}
+      .portal-account-card{margin-bottom:.75rem;padding:.85rem;border-radius:14px;background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border:1px solid rgba(148,163,184,.18);box-shadow:0 10px 24px rgba(15,23,42,.14);}
+      .portal-account-eyebrow{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9fb0c7;margin-bottom:.35rem;}
+      .portal-account-name{display:block;font-size:.96rem;line-height:1.3;color:#f8fbff;margin-bottom:.65rem;}
+      .portal-account-selector-row{margin-bottom:0 !important;}
       #appSidebar.transport-portal-sidebar .nav-link{appearance:none;-webkit-appearance:none;background:transparent;border:1px solid transparent;width:100%;text-align:left;font:inherit;cursor:pointer;color:#d8e2f0;display:flex;align-items:center;gap:.65rem;border-radius:10px;padding:.62rem .78rem;transition:background .18s ease,border-color .18s ease,color .18s ease;}
       #appSidebar.transport-portal-sidebar .nav-link:hover{background:rgba(255,255,255,.04);box-shadow:0 0 0 1px rgba(212,178,106,.18);}
       #appSidebar.transport-portal-sidebar .nav-link.active{color:#eef4ff;background:rgba(255,255,255,.04);border-color:rgba(212,178,106,.45);box-shadow:0 0 0 1px rgba(212,178,106,.12),0 8px 20px rgba(212,178,106,.12);}
+      .app-navbar{padding-top:1rem;padding-bottom:1rem;}
+      .navbar-left{display:flex;align-items:center;gap:.85rem;min-width:0;}
+      .portal-topbar-brand{display:flex;align-items:center;gap:.85rem;min-width:0;}
+      .portal-topbar-logo{width:36px;height:36px;object-fit:contain;flex:0 0 auto;}
+      .portal-topbar-copy{display:flex;flex-direction:column;min-width:0;}
+      .portal-topbar-name{font-size:.82rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#d4b26a;}
+      .portal-topbar-transporter{font-size:1rem;font-weight:800;color:#f8fbff;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .page-head p{color:#8ea2bc;}
+      .card,.trip-kpi-card,.trip-filter-card,.trip-table-card{border-radius:16px;}
+      .btn{border-radius:10px;}
       .badge{display:inline-flex;align-items:center;justify-content:center;padding:.35rem .7rem;border-radius:999px;font-size:.76rem;font-weight:700;border:1px solid transparent;white-space:nowrap;}
       .badge-default{background:rgba(148,163,184,.15);color:#475569;border-color:rgba(148,163,184,.25);}
       .badge-info{background:rgba(59,130,246,.14);color:#1d4ed8;border-color:rgba(59,130,246,.2);}
@@ -655,6 +688,7 @@ function render() {
       @media (max-width: 768px){
         .app-shell{display:block;}
         #appSidebar.transport-portal-sidebar{position:static;width:100%;min-height:auto;padding:1rem 1rem .75rem;}
+        .portal-brand-block{padding-bottom:.8rem;}
         #appSidebar.transport-portal-sidebar .nav-root{display:block;}
         #appSidebar.transport-portal-sidebar .nav-section + .nav-section{margin-top:.85rem;}
         #appSidebar.transport-portal-sidebar .nav-section:last-child{overflow-x:auto;padding-bottom:.2rem;}
@@ -668,7 +702,15 @@ function render() {
       ${renderSidebar()}
       <div class="app-main">
         <header class="app-navbar">
-          <div class="navbar-left"><strong>${escapeHtml(t?.name || "")}</strong></div>
+          <div class="navbar-left">
+            <div class="portal-topbar-brand">
+              <img src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus" class="portal-topbar-logo" />
+              <div class="portal-topbar-copy">
+                <span class="portal-topbar-name">Varada Nexus</span>
+                <strong class="portal-topbar-transporter">${escapeHtml(t?.name || "")}</strong>
+              </div>
+            </div>
+          </div>
           <div class="navbar-actions">
             <button class="icon-btn" id="themeToggle" type="button">Theme</button>
             <button class="btn btn-ghost" id="logoutBtn" type="button">Logout</button>
