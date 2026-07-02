@@ -731,6 +731,12 @@ function render() {
       .trip-sort-button{display:inline-flex;align-items:center;gap:.35rem;background:transparent;border:none;padding:0;color:inherit;font:inherit;font-weight:700;cursor:pointer;}
       .trip-sort-button:focus-visible,.trip-row-actions .btn:focus-visible,#tripApplyFiltersBtn:focus-visible,#tripResetFiltersBtn:focus-visible,#tripPrevPageBtn:focus-visible,#tripNextPageBtn:focus-visible{outline:2px solid rgba(59,130,246,.55);outline-offset:2px;border-radius:10px;}
       .trip-row-actions{display:flex;gap:.45rem;flex-wrap:wrap;}
+      .trip-modal-backdrop{position:fixed;inset:0;z-index:4000;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(2,6,23,.72);backdrop-filter:blur(2px);}
+      .trip-modal-panel{width:min(820px,100%);max-height:85vh;overflow:auto;border-radius:18px;background:#0f1a2d;border:1px solid rgba(148,163,184,.22);box-shadow:0 24px 60px rgba(2,6,23,.45);padding:1rem;color:#e8eef8;}
+      .trip-modal-panel .stmt-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem;}
+      .trip-modal-panel .stmt-detail-box{padding:.85rem 1rem;border-radius:14px;background:#132033;border:1px solid rgba(148,163,184,.16);}
+      .trip-modal-panel .stmt-detail-box label{display:block;font-size:.78rem;color:#9fb0c7;text-transform:uppercase;margin-bottom:.35rem;}
+      .trip-modal-panel .stmt-detail-box strong{display:block;color:#f8fbff;font-size:.96rem;line-height:1.35;}
       .trip-empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.4rem;padding:2.5rem 1rem;text-align:center;}
       .trip-empty-icon{font-size:2rem;line-height:1;}
       .trip-pagination-bar{margin-top:1rem;}
@@ -755,7 +761,7 @@ function render() {
         .app-main{min-width:0;}
         .app-navbar,.page-head,.page-content{padding-left:0;padding-right:0;}
       }
-      @media (max-width: 640px){.trip-kpi-grid,.trip-toolbar-grid{grid-template-columns:1fr;}.trip-kpi-card h2{font-size:1.25rem;}.trip-filter-header,.trip-table-head,.trip-pagination-bar{align-items:flex-start;}.trip-toolbar-actions,.trip-pagination-actions{width:100%;justify-content:stretch;}.trip-toolbar-actions .btn,.trip-pagination-actions .btn{flex:1;}.trip-filter-card,.trip-table-card{padding:.85rem;}}
+      @media (max-width: 640px){.trip-kpi-grid,.trip-toolbar-grid,.trip-modal-panel .stmt-detail-grid{grid-template-columns:1fr;}.trip-kpi-card h2{font-size:1.25rem;}.trip-filter-header,.trip-table-head,.trip-pagination-bar{align-items:flex-start;}.trip-toolbar-actions,.trip-pagination-actions{width:100%;justify-content:stretch;}.trip-toolbar-actions .btn,.trip-pagination-actions .btn{flex:1;}.trip-filter-card,.trip-table-card{padding:.85rem;}}
     </style>
     <div class="app-shell">
       ${renderSidebar()}
@@ -841,6 +847,7 @@ function bindTripEvents() {
   qs("#tripDetailsModal")?.addEventListener("click", (event) => {
     if (event.target === qs("#tripDetailsModal")) closeTripDetails();
   });
+  document.addEventListener("keydown", handleTripModalEscape);
   qs("#tripDetailsDownload")?.addEventListener("click", async () => {
     if (!PAGE_STATE.viewingTripId) return;
     await downloadTripPdf(PAGE_STATE.viewingTripId);
@@ -856,6 +863,10 @@ function openTripDetails(id) {
 function closeTripDetails() {
   PAGE_STATE.viewingTripId = null;
   render();
+}
+
+function handleTripModalEscape(event) {
+  if (event.key === "Escape" && PAGE_STATE.viewingTripId) closeTripDetails();
 }
 
 function applyTripFiltersFromInputs() {
