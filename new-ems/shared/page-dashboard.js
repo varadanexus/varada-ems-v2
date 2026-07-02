@@ -1,5 +1,6 @@
 import { CONTROL_CENTER_MODULES, MODULES, ROUTES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderAppSkeleton, renderModuleContent } from "./layout.js";
+import { getSession } from "./auth.js";
 
 const ADMIN_ITEMS = [
   { module: MODULES.USERS, title: "Users", href: ROUTES.USERS, description: "Provision access and manage identities." },
@@ -33,19 +34,26 @@ const DEVELOPER_ITEMS = [
 ];
 
 function initialsOf(title) {
-  return String(title || "CC").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  return String(title || "VN").trim().split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function formatSignIn(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function renderModuleCard(item) {
   return `
-    <a class="cc-module-card" href="${item.href}">
+    <a class="cc-module-card pm-card pm-card--hairline pm-card--interactive" href="${item.href}">
       <div class="cc-module-top">
-        <span class="cc-badge-lg">${initialsOf(item.title)}</span>
-        <span class="cc-dot active" title="Active"><span class="sr-only">Active</span></span>
+        <span class="pm-badge pm-badge--lg">${initialsOf(item.title)}</span>
+        <span class="pm-dot pm-dot--active" title="Active"><span class="sr-only">Active</span></span>
       </div>
-      <h4>${item.title}</h4>
+      <h4 class="pm-title">${item.title}</h4>
       <p>${item.subtitle || item.description || ""}</p>
-      <span class="cc-card-cta">Open workspace &rarr;</span>
+      <span class="pm-cta">Open workspace <span class="pm-cta-arrow">&rarr;</span></span>
     </a>
   `;
 }
@@ -53,7 +61,7 @@ function renderModuleCard(item) {
 function renderComingPill(item) {
   return `
     <div class="cc-pill" aria-disabled="true">
-      <span class="cc-dot muted"></span>
+      <span class="pm-dot pm-dot--muted"></span>
       <span class="cc-pill-title">${item.title}</span>
       <span class="cc-pill-tag">Soon</span>
     </div>
@@ -62,13 +70,13 @@ function renderComingPill(item) {
 
 function renderAdminCard(item) {
   return `
-    <a class="cc-admin-card" href="${item.href}">
+    <a class="cc-admin-card pm-card pm-card--interactive" href="${item.href}">
       <div class="cc-admin-top">
-        <span class="cc-badge-sm">${initialsOf(item.title)}</span>
+        <span class="pm-badge pm-badge--sm">${initialsOf(item.title)}</span>
         <span class="cc-admin-title">${item.title}</span>
       </div>
       <p>${item.description || ""}</p>
-      <span class="cc-card-cta">Open &rarr;</span>
+      <span class="pm-cta">Open <span class="pm-cta-arrow">&rarr;</span></span>
     </a>
   `;
 }
@@ -78,21 +86,21 @@ function renderPanelRow(item) {
   const label = tone === "setup" ? "Setup" : "Active";
   return `
     <a class="cc-panel-row" href="${item.href}">
-      <span class="cc-badge-xs">${initialsOf(item.title)}</span>
+      <span class="pm-badge pm-badge--xs">${initialsOf(item.title)}</span>
       <span class="cc-panel-row-copy">
         <span class="cc-panel-row-title">${item.title}</span>
         <span class="cc-panel-row-desc">${item.description || ""}</span>
       </span>
-      <span class="cc-chip tone-${tone}">${label}</span>
+      <span class="pm-chip pm-chip--${tone}">${label}</span>
     </a>
   `;
 }
 
 function renderPanel(title, note, rowsHtml, emptyText) {
   return `
-    <section class="cc-panel">
+    <section class="cc-panel pm-panel pm-card--hairline">
       <header class="cc-panel-head">
-        <strong>${title}</strong>
+        <strong class="pm-kicker">${title}</strong>
         <span>${note}</span>
       </header>
       <div class="cc-panel-rows">${rowsHtml || `<div class="empty-state">${emptyText}</div>`}</div>
@@ -108,6 +116,8 @@ async function init() {
     sidebarless: true
   });
   if (!boot) return;
+
+  const session = await getSession().catch(() => null);
 
   renderModuleContent(renderAppSkeleton("Dashboard loading"));
 
@@ -133,10 +143,18 @@ async function init() {
     const activeModuleCount = launchCards.length;
     const pendingActions = configCards.length + developerCards.filter((d) => d.tone === "setup").length;
 
+    // Signed-in identity
+    const appUser = boot.appUser || {};
+    const email = appUser.email || session?.user?.email || "";
+    const displayName = appUser.display_name || (email ? email.split("@")[0] : "User");
+    const roleLabel = String(boot.primaryRole || "user").replace(/_/g, " ").toUpperCase();
+    const divisionScope = boot.divisionContext?.scopeLabel || boot.divisionLabel || "All Divisions";
+    const lastSignIn = formatSignIn(session?.user?.last_sign_in_at);
+
     const activeModulesHtml = launchCards.map(renderModuleCard).join("");
     const futureModulesHtml = futureBusinessCards.map(renderComingPill).join("");
     const adminHtml = adminCards.map(renderAdminCard).join("");
-    const quickActionsHtml = quickActions.map((item) => `<a class="cc-action-pill" href="${item.href}">${item.title}</a>`).join("");
+    const quickActionsHtml = quickActions.map((item) => `<a class="pm-pill" href="${item.href}">${item.title}</a>`).join("");
 
     renderModuleContent(`
       <style>
@@ -144,114 +162,129 @@ async function init() {
         .app-shell.sidebarless .page-head{display:none;}
         .page-content{padding-top:.9rem;}
         .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
-        .cc-dashboard{display:grid;gap:.9rem;color:#e5edf8;}
+        .cc-dashboard{display:grid;gap:1rem;color:#e5edf8;}
 
         /* ---------- Command bar ---------- */
-        .cc-bar{display:grid;grid-template-columns:auto 1fr auto;gap:1.4rem;align-items:center;padding:1rem 1.3rem;border-radius:18px;background:linear-gradient(120deg,#0e1a2e 0%,#132441 55%,#0f1c33 100%);border:1px solid rgba(148,163,184,.18);box-shadow:0 20px 44px rgba(2,6,23,.35);position:relative;overflow:hidden;}
-        .cc-bar::after{content:"";position:absolute;top:-60%;right:-4%;width:280px;height:280px;background:radial-gradient(circle,rgba(212,178,106,.16),transparent 62%);pointer-events:none;}
-        .cc-bar>*{position:relative;z-index:1;}
-        .cc-ident{display:flex;align-items:center;gap:.85rem;min-width:0;}
-        .cc-logo{width:44px;height:44px;object-fit:contain;filter:drop-shadow(0 8px 16px rgba(2,6,23,.4));}
-        .cc-ident-copy{min-width:0;}
-        .cc-kicker{display:block;font-size:.68rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#d4b26a;margin-bottom:.15rem;}
-        .cc-ident-copy h2{margin:0;font-size:1.32rem;letter-spacing:.01em;color:#f8fbff;line-height:1.2;white-space:nowrap;}
-        .cc-ident-copy p{margin:.2rem 0 0;font-size:.82rem;color:#94a8c3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .cc-kpis{display:flex;gap:2.2rem;justify-content:center;flex-wrap:wrap;}
-        .cc-kpi{min-width:0;}
-        .cc-kpi label{display:block;font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#8fa3bf;margin-bottom:.28rem;white-space:nowrap;}
-        .cc-kpi strong{display:flex;align-items:center;gap:.4rem;font-size:1.18rem;color:#f8fbff;line-height:1;white-space:nowrap;}
-        .cc-actions{display:flex;flex-wrap:wrap;gap:.45rem;justify-content:flex-end;max-width:430px;}
-        .cc-action-pill{display:inline-flex;align-items:center;height:36px;padding:0 .85rem;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(148,163,184,.2);color:#e8eefb;text-decoration:none;font-size:.8rem;font-weight:700;white-space:nowrap;transition:border-color .15s ease,background .15s ease;}
-        .cc-action-pill:hover{border-color:rgba(212,178,106,.5);background:rgba(212,178,106,.1);}
+        .cc-bar{position:relative;overflow:hidden;padding:1.1rem 1.35rem;border-radius:20px;background:linear-gradient(120deg,#0d1930 0%,#142647 52%,#0e1c34 100%);border:1px solid rgba(148,163,184,.2);box-shadow:0 24px 52px rgba(2,6,23,.4);}
+        .cc-bar::before{content:"";position:absolute;top:0;left:8%;right:8%;height:1px;background:var(--pm-hairline);}
+        .cc-bar::after{content:"";position:absolute;top:-70%;right:-3%;width:340px;height:340px;background:radial-gradient(circle,rgba(212,178,106,.15),transparent 60%);pointer-events:none;}
+        .cc-bar-grid{display:grid;grid-template-columns:minmax(0,1.25fr) auto minmax(0,auto);gap:1.6rem;align-items:center;position:relative;z-index:1;}
+        .cc-ident{display:flex;align-items:center;gap:.95rem;min-width:0;}
+        .cc-logo{width:48px;height:48px;object-fit:contain;filter:drop-shadow(0 10px 18px rgba(2,6,23,.45));}
+        .cc-ident-copy h2{margin:0;font-size:1.42rem;letter-spacing:.01em;color:#f8fbff;line-height:1.2;white-space:nowrap;}
+        .cc-ident-copy p{margin:.22rem 0 0;font-size:.82rem;color:#94a8c3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .cc-kpis{display:flex;align-items:center;gap:1.5rem;}
+        .cc-kpi{padding-right:1.5rem;border-right:1px solid rgba(148,163,184,.16);}
+        .cc-kpi:last-child{border-right:0;padding-right:0;}
+        .cc-kpi label{display:block;font-size:.66rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#8fa3bf;margin-bottom:.3rem;white-space:nowrap;}
+        .cc-kpi strong{display:flex;align-items:center;gap:.45rem;font-size:1.3rem;color:#f8fbff;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums;}
 
-        /* ---------- Shared bits ---------- */
-        .cc-dot{width:9px;height:9px;border-radius:999px;flex:0 0 auto;}
-        .cc-dot.active{background:#3ddc84;box-shadow:0 0 0 3px rgba(61,220,132,.16);}
-        .cc-dot.muted{background:#64748b;}
-        .cc-chip{display:inline-flex;align-items:center;padding:.22rem .6rem;border-radius:999px;font-size:.7rem;font-weight:700;border:1px solid transparent;white-space:nowrap;margin-left:auto;flex:0 0 auto;}
-        .cc-chip.tone-active{background:rgba(34,197,94,.12);color:#3ddc84;border-color:rgba(34,197,94,.24);}
-        .cc-chip.tone-setup{background:rgba(245,158,11,.14);color:#fbbf24;border-color:rgba(245,158,11,.22);}
-        .cc-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;margin:.2rem .15rem .15rem;}
-        .cc-section-head strong{font-size:.72rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#d4b26a;}
+        /* Identity card */
+        .cc-user{display:flex;align-items:center;gap:.85rem;padding:.7rem .95rem;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(212,178,106,.22);min-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);}
+        .cc-user-copy{display:grid;gap:.14rem;min-width:0;}
+        .cc-user-name{display:flex;align-items:center;gap:.55rem;min-width:0;}
+        .cc-user-name strong{font-size:.94rem;color:#f8fbff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .cc-user-email{font-size:.74rem;color:#93a7c4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .cc-user-meta{font-size:.7rem;color:#7f93b0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .cc-user-meta b{color:#b7c5d9;font-weight:600;}
+
+        /* Quick actions row inside bar */
+        .cc-actions-row{display:flex;align-items:center;gap:.8rem;margin-top:.95rem;padding-top:.85rem;border-top:1px solid rgba(148,163,184,.12);position:relative;z-index:1;}
+        .cc-actions-label{font-size:.66rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#d4b26a;white-space:nowrap;}
+        .cc-actions{display:flex;flex-wrap:wrap;gap:.45rem;}
+
+        /* ---------- Sections ---------- */
+        .cc-section-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;margin:.15rem .1rem 0;padding-bottom:.4rem;border-bottom:1px solid rgba(148,163,184,.1);}
+        .cc-section-head strong{font-size:.72rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#d4b26a;}
         .cc-section-head span{font-size:.78rem;color:#7f93b0;}
-        .cc-card-cta{font-size:.78rem;font-weight:700;color:#c9d6e8;letter-spacing:.01em;}
-        .cc-badge-lg,.cc-badge-sm,.cc-badge-xs{display:inline-flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(212,178,106,.14);color:#d4b26a;font-weight:800;letter-spacing:.05em;flex:0 0 auto;}
-        .cc-badge-lg{width:44px;height:44px;font-size:.95rem;}
-        .cc-badge-sm{width:32px;height:32px;font-size:.78rem;border-radius:10px;}
-        .cc-badge-xs{width:26px;height:26px;font-size:.66rem;border-radius:8px;}
 
         /* ---------- Active business modules ---------- */
-        .cc-modules-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.9rem;}
-        .cc-module-card{display:flex;flex-direction:column;gap:.5rem;min-height:140px;max-height:170px;padding:1.05rem 1.15rem;border-radius:18px;text-decoration:none;color:inherit;background:linear-gradient(180deg,#152742,#101d33);border:1px solid rgba(148,163,184,.16);box-shadow:0 14px 30px rgba(2,6,23,.28);transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;min-width:0;}
-        .cc-module-card:hover{transform:translateY(-2px);border-color:rgba(212,178,106,.45);box-shadow:0 20px 40px rgba(2,6,23,.4);}
+        .cc-modules-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.95rem;}
+        .cc-module-card{display:flex;flex-direction:column;gap:.55rem;min-height:148px;max-height:176px;padding:1.15rem 1.25rem;text-decoration:none;color:inherit;border-radius:18px;min-width:0;}
         .cc-module-top{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:nowrap;}
-        .cc-module-card h4{margin:0;color:#f8fbff;font-size:1.05rem;line-height:1.3;}
+        .cc-module-card h4{margin:0;font-size:1.08rem;line-height:1.3;}
         .cc-module-card p{margin:0;color:#9fb0c7;font-size:.85rem;line-height:1.45;flex:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 
         /* ---------- Coming soon pills ---------- */
-        .cc-coming-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.55rem;margin-top:.6rem;}
-        .cc-pill{display:flex;align-items:center;gap:.6rem;height:46px;padding:0 .9rem;border-radius:12px;background:rgba(19,35,59,.55);border:1px solid rgba(148,163,184,.12);opacity:.68;min-width:0;}
+        .cc-coming-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.55rem;margin-top:.65rem;}
+        .cc-pill{display:flex;align-items:center;gap:.6rem;height:46px;padding:0 .9rem;border-radius:12px;background:rgba(19,35,59,.5);border:1px solid rgba(148,163,184,.11);opacity:.66;min-width:0;}
         .cc-pill-title{font-size:.84rem;font-weight:600;color:#c3cfe0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .cc-pill-tag{margin-left:auto;font-size:.66rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#7f93b0;flex:0 0 auto;}
+        .cc-pill-tag{margin-left:auto;font-size:.64rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#7f93b0;flex:0 0 auto;}
 
         /* ---------- Administration ---------- */
         .cc-admin-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.7rem;}
-        .cc-admin-card{display:flex;flex-direction:column;gap:.45rem;min-height:96px;padding:.85rem .9rem;border-radius:14px;text-decoration:none;color:inherit;background:linear-gradient(180deg,#13233b,#0f1b2f);border:1px solid rgba(148,163,184,.14);transition:transform .16s ease,border-color .16s ease;min-width:0;}
-        .cc-admin-card:hover{transform:translateY(-2px);border-color:rgba(212,178,106,.45);}
+        .cc-admin-card{display:flex;flex-direction:column;gap:.45rem;min-height:100px;padding:.9rem .95rem;text-decoration:none;color:inherit;border-radius:14px;min-width:0;}
         .cc-admin-top{display:flex;align-items:center;gap:.6rem;min-width:0;}
         .cc-admin-title{font-size:.92rem;font-weight:700;color:#f8fbff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .cc-admin-card p{margin:0;color:#8fa3bf;font-size:.76rem;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .cc-admin-card .cc-card-cta{font-size:.72rem;}
+        .cc-admin-card .pm-cta{font-size:.72rem;}
 
         /* ---------- Bottom panels ---------- */
-        .cc-panels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.9rem;align-items:start;}
-        .cc-panel{padding:.95rem 1rem;border-radius:16px;background:linear-gradient(180deg,rgba(15,23,42,.98),rgba(11,18,34,.98));border:1px solid rgba(148,163,184,.14);box-shadow:0 12px 26px rgba(2,6,23,.22);min-width:0;}
-        .cc-panel-head{display:grid;gap:.15rem;margin-bottom:.65rem;}
-        .cc-panel-head strong{font-size:.72rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#d4b26a;}
+        .cc-panels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.95rem;align-items:start;}
+        .cc-panel{padding:1rem 1.05rem;min-width:0;}
+        .cc-panel-head{display:grid;gap:.18rem;margin-bottom:.7rem;padding-bottom:.55rem;border-bottom:1px solid rgba(148,163,184,.1);}
         .cc-panel-head span{font-size:.76rem;color:#7f93b0;line-height:1.4;}
-        .cc-panel-rows{display:grid;gap:.4rem;}
-        .cc-panel-row{display:flex;align-items:center;gap:.7rem;min-height:52px;padding:.5rem .65rem;border-radius:11px;text-decoration:none;color:inherit;background:rgba(255,255,255,.03);border:1px solid rgba(148,163,184,.1);transition:background .15s ease,border-color .15s ease;min-width:0;}
-        .cc-panel-row:hover{background:rgba(212,178,106,.07);border-color:rgba(212,178,106,.35);}
+        .cc-panel-rows{display:grid;gap:.42rem;}
+        .cc-panel-row{display:flex;align-items:center;gap:.7rem;min-height:54px;padding:.5rem .7rem;border-radius:11px;text-decoration:none;color:inherit;background:rgba(255,255,255,.03);border:1px solid rgba(148,163,184,.1);transition:background .15s ease,border-color .15s ease;min-width:0;}
+        .cc-panel-row:hover{background:rgba(212,178,106,.07);border-color:rgba(212,178,106,.4);}
         .cc-panel-row-copy{display:grid;min-width:0;}
         .cc-panel-row-title{font-size:.86rem;font-weight:700;color:#eef4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .cc-panel-row-desc{font-size:.72rem;color:#8fa3bf;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .cc-panel-row .pm-chip{margin-left:auto;}
 
         /* ---------- Responsive ---------- */
         @media (max-width:1200px){
-          .cc-bar{grid-template-columns:1fr auto;grid-template-rows:auto auto;}
-          .cc-actions{grid-column:1 / -1;justify-content:flex-start;max-width:none;}
+          .cc-bar-grid{grid-template-columns:1fr auto;}
+          .cc-kpis{display:none;}
           .cc-admin-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
           .cc-coming-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
           .cc-modules-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
           .cc-panels{grid-template-columns:1fr;}
         }
         @media (max-width:760px){
-          .cc-bar{grid-template-columns:1fr;gap:.9rem;padding:.95rem 1rem;}
-          .cc-ident-copy h2{white-space:normal;font-size:1.2rem;}
+          .cc-bar-grid{grid-template-columns:1fr;gap:.9rem;}
+          .cc-ident-copy h2{white-space:normal;font-size:1.22rem;}
           .cc-ident-copy p{white-space:normal;}
-          .cc-kpis{justify-content:flex-start;gap:1.3rem;}
+          .cc-user{width:100%;}
+          .cc-actions-row{flex-direction:column;align-items:flex-start;gap:.5rem;}
           .cc-modules-grid{grid-template-columns:1fr;}
-          .cc-module-card{min-height:110px;}
+          .cc-module-card{min-height:112px;}
           .cc-coming-grid,.cc-admin-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
         }
       </style>
 
       <div class="cc-dashboard">
         <section class="cc-bar">
-          <div class="cc-ident">
-            <img class="cc-logo" src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus" />
-            <div class="cc-ident-copy">
-              <span class="cc-kicker">Varada Nexus</span>
-              <h2>EMS Control Center</h2>
-              <p>Unified command surface for administration, operations, and finance.</p>
+          <div class="cc-bar-grid">
+            <div class="cc-ident">
+              <img class="cc-logo" src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus" />
+              <div class="cc-ident-copy">
+                <span class="pm-kicker">Varada Nexus</span>
+                <h2>EMS Control Center</h2>
+                <p>Unified command surface for administration, operations, and finance.</p>
+              </div>
+            </div>
+            <div class="cc-kpis">
+              <div class="cc-kpi"><label>Active Modules</label><strong>${activeModuleCount}</strong></div>
+              <div class="cc-kpi"><label>Pending Actions</label><strong>${pendingActions}</strong></div>
+              <div class="cc-kpi"><label>System Health</label><strong><span class="pm-dot pm-dot--active"></span>Healthy</strong></div>
+            </div>
+            <div class="cc-user">
+              <span class="pm-avatar">${initialsOf(displayName)}</span>
+              <div class="cc-user-copy">
+                <div class="cc-user-name">
+                  <strong>${displayName}</strong>
+                  <span class="pm-chip pm-chip--gold">${roleLabel}</span>
+                </div>
+                <span class="cc-user-email">${email}</span>
+                <span class="cc-user-meta"><b>${divisionScope}</b>${lastSignIn ? ` &middot; Signed in ${lastSignIn}` : ""}</span>
+              </div>
             </div>
           </div>
-          <div class="cc-kpis">
-            <div class="cc-kpi"><label>Active Modules</label><strong>${activeModuleCount}</strong></div>
-            <div class="cc-kpi"><label>Pending Actions</label><strong>${pendingActions}</strong></div>
-            <div class="cc-kpi"><label>System Health</label><strong><span class="cc-dot active"></span>Healthy</strong></div>
+          <div class="cc-actions-row">
+            <span class="cc-actions-label">Quick Actions</span>
+            <div class="cc-actions">${quickActionsHtml || '<div class="empty-state">No quick actions for your role.</div>'}</div>
           </div>
-          <div class="cc-actions">${quickActionsHtml || '<div class="empty-state">No quick actions for your role.</div>'}</div>
         </section>
 
         <div class="cc-section-head">

@@ -1,0 +1,143 @@
+/* ============================================================
+   Varada Nexus — Premium Design Layer (Sprint 13E.3)
+   Reusable tokens + components for the whole EMS.
+   Include AFTER app.css:  <link rel="stylesheet" href="/new-ems/assets/css/premium.css" />
+   All classes are pm-* and safe to adopt page by page.
+   ============================================================ */
+
+:root {
+  /* Palette */
+  --pm-bg: #0a111f;
+  --pm-surface: linear-gradient(180deg, #14243e 0%, #0f1b30 100%);
+  --pm-surface-deep: linear-gradient(180deg, rgba(15, 23, 42, .98), rgba(10, 17, 32, .98));
+  --pm-glass: rgba(255, 255, 255, .045);
+  --pm-border: rgba(148, 163, 184, .16);
+  --pm-border-strong: rgba(148, 163, 184, .28);
+  --pm-gold: #d4b26a;
+  --pm-gold-strong: #e8cf96;
+  --pm-gold-soft: rgba(212, 178, 106, .14);
+  --pm-gold-border: rgba(212, 178, 106, .42);
+  --pm-text: #f6f9fe;
+  --pm-text-2: #b7c5d9;
+  --pm-text-3: #8fa3bf;
+  --pm-green: #3ddc84;
+  --pm-amber: #fbbf24;
+
+  /* Elevation */
+  --pm-shadow-1: 0 10px 26px rgba(2, 6, 23, .28);
+  --pm-shadow-2: 0 22px 48px rgba(2, 6, 23, .42);
+  --pm-shadow-gold: 0 14px 34px rgba(212, 178, 106, .12);
+
+  /* Shape & type */
+  --pm-radius: 16px;
+  --pm-radius-lg: 20px;
+  --pm-radius-sm: 11px;
+  --pm-kicker: .7rem;
+  --pm-hairline: linear-gradient(90deg, transparent 0%, rgba(212, 178, 106, .55) 28%, rgba(232, 207, 150, .85) 50%, rgba(212, 178, 106, .55) 72%, transparent 100%);
+}
+
+/* ---------- Surfaces ---------- */
+.pm-card {
+  position: relative;
+  background: var(--pm-surface);
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius);
+  box-shadow: var(--pm-shadow-1);
+}
+.pm-card--hairline::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 10%; right: 10%;
+  height: 1px;
+  background: var(--pm-hairline);
+  pointer-events: none;
+}
+.pm-card--interactive { transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.pm-card--interactive:hover {
+  transform: translateY(-2px);
+  border-color: var(--pm-gold-border);
+  box-shadow: var(--pm-shadow-2), var(--pm-shadow-gold);
+}
+.pm-panel {
+  background: var(--pm-surface-deep);
+  border: 1px solid var(--pm-border);
+  border-radius: var(--pm-radius);
+  box-shadow: var(--pm-shadow-1);
+}
+
+/* ---------- Typography ---------- */
+.pm-kicker {
+  font-size: var(--pm-kicker);
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--pm-gold);
+}
+.pm-title { color: var(--pm-text); letter-spacing: .01em; }
+.pm-muted { color: var(--pm-text-3); }
+.pm-num { font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+
+/* ---------- Chips, badges, dots ---------- */
+.pm-chip {
+  display: inline-flex; align-items: center; gap: .38rem;
+  padding: .24rem .62rem; border-radius: 999px;
+  font-size: .7rem; font-weight: 700; letter-spacing: .02em;
+  border: 1px solid transparent; white-space: nowrap; flex: 0 0 auto;
+}
+.pm-chip::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.pm-chip--active { background: rgba(34, 197, 94, .1); color: var(--pm-green); border-color: rgba(34, 197, 94, .26); }
+.pm-chip--setup { background: rgba(245, 158, 11, .1); color: var(--pm-amber); border-color: rgba(245, 158, 11, .26); }
+.pm-chip--muted { background: rgba(148, 163, 184, .1); color: #cbd5e1; border-color: rgba(148, 163, 184, .22); }
+.pm-chip--gold { background: var(--pm-gold-soft); color: var(--pm-gold-strong); border-color: var(--pm-gold-border); }
+
+.pm-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--pm-gold-soft); color: var(--pm-gold);
+  border: 1px solid rgba(212, 178, 106, .2);
+  font-weight: 800; letter-spacing: .05em; flex: 0 0 auto;
+}
+.pm-badge--lg { width: 46px; height: 46px; border-radius: 13px; font-size: .95rem; }
+.pm-badge--sm { width: 32px; height: 32px; border-radius: 10px; font-size: .76rem; }
+.pm-badge--xs { width: 26px; height: 26px; border-radius: 8px; font-size: .64rem; }
+
+.pm-dot { width: 9px; height: 9px; border-radius: 999px; flex: 0 0 auto; }
+.pm-dot--active { background: var(--pm-green); box-shadow: 0 0 0 3px rgba(61, 220, 132, .15), 0 0 10px rgba(61, 220, 132, .5); }
+.pm-dot--muted { background: #64748b; }
+
+/* ---------- Buttons / pills ---------- */
+.pm-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 36px; padding: 0 .9rem; border-radius: 999px;
+  background: var(--pm-glass); border: 1px solid rgba(148, 163, 184, .22);
+  color: #e9effb; text-decoration: none; font-size: .8rem; font-weight: 700; white-space: nowrap;
+  transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.pm-pill:hover { border-color: var(--pm-gold-border); background: var(--pm-gold-soft); color: var(--pm-gold-strong); }
+
+/* ---------- Avatar / identity ---------- */
+.pm-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 999px; flex: 0 0 auto;
+  background: linear-gradient(145deg, #1b2f4e, #12213a);
+  color: var(--pm-gold-strong); font-weight: 800; font-size: .95rem; letter-spacing: .04em;
+  border: 1px solid var(--pm-gold-border);
+  box-shadow: 0 0 0 3px rgba(212, 178, 106, .1);
+}
+
+/* ---------- Section headers ---------- */
+.pm-section-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+  padding-bottom: .35rem; margin: .25rem .1rem 0;
+  border-bottom: 1px solid rgba(148, 163, 184, .1);
+}
+.pm-section-head .pm-section-meta { font-size: .76rem; color: var(--pm-text-3); }
+
+/* ---------- CTA link ---------- */
+.pm-cta {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .78rem; font-weight: 700; color: #cdd9ea; letter-spacing: .02em;
+  transition: color .15s ease;
+}
+.pm-cta .pm-cta-arrow { transition: transform .15s ease; }
+a:hover > .pm-cta, .pm-card--interactive:hover .pm-cta { color: var(--pm-gold-strong); }
+.pm-card--interactive:hover .pm-cta .pm-cta-arrow { transform: translateX(3px); }
