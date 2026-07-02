@@ -755,16 +755,11 @@ export async function cancelTransportClientBill(billId) {
   if (currentError) throw currentError;
   if (!current) return null;
   if (current.status === "approved") throw new Error("Approved bill cannot be cancelled.");
-  if (current.status === "cancelled") return null;
-  const { data, error } = await client
-    .from("transport_client_bills")
-    .update({ status: "cancelled", updated_at: new Date().toISOString() })
-    .eq("id", billId)
-    .is("deleted_at", null)
-    .select("*")
-    .maybeSingle();
+  // Sprint 13E.9: cancelling permanently removes the bill (snapshot kept in the
+  // restricted archive) so its invoice number is freed for reuse.
+  const { data, error } = await client.rpc("purge_transport_client_bill", { p_bill_id: billId });
   if (error) throw error;
-  return data || null;
+  return { id: billId, bill_no: data, status: "deleted" };
 }
 
 export async function approveTransportClientBill(billId) {
@@ -1040,17 +1035,11 @@ export async function cancelTransportGstInvoice(invoiceId) {
   if (currentError) throw currentError;
   if (!current) return null;
   if (current.status === "approved") throw new Error("Approved invoice cannot be cancelled.");
-  if (current.status === "cancelled") return null;
-  const { data, error } = await client
-    .from("transport_gst_invoices")
-    .update({ status: "cancelled", updated_at: new Date().toISOString() })
-    .eq("id", invoiceId)
-    .eq("status", "draft")
-    .is("deleted_at", null)
-    .select("*")
-    .maybeSingle();
+  // Sprint 13E.9: cancelling permanently removes the invoice (snapshot kept in the
+  // restricted archive) so its invoice number is freed for reuse.
+  const { data, error } = await client.rpc("purge_transport_gst_invoice", { p_invoice_id: invoiceId });
   if (error) throw error;
-  return data || null;
+  return { id: invoiceId, invoice_no: data, status: "deleted" };
 }
 
 export async function listClientReceiptBillOptions({ divisionId = null, transportClientId = null } = {}) {

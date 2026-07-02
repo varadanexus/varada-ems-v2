@@ -399,7 +399,7 @@ function renderBillList() {
   body.querySelectorAll("button[data-bill-cancel]").forEach((button) => button.addEventListener("click", async () => {
     const billId = button.getAttribute("data-bill-cancel");
     if (!billId) return;
-    const confirmed = window.confirm("Cancel this bill? This is a soft-cancel and will make its trips eligible for rebilling.");
+    const confirmed = window.confirm("Cancel this bill? It will be permanently removed, its number reused, and its trips become eligible for rebilling.");
     if (!confirmed) return;
     try {
       const before = PAGE_STATE.bills.find((x) => String(x.id) === String(billId)) || null;

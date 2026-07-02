@@ -174,7 +174,7 @@ function renderInvoiceList() {
   body.querySelectorAll("button[data-inv-cancel]").forEach((button) => button.addEventListener("click", async () => {
     const invoiceId = button.getAttribute("data-inv-cancel");
     if (!invoiceId) return;
-    if (!window.confirm("Cancel this invoice? This is a soft-cancel.")) return;
+    if (!window.confirm("Cancel this invoice? It will be permanently removed and its number reused.")) return;
     try {
       const before = PAGE_STATE.invoices.find((x) => String(x.id) === String(invoiceId)) || null;
       const cancelled = await cancelTransportGstInvoice(invoiceId);
