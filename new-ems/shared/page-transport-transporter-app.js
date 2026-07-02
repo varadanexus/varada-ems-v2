@@ -1,6 +1,6 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
-import { exportPortalTransporterStatementPdf } from "./portal-pdf-exports.js";
+import { exportPortalTransporterStatementPdf, exportPortalTransporterTripPdf } from "./portal-pdf-exports.js";
 import { showToast, qs } from "./utils.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
@@ -45,7 +45,8 @@ const PAGE_STATE = {
   tripPagination: {
     page: 1,
     pageSize: 10
-  }
+  },
+  viewingTripId: null
 };
 
 const TRIP_SORTABLE_COLUMNS = new Set(["trip_no", "trip_date", "quantity_mt", "transporter_gross_amount", "status"]);
@@ -451,11 +452,51 @@ function renderTripRow(trip, index) {
       <td>${statusBadge(trip.status)}</td>
       <td>
         <div class="trip-row-actions">
-          <button class="btn btn-sm btn-ghost" type="button" disabled aria-disabled="true">View</button>
-          <button class="btn btn-sm btn-ghost" type="button" disabled aria-disabled="true">Download</button>
+          <button class="btn btn-sm btn-ghost" data-trip-view="${escapeHtml(String(trip.id || trip.trip_no || ""))}" type="button">View</button>
+          <button class="btn btn-sm btn-ghost" data-trip-pdf="${escapeHtml(String(trip.id || trip.trip_no || ""))}" type="button">Download</button>
         </div>
       </td>
     </tr>
+  `;
+}
+
+function activeTripDetails() {
+  return PAGE_STATE.trips.find((trip) => String(trip.id || trip.trip_no || "") === String(PAGE_STATE.viewingTripId || "")) || null;
+}
+
+function renderTripDetailsModal() {
+  const trip = activeTripDetails();
+  if (!trip) return "";
+  const detailRows = [
+    ["Trip No", trip.trip_no || "-"],
+    ["Date", formatDate(trip.trip_date)],
+    ["Route", formatRouteDisplay(trip.route_name)],
+    ["Truck", resolveTruckDisplay(trip)],
+    ["Driver", trip.driver_name || "-"],
+    ["Commodity", trip.commodity_name || "-"],
+    ["Quantity", `${Number(trip.quantity_mt || 0).toFixed(2)} MT`],
+    ["Rate", `${formatMoney(trip.transporter_rate_per_mt).replace('.00', '')} / MT`],
+    ["Gross Amount", formatMoney(trip.transporter_gross_amount)],
+    ["Status", statusLabel(trip.status)]
+  ];
+  return `
+    <div id="tripDetailsModal" class="stmt-modal">
+      <div class="stmt-modal-panel">
+        <div class="stmt-actions" style="justify-content:space-between;margin-bottom:1rem;">
+          <div>
+            <h3 style="margin:0;">Trip Details</h3>
+            <p class="muted" style="margin:.25rem 0 0;">Review assigned transporter trip information.</p>
+          </div>
+          <button class="btn" type="button" id="tripDetailsClose">Close</button>
+        </div>
+        <div class="stmt-detail-grid">
+          ${detailRows.map(([label, value]) => `<div class="stmt-detail-box"><label>${escapeHtml(label)}</label><strong>${escapeHtml(String(value ?? "-"))}</strong></div>`).join("")}
+        </div>
+        <div class="stmt-actions" style="margin-top:1rem;justify-content:flex-end;">
+          <button class="btn" type="button" id="tripDetailsDownload">Download PDF</button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -741,6 +782,7 @@ function render() {
         <section class="page-content">${sectionBody()}</section>
       </div>
     </div>
+    ${renderTripDetailsModal()}
     <div id="toastHost" class="toast-host" aria-live="polite"></div>
   `;
   bindEvents();
@@ -793,6 +835,27 @@ function bindTripEvents() {
     PAGE_STATE.tripPagination.page += 1;
     render();
   });
+  document.querySelectorAll("[data-trip-view]").forEach((button) => button.addEventListener("click", () => openTripDetails(button.dataset.tripView)));
+  document.querySelectorAll("[data-trip-pdf]").forEach((button) => button.addEventListener("click", () => downloadTripPdf(button.dataset.tripPdf)));
+  qs("#tripDetailsClose")?.addEventListener("click", closeTripDetails);
+  qs("#tripDetailsModal")?.addEventListener("click", (event) => {
+    if (event.target === qs("#tripDetailsModal")) closeTripDetails();
+  });
+  qs("#tripDetailsDownload")?.addEventListener("click", async () => {
+    if (!PAGE_STATE.viewingTripId) return;
+    await downloadTripPdf(PAGE_STATE.viewingTripId);
+  });
+}
+
+function openTripDetails(id) {
+  if (!id) return;
+  PAGE_STATE.viewingTripId = id;
+  render();
+}
+
+function closeTripDetails() {
+  PAGE_STATE.viewingTripId = null;
+  render();
 }
 
 function applyTripFiltersFromInputs() {
@@ -829,6 +892,21 @@ async function downloadStatementPdf(id) {
   const row = PAGE_STATE.statements.find((s) => String(s.id) === String(id));
   if (!row) return;
   await exportPortalTransporterStatementPdf({ statement: row, transporterName: t?.name || row.transporter_name || "N/A" });
+}
+
+async function downloadTripPdf(id) {
+  const t = activeTransporter();
+  const row = PAGE_STATE.trips.find((trip) => String(trip.id || trip.trip_no || "") === String(id));
+  if (!row) {
+    showToast("Trip not found.", TOAST_TYPES.ERROR);
+    return;
+  }
+  try {
+    await exportPortalTransporterTripPdf({ trip: row, transporterName: t?.name || row.transporter_name || "N/A" });
+  } catch (error) {
+    console.error(error);
+    showToast(error?.message || "Failed to download trip PDF.", TOAST_TYPES.ERROR);
+  }
 }
 
 init().catch((error) => {

@@ -32,6 +32,78 @@ export function formatPortalPdfFilename(documentType, documentNo) {
   return `VARADA_${type}_${no}.pdf`;
 }
 
+export async function exportPortalTransporterTripPdf({ trip, transporterName }) {
+  const doc = await createPdfDocument();
+  const tripNo = trip?.trip_no || "—";
+  const routeText = String(trip?.route_name || "-").trim() || "-";
+  const truckText = [trip?.truck_no, trip?.vehicle_no, trip?.registration_no].find((value) => String(value || "").trim()) || "Unknown Truck";
+  let y = await addOldEmsCompanyHeader(doc, {
+    title: "Transporter Trip",
+    verifiedText: "Digitally Verified"
+  });
+
+  y = addDetailsSection(doc, "TRANSPORTER / TRIP DETAILS", [
+    { label: "Transporter", value: transporterName || trip?.transporter_name || "N/A" },
+    { label: "Trip No", value: tripNo },
+    { label: "Date", value: formatPdfDate(trip?.trip_date) },
+    { label: "Status", value: String(trip?.status || "—").toUpperCase() },
+    { label: "Portal", value: "Transporter Portal" },
+    { label: "Document Type", value: "Trip Details" }
+  ], y + 3);
+
+  y = addTable(doc, {
+    startY: y + 5,
+    head: ["Trip No", "Date", "Truck", "Qty MT", "Rate/MT", "Gross Amount", "Status"],
+    body: [[
+      tripNo,
+      formatPdfDate(trip?.trip_date),
+      truckText,
+      Number(trip?.quantity_mt || 0).toFixed(2),
+      formatPdfCurrency(trip?.transporter_rate_per_mt || 0),
+      formatPdfCurrency(trip?.transporter_gross_amount || 0),
+      String(trip?.status || "—").toUpperCase()
+    ]],
+    options: {
+      headFillColor: [0, 102, 204],
+      styles: { fontSize: 8.25, cellPadding: 1.7 },
+      columnStyles: {
+        0: { cellWidth: 24 },
+        1: { cellWidth: 20 },
+        2: { cellWidth: 35 },
+        3: { cellWidth: 18, halign: "right" },
+        4: { cellWidth: 24, halign: "right" },
+        5: { cellWidth: 28, halign: "right" },
+        6: { cellWidth: 24 }
+      }
+    }
+  });
+
+  const summaryStartY = y + 5;
+  const summaryEndY = addOldEmsTaxSummaryBlock(doc, {
+    startY: summaryStartY,
+    marginLeft: 110,
+    tableWidth: 85,
+    title: "Trip Summary",
+    rows: [
+      { label: "Route", value: routeText },
+      { label: "Driver", value: trip?.driver_name || "-" },
+      { label: "Commodity", value: trip?.commodity_name || "-" },
+      { label: "Quantity", value: `${Number(trip?.quantity_mt || 0).toFixed(2)} MT` },
+      { label: "Gross Amount", value: formatPdfCurrency(trip?.transporter_gross_amount || 0) }
+    ]
+  });
+  const bankEndY = addOldEmsBankDetailsBlock(doc, { startY: summaryStartY, marginLeft: 15, tableWidth: 90 });
+  y = Math.max(summaryEndY, bankEndY) + 8;
+
+  addOldEmsDeclarationBlock(doc, {
+    startY: y,
+    text: "This is a system-generated trip details document issued from the Varada Nexus Transporter Portal.",
+    width: 90
+  });
+  await addOldEmsSignatureStampBlock(doc, { startY: 248 });
+  savePdf(doc, formatPortalPdfFilename("TRIP", trip?.trip_no));
+}
+
 export async function exportPortalTransporterStatementPdf({ statement, transporterName }) {
   const doc = await createPdfDocument();
   const penaltyAmount = Number(statement?.penalty_amount || 0);
