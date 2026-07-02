@@ -172,7 +172,8 @@ async function init() {
         .cc-bar::before{content:"";position:absolute;top:0;left:8%;right:8%;height:1px;background:var(--pm-hairline);}
         .cc-bar::after{content:"";position:absolute;top:-70%;right:-3%;width:340px;height:340px;background:radial-gradient(circle,rgba(212,178,106,.15),transparent 60%);pointer-events:none;}
         .cc-bar-grid{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:1.6rem;align-items:center;position:relative;z-index:1;}
-        .cc-ident{display:flex;align-items:center;gap:.95rem;min-width:0;}
+        .cc-ident{display:flex;align-items:center;gap:.95rem;min-width:0;overflow:hidden;}
+        .cc-ident-copy{min-width:0;overflow:hidden;}
         .cc-logo{width:48px;height:48px;object-fit:contain;filter:drop-shadow(0 10px 18px rgba(2,6,23,.45));}
         .cc-ident-copy h2{margin:0;font-size:1.42rem;letter-spacing:.01em;color:#f8fbff;line-height:1.2;white-space:nowrap;}
         .cc-ident-copy p{margin:.22rem 0 0;font-size:.82rem;color:#94a8c3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}

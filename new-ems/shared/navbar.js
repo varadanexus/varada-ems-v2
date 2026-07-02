@@ -4,7 +4,13 @@ export function renderNavbar(email = "", role = "", options = {}) {
     <header class="app-navbar">
       <div class="navbar-left">
         <button class="icon-btn ${sidebarless ? "hidden" : ""}" id="menuToggle" aria-label="Toggle menu">☰</button>
-        <div class="navbar-title">EMS 2.0</div>
+        <div class="navbar-title" style="display:flex;align-items:center;gap:.6rem;">
+          <img src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus" style="width:30px;height:30px;object-fit:contain;" />
+          <span style="line-height:1.15;display:inline-grid;">
+            <span style="font-weight:700;letter-spacing:.02em;">Varada Nexus</span>
+            <small style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#d4b26a;">Private Limited</small>
+          </span>
+        </div>
       </div>
       <div class="global-search">Search modules, users, settings...</div>
       <div class="navbar-actions">
