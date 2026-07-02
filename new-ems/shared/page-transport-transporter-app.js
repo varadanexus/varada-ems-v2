@@ -610,6 +610,7 @@ function render() {
       .trip-workspace{display:grid;grid-template-columns:minmax(0,1fr);gap:.9rem;align-items:start;width:100%;}
       .trip-workspace > *{min-width:0;width:100%;}
       .trip-kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.85rem;width:100%;margin:0;}
+      .trip-kpi-grid > .trip-kpi-card{grid-column:auto !important;width:auto !important;min-width:0;}
       .trip-kpi-card{padding:.95rem 1rem;min-height:108px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(180deg,rgba(16,26,48,.96),rgba(11,19,36,.96));border:1px solid rgba(148,163,184,.16);box-shadow:0 10px 24px rgba(15,23,42,.18);}
       .trip-kpi-card h2{margin:.45rem 0 0;font-size:1.35rem;line-height:1.2;white-space:nowrap;}
       .trip-filter-card,.trip-table-card{overflow:hidden;width:100%;}
