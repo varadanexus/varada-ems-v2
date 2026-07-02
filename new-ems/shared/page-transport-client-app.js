@@ -148,8 +148,17 @@ function renderTrips() {
 function renderBills() {
   const rows = PAGE_STATE.bills;
   return renderTable(
-    ["Bill No", "Date", "Type", "Status", "Gross Total", "Net Receivable", "PDF"],
-    rows.map((b) => [b.bill_no, formatDate(b.bill_date), b.billing_type || "-", statusBadge(b.status), formatMoney(b.gross_total), formatMoney(b.net_receivable), pdfButton("bill", b)]),
+    ["Bill No", "Date", "Type", "Status", "Gross Total", "Deductions", "Net Receivable", "PDF"],
+    rows.map((b) => [
+      b.bill_no,
+      formatDate(b.bill_date),
+      b.billing_type || "-",
+      statusBadge(b.status),
+      formatMoney(b.gross_total),
+      formatMoney(b.support_deduction_total),
+      formatMoney(b.net_receivable),
+      pdfButton("bill", b)
+    ]),
     "No bills found."
   );
 }

@@ -34,6 +34,7 @@ export function formatPortalPdfFilename(documentType, documentNo) {
 
 export async function exportPortalTransporterStatementPdf({ statement, transporterName }) {
   const doc = await createPdfDocument();
+  const penaltyAmount = Number(statement?.penalty_amount || 0);
   let y = await addOldEmsCompanyHeader(doc, {
     title: "Transporter Statement",
     verifiedText: "Digitally Verified"
@@ -50,12 +51,13 @@ export async function exportPortalTransporterStatementPdf({ statement, transport
 
   y = addTable(doc, {
     startY: y + 5,
-    head: ["Statement No", "Date", "Gross Payable", "Support Deduction", "Net Payable"],
+    head: ["Statement No", "Date", "Gross Payable", "Deductions", "Penalties", "Net Payable"],
     body: [[
       statement?.statement_no || "—",
       formatPdfDate(statement?.statement_date),
       formatPdfCurrency(statement?.gross_payable_total || 0),
       formatPdfCurrency(statement?.support_deduction_total || 0),
+      formatPdfCurrency(penaltyAmount),
       formatPdfCurrency(statement?.net_payable_total || 0)
     ]],
     options: { headFillColor: [0, 102, 204] }
@@ -69,7 +71,9 @@ export async function exportPortalTransporterStatementPdf({ statement, transport
     title: "Statement Summary",
     rows: [
       { label: "Gross Payable", value: formatPdfCurrency(statement?.gross_payable_total || 0) },
-      { label: "Support Deduction", value: formatPdfCurrency(statement?.support_deduction_total || 0) },
+      { label: "Deductions", value: formatPdfCurrency(statement?.support_deduction_total || 0) },
+      { label: "Penalties", value: formatPdfCurrency(penaltyAmount) },
+      ...(statement?.penalty_reason ? [{ label: "Penalty Reason", value: statement.penalty_reason }] : []),
       [{ content: "Net Payable", styles: { fontStyle: "bold" } }, { content: formatPdfCurrency(statement?.net_payable_total || 0), styles: { fontStyle: "bold" } }]
     ]
   });
@@ -88,6 +92,9 @@ export async function exportPortalTransporterStatementPdf({ statement, transport
 export async function exportPortalClientBillPdf({ bill, clientName }) {
   const doc = await createPdfDocument();
   const isGst = String(bill?.billing_type || "").toUpperCase() === "GST";
+  const supportDeductions = Number(bill?.support_deduction_total || 0);
+  const hasPenaltyAmount = bill?.penalty_amount != null && bill?.penalty_amount !== "";
+  const penaltyAmount = hasPenaltyAmount ? Number(bill?.penalty_amount || 0) : null;
   let y = await addOldEmsCompanyHeader(doc, {
     title: isGst ? "GST Invoice" : "Client Bill",
     verifiedText: "Digitally Verified"
@@ -104,12 +111,22 @@ export async function exportPortalClientBillPdf({ bill, clientName }) {
 
   y = addTable(doc, {
     startY: y + 5,
-    head: ["Bill No", "Date", "Type", "Gross Total", "Net Receivable"],
+    head: [
+      "Bill No",
+      "Date",
+      "Type",
+      "Gross Total",
+      "Deductions",
+      ...(hasPenaltyAmount ? ["Penalties"] : []),
+      "Net Receivable"
+    ],
     body: [[
       bill?.bill_no || "—",
       formatPdfDate(bill?.bill_date),
       bill?.billing_type || "—",
       formatPdfCurrency(bill?.gross_total || 0),
+      formatPdfCurrency(supportDeductions),
+      ...(hasPenaltyAmount ? [formatPdfCurrency(penaltyAmount || 0)] : []),
       formatPdfCurrency(bill?.net_receivable || 0)
     ]],
     options: { headFillColor: [0, 102, 204] }
@@ -117,8 +134,12 @@ export async function exportPortalClientBillPdf({ bill, clientName }) {
 
   const summaryRows = [
     { label: "Gross Total", value: formatPdfCurrency(bill?.gross_total || 0) },
+    { label: "Deductions", value: formatPdfCurrency(supportDeductions) },
     { label: "Net Receivable", value: formatPdfCurrency(bill?.net_receivable || 0) }
   ];
+  if (hasPenaltyAmount) {
+    summaryRows.splice(2, 0, { label: "Penalties", value: formatPdfCurrency(penaltyAmount || 0) });
+  }
   if (isGst) {
     summaryRows.splice(1, 0,
       { label: "Taxable Value", value: formatPdfCurrency(bill?.taxable_value || 0) },

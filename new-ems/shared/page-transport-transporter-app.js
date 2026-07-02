@@ -475,8 +475,17 @@ function renderTripEmptyStateRow() {
 
 function renderStatements() {
   return renderTable(
-    ["Statement No", "Date", "Status", "Gross Payable", "Deductions", "Net Payable", "PDF"],
-    PAGE_STATE.statements.map((s) => [s.statement_no, formatDate(s.statement_date), statusBadge(s.status), formatMoney(s.gross_payable_total), formatMoney(s.support_deduction_total), formatMoney(s.net_payable_total), pdfButton(s)]),
+    ["Statement No", "Date", "Status", "Gross Payable", "Support Deductions", "Penalties", "Net Payable", "PDF"],
+    PAGE_STATE.statements.map((s) => [
+      s.statement_no,
+      formatDate(s.statement_date),
+      statusBadge(s.status),
+      formatMoney(s.gross_payable_total),
+      formatMoney(s.support_deduction_total),
+      formatMoney(s.penalty_amount),
+      formatMoney(s.net_payable_total),
+      pdfButton(s)
+    ]),
     "No statements found."
   );
 }
@@ -491,8 +500,16 @@ function renderPayments() {
 
 function renderDeductions() {
   return renderTable(
-    ["Statement No", "Date", "Support Deductions", "Penalty Amount", "Penalty Reason", "GST Input"],
-    PAGE_STATE.statements.map((s) => [s.statement_no, formatDate(s.statement_date), formatMoney(s.support_deduction_total), formatMoney(s.penalty_amount), s.penalty_reason || "-", formatMoney(s.gst_input_amount)]),
+    ["Statement No", "Date", "Support Deductions", "Penalty Amount", "Penalty Reason", "GST Input", "Net Payable"],
+    PAGE_STATE.statements.map((s) => [
+      s.statement_no,
+      formatDate(s.statement_date),
+      formatMoney(s.support_deduction_total),
+      formatMoney(s.penalty_amount),
+      s.penalty_reason || "-",
+      formatMoney(s.gst_input_amount),
+      formatMoney(s.net_payable_total)
+    ]),
     "No deductions found."
   );
 }
