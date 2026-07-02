@@ -2,6 +2,70 @@ import { CONTROL_CENTER_MODULES, MODULES, ROUTES } from "../config/constants.js"
 import { bootstrapProtectedPage, renderAppSkeleton, renderModuleContent } from "./layout.js";
 import { renderModuleWorkspaceShell } from "./module-workspace.js";
 
+const ADMIN_ITEMS = [
+  { module: MODULES.USERS, title: "Users", href: ROUTES.USERS, description: "Provision access, manage identities, and review workforce accounts.", tone: "active" },
+  { module: MODULES.ROLES, title: "Roles", href: ROUTES.ROLES, description: "Manage role structure, permission boundaries, and access templates.", tone: "active" },
+  { module: MODULES.DIVISIONS, title: "Divisions", href: ROUTES.DIVISIONS, description: "Control canonical division scope, workspace ownership, and access routing.", tone: "active" },
+  { module: MODULES.SETTINGS, title: "Settings", href: ROUTES.SETTINGS, description: "Configure ERP-wide operational preferences and core controls.", tone: "active" },
+  { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, title: "Audit Logs", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT, description: "Inspect system events, role changes, and sensitive workflow activity.", tone: "active" },
+  { module: MODULES.PORTAL_ACCESS, title: "Portal Access", href: ROUTES.PORTAL_ACCESS, description: "Grant and review controlled external portal visibility for clients and transporters.", tone: "active" }
+];
+
+const GLOBAL_CONFIG_ITEMS = [
+  { module: MODULES.MASTER_TAX_CODES, title: "Tax Codes", href: ROUTES.MASTER_TAX_CODES, description: "Global tax references used by finance and billing workflows.", tone: "setup" },
+  { module: MODULES.MASTER_UNITS, title: "Units", href: ROUTES.MASTER_UNITS, description: "Measurement units shared across modules where standardization matters.", tone: "setup" },
+  { module: MODULES.MASTER_DOCUMENT_TYPES, title: "Document Types", href: ROUTES.MASTER_DOCUMENT_TYPES, description: "Reusable document classifications for compliance and operations.", tone: "setup" }
+];
+
+const QUICK_ACTIONS = [
+  { module: MODULES.USERS, title: "Manage Users", href: ROUTES.USERS },
+  { module: MODULES.ROLES, title: "Manage Roles & Permissions", href: ROUTES.ROLES },
+  { module: MODULES.DIVISIONS, title: "Manage Divisions", href: ROUTES.DIVISIONS },
+  { module: MODULES.PORTAL_ACCESS, title: "Portal Access", href: ROUTES.PORTAL_ACCESS },
+  { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
+  { module: MODULES.TRANSPORTATION, title: "Transportation Dashboard", href: ROUTES.TRANSPORT_DASHBOARD },
+  { module: MODULES.INTERIORS, title: "Interiors Dashboard", href: ROUTES.INTERIORS_DASHBOARD }
+];
+
+const DEVELOPER_ITEMS = [
+  { module: MODULES.CENTRAL_ACCOUNTS_POSTING_QUEUE, title: "Background Jobs", href: ROUTES.CENTRAL_ACCOUNTS_POSTING_QUEUE, description: "Observe operational queues and downstream posting workload.", tone: "active" },
+  { module: MODULES.CENTRAL_ACCOUNTS_POSTING_QUEUE, title: "Queues", href: ROUTES.CENTRAL_ACCOUNTS_POSTING_QUEUE, description: "Track queue-driven processing health and pending backlogs.", tone: "active" },
+  { module: MODULES.SETTINGS, title: "Integrations", href: ROUTES.SETTINGS, description: "Review system touchpoints, portal settings, and future integration control hooks.", tone: "setup" },
+  { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, title: "API / Logs", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT, description: "Use audit visibility as the current system-level diagnostics surface.", tone: "active" }
+];
+
+function statusChip(label, tone = "active") {
+  return `<span class="cc-status tone-${tone}">${label}</span>`;
+}
+
+function renderTile(item, fallbackLabel = "Setup Needed") {
+  const href = item.href || "#";
+  const disabled = !item.href;
+  const chip = disabled
+    ? statusChip("Coming Soon", "coming")
+    : item.tone === "setup"
+      ? statusChip("Setup Needed", "setup")
+      : statusChip("Active", "active");
+  const initials = String(item.title || "CC").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
+  const tag = disabled ? "div" : "a";
+  const attrs = disabled ? 'aria-disabled="true"' : `href="${href}"`;
+  return `
+    <${tag} class="cc-tile ${disabled ? "is-disabled" : ""}" ${attrs}>
+      <div class="cc-tile-top">
+        <span class="cc-tile-badge">${initials}</span>
+        ${chip || statusChip(fallbackLabel, "setup")}
+      </div>
+      <h4>${item.title}</h4>
+      <p>${item.description || "Open workspace"}</p>
+      <span class="cc-link-row">${disabled ? "Planned" : "Open Workspace →"}</span>
+    </${tag}>
+  `;
+}
+
+function renderActionPill(item) {
+  return `<a class="cc-action-pill" href="${item.href}">${item.title}</a>`;
+}
+
 async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.DASHBOARD,
@@ -14,97 +78,183 @@ async function init() {
   renderModuleContent(renderAppSkeleton("Dashboard loading"));
 
   window.setTimeout(() => {
-    const visibleCards = CONTROL_CENTER_MODULES.filter((m) => (boot.accessibleModules || boot.allowedModules || []).includes(m.module));
-    const cardsHtml = visibleCards.map((m) => `
-      <a class="module-card" href="${m.href || ROUTES.DASHBOARD}">
-        <div class="module-top"><span class="module-dot"></span><span class="module-open">→</span></div>
-        <div class="module-card-title">${m.title}</div>
-        <p class="muted">${m.subtitle}</p>
-        <span class="meta-pill">${m.href ? "Open" : "Coming soon"}</span>
-      </a>
-    `).join("");
+    const allowedModules = boot.accessibleModules || boot.allowedModules || [];
+    const visibleCards = CONTROL_CENTER_MODULES.filter((m) => allowedModules.includes(m.module));
+    const businessCards = visibleCards.filter((m) => ![MODULES.SETTINGS, MODULES.MASTER_CLIENTS, MODULES.ACCOUNTS].includes(m.module));
+    const activeBusinessCards = businessCards.filter((m) => Boolean(m.href));
+    const futureBusinessCards = businessCards.filter((m) => !m.href);
+    const adminCards = ADMIN_ITEMS.filter((x) => allowedModules.includes(x.module));
+    const configCards = GLOBAL_CONFIG_ITEMS.filter((x) => allowedModules.includes(x.module));
+    const financeCards = [
+      { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD, description: "Operate journals, receivables, payables, treasury, and financial control.", tone: "active" },
+      { module: MODULES.CENTRAL_ACCOUNTS_REPORTING, title: "Reports", href: ROUTES.CENTRAL_ACCOUNTS_REPORTING, description: "Review finance reporting workspaces and downstream statements.", tone: "active" }
+    ].filter((x) => allowedModules.includes(x.module));
+    const developerCards = DEVELOPER_ITEMS.filter((x) => allowedModules.includes(x.module));
+    const quickActions = QUICK_ACTIONS.filter((x) => allowedModules.includes(x.module));
+    const activeModuleCount = activeBusinessCards.length + financeCards.filter((item) => item.href).length;
+    const pendingActions = adminCards.length + quickActions.length;
 
-    const adminCards = [
-      { module: MODULES.USERS, title: "Users", href: ROUTES.USERS },
-      { module: MODULES.ROLES, title: "Roles", href: ROUTES.ROLES },
-      { module: MODULES.DIVISIONS, title: "Divisions", href: ROUTES.DIVISIONS },
-      { module: MODULES.SETTINGS, title: "Settings", href: ROUTES.SETTINGS },
-      { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, title: "Audit Logs", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT }
-    ].filter((x) => (boot.allowedModules || []).includes(x.module));
-
-    const masterCards = [
-      { module: MODULES.MASTER_CLIENTS, title: "Clients", href: ROUTES.MASTER_CLIENTS },
-      { module: MODULES.MASTER_CONTRACTORS, title: "Contractors", href: ROUTES.MASTER_CONTRACTORS },
-      { module: MODULES.MASTER_TRANSPORTERS, title: "Transporters", href: ROUTES.MASTER_TRANSPORTERS },
-      { module: MODULES.MASTER_AGENTS, title: "Agents", href: ROUTES.MASTER_AGENTS },
-      { module: MODULES.MASTER_COMMODITIES, title: "Commodities", href: ROUTES.MASTER_COMMODITIES },
-      { module: MODULES.MASTER_ROUTES, title: "Routes", href: ROUTES.MASTER_ROUTES },
-      { module: MODULES.MASTER_UNITS, title: "Units", href: ROUTES.MASTER_UNITS },
-      { module: MODULES.MASTER_TAX_CODES, title: "Tax Codes", href: ROUTES.MASTER_TAX_CODES },
-      { module: MODULES.MASTER_DOCUMENT_TYPES, title: "Document Types", href: ROUTES.MASTER_DOCUMENT_TYPES }
-    ].filter((x) => (boot.allowedModules || []).includes(x.module));
+    const activeModulesHtml = activeBusinessCards.map((m) => renderTile({ title: m.title, href: m.href, description: m.subtitle, tone: "active" })).join("");
+    const futureModulesHtml = futureBusinessCards.map((m) => renderTile({ title: m.title, href: null, description: m.subtitle, tone: "coming" }, "Coming Soon")).join("");
+    const adminHtml = adminCards.map((m) => renderTile(m)).join("");
+    const configHtml = configCards.map((m) => renderTile(m)).join("");
+    const financeHtml = financeCards.map((m) => renderTile(m)).join("");
+    const developerHtml = developerCards.map((m) => renderTile(m)).join("");
+    const quickActionsHtml = quickActions.map(renderActionPill).join("");
 
     renderModuleContent(`
-      <section class="control-hero card">
-        <h2>Welcome to EMS Control Center</h2>
-        <p class="muted">Access only what your role permits. Use quick actions to manage users, roles, and master data.</p>
-        <div class="hero-kpis">
-          <span class="meta-pill">Active Modules: ${visibleCards.length}</span>
-          <span class="meta-pill">Users: --</span>
-          <span class="meta-pill">Pending Actions: --</span>
-          <span class="meta-pill">System Health: Healthy</span>
-        </div>
-      </section>
+      <style>
+        .app-shell.sidebarless .page-head,.app-shell.sidebarless .page-content{max-width:min(1680px,calc(100vw - 32px));}
+        .cc-dashboard{display:grid;gap:1rem;}
+        .cc-hero{position:relative;overflow:hidden;padding:1.35rem 1.4rem 1.2rem;background:linear-gradient(135deg,#0f1a2d 0%,#13233d 48%,#101b31 100%);border:1px solid rgba(148,163,184,.18);box-shadow:0 24px 60px rgba(15,23,42,.18);}
+        .cc-hero::after{content:"";position:absolute;inset:auto -10% -35% auto;width:320px;height:320px;background:radial-gradient(circle,rgba(212,178,106,.18),transparent 62%);pointer-events:none;}
+        .cc-hero-grid{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(420px,.95fr);gap:1rem;align-items:start;position:relative;z-index:1;}
+        .cc-brand{display:flex;align-items:flex-start;gap:1rem;min-width:0;}
+        .cc-brand-logo{width:54px;height:54px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 10px 20px rgba(2,6,23,.28));}
+        .cc-brand-copy h2{margin:0 0 .45rem;font-size:1.85rem;letter-spacing:.01em;color:#f8fbff;}
+        .cc-brand-copy p{margin:0;color:#b5c4d8;max-width:760px;line-height:1.55;}
+        .cc-label{display:inline-flex;align-items:center;gap:.45rem;margin-bottom:.6rem;padding:.35rem .65rem;border-radius:999px;background:rgba(255,255,255,.06);color:#d4b26a;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
+        .cc-overview-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-top:1rem;}
+        .cc-kpi{padding:.9rem 1rem;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.15);min-width:0;}
+        .cc-kpi label{display:block;font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:#9fb0c7;margin-bottom:.45rem;}
+        .cc-kpi strong{display:block;font-size:1.2rem;color:#f8fbff;line-height:1.2;}
+        .cc-side-panel{display:grid;gap:.8rem;}
+        .cc-side-card{padding:1rem;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.14);}
+        .cc-side-card h3,.cc-section h3{margin:0 0 .4rem;color:#f8fbff;}
+        .cc-side-card p,.cc-section-copy{margin:0;color:#94a3b8;line-height:1.5;}
+        .cc-chip-row,.cc-action-row{display:flex;flex-wrap:wrap;gap:.55rem;margin-top:.75rem;}
+        .cc-status{display:inline-flex;align-items:center;justify-content:center;padding:.34rem .68rem;border-radius:999px;font-size:.75rem;font-weight:700;border:1px solid transparent;white-space:nowrap;}
+        .cc-status.tone-active{background:rgba(34,197,94,.12);color:#3ddc84;border-color:rgba(34,197,94,.24);}
+        .cc-status.tone-coming{background:rgba(148,163,184,.14);color:#cbd5e1;border-color:rgba(148,163,184,.22);}
+        .cc-status.tone-setup{background:rgba(245,158,11,.14);color:#fbbf24;border-color:rgba(245,158,11,.22);}
+        .cc-section{padding:1.05rem 1.1rem;border-radius:18px;background:linear-gradient(180deg,rgba(15,23,42,.98),rgba(11,18,34,.98));border:1px solid rgba(148,163,184,.14);box-shadow:0 16px 34px rgba(15,23,42,.14);}
+        .cc-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:.95rem;}
+        .cc-section-copy strong{display:block;margin-bottom:.25rem;color:#e5edf8;font-size:1rem;}
+        .cc-dashboard-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(420px,.95fr);gap:1rem;align-items:start;}
+        .cc-stack{display:grid;gap:1rem;}
+        .cc-tile-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.9rem;}
+        .cc-tile-grid.compact{grid-template-columns:repeat(2,minmax(0,1fr));}
+        .cc-tile{display:flex;flex-direction:column;gap:.7rem;min-height:172px;padding:1rem;border-radius:18px;text-decoration:none;color:inherit;background:linear-gradient(180deg,#13233b,#0f1b2f);border:1px solid rgba(148,163,184,.14);box-shadow:0 12px 28px rgba(15,23,42,.12);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
+        .cc-tile:hover{transform:translateY(-2px);border-color:rgba(212,178,106,.32);box-shadow:0 18px 36px rgba(15,23,42,.18);}
+        .cc-tile.is-disabled{opacity:.78;cursor:default;}
+        .cc-tile-top{display:flex;align-items:center;justify-content:space-between;gap:.75rem;}
+        .cc-tile-badge{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:12px;background:rgba(212,178,106,.14);color:#d4b26a;font-weight:800;letter-spacing:.06em;}
+        .cc-tile h4{margin:0;color:#f8fbff;font-size:1.02rem;line-height:1.35;}
+        .cc-tile p{margin:0;color:#9fb0c7;line-height:1.5;flex:1;}
+        .cc-link-row{font-size:.82rem;font-weight:700;color:#d8e2f0;letter-spacing:.01em;}
+        .cc-action-pill{display:inline-flex;align-items:center;justify-content:center;padding:.75rem .95rem;border-radius:12px;background:#13233b;border:1px solid rgba(148,163,184,.14);color:#eef4ff;text-decoration:none;font-weight:700;min-height:46px;}
+        .cc-action-pill:hover{border-color:rgba(212,178,106,.32);}
+        .cc-list{display:grid;gap:.7rem;margin-top:.75rem;}
+        .cc-list-item{display:flex;align-items:flex-start;gap:.75rem;padding:.8rem .9rem;border-radius:14px;background:#101b30;border:1px solid rgba(148,163,184,.12);}
+        .cc-list-bullet{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:10px;background:rgba(59,130,246,.14);color:#93c5fd;font-weight:700;flex:0 0 auto;}
+        .cc-list-item strong{display:block;color:#e5edf8;margin-bottom:.15rem;}
+        .cc-list-item span{display:block;color:#94a3b8;line-height:1.45;}
+        @media (max-width: 1320px){.cc-hero-grid,.cc-dashboard-grid{grid-template-columns:1fr;}.cc-tile-grid,.cc-tile-grid.compact,.cc-overview-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media (max-width: 760px){.cc-overview-kpis,.cc-tile-grid,.cc-tile-grid.compact{grid-template-columns:1fr;}.cc-hero{padding:1rem;}.cc-section{padding:1rem;}.cc-brand{align-items:flex-start;}.cc-brand-copy h2{font-size:1.55rem;}}
+      </style>
 
-      <section class="card">
-        <h3>Administration</h3>
-        <div class="module-card-grid">${adminCards.map((m) => `<a class="quick-action" href="${m.href}">${m.title}</a>`).join("") || '<div class="empty-state">No administration access.</div>'}</div>
-      </section>
-
-      <section class="card" style="margin-top:1rem;">
-        <h3>Master Data</h3>
-        <div class="module-card-grid">${masterCards.map((m) => `<a class="quick-action" href="${m.href}">${m.title}</a>`).join("") || '<div class="empty-state">No master data access.</div>'}</div>
-      </section>
-
-      <section class="control-grid">
-        <article class="card">
-          <h3>Module Launcher</h3>
-          <div class="module-card-grid">${cardsHtml || '<div class="empty-state">No modules available for your role.</div>'}</div>
-        </article>
-
-        <article class="card">
-          <h3>Quick Actions</h3>
-          <div class="quick-action-list">
-            <a class="quick-action" href="${ROUTES.USERS}">Manage Users</a>
-            <a class="quick-action" href="${ROUTES.ROLES}">Manage Roles & Permissions</a>
-            <a class="quick-action" href="${ROUTES.DIVISIONS}">Manage Divisions</a>
-            <a class="quick-action" href="${ROUTES.MASTER_CLIENTS}">Open Master Data</a>
+      <div class="cc-dashboard">
+        <section class="cc-hero card">
+          <div class="cc-hero-grid">
+            <div>
+              <div class="cc-label">Control Center</div>
+              <div class="cc-brand">
+                <img class="cc-brand-logo" src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus" />
+                <div class="cc-brand-copy">
+                  <h2>EMS Control Center</h2>
+                  <p>Operate Varada Nexus from a cleaner command surface with administration, module launchers, finance oversight, and system configuration grouped by ownership instead of scattered master-data shortcuts.</p>
+                </div>
+              </div>
+              <div class="cc-overview-kpis">
+                <div class="cc-kpi"><label>Active Modules</label><strong>${activeModuleCount}</strong></div>
+                <div class="cc-kpi"><label>Pending Actions</label><strong>${pendingActions}</strong></div>
+                <div class="cc-kpi"><label>System Health</label><strong>Healthy</strong></div>
+                <div class="cc-kpi"><label>Future Modules</label><strong>${futureBusinessCards.length}</strong></div>
+              </div>
+            </div>
+            <div class="cc-side-panel">
+              <div class="cc-side-card">
+                <h3>Welcome / System Overview</h3>
+                <p>Access only what your role permits. Active business entities such as Clients, Transporters, Agents, Commodities, and Routes should be managed inside their owning modules, not from a global master-data launcher.</p>
+                <div class="cc-chip-row">
+                  ${statusChip(`Active Modules ${activeModuleCount}`, "active")}
+                  ${statusChip(`Pending Actions ${pendingActions}`, pendingActions ? "setup" : "active")}
+                  ${statusChip("System Health Healthy", "active")}
+                </div>
+              </div>
+              <div class="cc-side-card">
+                <h3>Quick Actions</h3>
+                <div class="cc-action-row">${quickActionsHtml || '<div class="empty-state">No quick actions available for your role.</div>'}</div>
+              </div>
+            </div>
           </div>
-        </article>
+        </section>
 
-        <article class="card">
-          <h3>Recent Activity</h3>
-          <ul class="activity-list">
-            <li>Role and permission updates appear here (placeholder)</li>
-            <li>Master-data updates appear here (placeholder)</li>
-            <li>User security actions appear here (placeholder)</li>
-          </ul>
-        </article>
+        <div class="cc-dashboard-grid">
+          <div class="cc-stack">
+            <section class="cc-section">
+              <div class="cc-section-head">
+                <div class="cc-section-copy">
+                  <strong>Administration</strong>
+                  <span>Users, roles, divisions, portal access, audit visibility, and core controls grouped into one operational block.</span>
+                </div>
+              </div>
+              <div class="cc-tile-grid">${adminHtml || '<div class="empty-state">No administration access.</div>'}</div>
+            </section>
 
-        <article class="card">
-          <h3>Notifications</h3>
-          <div class="empty-state">Notification center integration placeholder.</div>
-        </article>
-      </section>
+            <section class="cc-section">
+              <div class="cc-section-head">
+                <div class="cc-section-copy">
+                  <strong>Business Modules</strong>
+                  <span>Active module launchers are emphasized, while future business streams remain visible but muted with proper card width and spacing.</span>
+                </div>
+              </div>
+              <div style="display:grid;gap:1rem;">
+                <div>
+                  <h3>Active Modules</h3>
+                  <div class="cc-tile-grid">${activeModulesHtml || '<div class="empty-state">No active modules available.</div>'}</div>
+                </div>
+                <div>
+                  <h3>Coming Soon</h3>
+                  <div class="cc-tile-grid">${futureModulesHtml || '<div class="empty-state">No future modules declared.</div>'}</div>
+                </div>
+              </div>
+            </section>
+          </div>
 
-      ${renderModuleWorkspaceShell({
-        title: "Module Workspace Pattern",
-        subtitle: "Reusable scaffold for upcoming domain modules.",
-        breadcrumbs: [{ label: "Control Center", href: ROUTES.DASHBOARD }, { label: "Workspace" }],
-        quickActions: [{ key: "new", label: "New Record" }, { key: "export", label: "Export" }],
-        tabs: [{ key: "overview", label: "Overview" }, { key: "list", label: "List" }, { key: "insights", label: "Insights" }]
-      })}
-      <div class="empty-state" style="margin-top:1rem;">Use this shell for Transportation/Accounts/etc module pages in upcoming sprints.</div>
+          <div class="cc-stack">
+            <section class="cc-section">
+              <div class="cc-section-head">
+                <div class="cc-section-copy">
+                  <strong>Finance</strong>
+                  <span>Financial cockpit access stays separate from business operations for cleaner ownership.</span>
+                </div>
+              </div>
+              <div class="cc-tile-grid compact">${financeHtml || '<div class="empty-state">No finance workspace access.</div>'}</div>
+            </section>
+
+            <section class="cc-section">
+              <div class="cc-section-head">
+                <div class="cc-section-copy">
+                  <strong>System Configuration</strong>
+                  <span>Only true global configuration references remain visible here. Business entities are intentionally removed from global Master Data.</span>
+                </div>
+              </div>
+              <div class="cc-tile-grid compact">${configHtml || '<div class="empty-state">No global configuration access.</div>'}</div>
+            </section>
+
+            <section class="cc-section">
+              <div class="cc-section-head">
+                <div class="cc-section-copy">
+                  <strong>Developer / System</strong>
+                  <span>Operational diagnostics, processing queues, and integration-oriented controls.</span>
+                </div>
+              </div>
+              <div class="cc-tile-grid compact">${developerHtml || '<div class="empty-state">No developer/system tools available.</div>'}</div>
+            </section>
+          </div>
+        </div>
+      </div>
     `);
 
     const workspace = document.getElementById("workspaceContent");
