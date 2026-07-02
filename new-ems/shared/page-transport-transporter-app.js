@@ -326,7 +326,6 @@ function renderTrips() {
         <div class="trip-filter-header">
           <div>
             <h3>Assigned Trips</h3>
-            <p class="muted">Filter and sort your trip assignments using the currently loaded transporter portal data.</p>
           </div>
           <span class="meta-pill">Rows: ${escapeHtml(String(filteredRows.length))}</span>
         </div>
@@ -379,7 +378,6 @@ function renderTrips() {
         <div class="trip-table-head">
           <div>
             <h3>Trip Register</h3>
-            <p class="muted">Premium transporter view with route, truck, commodity, rate, and gross amount visibility.</p>
           </div>
           <span class="meta-pill">Page ${paged.page} / ${paged.totalPages}</span>
         </div>
