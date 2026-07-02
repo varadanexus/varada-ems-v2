@@ -480,11 +480,11 @@ function renderTripDetailsModal() {
     ["Status", statusLabel(trip.status)]
   ];
   return `
-    <div id="tripDetailsModal" class="stmt-modal">
-      <div class="stmt-modal-panel">
+    <div id="tripDetailsModal" class="trip-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="tripDetailsTitle">
+      <div class="trip-modal-panel">
         <div class="stmt-actions" style="justify-content:space-between;margin-bottom:1rem;">
           <div>
-            <h3 style="margin:0;">Trip Details</h3>
+            <h3 id="tripDetailsTitle" style="margin:0;">Trip Details</h3>
             <p class="muted" style="margin:.25rem 0 0;">Review assigned transporter trip information.</p>
           </div>
           <button class="btn" type="button" id="tripDetailsClose">Close</button>
