@@ -658,6 +658,21 @@ export async function listTripExpenses({ tripId, divisionId = null, search = "",
   return { rows: data || [], count: count || 0 };
 }
 
+export async function listRateRoutesForCommodity({ divisionId = null, transportCommodityId = null } = {}) {
+  if (!transportCommodityId) return null;
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_rate_master")
+    .select("route_id")
+    .is("deleted_at", null)
+    .eq("is_active", true)
+    .eq("transport_commodity_id", transportCommodityId);
+  if (divisionId) query = query.eq("division_id", divisionId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return [...new Set((data || []).map((r) => r.route_id).filter(Boolean))];
+}
+
 export async function listTransportClientBillableTrips({ divisionId = null, transportClientId = null } = {}) {
   if (!divisionId || !transportClientId) return [];
   const client = getSupabaseClient();

@@ -1,5 +1,5 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, findTransportRateForTrip, getActiveAgentByTruck, getTransporterByTruck, getTripById, listActiveOptions, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
+import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, findTransportRateForTrip, getActiveAgentByTruck, getTransporterByTruck, getTripById, listActiveOptions, listRateRoutesForCommodity, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { getCurrentAppUser } from "./auth.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
@@ -12,7 +12,7 @@ async function init() {
   const fixedDivisionId = boot.divisionId || null;
   let page = 1; const pageSize = 10; let rows = [];
 
-  renderModuleContent(`<section class="card"><h3>Create Trip</h3><form id="tripCreateForm" class="form-row"></form><div id="tripCreateMeta" class="muted" style="margin-top:.5rem;"></div></section>
+  renderModuleContent(`<details class="card pm-collapse"><summary>Create Trip</summary><form id="tripCreateForm" class="form-row" style="margin-top:.85rem;"></form><div id="tripCreateMeta" class="muted" style="margin-top:.5rem;"></div></details>
   <section class="card" style="margin-top:1rem;"><h3>Trip List</h3><input id="tripSearch" placeholder="Search trip no/notes"/><select id="tripStatus"><option value="">All Status</option>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}">${s}</option>`).join("")}</select><div class="table-shell" style="margin-top:.75rem;"><table><thead><tr><th>Trip No</th><th>Date</th><th>Status</th><th>Qty</th><th>Actions</th></tr></thead><tbody id="tripBody"></tbody></table></div><div style="margin-top:.75rem;display:flex;gap:.5rem;"><button class="btn" id="tripPrev">Prev</button><span id="tripMeta"></span><button class="btn" id="tripNext">Next</button></div></section>
   <div id="tripDetailsModal" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,.62);backdrop-filter:blur(4px);z-index:70;align-items:center;justify-content:center;">
     <div class="card" style="width:min(1000px,95vw);max-height:90vh;overflow:auto;">
@@ -60,7 +60,7 @@ async function init() {
     <div id="tripCreateFinancialPreview" class="meta-pill" style="grid-column:1/-1;background:#f3f4f6;color:#111827;">Preview: Qty MT 0.000 | Client Gross ₹0.00 | Transporter Gross ₹0.00 | Estimated Margin ₹0.00</div>
     <label>Notes</label><input data-f="notes" />
     <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 6: Documents</h4>
-    <div style="grid-column:1/-1;margin-top:.5rem;"><h4 style="margin:.25rem 0;">Trip Documents</h4><div id="tripDocCreateRows"></div></div>
+    <details class="pm-collapse pm-collapse--sub" style="grid-column:1/-1;margin-top:.5rem;"><summary>Trip Documents</summary><div id="tripDocCreateRows" style="margin-top:.6rem;"></div></details>
     <button class="btn" type="submit">Create Trip</button>`;
 
   function renderCreateDocRows() {
@@ -94,11 +94,35 @@ async function init() {
   renderCreateDocRows();
 
   const map = [["transport_client_id","transport_clients",fixedDivisionId],["transport_transporter_id","transport_transporters",fixedDivisionId],["truck_id","transport_trucks",fixedDivisionId],["driver_id","transport_drivers",fixedDivisionId],["route_id","transport_route_master",fixedDivisionId],["transport_commodity_id","transport_commodities",fixedDivisionId]];
+  let allRouteOpts = [];
   for (const [field, table, div] of map) {
     const sel = qs(`[data-f='${field}']`); if (!sel) continue;
     const opts = await listActiveOptions(table, { labelField: "name", valueField: "id", divisionId: div });
+    if (field === "route_id") allRouteOpts = opts;
     sel.innerHTML = `<option value="">Select...</option>${opts.map((o)=>`<option value="${o.value}">${o.label}</option>`).join("")}`;
   }
+
+  async function applyRouteFilter(sel, commodityId) {
+    if (!sel) return;
+    const current = sel.value;
+    let opts = allRouteOpts;
+    if (commodityId) {
+      try {
+        const ids = await listRateRoutesForCommodity({ divisionId: fixedDivisionId, transportCommodityId: commodityId });
+        if (ids && ids.length) {
+          opts = allRouteOpts.filter((o) => ids.map(String).includes(String(o.value)));
+        } else {
+          showToast("No rate-linked routes for this commodity yet; showing all routes.", TOAST_TYPES.INFO);
+        }
+      } catch { /* fall back to all routes */ }
+    }
+    sel.innerHTML = `<option value="">Select...</option>${opts.map((o)=>`<option value="${o.value}">${o.label}</option>`).join("")}`;
+    if (current && opts.some((o) => String(o.value) === String(current))) sel.value = current;
+  }
+
+  qs("[data-f='transport_commodity_id']")?.addEventListener("change", async () => {
+    await applyRouteFilter(qs("[data-f='route_id']"), qs("[data-f='transport_commodity_id']")?.value || "");
+  });
 
   async function derivePartiesFromTruckCreate() {
     const truckId = qs("[data-f='truck_id']")?.value || "";
@@ -423,6 +447,9 @@ async function init() {
     bindOptions("transport_commodity_id", "transport_commodities", row.transport_commodity_id);
     bindOptions("transport_client_id", "transport_clients", row.transport_client_id);
     bindOptions("transport_transporter_id", "transport_transporters", row.transport_transporter_id);
+    qs("[data-e='transport_commodity_id']")?.addEventListener("change", async () => {
+      await applyRouteFilter(qs("[data-e='route_id']"), qs("[data-e='transport_commodity_id']")?.value || "");
+    });
 
     const derivePartiesFromTruckEdit = async () => {
       const truckId = qs("[data-e='truck_id']")?.value || "";
@@ -557,7 +584,12 @@ async function init() {
         await load();
       } catch (error) {
         console.error("trip_status_update_failed", { id, status, error });
-        showToast(error?.message || `Failed to update trip status to ${status}.`, TOAST_TYPES.ERROR);
+        const emsg = String(error?.message || "");
+        if (emsg.includes("WEIGHT_BILL")) {
+          showToast("Weight Bill required: open Details and add a WEIGHT_BILL document before marking this trip completed / financial review.", TOAST_TYPES.ERROR);
+        } else {
+          showToast(emsg || `Failed to update trip status to ${status}.`, TOAST_TYPES.ERROR);
+        }
         await load();
       }
     }));
