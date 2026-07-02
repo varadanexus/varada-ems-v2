@@ -347,3 +347,56 @@ export async function exportPortalClientTripPdf({ trip, clientName }) {
   await addOldEmsSignatureStampBlock(doc, { startY: 248 });
   savePdf(doc, formatPortalPdfFilename("TRIP", trip?.trip_no));
 }
+
+export async function exportPortalClientCreditNotePdf({ creditNote, clientName }) {
+  const doc = await createPdfDocument();
+  let y = await addOldEmsCompanyHeader(doc, {
+    title: "Credit Note",
+    verifiedText: "Digitally Verified"
+  });
+
+  y = addDetailsSection(doc, "CLIENT / DOCUMENT DETAILS", [
+    { label: "Client", value: clientName || creditNote?.client_name || "N/A" },
+    { label: "Credit Note No", value: creditNote?.credit_note_no || "—" },
+    { label: "Against Bill", value: creditNote?.bill_no || creditNote?.transport_client_bills?.bill_no || "—" },
+    { label: "Credit Note Date", value: formatPdfDate(creditNote?.credit_note_date) },
+    { label: "Status", value: String(creditNote?.status || "—").toUpperCase() },
+    { label: "Document Type", value: "Client Credit Note" }
+  ], y + 3);
+
+  y = addTable(doc, {
+    startY: y + 5,
+    head: ["Credit Note No", "Date", "Against Bill", "Reason", "Amount"],
+    body: [[
+      creditNote?.credit_note_no || "—",
+      formatPdfDate(creditNote?.credit_note_date),
+      creditNote?.bill_no || creditNote?.transport_client_bills?.bill_no || "—",
+      creditNote?.reason || "—",
+      formatPdfCurrency(creditNote?.credit_note_amount || 0)
+    ]],
+    options: { headFillColor: [0, 102, 204] }
+  });
+
+  const summaryStartY = y + 5;
+  const summaryEndY = addOldEmsTaxSummaryBlock(doc, {
+    startY: summaryStartY,
+    marginLeft: 110,
+    tableWidth: 85,
+    title: "Credit Summary",
+    rows: [
+      { label: "Against Bill", value: creditNote?.bill_no || creditNote?.transport_client_bills?.bill_no || "—" },
+      { label: "Reason", value: creditNote?.reason || "—" },
+      [{ content: "Credit Amount", styles: { fontStyle: "bold" } }, { content: formatPdfCurrency(creditNote?.credit_note_amount || 0), styles: { fontStyle: "bold" } }]
+    ]
+  });
+  const bankEndY = addOldEmsBankDetailsBlock(doc, { startY: summaryStartY, marginLeft: 15, tableWidth: 90 });
+  y = Math.max(summaryEndY, bankEndY) + 8;
+
+  addOldEmsDeclarationBlock(doc, {
+    startY: y,
+    text: "This is a system-generated credit note reducing the receivable against the referenced client bill.",
+    width: 90
+  });
+  await addOldEmsSignatureStampBlock(doc, { startY: 248 });
+  savePdf(doc, formatPortalPdfFilename("CREDIT_NOTE", creditNote?.credit_note_no));
+}

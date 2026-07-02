@@ -1,6 +1,6 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
-import { exportPortalClientBillPdf, exportPortalClientGstInvoicePdf, exportPortalClientTripPdf } from "./portal-pdf-exports.js";
+import { exportPortalClientBillPdf, exportPortalClientCreditNotePdf, exportPortalClientGstInvoicePdf, exportPortalClientTripPdf } from "./portal-pdf-exports.js";
 import { showToast, qs } from "./utils.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
@@ -520,8 +520,8 @@ function renderGstInvoices() {
 
 function renderCreditNotes() {
   return renderTable(
-    ["Credit Note No", "Date", "Status", "Amount", "Reason"],
-    PAGE_STATE.creditNotes.map((n) => [n.credit_note_no, formatDate(n.credit_note_date), statusBadge(n.status), formatMoney(n.credit_note_amount), n.reason || "-"]),
+    ["Credit Note No", "Date", "Status", "Amount", "Reason", "PDF"],
+    PAGE_STATE.creditNotes.map((n) => [n.credit_note_no, formatDate(n.credit_note_date), statusBadge(n.status), formatMoney(n.credit_note_amount), n.reason || "-", pdfButton("cn", n)]),
     "No credit notes found."
   );
 }
@@ -821,6 +821,10 @@ async function downloadPdf(kind, id) {
     row = PAGE_STATE.bills.find((b) => String(b.id) === String(id));
     if (!row) return;
     await exportPortalClientBillPdf({ bill: row, clientName: c?.name || row.client_name || "N/A" });
+  } else if (kind === "cn") {
+    row = PAGE_STATE.creditNotes.find((n) => String(n.id) === String(id));
+    if (!row) return;
+    await exportPortalClientCreditNotePdf({ creditNote: row, clientName: c?.name || "N/A" });
   } else {
     row = PAGE_STATE.gstInvoices.find((i) => String(i.id) === String(id));
     if (!row) return;
