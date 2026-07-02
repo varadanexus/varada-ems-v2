@@ -1,5 +1,6 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
+import { exportPortalClientBillPdf, exportPortalClientGstInvoicePdf } from "./portal-pdf-exports.js";
 import { showToast, qs } from "./utils.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
@@ -275,54 +276,18 @@ function bindEvents() {
   document.querySelectorAll("[data-pdf]").forEach((btn) => btn.addEventListener("click", () => downloadPdf(btn.dataset.pdf, btn.dataset.id)));
 }
 
-function downloadPdf(kind, id) {
+async function downloadPdf(kind, id) {
   const c = activeClient();
-  let row, title, fields, filename;
+  let row;
   if (kind === "bill") {
     row = PAGE_STATE.bills.find((b) => String(b.id) === String(id));
     if (!row) return;
-    title = `Bill ${row.bill_no || ""}`;
-    filename = (row.bill_no || "bill").replace(/\//g, "-");
-    fields = [
-      ["Bill No", row.bill_no],
-      ["Date", formatDate(row.bill_date)],
-      ["Type", row.billing_type || "-"],
-      ["Status", row.status],
-      ["Gross Total", formatMoney(row.gross_total)],
-      ["Net Receivable", formatMoney(row.net_receivable)]
-    ];
-    if (row.billing_type === "GST") {
-      fields.push(["Taxable Value", formatMoney(row.taxable_value)]);
-      fields.push(["GST %", row.gst_percentage ?? "-"]);
-      fields.push(["GST Amount", formatMoney(row.gst_amount)]);
-      fields.push(["Invoice Total", formatMoney(row.invoice_total)]);
-    }
+    await exportPortalClientBillPdf({ bill: row, clientName: c?.name || row.client_name || "N/A" });
   } else {
     row = PAGE_STATE.gstInvoices.find((i) => String(i.id) === String(id));
     if (!row) return;
-    title = `GST Invoice ${row.invoice_no || ""}`;
-    filename = (row.invoice_no || "gst-invoice").replace(/\//g, "-");
-    fields = [
-      ["Invoice No", row.invoice_no],
-      ["Date", formatDate(row.invoice_date)],
-      ["Status", row.status],
-      ["Taxable Value", formatMoney(row.taxable_value)],
-      ["GST %", row.gst_percentage ?? "-"],
-      ["GST Amount", formatMoney(row.gst_amount)],
-      ["Invoice Total", formatMoney(row.invoice_total)]
-    ];
+    await exportPortalClientGstInvoicePdf({ invoice: row, clientName: c?.name || row.client_name || "N/A" });
   }
-  // Blob + hidden anchor — direct download, no popup, browser never blocks this.
-  const html = `<!doctype html><html><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title><style>body{font-family:Arial,sans-serif;padding:24px;max-width:720px;margin:auto;}h2{margin-bottom:.25rem;}p{color:#666;margin-top:0;}table{width:100%;border-collapse:collapse;margin-top:1rem;}th,td{border:1px solid #d1d5db;padding:8px 12px;text-align:left;}th{background:#f9fafb;width:40%;}</style></head><body><h2>${escapeHtml(title)}</h2><p>${escapeHtml(c?.name || "")}</p><table>${fields.map(([k, v]) => `<tr><th>${escapeHtml(String(k))}</th><td>${escapeHtml(String(v ?? "-"))}</td></tr>`).join("")}</table></body></html>`;
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filename}.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 init().catch((error) => {

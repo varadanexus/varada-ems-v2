@@ -1,5 +1,6 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
+import { exportPortalTransporterStatementPdf } from "./portal-pdf-exports.js";
 import { showToast, qs } from "./utils.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
@@ -806,19 +807,11 @@ function resetTripFilters() {
   render();
 }
 
-function downloadStatementPdf(id) {
+async function downloadStatementPdf(id) {
   const t = activeTransporter();
   const row = PAGE_STATE.statements.find((s) => String(s.id) === String(id));
   if (!row) return;
-  const popup = window.open("", "_blank", "noopener,noreferrer,width=720,height=600");
-  if (!popup) return showToast("Popup blocked. Allow popups to download.", TOAST_TYPES.ERROR);
-  const fields = [
-    ["Statement No", row.statement_no], ["Date", formatDate(row.statement_date)], ["Status", row.status],
-    ["Gross Payable", formatMoney(row.gross_payable_total)], ["Support Deductions", formatMoney(row.support_deduction_total)],
-    ["Penalty", formatMoney(row.penalty_amount)], ["GST Input", formatMoney(row.gst_input_amount)], ["Net Payable", formatMoney(row.net_payable_total)]
-  ];
-  popup.document.write(`<!doctype html><html><head><title>Statement ${escapeHtml(row.statement_no || "")}</title><style>body{font-family:Arial,sans-serif;padding:24px;}table{width:100%;border-collapse:collapse;margin-top:16px;}th,td{border:1px solid #d1d5db;padding:8px;text-align:left;}</style></head><body><h2>Transporter Statement ${escapeHtml(row.statement_no || "")}</h2><p>${escapeHtml(t?.name || "")}</p><table>${fields.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(String(v ?? "-"))}</td></tr>`).join("")}</table><script>window.onload=function(){window.print();};<\/script></body></html>`);
-  popup.document.close();
+  await exportPortalTransporterStatementPdf({ statement: row, transporterName: t?.name || row.transporter_name || "N/A" });
 }
 
 init().catch((error) => {
