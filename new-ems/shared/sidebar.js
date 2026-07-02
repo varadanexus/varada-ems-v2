@@ -3,18 +3,15 @@ import { MODULES, ROUTES, WORKSPACES } from "../config/constants.js";
 const MENU_BY_WORKSPACE = {
   [WORKSPACES.ADMIN]: [
     {
-      title: "Admin Workspace",
+      title: "Control Center / Administration",
       items: [
         { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
-        { module: MODULES.INTERIORS_DASHBOARD, label: "Dashboard", href: ROUTES.INTERIORS_DASHBOARD },
-        { module: MODULES.INTERIORS_CLIENTS, label: "Interior Clients", href: ROUTES.INTERIORS_CLIENTS },
-        { module: MODULES.PROJECT_ENGINE_PROJECTS, label: "Projects", href: ROUTES.PROJECT_ENGINE_PROJECTS },
-        { module: MODULES.PROJECT_ENGINE_APPROVALS, label: "Project Approvals", href: ROUTES.PROJECT_ENGINE_APPROVALS },
         { module: MODULES.USERS, label: "Users", href: ROUTES.USERS },
         { module: MODULES.ROLES, label: "Roles", href: ROUTES.ROLES },
         { module: MODULES.DIVISIONS, label: "Divisions", href: ROUTES.DIVISIONS },
-        { module: MODULES.SETTINGS, label: "Settings", href: ROUTES.SETTINGS },
-        { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, label: "Audit Events", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT }
+        { module: MODULES.PORTAL_ACCESS, label: "Portal Access", href: ROUTES.PORTAL_ACCESS },
+        { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, label: "Audit Events", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT },
+        { module: MODULES.SETTINGS, label: "Settings", href: ROUTES.SETTINGS }
       ]
     }
   ],
@@ -143,8 +140,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Insights",
       items: [
-        { module: MODULES.INTERIORS_REPORTS, label: "Reports", href: ROUTES.INTERIORS_REPORTS },
-        { module: MODULES.INTERIORS_CLIENT_PORTAL, label: "Client Portal", href: ROUTES.INTERIORS_CLIENT_PORTAL }
+        { module: MODULES.INTERIORS_REPORTS, label: "Reports", href: ROUTES.INTERIORS_REPORTS }
       ]
     }
   ]
@@ -171,7 +167,7 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
 
   return `
     <aside class="app-sidebar" id="appSidebar">
-      <div class="brand">EMS 2.0</div>
+      
       <nav class="nav-root">${sections}</nav>
     </aside>
   `;
