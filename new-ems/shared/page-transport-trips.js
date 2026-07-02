@@ -68,7 +68,7 @@ async function init() {
     if (!host) return;
     const mkRow = (label, type, mandatory = false) => {
       const rec = pendingCreateDocs.find((d) => d.document_type === type && (!d.custom_document_name || d.custom_document_name === ""));
-      return `<tr><td>${label}${mandatory ? " <span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Mandatory</span>" : ""}</td><td>${rec ? (rec.is_uploaded ? "Uploaded" : "Pending Upload") : (mandatory ? "Missing" : "Missing")}</td><td><button class='btn' data-c-up='${type}'>Upload Placeholder</button></td><td><button class='btn' ${rec?.file_url ? "" : "disabled"}>View</button></td><td><button class='btn' data-c-rep='${type}' ${rec ? "" : "disabled"}>Replace</button></td><td><button class='btn btn-danger' data-c-del='${type}' ${rec ? "" : "disabled"}>Delete</button></td></tr>`;
+      return `<tr><td>${label}${mandatory ? " <span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Mandatory</span>" : ""}</td><td>${rec ? (rec.is_uploaded ? "Uploaded" : "Pending Upload") : (mandatory ? "Missing" : "Missing")}</td><td><button type='button' class='btn' data-c-up='${type}'>Upload Placeholder</button></td><td><button type='button' class='btn' ${rec?.file_url ? "" : "disabled"}>View</button></td><td><button type='button' class='btn' data-c-rep='${type}' ${rec ? "" : "disabled"}>Replace</button></td><td><button type='button' class='btn btn-danger' data-c-del='${type}' ${rec ? "" : "disabled"}>Delete</button></td></tr>`;
     };
     host.innerHTML = `<div class='table-shell'><table><thead><tr><th>Document</th><th>Status</th><th>Upload</th><th>View</th><th>Replace</th><th>Delete</th></tr></thead><tbody>
       ${mkRow("Weight Bill", "WEIGHT_BILL", true)}
@@ -138,6 +138,7 @@ async function init() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (form.dataset.busy === "1") return;
     const payload = { status: "draft", is_active: true };
     ["division_id","trip_date","transport_client_id","transport_transporter_id","truck_id","driver_id","route_id","transport_commodity_id","quantity_kg","quantity_mt","client_rate_per_mt","transporter_rate_per_mt","notes"].forEach((k)=>{ const v = qs(`[data-f='${k}']`)?.value?.trim(); if (v) payload[k]=v; });
     if (!fixedDivisionId) return showToast("Canonical Transportation division not found", TOAST_TYPES.ERROR);
@@ -156,6 +157,9 @@ async function init() {
     if (Number(payload.transporter_rate_per_mt || 0) > Number(payload.client_rate_per_mt || 0)) {
       showToast("Warning: transporter rate is higher than client rate. This trip will create negative margin.", TOAST_TYPES.WARNING);
     }
+    form.dataset.busy = "1";
+    const submitBtn = form.querySelector("button[type='submit']");
+    if (submitBtn) submitBtn.disabled = true;
     try {
       const created = await createTrip(payload);
       const appUser = await getCurrentAppUser();
@@ -175,6 +179,10 @@ async function init() {
     } catch (err) {
       const detail = [err?.code, err?.message, err?.details, err?.hint].filter(Boolean).join(" | ");
       showToast(detail || "Create failed", TOAST_TYPES.ERROR);
+    } finally {
+      form.dataset.busy = "";
+      const sBtn = form.querySelector("button[type='submit']");
+      if (sBtn) sBtn.disabled = false;
     }
   });
 
@@ -465,6 +473,9 @@ async function init() {
     renderFinancialPreview("edit");
 
     qs("#tripEditSave").onclick = async () => {
+      const saveBtn = qs("#tripEditSave");
+      if (saveBtn?.disabled) return;
+      if (saveBtn) saveBtn.disabled = true;
       try {
         const payload = { notes: qs("[data-e='notes']")?.value?.trim() || null };
         if (!isCompleted) {
@@ -502,6 +513,9 @@ async function init() {
         await load();
       } catch (err) {
         showToast(err?.message || "Edit failed", TOAST_TYPES.ERROR);
+      } finally {
+        const sb = qs("#tripEditSave");
+        if (sb) sb.disabled = false;
       }
     };
 

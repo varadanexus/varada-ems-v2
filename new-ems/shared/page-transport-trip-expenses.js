@@ -164,6 +164,7 @@ async function init() {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (form.dataset.busy === "1") return;
     if (!selectedTrip?.id) return showToast("Select trip first", TOAST_TYPES.ERROR);
     const payload = {
       division_id: divisionId,
@@ -177,6 +178,7 @@ async function init() {
     };
     if (!payload.expense_date || !payload.category || !payload.paid_by) return showToast("Fill required fields", TOAST_TYPES.ERROR);
     if (payload.amount < 0) return showToast("Amount cannot be negative", TOAST_TYPES.ERROR);
+    form.dataset.busy = "1";
     try {
       const created = await createTripExpense(payload);
       await logAuditEvent("trip_expense_create", { moduleCode: MODULES.TRANSPORT_TRIP_EXPENSES, entityType: "transport_trip_expenses", entityId: created.id, afterData: created, action: "create" });
@@ -186,6 +188,8 @@ async function init() {
     } catch (err) {
       const detail = [err?.code, err?.message, err?.details, err?.hint].filter(Boolean).join(" | ");
       showToast(detail || "Create failed", TOAST_TYPES.ERROR);
+    } finally {
+      form.dataset.busy = "";
     }
   });
 
