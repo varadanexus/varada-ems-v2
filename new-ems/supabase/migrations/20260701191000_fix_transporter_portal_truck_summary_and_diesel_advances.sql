@@ -15,7 +15,10 @@ returns table(
   truck_no text,
   vehicle_no text,
   registration_no text,
-  transporter_name text
+  transporter_name text,
+  route_name text,
+  driver_name text,
+  commodity_name text
 )
 language plpgsql
 security definer
@@ -48,10 +51,16 @@ begin
     trk.name as truck_no,
     trk.name as vehicle_no,
     trk.registration_no,
-    tt.name as transporter_name
+    tt.name as transporter_name,
+    rt.name as route_name,
+    drv.name as driver_name,
+    cmd.name as commodity_name
   from public.transport_trips t
   left join public.transport_trucks trk on trk.id = t.truck_id and trk.deleted_at is null
   left join public.transport_transporters tt on tt.id = t.transport_transporter_id and tt.deleted_at is null
+  left join public.transport_route_master rt on rt.id = t.route_id and rt.deleted_at is null
+  left join public.transport_drivers drv on drv.id = t.driver_id and drv.deleted_at is null
+  left join public.transport_commodities cmd on cmd.id = t.transport_commodity_id and cmd.deleted_at is null
   where t.transport_transporter_id = p_transport_transporter_id
     and t.deleted_at is null
   order by t.trip_date desc nulls last, t.created_at desc;
