@@ -6,27 +6,35 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
 
-function actionCard({ title, detail, href, accent }) {
-  return `
-    <a class="meet-action-card" href="${href}">
-      <span class="meet-action-mark">${accent}</span>
-      <strong>${escapeHtml(title)}</strong>
-      <small>${escapeHtml(detail)}</small>
-    </a>
-  `;
+function fmt(value) {
+  if (!value) return "-";
+  try {
+    return new Date(value).toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return String(value);
+  }
 }
 
 function statusPill(value) {
   return `<span class="meta-pill">${escapeHtml(value || "-")}</span>`;
 }
 
-function fmt(value) {
-  if (!value) return "-";
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return String(value);
-  }
+function actionBand({ code, title, detail, href }) {
+  return `
+    <a class="mcd-band" href="${href}">
+      <span class="mcd-band-code">${escapeHtml(code)}</span>
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <small>${escapeHtml(detail)}</small>
+      </div>
+    </a>
+  `;
 }
 
 function renderPage(data = {}) {
@@ -35,82 +43,78 @@ function renderPage(data = {}) {
 
   renderModuleContent(`
     <style>
-      .meet-overview{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.75rem}
-      .meet-overview .cardlet{border:1px solid rgba(148,163,184,.22);border-radius:8px;padding:.9rem;background:#0b1324;color:#e5edf8}
-      .meet-overview strong{display:block;font-size:1.5rem}
-      .meet-two-col{display:grid;grid-template-columns:1.2fr .8fr;gap:1rem;margin-top:1rem}
-      .meet-action-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem;margin-top:1rem}
-      .meet-action-card{display:grid;gap:.45rem;min-height:132px;border:1px solid rgba(148,163,184,.22);border-radius:8px;padding:1rem;background:#111d31;text-decoration:none;color:#f8fafc}
-      .meet-action-card:hover{border-color:#d4b26a;box-shadow:0 12px 30px rgba(0,0,0,.22)}
-      .meet-action-mark{width:42px;height:42px;border-radius:8px;display:grid;place-items:center;background:#07101f;color:#f7d774;font-weight:900}
-      .meet-action-card small{color:#a9bad0;line-height:1.45}
-      .meet-list{display:grid;gap:.75rem}
-      .meet-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.9rem;align-items:center;padding:.9rem;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#0b1324}
-      .meet-row strong{display:block;font-size:.96rem}
-      .meet-row small{display:block;margin-top:.2rem;color:#9eb0c7;line-height:1.45}
-      .meet-stamp{display:grid;justify-items:end;gap:.35rem}
-      .meet-guidance{display:grid;gap:.75rem}
-      .meet-guidance-item{padding:.9rem;border:1px solid rgba(148,163,184,.18);border-radius:10px;background:#0b1324}
-      .meet-guidance-item strong{display:block;margin-bottom:.3rem}
-      @media (max-width: 1100px){.meet-overview,.meet-action-grid,.meet-two-col{grid-template-columns:1fr}}
+      .mcd-hero{padding:1.35rem;border:1px solid rgba(148,163,184,.18);border-radius:18px;background:linear-gradient(180deg,#13213b,#0d172b)}
+      .mcd-hero h3{margin:0 0 .35rem}
+      .mcd-hero p{margin:0;color:#aebed1;line-height:1.65;max-width:900px}
+      .mcd-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.75rem;margin-top:1rem}
+      .mcd-kpi{padding:.95rem 1rem;border:1px solid rgba(148,163,184,.18);border-radius:14px;background:#0b1324}
+      .mcd-kpi span{display:block;font-size:.78rem;color:#9eb0c7}
+      .mcd-kpi strong{display:block;font-size:1.45rem;margin-top:.2rem}
+      .mcd-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin-top:1rem}
+      .mcd-step{padding:.95rem;border-radius:14px;border:1px solid rgba(148,163,184,.18);background:#0b1324}
+      .mcd-step span{display:block;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:#f7d774}
+      .mcd-step strong{display:block;margin-top:.28rem}
+      .mcd-step small{display:block;color:#9eb0c7;line-height:1.5;margin-top:.28rem}
+      .mcd-main{display:grid;grid-template-columns:1.1fr .9fr;gap:1rem;margin-top:1rem}
+      .mcd-bands{display:grid;gap:.8rem}
+      .mcd-band{display:grid;grid-template-columns:56px minmax(0,1fr);gap:.9rem;align-items:start;padding:1rem;border:1px solid rgba(148,163,184,.18);border-radius:14px;background:#0b1324;color:#f8fafc;text-decoration:none}
+      .mcd-band:hover{border-color:#d4b26a;box-shadow:0 14px 36px rgba(0,0,0,.2)}
+      .mcd-band-code{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;background:#07101f;color:#f7d774;font-weight:900}
+      .mcd-band strong{display:block}
+      .mcd-band small{display:block;margin-top:.3rem;color:#9eb0c7;line-height:1.55}
+      .mcd-list{display:grid;gap:.75rem}
+      .mcd-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.8rem;align-items:center;padding:.95rem;border:1px solid rgba(148,163,184,.18);border-radius:14px;background:#0b1324;text-decoration:none;color:#f8fafc}
+      .mcd-row strong{display:block}
+      .mcd-row small{display:block;color:#9eb0c7;line-height:1.45;margin-top:.25rem}
+      .mcd-meta{display:grid;justify-items:end;gap:.3rem}
+      .mcd-note{padding:.95rem;border:1px dashed rgba(148,163,184,.22);border-radius:14px;color:#9eb0c7;line-height:1.55;background:#0b1324}
+      @media (max-width:1180px){.mcd-main,.mcd-kpis,.mcd-flow{grid-template-columns:1fr}}
     </style>
 
-    <section class="card">
-      <h3>Meetings Dashboard</h3>
-      <p class="muted">Schedule communication sessions, control the waiting room, open the Jitsi live room, and manage guest access from one workspace.</p>
-      <div class="meet-overview">
-        <div class="cardlet"><span class="muted">Meetings</span><strong>${stats.totalMeetings || 0}</strong></div>
-        <div class="cardlet"><span class="muted">Live</span><strong>${stats.liveMeetings || 0}</strong></div>
-        <div class="cardlet"><span class="muted">Upcoming</span><strong>${stats.upcomingMeetings || 0}</strong></div>
-        <div class="cardlet"><span class="muted">Ended</span><strong>${stats.endedMeetings || 0}</strong></div>
-        <div class="cardlet"><span class="muted">In Room</span><strong>${stats.activeParticipants || 0}</strong></div>
-        <div class="cardlet"><span class="muted">Waiting Approval</span><strong>${stats.waitingParticipants || 0}</strong></div>
+    <section class="mcd-hero">
+      <h3>Communications Meeting Command Center</h3>
+      <p>This workspace is now organized around the real meeting lifecycle: session planning, participant registration, invite rollout, OTP verification, waiting-room moderation, and live room control. Use the dashboard as a launch surface, and the studio as your working console.</p>
+      <div class="mcd-kpis">
+        <div class="mcd-kpi"><span>Total Meetings</span><strong>${stats.totalMeetings || 0}</strong></div>
+        <div class="mcd-kpi"><span>Live Now</span><strong>${stats.liveMeetings || 0}</strong></div>
+        <div class="mcd-kpi"><span>Upcoming</span><strong>${stats.upcomingMeetings || 0}</strong></div>
+        <div class="mcd-kpi"><span>Ended</span><strong>${stats.endedMeetings || 0}</strong></div>
+        <div class="mcd-kpi"><span>In Room</span><strong>${stats.activeParticipants || 0}</strong></div>
+        <div class="mcd-kpi"><span>Waiting Approval</span><strong>${stats.waitingParticipants || 0}</strong></div>
+      </div>
+      <div class="mcd-flow">
+        <div class="mcd-step"><span>Step 1</span><strong>Plan</strong><small>Create the meeting, define host, timing, agenda, and room configuration.</small></div>
+        <div class="mcd-step"><span>Step 2</span><strong>Register</strong><small>Capture attendee identity, mobile, email, role, company, and notes.</small></div>
+        <div class="mcd-step"><span>Step 3</span><strong>Invite</strong><small>Send WhatsApp and email with branded meeting login and OTP join flow.</small></div>
+        <div class="mcd-step"><span>Step 4</span><strong>Moderate</strong><small>Admit verified people, monitor presence, and run the live session cleanly.</small></div>
       </div>
     </section>
 
-    <section class="meet-action-grid">
-      ${actionCard({ title: "Meeting Studio", detail: "Create meetings, invite guests, approve waiting participants, and launch the host room.", href: ROUTES.MEETINGS_SCHEDULER, accent: "MS" })}
-      ${actionCard({ title: "Jitsi Settings", detail: "Maintain your default public origin, Jitsi domain, room prefix, and lobby note.", href: ROUTES.MEETINGS_SETTINGS, accent: "JS" })}
-      ${actionCard({ title: "Live Host Room", detail: "Open a host-controlled meeting room for the selected session and watch attendee presence.", href: ROUTES.MEETINGS_SCHEDULER, accent: "LR" })}
-    </section>
-
-    <div class="meet-two-col">
+    <div class="mcd-main">
       <section class="card">
-        <h3>Recent Meetings</h3>
-        <div class="meet-list">
-          ${(recentMeetings.slice(0, 8).map((row) => `
-            <a class="meet-row" href="${ROUTES.MEETINGS_SCHEDULER}?meeting=${encodeURIComponent(row.id)}" style="text-decoration:none;color:inherit;">
-              <div>
-                <strong>${escapeHtml(row.title || "Untitled meeting")}</strong>
-                <small>${escapeHtml(row.host_name || "Host to be assigned")} · ${escapeHtml(row.scheduled_local || fmt(row.scheduled_at))}</small>
-              </div>
-              <div class="meet-stamp">
-                ${statusPill(row.status)}
-                <small class="muted">${escapeHtml((row.room_domain || "meet.jit.si").replace(/^https?:\/\//, ""))}</small>
-              </div>
-            </a>
-          `).join("")) || '<div class="empty-state">No meetings have been scheduled yet.</div>'}
+        <h3>Workspace Actions</h3>
+        <div class="mcd-bands" style="margin-top:1rem;">
+          ${actionBand({ code: "ST", title: "Meeting Studio", detail: "Full planning, participant intake, invite dispatch, and live-control workspace.", href: ROUTES.MEETINGS_SCHEDULER })}
+          ${actionBand({ code: "JS", title: "Jitsi / JaaS Settings", detail: "Public origin, room prefix, domain, default lobby note, and communications defaults.", href: ROUTES.MEETINGS_SETTINGS })}
+          ${actionBand({ code: "WG", title: "Waiting Room + Guest Flow", detail: "Branded public meeting login, OTP verification, and approval-based room entry.", href: ROUTES.MEETINGS_SCHEDULER })}
         </div>
       </section>
+
       <section class="card">
-        <h3>How this workspace works</h3>
-        <div class="meet-guidance">
-          <div class="meet-guidance-item">
-            <strong>1. Create the session</strong>
-            <span class="muted">Define the meeting title, schedule, host, room domain, agenda, and lobby instruction.</span>
-          </div>
-          <div class="meet-guidance-item">
-            <strong>2. Register participants</strong>
-            <span class="muted">Add name, phone, email, company, and role, then copy each personal invite link.</span>
-          </div>
-          <div class="meet-guidance-item">
-            <strong>3. Admit from the waiting room</strong>
-            <span class="muted">Guests land in a premium lobby page and move into the room only after host approval.</span>
-          </div>
-          <div class="meet-guidance-item">
-            <strong>4. Run the live room</strong>
-            <span class="muted">Launch the host room, watch attendee status, remove anyone if needed, and end the session cleanly.</span>
-          </div>
+        <h3>Recent Sessions</h3>
+        <div class="mcd-list" style="margin-top:1rem;">
+          ${(recentMeetings.slice(0, 8).map((row) => `
+            <a class="mcd-row" href="${ROUTES.MEETINGS_SCHEDULER}?meeting=${encodeURIComponent(row.id)}">
+              <div>
+                <strong>${escapeHtml(row.title || "Untitled meeting")}</strong>
+                <small>${escapeHtml(row.host_name || "Host pending")} · ${escapeHtml(row.scheduled_local || fmt(row.scheduled_at))}</small>
+              </div>
+              <div class="mcd-meta">
+                ${statusPill(row.status)}
+                <small>${escapeHtml(row.room_domain || "meet.jit.si")}</small>
+              </div>
+            </a>
+          `).join("")) || `<div class="mcd-note">No sessions are scheduled yet. Open Meeting Studio to create the first one.</div>`}
         </div>
       </section>
     </div>
@@ -121,7 +125,7 @@ async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.MEETINGS_COMMAND_CENTER,
     pageTitle: "Meetings Dashboard",
-    pageDescription: "Scheduling, waiting room control, and Jitsi video sessions",
+    pageDescription: "Communications scheduling, guest approval, OTP join, and live room control",
     workspace: WORKSPACES.MEETINGS
   });
   if (!boot) return;

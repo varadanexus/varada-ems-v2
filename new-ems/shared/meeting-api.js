@@ -75,7 +75,7 @@ export function buildMeetingRoomName(title = "") {
 export function buildMeetingInviteLink(inviteToken, origin = "") {
   const settings = getMeetingSettings();
   const baseOrigin = String(origin || settings.publicOrigin || window.location.origin || "").replace(/\/$/, "");
-  return `${baseOrigin}${ROUTES.MEETINGS_GUEST}?t=${encodeURIComponent(inviteToken)}`;
+  return `${baseOrigin}${ROUTES.MEETINGS_LOGIN}?t=${encodeURIComponent(inviteToken)}`;
 }
 
 export function buildHostRoomLink(meetingId) {
