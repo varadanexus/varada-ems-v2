@@ -56,11 +56,12 @@ async function init() {
   let tripKpis = { total: "—", draft: "—", inTransit: "—", completed: "—" };
   try {
     const { rows } = await listTrips({ divisionId, page: 1, pageSize: 500 });
+    const operationallyCompletedStatuses = new Set(["completed", "financial_review", "closed"]);
     tripKpis = {
       total: rows.length,
       draft: rows.filter((r) => r.status === "draft").length,
       inTransit: rows.filter((r) => r.status === "in_transit").length,
-      completed: rows.filter((r) => r.status === "completed").length
+      completed: rows.filter((r) => operationallyCompletedStatuses.has(r.status)).length
     };
   } catch {
     tripKpis = { total: "—", draft: "—", inTransit: "—", completed: "—" };
@@ -92,6 +93,7 @@ async function init() {
     canView(MODULES.TRANSPORT_CLIENTS) ? masterCard("Clients", counts.clients, ROUTES.TRANSPORT_CLIENTS) : "",
     canView(MODULES.TRANSPORT_TRANSPORTERS) ? masterCard("Transporters", counts.transporters, ROUTES.TRANSPORT_TRANSPORTERS) : "",
     canView(MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING) ? masterCard("Agents / Truck Mapping", counts.agents, ROUTES.TRANSPORT_TRUCK_AGENT_COMMISSION) : "",
+    canView(MODULES.TRANSPORT_AGENT_PENALTIES) ? masterCard("Agent Penalties", "Open", ROUTES.TRANSPORT_AGENT_PENALTIES) : "",
     canView(MODULES.TRANSPORT_COMMODITIES) ? masterCard("Commodities", counts.commodities, ROUTES.TRANSPORT_COMMODITIES) : "",
     canView(MODULES.TRANSPORT_TRUCKS) ? masterCard("Trucks", counts.trucks, ROUTES.TRANSPORT_TRUCKS) : "",
     canView(MODULES.TRANSPORT_DRIVERS) ? masterCard("Drivers", counts.drivers, ROUTES.TRANSPORT_DRIVERS) : "",

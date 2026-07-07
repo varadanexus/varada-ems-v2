@@ -2,6 +2,7 @@ import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { showToast, qs } from "./utils.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml } from "./transport-portal-auth.js";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
 
 const PAGE_STATE = { session: null, access: { clients: [], transporters: [], agents: [] } };
 
@@ -10,6 +11,7 @@ async function init() {
   const session = await requirePortalSession();
   if (!session) return;
   PAGE_STATE.session = session;
+  await enforceTermsAcceptance();
   try {
     PAGE_STATE.access = await listMyAccess(session.sessionToken);
   } catch (error) {

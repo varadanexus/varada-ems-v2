@@ -4,6 +4,8 @@ import { exportPortalTransporterStatementPdf, exportPortalTransporterTripPdf } f
 import { showToast, qs } from "./utils.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
+import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
 
 const client = getSupabaseClient();
 
@@ -56,6 +58,8 @@ async function init() {
   const session = await requirePortalSession();
   if (!session) return;
   PAGE_STATE.session = session;
+  await enforceTermsAcceptance();
+  initLiveChat().catch(() => {});
 
   const access = await listMyAccess(session.sessionToken);
   if (!access.transporters.length) {

@@ -3,6 +3,8 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { showToast, qs } from "./utils.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
+import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
 
 const client = getSupabaseClient();
 
@@ -10,6 +12,7 @@ const SECTIONS = [
   ["dashboard", "Dashboard"],
   ["trips", "My Trips"],
   ["commissions", "Commissions"],
+  ["withdrawals", "Withdrawals"],
   ["truck-summary", "Truck-wise Summary"],
   ["documents", "Documents"]
 ];
@@ -21,6 +24,8 @@ const PAGE_STATE = {
   activeSection: "dashboard",
   dashboard: null,
   trips: [],
+  withdrawals: [],
+  withdrawalSummary: null,
   loading: false,
   tripFilters: { search: "", tripNo: "", dateFrom: "", dateTo: "", status: "", commodity: "", truck: "" },
   tripSort: { key: "trip_date", direction: "desc" },
@@ -35,6 +40,8 @@ async function init() {
   const session = await requirePortalSession();
   if (!session) return;
   PAGE_STATE.session = session;
+  await enforceTermsAcceptance();
+  initLiveChat().catch(() => {});
 
   const access = await listMyAccess(session.sessionToken);
   if (!(access.agents || []).length) {
@@ -57,15 +64,20 @@ async function loadSection() {
   const agentId = PAGE_STATE.activeAgentId;
   PAGE_STATE.loading = true;
   try {
-    if (PAGE_STATE.activeSection === "dashboard") {
-      const { data, error } = await client.rpc("transport_agent_portal_dashboard", { p_session_token: token, p_transport_agent_id: agentId });
-      if (error) throw error;
-      PAGE_STATE.dashboard = Array.isArray(data) ? data[0] : data;
-    }
-    if (["trips", "commissions", "truck-summary"].includes(PAGE_STATE.activeSection) || !PAGE_STATE.trips.length) {
+    if (["dashboard", "trips", "commissions", "truck-summary"].includes(PAGE_STATE.activeSection) || !PAGE_STATE.trips.length) {
       const { data, error } = await client.rpc("transport_agent_portal_trips", { p_session_token: token, p_transport_agent_id: agentId });
       if (error) throw error;
       PAGE_STATE.trips = data || [];
+    }
+    if (PAGE_STATE.activeSection === "withdrawals") {
+      const [summaryRes, requestsRes] = await Promise.all([
+        client.rpc("transport_agent_portal_withdrawal_summary", { p_session_token: token, p_transport_agent_id: agentId }),
+        client.rpc("transport_agent_portal_list_withdrawals", { p_session_token: token, p_transport_agent_id: agentId })
+      ]);
+      if (summaryRes.error) throw summaryRes.error;
+      if (requestsRes.error) throw requestsRes.error;
+      PAGE_STATE.withdrawalSummary = Array.isArray(summaryRes.data) ? summaryRes.data[0] : summaryRes.data;
+      PAGE_STATE.withdrawals = requestsRes.data || [];
     }
   } catch (error) {
     showToast(error?.message || "Failed to load data.", TOAST_TYPES.ERROR);
@@ -115,18 +127,20 @@ function renderSidebar() {
 }
 
 function renderDashboard() {
-  const d = PAGE_STATE.dashboard || {};
+  const rows = PAGE_STATE.trips || [];
+  const completedTrips = rows.filter((trip) => String(trip.status || "").toLowerCase() === "completed").length;
+  const mappedTrucks = new Set(rows.map((trip) => String(trip.truck_no || trip.registration_no || "")).filter(Boolean)).size;
   const cards = [
-    ["Total Trips", d.total_trips ?? 0],
-    ["Active Trips", d.active_trips ?? 0],
-    ["Completed Trips", d.completed_trips ?? 0],
-    ["Total Quantity", `${Number(d.total_quantity_mt || 0).toFixed(2)} MT`],
-    ["Total Commission", formatMoney(d.total_commission)],
-    ["Mapped Trucks", d.mapped_trucks ?? 0]
+    ["Total Trips", rows.length],
+    ["Active Trips", rows.length - completedTrips],
+    ["Completed Trips", completedTrips],
+    ["Total Quantity", `${rows.reduce((sum, trip) => sum + Number(trip.quantity_mt || 0), 0).toFixed(2)} MT`],
+    ["Total Commission", formatMoney(rows.reduce((sum, trip) => sum + Number(trip.commission_amount || 0), 0))],
+    ["Mapped Trucks", mappedTrucks]
   ];
   return `
     <section class="card-grid">
-      ${cards.map(([label, value]) => `<article class="card" style="grid-column:span 4;"><div class="meta-pill">${escapeHtml(label)}</div><h2 style="margin:.5rem 0 0;">${escapeHtml(String(value))}</h2></article>`).join("")}
+      ${cards.map(([label, value]) => `<article class="card agent-summary-card"><div class="meta-pill">${escapeHtml(label)}</div><h2 style="margin:.5rem 0 0;">${escapeHtml(String(value))}</h2></article>`).join("")}
     </section>
   `;
 }
@@ -153,13 +167,6 @@ function statusLabel(status) {
 function resolveTruckDisplay(row) {
   const primary = [row.truck_no, row.vehicle_no, row.registration_no].find((value) => String(value || "").trim());
   return primary || "-";
-}
-
-function commissionLabel(row) {
-  if (!row.commission_type) return "Not mapped";
-  return String(row.commission_type || "").toLowerCase().includes("mt")
-    ? `${formatMoney(row.commission_value).replace(".00", "")} / MT`
-    : `${formatMoney(row.commission_value).replace(".00", "")} / Trip`;
 }
 
 function collectTripFilterOptions() {
@@ -312,7 +319,6 @@ function renderTrips() {
                 <th scope="col">Driver</th>
                 <th scope="col">Commodity</th>
                 ${renderTripHeaderCell("Quantity", "quantity_mt")}
-                <th scope="col">Commission Rate</th>
                 ${renderTripHeaderCell("Commission", "commission_amount", "numeric")}
                 ${renderTripHeaderCell("Status", "status")}
                 <th scope="col">Actions</th>
@@ -353,7 +359,6 @@ function renderTripRow(trip, index) {
       <td>${escapeHtml(trip.driver_name || "-")}</td>
       <td>${escapeHtml(trip.commodity_name || "-")}</td>
       <td>${escapeHtml(`${Number(trip.quantity_mt || 0).toFixed(2)} MT`)}</td>
-      <td>${escapeHtml(commissionLabel(trip))}</td>
       <td class="trip-numeric-cell">${escapeHtml(formatMoney(trip.commission_amount))}</td>
       <td>${statusBadge(trip.status)}</td>
       <td>
@@ -381,7 +386,6 @@ function renderTripDetailsModal() {
     ["Commodity", trip.commodity_name || "-"],
     ["Transporter", trip.transporter_name || "-"],
     ["Quantity", `${Number(trip.quantity_mt || 0).toFixed(2)} MT`],
-    ["Commission Rate", commissionLabel(trip)],
     ["Commission Amount", formatMoney(trip.commission_amount)],
     ["Status", statusLabel(trip.status)]
   ];
@@ -406,7 +410,7 @@ function renderTripDetailsModal() {
 function renderTripEmptyStateRow() {
   return `
     <tr>
-      <td colspan="11">
+      <td colspan="10">
         <div class="trip-empty-state" role="status" aria-live="polite">
           <div class="trip-empty-icon" aria-hidden="true">🚚</div>
           <strong>No trips available.</strong>
@@ -423,17 +427,16 @@ function renderCommissions() {
   return `
     <section class="card" style="margin-bottom:1rem;">
       <h3>Commission Statement</h3>
-      <p class="muted">Commission per trip is derived from the active truck-agent mapping effective on the trip date.</p>
+      <p class="muted">Commission per trip is derived from the active truck-agent mapping effective on the trip date. Rate details are hidden in the portal; only earned amounts are shown here.</p>
       <div class="meta-pill" style="margin-top:.5rem;">Total Commission: ${escapeHtml(formatMoney(total))}</div>
     </section>
     ${renderTable(
-      ["Trip No", "Date", "Truck", "Quantity", "Commission Rate", "Commission Amount", "Status"],
+      ["Trip No", "Date", "Truck", "Quantity", "Commission Amount", "Status"],
       rows.map((r) => [
         r.trip_no || "-",
         formatDate(r.trip_date),
         resolveTruckDisplay(r),
         `${Number(r.quantity_mt || 0).toFixed(2)} MT`,
-        commissionLabel(r),
         formatMoney(r.commission_amount),
         statusBadge(r.status)
       ]),
@@ -458,6 +461,38 @@ function renderTruckSummary() {
     rows.map((r) => [r.truck, r.registration_no, r.trip_count, `${r.total_quantity.toFixed(2)} MT`, formatMoney(r.total_commission)]),
     "No trips found to summarize."
   );
+}
+
+function renderWithdrawals() {
+  const s = PAGE_STATE.withdrawalSummary || {};
+  const available = Number(s.available_amount || 0);
+  return `
+    <section class="card-grid agent-withdrawal-grid" style="margin-bottom:1rem;">
+      ${[
+        ["Completed Commission", formatMoney(s.earned_commission)],
+        ["Penalty Deductions", formatMoney(s.penalty_amount)],
+        ["Requested / Paid", formatMoney(s.committed_amount)],
+        ["Available to Withdraw", formatMoney(available)]
+      ].map(([label, value]) => `<article class="card agent-summary-card"><div class="meta-pill">${escapeHtml(label)}</div><h2 style="margin:.5rem 0 0;">${escapeHtml(value)}</h2></article>`).join("")}
+    </section>
+    <section class="card" style="margin-bottom:1rem;">
+      <h3>Withdrawal History</h3>
+      <p class="muted">Withdrawal requests are created and processed by authorised EMS staff. Portal users have read-only visibility of requests linked to their own agent account.</p>
+    </section>
+    ${renderTable(
+      ["Request No", "Requested", "Amount", "Status", "Review Note", "Payment Reference", "Action"],
+      PAGE_STATE.withdrawals.map((row) => [
+        row.request_no,
+        formatDate(row.requested_at),
+        formatMoney(row.amount),
+        statusBadge(row.status),
+        row.review_note || "-",
+        row.payment_reference || "-",
+        "-"
+      ]),
+      "No withdrawal requests yet."
+    )}
+  `;
 }
 
 function renderDocuments() {
@@ -489,6 +524,7 @@ function sectionBody() {
   if (PAGE_STATE.activeSection === "dashboard") return renderDashboard();
   if (PAGE_STATE.activeSection === "trips") return renderTrips();
   if (PAGE_STATE.activeSection === "commissions") return renderCommissions();
+  if (PAGE_STATE.activeSection === "withdrawals") return renderWithdrawals();
   if (PAGE_STATE.activeSection === "truck-summary") return renderTruckSummary();
   if (PAGE_STATE.activeSection === "documents") return renderDocuments();
   return "";
@@ -522,6 +558,9 @@ function render() {
       .portal-topbar-transporter{font-size:1rem;font-weight:800;color:#f8fbff;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
       .page-head p{color:#8ea2bc;}
       .card,.trip-kpi-card,.trip-filter-card,.trip-table-card{border-radius:16px;}
+      .card-grid,.agent-withdrawal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;width:100%;}
+      .card-grid > .card,.agent-withdrawal-grid > .card{grid-column:auto !important;min-width:0;}
+      .agent-summary-card{min-height:92px;display:flex;flex-direction:column;justify-content:space-between;}
       .btn{border-radius:10px;}
       .badge{display:inline-flex;align-items:center;justify-content:center;padding:.35rem .7rem;border-radius:999px;font-size:.76rem;font-weight:700;border:1px solid transparent;white-space:nowrap;}
       .badge-default{background:rgba(148,163,184,.15);color:#94a3b8;border-color:rgba(148,163,184,.25);}

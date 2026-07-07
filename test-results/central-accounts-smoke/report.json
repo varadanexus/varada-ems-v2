@@ -1,0 +1,415 @@
+{
+  "baseUrl": "http://127.0.0.1:5500",
+  "generatedAt": "2026-07-03T20:10:51.492Z",
+  "login": {
+    "url": "http://127.0.0.1:5500/new-ems/modules/login/index.html",
+    "hasSupabaseToken": true,
+    "hasLocalSession": false,
+    "console": [
+      {
+        "type": "warning",
+        "text": "GoTrueClient@sb-ftejxcycoiagbslnzaab-auth-token:1 (2.110.0) 2026-07-03T20:10:52.550Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key."
+      }
+    ],
+    "pageErrors": [],
+    "body": "Varada EMS 2.0\n\nSecure access for staff, clients, transporters, vendors, and partners.\n\nEmail / Username / Phone\nPassword\n Signing in…\nAdvanced: choose login type manually",
+    "ok": true
+  },
+  "results": [
+    {
+      "key": "dashboard",
+      "route": "/new-ems/modules/central-accounts-dashboard/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-dashboard/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-dashboard/index.html",
+      "title": "Central Accounts Dashboard | EMS 2.0",
+      "bodyLength": 898,
+      "h1h2h3": [
+        "Central Accounts Dashboard",
+        "Central Accounts Control Hub",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "financial-documents",
+      "route": "/new-ems/modules/central-accounts-financial-documents/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-financial-documents/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-financial-documents/index.html",
+      "title": "Financial Documents | EMS 2.0",
+      "bodyLength": 962,
+      "h1h2h3": [
+        "Financial Documents",
+        "Filters",
+        "Financial Documents",
+        "Financial Document Details",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "posting-queue",
+      "route": "/new-ems/modules/central-accounts-posting-queue/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-posting-queue/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-posting-queue/index.html",
+      "title": "Posting Queue | EMS 2.0",
+      "bodyLength": 851,
+      "h1h2h3": [
+        "Posting Queue",
+        "Filters",
+        "Posting Queue",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "journals",
+      "route": "/new-ems/modules/central-accounts-journals/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-journals/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-journals/index.html",
+      "title": "Journals | EMS 2.0",
+      "bodyLength": 769,
+      "h1h2h3": [
+        "Journals",
+        "Filters",
+        "Journals",
+        "Journal Details",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "vouchers",
+      "route": "/new-ems/modules/central-accounts-vouchers/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-vouchers/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-vouchers/index.html",
+      "title": "Manual Vouchers | EMS 2.0",
+      "bodyLength": 1613,
+      "h1h2h3": [
+        "Manual Vouchers",
+        "Create Balanced Voucher",
+        "Voucher Register",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "receivables",
+      "route": "/new-ems/modules/central-accounts-receivables/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-receivables/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-receivables/index.html",
+      "title": "Receivables | EMS 2.0",
+      "bodyLength": 927,
+      "h1h2h3": [
+        "Receivables",
+        "Filters",
+        "Summary",
+        "Aging Buckets",
+        "Receivable Open Items",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "payables",
+      "route": "/new-ems/modules/central-accounts-payables/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-payables/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-payables/index.html",
+      "title": "Payables | EMS 2.0",
+      "bodyLength": 2528,
+      "h1h2h3": [
+        "Payables",
+        "Vendor Accounting",
+        "Purchase Bills",
+        "Filters",
+        "Summary",
+        "Aging Buckets",
+        "Payable Open Items",
+        "Live Chat"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "treasury",
+      "route": "/new-ems/modules/central-accounts-treasury/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-treasury/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-treasury/index.html",
+      "title": "Treasury | EMS 2.0",
+      "bodyLength": 1436,
+      "h1h2h3": [
+        "Treasury",
+        "Filters",
+        "Summary",
+        "Treasury Accounts",
+        "Bank Reconciliation",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "fixed-assets",
+      "route": "/new-ems/modules/central-accounts-fixed-assets/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-fixed-assets/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-fixed-assets/index.html",
+      "title": "Fixed Assets | EMS 2.0",
+      "bodyLength": 1329,
+      "h1h2h3": [
+        "Fixed Assets",
+        "Add Asset / Movement / Depreciation",
+        "Asset Register",
+        "Depreciation Runs",
+        "Movements",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "gst-compliance",
+      "route": "/new-ems/modules/central-accounts-gst-compliance/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-gst-compliance/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-gst-compliance/index.html",
+      "title": "GST Compliance | EMS 2.0",
+      "bodyLength": 1357,
+      "h1h2h3": [
+        "GST Compliance",
+        "GST Return Periods",
+        "Classification & Reconciliation Queue",
+        "GSTR-2B Match Exceptions & ITC Review",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "tds",
+      "route": "/new-ems/modules/central-accounts-tds/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-tds/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-tds/index.html",
+      "title": "TDS Compliance | EMS 2.0",
+      "bodyLength": 1162,
+      "h1h2h3": [
+        "TDS Compliance",
+        "Create / Maintain TDS",
+        "TDS Register",
+        "Deductees",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "annual-tax",
+      "route": "/new-ems/modules/central-accounts-annual-tax/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-annual-tax/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-annual-tax/index.html",
+      "title": "Annual Tax & Audit | EMS 2.0",
+      "bodyLength": 1044,
+      "h1h2h3": [
+        "Annual Tax & Audit",
+        "Add Filing / Workpaper",
+        "Statutory Filing Calendar",
+        "Annual Audit Workpapers",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "close-controls",
+      "route": "/new-ems/modules/central-accounts-close-controls/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-close-controls/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-close-controls/index.html",
+      "title": "Close Controls | EMS 2.0",
+      "bodyLength": 1251,
+      "h1h2h3": [
+        "Close Controls",
+        "Create Close Controls",
+        "Close Checklists",
+        "Close Tasks",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "tax-settings",
+      "route": "/new-ems/modules/central-accounts-tax-settings/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-tax-settings/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-tax-settings/index.html",
+      "title": "Tax & Company Settings | EMS 2.0",
+      "bodyLength": 1510,
+      "h1h2h3": [
+        "Tax & Company Settings",
+        "Company Profile",
+        "GST Registrations",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "reporting",
+      "route": "/new-ems/modules/central-accounts-reporting/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-reporting/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-reporting/index.html",
+      "title": "Central Accounts Reporting | EMS 2.0",
+      "bodyLength": 3477,
+      "h1h2h3": [
+        "Central Accounts Reporting",
+        "Central Accounts Financial Reporting",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "consolidated",
+      "route": "/new-ems/modules/central-accounts-consolidated/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-consolidated/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-consolidated/index.html",
+      "title": "Consolidated Books | EMS 2.0",
+      "bodyLength": 976,
+      "h1h2h3": [
+        "Consolidated Books",
+        "Document Preview",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "budgets",
+      "route": "/new-ems/modules/central-accounts-budgets/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-budgets/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-budgets/index.html",
+      "title": "Budgets & Profitability | EMS 2.0",
+      "bodyLength": 1615,
+      "h1h2h3": [
+        "Budgets & Profitability",
+        "Budget Planning",
+        "Budgets",
+        "Profitability Snapshots",
+        "Actual Profitability by Division",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    },
+    {
+      "key": "audit",
+      "route": "/new-ems/modules/central-accounts-audit/index.html",
+      "url": "http://127.0.0.1:5500/new-ems/modules/central-accounts-audit/index.html",
+      "finalUrl": "http://127.0.0.1:5500/new-ems/modules/central-accounts-audit/index.html",
+      "title": "Audit Events | EMS 2.0",
+      "bodyLength": 1044,
+      "h1h2h3": [
+        "Audit Events",
+        "Filters",
+        "Auditor Workspace",
+        "Audit Events",
+        "Live Chat",
+        "Select a conversation"
+      ],
+      "redirectedToLogin": false,
+      "console": [],
+      "pageErrors": [],
+      "requestFailures": [],
+      "responseFailures": [],
+      "ok": true
+    }
+  ],
+  "passed": 18,
+  "failed": 0
+}

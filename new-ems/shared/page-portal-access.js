@@ -3,6 +3,7 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { hasAnyRolePermission } from "./permissions.js";
 import { PERMISSIONS } from "../config/roles.js";
+import { notifyPortalAccessCreated } from "./transport-integrations-api.js";
 import { showToast } from "./utils.js";
 
 const client = getSupabaseClient();
@@ -768,6 +769,31 @@ async function handleWizardSubmit() {
     };
     render();
     showToast("Portal login created.", TOAST_TYPES.SUCCESS);
+    try {
+      const notification = await notifyPortalAccessCreated({
+        division: PAGE_STATE.wizard.division,
+        entityType: PAGE_STATE.wizard.entityType,
+        portalSystem: s.system,
+        portalType: s.portalType,
+        portalLoginUrl: s.portalLoginUrl || "",
+        portalUserCode: newRow?.portalUserCode || "",
+        username,
+        password,
+        displayName,
+        recipientName: displayName || s.label,
+        recipientPhone: phone || s.phone || "",
+        recipientEmail: email || s.email || "",
+        linkedEntityId: s.id,
+        linkedEntityName: s.label
+      });
+      if (notification?.whatsapp?.sent) {
+        showToast("Portal access WhatsApp sent.", TOAST_TYPES.INFO);
+      } else if (notification?.whatsapp?.reason) {
+        showToast(`Portal access WhatsApp skipped: ${notification.whatsapp.reason}`, TOAST_TYPES.WARNING);
+      }
+    } catch (notifyError) {
+      showToast(`Portal login created, but WhatsApp failed: ${notifyError?.message || "Unknown error"}`, TOAST_TYPES.WARNING);
+    }
   } catch (error) {
     showToast(error?.message || "Failed to create portal login.", TOAST_TYPES.ERROR);
   }

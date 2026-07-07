@@ -22,8 +22,8 @@ function render(appUser, portals) {
         <section class="page-head">
           <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
             <div>
-              <h1>Choose Portal</h1>
-              <p>Select where you want to continue after the shared EMS login.</p>
+              <h1>Choose Workspace</h1>
+              <p>Select the internal EMS workspace you want to continue into. External portals use their own dedicated login pages.</p>
             </div>
             <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
               <span class="meta-pill">${escapeHtml(appUser?.display_name || appUser?.email || APP_NAME)}</span>

@@ -1,0 +1,71 @@
+{
+  "console": [
+    {
+      "type": "log",
+      "text": "Live reload enabled."
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_SCRIPT_LOADED]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_INIT_START]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_ROOT_FOUND]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_RENDER_DONE]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_ROOT_FOUND]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_RENDER_DONE]"
+    }
+  ],
+  "popupPagesBefore": 1,
+  "popupPagesAfter": 0,
+  "modalOpened": true,
+  "download": null,
+  "pass": false,
+  "currentUrl": "http://127.0.0.1:5500/new-ems/modules/transport-transporter-app/index.html",
+  "storedSession": {
+    "sessionToken": "7e472ec892544bc04c2937dadcf373e3daaa4e8af2f85aaab0224695f343acec",
+    "portalUserId": "383e02d0-bc2e-45ee-b2fd-a5a34982c10e",
+    "displayName": "BHANU MODIUM",
+    "hasClientAccess": false,
+    "hasTransporterAccess": true
+  },
+  "transporters": [
+    {
+      "value": "82b75e5b-be6b-491e-9682-983565a0a680",
+      "label": "BHANU MODIUM",
+      "rowCount": 2,
+      "emptyCount": 0,
+      "rowsLabel": "2"
+    }
+  ],
+  "selectedTransporter": {
+    "value": "82b75e5b-be6b-491e-9682-983565a0a680",
+    "label": "BHANU MODIUM"
+  },
+  "bodyTextSample": "Varada Nexus\nTRANSPORTER PORTAL\nACCOUNT\nACTIVE TRANSPORTER\nBHANU MODIUM\nBHANU MODIUM\nWORKSPACE\nDashboard\nAssigned Trips\nStatements\nPayments\nDeductions\nDiesel Advances\nTruck-wise Summary\nDocuments\nVARADA NEXUS\nBHANU MODIUM\nTheme\nLogout\nAssigned Trips\n\nWelcome, BHANU MODIUM.\n\nAssigned Trips\n2\nCompleted Trips\n0\nFinancial Review\n2\nTotal Quantity\n110.00 MT\nGross Amount\n₹33,000.00\nAssigned Trips\nRows: 2\nSearch\nTrip Number\nDate From\nDate To\nStatus\nAll Status\nFinancial Review\nCommodity\nAll Commodity\nFL ASH\nTruck\nAll Truck\nAP39QM9369\nSearch\nReset\nTrip Register\nPage 1 / 1\nTrip No\n↕\n\tDate\n↓\n\tROUTE\tTRUCK\tDRIVER\tCOMMODITY\tQuantity\n↕\n\tRATE\tGross Amount\n↕\n\tStatus\n↕\n\tACTIONS\n\nTR2607001\nBHANU MODIUM\n\t01/07/2026\t\nNTPC → BHOG\nRoute\n\t\nAP39QM9369\nAP39QM9369\n\tRAMU\tFL ASH\t60.00 MT\t₹300 / MT\t₹18,000.00\tFinancial Review\t\nView\nDownload\n\n\nTR2606015\nBHANU MODIUM\n\t30/06/2026\t\nNTPC → BHOG\nRoute\n\t\nAP39QM9369\nAP39QM9369\n\tRAMU\tFL ASH\t50.00 MT\t₹300 / MT\t₹15,000.00\tFinancial Review\t\nView\nDownload\nShowing 1-2 of 2\nPrevious\nNext",
+  "tripActionCount": 2,
+  "firstTripNo": "TR2607001\nBHANU MODIUM",
+  "grossAmount": "₹18,000.00",
+  "modalTitle": "Trip Details",
+  "modalTripNo": "TRIP NO\nTR2607001",
+  "escapeClosed": true,
+  "closeButtonClosed": true,
+  "backdropClosed": true,
+  "error": {
+    "message": "page.waitForEvent: Timeout 30000ms exceeded while waiting for event \"download\"\n=========================== logs ===========================\nwaiting for event \"download\"\n============================================================",
+    "stack": "page.waitForEvent: Timeout 30000ms exceeded while waiting for event \"download\"\n=========================== logs ===========================\nwaiting for event \"download\"\n============================================================\n    at main (D:\\Varada EMS 2.0\\scripts\\validate-transporter-trip-actions.cjs:124:12)"
+  }
+}

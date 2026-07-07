@@ -27,6 +27,11 @@ import {
   getStoredInteriorsPortalSession,
   clearStoredInteriorsPortalSession
 } from "./interiors-portal-auth.js";
+import {
+  emsLocalLogin,
+  getLocalSession,
+  restoreLocalSession
+} from "./ems-local-auth.js";
 import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 
@@ -264,7 +269,8 @@ function bindEvents() {
   // Picker: user picks a type.
   document.querySelectorAll("[data-ul-pick]").forEach(btn => {
     btn.addEventListener("click", () => {
-      loginWithType(btn.dataset.ulPick, PAGE_STATE.identifier, PAGE_STATE.password);
+      const picked = (PAGE_STATE.accounts || []).find(a => a.login_type === btn.dataset.ulPick);
+      loginWithType(btn.dataset.ulPick, PAGE_STATE.identifier, PAGE_STATE.password, picked?.auth_provider);
     });
   });
 
@@ -333,7 +339,7 @@ async function handleLogin() {
 
   if (usable.length === 1) {
     // Single match — auto-login without showing a picker.
-    await loginWithType(usable[0].login_type, identifier, password);
+    await loginWithType(usable[0].login_type, identifier, password, usable[0].auth_provider);
     return;
   }
 
@@ -350,13 +356,13 @@ async function lookupIdentifier(identifier) {
   return data || [];
 }
 
-async function loginWithType(type, identifier, password) {
+async function loginWithType(type, identifier, password, authProvider = null) {
   PAGE_STATE.step = "logging_in";
   render();
 
   try {
     switch (type) {
-      case "ems":       await handleEmsLogin(identifier, password);       break;
+      case "ems":       await handleEmsLogin(identifier, password, authProvider); break;
       case "transport": await handleTransportLogin(identifier, password); break;
       case "interiors": await handleInteriorsLogin(identifier, password); break;
       case "external":  await handleExternalLogin(identifier, password);  break;
@@ -372,10 +378,32 @@ async function loginWithType(type, identifier, password) {
 // ─── Auth handlers ────────────────────────────────────────────────────────────
 // Each handler uses ONLY its own auth system. No cross-system credential sharing.
 
-async function handleEmsLogin(email, password) {
-  const loginData = await loginWithPassword(email, password);
-  if (loginData?.user?.id) {
-    await markUserLogin(loginData.user.id);
+// EMS Staff: LOCAL accounts (auth_provider='local') authenticate against our own
+// tables via ems_local_login + the ems-auth JWT mint; the super admin
+// (auth_provider='supabase') uses Supabase Auth. When the provider is unknown
+// (manual type / no lookup), try local first, then fall back to Supabase.
+async function handleEmsLogin(identifier, password, authProvider = null) {
+  if (authProvider === "supabase") {
+    const loginData = await loginWithPassword(identifier, password);
+    if (loginData?.user?.id) await markUserLogin(loginData.user.id);
+    showToast("Login successful.", TOAST_TYPES.SUCCESS);
+    await redirectToResolvedPortal();
+    return;
+  }
+
+  if (authProvider === "local") {
+    await emsLocalLogin(identifier, password);
+    showToast("Login successful.", TOAST_TYPES.SUCCESS);
+    await redirectToResolvedPortal();
+    return;
+  }
+
+  // Unknown provider: attempt local, then Supabase.
+  try {
+    await emsLocalLogin(identifier, password);
+  } catch (localErr) {
+    const loginData = await loginWithPassword(identifier, password);
+    if (loginData?.user?.id) await markUserLogin(loginData.user.id);
   }
   showToast("Login successful.", TOAST_TYPES.SUCCESS);
   await redirectToResolvedPortal();
@@ -385,16 +413,28 @@ async function handleTransportLogin(username, password) {
   const session = await portalLogin(username, password);
   const access  = await listMyAccess(session.sessionToken);
   showToast("Login successful.", TOAST_TYPES.SUCCESS);
-  if (access.clients.length && access.transporters.length) {
-    window.location.assign(ROUTES.TRANSPORT_PORTAL_SELECTOR);
-  } else if (access.clients.length) {
-    window.location.assign(ROUTES.TRANSPORT_CLIENT_APP);
-  } else if (access.transporters.length) {
-    window.location.assign(ROUTES.TRANSPORT_TRANSPORTER_APP);
-  } else {
+  if (!redirectToTransportAccess(access)) {
     clearTransportSession();
-    throw new Error("No client or transporter access is linked to this account. Contact your administrator.");
+    throw new Error("No client, transporter, or agent access is linked to this account. Contact your administrator.");
   }
+}
+
+function redirectToTransportAccess(access) {
+  const availablePortals = [
+    access.clients?.length ? ROUTES.TRANSPORT_CLIENT_APP : null,
+    access.transporters?.length ? ROUTES.TRANSPORT_TRANSPORTER_APP : null,
+    access.agents?.length ? ROUTES.TRANSPORT_AGENT_APP : null
+  ].filter(Boolean);
+
+  if (availablePortals.length > 1) {
+    window.location.assign(ROUTES.TRANSPORT_PORTAL_SELECTOR);
+    return true;
+  }
+  if (availablePortals.length === 1) {
+    window.location.assign(availablePortals[0]);
+    return true;
+  }
+  return false;
 }
 
 // interiorsPortalLogin (in interiors-portal-auth.js) handles Supabase Auth sign-in
@@ -466,14 +506,22 @@ async function checkExistingSession() {
   if (transportStored?.sessionToken) {
     try {
       const access = await listMyAccess(transportStored.sessionToken);
-      if (access.clients.length && access.transporters.length) { window.location.assign(ROUTES.TRANSPORT_PORTAL_SELECTOR); return; }
-      if (access.clients.length)      { window.location.assign(ROUTES.TRANSPORT_CLIENT_APP); return; }
-      if (access.transporters.length) { window.location.assign(ROUTES.TRANSPORT_TRANSPORTER_APP); return; }
+      if (redirectToTransportAccess(access)) return;
     } catch {}
     clearTransportSession();
   }
 
-  // 3. EMS Staff (Supabase Auth; interiors case already handled above).
+  // 3. EMS Staff — LOCAL accounts (own session token + minted JWT).
+  const localStaff = getLocalSession();
+  if (localStaff?.authUserId) {
+    const ok = await restoreLocalSession();
+    if (ok) {
+      await redirectToResolvedPortal().catch(() => {});
+      return;
+    }
+  }
+
+  // 4. EMS Staff — Supabase Auth (super admin; interiors handled above).
   const session = await getSession();
   if (session) {
     await redirectToResolvedPortal().catch(() => {});

@@ -1,6 +1,6 @@
 import { MODULES, WORKSPACES } from "../config/constants.js";
 import { logUserRoleEvent } from "./audit.js";
-import { listDivisions, listRoles, listUsers, provisionUserViaEdge, syncUserAccessMappings, updateUserStatus } from "./admin-api.js";
+import { listDivisions, listRoles, listUsers, provisionUserViaEdge, provisionLocalUser, deleteAppUser, updateAppUserDetails, setLocalUserPassword, syncUserAccessMappings, updateUserStatus } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
 import { updateUserSecurity } from "./admin-api.js";
@@ -30,8 +30,15 @@ async function init() {
       <h3>Create User</h3>
       <form id="createUserForm" class="form-row">
         <input id="newUserEmail" type="email" placeholder="Email" required />
-        <input id="newUserPassword" type="password" placeholder="Temporary password" />
+        <input id="newUserUsername" type="text" placeholder="Username (optional)" />
+        <input id="newUserPhone" type="text" placeholder="Phone (optional)" />
+        <input id="newUserPassword" type="password" placeholder="Password" required />
         <input id="newUserName" type="text" placeholder="Display name" />
+        <select id="newUserAuthMethod" required>
+          <option value="" disabled selected>Auth method…</option>
+          <option value="local">Local (no Supabase Auth)</option>
+          <option value="supabase">Supabase Auth</option>
+        </select>
         <select id="newUserRole"></select>
         <select id="newUserDivision"></select>
         <button class="btn" type="submit">Provision User</button>
@@ -100,7 +107,10 @@ function renderUsers() {
   if (empty) empty.style.display = "none";
   body.innerHTML = pageRows.map((u) => {
     const role = (u.user_roles || []).map((x) => x.roles?.name || x.roles?.code).filter(Boolean).join(", ") || "-";
-    const divisions = (u.user_divisions || []).map((x) => x.divisions?.name || x.divisions?.code).filter(Boolean).join(", ") || "all";
+    const hasAllScope = (u.user_divisions || []).some((x) => String(x.scope || "").toLowerCase() === "all");
+    const divisions = hasAllScope
+      ? "All Divisions"
+      : ((u.user_divisions || []).map((x) => x.divisions?.name || x.divisions?.code).filter(Boolean).join(", ") || "—");
     const nextStatus = u.status === "active" ? "disabled" : "active";
     return `
       <tr>
@@ -115,7 +125,17 @@ function renderUsers() {
         <td>
           <button class="btn" data-user-id="${u.id}" data-next-status="${nextStatus}">${nextStatus === "active" ? "Enable" : "Disable"}</button>
           <button class="btn" data-lock-user-id="${u.id}" data-next-lock="${u.is_locked ? "false" : "true"}">${u.is_locked ? "Unlock" : "Lock"}</button>
-          <button class="btn" data-reset-user-id="${u.id}">Reset Password*</button>
+          <button class="btn" data-reset-user-id="${u.id}">${u.auth_provider === "supabase" ? "Reset Password*" : "Set Password"}</button>
+          <button class="btn" data-edit-user-id="${u.id}">Edit</button>
+          ${u.auth_provider === "supabase" ? "" : `<button class="btn" data-delete-user-id="${u.id}" style="color:#f87171;border-color:#f8717155;">Delete</button>`}
+          <div data-edit-form="${u.id}" style="display:none;margin-top:.5rem;padding:.5rem;border:1px solid rgba(255,255,255,.12);border-radius:8px;">
+            <input data-edit-name="${u.id}" placeholder="Display name" value="${escAttr(u.display_name)}" style="display:block;width:100%;margin-bottom:.35rem;" />
+            <input data-edit-email="${u.id}" placeholder="Email" value="${escAttr(u.email)}" style="display:block;width:100%;margin-bottom:.35rem;" ${u.auth_provider === "supabase" ? "disabled title='Managed by Supabase Auth'" : ""} />
+            <input data-edit-username="${u.id}" placeholder="Username" value="${escAttr(u.username)}" style="display:block;width:100%;margin-bottom:.35rem;" ${u.auth_provider === "supabase" ? "disabled" : ""} />
+            <input data-edit-phone="${u.id}" placeholder="Phone" value="${escAttr(u.phone)}" style="display:block;width:100%;margin-bottom:.35rem;" ${u.auth_provider === "supabase" ? "disabled" : ""} />
+            <button class="btn" data-edit-save="${u.id}">Save details</button>
+            <button class="btn" data-edit-cancel="${u.id}">Cancel</button>
+          </div>
           <label class="muted" style="display:block;margin-top:.35rem;">Roles</label>
           <select data-role-user-id="${u.id}" multiple size="4" style="min-width:12rem;">${renderRoleOptions((u.user_roles || []).map((x) => x.roles?.id))}</select>
           <label class="muted" style="display:block;margin-top:.35rem;">Divisions</label>
@@ -180,10 +200,88 @@ function renderUsers() {
     });
   });
 
+  body.querySelectorAll("button[data-edit-user-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const userId = btn.getAttribute("data-edit-user-id");
+      const form = qs(`div[data-edit-form='${userId}']`);
+      if (form) form.style.display = form.style.display === "none" ? "block" : "none";
+    });
+  });
+
+  body.querySelectorAll("button[data-edit-cancel]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const userId = btn.getAttribute("data-edit-cancel");
+      const form = qs(`div[data-edit-form='${userId}']`);
+      if (form) form.style.display = "none";
+    });
+  });
+
+  body.querySelectorAll("button[data-edit-save]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.getAttribute("data-edit-save");
+      const displayName = qs(`input[data-edit-name='${userId}']`)?.value?.trim() || "";
+      const email = qs(`input[data-edit-email='${userId}']`)?.value?.trim() || "";
+      const username = qs(`input[data-edit-username='${userId}']`)?.value?.trim() || "";
+      const phone = qs(`input[data-edit-phone='${userId}']`)?.value?.trim() || "";
+      try {
+        await updateAppUserDetails(userId, { email, username, phone, displayName });
+        await logUserRoleEvent("user_updated", { entityType: "app_users", entityId: userId });
+        showToast("Details updated", "success");
+        await loadUsers();
+      } catch (error) {
+        showToast(error?.message || "Failed to update details", "error");
+      }
+    });
+  });
+
+  body.querySelectorAll("button[data-delete-user-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.getAttribute("data-delete-user-id");
+      const user = allUsers.find((x) => String(x.id) === String(userId));
+      const label = user?.display_name || user?.email || "this user";
+      if (String(userId) === String(currentAppUserId)) {
+        showToast("You cannot delete your own account", "error");
+        return;
+      }
+      if (!window.confirm(`Delete ${label}? This removes their login and access. This cannot be undone.`)) {
+        return;
+      }
+      try {
+        const outcome = await deleteAppUser(userId);
+        await logUserRoleEvent("user_deleted", { entityType: "app_users", entityId: userId, outcome });
+        showToast(
+          outcome === "soft_deleted"
+            ? "User had records — disabled and removed from lists"
+            : "User deleted",
+          "success"
+        );
+        await loadUsers();
+      } catch (error) {
+        showToast(error?.message || "Failed to delete user", "error");
+      }
+    });
+  });
+
   body.querySelectorAll("button[data-reset-user-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const userId = btn.getAttribute("data-reset-user-id");
       const user = allUsers.find((x) => String(x.id) === String(userId));
+
+      // LOCAL accounts: no Supabase Auth email — set the password directly.
+      if (user && user.auth_provider !== "supabase") {
+        const pw = window.prompt(`Enter a new password for ${user.display_name || user.email || "this user"}:`);
+        if (!pw) return;
+        try {
+          await setLocalUserPassword(userId, pw);
+          await logUserRoleEvent("password_set", { entityType: "app_users", entityId: userId });
+          showToast("Password updated. The user's active sessions were signed out.", "success");
+        } catch (error) {
+          showToast(error?.message || "Failed to set password", "error");
+        }
+        return;
+      }
+
+      // Supabase-backed accounts (super admin): trigger the reset email.
       if (!user?.email) {
         showToast("Cannot reset password: user email missing", "error");
         return;
@@ -206,7 +304,28 @@ async function loadMasterLists() {
   const roleSelect = qs("#newUserRole");
   const divisionSelect = qs("#newUserDivision");
   if (roleSelect) roleSelect.innerHTML = renderRoleOptions();
-  if (divisionSelect) divisionSelect.innerHTML = `<option value="">No Division</option>${renderDivisionOptions()}`;
+  if (divisionSelect) {
+    divisionSelect.innerHTML =
+      `<option value="">No Division</option>` +
+      `<option value="__ALL__">All Divisions</option>` +
+      renderCreateDivisionOptions();
+  }
+}
+
+// Create-form division options: active only, de-duplicated by name (guards
+// against any residual duplicate rows).
+function renderCreateDivisionOptions() {
+  const seen = new Set();
+  return allDivisions
+    .filter((d) => d.is_active !== false)
+    .filter((d) => {
+      const key = String(d.name || "").trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((d) => `<option value="${d.id}">${d.name}</option>`)
+    .join("");
 }
 
 function renderRoleOptions(selected = []) {
@@ -224,25 +343,56 @@ function getSelectedValues(select) {
   return Array.from(select.selectedOptions || []).map((option) => option.value).filter(Boolean);
 }
 
+function escAttr(v) {
+  return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function bindCreateForm() {
   const form = qs("#createUserForm");
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
       const email = qs("#newUserEmail")?.value?.trim();
-      const password = qs("#newUserPassword")?.value || undefined;
+      const username = qs("#newUserUsername")?.value?.trim() || undefined;
+      const phone = qs("#newUserPhone")?.value?.trim() || undefined;
+      const password = qs("#newUserPassword")?.value || "";
       const displayName = qs("#newUserName")?.value?.trim() || undefined;
+      const authMethod = qs("#newUserAuthMethod")?.value;
       const roleId = qs("#newUserRole")?.value;
-      const divisionId = qs("#newUserDivision")?.value || undefined;
+      const divisionValue = qs("#newUserDivision")?.value || "";
       const role = allRoles.find((r) => String(r.id) === String(roleId));
-      const division = allDivisions.find((d) => String(d.id) === String(divisionId));
 
+      if (!authMethod) {
+        showToast("Choose an auth method (Local or Supabase)", "error");
+        return;
+      }
       if (!email || !role?.code) {
         showToast("Email and role are required", "error");
         return;
       }
+      if (!password) {
+        showToast("Password is required", "error");
+        return;
+      }
 
-      await provisionUserViaEdge({ email, password, displayName, roleCode: role.code, divisionCode: division?.code });
+      // Division: "" = none, "__ALL__" = global scope, otherwise a specific division.
+      let divisionCode;
+      let divisionScope = "assigned";
+      if (divisionValue === "__ALL__") {
+        divisionScope = "all";
+      } else if (divisionValue) {
+        const division = allDivisions.find((d) => String(d.id) === String(divisionValue));
+        divisionCode = division?.code;
+      }
+
+      if (authMethod === "local") {
+        // Sprint 13F: LOCAL account (no Supabase Auth).
+        await provisionLocalUser({ email, username, phone, displayName, password, roleCode: role.code, divisionCode, divisionScope });
+      } else {
+        // Supabase Auth account via the admin-provision-user edge function.
+        // (Edge path assigns a single division; global scope is role-derived.)
+        await provisionUserViaEdge({ email, password, displayName, roleCode: role.code, divisionCode });
+      }
       showToast("User provisioned", "success");
       form.reset();
       await loadUsers();

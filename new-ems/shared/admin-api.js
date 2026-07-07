@@ -54,6 +54,37 @@ export async function getUserRoleCodes(appUserId) {
   return roleCodes;
 }
 
+// Sprint 13F.11: the CURRENT user's role codes via SECURITY DEFINER RPC, so
+// non-admins (blocked by RLS from reading roles) still get their role name.
+export async function getMyRoleCodes() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_my_role_codes");
+  if (error) throw error;
+  return (data || [])
+    .map((row) => (typeof row === "string" ? row : (row?.get_my_role_codes ?? Object.values(row || {})[0])))
+    .filter(Boolean);
+}
+
+// Sprint 13F.9: resolve the CURRENT user's allowed modules via a SECURITY DEFINER
+// RPC that bypasses the admin-only RLS on role_permissions. Works for non-admins.
+export async function getMyAllowedModules() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_my_allowed_modules");
+  if (error) throw error;
+  return (data || [])
+    .map((row) => (typeof row === "string" ? row : (row?.get_my_allowed_modules ?? Object.values(row || {})[0])))
+    .filter(Boolean);
+}
+
+// Sprint 13F.14: the CURRENT user's full (module, action) permission set via
+// SECURITY DEFINER RPC, so edit/create/delete grants work for non-admins too.
+export async function getMyPermissions() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_my_permissions");
+  if (error) throw error;
+  return (data || []).filter((row) => row && row.module_code && row.action_code);
+}
+
 export async function getAllowedModulesForRoles(roleCodes) {
   if (!roleCodes?.length) return [];
   debugLog("lookup permissions for role codes", { roleCodes });
@@ -102,7 +133,8 @@ export async function listUsers() {
   const client = getSupabaseClient();
   const { data: users, error } = await client
     .from("app_users")
-    .select("id,auth_user_id,email,display_name,status,is_locked,last_login_at")
+    .select("id,auth_user_id,email,username,phone,display_name,status,is_locked,last_login_at,auth_provider")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
   if (error) throw error;
 
@@ -111,7 +143,7 @@ export async function listUsers() {
 
   const [{ data: userRoleRows, error: urErr }, { data: userDivisionRows, error: udErr }] = await Promise.all([
     client.from("user_roles").select("user_id,role_id").in("user_id", userIds),
-    client.from("user_divisions").select("user_id,division_id").in("user_id", userIds)
+    client.from("user_divisions").select("user_id,division_id,scope").in("user_id", userIds)
   ]);
   if (urErr) throw urErr;
   if (udErr) throw udErr;
@@ -136,7 +168,7 @@ export async function listUsers() {
 
     const userDivisions = (userDivisionRows || [])
       .filter((ud) => ud.user_id === u.id)
-      .map((ud) => ({ divisions: divisionById.get(String(ud.division_id)) || null }));
+      .map((ud) => ({ scope: ud.scope, divisions: divisionById.get(String(ud.division_id)) || null }));
 
     return {
       ...u,
@@ -191,6 +223,19 @@ export async function getDivisionByCode(code) {
     .from("divisions")
     .select("id,code,name,is_active")
     .eq("code", code)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+export async function getDivisionById(id) {
+  if (!id) return null;
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("divisions")
+    .select("id,code,name,is_active")
+    .eq("id", id)
     .eq("is_active", true)
     .maybeSingle();
   if (error) throw error;
@@ -263,6 +308,68 @@ export async function requestUserPasswordReset(targetEmail) {
   return json;
 }
 
+// Sprint 13F: create a LOCAL staff account (no Supabase Auth). Super-admin only
+// (enforced in the SECURITY DEFINER RPC). Returns the new app_users id.
+export async function provisionLocalUser({ email, username, phone, displayName, password, roleCode, divisionCode, divisionScope = "assigned" }) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("provision_local_app_user", {
+    p_email: email,
+    p_username: username || null,
+    p_phone: phone || null,
+    p_display_name: displayName || null,
+    p_password: password,
+    p_role_code: roleCode,
+    p_division_code: divisionCode || null,
+    p_division_scope: divisionScope || "assigned"
+  });
+  if (error) throw error;
+  return data;
+}
+
+// Admin resets a local staff user's password (revokes their sessions).
+export async function setLocalUserPassword(appUserId, newPassword) {
+  const client = getSupabaseClient();
+  const { error } = await client.rpc("ems_local_set_password", {
+    p_app_user_id: appUserId,
+    p_new_password: newPassword
+  });
+  if (error) throw error;
+}
+
+// Edit a staff account's identity (super-admin only). For local accounts updates
+// email/username/phone/display name; for Supabase-backed accounts only display name.
+export async function updateAppUserDetails(appUserId, { email, username, phone, displayName }) {
+  const client = getSupabaseClient();
+  const { error } = await client.rpc("admin_update_app_user_details", {
+    p_app_user_id: appUserId,
+    p_email: email || null,
+    p_username: username || null,
+    p_phone: phone || null,
+    p_display_name: displayName || null
+  });
+  if (error) throw error;
+}
+
+// Delete a staff account (super-admin only). Hard-deletes when possible,
+// otherwise soft-deletes. Returns 'deleted' or 'soft_deleted'.
+export async function deleteAppUser(appUserId) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("admin_delete_app_user", { p_app_user_id: appUserId });
+  if (error) throw error;
+  return data;
+}
+
+// Restricted reveal of a local staff user's current password (allowlisted admins).
+export async function revealLocalUserPassword(appUserId, reason = null) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("reveal_ems_local_password", {
+    p_app_user_id: appUserId,
+    p_reason: reason
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function listPermissions() {
   const client = getSupabaseClient();
   const { data, error } = await client
@@ -275,12 +382,27 @@ export async function listPermissions() {
 
 export async function listRolePermissions() {
   const client = getSupabaseClient();
-  const { data, error } = await client
-    .from("role_permissions")
-    .select("id,allow,role_id,permission_id")
-    .eq("allow", true);
-  if (error) throw error;
-  return data || [];
+  // PostgREST caps results (default 1000 rows). With many roles × permissions the
+  // grant count exceeds that, so page through with .range() to fetch them all —
+  // otherwise some grants are silently dropped and appear unchecked/"reverted".
+  const pageSize = 1000;
+  let from = 0;
+  const all = [];
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { data, error } = await client
+      .from("role_permissions")
+      .select("id,allow,role_id,permission_id")
+      .eq("allow", true)
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    const batch = data || [];
+    all.push(...batch);
+    if (batch.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
 }
 
 export async function setRolePermission(roleId, permissionId, allow) {
@@ -315,6 +437,13 @@ export async function upsertSystemSetting(key, value, updatedBy = null) {
   const payload = { key, value, updated_by: updatedBy, updated_at: new Date().toISOString() };
   const { error } = await client.from("system_settings").upsert(payload, { onConflict: "key" });
   if (error) throw error;
+}
+
+export async function publishTermsPolicy(title = null) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("publish_terms_policy", { p_title: title || null });
+  if (error) throw error;
+  return data;
 }
 
 export async function listAuditLogs(limit = 50) {
@@ -384,6 +513,16 @@ export async function listMasterRecords(table, { search = "", page = 1, pageSize
 
 export async function listActiveOptions(table, { labelField = "name", valueField = "id", divisionId = null } = {}) {
   const client = getSupabaseClient();
+  const pageModule = window.EMS_PAGE_MODULE_CODE || null;
+  if (pageModule && labelField === "name" && valueField === "id") {
+    const { data, error } = await client.rpc("get_page_lookup_options", {
+      p_page_module: pageModule,
+      p_table_name: table,
+      p_division_id: divisionId
+    });
+    if (error) throw error;
+    return (data || []).map((row) => ({ value: row.value, label: row.label }));
+  }
   let query = client.from(table).select(`${valueField},${labelField}`).is("deleted_at", null).eq("is_active", true).order(labelField);
   if (divisionId) query = query.eq("division_id", divisionId);
   const { data, error } = await query;
@@ -1578,6 +1717,13 @@ export async function listCentralPayables({ search = "" } = {}) {
   const needle = String(search).toLowerCase();
   return rows.filter((row) => [row.financial_documents?.source_document_no, row.financial_documents?.document_family, row.reporting_dimensions?.name, row.reporting_dimensions?.code, row.status].join(" ").toLowerCase().includes(needle));
 }
+export async function getVendorAccountingDataset(){const c=getSupabaseClient();const [v,b,a,s,coa,div]=await Promise.all([
+c.from("accounting_vendors").select("*").is("deleted_at",null).order("legal_name"),c.from("purchase_bills").select("*,accounting_vendors(id,vendor_code,legal_name),accounting_vouchers(id,voucher_no,status,journal_entry_id)").is("deleted_at",null).order("bill_date",{ascending:false}),c.from("vendor_advances").select("*,accounting_vendors(id,legal_name)").order("advance_date",{ascending:false}),c.from("vendor_settlements").select("*").order("settlement_date",{ascending:false}),c.from("coa_accounts").select("id,code,name,is_posting_allowed").eq("is_active",true).eq("is_posting_allowed",true).order("code"),c.from("divisions").select("id,name").eq("is_active",true).order("name")]);[v,b,a,s,coa,div].forEach(r=>{if(r.error)throw r.error});return{vendors:v.data||[],bills:b.data||[],advances:a.data||[],settlements:s.data||[],accounts:coa.data||[],divisions:div.data||[]}}
+export async function saveAccountingVendor(p){const c=getSupabaseClient(),q=p.id?c.from("accounting_vendors").update({...p,updated_at:new Date().toISOString()}).eq("id",p.id):c.from("accounting_vendors").insert(p),{data,error}=await q.select("*").single();if(error)throw error;return data}
+export async function savePurchaseBill(p){const c=getSupabaseClient(),q=p.id?c.from("purchase_bills").update({...p,updated_at:new Date().toISOString()}).eq("id",p.id):c.from("purchase_bills").insert({...p,open_amount:p.total_amount,status:"submitted"}),{data,error}=await q.select("*").single();if(error)throw error;return data}
+export async function saveVendorAdvance(p){const c=getSupabaseClient();const{data,error}=await c.from("vendor_advances").insert({...p,unadjusted_amount:p.amount}).select("*").single();if(error)throw error;return data}
+export async function approvePurchaseBill(id){const c=getSupabaseClient();const{error}=await c.rpc("approve_purchase_bill",{p_bill_id:id});if(error)throw error;}
+export async function postPurchaseBill(id){const c=getSupabaseClient();const{data,error}=await c.rpc("post_purchase_bill",{p_bill_id:id});if(error)throw error;return data;}
 
 export async function listCentralTreasuryAccounts({ search = "" } = {}) {
   const client = getSupabaseClient();
@@ -1652,6 +1798,114 @@ export async function listCentralTreasuryAccounts({ search = "" } = {}) {
   if (!search) return rows;
   const needle = String(search).toLowerCase();
   return rows.filter((row) => [row.account_code, row.account_name, row.account_type, row.status].join(" ").toLowerCase().includes(needle));
+}
+
+export async function getBankReconciliationDataset({ search = "" } = {}) {
+  const client = getSupabaseClient();
+  const accounts = (await listCentralTreasuryAccounts({ search })).filter((row) => row.source_type === "bank");
+  const bankAccountIds = accounts.map((row) => row.id).filter(Boolean);
+  const ledgerAccountIds = accounts.map((row) => row.raw?.ledger_account_id).filter(Boolean);
+
+  const [importsRes, certsRes, journalLinesRes] = await Promise.all([
+    bankAccountIds.length
+      ? client
+        .from("bank_statement_imports")
+        .select("*,bank_accounts(id,code,bank_name,account_title,masked_account_number,ledger_account_id)")
+        .in("bank_account_id", bankAccountIds)
+        .order("imported_at", { ascending: false })
+        .limit(50)
+      : Promise.resolve({ data: [], error: null }),
+    client
+      .from("bank_reconciliation_certificates")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50),
+    ledgerAccountIds.length
+      ? client
+        .from("journal_lines")
+        .select("id,journal_entry_id,line_no,ledger_account_id,debit_amount,credit_amount,line_memo,journal_entries(id,journal_no,entry_date,source_module,source_document_family,source_document_id,status)")
+        .in("ledger_account_id", ledgerAccountIds)
+        .order("id", { ascending: false })
+        .limit(500)
+      : Promise.resolve({ data: [], error: null })
+  ]);
+  [importsRes, certsRes, journalLinesRes].forEach((res) => { if (res.error) throw res.error; });
+
+  const importIds = (importsRes.data || []).map((row) => row.id);
+  let lines = [];
+  if (importIds.length) {
+    const { data, error } = await client
+      .from("bank_statement_lines")
+      .select("*,journal_lines(id,journal_entry_id,line_no,debit_amount,credit_amount,line_memo,journal_entries(id,journal_no,entry_date,source_module,source_document_family,status))")
+      .in("import_id", importIds)
+      .order("transaction_date", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    lines = data || [];
+  }
+
+  return {
+    accounts,
+    imports: importsRes.data || [],
+    lines,
+    certificates: certsRes.data || [],
+    journalLines: journalLinesRes.data || []
+  };
+}
+
+export async function createBankStatementImport({ importRow, lines }) {
+  const client = getSupabaseClient();
+  const { data: createdImport, error: importError } = await client
+    .from("bank_statement_imports")
+    .insert(importRow)
+    .select("*")
+    .single();
+  if (importError) throw importError;
+
+  const normalizedLines = (lines || []).map((line) => ({ ...line, import_id: createdImport.id }));
+  if (normalizedLines.length) {
+    const { error: linesError } = await client.from("bank_statement_lines").insert(normalizedLines);
+    if (linesError) throw linesError;
+  }
+  return createdImport;
+}
+
+export async function updateBankStatementLineMatch(id, payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("bank_statement_lines")
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveBankReconciliationCertificate(payload) {
+  const client = getSupabaseClient();
+  const now = new Date().toISOString();
+  const { data, error } = await client
+    .from("bank_reconciliation_certificates")
+    .upsert({ ...payload, prepared_at: payload.prepared_at || now, updated_at: now }, { onConflict: "import_id" })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function markBankStatementImportStatus(id, status) {
+  const client = getSupabaseClient();
+  const patch = { status, updated_at: new Date().toISOString() };
+  if (status === "reconciled") patch.reconciled_at = new Date().toISOString();
+  const { data, error } = await client
+    .from("bank_statement_imports")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 function getCentralTreasuryBalance(balanceByLedgerAccountId, ledgerAccountId) {
@@ -1763,3 +2017,379 @@ export async function listTripDocuments(tripId) {
   if (error) throw error;
   return data || [];
 }
+
+export async function getCompanyTaxProfile() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("company_tax_profiles").select("*").eq("company_key", "PRIMARY").maybeSingle();
+  if (error) throw error;
+  return data || { company_key: "PRIMARY", financial_year_start_month: 4 };
+}
+
+export async function saveCompanyTaxProfile(payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("company_tax_profiles")
+    .upsert({ ...payload, company_key: "PRIMARY", updated_at: new Date().toISOString() }, { onConflict: "company_key" })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function listCompanyGstRegistrations() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("company_gst_registrations").select("*").order("state_name").order("registration_name");
+  if (error) throw error;
+  return data || [];
+}
+
+export async function saveCompanyGstRegistration(payload) {
+  const client = getSupabaseClient();
+  const normalized = { ...payload, company_key: "PRIMARY", gstin: String(payload.gstin || "").toUpperCase(), updated_at: new Date().toISOString() };
+  const query = normalized.id
+    ? client.from("company_gst_registrations").update(normalized).eq("id", normalized.id)
+    : client.from("company_gst_registrations").insert(normalized);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deactivateCompanyGstRegistration(id) {
+  const client = getSupabaseClient();
+  const { error } = await client
+    .from("company_gst_registrations")
+    .update({ is_active: false, is_primary: false, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function getConsolidatedAccountingRegister({ divisionId = null, sourceModule = "", status = "", search = "" } = {}) {
+  const client = getSupabaseClient();
+  let query = client
+    .from("financial_documents")
+    .select("*,divisions(id,code,name),posting_queue(id,queue_status,last_error,processed_at),journal_entries(id,journal_no,posting_sequence,status,entry_date)")
+    .is("deleted_at", null)
+    .order("document_date", { ascending: false });
+  if (divisionId) query = query.eq("division_id", divisionId);
+  if (sourceModule) query = query.eq("source_module", sourceModule);
+  if (status) query = query.eq("status", status);
+  if (search) query = query.or(`source_document_no.ilike.%${search}%,document_family.ilike.%${search}%,source_module.ilike.%${search}%`);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getConsolidatedSourceDocument(financialDocumentId) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_consolidated_source_document", { p_financial_document_id: financialDocumentId });
+  if (error) throw error;
+  return data || null;
+}
+
+export async function getGstComplianceDataset() {
+  const client = getSupabaseClient();
+  const [registrations, periods, classifications, documents, batches, items] = await Promise.all([
+    client.from("company_gst_registrations").select("*").eq("is_active", true).order("state_name"),
+    client.from("gst_return_periods").select("*").order("period_start", { ascending: false }),
+    client.from("gst_document_classifications").select("*").order("updated_at", { ascending: false }),
+    client.from("financial_documents").select("id,source_document_no,document_family,source_module,document_date,gross_amount,taxable_amount,tax_amount,division_id,status").is("deleted_at", null),
+    client.from("gst_2b_import_batches").select("*").order("imported_at", { ascending: false }),
+    client.from("gst_2b_items").select("*").order("invoice_date", { ascending: false })
+  ]);
+  [registrations, periods, classifications, documents, batches, items].forEach((res) => { if (res.error) throw res.error; });
+  return { registrations: registrations.data || [], periods: periods.data || [], classifications: classifications.data || [], documents: documents.data || [], batches: batches.data || [], items: items.data || [] };
+}
+
+export async function saveGstReturnPeriod(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id
+    ? client.from("gst_return_periods").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id)
+    : client.from("gst_return_periods").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveGstDocumentClassification(id, payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("gst_document_classifications").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateGst2bItem(id, payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("gst_2b_items").update(payload).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateGst2bBatch(id, payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("gst_2b_import_batches").update(payload).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function importGst2bBatch({ batch, items }) {
+  const client = getSupabaseClient();
+  const { data: createdBatch, error: batchError } = await client.from("gst_2b_import_batches").insert({ ...batch, row_count: items.length }).select("*").single();
+  if (batchError) throw batchError;
+  if (items.length) {
+    const { error: itemError } = await client.from("gst_2b_items").insert(items.map((item) => ({ ...item, batch_id: createdBatch.id })));
+    if (itemError) throw itemError;
+  }
+  return createdBatch;
+}
+
+export async function getAnnualTaxDataset() {
+  const client = getSupabaseClient();
+  const [filings, workpapers, fiscalYears] = await Promise.all([
+    client.from("statutory_filing_records").select("*").order("financial_year", { ascending: false }).order("due_date"),
+    client.from("annual_tax_workpapers").select("*").order("financial_year", { ascending: false }).order("section_code"),
+    client.from("fiscal_years").select("*").order("start_date", { ascending: false })
+  ]);
+  [filings, workpapers, fiscalYears].forEach((res) => { if (res.error) throw res.error; });
+  return { filings: filings.data || [], workpapers: workpapers.data || [], fiscalYears: fiscalYears.data || [] };
+}
+
+export async function saveStatutoryFiling(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id
+    ? client.from("statutory_filing_records").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id)
+    : client.from("statutory_filing_records").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveAnnualTaxWorkpaper(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id
+    ? client.from("annual_tax_workpapers").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id)
+    : client.from("annual_tax_workpapers").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getTdsComplianceDataset() {
+  const client = getSupabaseClient();
+  const [sections, deductees, deductions, documents, bills, accounts] = await Promise.all([
+    client.from("tds_sections").select("*").order("section_code"),
+    client.from("tds_deductees").select("*").order("legal_name"),
+    client.from("tds_deductions").select("*,tds_deductees(id,deductee_code,legal_name,pan),tds_sections(id,section_code,description),financial_documents(id,source_document_no,document_date,document_family,source_module),purchase_bills(id,bill_no,bill_date,total_amount)").order("deduction_date", { ascending: false }),
+    client.from("financial_documents").select("id,source_document_no,document_date,document_family,source_module,net_amount,taxable_amount,status").is("deleted_at", null).order("document_date", { ascending: false }).limit(500),
+    client.from("purchase_bills").select("id,bill_no,bill_date,total_amount,accounting_vendors(id,legal_name,pan,gstin)").is("deleted_at", null).order("bill_date", { ascending: false }).limit(500),
+    client.from("coa_accounts").select("id,code,name,is_posting_allowed,is_active").eq("is_active", true).eq("is_posting_allowed", true).order("code")
+  ]);
+  [sections, deductees, deductions, documents, bills, accounts].forEach((res) => { if (res.error) throw res.error; });
+  return { sections: sections.data || [], deductees: deductees.data || [], deductions: deductions.data || [], documents: documents.data || [], bills: bills.data || [], accounts: accounts.data || [] };
+}
+
+export async function saveTdsSection(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("tds_sections").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("tds_sections").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveTdsDeductee(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("tds_deductees").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("tds_deductees").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveTdsDeduction(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("tds_deductions").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("tds_deductions").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function approveTdsDeduction(id) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("tds_deductions").update({ filing_status: "return_prepared", approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function postTdsDeduction({ id, debitAccountId, creditAccountId }) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("post_tds_deduction", { p_deduction_id: id, p_debit_account_id: debitAccountId, p_credit_account_id: creditAccountId });
+  if (error) throw error;
+  return data;
+}
+
+export async function getFixedAssetsDataset() {
+  const client = getSupabaseClient();
+  const [assets, movements, runs, vendors, bills, divisions, accounts] = await Promise.all([
+    client.from("fixed_assets").select("*,divisions(id,name),accounting_vendors(id,legal_name),purchase_bills(id,bill_no)").order("acquisition_date", { ascending: false }),
+    client.from("fixed_asset_movements").select("*,fixed_assets(id,asset_code,asset_name),from_division:from_division_id(id,name),to_division:to_division_id(id,name)").order("movement_date", { ascending: false }),
+    client.from("fixed_asset_depreciation_runs").select("*,journal_entries(id,journal_no)").order("run_month", { ascending: false }),
+    client.from("accounting_vendors").select("id,legal_name,vendor_code").is("deleted_at", null).order("legal_name"),
+    client.from("purchase_bills").select("id,bill_no,bill_date,total_amount,vendor_id").is("deleted_at", null).order("bill_date", { ascending: false }),
+    client.from("divisions").select("id,code,name").eq("is_active", true).order("name"),
+    client.from("coa_accounts").select("id,code,name,is_posting_allowed,is_active").eq("is_active", true).eq("is_posting_allowed", true).order("code")
+  ]);
+  [assets, movements, runs, vendors, bills, divisions, accounts].forEach((res) => { if (res.error) throw res.error; });
+  return { assets: assets.data || [], movements: movements.data || [], runs: runs.data || [], vendors: vendors.data || [], bills: bills.data || [], divisions: divisions.data || [], accounts: accounts.data || [] };
+}
+
+export async function saveFixedAsset(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("fixed_assets").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("fixed_assets").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveFixedAssetMovement(payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("fixed_asset_movements").insert(payload).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveFixedAssetDepreciationRun(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("fixed_asset_depreciation_runs").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("fixed_asset_depreciation_runs").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function approveFixedAssetDepreciationRun(id) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("fixed_asset_depreciation_runs").update({ status: "approved", approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", id).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function postFixedAssetDepreciationRun({ id, expenseAccountId, accumulatedDepreciationAccountId }) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("post_fixed_asset_depreciation_run", { p_run_id: id, p_expense_account_id: expenseAccountId, p_accumulated_depreciation_account_id: accumulatedDepreciationAccountId });
+  if (error) throw error;
+  return data;
+}
+
+export async function getCloseControlsDataset() {
+  const client = getSupabaseClient();
+  const [checklists, tasks, periods, users] = await Promise.all([
+    client.from("accounting_close_checklists").select("*,accounting_periods(id,period_code,period_name,status)").order("close_month", { ascending: false }),
+    client.from("accounting_close_tasks").select("*,app_users:owner_app_user_id(id,display_name,email)").order("due_date"),
+    client.from("accounting_periods").select("id,period_code,period_name,status,start_date,end_date").order("start_date", { ascending: false }),
+    client.from("app_users").select("id,display_name,email,status").eq("status", "active").order("display_name")
+  ]);
+  [checklists, tasks, periods, users].forEach((res) => { if (res.error) throw res.error; });
+  return { checklists: checklists.data || [], tasks: tasks.data || [], periods: periods.data || [], users: users.data || [] };
+}
+
+export async function saveCloseChecklist(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("accounting_close_checklists").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("accounting_close_checklists").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveCloseTask(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("accounting_close_tasks").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("accounting_close_tasks").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function closeAccountingChecklist(id) {
+  const client = getSupabaseClient();
+  const { error } = await client.rpc("close_accounting_checklist", { p_checklist_id: id });
+  if (error) throw error;
+}
+
+export async function reopenAccountingChecklist(id, reason) {
+  const client = getSupabaseClient();
+  const { error } = await client.rpc("reopen_accounting_checklist", { p_checklist_id: id, p_reason: reason });
+  if (error) throw error;
+}
+
+export async function getBudgetsProfitabilityDataset() {
+  const client = getSupabaseClient();
+  const [budgets, lines, accounts, divisions, snapshots, docs] = await Promise.all([
+    client.from("accounting_budgets").select("*,divisions(id,name)").order("financial_year", { ascending: false }).order("budget_code"),
+    client.from("accounting_budget_lines").select("*,coa_accounts(id,code,name,account_class),reporting_dimensions(id,code,name)").order("period_code"),
+    client.from("coa_accounts").select("id,code,name,account_class,is_posting_allowed,is_active").eq("is_active", true).eq("is_posting_allowed", true).order("code"),
+    client.from("divisions").select("id,code,name").eq("is_active", true).order("name"),
+    client.from("profitability_snapshots").select("*,divisions(id,name)").order("snapshot_date", { ascending: false }).limit(100),
+    client.from("financial_documents").select("id,division_id,document_family,source_module,document_date,gross_amount,net_amount,taxable_amount,status").is("deleted_at", null).limit(5000)
+  ]);
+  [budgets, lines, accounts, divisions, snapshots, docs].forEach((res) => { if (res.error) throw res.error; });
+  return { budgets: budgets.data || [], lines: lines.data || [], accounts: accounts.data || [], divisions: divisions.data || [], snapshots: snapshots.data || [], documents: docs.data || [] };
+}
+
+export async function saveAccountingBudget(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("accounting_budgets").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("accounting_budgets").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveAccountingBudgetLine(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("accounting_budget_lines").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("accounting_budget_lines").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveProfitabilitySnapshot(payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("profitability_snapshots").insert(payload).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getAuditWorkspaceDataset() {
+  const client = getSupabaseClient();
+  const [requests, evidence] = await Promise.all([
+    client.from("audit_workspace_requests").select("*,assigned:assigned_to(id,display_name,email),requested:requested_by(id,display_name,email)").order("created_at", { ascending: false }),
+    client.from("accounting_control_evidence").select("*,maker:maker_app_user_id(id,display_name,email),checker:checker_app_user_id(id,display_name,email)").order("captured_at", { ascending: false }).limit(500)
+  ]);
+  [requests, evidence].forEach((res) => { if (res.error) throw res.error; });
+  return { requests: requests.data || [], evidence: evidence.data || [] };
+}
+
+export async function saveAuditWorkspaceRequest(payload) {
+  const client = getSupabaseClient();
+  const query = payload.id ? client.from("audit_workspace_requests").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", payload.id) : client.from("audit_workspace_requests").insert(payload);
+  const { data, error } = await query.select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function saveAccountingControlEvidence(payload) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("accounting_control_evidence").insert(payload).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getManualVoucherDataset() {
+  const client=getSupabaseClient();
+  const [vouchers,lines,accounts,divisions]=await Promise.all([
+    client.from("accounting_vouchers").select("*").order("voucher_date",{ascending:false}).order("created_at",{ascending:false}),
+    client.from("accounting_voucher_lines").select("*").order("line_no"),
+    client.from("coa_accounts").select("id,code,name,account_class,is_posting_allowed,is_active").eq("is_active",true).eq("is_posting_allowed",true).order("code"),
+    client.from("divisions").select("id,code,name").eq("is_active",true).order("name")
+  ]);
+  [vouchers,lines,accounts,divisions].forEach(r=>{if(r.error)throw r.error;});
+  return {vouchers:vouchers.data||[],lines:lines.data||[],accounts:accounts.data||[],divisions:divisions.data||[]};
+}
+export async function createManualVoucher(payload){const c=getSupabaseClient();const{data,error}=await c.rpc("create_accounting_voucher",payload);if(error)throw error;return data;}
+export async function approveManualVoucher(id){const c=getSupabaseClient();const{error}=await c.rpc("approve_accounting_voucher",{p_voucher_id:id});if(error)throw error;}
+export async function postManualVoucher(id){const c=getSupabaseClient();const{data,error}=await c.rpc("post_accounting_voucher",{p_voucher_id:id});if(error)throw error;return data;}

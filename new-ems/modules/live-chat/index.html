@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Chat | EMS 2.0</title>
+  <link rel="stylesheet" href="/new-ems/assets/css/app.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/new-ems/config/runtime.js?v=sprint15-chat-7"></script>
+  <style>
+    body{margin:0;background:#081120;color:#e5edf8;font-family:Inter,system-ui,sans-serif}
+    .chat-page{height:100vh;display:grid;grid-template-columns:310px 1fr;overflow:hidden}
+    .side{background:#101a2d;border-right:1px solid rgba(148,163,184,.2);display:flex;flex-direction:column;min-width:0}
+    .head{padding:.9rem 1rem;border-bottom:1px solid rgba(148,163,184,.2)}
+    .head h2{margin:0;font-size:1.05rem}.head p{margin:.2rem 0 0;color:#91a4be;font-size:.78rem}
+    .tabs{display:flex;gap:.4rem;padding:.7rem}.tab,.btn{border:1px solid rgba(212,178,106,.42);background:#15243d;color:#fff;border-radius:10px;padding:.5rem .7rem;cursor:pointer;font-weight:800}.tab{flex:1}.tab.active{background:#3b2f14;color:#fde68a}
+    .search{margin:0 .7rem .7rem;border:1px solid rgba(148,163,184,.28);background:#07101f;color:#fff;border-radius:10px;padding:.55rem}
+    .list{overflow:auto;padding:.4rem .55rem;display:flex;flex-direction:column;gap:.35rem}.row{background:transparent;color:#dbeafe;border:1px solid transparent;border-radius:12px;text-align:left;padding:.58rem;cursor:pointer}.row:hover,.row.active{background:rgba(148,163,184,.1);border-color:rgba(212,178,106,.28)}
+    .name{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sub{font-size:.75rem;color:#91a4be;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .main{display:flex;flex-direction:column;min-width:0}.empty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:#91a4be;padding:2rem}
+    .thread-head{padding:.9rem 1rem;border-bottom:1px solid rgba(148,163,184,.18);font-weight:900}.messages{flex:1;overflow:auto;padding:1rem;display:flex;flex-direction:column;gap:.55rem}.msg{max-width:75%;background:#111d31;border:1px solid rgba(148,163,184,.18);border-radius:14px;padding:.55rem .7rem;align-self:flex-start}.msg.mine{align-self:flex-end;background:#18335c}.meta{font-size:.7rem;color:#93a6bf;margin-bottom:.2rem}
+    .compose{display:flex;gap:.5rem;padding:.7rem;border-top:1px solid rgba(148,163,184,.18);background:#0b1222}.input{flex:1;border:1px solid rgba(148,163,184,.25);background:#07101f;color:#fff;border-radius:12px;padding:.65rem;resize:vertical}
+    .error{margin:1rem;border:1px solid rgba(248,113,113,.35);background:rgba(248,113,113,.08);color:#fecaca;border-radius:12px;padding:.8rem}
+    @media(max-width:760px){.chat-page{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div id="chatApp" class="chat-page"></div>
+  <script src="/new-ems/shared/page-live-chat-frame.js?v=sprint15-chat-21"></script>
+</body>
+</html>

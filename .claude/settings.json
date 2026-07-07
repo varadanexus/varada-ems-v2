@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/check-supabase-migrations.cjs)",
+      "Bash(npm run check:migrations)",
+      "Bash(npm run db:status)",
+      "Bash(npm run db:dry-run)",
+      "Bash(cat)"
+    ]
+  }
+}

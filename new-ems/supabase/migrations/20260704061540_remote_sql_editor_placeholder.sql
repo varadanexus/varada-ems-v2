@@ -1,0 +1,3 @@
+-- Placeholder for remote SQL Editor migration 20260704061540.
+-- The change already exists in the linked Supabase database; this file keeps
+-- local migration history aligned so later canonical migrations can be pushed.

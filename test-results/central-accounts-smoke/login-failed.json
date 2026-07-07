@@ -1,0 +1,14 @@
+{
+  "url": "http://127.0.0.1:5500/new-ems/modules/login/index.html",
+  "hasSupabaseToken": true,
+  "hasLocalSession": false,
+  "console": [
+    {
+      "type": "warning",
+      "text": "GoTrueClient@sb-ftejxcycoiagbslnzaab-auth-token:1 (2.110.0) 2026-07-03T19:55:20.077Z Multiple GoTrueClient instances detected in the same browser context. It is not an error, but this should be avoided as it may produce undefined behavior when used concurrently under the same storage key."
+    }
+  ],
+  "pageErrors": [],
+  "body": "Varada EMS 2.0\n\nSecure access for staff, clients, transporters, vendors, and partners.\n\nEmail / Username / Phone\nPassword\n Signing in…\nAdvanced: choose login type manually",
+  "ok": false
+}

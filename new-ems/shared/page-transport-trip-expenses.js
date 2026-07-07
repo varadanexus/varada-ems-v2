@@ -2,6 +2,7 @@ import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { createTripExpense, listActiveOptions, listTripExpenses, listTripOptions, resolveWorkspaceDivision, softDeleteTripExpense, updateTripExpense } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { notifyTransportExpenseCreated } from "./transport-integrations-api.js";
 import { qs, showToast } from "./utils.js";
 
 const EXPENSE_CATEGORIES = ["Diesel", "Toll", "Driver Bata", "Loading", "Unloading", "RTO", "Maintenance", "Advance", "Miscellaneous"];
@@ -17,6 +18,11 @@ async function init() {
   if (!boot) return;
 
   const divisionId = boot.divisionId || null;
+  const permissionSet = new Set((boot.permissions || []).map((p) => `${p.module_code}:${p.action_code}`));
+  const isPrivileged = boot.roleCodes?.some((role) => role === "super_admin" || role === "admin");
+  const canCreate = isPrivileged || permissionSet.has(`${MODULES.TRANSPORT_TRIP_EXPENSES}:create`);
+  const canEdit = isPrivileged || permissionSet.has(`${MODULES.TRANSPORT_TRIP_EXPENSES}:edit`);
+  const canDelete = isPrivileged || permissionSet.has(`${MODULES.TRANSPORT_TRIP_EXPENSES}:delete`);
   if (!divisionId) return showToast("Canonical Transportation division not found", TOAST_TYPES.ERROR);
 
   renderModuleContent(`
@@ -28,10 +34,10 @@ async function init() {
       <div id="teTripSummary" class="empty-state" style="margin-top:.75rem;">Select a trip to view summary.</div>
     </section>
 
-    <section class="card" style="margin-top:1rem;">
+    ${canCreate ? `<section class="card" style="margin-top:1rem;">
       <h3>Add Support / Deduction</h3>
       <form id="teForm" class="form-row"></form>
-    </section>
+    </section>` : ""}
 
     <section class="card" style="margin-top:1rem;">
       <h3>Trip Support / Deductions List</h3>
@@ -63,7 +69,7 @@ async function init() {
   const labelBy = (arr) => new Map(arr.map((x) => [x.value, x.label]));
   const clientBy = labelBy(clients), transporterBy = labelBy(transporters), truckBy = labelBy(trucks), driverBy = labelBy(drivers), routeBy = labelBy(routes), commodityBy = labelBy(commodities);
 
-  form.innerHTML = `
+  if (form) form.innerHTML = `
     <label>Expense No</label><input disabled placeholder="Auto-generated EXYYMM###" />
     <label>Expense Date *</label><input data-f="expense_date" type="date" required disabled />
     <label>Category *</label><select data-f="category" disabled><option value="">Select...</option>${EXPENSE_CATEGORIES.map((x)=>`<option value="${x}">${x}</option>`).join("")}</select>
@@ -74,6 +80,7 @@ async function init() {
   `;
 
   function setFormEnabled(enabled) {
+    if (!form) return;
     form.querySelectorAll("input[data-f],select[data-f]").forEach((el) => (el.disabled = !enabled));
     const btn = qs("#teSaveBtn");
     if (btn) btn.disabled = !enabled;
@@ -123,7 +130,7 @@ async function init() {
       <td><input data-e-amt="${r.id}" type="number" min="0" step="0.01" value="${r.amount || 0}" /></td>
       <td><select data-e-paid="${r.id}">${PAID_BY_OPTIONS.map((x) => `<option value="${x}" ${r.paid_by === x ? "selected" : ""}>${x}</option>`).join("")}</select></td>
       <td><input data-e-notes="${r.id}" value="${r.notes || ""}" /></td>
-      <td><button class="btn" data-e-save="${r.id}">Edit</button> <button class="btn btn-danger" data-e-del="${r.id}">Delete</button></td>
+      <td>${canEdit ? `<button class="btn" data-e-save="${r.id}">Edit</button>` : ""} ${canDelete ? `<button class="btn btn-danger" data-e-del="${r.id}">Delete</button>` : ""}</td>
     </tr>`).join("");
 
     body.querySelectorAll("button[data-e-save]").forEach((b) => b.addEventListener("click", async () => {
@@ -162,7 +169,7 @@ async function init() {
     qs(sel)?.addEventListener(sel === "#teSearch" ? "input" : "change", async () => loadExpenses());
   });
 
-  form.addEventListener("submit", async (e) => {
+  form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (form.dataset.busy === "1") return;
     if (!selectedTrip?.id) return showToast("Select trip first", TOAST_TYPES.ERROR);
@@ -183,6 +190,16 @@ async function init() {
       const created = await createTripExpense(payload);
       await logAuditEvent("trip_expense_create", { moduleCode: MODULES.TRANSPORT_TRIP_EXPENSES, entityType: "transport_trip_expenses", entityId: created.id, afterData: created, action: "create" });
       showToast(`Expense created: ${created.expense_no}`, TOAST_TYPES.SUCCESS);
+      try {
+        const notification = await notifyTransportExpenseCreated(created.id);
+        if (notification?.whatsapp?.sent) {
+          showToast("Expense WhatsApp sent.", TOAST_TYPES.INFO);
+        } else if (notification?.whatsapp?.reason) {
+          showToast(`Expense WhatsApp skipped: ${notification.whatsapp.reason}`, TOAST_TYPES.WARNING);
+        }
+      } catch (notifyError) {
+        showToast(`Expense saved, but WhatsApp failed: ${notifyError?.message || "Unknown error"}`, TOAST_TYPES.WARNING);
+      }
       form.reset();
       await loadExpenses();
     } catch (err) {

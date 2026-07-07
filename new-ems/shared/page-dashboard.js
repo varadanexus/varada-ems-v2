@@ -1,11 +1,13 @@
 import { CONTROL_CENTER_MODULES, MODULES, ROUTES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderAppSkeleton, renderModuleContent } from "./layout.js";
 import { getSession } from "./auth.js";
+import { loadPendingActions, openPendingActionsModal } from "./pending-actions.js";
 
 const ADMIN_ITEMS = [
   { module: MODULES.USERS, title: "Users", href: ROUTES.USERS, description: "Provision access and manage identities." },
   { module: MODULES.ROLES, title: "Roles", href: ROUTES.ROLES, description: "Role structure and permission boundaries." },
   { module: MODULES.DIVISIONS, title: "Divisions", href: ROUTES.DIVISIONS, description: "Division scope and access routing." },
+  { module: MODULES.NOTIFICATIONS_CENTER, title: "Notifications", href: ROUTES.NOTIFICATIONS_CENTER, description: "EMS-wide alerts, preferences, and dispatch console." },
   { module: MODULES.SETTINGS, title: "Settings", href: ROUTES.SETTINGS, description: "ERP-wide operational preferences." },
   { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, title: "Audit Logs", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT, description: "System events and sensitive activity." },
   { module: MODULES.PORTAL_ACCESS, title: "Portal Access", href: ROUTES.PORTAL_ACCESS, description: "External portal visibility control." }
@@ -21,9 +23,11 @@ const QUICK_ACTIONS = [
   { module: MODULES.USERS, title: "Users", href: ROUTES.USERS },
   { module: MODULES.ROLES, title: "Roles", href: ROUTES.ROLES },
   { module: MODULES.DIVISIONS, title: "Divisions", href: ROUTES.DIVISIONS },
+  { module: MODULES.NOTIFICATIONS_CENTER, title: "Notifications", href: ROUTES.NOTIFICATIONS_CENTER },
   { module: MODULES.PORTAL_ACCESS, title: "Portal Access", href: ROUTES.PORTAL_ACCESS },
   { module: MODULES.TRANSPORTATION, title: "Transportation", href: ROUTES.TRANSPORT_DASHBOARD },
   { module: MODULES.INTERIORS, title: "Interiors", href: ROUTES.INTERIORS_DASHBOARD },
+  { module: MODULES.MEETINGS, title: "Meetings", href: ROUTES.MEETINGS_COMMAND_CENTER },
   { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD }
 ];
 
@@ -139,7 +143,14 @@ async function init() {
     const accountsLauncher = allowedModules.includes(MODULES.ACCOUNTS)
       ? [{ title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD, subtitle: "Journals, receivables, payables, treasury, and financial control" }]
       : [];
-    const launchCards = [...activeBusinessCards, ...accountsLauncher];
+    // Grouped domain sections: Communications (WhatsApp + Email) and Legal each
+    // get their own heading; Central Accounts is surfaced as the Finance section.
+    const COMMS_MODULES = [MODULES.WHATSAPP, MODULES.EMAIL, MODULES.MEETINGS];
+    const communicationCards = activeBusinessCards.filter((m) => COMMS_MODULES.includes(m.module));
+    const legalCards = activeBusinessCards.filter((m) => m.module === MODULES.LEGAL);
+    const groupedModules = [...COMMS_MODULES, MODULES.LEGAL];
+    const nonGroupedBusinessCards = activeBusinessCards.filter((m) => !groupedModules.includes(m.module));
+    const launchCards = [...nonGroupedBusinessCards];
     const activeModuleCount = launchCards.length;
     const pendingActions = configCards.length + developerCards.filter((d) => d.tone === "setup").length;
 
@@ -154,6 +165,19 @@ async function init() {
     const lastSignIn = formatSignIn(session?.user?.last_sign_in_at);
 
     const activeModulesHtml = launchCards.map(renderModuleCard).join("");
+    const communicationsHtml = communicationCards.map(renderModuleCard).join("");
+    const legalHtml = legalCards.map(renderModuleCard).join("");
+    const financeHtml = financeCards.map(renderModuleCard).join("");
+    // Legal and Finance are single-card scopes, so render them side by side.
+    const sideSections = [];
+    if (legalHtml) sideSections.push({ title: "Legal", note: "Drafting, signing evidence &amp; secure archive", html: legalHtml });
+    if (financeHtml) sideSections.push({ title: "Finance", note: "Central Accounts &amp; financial reporting", html: financeHtml });
+    const sideCols = Math.max(Math.min(sideSections.length, 2), 1);
+    const sideSectionsHtml = sideSections.map((s) => `
+      <div class="cc-scope-col">
+        <div class="cc-section-head"><strong>${s.title}</strong><span>${s.note}</span></div>
+        <div class="cc-scope-grid">${s.html}</div>
+      </div>`).join("");
     const futureModulesHtml = futureBusinessCards.map(renderComingPill).join("");
     const adminHtml = adminCards.map(renderAdminCard).join("");
     const quickActionsHtml = quickActions.map((item) => `<a class="pm-pill" href="${item.href}">${item.title}</a>`).join("");
@@ -204,6 +228,9 @@ async function init() {
 
         /* ---------- Active business modules ---------- */
         .cc-modules-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.95rem;}
+        .cc-scope-row{display:grid;gap:1rem;align-items:start;margin-top:.15rem;}
+        .cc-scope-grid{display:grid;grid-template-columns:1fr;gap:.85rem;margin-top:.55rem;}
+        @media (max-width: 820px){.cc-scope-row{grid-template-columns:1fr !important;}}
         .cc-module-card{display:flex;flex-direction:column;gap:.55rem;min-height:148px;max-height:176px;padding:1.15rem 1.25rem;text-decoration:none;color:inherit;border-radius:18px;min-width:0;}
         .cc-module-top{display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:nowrap;}
         .cc-module-card h4{margin:0;font-size:1.08rem;line-height:1.3;}
@@ -270,7 +297,7 @@ async function init() {
             </div>
             <div class="cc-kpis">
               <div class="cc-kpi"><label>Active Modules</label><strong>${activeModuleCount}</strong></div>
-              <div class="cc-kpi"><label>Pending Actions</label><strong>${pendingActions}</strong></div>
+              <div class="cc-kpi cc-kpi--action" id="ccPendingKpi" role="button" tabindex="0" title="View pending actions"><label>Pending Actions</label><strong id="ccPendingCount">${pendingActions}</strong></div>
               <div class="cc-kpi"><label>System Health</label><strong><span class="pm-dot pm-dot--active"></span>Healthy</strong></div>
             </div>
             <div class="cc-user">
@@ -300,6 +327,16 @@ async function init() {
           ${futureModulesHtml ? `<div class="cc-coming-grid">${futureModulesHtml}</div>` : ""}
         </div>
 
+        ${sideSectionsHtml ? `<div class="cc-scope-row" style="grid-template-columns:repeat(${sideCols},minmax(0,1fr));">${sideSectionsHtml}</div>` : ""}
+
+        ${communicationsHtml ? `
+        <div class="cc-section-head">
+          <strong>Communications</strong>
+          <span>Email, WhatsApp, and Meetings</span>
+        </div>
+        <div class="cc-modules-grid">${communicationsHtml}</div>
+        ` : ""}
+
         <div class="cc-section-head">
           <strong>Administration</strong>
           <span>Access, structure, and governance</span>
@@ -307,12 +344,21 @@ async function init() {
         <div class="cc-admin-grid">${adminHtml || '<div class="empty-state">No administration access.</div>'}</div>
 
         <div class="cc-panels">
-          ${renderPanel("Finance", "Financial cockpit and reporting", financeCards.map(renderPanelRow).join(""), "No finance workspace access.")}
           ${renderPanel("System Configuration", "Global references only. Business entities live inside their owning modules.", configCards.map(renderPanelRow).join(""), "No global configuration access.")}
           ${renderPanel("Developer / System", "Diagnostics, queues, and integrations", developerCards.map(renderPanelRow).join(""), "No developer/system tools available.")}
         </div>
       </div>
     `);
+
+    // Live "Pending Actions" — real counts + a clickable modal listing what's pending.
+    loadPendingActions().then((items) => {
+      const countEl = document.querySelector("#ccPendingCount");
+      if (countEl) countEl.textContent = String(items.length);
+      const kpi = document.querySelector("#ccPendingKpi");
+      const open = () => openPendingActionsModal(items);
+      kpi?.addEventListener("click", open);
+      kpi?.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    }).catch(() => {});
   }, 250);
 }
 

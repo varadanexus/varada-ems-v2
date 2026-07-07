@@ -1,0 +1,7 @@
+.claude/settings.json
+exports/recovery-untracked-before-cleanup.txt
+new-ems/modules/central-accounts-reporting/index.html
+new-ems/modules/interiors-project-closure/index.html
+new-ems/shared/page-central-accounts-reporting.js
+new-ems/shared/page-interiors-project-closure.js
+new-ems/supabase/migrations/20260629100000_sprint10d_interiors_leads_and_project_closure.sql

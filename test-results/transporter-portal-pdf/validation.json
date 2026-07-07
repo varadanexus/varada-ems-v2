@@ -1,0 +1,53 @@
+{
+  "console": [
+    {
+      "type": "log",
+      "text": "Live reload enabled."
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_SCRIPT_LOADED]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_INIT_START]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_ROOT_FOUND]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_RENDER_DONE]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_ROOT_FOUND]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_RENDER_DONE]"
+    },
+    {
+      "type": "warning",
+      "text": "Of the table content, 10 units width could not fit page"
+    }
+  ],
+  "popupPagesBefore": 1,
+  "popupPagesAfter": 1,
+  "downloaded": {
+    "suggestedFilename": "VARADA_STATEMENT_TS_VALIDATION_0001.pdf",
+    "path": "D:\\Varada EMS 2.0\\test-results\\transporter-portal-pdf\\VARADA_STATEMENT_TS_VALIDATION_0001.pdf",
+    "exists": true,
+    "size": 14478919
+  },
+  "pageUrl": "http://127.0.0.1:5500/new-ems/modules/transport-transporter-app/index.html",
+  "pass": false,
+  "statementButtons": 0,
+  "downloadSource": "portal-helper-fallback",
+  "pdfContentChecks": {
+    "hasPenaltiesLabel": true,
+    "hasPenaltyReasonLabel": true,
+    "hasPenaltyReasonValue": false
+  }
+}

@@ -1,9 +1,9 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { listCentralPayables } from "./admin-api.js";
+import { approvePurchaseBill, getVendorAccountingDataset, listCentralPayables, postPurchaseBill, saveAccountingVendor, savePurchaseBill, saveVendorAdvance } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
 
-const PAGE_STATE = { rows: [] };
+const PAGE_STATE = { rows: [], vendorData: null, canEdit: false, canApprove: false, canPost: false };
 
 async function init() {
   const boot = await bootstrapProtectedPage({
@@ -13,6 +13,12 @@ async function init() {
     workspace: WORKSPACES.ACCOUNTS
   });
   if (!boot) return;
+  const ps=new Set((boot.permissions||[]).map(p=>`${p.module_code}:${p.action_code}`));
+  const admin = boot.roleCodes?.some(r=>["super_admin","admin"].includes(r));
+  PAGE_STATE.canEdit=admin||ps.has(`${MODULES.CENTRAL_ACCOUNTS_PAYABLES}:edit`)||ps.has(`${MODULES.CENTRAL_ACCOUNTS_PAYABLES}:create`);
+  PAGE_STATE.canApprove=admin||ps.has(`${MODULES.CENTRAL_ACCOUNTS_PAYABLES}:approve`);
+  PAGE_STATE.canPost=admin||ps.has(`${MODULES.CENTRAL_ACCOUNTS_PAYABLES}:post`);
+  if(PAGE_STATE.canEdit || PAGE_STATE.canApprove || PAGE_STATE.canPost) PAGE_STATE.vendorData=await getVendorAccountingDataset();
 
   renderModuleContent(renderShell());
   bindEvents();
@@ -20,7 +26,18 @@ async function init() {
 }
 
 function renderShell() {
+  const d=PAGE_STATE.vendorData;
   return `
+    ${PAGE_STATE.canEdit?`<section class="card" style="margin-bottom:1rem"><h3>Vendor Accounting</h3><div class="form-row"><form id="vendorForm" class="form-row"><input data-v="vendor_code" placeholder="Vendor Code" required><input data-v="legal_name" placeholder="Legal Name" required><input data-v="gstin" placeholder="GSTIN"><input data-v="pan" placeholder="PAN"><select data-v="payable_account_id"><option value="">Payable Account</option>${accountOptions(d?.accounts)}</select><button class="btn">Add Vendor</button></form></div><hr><form id="purchaseBillForm" class="form-row"><select data-b="vendor_id" required><option value="">Vendor</option>${(d?.vendors||[]).map(v=>`<option value="${v.id}">${escapeHtml(v.vendor_code)} - ${escapeHtml(v.legal_name)}</option>`).join("")}</select><select data-b="division_id"><option value="">Company</option>${(d?.divisions||[]).map(x=>`<option value="${x.id}">${escapeHtml(x.name)}</option>`).join("")}</select><input data-b="bill_no" placeholder="Bill No" required><input data-b="bill_date" type="date" required><input data-b="due_date" type="date"><select data-b="expense_account_id" required><option value="">Expense Account</option>${accountOptions(d?.accounts)}</select><select data-b="input_tax_account_id"><option value="">Input Tax Account</option>${accountOptions(d?.accounts)}</select><select data-b="payable_account_id" required><option value="">Payable Account</option>${accountOptions(d?.accounts)}</select><select data-b="tds_payable_account_id"><option value="">TDS Payable Account</option>${accountOptions(d?.accounts)}</select><input data-b="taxable_amount" type="number" placeholder="Taxable"><input data-b="cgst_amount" type="number" placeholder="CGST"><input data-b="sgst_amount" type="number" placeholder="SGST"><input data-b="igst_amount" type="number" placeholder="IGST"><input data-b="tds_amount" type="number" placeholder="TDS"><input data-b="total_amount" type="number" placeholder="Total" required><button class="btn">Add Purchase Bill</button></form><hr><form id="advanceForm" class="form-row"><select data-a="vendor_id" required><option value="">Vendor Advance</option>${(d?.vendors||[]).map(v=>`<option value="${v.id}">${escapeHtml(v.legal_name)}</option>`).join("")}</select><input data-a="advance_date" type="date" required><input data-a="amount" type="number" placeholder="Amount" required><input data-a="reference_no" placeholder="Reference"><button class="btn">Record Advance</button></form></section>`:""}
+    <section class="card" style="margin-bottom:1rem;">
+      <h3>Purchase Bills</h3>
+      <div class="table-shell">
+        <table>
+          <thead><tr><th>Bill</th><th>Vendor</th><th>Date</th><th>Total</th><th>Status</th><th>Voucher</th><th>Action</th></tr></thead>
+          <tbody>${renderPurchaseBillRows()}</tbody>
+        </table>
+      </div>
+    </section>
     <section class="card" style="margin-bottom:1rem;">
       <h3>Filters</h3>
       <div class="form-row">
@@ -50,6 +67,21 @@ function renderShell() {
 
 function bindEvents() {
   qs("#caPayApply")?.addEventListener("click", loadPayables);
+  qs("#vendorForm")?.addEventListener("submit",saveVendor);
+  qs("#purchaseBillForm")?.addEventListener("submit",saveBill);
+  qs("#advanceForm")?.addEventListener("submit",saveAdvance);
+  document.querySelectorAll("[data-approve-bill]").forEach((button)=>button.addEventListener("click",async()=>{await approvePurchaseBill(button.dataset.approveBill);showToast("Purchase bill approved","success");location.reload();}));
+  document.querySelectorAll("[data-post-bill]").forEach((button)=>button.addEventListener("click",async()=>{await postPurchaseBill(button.dataset.postBill);showToast("Purchase bill posted to voucher and journal","success");location.reload();}));
+}
+const collect=(form,key)=>{const p={};form.querySelectorAll(`[data-${key}]`).forEach(x=>p[x.dataset[key]]=x.value||null);return p};
+async function saveVendor(e){e.preventDefault();await saveAccountingVendor(collect(e.target,"v"));showToast("Vendor added","success");location.reload()}
+async function saveBill(e){e.preventDefault();const p=collect(e.target,"b");["taxable_amount","cgst_amount","sgst_amount","igst_amount","tds_amount","total_amount"].forEach(k=>p[k]=Number(p[k]||0));if(!p.tds_payable_account_id)delete p.tds_payable_account_id;await savePurchaseBill(p);showToast("Purchase bill added","success");location.reload()}
+async function saveAdvance(e){e.preventDefault();const p=collect(e.target,"a");p.amount=Number(p.amount||0);await saveVendorAdvance(p);showToast("Vendor advance recorded","success");location.reload()}
+function accountOptions(a=[]){return a.map(x=>`<option value="${x.id}">${escapeHtml(x.code)} - ${escapeHtml(x.name)}</option>`).join("")}
+function renderPurchaseBillRows(){
+  const rows=PAGE_STATE.vendorData?.bills||[];
+  if(!rows.length)return `<tr><td colspan="7">No purchase bills recorded.</td></tr>`;
+  return rows.map((b)=>`<tr><td>${escapeHtml(b.bill_no)}</td><td>${escapeHtml(b.accounting_vendors?.legal_name||"-")}</td><td>${escapeHtml(b.bill_date)}</td><td>₹${Number(b.total_amount||0).toFixed(2)}</td><td><span class="meta-pill">${escapeHtml(b.status)}</span></td><td>${escapeHtml(b.accounting_vouchers?.voucher_no||"-")}</td><td>${PAGE_STATE.canApprove&&["draft","submitted"].includes(b.status)?`<button class="btn btn-sm" data-approve-bill="${b.id}">Approve</button>`:""} ${PAGE_STATE.canPost&&b.status==="approved"?`<button class="btn btn-sm" data-post-bill="${b.id}">Post</button>`:""}</td></tr>`).join("");
 }
 
 async function loadPayables() {

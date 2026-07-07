@@ -1,8 +1,10 @@
 import { APP_NAME, ROUTES, TOAST_TYPES } from "../config/constants.js";
-import { getSession, logout, requireAuth, resolveAvailablePortals, validateActiveUnlockedUser } from "./auth.js";
+import { getStoredInteriorsPortalSession, interiorsPortalLogout, listMyInteriorsAccess, requireInteriorsPortalSession } from "./interiors-portal-auth.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
+import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
 
 console.log("CLIENT_APP_BOOT");
 
@@ -81,7 +83,7 @@ function renderShell({ title = "Interiors Client Portal", message = "Loading you
     <div id="toastHost" class="toast-host" aria-live="polite"></div>
   `;
   qs("#themeToggle")?.addEventListener("click", () => toggleTheme());
-  qs("#logoutBtn")?.addEventListener("click", async () => logout());
+  qs("#logoutBtn")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN)));
   app.classList.add("page-enter-active");
 }
 
@@ -817,17 +819,7 @@ function renderApprovalsSection() {
       <article class="client-surface">
         <div class="client-surface-head"><h3>Comments &amp; Revision History</h3></div>
         <div class="client-list compact" style="margin-top:.75rem;max-height:260px;overflow:auto;">${PAGE_STATE.approvals.filter((row) => row.remarks).slice(0, 12).map((row) => `<div class="client-list-item"><strong>${escapeHtml(normalizeStatus(row.approval_type, "Note"))}</strong><div class="muted">${escapeHtml(row.remarks)}</div><div class="muted" style="margin-top:.3rem;font-size:.78rem;">${escapeHtml(formatDateTime(row.decided_at || row.created_at))}</div></div>`).join("") || `<div class="empty-state">No comments yet.</div>`}</div>
-        <div class="client-surface-head" style="margin-top:1.1rem;"><h3>Raise a Revision Request</h3></div>
-        <form id="revisionRequestForm" style="margin-top:.6rem;display:grid;gap:.6rem;">
-          <select name="approval_type" required>
-            <option value="design">Design Revision</option>
-            <option value="quote">Quote / Billing Query</option>
-            <option value="change">Scope or Schedule Change</option>
-            <option value="completion">Completion / Handover Note</option>
-          </select>
-          <textarea class="client-textarea" name="remarks" rows="4" placeholder="Describe the revision or feedback you'd like the project team to address." required></textarea>
-          <button class="btn btn-sm" type="submit">Submit Revision Request</button>
-        </form>
+        <p class="muted" style="margin-top:1rem;">Portal users can approve, reject, or request revision only on an existing pending approval when approval access has been granted.</p>
       </article>
     </section>
   `;
@@ -1434,13 +1426,6 @@ function bindClientAppEvents(app) {
     render();
   });
 
-  qs("#revisionRequestForm")?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const form = event.target;
-    const formData = new FormData(form);
-    submitRevisionRequest(formData.get("approval_type"), formData.get("remarks"));
-  });
-
   qs("#supportRequestForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const form = event.target;
@@ -1504,16 +1489,15 @@ function bindClientAppEvents(app) {
   app.querySelectorAll("[data-pdf-action]").forEach((button) => button.addEventListener("click", () => handlePdfAction(button.dataset.pdfAction, button.dataset.pdfId)));
 
   qs("#themeToggle")?.addEventListener("click", () => toggleTheme());
-  qs("#logoutBtn")?.addEventListener("click", async () => logout());
-  qs("#logoutBtnSidebar")?.addEventListener("click", async () => logout());
+  qs("#logoutBtn")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN)));
+  qs("#logoutBtnSidebar")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN)));
   qs("#markNotificationsReadBtn")?.addEventListener("click", () => { markNotificationsSeenNow(); render(); });
   qs("#switchPortalBtn")?.addEventListener("click", async () => {
-    const portals = await resolveAvailablePortals();
-    if (portals.length > 1) {
-      window.location.assign(ROUTES.PORTAL_SELECTOR);
-      return;
+    const current = getStoredInteriorsPortalSession();
+    if (current?.sessionToken) {
+      await interiorsPortalLogout();
     }
-    showToast("No alternate portal is available for this account.", TOAST_TYPES.INFO);
+    window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN);
   });
 }
 
@@ -1535,35 +1519,6 @@ async function updateApprovalDecision(approvalId, decision) {
   }
 }
 
-async function submitRevisionRequest(approvalType, remarks) {
-  const project = activeProject();
-  if (!project) {
-    showToast("Select a project before submitting a revision request.", TOAST_TYPES.ERROR);
-    return;
-  }
-  if (!String(remarks || "").trim()) {
-    showToast("Please describe the revision request before submitting.", TOAST_TYPES.ERROR);
-    return;
-  }
-  try {
-    const { error } = await getClient()
-      .from("interior_client_approvals")
-      .insert({
-        interior_project_id: project.id,
-        portal_user_id: PAGE_STATE.portalUser?.id || null,
-        approval_type: approvalType || "change",
-        decision: "pending",
-        remarks: String(remarks).trim()
-      });
-    if (error) throw error;
-    showToast("Revision request submitted.", TOAST_TYPES.SUCCESS);
-    await loadData();
-    render();
-  } catch (error) {
-    showToast(error?.message || "Failed to submit revision request.", TOAST_TYPES.ERROR);
-  }
-}
-
 function submitSupportRequest(category, subject, message) {
   if (!String(subject || "").trim() || !String(message || "").trim()) {
     showToast("Please provide a subject and message.", TOAST_TYPES.ERROR);
@@ -1582,31 +1537,16 @@ function submitSupportRequest(category, subject, message) {
   showToast("Opening your email client to send the request.", TOAST_TYPES.INFO);
 }
 
-async function getClientSafeAppUser() {
-  const client = getClient();
-  const session = await getSession();
-  const authUserId = session?.user?.id || null;
-  if (!authUserId) return null;
-  const { data, error } = await client
-    .from("app_users")
-    .select("id,auth_user_id,email,display_name,status,is_locked")
-    .eq("auth_user_id", authUserId)
-    .maybeSingle();
-  if (error) throw error;
-  return data || null;
-}
-
 async function loadData() {
   const client = getClient();
-  PAGE_STATE.appUser = await getClientSafeAppUser();
-  if (!PAGE_STATE.appUser?.auth_user_id) {
-    throw new Error("Your client app user record is not available.");
-  }
+  const session = await requireInteriorsPortalSession();
+  if (!session?.portalUserId) return;
+  PAGE_STATE.appUser = null;
   const portalUserRes = await client
     .from("interior_client_portal_users")
     .select("*, interior_clients(id, client_name, client_code)")
-    .eq("auth_user_id", PAGE_STATE.appUser?.auth_user_id || "")
-    .eq("access_status", "active")
+    .eq("id", session.portalUserId)
+    .eq("portal_status", "active")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -1683,16 +1623,17 @@ async function init() {
   ensureImmediateBootShell();
   initTheme();
   renderShell({ title: "Interiors Client Portal", message: "Loading your client workspace..." });
-  const session = await requireAuth();
+  const session = await requireInteriorsPortalSession();
   if (!session) return;
-  await validateActiveUnlockedUser();
+  await enforceTermsAcceptance();
+  initLiveChat().catch(() => {});
   await loadData();
   if (!PAGE_STATE.portalUser?.id) {
     renderShell({ title: "No Portal Access", message: "No active client portal access is linked to this account.", tone: "warning", content: "<strong>No active client portal access is linked to this account.</strong><br/><span class='muted'>Please contact your administrator to activate your portal user and assign at least one project.</span>" });
     return;
   }
   if (!PAGE_STATE.access.length) {
-    renderShell({ title: "No Projects Assigned", message: "Your portal account is active, but no projects are assigned yet.", tone: "warning", content: "<strong>No projects are assigned to your client portal yet.</strong><br/><span class='muted'>Please ask your administrator to grant project access from Portal Management.</span>" });
+    renderShell({ title: "No Projects Assigned", message: "Your portal account is active, but no projects are assigned yet.", tone: "warning", content: "<strong>No projects are assigned to your client portal yet.</strong><br/><span class='muted'>Please ask your administrator to grant project access from Portal Access.</span>" });
     return;
   }
   if (!PAGE_STATE.projects.length) {

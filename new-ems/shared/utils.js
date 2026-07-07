@@ -9,7 +9,7 @@ export function qsa(selector, root = document) {
 }
 
 export function showToast(message, type = TOAST_TYPES.INFO) {
-  const host = qs("#toastHost");
+  const host = getToastHost();
   if (!host) return;
 
   const item = document.createElement("div");
@@ -21,6 +21,18 @@ export function showToast(message, type = TOAST_TYPES.INFO) {
     item.classList.add("toast-hide");
     window.setTimeout(() => item.remove(), 200);
   }, 2400);
+}
+
+function getToastHost() {
+  let host = document.body?.querySelector?.('[data-global-toast-host="true"]');
+  if (host) return host;
+  if (!document.body) return null;
+  host = document.createElement("div");
+  host.className = "toast-host";
+  host.setAttribute("data-global-toast-host", "true");
+  host.setAttribute("aria-live", "polite");
+  document.body.appendChild(host);
+  return host;
 }
 
 export function setLoadingState(container, isLoading) {

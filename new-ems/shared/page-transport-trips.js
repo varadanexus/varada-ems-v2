@@ -3,6 +3,8 @@ import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, fi
 import { logAuditEvent } from "./audit.js";
 import { getCurrentAppUser } from "./auth.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { dispatchNotification } from "./notification-api.js";
+import { notifyTransportTripCreated } from "./transport-integrations-api.js";
 import { qs, showToast } from "./utils.js";
 
 async function init() {
@@ -10,9 +12,14 @@ async function init() {
   const boot = await bootstrapProtectedPage({ moduleCode: MODULES.TRANSPORT_TRIPS, pageTitle: "Trips", pageDescription: "Create, track, and update transportation trips", workspace: WORKSPACES.TRANSPORTATION });
   if (!boot) return;
   const fixedDivisionId = boot.divisionId || null;
+  const permissionSet = new Set((boot.permissions || []).map((p) => `${p.module_code}:${p.action_code}`));
+  const isPrivileged = boot.roleCodes?.some((role) => role === "super_admin" || role === "admin");
+  const canCreate = isPrivileged || permissionSet.has(`${MODULES.TRANSPORT_TRIPS}:create`);
+  const canEdit = isPrivileged || permissionSet.has(`${MODULES.TRANSPORT_TRIPS}:edit`);
+  const canDelete = isPrivileged || permissionSet.has(`${MODULES.TRANSPORT_TRIPS}:delete`);
   let page = 1; const pageSize = 10; let rows = [];
 
-  renderModuleContent(`<details class="card pm-collapse"><summary>Create Trip</summary><form id="tripCreateForm" class="form-row" style="margin-top:.85rem;"></form><div id="tripCreateMeta" class="muted" style="margin-top:.5rem;"></div></details>
+  renderModuleContent(`${canCreate ? `<details class="card pm-collapse"><summary>Create Trip</summary><form id="tripCreateForm" class="form-row" style="margin-top:.85rem;"></form><div id="tripCreateMeta" class="muted" style="margin-top:.5rem;"></div></details>` : ""}
   <section class="card" style="margin-top:1rem;"><h3>Trip List</h3><input id="tripSearch" placeholder="Search trip no/notes"/><select id="tripStatus"><option value="">All Status</option>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}">${s}</option>`).join("")}</select><div class="table-shell" style="margin-top:.75rem;"><table><thead><tr><th>Trip No</th><th>Date</th><th>Status</th><th>Qty</th><th>Actions</th></tr></thead><tbody id="tripBody"></tbody></table></div><div style="margin-top:.75rem;display:flex;gap:.5rem;"><button class="btn" id="tripPrev">Prev</button><span id="tripMeta"></span><button class="btn" id="tripNext">Next</button></div></section>
   <div id="tripDetailsModal" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,.62);backdrop-filter:blur(4px);z-index:70;align-items:center;justify-content:center;">
     <div class="card" style="width:min(1000px,95vw);max-height:90vh;overflow:auto;">
@@ -33,7 +40,7 @@ async function init() {
 
   const form = qs("#tripCreateForm");
   let pendingCreateDocs = [];
-  form.innerHTML = `
+  if (form) form.innerHTML = `
     <div class="meta-pill">Workspace: Transportation</div>
     <input type="hidden" data-f="division_id" value="${fixedDivisionId || ""}" />
     <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 1: Movement</h4>
@@ -91,7 +98,7 @@ async function init() {
       renderCreateDocRows();
     }));
   }
-  renderCreateDocRows();
+  if (form) renderCreateDocRows();
 
   const map = [["transport_client_id","transport_clients",fixedDivisionId],["transport_transporter_id","transport_transporters",fixedDivisionId],["truck_id","transport_trucks",fixedDivisionId],["driver_id","transport_drivers",fixedDivisionId],["route_id","transport_route_master",fixedDivisionId],["transport_commodity_id","transport_commodities",fixedDivisionId]];
   let allRouteOpts = [];
@@ -160,7 +167,7 @@ async function init() {
     }
   }
 
-  form.addEventListener("submit", async (e) => {
+  form?.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (form.dataset.busy === "1") return;
     const payload = { status: "draft", is_active: true };
@@ -193,9 +200,40 @@ async function init() {
       }
       await addTripTimeline({ trip_id: created.id, status: "draft", remarks: "Trip created", changed_by: appUser?.id || null });
       await logAuditEvent("trip_create", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trips", entityId: created.id, afterData: created, action: "create" });
+      try {
+        await dispatchNotification({
+          moduleCode: MODULES.TRANSPORT_TRIPS,
+          eventCode: "trip_created",
+          category: "operations",
+          title: `Trip created: ${created.trip_no || "New Trip"}`,
+          message: `A transportation trip was created for ${payload.trip_date || "the selected date"} with quantity ${payload.quantity_kg || 0} KG.`,
+          severity: "success",
+          actionLabel: "Open Trips",
+          actionUrl: "/new-ems/modules/transport-trips/index.html",
+          entityType: "transport_trips",
+          entityId: String(created.id || ""),
+          targetMode: "smart",
+          targetRoleCodes: ["super_admin", "admin", "manager", "accounts", "accounts_manager"],
+          context: {
+            trip_no: created.trip_no || null,
+            division_id: fixedDivisionId,
+            quantity_kg: payload.quantity_kg || null
+          }
+        });
+      } catch {}
       const meta = qs("#tripCreateMeta");
       if (meta) meta.textContent = `Generated Trip No: ${created.trip_no || "(pending)"}`;
       showToast(`Trip created: ${created.trip_no}`, TOAST_TYPES.SUCCESS);
+      try {
+        const notification = await notifyTransportTripCreated(created.id);
+        if (notification?.whatsapp?.sent) {
+          showToast("Trip WhatsApp sent to transporter.", TOAST_TYPES.INFO);
+        } else if (notification?.whatsapp?.reason) {
+          showToast(`Trip WhatsApp skipped: ${notification.whatsapp.reason}`, TOAST_TYPES.WARNING);
+        }
+      } catch (notifyError) {
+        showToast(`Trip created, but WhatsApp failed: ${notifyError?.message || "Unknown error"}`, TOAST_TYPES.WARNING);
+      }
       form.reset();
       pendingCreateDocs = [];
       renderCreateDocRows();
@@ -561,7 +599,7 @@ async function init() {
     qs("#tripMeta").textContent = `Page ${page}/${Math.max(1, Math.ceil((out.count || 0) / pageSize))}`;
     const body = qs("#tripBody");
     if (!rows.length) { body.innerHTML = `<tr><td colspan="5">No trips found</td></tr>`; return; }
-    body.innerHTML = rows.map((r)=>`<tr><td>${r.trip_no}</td><td>${r.trip_date || ""}</td><td><select data-s="${r.id}">${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}" ${r.status===s?"selected":""}>${s}</option>`).join("")}</select></td><td>${(r.quantity_kg ?? "")} KG (${Number(r.quantity_mt || 0).toFixed(2)} MT)</td><td><button class="btn" data-e="${r.id}">Edit</button> <button class="btn" data-v="${r.id}">Details</button> <button class="btn btn-danger" data-d="${r.id}">Delete</button></td></tr>`).join("");
+    body.innerHTML = rows.map((r)=>`<tr><td>${r.trip_no}</td><td>${r.trip_date || ""}</td><td><select data-s="${r.id}" ${canEdit ? "" : "disabled"}>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}" ${r.status===s?"selected":""}>${s}</option>`).join("")}</select></td><td>${(r.quantity_kg ?? "")} KG (${Number(r.quantity_mt || 0).toFixed(2)} MT)</td><td>${canEdit ? `<button class="btn" data-e="${r.id}">Edit</button>` : ""} <button class="btn" data-v="${r.id}">Details</button> ${canDelete ? `<button class="btn btn-danger" data-d="${r.id}">Delete</button>` : ""}</td></tr>`).join("");
     body.querySelectorAll("button[data-v]").forEach((b)=>b.addEventListener("click", ()=>openDetails(b.getAttribute("data-v"))));
     body.querySelectorAll("button[data-e]").forEach((b)=>b.addEventListener("click", ()=>{
       const id = b.getAttribute("data-e");
@@ -616,8 +654,10 @@ async function init() {
 
   qs("#tripSearch")?.addEventListener("input", async ()=>{ page = 1; await load(); });
   qs("#tripStatus")?.addEventListener("change", async ()=>{ page = 1; await load(); });
-  const cSrc = document.createElement("input"); cSrc.type = "hidden"; cSrc.setAttribute("data-f", "client_rate_source"); cSrc.value = "MANUAL_OVERRIDE"; form.appendChild(cSrc);
-  const tSrc = document.createElement("input"); tSrc.type = "hidden"; tSrc.setAttribute("data-f", "transporter_rate_source"); tSrc.value = "MANUAL_OVERRIDE"; form.appendChild(tSrc);
+  if (form) {
+    const cSrc = document.createElement("input"); cSrc.type = "hidden"; cSrc.setAttribute("data-f", "client_rate_source"); cSrc.value = "MANUAL_OVERRIDE"; form.appendChild(cSrc);
+    const tSrc = document.createElement("input"); tSrc.type = "hidden"; tSrc.setAttribute("data-f", "transporter_rate_source"); tSrc.value = "MANUAL_OVERRIDE"; form.appendChild(tSrc);
+  }
   const setCreateRateStatus = (text, kind = "info") => {
     const host = qs("#tripCreateRateStatus"); if (!host) return; host.textContent = text;
     if (kind === "success") { host.style.background = "#dcfce7"; host.style.color = "#166534"; }
