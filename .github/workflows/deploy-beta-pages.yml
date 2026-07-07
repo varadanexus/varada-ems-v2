@@ -29,21 +29,10 @@ jobs:
         shell: bash
         run: |
           rm -rf .pages-dist
-          mkdir -p .pages-dist/new-ems
+          mkdir -p .pages-dist
+          cp -R public-site/. .pages-dist/
           cp -R new-ems/. .pages-dist/new-ems/
-          cat <<'EOF' > .pages-dist/index.html
-          <!doctype html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-            <title>Varada EMS Beta</title>
-            <meta http-equiv="refresh" content="0; url=/new-ems/index.html" />
-            <script>window.location.replace('/new-ems/index.html');</script>
-          </head>
-          <body></body>
-          </html>
-          EOF
+          cp CNAME .pages-dist/CNAME
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
