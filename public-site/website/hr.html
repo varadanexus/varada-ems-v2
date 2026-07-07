@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HR & PR – Varada Nexus</title>
+<base href="/">
+
+<link rel="icon" type="image/png" sizes="32x32" href="/images/logo.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/images/logo.png">
+  
+<style>
+
+/* ===== BASE ===== */
+body{
+margin:0;
+font-family:'Inter',sans-serif;
+background:linear-gradient(-45deg,#020617,#0f172a,#1e3a8a,#020617);
+background-size:400% 400%;
+animation:gradientBG 14s ease infinite;
+color:white;
+overflow-x:hidden;
+}
+
+@keyframes gradientBG{
+0%{background-position:0% 50%}
+50%{background-position:100% 50%}
+100%{background-position:0% 50%}
+}
+
+/* ===== NAVBAR ===== */
+header{
+position:sticky;
+top:0;
+background:rgba(0,0,0,0.4);
+backdrop-filter:blur(14px);
+border-bottom:1px solid rgba(255,255,255,0.08);
+}
+
+.nav-container{
+max-width:1200px;
+margin:auto;
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:14px 20px;
+}
+
+.nav-left{
+display:flex;
+align-items:center;
+gap:14px;
+}
+
+.logo{height:40px;}
+
+.brand-name{font-size:18px;font-weight:600;}
+.brand-sub{font-size:10px;color:#94a3b8;}
+
+.nav-links{
+display:flex;
+gap:26px;
+}
+
+.nav-links a{
+color:#cbd5f5;
+text-decoration:none;
+font-size:14px;
+}
+
+.nav-links a:hover{color:white;}
+
+/* ===== HERO ===== */
+.hero{
+max-width:1200px;
+margin:auto;
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:140px 20px 100px;
+gap:60px;
+}
+
+.hero-left{max-width:600px;}
+
+.hero h1{
+font-size:48px;
+line-height:1.1;
+}
+
+.hero p{
+margin-top:18px;
+color:#cbd5f5;
+}
+
+.hero-right{
+width:320px;
+}
+
+/* GLASS PANEL */
+.panel{
+background:rgba(255,255,255,0.05);
+border-radius:20px;
+padding:26px;
+border:1px solid rgba(255,255,255,0.08);
+backdrop-filter:blur(18px);
+}
+
+/* ===== SECTION ===== */
+.section{
+max-width:1100px;
+margin:120px auto;
+padding:0 20px;
+}
+
+.section h2{
+font-size:32px;
+margin-bottom:14px;
+}
+
+.section p{
+color:#cbd5f5;
+max-width:780px;
+}
+
+/* GRID */
+.grid{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:24px;
+margin-top:40px;
+}
+
+.card{
+padding:26px;
+background:rgba(255,255,255,0.04);
+border-radius:14px;
+border:1px solid rgba(255,255,255,0.08);
+transition:0.3s;
+}
+
+.card:hover{
+transform:translateY(-8px);
+}
+
+/* STACK */
+.stack{
+margin-top:30px;
+display:flex;
+flex-direction:column;
+gap:16px;
+}
+
+.panel-line{
+background:rgba(255,255,255,0.04);
+padding:18px;
+border-radius:12px;
+}
+
+/* PROCESS */
+.process{
+max-width:900px;
+margin:120px auto;
+padding:0 20px;
+}
+
+.step{
+display:flex;
+gap:18px;
+margin-bottom:30px;
+}
+
+.dot{
+width:8px;
+height:8px;
+background:#3b82f6;
+border-radius:50%;
+margin-top:8px;
+}
+
+/* CTA */
+.cta{
+text-align:center;
+padding:120px 20px;
+}
+
+.btn{
+padding:14px 30px;
+border-radius:999px;
+background:#fff;
+color:#000;
+text-decoration:none;
+display:inline-block;
+margin-top:20px;
+}
+
+/* MOBILE */
+@media(max-width:900px){
+.hero{flex-direction:column;text-align:center;}
+.grid{grid-template-columns:1fr;}
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- NAVBAR -->
+<header>
+<div class="nav-container">
+
+<div class="nav-left">
+<img src="/images/logo.png" class="logo">
+<div>
+<div class="brand-name">Varada Nexus</div>
+<div class="brand-sub">Private Limited</div>
+</div>
+</div>
+
+<nav class="nav-links">
+<nav class="nav-links">
+<a href="/index.html">Home</a>
+<a href="/website/founder.html">Founder</a>
+<a href="/website/services.html">Services</a>
+<a href="/website/team.html">Team</a>
+<a href="/website/contact.html">Contact</a>
+<a href="/website/login.html">Login</a>
+<a href="/portals/meeting/meeting-login.html">Join Meeting</a> 
+</nav>
+</nav>
+
+</div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+
+<div class="hero-left">
+<h1>HR & PR Solutions</h1>
+<p>
+Talent acquisition, workforce management, and brand positioning —
+built for healthcare institutions and enterprise operations.
+</p>
+<a href="/website/contact.html" class="btn">Request Consultation</a>
+</div>
+
+<div class="hero-right">
+<div class="panel">
+<h3>People + Brand Systems</h3>
+<p>Recruitment • Management • Reputation</p>
+</div>
+</div>
+
+</section>
+
+<!-- OVERVIEW -->
+<section class="section">
+<h2>Overview</h2>
+<p>
+We provide integrated HR and PR solutions that ensure hospitals and organizations
+have the right people, structured workflows, and strong brand positioning.
+</p>
+</section>
+
+<!-- CAPABILITIES -->
+<section class="section">
+<h2>HR & PR Capabilities</h2>
+
+<div class="grid">
+
+<div class="card">
+<h3>Recruitment & Staffing</h3>
+<p>Doctors, nurses, technicians, and administrative teams.</p>
+</div>
+
+<div class="card">
+<h3>Workforce Management</h3>
+<p>Structured staffing systems and operational efficiency.</p>
+</div>
+
+<div class="card">
+<h3>Employer Branding</h3>
+<p>Positioning hospitals as attractive workplaces.</p>
+</div>
+
+<div class="card">
+<h3>Media & PR Strategy</h3>
+<p>Brand communication, outreach, and public visibility.</p>
+</div>
+
+<div class="card">
+<h3>Hospital HR Systems</h3>
+<p>Policies, compliance, and structured HR frameworks.</p>
+</div>
+
+<div class="card">
+<h3>Talent Retention</h3>
+<p>Systems to ensure long-term workforce stability.</p>
+</div>
+
+</div>
+</section>
+
+<!-- HEALTHCARE FOCUS -->
+<section class="section">
+<h2>Healthcare-Focused HR</h2>
+<p>
+Our HR solutions are designed specifically for healthcare institutions —
+ensuring compliance with medical regulations while maintaining operational efficiency.
+</p>
+
+<div class="stack">
+
+<div class="panel-line">
+<strong>Clinical Workforce Setup</strong><br>
+Doctors, specialists, and nursing staff aligned with hospital departments.
+</div>
+
+<div class="panel-line">
+<strong>Regulatory Compliance</strong><br>
+Staffing aligned with healthcare laws and medical board requirements.
+</div>
+
+<div class="panel-line">
+<strong>Operational Coordination</strong><br>
+Ensuring seamless coordination between departments and teams.
+</div>
+
+</div>
+
+</section>
+
+<!-- PROCESS -->
+<section class="process">
+<h2>Execution Process</h2>
+
+<div class="step">
+<div class="dot"></div>
+<div><h3>Assessment</h3><p>Understanding staffing and branding needs</p></div>
+</div>
+
+<div class="step">
+<div class="dot"></div>
+<div><h3>Planning</h3><p>Developing HR structure and PR strategy</p></div>
+</div>
+
+<div class="step">
+<div class="dot"></div>
+<div><h3>Implementation</h3><p>Recruitment, onboarding, and system setup</p></div>
+</div>
+
+<div class="step">
+<div class="dot"></div>
+<div><h3>Optimization</h3><p>Performance tracking and continuous improvement</p></div>
+</div>
+
+</section>
+
+<!-- CTA -->
+<section class="cta">
+<h2>Build a Strong Workforce & Brand</h2>
+<p>Partner with us for complete HR and PR solutions.</p>
+<a href="/website/contact.html" class="btn">Start Now</a>
+</section>
+
+</body>
+</html>

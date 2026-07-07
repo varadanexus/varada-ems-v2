@@ -1,78 +1,495 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Login | Varada Nexus</title>
-  <link rel="icon" type="image/png" href="/images/logo.png" />
-  <link rel="stylesheet" href="/assets/site.css" />
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Login - Varada Nexus</title>
+<base href="/">
+
+<link rel="icon" type="image/png" sizes="32x32" href="/images/logo.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/images/logo.png">
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/new-ems/config/runtime.js?v=beta-site-1"></script>
+
+<style>
+
+/* 🔥 ANIMATED BACKGROUND */
+body{
+margin:0;
+font-family:'Inter',sans-serif;
+height:100vh;
+background:linear-gradient(-45deg,#020617,#0f172a,#1e3a8a,#020617);
+background-size:400% 400%;
+animation:bg 12s ease infinite;
+color:white;
+}
+
+@keyframes bg{
+0%{background-position:0% 50%}
+50%{background-position:100% 50%}
+100%{background-position:0% 50%}
+}
+
+body::before{
+content:"";
+position:absolute;
+width:600px;
+height:600px;
+background:radial-gradient(circle, rgba(59,130,246,0.18), transparent 70%);
+top:0;
+left:50%;
+transform:translateX(-50%);
+filter:blur(120px);
+z-index:-1;
+}
+  
+/* HEADER */
+header{
+position:sticky;
+top:0;
+z-index:1000;
+background:rgba(10,15,30,0.55);
+backdrop-filter:blur(20px);
+border-bottom:1px solid rgba(255,255,255,0.08);
+}
+
+body{
+position:relative;
+overflow-x:hidden;
+}
+
+@keyframes headerFlow{
+0%{background-position:0%}
+100%{background-position:200%}
+}
+  
+
+
+/* LOGO */
+.logo{
+height:48px;
+width:auto;
+object-fit:contain;
+display:block;
+}
+  
+
+/* 🔥 NAV CONTAINER */
+.nav-container{
+max-width:1200px;
+margin:auto;
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:14px 20px;
+}
+
+.nav-left{
+display:flex;
+align-items:center;
+gap:14px;
+height:48px;
+}
+
+
+.nav-left{
+align-items:center;
+height:48px;
+}
+  
+.brand-block{
+display:flex;
+flex-direction:column;
+justify-content:center;
+white-space:nowrap;   /* 🔥 THIS FIXES LINE BREAK */
+}
+
+.logo:hover{
+filter:drop-shadow(0 0 10px rgba(255,215,150,0.6));
+transform:scale(1.05);
+}
+  
+.brand-name{
+font-size:19px;
+font-weight:600;
+}
+
+.brand-sub{
+font-size:10px;
+color:#94a3b8;
+margin-top:2px;
+}
+
+.nav-links{
+display:flex;
+gap:28px;
+}
+
+.nav-links a{
+color:#cbd5f5;
+text-decoration:none;
+font-size:14px;
+}
+
+.nav-links a:hover,
+.nav-links a.active{
+color:white;
+}
+
+
+/* 🔥 SUBTLE PREMIUM GLOW */
+@keyframes logoGlow{
+0%{
+filter: drop-shadow(0 0 4px rgba(255,215,150,0.15));
+transform:scale(1);
+}
+100%{
+filter: drop-shadow(0 0 14px rgba(255,215,150,0.35));
+transform:scale(1.02);
+}
+}
+/* MAIN */
+main{
+display:flex;
+justify-content:center;
+align-items:center;
+min-height:calc(100vh - 100px);
+padding:40px 20px;
+}
+
+/* 🔥 GLASS CARD */
+.login-card{
+background:rgba(15,23,42,0.75);
+backdrop-filter:blur(18px);
+border:1px solid rgba(255,255,255,0.08);
+padding:40px 32px;
+border-radius:16px;
+width:380px;
+box-shadow:0 20px 60px rgba(0,0,0,0.6);
+text-align:center;
+}
+
+/* 🔥 BRAND SECTION */
+.brand{
+margin-bottom:20px;
+}
+
+.brand img{
+height:60px;
+width:auto;
+object-fit:contain;
+display:block;
+margin:0 auto 12px auto;
+}
+
+.brand h2{
+margin:0;
+font-size:20px;
+}
+
+.brand p{
+font-size:13px;
+color:#cbd5f5;
+}
+
+header{
+position:sticky;
+top:0;
+z-index:1000;
+}
+  
+/* INPUTS FIXED */
+
+/* 🔥 UNIFORM FIELD SYSTEM */
+.field{
+position:relative;
+width:100%;
+height:44px;
+margin-bottom:15px;
+display:block;
+}
+
+.field input,
+.field select{
+box-sizing:border-box; 
+width:100%;
+height:100%;
+padding:0 12px;
+border-radius:8px;
+border:none;
+outline:none;
+background:rgba(255,255,255,0.12);
+color:white;
+font-size:14px;
+}
+
+/* FOCUS */
+.field input:focus,
+.field select:focus{
+outline:1px solid rgba(99,102,241,0.6);
+background:rgba(255,255,255,0.16);
+}
+
+/* PLACEHOLDER */
+.field input::placeholder{
+color:#94a3b8;
+}
+
+/* PASSWORD BUTTON */
+.show-password{
+position:absolute;
+right:12px;
+top:50%;
+transform:translateY(-50%);
+font-size:12px;
+color:#93c5fd;
+cursor:pointer;
+}
+  
+.login-card input:focus,
+.login-card select:focus{
+outline:1px solid rgba(99,102,241,0.6);
+background:rgba(255,255,255,0.16);
+}
+  
+/* PLACEHOLDER */
+.login-card input::placeholder{
+color:#94a3b8;
+}
+
+/* SELECT TEXT ALIGN */
+.login-card select{
+color:#e2e8f0;
+}
+
+
+/* BUTTON */
+.field button{
+width:100%;
+height:100%;
+border-radius:8px;
+background:linear-gradient(135deg,#3b82f6,#6366f1);
+color:#f1f5f9;
+font-weight:600;
+border:none;
+cursor:pointer;
+transition:0.3s;
+}
+
+.login-card button{
+width:100%;
+height:44px;
+box-sizing:border-box;   /* 🔥 SAME FIX */
+border-radius:8px;
+background:linear-gradient(135deg,#3b82f6,#6366f1);
+color:#f1f5f9;
+font-weight:600;
+border:none;
+cursor:pointer;
+transition:0.3s;
+}
+
+.field{
+max-width:100%;
+}
+  
+/* ERROR */
+.error{
+color:#f87171;
+margin-top:10px;
+}
+
+/* FOOTER */
+footer{
+text-align:center;
+padding:10px;
+font-size:13px;
+color:#cbd5f5;
+}
+
+@media (max-width:768px){
+
+.nav-container{
+flex-direction:column;
+gap:12px;
+}
+
+.nav-links{
+flex-wrap:wrap;
+justify-content:center;
+gap:14px;
+}
+
+.login-card{
+padding:30px 20px;
+}
+
+}
+
+header.shrink{
+padding:6px 20px !important;
+background:rgba(0,0,0,0.55);
+backdrop-filter:blur(18px);
+transition:0.3s;
+}
+  
+</style>
+
 </head>
+
 <body>
-  <div class="site-shell">
-    <header class="site-header">
-      <nav class="site-nav">
-        <a class="brand" href="/index.html">
-          <img src="/images/logo.png" alt="Varada Nexus logo" />
-          <div class="brand-copy">
-            <span class="brand-title">Varada Nexus</span>
-            <span class="brand-subtitle">Private Limited</span>
-          </div>
-        </a>
-        <div class="site-links">
-          <a data-nav href="/index.html">Home</a>
-          <a data-nav href="/website/services.html">Services</a>
-          <a data-nav href="/website/founder.html">Founder</a>
-          <a data-nav href="/website/team.html">Team</a>
-          <a data-nav href="/website/contact.html">Contact</a>
-          <a data-nav href="/website/login.html">Login</a>
+
+<header>
+
+<div class="nav-container">
+
+    <div class="nav-left">
+        <img src="/images/logo.png" class="logo">
+        <div class="brand-block">
+            <span class="brand-name">Varada Nexus</span>
+            <span class="brand-sub">Private Limited</span>
         </div>
-        <div class="site-actions">
-          <a class="btn" href="/new-ems/modules/meetings-guest/index.html">Join Meeting</a>
-          <a class="btn btn-primary" href="/new-ems/modules/login/index.html?type=ems">Open Beta EMS</a>
-        </div>
-      </nav>
-    </header>
+    </div>
 
-    <main class="page">
-      <section class="page-hero">
-        <span class="eyebrow">Access</span>
-        <h1>Choose the right entry into the new EMS.</h1>
-        <p>
-          This replaces the old website login handoff with branded entry points into the new unified login,
-          meetings, and external workflows.
-        </p>
-      </section>
+<nav class="nav-links">
+<a href="/index.html">Home</a>
+<a href="/website/founder.html">Founder</a>
+<a href="/website/services.html">Services</a>
+<a href="/website/team.html">Team</a>
+<a href="/website/contact.html">Contact</a>
+<a href="/website/login.html" class="active">Login</a>
+<a href="/portals/meeting/meeting-login.html">Join Meeting</a> 
+</nav>
 
-      <section class="grid-2">
-        <article class="login-card">
-          <h3>Internal EMS Access</h3>
-          <p>For staff, admins, finance operators, legal operators, communications, and internal execution teams.</p>
-          <div class="login-actions">
-            <a class="btn btn-primary" href="/new-ems/modules/login/index.html?type=ems">Open Staff Login</a>
-            <a class="btn" href="/new-ems/login.html">Legacy Login Alias</a>
-          </div>
-        </article>
+</div>
 
-        <article class="login-card">
-          <h3>External / Workflow Access</h3>
-          <p>For invited participants, client-side signers, and meeting guests entering a specific workflow.</p>
-          <div class="login-actions">
-            <a class="btn" href="/new-ems/modules/meetings-guest/index.html">Join Meeting</a>
-            <a class="btn" href="/new-ems/modules/legal-public-sign/index.html">Legal Signing Link</a>
-            <a class="btn" href="/new-ems/modules/transport-portal-login/index.html">Transport Portal Login</a>
-          </div>
-        </article>
-      </section>
-    </main>
+</header>
+<main>
 
-    <footer class="site-footer">
-      <span>© 2026 Varada Nexus Private Limited</span>
-      <div class="site-links">
-        <a href="/website/contact.html">Contact</a>
-        <a href="/index.html">Home</a>
-      </div>
-    </footer>
-  </div>
-  <script src="/assets/site.js"></script>
+<div class="login-card">
+
+<!-- 🔥 BRANDING -->
+<div class="brand">
+<h2>Welcome Back</h2>
+<p>Secure access to Varada Nexus ERP</p>
+</div>
+
+<div class="field">
+<input type="email" id="email" placeholder="Email">
+</div>
+
+<div class="field">
+<input type="password" id="password" placeholder="Password">
+<span class="show-password" onclick="togglePassword()">Show</span>
+</div>
+
+<div class="field">
+<button id="loginBtn" onclick="login()">Login</button>
+</div>
+
+<div style="margin-top:12px; text-align:center;">
+  <span 
+    onclick="window.location.href='/portals/meeting/meeting-login.html'" 
+    style="
+      font-size:12px;
+      color:#94a3b8;
+      cursor:pointer;
+      transition:0.2s;
+    "
+    onmouseover="this.style.color='white'"
+    onmouseout="this.style.color='#94a3b8'"
+  >
+    Join a Meeting →
+  </span>
+</div>
+  
+<div id="error" class="error"></div>
+
+</div>
+
+</main>
+
+<footer>
+© 2025 Varada Nexus Private Limited
+</footer>
+
+<script type="module">
+import { loginWithPassword, redirectIfAuthenticated, redirectToResolvedPortal, validateActiveUnlockedUser, signOutSessionOnly } from "/new-ems/shared/auth.js";
+import { markUserLogin } from "/new-ems/shared/admin-api.js";
+
+function setError(message = "") {
+  const node = document.getElementById("error");
+  if (node) node.innerText = message;
+}
+
+window.togglePassword = function togglePassword() {
+  const pass = document.getElementById("password");
+  if (!pass) return;
+  pass.type = pass.type === "password" ? "text" : "password";
+};
+
+window.login = async function login() {
+  const btn = document.getElementById("loginBtn");
+  const email = document.getElementById("email")?.value?.trim() || "";
+  const password = document.getElementById("password")?.value || "";
+
+  if (btn?.disabled) return;
+  setError("");
+
+  if (!email || !password) {
+    setError("Enter email and password");
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = "Logging in...";
+  }
+
+  try {
+    const loginData = await loginWithPassword(email, password);
+    await validateActiveUnlockedUser();
+    if (loginData?.user?.id) {
+      await markUserLogin(loginData.user.id);
+    }
+    await redirectToResolvedPortal();
+  } catch (error) {
+    await signOutSessionOnly().catch(() => {});
+    setError(error?.message || "Login failed");
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = "Login";
+    }
+  }
+};
+
+document.getElementById("password")?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    window.login();
+  }
+});
+
+redirectIfAuthenticated().catch(() => {});
+</script>
+
+<script>
+window.addEventListener("scroll",()=>{
+const header=document.querySelector("header");
+
+if(window.scrollY > 50){
+header.classList.add("shrink");
+}else{
+header.classList.remove("shrink");
+}
+});
+</script>
+  
 </body>
 </html>
