@@ -11,7 +11,8 @@ const DEFAULT_TEMPLATE_SIDS = {
   trip_update_v1: "HXd8a5ab2b0295e9271e04037448eda159",
   expense_update_v1: "HX1e0d2241c09a5e04509aae900777837c",
   payment_update_v1: "HX599c0b958b071caac666e8826f9a7995",
-  access_notification_v1: "HXb41a4c3c42e1e6633b0e5a94da9782a9"
+  access_notification_v1: "HXb41a4c3c42e1e6633b0e5a94da9782a9",
+  document_ready_v1: "HX1dd8d011a3f6f9898808911fe779e1b5"
 };
 
 function json(body: unknown, status = 200) {
@@ -76,7 +77,8 @@ function templateSidFor(alias: string) {
     trip_update_v1: env("TRANSPORT_TWILIO_TRIP_CONTENT_SID"),
     expense_update_v1: env("TRANSPORT_TWILIO_EXPENSE_CONTENT_SID"),
     payment_update_v1: env("TRANSPORT_TWILIO_PAYMENT_CONTENT_SID"),
-    access_notification_v1: env("TRANSPORT_TWILIO_ACCESS_CONTENT_SID")
+    access_notification_v1: env("TRANSPORT_TWILIO_ACCESS_CONTENT_SID"),
+    document_ready_v1: env("TRANSPORT_TWILIO_DOCUMENT_CONTENT_SID")
   };
   return envMap[alias] || DEFAULT_TEMPLATE_SIDS[alias] || "";
 }
@@ -111,6 +113,14 @@ function fallbackMessage(alias: string, variables: Record<string, string>) {
       `Amount: ${variables["3"] || "-"}`,
       `Trip ID: ${variables["4"] || "-"}`,
       `Status: ${variables["5"] || "-"}`,
+      "Thank you."
+    ].join("\n");
+  }
+  if (alias === "document_ready_v1") {
+    return [
+      `Hello ${variables["1"] || "Sir/Madam"},`,
+      `Your ${variables["2"] || "document"} ${variables["3"] || ""} for ${variables["4"] || "-"} from Varada Nexus is ready.`,
+      "It has also been emailed to you.",
       "Thank you."
     ].join("\n");
   }
@@ -482,6 +492,64 @@ async function notifyPortalAccessCreated(body: any) {
   };
 }
 
+async function loadClientBillSnapshot(admin: any, billId: string) {
+  const { data: bill, error } = await admin.from("transport_client_bills")
+    .select("id,bill_no,transport_client_id,invoice_total,net_receivable").eq("id", billId).is("deleted_at", null).maybeSingle();
+  if (error) throw error;
+  if (!bill?.id) throw new Error("Client bill not found");
+  const { data: client } = await admin.from("transport_clients")
+    .select("id,name,company_name,phone_number,contact_no").eq("id", bill.transport_client_id).maybeSingle();
+  return { bill, client: client || null };
+}
+async function loadStatementSnapshot(admin: any, statementId: string) {
+  const { data: statement, error } = await admin.from("transport_transporter_statements")
+    .select("id,statement_no,transport_transporter_id,net_payable_total").eq("id", statementId).is("deleted_at", null).maybeSingle();
+  if (error) throw error;
+  if (!statement?.id) throw new Error("Statement not found");
+  const { data: transporter } = await admin.from("transport_transporters")
+    .select("id,name,phone_number,contact_no").eq("id", statement.transport_transporter_id).maybeSingle();
+  return { statement, transporter: transporter || null };
+}
+async function loadReceiptSnapshot(admin: any, receiptId: string) {
+  const { data: receipt, error } = await admin.from("transport_client_receipts")
+    .select("id,receipt_no,transport_client_id,client_bill_id,amount_received").eq("id", receiptId).is("deleted_at", null).maybeSingle();
+  if (error) throw error;
+  if (!receipt?.id) throw new Error("Receipt not found");
+  const [clientRes, billRes] = await Promise.all([
+    admin.from("transport_clients").select("id,name,company_name,phone_number,contact_no").eq("id", receipt.transport_client_id).maybeSingle(),
+    receipt.client_bill_id ? admin.from("transport_client_bills").select("id,bill_no").eq("id", receipt.client_bill_id).maybeSingle() : Promise.resolve({ data: null })
+  ]);
+  return { receipt, client: clientRes.data || null, bill: billRes.data || null };
+}
+
+async function notifyBillGenerated(admin: any, billId: string) {
+  const s = await loadClientBillSnapshot(admin, billId);
+  const phone = s.client?.phone_number || s.client?.contact_no || "";
+  const name = s.client?.company_name || s.client?.name || "Client";
+  const variables = { "1": name, "2": "Bill", "3": s.bill.bill_no || "-", "4": `Rs. ${formatAmount(s.bill.invoice_total || s.bill.net_receivable)}` };
+  const result = await sendTwilioTemplateMessage({ toPhone: phone, templateAlias: "document_ready_v1", variables });
+  if (result?.sent) await recordWhatsAppDelivery(admin, { phone, name, templateAlias: "document_ready_v1", sourceModule: "transportation", sourceEvent: "client_bill_generated", messageText: renderedTemplateMessage("document_ready_v1", variables), renderedPayload: variables, sid: result.sid, status: "sent" });
+  return { event: "client_bill_generated", billId, billNo: s.bill.bill_no || null, recipientName: name, recipientPhone: normalizePhone(phone), whatsapp: result };
+}
+async function notifyStatementGenerated(admin: any, statementId: string) {
+  const s = await loadStatementSnapshot(admin, statementId);
+  const phone = s.transporter?.phone_number || s.transporter?.contact_no || "";
+  const name = s.transporter?.name || "Transporter";
+  const variables = { "1": name, "2": "Statement", "3": s.statement.statement_no || "-", "4": `Rs. ${formatAmount(s.statement.net_payable_total)}` };
+  const result = await sendTwilioTemplateMessage({ toPhone: phone, templateAlias: "document_ready_v1", variables });
+  if (result?.sent) await recordWhatsAppDelivery(admin, { phone, name, templateAlias: "document_ready_v1", sourceModule: "transportation", sourceEvent: "transporter_statement_generated", messageText: renderedTemplateMessage("document_ready_v1", variables), renderedPayload: variables, sid: result.sid, status: "sent" });
+  return { event: "transporter_statement_generated", statementId, statementNo: s.statement.statement_no || null, recipientName: name, recipientPhone: normalizePhone(phone), whatsapp: result };
+}
+async function notifyReceiptCreated(admin: any, receiptId: string) {
+  const s = await loadReceiptSnapshot(admin, receiptId);
+  const phone = s.client?.phone_number || s.client?.contact_no || "";
+  const name = s.client?.company_name || s.client?.name || "Client";
+  const variables = { "1": name, "2": s.receipt.receipt_no || "-", "3": formatAmount(s.receipt.amount_received), "4": s.bill?.bill_no || "-", "5": "RECEIVED" };
+  const result = await sendTwilioTemplateMessage({ toPhone: phone, templateAlias: "payment_update_v1", variables });
+  if (result?.sent) await recordWhatsAppDelivery(admin, { phone, name, templateAlias: "payment_update_v1", sourceModule: "transportation", sourceEvent: "client_receipt_created", messageText: renderedTemplateMessage("payment_update_v1", variables), renderedPayload: variables, sid: result.sid, status: "sent" });
+  return { event: "client_receipt_created", receiptId, receiptNo: s.receipt.receipt_no || null, recipientName: name, recipientPhone: normalizePhone(phone), whatsapp: result };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -505,6 +573,18 @@ Deno.serve(async (req) => {
     }
     if (action === "notify_portal_access_created") {
       return json(await notifyPortalAccessCreated(body));
+    }
+    if (action === "notify_bill_created") {
+      if (!body.clientBillId) return json({ error: "clientBillId is required." }, 400);
+      return json(await notifyBillGenerated(admin, body.clientBillId));
+    }
+    if (action === "notify_statement_created") {
+      if (!body.statementId) return json({ error: "statementId is required." }, 400);
+      return json(await notifyStatementGenerated(admin, body.statementId));
+    }
+    if (action === "notify_receipt_created") {
+      if (!body.receiptId) return json({ error: "receiptId is required." }, 400);
+      return json(await notifyReceiptCreated(admin, body.receiptId));
     }
 
     return json({ error: `Unsupported action: ${action}` }, 400);

@@ -2,6 +2,7 @@ import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { approveTransporterStatement, cancelTransporterStatement, createTransporterStatement, getTransporterStatementDetails, listActiveOptions, listTransporterStatementableTrips, listTransporterStatements, resolveWorkspaceDivision } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
+import { notifyTransportStatementGenerated } from "./transport-integrations-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { addOldEmsCompanyHeader, addOldEmsDeclarationBlock, addOldEmsSignatureStampBlock, addOldEmsTaxSummaryBlock, addTable, createPdfDocument, formatPdfCurrency, formatPdfDate, formatPdfFilename, formatPdfQuantity, savePdf } from "./pdf-utils.js";
 import { qs, showToast } from "./utils.js";
@@ -179,6 +180,9 @@ function bindEvents() {
       showToast(`Transporter statement created: ${result?.statement_no || "(generated)"}`, TOAST_TYPES.SUCCESS);
       await loadEligibleTrips(transporterId);
       await loadStatementList();
+      if (result?.statement_id) {
+        notifyTransportStatementGenerated(result.statement_id).catch((err) => console.warn("Statement WhatsApp notify failed", err));
+      }
     } catch (error) {
       showToast(error?.message || "Transporter statement creation failed", TOAST_TYPES.ERROR);
     }

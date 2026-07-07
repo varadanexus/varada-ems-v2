@@ -2,6 +2,7 @@ import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { approveTransportClientBill, cancelTransportClientBill, createTransportClientBill, getTransportClientBillDetails, listActiveOptions, listTransportClientBillableTrips, listTransportClientBills, listTransportClientCreditNotes, resolveWorkspaceDivision } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
+import { notifyTransportBillGenerated } from "./transport-integrations-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { addOldEmsBankDetailsBlock, addOldEmsClientDetailsBlock, addOldEmsCompanyHeader, addOldEmsCreditNotesSection, addOldEmsDeclarationBlock, addOldEmsSignatureStampBlock, addOldEmsTaxSummaryBlock, addTable, createPdfDocument, formatPdfCurrency, formatPdfDate, formatPdfFilename, formatPdfQuantity, savePdf } from "./pdf-utils.js";
 import { qs, showToast } from "./utils.js";
@@ -291,6 +292,9 @@ function bindEvents() {
       if (resultNode) resultNode.innerHTML = `<div class="billing-result">Generated Bill No: ${escapeHtml(result?.bill_no || "—")}</div>`;
       await loadEligibleTrips(transportClientId);
       await loadBillList();
+      if (result?.bill_id) {
+        notifyTransportBillGenerated(result.bill_id).catch((err) => console.warn("Bill WhatsApp notify failed", err));
+      }
     } catch (error) {
       showToast(error?.message || "Client bill creation failed", TOAST_TYPES.ERROR);
     }

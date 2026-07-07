@@ -173,6 +173,14 @@ function defaultTemplateRegistry() {
       contentSid: env("TRANSPORT_TWILIO_ACCESS_CONTENT_SID"),
       variables: ["recipientName", "portalLoginUrl", "username", "portalUserCode", "password"],
       defaultBody: "Hello {{1}}, your portal access is ready. Login: {{2}}. Username: {{3}}. Code: {{4}}. Password: {{5}}."
+    },
+    {
+      alias: "document_ready_v1",
+      title: "Document Ready",
+      module: "transportation",
+      contentSid: env("TRANSPORT_TWILIO_DOCUMENT_CONTENT_SID"),
+      variables: ["recipientName", "docType", "docNo", "amount"],
+      defaultBody: "Hello {{1}}, your {{2}} {{3}} for {{4}} from Varada Nexus is ready. It has also been emailed to you."
     }
   ].filter((item) => item.contentSid || item.defaultBody);
 }

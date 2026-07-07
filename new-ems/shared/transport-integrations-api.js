@@ -37,3 +37,15 @@ export function notifyTransportPaymentCreated(paymentId) {
 export function notifyPortalAccessCreated(payload) {
   return transportIntegration("notify_portal_access_created", payload);
 }
+
+export function notifyTransportBillGenerated(clientBillId) {
+  return transportIntegration("notify_bill_created", { clientBillId });
+}
+
+export function notifyTransportStatementGenerated(statementId) {
+  return transportIntegration("notify_statement_created", { statementId });
+}
+
+export function notifyTransportReceiptCreated(receiptId) {
+  return transportIntegration("notify_receipt_created", { receiptId });
+}

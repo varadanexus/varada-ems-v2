@@ -3,6 +3,7 @@ import { approveTransportGstInvoice, cancelTransportGstInvoice, createTransportG
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { addBankDetailsSection, addDeclarationSection, addDetailsSection, addDocumentFooter, addDocumentHeader, addSignatureSection, addSummarySection, createPdfDocument, formatPdfCurrency, formatPdfDate, formatPdfFilename, savePdf } from "./pdf-utils.js";
+import { emailTransportDoc, pdfDocBase64, whatsappDocumentReady } from "./transport-messaging.js";
 import { qs, showToast } from "./utils.js";
 
 const GST_RATES = [0, 5, 12, 18, 28];
@@ -150,12 +151,14 @@ function renderInvoiceList() {
     const actionButtons = statusClass === "draft"
       ? `<button class="btn" type="button" data-inv-approve="${row.id}">Approve Invoice</button> <button class="btn btn-danger" type="button" data-inv-cancel="${row.id}">Cancel Invoice</button>`
       : statusClass === "approved"
-        ? `<button class="btn" type="button" data-inv-pdf="${row.id}">Download PDF</button>`
+        ? `<button class="btn" type="button" data-inv-pdf="${row.id}">Download PDF</button> <button class="btn btn-ghost" type="button" data-inv-email="${row.id}">Email</button> <button class="btn btn-ghost" type="button" data-inv-wa="${row.id}">WhatsApp</button>`
         : "";
     return `<tr><td>${escapeHtml(row.invoice_no || "—")}</td><td>${escapeHtml(row.transport_client_bills?.bill_no || "—")}</td><td>${escapeHtml(resolveClientLabel(row))}</td><td>${escapeHtml(row.invoice_date || "—")}</td><td>${formatMoney(row.taxable_value)}</td><td>${escapeHtml(row.gst_base || "ENTIRE_BILL")}</td><td>${escapeHtml(String(row.gst_percentage ?? 0))}%</td><td>${formatMoney(row.gst_amount)}</td><td>${formatMoney(row.invoice_total)}</td><td><span class="inv-status-pill ${statusClass}">${escapeHtml(row.status || "—")}</span></td><td><button class="btn" type="button" data-inv-view="${row.id}">View Details</button>${actionButtons ? ` ${actionButtons}` : ""}</td></tr>`;
   }).join("");
   body.querySelectorAll("button[data-inv-view]").forEach((button) => button.addEventListener("click", async () => openDetailsModal(button.getAttribute("data-inv-view"))));
   body.querySelectorAll("button[data-inv-pdf]").forEach((button) => button.addEventListener("click", async () => downloadInvoicePdf(button.getAttribute("data-inv-pdf"))));
+  body.querySelectorAll("button[data-inv-email]").forEach((button) => button.addEventListener("click", async () => { button.disabled = true; button.textContent = "Sending…"; await emailInvoiceToClient(button.getAttribute("data-inv-email")); button.disabled = false; button.textContent = "Email"; }));
+  body.querySelectorAll("button[data-inv-wa]").forEach((button) => button.addEventListener("click", async () => { button.disabled = true; button.textContent = "Sending…"; await whatsappInvoiceToClient(button.getAttribute("data-inv-wa")); button.disabled = false; button.textContent = "WhatsApp"; }));
   body.querySelectorAll("button[data-inv-approve]").forEach((button) => button.addEventListener("click", async () => {
     const invoiceId = button.getAttribute("data-inv-approve");
     if (!invoiceId) return;
@@ -218,10 +221,7 @@ async function openDetailsModal(invoiceId) {
   qs("#gstInvoiceDetailsModal")?.removeAttribute("hidden");
 }
 
-async function downloadInvoicePdf(invoiceId, details = null) {
-  const resolved = details || await getTransportGstInvoiceDetails(invoiceId);
-  if (!resolved || resolved.status !== "approved") return showToast("PDF is available only for approved invoices.", TOAST_TYPES.WARNING);
-  try {
+async function buildInvoiceDoc(resolved) {
     const doc = await createPdfDocument();
     const billAmount = Number(resolved.transport_client_bills?.net_receivable || 0);
     const marginAmount = Number(resolved.margin_amount || 0);
@@ -285,9 +285,43 @@ async function downloadInvoicePdf(invoiceId, details = null) {
     y = addBankDetailsSection(doc, y + 2);
     await addSignatureSection(doc, y + 1);
     await addDocumentFooter(doc);
+    return doc;
+}
+
+async function downloadInvoicePdf(invoiceId, details = null) {
+  const resolved = details || await getTransportGstInvoiceDetails(invoiceId);
+  if (!resolved || resolved.status !== "approved") return showToast("PDF is available only for approved invoices.", TOAST_TYPES.WARNING);
+  try {
+    const doc = await buildInvoiceDoc(resolved);
     savePdf(doc, formatPdfFilename("INV", resolved.invoice_no || "gst-invoice"));
   } catch (error) {
     showToast(error?.message || "GST invoice PDF generation failed", TOAST_TYPES.ERROR);
+  }
+}
+
+async function emailInvoiceToClient(invoiceId, details = null) {
+  const resolved = details || await getTransportGstInvoiceDetails(invoiceId);
+  if (!resolved || resolved.status !== "approved") return showToast("Email is available only for approved invoices.", TOAST_TYPES.WARNING);
+  const client = normalizeTransportClient(resolved?.transport_clients);
+  try {
+    const doc = await buildInvoiceDoc(resolved);
+    const html = `<p>Dear ${escapeHtml(client.displayName)},</p><p>Please find attached GST Invoice <b>${escapeHtml(resolved.invoice_no || "")}</b> for ${formatMoney(resolved.invoice_total)}${resolved.invoice_date ? `, dated ${escapeHtml(resolved.invoice_date)}` : ""}.</p><p>Thank you for your business.<br/>Varada Nexus Private Limited</p>`;
+    await emailTransportDoc({ toEmail: client.email, toName: client.displayName, subject: `GST Invoice ${resolved.invoice_no || ""} — Varada Nexus Private Limited`, bodyHtml: html, pdfBase64: pdfDocBase64(doc), filename: `${String(resolved.invoice_no || "invoice").replace(/[\\/]/g, "-")}.pdf`, sourceEvent: "gst_invoice_email" });
+    showToast(`Invoice emailed to ${client.email}`, TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    showToast(error?.message || "Could not email invoice", TOAST_TYPES.ERROR);
+  }
+}
+
+async function whatsappInvoiceToClient(invoiceId, details = null) {
+  const resolved = details || await getTransportGstInvoiceDetails(invoiceId);
+  if (!resolved) return;
+  const client = normalizeTransportClient(resolved?.transport_clients);
+  try {
+    await whatsappDocumentReady(client.phone, { recipientName: client.displayName, docType: "GST Invoice", docNo: resolved.invoice_no || "", amount: formatMoney(resolved.invoice_total) });
+    showToast("WhatsApp message sent.", TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    showToast(error?.message || "WhatsApp send failed (needs an approved document template, or the client must message first).", TOAST_TYPES.ERROR);
   }
 }
 
