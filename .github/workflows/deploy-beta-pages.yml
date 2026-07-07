@@ -25,13 +25,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Prepare Pages bundle
+        shell: bash
+        run: |
+          rm -rf .pages-dist
+          mkdir -p .pages-dist/new-ems
+          cp -R new-ems/. .pages-dist/new-ems/
+          cat <<'EOF' > .pages-dist/index.html
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+            <title>Varada EMS Beta</title>
+            <meta http-equiv="refresh" content="0; url=/new-ems/index.html" />
+            <script>window.location.replace('/new-ems/index.html');</script>
+          </head>
+          <body></body>
+          </html>
+          EOF
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
       - name: Upload EMS beta artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./new-ems
+          path: ./.pages-dist
 
       - name: Deploy to GitHub Pages
         id: deployment
