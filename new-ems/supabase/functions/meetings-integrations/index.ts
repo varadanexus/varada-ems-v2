@@ -240,7 +240,7 @@ function formatDisplayDate(value: string | null) {
 function buildPublicInviteUrl(inviteToken: string, origin = "") {
   const baseOrigin = trimText(origin || getMeetingInviteConfig().publicOrigin || "").replace(/\/$/, "");
   if (!baseOrigin) throw new Error("Public invite origin is not configured. Save a Public Origin in Meetings Settings or EMS_PUBLIC_ORIGIN secret.");
-  return `${baseOrigin}/new-ems/modules/meetings-guest/index.html?t=${encodeURIComponent(inviteToken)}`;
+  return `${baseOrigin}/portals/meeting/meeting-login.html?t=${encodeURIComponent(inviteToken)}`;
 }
 
 function randomOtp() {

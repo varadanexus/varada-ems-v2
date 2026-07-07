@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=/new-ems/modules/meetings-guest/index.html">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Redirecting to Meeting | Varada Nexus</title>
   <script>
-    window.location.replace("/new-ems/modules/meetings-guest/index.html");
+    const target = "/new-ems/modules/meetings-guest/index.html" + window.location.search + window.location.hash;
+    window.location.replace(target);
   </script>
 </head>
 <body>

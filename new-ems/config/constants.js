@@ -2,8 +2,8 @@ export const APP_NAME = "EMS 2.0";
 
 export const ROUTES = {
   ROOT: "/new-ems/index.html",
-  // Sprint 13C: unified login page. /new-ems/login.html redirects here.
-  LOGIN: "/new-ems/modules/login/index.html",
+  // Public website login is the canonical EMS login entry point.
+  LOGIN: "/website/login.html",
   LOGIN_LEGACY: "/new-ems/login.html",
   PORTAL_SELECTOR: "/new-ems/modules/portal-selector/index.html",
   DASHBOARD: "/new-ems/modules/dashboard/index.html",
@@ -61,6 +61,7 @@ export const ROUTES = {
   MEETINGS_ROOM: "/new-ems/modules/meetings-room/index.html",
   MEETINGS_SETTINGS: "/new-ems/modules/meetings-settings/index.html",
   MEETINGS_GUEST: "/new-ems/modules/meetings-guest/index.html",
+  MEETINGS_LOGIN: "/portals/meeting/meeting-login.html",
   MEETINGS_WAITING: "/new-ems/modules/meetings-waiting/index.html",
   MEETINGS_PUBLIC_ROOM: "/new-ems/modules/meetings-public-room/index.html",
   DIGITAL_SERVICES_DASHBOARD: "/new-ems/modules/digital-services-dashboard/index.html",
