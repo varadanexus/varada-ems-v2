@@ -13,4 +13,31 @@
   <url><loc>https://www.varadanexus.com/ecommerce.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://www.varadanexus.com/hr.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://www.varadanexus.com/arbitrage.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <!-- blog-categories:start -->
+  <url><loc>https://www.varadanexus.com/blog/category/healthcare/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/ems/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/artificial-intelligence/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/business/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/startups/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/cybersecurity/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/saas/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/software-development/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/web-development/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/cloud-computing/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/digital-transformation/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/marketing/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/seo/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/finance/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/education/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/global-news/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/technology/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/automation/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/logistics/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/mining/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/import-export/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/ecommerce/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/hr/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/interior-design/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.varadanexus.com/blog/category/arbitrage/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <!-- blog-categories:end -->
 </urlset>

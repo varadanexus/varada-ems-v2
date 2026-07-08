@@ -1,0 +1,45 @@
+name: Blog backfill (one-time backdated posts)
+
+on:
+  workflow_dispatch:
+    inputs:
+      date_from:
+        description: "Start date (YYYY-MM-DD). Empty = financial year start (Apr 1)."
+        required: false
+      date_to:
+        description: "End date (YYYY-MM-DD). Empty = today."
+        required: false
+      post_count:
+        description: "Number of posts to generate (1-200)"
+        required: false
+        default: "30"
+      categories:
+        description: "Comma-separated category slugs. Empty = all."
+        required: false
+      publish_mode:
+        description: "draft (review first) or publish (goes live, backdated)"
+        required: false
+        default: "draft"
+  schedule:
+    - cron: "15 * * * *"   # hourly: picks up jobs queued from the Blog Console (exits fast when none)
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run backfill
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          DATE_FROM: ${{ github.event.inputs.date_from }}
+          DATE_TO: ${{ github.event.inputs.date_to }}
+          POST_COUNT: ${{ github.event.inputs.post_count }}
+          CATEGORIES: ${{ github.event.inputs.categories }}
+          PUBLISH_MODE: ${{ github.event.inputs.publish_mode }}
+        run: node scripts/backfill-blog-posts.mjs
