@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>New post — Blog Console — Varada Nexus</title>
+<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/blog/console/console.css">
+</head>
+<body>
+<div class="ambient"></div>
+
+<main class="console-wrap">
+  <div class="form-panel" style="max-width:860px">
+    <input type="hidden" id="postId">
+    <div class="field"><label>Title</label><input type="text" id="f_title" placeholder="Post title"></div>
+    <div class="field"><label>Slug (URL)</label><input type="text" id="f_slug" placeholder="auto-generated-from-title"></div>
+    <div class="field"><label>Excerpt</label><textarea id="f_excerpt" rows="2" placeholder="One-line summary shown on the blog list"></textarea></div>
+    <div class="two-col">
+      <div class="field"><label>Primary category</label><select id="f_category"></select></div>
+      <div class="field"><label>Content type</label>
+        <select id="f_ctype">
+          <option value="evergreen">Evergreen</option><option value="trending_news">Trending news</option>
+          <option value="how_to">How-to</option><option value="comparison">Comparison</option>
+          <option value="case_study">Case study</option><option value="opinion">Opinion</option>
+          <option value="product_service">Product/Service</option><option value="global_news_explainer">Global news explainer</option>
+          <option value="faq">FAQ</option>
+        </select>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="field"><label>Sector</label><input type="text" id="f_sector" placeholder="e.g. logistics"></div>
+      <div class="field"><label>Region</label><input type="text" id="f_region" value="India"></div>
+    </div>
+    <div class="field"><label>Tags (comma-separated)</label><input type="text" id="f_tags" placeholder="Healthcare, Logistics"></div>
+    <div class="field"><label>Cover image URL (optional)</label><input type="text" id="f_cover" placeholder="/images/... or https://..."></div>
+    <div class="two-col">
+      <div class="field"><label>Meta title (SEO)</label><input type="text" id="f_mtitle" maxlength="70"></div>
+      <div class="field"><label>Alt text (cover image)</label><input type="text" id="f_alt" maxlength="120"></div>
+    </div>
+    <div class="field"><label>Meta description (SEO)</label><textarea id="f_mdesc" rows="2" maxlength="160"></textarea></div>
+    <div class="field"><label>LinkedIn post text</label><textarea id="f_linkedin" rows="2"></textarea></div>
+    <div class="field"><label>Content (HTML)</label><textarea id="f_content" class="code" placeholder="&lt;p&gt;Your article...&lt;/p&gt;"></textarea></div>
+    <div class="two-col">
+      <div class="field"><label>Status</label>
+        <select id="f_status">
+          <option value="draft">Draft</option><option value="scheduled">Scheduled</option>
+          <option value="published">Published</option><option value="auto_published">Auto-published</option>
+          <option value="backdated">Backdated</option><option value="needs_review">Needs review</option>
+          <option value="failed_review">Failed review</option><option value="archived">Archived</option>
+          <option value="deleted">Deleted</option>
+        </select>
+      </div>
+      <div class="field"><label>Publish date</label><input type="datetime-local" id="f_pubdate"></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" id="saveBtn" style="flex:1">Save post</button>
+      <button class="btn btn-ghost" id="newBtn" type="button">Clear</button>
+    </div>
+    <p class="adm-msg" id="editMsg"></p>
+  </div>
+</main>
+
+<script src="/new-ems/config/runtime.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/blog/console/shared.js"></script>
+<script>
+(async function () {
+  var editId = VN.qs("id");
+  VN.shell("new", editId ? "Edit post" : "New post");
+  if (!(await VN.requireAuth())) return;
+  var sb = VN.sb, $ = function (id) { return document.getElementById(id); };
+  var V2 = true;
+
+  var CATS = await VN.loadCats();
+  if (!CATS.length) V2 = false;
+  $("f_category").innerHTML = '<option value="">(none)</option>' + CATS.map(function (c) { return '<option value="' + c.slug + '">' + VN.esc(c.name) + "</option>"; }).join("");
+
+  function fillForm(p) {
+    $("postId").value = p.id; $("f_title").value = p.title || ""; $("f_slug").value = p.slug || "";
+    $("f_excerpt").value = p.excerpt || ""; $("f_cover").value = p.cover_image || "";
+    $("f_tags").value = (p.tags || []).join(", "); $("f_content").value = p.content || "";
+    $("f_status").value = p.status || "draft";
+    $("f_category").value = p.primary_category || ""; $("f_ctype").value = p.content_type || "evergreen";
+    $("f_sector").value = p.sector || ""; $("f_region").value = p.region || "India";
+    $("f_mtitle").value = p.meta_title || ""; $("f_mdesc").value = p.meta_description || "";
+    $("f_linkedin").value = p.linkedin_post_text || ""; $("f_alt").value = p.alt_text || "";
+    $("f_pubdate").value = p.published_at ? new Date(p.published_at).toISOString().slice(0, 16) : "";
+  }
+  function clearForm() {
+    $("postId").value = "";
+    ["f_title","f_slug","f_excerpt","f_cover","f_tags","f_content","f_mtitle","f_mdesc","f_linkedin","f_sector","f_pubdate","f_alt"].forEach(function (i) { $(i).value = ""; });
+    $("f_region").value = "India"; $("f_status").value = "draft"; $("f_ctype").value = "evergreen"; $("f_category").value = ""; $("editMsg").textContent = "";
+    history.replaceState(null, "", "/blog/console/new-post.html");
+  }
+  $("newBtn").addEventListener("click", clearForm);
+  $("f_title").addEventListener("blur", function () { if (!$("f_slug").value) $("f_slug").value = VN.slugify($("f_title").value); });
+
+  if (editId) {
+    var r = await sb.from("blog_posts").select("*").eq("id", editId).maybeSingle();
+    if (r.data) fillForm(r.data);
+    else VN.msg($("editMsg"), "Post not found.", false);
+  }
+
+  $("saveBtn").addEventListener("click", async function () {
+    var id = $("postId").value, status = $("f_status").value;
+    var rec = {
+      title: $("f_title").value.trim(),
+      slug: ($("f_slug").value.trim() || VN.slugify($("f_title").value)),
+      excerpt: $("f_excerpt").value.trim() || null,
+      cover_image: $("f_cover").value.trim() || null,
+      tags: $("f_tags").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean),
+      content: $("f_content").value,
+      status: status,
+    };
+    if (V2) Object.assign(rec, {
+      primary_category: $("f_category").value || null,
+      content_type: $("f_ctype").value,
+      sector: $("f_sector").value.trim() || null,
+      region: $("f_region").value.trim() || null,
+      meta_title: $("f_mtitle").value.trim() || null,
+      meta_description: $("f_mdesc").value.trim() || null,
+      linkedin_post_text: $("f_linkedin").value.trim() || null,
+      alt_text: $("f_alt").value.trim() || null,
+    });
+    if (!rec.title || !rec.slug) { VN.msg($("editMsg"), "Title and slug are required.", false); return; }
+    if ($("f_pubdate").value) rec.published_at = new Date($("f_pubdate").value).toISOString();
+    else if (VN.LIVE.indexOf(status) > -1) rec.published_at = new Date().toISOString();
+    var r;
+    if (id) r = await sb.from("blog_posts").update(rec).eq("id", id);
+    else r = await sb.from("blog_posts").insert(rec);
+    if (r.error) { VN.msg($("editMsg"), r.error.message, false); return; }
+    VN.msg($("editMsg"), id ? "Post updated." : "Post created.", true);
+    if (!id) clearForm();
+  });
+})();
+</script>
+</body>
+</html>

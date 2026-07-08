@@ -159,6 +159,44 @@ const SB_HEADERS = {
   "content-type": "application/json",
 };
 
+// Owner-controlled settings (blog_settings singleton). Falls back to defaults
+// if the v2 migration hasn't been applied yet.
+async function loadSettings() {
+  const defaults = {
+    auto_publish_enabled: true, approved_categories: [],
+    min_seo_score: 60, min_quality_score: 60, min_confidence_score: 70,
+    posts_per_day: MAX_POSTS,
+  };
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/blog_settings?id=eq.1&limit=1`, { headers: SB_HEADERS });
+    if (!res.ok) return defaults;
+    const rows = await res.json();
+    return rows[0] ? { ...defaults, ...rows[0] } : defaults;
+  } catch { return defaults; }
+}
+
+async function logGeneration(entry) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/blog_generation_logs`, {
+      method: "POST", headers: SB_HEADERS,
+      body: JSON.stringify({ run_kind: "daily", model: MODEL, ...entry }),
+    });
+  } catch { /* logging must never break the run */ }
+}
+
+async function saveSource(postId, item) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/blog_sources`, {
+      method: "POST", headers: SB_HEADERS,
+      body: JSON.stringify({
+        post_id: postId, url: item.link, publisher: item.feedName, headline: item.title,
+        published_on: item.pubDate.toISOString().slice(0, 10),
+        kind: item.kind === "government" ? "government" : "news",
+      }),
+    });
+  } catch { /* optional table */ }
+}
+
 async function recentPosts() {
   const since = new Date(Date.now() - 21 * 24 * 3600 * 1000).toISOString();
   const url = `${SUPABASE_URL}/rest/v1/blog_posts?select=title,content&created_at=gte.${since}&limit=200`;
@@ -196,9 +234,23 @@ async function generatePost(item, sector) {
     `SUMMARY: ${item.description || "(no summary provided)"}\n\n` +
     `Write a 350-550 word blog post covering: (1) what happened, (2) why it matters for the ` +
     `${sector.label} sector in India, (3) practical implications for enterprises operating in this space. ` +
-    "Return ONLY strict JSON with keys: title (<=70 chars, not identical to the headline), " +
-    "excerpt (1 sentence <=160 chars), tags (array of 3-5 short strings), " +
-    "content_html (valid HTML using <p>,<h2>,<h3>,<ul>/<li> only; no <h1>, no links, no inline styles).";
+    "Return ONLY strict JSON with keys: " +
+    "title (<=70 chars, not identical to the headline), " +
+    "excerpt (1 sentence <=160 chars), " +
+    "tags (array of 3-5 short strings), " +
+    "content_html (valid HTML using <p>,<h2>,<h3>,<ul>/<li> only; no <h1>, no links, no inline styles), " +
+    "meta_title (<=60 chars, SEO-optimised), " +
+    "meta_description (<=155 chars, SEO-optimised), " +
+    "category (exactly one of: healthcare, ems, artificial-intelligence, business, startups, cybersecurity, " +
+    "saas, software-development, web-development, cloud-computing, digital-transformation, marketing, seo, " +
+    "finance, education, global-news, technology, automation, logistics, mining, import-export, ecommerce, " +
+    "hr, interior-design, arbitrage), " +
+    "linkedin_post_text (a 2-4 sentence LinkedIn post announcing this article, professional tone, no hashtag spam, max 3 hashtags), " +
+    "featured_image_prompt (one sentence describing an ideal cover image), " +
+    "alt_text (<=110 chars describing that image), " +
+    "seo_score (0-100 your honest rating of this post's SEO strength), " +
+    "quality_score (0-100 honest rating of writing quality and usefulness), " +
+    "confidence_score (0-100 how confident you are that every claim is supported by the provided source).";
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
@@ -255,6 +307,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Main
 // ---------------------------------------------------------------------------
 (async () => {
+  // 0) Owner settings (auto-publish switch, thresholds, approved categories)
+  const settings = await loadSettings();
+  const maxPosts = Math.min(settings.posts_per_day ?? MAX_POSTS, MAX_POSTS === 6 ? 10 : MAX_POSTS) || MAX_POSTS;
+  if (settings.posts_per_day === 0) { console.log("posts_per_day is 0 in blog_settings — nothing to do."); return; }
+  console.log(`Settings: auto_publish=${settings.auto_publish_enabled}, posts/day=${maxPosts}, ` +
+    `min scores seo=${settings.min_seo_score} quality=${settings.min_quality_score} confidence=${settings.min_confidence_score}` +
+    (settings.approved_categories?.length ? `, approved=[${settings.approved_categories}]` : ", approved=all"));
+
   // 1) Gather trusted, fresh, sector-relevant news
   const all = (await Promise.all(FEEDS.map(fetchFeed))).flat();
   const cutoff = Date.now() - FRESH_HOURS * 3600 * 1000;
@@ -290,7 +350,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const perSector = {};
   const picks = [];
   for (const c of dedup) {
-    if (picks.length >= MAX_POSTS) break;
+    if (picks.length >= maxPosts) break;
     const n = perSector[c.sector.tag] || 0;
     if (n >= 2) continue;
     perSector[c.sector.tag] = n + 1;
@@ -299,7 +359,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log(`Selected ${picks.length} stories:`);
   picks.forEach((c) => console.log(`  [${c.item.kind}/${c.sector.tag}] ${c.item.title}`));
 
-  // 4) Generate and publish
+  // 4) Generate; publish or hold for review per owner settings
   let published = 0;
   for (const { item, sector } of picks) {
     try {
@@ -308,6 +368,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       // Strip any links the AI produced despite instructions; ours are appended below.
       const body = String(post.content_html).replace(/<a\b[^>]*>/gi, "").replace(/<\/a>/gi, "");
       const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+
+      // --- Owner-control review gate ---
+      const seo = Number(post.seo_score) || 0;
+      const quality = Number(post.quality_score) || 0;
+      const confidence = Number(post.confidence_score) || 0;
+      const category = String(post.category || sector.tag);
+      const reasons = [];
+      if (!settings.auto_publish_enabled) reasons.push("auto-publish disabled");
+      if (settings.approved_categories?.length && !settings.approved_categories.includes(category))
+        reasons.push(`category '${category}' not in approved list`);
+      if (seo < settings.min_seo_score) reasons.push(`seo ${seo} < ${settings.min_seo_score}`);
+      if (quality < settings.min_quality_score) reasons.push(`quality ${quality} < ${settings.min_quality_score}`);
+      if (confidence < settings.min_confidence_score) reasons.push(`confidence ${confidence} < ${settings.min_confidence_score}`);
+      const publishNow = reasons.length === 0;
+
       const rec = {
         title: String(post.title).slice(0, 120),
         slug: slugify(post.title) + "-" + datePart,
@@ -315,20 +390,55 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         content: body + referencesHtml(item),
         tags: [...new Set([...(Array.isArray(post.tags) ? post.tags : []), sector.tag, "news"])].slice(0, 6),
         author: "Varada Nexus",
-        status: "published",
+        status: publishNow ? "auto_published" : "needs_review",
         source: "ai",
-        published_at: new Date().toISOString(),
+        published_at: publishNow ? new Date().toISOString() : null,
+        // v2 metadata (present after the Sprint 18B migration)
+        primary_category: category,
+        sector: sector.tag,
+        region: "India",
+        content_type: "trending_news",
+        meta_title: post.meta_title ? String(post.meta_title).slice(0, 70) : null,
+        meta_description: post.meta_description ? String(post.meta_description).slice(0, 160) : null,
+        source_urls: [item.link],
+        source_dates: [item.pubDate.toISOString().slice(0, 10)],
+        seo_score: seo || null,
+        quality_score: quality || null,
+        confidence_score: confidence || null,
+        featured_image_prompt: post.featured_image_prompt || null,
+        alt_text: post.alt_text || null,
+        linkedin_post_text: post.linkedin_post_text || null,
+        is_auto_published: publishNow,
+        is_backdated: false,
       };
-      await insertPost(rec);
-      published++;
-      console.log(`Published: ${rec.title} -> /blog/post.html?slug=${rec.slug}`);
+      let saved;
+      try {
+        saved = await insertPost(rec);
+      } catch (e) {
+        // Fallback for pre-migration schema: retain original column set only.
+        if (!/column/i.test(String(e.message))) throw e;
+        const legacy = { title: rec.title, slug: rec.slug, excerpt: rec.excerpt, content: rec.content,
+          tags: rec.tags, author: rec.author, status: publishNow ? "published" : "draft",
+          source: "ai", published_at: rec.published_at };
+        saved = await insertPost(legacy);
+      }
+      const postId = Array.isArray(saved) ? saved[0]?.id : saved?.id;
+      if (postId) await saveSource(postId, item);
+      await logGeneration({
+        post_id: postId || null,
+        status: publishNow ? "published" : "needs_review",
+        detail: publishNow ? `auto-published (seo=${seo}, quality=${quality}, confidence=${confidence})`
+                           : `held for review: ${reasons.join("; ")}`,
+      });
+      if (publishNow) { published++; console.log(`Published: ${rec.title} -> /blog/post.html?slug=${rec.slug}`); }
+      else console.log(`Needs review (${reasons.join("; ")}): ${rec.title}`);
     } catch (e) {
       console.warn(`Skipped one story (${e.message}): ${item.title}`);
+      await logGeneration({ status: "failed", detail: `${e.message}: ${item.title}` });
     }
     await sleep(15000); // stay well inside Gemini free-tier rate limits
   }
-  console.log(`Done. ${published}/${picks.length} posts published.`);
-  if (!published) process.exit(1);
+  console.log(`Done. ${published}/${picks.length} posts auto-published (rest held for review or skipped).`);
 })().catch((e) => {
   console.error(e.message || e);
   process.exit(1);

@@ -3,5 +3,6 @@ Allow: /
 Disallow: /new-ems/
 Disallow: /portals/
 Disallow: /blog/admin.html
+Disallow: /blog/console/
 
 Sitemap: https://www.varadanexus.com/sitemap.xml

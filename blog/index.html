@@ -62,18 +62,56 @@
 
   <section class="section">
     <div class="wrap">
+      <div class="blog-toolbar">
+        <form id="searchForm" class="blog-search" role="search" action="/blog/" method="get">
+          <input type="search" id="q" name="q" placeholder="Search by title, keyword, tag, author, sector, topic&hellip;" aria-label="Search blog posts" autocomplete="off">
+          <button type="submit" class="btn btn-primary" id="searchBtn">Search</button>
+        </form>
+        <div class="blog-filters" id="filters" role="tablist" aria-label="Filter by category">
+          <button class="chip active" data-cat="">All</button>
+        </div>
+        <div class="blog-adv" id="advFilters">
+          <select id="f_type" aria-label="Content type">
+            <option value="">All content types</option>
+            <option value="evergreen">Evergreen</option>
+            <option value="trending_news">Trending news</option>
+            <option value="how_to">How-to guide</option>
+            <option value="comparison">Comparison</option>
+            <option value="case_study">Case study</option>
+            <option value="opinion">Opinion / insight</option>
+            <option value="product_service">Product / service</option>
+            <option value="global_news_explainer">Global news explainer</option>
+            <option value="faq">FAQ</option>
+          </select>
+          <input type="date" id="f_from" aria-label="From date">
+          <input type="date" id="f_to" aria-label="To date">
+        </div>
+      </div>
       <div id="posts" class="grid grid-3" aria-live="polite">
         <p class="blog-status">Loading the latest posts&hellip;</p>
       </div>
+      <div style="text-align:center;margin-top:26px"><button class="btn btn-ghost" id="moreBtn" style="display:none">Load more</button></div>
     </div>
   </section>
 </main>
+
+<style>
+  .blog-toolbar{margin-bottom:30px}
+  .blog-search{display:flex;gap:10px;max-width:640px;margin:0 auto 18px}
+  .blog-search input{flex:1;padding:12px 16px;border-radius:12px;border:1px solid var(--border,#333);background:var(--surface,#161616);color:var(--text,#eee);font-size:15px}
+  .blog-filters{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:12px}
+  .chip{font-size:12.5px;padding:6px 14px;border-radius:99px;border:1px solid var(--border,#333);background:var(--surface,#161616);color:var(--text-2,#bbb);cursor:pointer;letter-spacing:.03em}
+  .chip:hover{border-color:var(--border-gold,#a8873a)}
+  .chip.active{background:var(--gold-soft,rgba(200,164,86,.15));color:var(--gold,#c8a456);border-color:var(--border-gold,#a8873a)}
+  .blog-adv{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .blog-adv select,.blog-adv input{padding:8px 12px;border-radius:10px;border:1px solid var(--border,#333);background:var(--surface,#161616);color:var(--text-2,#bbb);font-size:13px}
+</style>
 
 <footer class="site-footer">
   <div class="wrap">
     <div class="footer-bottom">
       <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
-      <span>Rajahmundry, Andhra Pradesh, India</span>
+      <span id="vn-loc">Rajahmundry, Andhra Pradesh, India</span>
     </div>
   </div>
 </footer>
@@ -102,17 +140,111 @@
       + '<span class="card-more">Read more &rarr;</span></a>';
   }
 
-  sb.from("blog_posts")
-    .select("slug,title,excerpt,cover_image,tags,author,published_at")
-    .eq("status","published")
-    .order("published_at",{ascending:false})
-    .then(function(res){
-      if (res.error) { wrap.innerHTML = '<p class="blog-status">Unable to load posts right now.</p>'; return; }
+  var PAGE = 18, offset = 0, lastParams = null;
+  var moreBtn = document.getElementById("moreBtn");
+
+  function currentParams(){
+    var qs = new URLSearchParams(location.search);
+    return {
+      q: (document.getElementById("q").value || "").trim() || null,
+      cat: (document.querySelector(".chip.active")||{}).dataset ? (document.querySelector(".chip.active").dataset.cat || null) : null,
+      p_type: document.getElementById("f_type").value || null,
+      date_from: document.getElementById("f_from").value || null,
+      date_to: document.getElementById("f_to").value || null,
+      p_tag: qs.get("tag") || null,
+      p_author: qs.get("author") || null,
+      p_sector: qs.get("sector") || null
+    };
+  }
+
+  function run(reset){
+    if (reset) { offset = 0; wrap.innerHTML = '<p class="blog-status">Searching&hellip;</p>'; }
+    var p = currentParams(); lastParams = p;
+    var args = { q: p.q, cat: p.cat, p_tag: p.p_tag, p_author: p.p_author, p_sector: p.p_sector,
+                 p_type: p.p_type, date_from: p.date_from, date_to: p.date_to, lim: PAGE, off: offset };
+    sb.rpc("search_blog_posts", args).then(function(res){
+      if (res.error) { legacyLoad(); return; }   // graceful fallback if migration not yet applied
       var rows = res.data || [];
-      if (!rows.length) { wrap.innerHTML = '<div class="blog-empty"><h3>No posts yet</h3><p>New insights are published here every week. Check back soon.</p></div>'; return; }
-      wrap.innerHTML = rows.map(card).join("");
-      wrap.querySelectorAll(".reveal").forEach(function(el){ el.classList.add("in"); });
+      if (reset && !rows.length) {
+        wrap.innerHTML = '<div class="blog-empty"><h3>No matching posts</h3><p>Try a different keyword or category.</p></div>';
+        moreBtn.style.display = "none";
+      } else {
+        if (reset) wrap.innerHTML = "";
+        wrap.insertAdjacentHTML("beforeend", rows.map(card).join(""));
+        wrap.querySelectorAll(".reveal").forEach(function(el){ el.classList.add("in"); });
+        moreBtn.style.display = rows.length === PAGE ? "inline-flex" : "none";
+      }
+      offset += rows.length;
+      if (reset && (p.q || p.cat)) {
+        sb.from("blog_search_logs").insert({ query: p.q, category: p.cat, results: rows.length }).then(function(){});
+      }
     });
+  }
+
+  // Fallback to the original query when the search RPC isn't deployed yet.
+  function legacyLoad(){
+    sb.from("blog_posts")
+      .select("slug,title,excerpt,cover_image,tags,author,published_at")
+      .eq("status","published")
+      .order("published_at",{ascending:false})
+      .then(function(res){
+        if (res.error) { wrap.innerHTML = '<p class="blog-status">Unable to load posts right now.</p>'; return; }
+        var rows = res.data || [];
+        if (!rows.length) { wrap.innerHTML = '<div class="blog-empty"><h3>No posts yet</h3><p>New insights are published here daily. Check back soon.</p></div>'; return; }
+        wrap.innerHTML = rows.map(card).join("");
+        wrap.querySelectorAll(".reveal").forEach(function(el){ el.classList.add("in"); });
+      });
+  }
+
+  // Category chips from blog_categories (falls back to All only).
+  var filters = document.getElementById("filters");
+  sb.from("blog_categories").select("slug,name").eq("is_active", true).order("sort_order").then(function(res){
+    (res.data || []).forEach(function(c){
+      var b = document.createElement("button");
+      b.className = "chip"; b.dataset.cat = c.slug; b.textContent = c.name;
+      filters.appendChild(b);
+    });
+  });
+  filters.addEventListener("click", function(e){
+    var chip = e.target.closest(".chip"); if (!chip) return;
+    filters.querySelectorAll(".chip").forEach(function(c){ c.classList.remove("active"); });
+    chip.classList.add("active"); run(true);
+  });
+
+  document.getElementById("searchForm").addEventListener("submit", function(e){ e.preventDefault(); run(true); });
+  ["f_type","f_from","f_to"].forEach(function(id){ document.getElementById(id).addEventListener("change", function(){ run(true); }); });
+  var debounce; document.getElementById("q").addEventListener("input", function(){
+    clearTimeout(debounce); debounce = setTimeout(function(){ run(true); }, 350);
+  });
+  moreBtn.addEventListener("click", function(){ run(false); });
+
+  // Concealed console access (owner only): 5 quick clicks on the footer
+  // location text, or Ctrl+Shift+L anywhere on this page.
+  (function concealedEntry(){
+    var el = document.getElementById("vn-loc"), taps = 0, timer;
+    if (el) el.addEventListener("click", function(){
+      taps++; clearTimeout(timer);
+      timer = setTimeout(function(){ taps = 0; }, 1600);
+      if (taps >= 5) { taps = 0; location.href = "/blog/console/"; }
+    });
+    document.addEventListener("keydown", function(e){
+      if (e.ctrlKey && e.shiftKey && (e.key === "L" || e.key === "l")) { e.preventDefault(); location.href = "/blog/console/"; }
+    });
+  })();
+
+  // Deep-link support: /blog/?q=...&cat=...
+  (function init(){
+    var qs = new URLSearchParams(location.search);
+    if (qs.get("q")) document.getElementById("q").value = qs.get("q");
+    if (qs.get("cat")) {
+      var t = setInterval(function(){
+        var chip = filters.querySelector('.chip[data-cat="' + qs.get("cat") + '"]');
+        if (chip) { clearInterval(t); chip.click(); }
+      }, 150);
+      setTimeout(function(){ clearInterval(t); }, 3000);
+    }
+    run(true);
+  })();
 })();
 </script>
 </body>
