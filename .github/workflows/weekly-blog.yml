@@ -1,9 +1,10 @@
 name: Weekly AI blog post
 
 on:
-  schedule:
-    - cron: "0 4 * * 1"   # every Monday 04:00 UTC
-  workflow_dispatch: {}    # allow manual runs from the Actions tab
+  # Weekly schedule retired — superseded by daily-blog.yml (news-driven daily posts).
+  # schedule:
+  #   - cron: "0 4 * * 1"
+  workflow_dispatch: {}    # still runnable manually from the Actions tab
 
 jobs:
   generate:

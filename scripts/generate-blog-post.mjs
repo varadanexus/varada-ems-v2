@@ -82,13 +82,26 @@ async function callGemini() {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ role: "user", parts: [{ text: USER }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 2048, responseMimeType: "application/json" },
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 8192,
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingBudget: 0 }, // disable "thinking" so tokens go to the answer
+      },
     }),
   });
   if (!res.ok) throw new Error("Gemini error " + res.status + ": " + (await res.text()));
   const data = await res.json();
-  const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-  return (parts || []).map((p) => p.text || "").join("");
+  const cand = data.candidates && data.candidates[0];
+  const parts = cand && cand.content && cand.content.parts;
+  const text = (parts || []).map((p) => p.text || "").join("");
+  if (!text) {
+    throw new Error(
+      "Gemini returned no text (finishReason=" + (cand && cand.finishReason) + "). " +
+      "Response: " + JSON.stringify(data).slice(0, 500)
+    );
+  }
+  return text;
 }
 
 async function callOpenAI() {
