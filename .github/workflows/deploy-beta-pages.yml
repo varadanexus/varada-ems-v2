@@ -30,7 +30,15 @@ jobs:
         run: |
           rm -rf .pages-dist
           mkdir -p .pages-dist
-          cp -R public-site/. .pages-dist/
+          # Public website pages live at the repo root (clean URLs: /founder, /services, ...)
+          cp ./*.html .pages-dist/
+          cp robots.txt .pages-dist/robots.txt
+          cp sitemap.xml .pages-dist/sitemap.xml
+          cp -R assets .pages-dist/assets
+          cp -R images .pages-dist/images
+          cp -R portals .pages-dist/portals
+          cp -R blog .pages-dist/blog
+          cp favicon.ico .pages-dist/favicon.ico
           cp -R new-ems/. .pages-dist/new-ems/
           cp CNAME .pages-dist/CNAME
 

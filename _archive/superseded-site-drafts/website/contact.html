@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Contact Us – Varada Nexus Private Limited</title>
+<meta name="description" content="Contact Varada Nexus Private Limited. Office in Rajahmundry, Andhra Pradesh. CIN: U43121AP2025PTC117741 | GST: 37AAKCV7495B1ZV | Email: connect@varadanexus.com" />
+<link rel="icon" href="/images/logo.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/website/assets/site.css" />
+</head>
+<body>
+<div id="loader"><img src="/images/logo.png" alt="" /><span>Varada Nexus</span></div>
+<nav id="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="/index.html">
+      <img src="/images/logo.png" alt="Varada Nexus" />
+      <span><b>Varada Nexus</b><small>Private Limited</small></span>
+    </a>
+    <div class="nav-links">
+      <a href="/index.html">Home</a>
+      <a href="/website/founder.html">Founder</a>
+      <a href="/website/services.html">Services</a>
+      <a href="/website/team.html">Team</a>
+      <a href="/website/contact.html" class="active">Contact</a>
+      <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
+    </div>
+    <a class="btn btn-gold" href="/website/login.html">Login</a>
+  </div>
+</nav>
+
+<section class="page-hero">
+  <div class="wrap">
+    <div class="kicker rv">Contact Us</div>
+    <h1 class="rv rv-d1">Let’s build something scalable together.</h1>
+    <p class="hero-sub rv rv-d2">Reach out for healthcare consulting, logistics, import-export, e-commerce, and more.</p>
+  </div>
+</section>
+<section style="padding-top:1rem;">
+  <div class="wrap contact-grid">
+    <div>
+      <div class="c-card rv">
+        <b>Registered Office</b>
+        <p>Varada Nexus Private Limited<br />KB Nagar, A.V.A Road<br />Rajahmundry, Andhra Pradesh – 533103<br />India</p>
+      </div>
+      <div class="c-card rv rv-d1">
+        <b>Email</b>
+        <p><a href="mailto:connect@varadanexus.com">connect@varadanexus.com</a></p>
+      </div>
+      <div class="c-card rv rv-d2">
+        <b>Company Registration</b>
+        <p class="reg-line"><b style="display:inline;">CIN:</b> U43121AP2025PTC117741</p>
+        <p class="reg-line"><b style="display:inline;">GSTIN:</b> 37AAKCV7495B1ZV</p>
+      </div>
+      <div class="c-card rv rv-d3">
+        <b>Meetings</b>
+        <p>Invited to a Varada Nexus meeting? <a href="/portals/meeting/meeting-login.html">Join here →</a></p>
+      </div>
+    </div>
+    <div class="rv rv-d1">
+      <div class="sec-kicker">Send a message</div>
+      <h2 style="font-size:clamp(1.5rem,2.4vw,2rem);">Tell us about your project.</h2>
+      <form class="contact-form" id="vnContactForm">
+        <input type="text" name="name" placeholder="Name" required />
+        <input type="email" name="email" placeholder="Email" required />
+        <input type="text" name="subject" placeholder="Subject" required />
+        <textarea name="message" placeholder="Message" required></textarea>
+        <button class="btn btn-gold" type="submit" style="justify-self:start;">Send Message</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<script>
+document.getElementById("vnContactForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+  var f = e.target;
+  var body = "Name: " + f.name.value + "\nEmail: " + f.email.value + "\n\n" + f.message.value;
+  location.href = "mailto:connect@varadanexus.com?subject=" + encodeURIComponent(f.subject.value) + "&body=" + encodeURIComponent(body);
+});
+</script>
+
+<footer>
+  <div class="wrap foot">
+    <span>© 2025 Varada Nexus Private Limited</span>
+    <div class="foot-links">
+      <a href="/index.html">Home</a>
+      <a href="/website/founder.html">Founder</a>
+      <a href="/website/services.html">Services</a>
+      <a href="/website/team.html">Team</a>
+      <a href="/website/contact.html">Contact</a>
+    </div>
+  </div>
+</footer>
+<script src="/website/assets/site.js"></script>
+</body>
+</html>

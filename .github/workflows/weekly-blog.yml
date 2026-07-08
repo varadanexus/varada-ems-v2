@@ -1,0 +1,25 @@
+name: Weekly AI blog post
+
+on:
+  schedule:
+    - cron: "0 4 * * 1"   # every Monday 04:00 UTC
+  workflow_dispatch: {}    # allow manual runs from the Actions tab
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Generate and publish a post
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}          # "gemini" (free), "anthropic", or "openai"
+          AI_MODEL: ${{ vars.AI_MODEL }}                # optional override
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: node scripts/generate-blog-post.mjs

@@ -3,7 +3,7 @@ export const APP_NAME = "EMS 2.0";
 export const ROUTES = {
   ROOT: "/new-ems/index.html",
   // Public website login is the canonical EMS login entry point.
-  LOGIN: "/website/login.html",
+  LOGIN: "/login.html",
   LOGIN_LEGACY: "/new-ems/login.html",
   PORTAL_SELECTOR: "/new-ems/modules/portal-selector/index.html",
   DASHBOARD: "/new-ems/modules/dashboard/index.html",

@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /new-ems/
+Disallow: /portals/
+Disallow: /blog/admin.html
+
+Sitemap: https://www.varadanexus.com/sitemap.xml
