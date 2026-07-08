@@ -18,3 +18,7 @@
 
 # Supabase CLI connection/cache state is machine-local.
 **/supabase/.temp/
+
+# MCP server (Claude Desktop blog admin) — deps & secrets are machine-local.
+/mcp/node_modules/
+/mcp/.env

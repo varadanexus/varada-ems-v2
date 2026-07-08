@@ -11,6 +11,28 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
 <link rel="stylesheet" href="/assets/site.css">
 <link rel="stylesheet" href="/blog/console/console.css">
+<style>
+/* Custom dark dropdown */
+.vn-sel{position:relative;width:100%}
+.vn-sel-trigger{
+  display:block;width:100%;font-family:inherit;font-size:15.5px;color:var(--text);
+  background:rgba(120,165,255,.06);border:1px solid var(--border);border-radius:14px;
+  padding:14px 40px 14px 16px;cursor:pointer;user-select:none;text-align:left;
+  position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:border-color .25s,background .25s;
+}
+.vn-sel-trigger::after{content:"▾";position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-3);pointer-events:none}
+.vn-sel.open .vn-sel-trigger{border-color:var(--accent);background:rgba(120,165,255,.10)}
+.vn-sel-drop{
+  display:none;position:absolute;top:calc(100% + 4px);left:0;width:100%;
+  background:var(--bg-elev,#0c1830);border:1px solid var(--border);border-radius:12px;
+  z-index:300;overflow:hidden;box-shadow:0 12px 40px rgba(2,8,23,.7);
+}
+.vn-sel.open .vn-sel-drop{display:block}
+.vn-sel-opt{padding:10px 16px;color:var(--text-2);cursor:pointer;font-size:14.5px}
+.vn-sel-opt:hover{background:rgba(120,165,255,.10);color:var(--text)}
+.vn-sel-opt.selected{color:var(--gold,#e0c274)}
+</style>
 </head>
 <body>
 <div class="ambient"></div>
@@ -22,15 +44,29 @@
     <div class="field"><label>Slug (URL)</label><input type="text" id="f_slug" placeholder="auto-generated-from-title"></div>
     <div class="field"><label>Excerpt</label><textarea id="f_excerpt" rows="2" placeholder="One-line summary shown on the blog list"></textarea></div>
     <div class="two-col">
-      <div class="field"><label>Primary category</label><select id="f_category"></select></div>
+      <div class="field"><label>Primary category</label>
+        <div class="vn-sel" id="f_category_wrap">
+          <div class="vn-sel-trigger" id="f_category_trigger">(none)</div>
+          <div class="vn-sel-drop" id="f_category_drop">
+            <div class="vn-sel-opt selected" data-val="">(none)</div>
+          </div>
+        </div>
+      </div>
       <div class="field"><label>Content type</label>
-        <select id="f_ctype">
-          <option value="evergreen">Evergreen</option><option value="trending_news">Trending news</option>
-          <option value="how_to">How-to</option><option value="comparison">Comparison</option>
-          <option value="case_study">Case study</option><option value="opinion">Opinion</option>
-          <option value="product_service">Product/Service</option><option value="global_news_explainer">Global news explainer</option>
-          <option value="faq">FAQ</option>
-        </select>
+        <div class="vn-sel" id="f_ctype_wrap">
+          <div class="vn-sel-trigger" id="f_ctype_trigger">Evergreen</div>
+          <div class="vn-sel-drop" id="f_ctype_drop">
+            <div class="vn-sel-opt selected" data-val="evergreen">Evergreen</div>
+            <div class="vn-sel-opt" data-val="trending_news">Trending news</div>
+            <div class="vn-sel-opt" data-val="how_to">How-to</div>
+            <div class="vn-sel-opt" data-val="comparison">Comparison</div>
+            <div class="vn-sel-opt" data-val="case_study">Case study</div>
+            <div class="vn-sel-opt" data-val="opinion">Opinion</div>
+            <div class="vn-sel-opt" data-val="product_service">Product / Service</div>
+            <div class="vn-sel-opt" data-val="global_news_explainer">Global news explainer</div>
+            <div class="vn-sel-opt" data-val="faq">FAQ</div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="two-col">
@@ -48,13 +84,20 @@
     <div class="field"><label>Content (HTML)</label><textarea id="f_content" class="code" placeholder="&lt;p&gt;Your article...&lt;/p&gt;"></textarea></div>
     <div class="two-col">
       <div class="field"><label>Status</label>
-        <select id="f_status">
-          <option value="draft">Draft</option><option value="scheduled">Scheduled</option>
-          <option value="published">Published</option><option value="auto_published">Auto-published</option>
-          <option value="backdated">Backdated</option><option value="needs_review">Needs review</option>
-          <option value="failed_review">Failed review</option><option value="archived">Archived</option>
-          <option value="deleted">Deleted</option>
-        </select>
+        <div class="vn-sel" id="f_status_wrap">
+          <div class="vn-sel-trigger" id="f_status_trigger">Draft</div>
+          <div class="vn-sel-drop" id="f_status_drop">
+            <div class="vn-sel-opt selected" data-val="draft">Draft</div>
+            <div class="vn-sel-opt" data-val="scheduled">Scheduled</div>
+            <div class="vn-sel-opt" data-val="published">Published</div>
+            <div class="vn-sel-opt" data-val="auto_published">Auto-published</div>
+            <div class="vn-sel-opt" data-val="backdated">Backdated</div>
+            <div class="vn-sel-opt" data-val="needs_review">Needs review</div>
+            <div class="vn-sel-opt" data-val="failed_review">Failed review</div>
+            <div class="vn-sel-opt" data-val="archived">Archived</div>
+            <div class="vn-sel-opt" data-val="deleted">Deleted</div>
+          </div>
+        </div>
       </div>
       <div class="field"><label>Publish date</label><input type="datetime-local" id="f_pubdate"></div>
     </div>
@@ -77,25 +120,89 @@
   var sb = VN.sb, $ = function (id) { return document.getElementById(id); };
   var V2 = true;
 
+  // ── Custom dropdown helper ─────────────────────────────────
+  function makeDropdown(wrapId) {
+    var wrap    = $(wrapId + "_wrap");
+    var trigger = $(wrapId + "_trigger");
+    var drop    = $(wrapId + "_drop");
+    if (!wrap) return;
+    trigger.addEventListener("click", function (e) {
+      e.stopPropagation();
+      document.querySelectorAll(".vn-sel.open").forEach(function (el) { if (el !== wrap) el.classList.remove("open"); });
+      wrap.classList.toggle("open");
+    });
+    drop.addEventListener("click", function (e) {
+      var opt = e.target.closest(".vn-sel-opt"); if (!opt) return;
+      drop.querySelectorAll(".vn-sel-opt").forEach(function (o) { o.classList.remove("selected"); });
+      opt.classList.add("selected");
+      trigger.textContent = opt.textContent;
+      wrap.dataset.val = opt.dataset.val;
+      wrap.classList.remove("open");
+    });
+    // getter / setter
+    wrap.getValue = function () { return wrap.dataset.val || ""; };
+    wrap.setValue = function (val) {
+      var opt = drop.querySelector('[data-val="' + val + '"]');
+      drop.querySelectorAll(".vn-sel-opt").forEach(function (o) { o.classList.remove("selected"); });
+      if (opt) { opt.classList.add("selected"); trigger.textContent = opt.textContent; }
+      wrap.dataset.val = val || "";
+    };
+    return wrap;
+  }
+
+  document.addEventListener("click", function () {
+    document.querySelectorAll(".vn-sel.open").forEach(function (el) { el.classList.remove("open"); });
+  });
+
+  var ddCat    = makeDropdown("f_category");
+  var ddCtype  = makeDropdown("f_ctype");
+  var ddStatus = makeDropdown("f_status");
+
+  // ── Populate categories ────────────────────────────────────
   var CATS = await VN.loadCats();
   if (!CATS.length) V2 = false;
-  $("f_category").innerHTML = '<option value="">(none)</option>' + CATS.map(function (c) { return '<option value="' + c.slug + '">' + VN.esc(c.name) + "</option>"; }).join("");
+  var catDrop = $("f_category_drop");
+  CATS.forEach(function (c) {
+    var d = document.createElement("div");
+    d.className = "vn-sel-opt"; d.dataset.val = c.slug; d.textContent = c.name;
+    catDrop.appendChild(d);
+  });
+  // re-wire click after adding options
+  catDrop.addEventListener("click", function (e) {
+    var opt = e.target.closest(".vn-sel-opt"); if (!opt) return;
+    catDrop.querySelectorAll(".vn-sel-opt").forEach(function (o) { o.classList.remove("selected"); });
+    opt.classList.add("selected");
+    $("f_category_trigger").textContent = opt.textContent;
+    $("f_category_wrap").dataset.val = opt.dataset.val;
+    $("f_category_wrap").classList.remove("open");
+  });
 
+  // ── Fill / clear form ──────────────────────────────────────
   function fillForm(p) {
-    $("postId").value = p.id; $("f_title").value = p.title || ""; $("f_slug").value = p.slug || "";
-    $("f_excerpt").value = p.excerpt || ""; $("f_cover").value = p.cover_image || "";
-    $("f_tags").value = (p.tags || []).join(", "); $("f_content").value = p.content || "";
-    $("f_status").value = p.status || "draft";
-    $("f_category").value = p.primary_category || ""; $("f_ctype").value = p.content_type || "evergreen";
-    $("f_sector").value = p.sector || ""; $("f_region").value = p.region || "India";
-    $("f_mtitle").value = p.meta_title || ""; $("f_mdesc").value = p.meta_description || "";
-    $("f_linkedin").value = p.linkedin_post_text || ""; $("f_alt").value = p.alt_text || "";
-    $("f_pubdate").value = p.published_at ? new Date(p.published_at).toISOString().slice(0, 16) : "";
+    $("postId").value      = p.id;
+    $("f_title").value     = p.title || "";
+    $("f_slug").value      = p.slug || "";
+    $("f_excerpt").value   = p.excerpt || "";
+    $("f_cover").value     = p.cover_image || "";
+    $("f_tags").value      = (p.tags || []).join(", ");
+    $("f_content").value   = p.content || "";
+    $("f_sector").value    = p.sector || "";
+    $("f_region").value    = p.region || "India";
+    $("f_mtitle").value    = p.meta_title || "";
+    $("f_mdesc").value     = p.meta_description || "";
+    $("f_linkedin").value  = p.linkedin_post_text || "";
+    $("f_alt").value       = p.alt_text || "";
+    $("f_pubdate").value   = p.published_at ? new Date(p.published_at).toISOString().slice(0, 16) : "";
+    ddCat.setValue(p.primary_category || "");
+    ddCtype.setValue(p.content_type || "evergreen");
+    ddStatus.setValue(p.status || "draft");
   }
   function clearForm() {
     $("postId").value = "";
     ["f_title","f_slug","f_excerpt","f_cover","f_tags","f_content","f_mtitle","f_mdesc","f_linkedin","f_sector","f_pubdate","f_alt"].forEach(function (i) { $(i).value = ""; });
-    $("f_region").value = "India"; $("f_status").value = "draft"; $("f_ctype").value = "evergreen"; $("f_category").value = ""; $("editMsg").textContent = "";
+    $("f_region").value = "India";
+    ddCat.setValue(""); ddCtype.setValue("evergreen"); ddStatus.setValue("draft");
+    $("editMsg").textContent = "";
     history.replaceState(null, "", "/blog/console/new-post.html");
   }
   $("newBtn").addEventListener("click", clearForm);
@@ -108,33 +215,33 @@
   }
 
   $("saveBtn").addEventListener("click", async function () {
-    var id = $("postId").value, status = $("f_status").value;
+    var id = $("postId").value, status = ddStatus.getValue();
     var rec = {
-      title: $("f_title").value.trim(),
-      slug: ($("f_slug").value.trim() || VN.slugify($("f_title").value)),
-      excerpt: $("f_excerpt").value.trim() || null,
+      title:      $("f_title").value.trim(),
+      slug:       ($("f_slug").value.trim() || VN.slugify($("f_title").value)),
+      excerpt:    $("f_excerpt").value.trim() || null,
       cover_image: $("f_cover").value.trim() || null,
-      tags: $("f_tags").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean),
-      content: $("f_content").value,
-      status: status,
+      tags:       $("f_tags").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean),
+      content:    $("f_content").value,
+      status:     status,
     };
     if (V2) Object.assign(rec, {
-      primary_category: $("f_category").value || null,
-      content_type: $("f_ctype").value,
-      sector: $("f_sector").value.trim() || null,
-      region: $("f_region").value.trim() || null,
-      meta_title: $("f_mtitle").value.trim() || null,
-      meta_description: $("f_mdesc").value.trim() || null,
+      primary_category:   ddCat.getValue() || null,
+      content_type:       ddCtype.getValue(),
+      sector:             $("f_sector").value.trim() || null,
+      region:             $("f_region").value.trim() || null,
+      meta_title:         $("f_mtitle").value.trim() || null,
+      meta_description:   $("f_mdesc").value.trim() || null,
       linkedin_post_text: $("f_linkedin").value.trim() || null,
-      alt_text: $("f_alt").value.trim() || null,
+      alt_text:           $("f_alt").value.trim() || null,
     });
     if (!rec.title || !rec.slug) { VN.msg($("editMsg"), "Title and slug are required.", false); return; }
     if ($("f_pubdate").value) rec.published_at = new Date($("f_pubdate").value).toISOString();
     else if (VN.LIVE.indexOf(status) > -1) rec.published_at = new Date().toISOString();
-    var r;
-    if (id) r = await sb.from("blog_posts").update(rec).eq("id", id);
-    else r = await sb.from("blog_posts").insert(rec);
-    if (r.error) { VN.msg($("editMsg"), r.error.message, false); return; }
+    var res;
+    if (id) res = await sb.from("blog_posts").update(rec).eq("id", id);
+    else res = await sb.from("blog_posts").insert(rec);
+    if (res.error) { VN.msg($("editMsg"), res.error.message, false); return; }
     VN.msg($("editMsg"), id ? "Post updated." : "Post created.", true);
     if (!id) clearForm();
   });

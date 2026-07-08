@@ -603,6 +603,7 @@ body.modal-open{overflow:hidden}
   background:rgba(120,165,255,.06);
   border:1px solid var(--border);border-radius:14px;
   padding:14px 16px;outline:none;
+  -webkit-appearance:none;appearance:none;
   transition:border-color .25s,background .25s,box-shadow .25s;
 }
 .field input:focus,.field textarea:focus,.field select:focus{
