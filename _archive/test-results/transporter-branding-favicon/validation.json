@@ -1,0 +1,137 @@
+{
+  "baseUrl": "http://127.0.0.1:5500/new-ems/modules/transport-transporter-app/index.html",
+  "network": {
+    "requests": [
+      {
+        "url": "http://127.0.0.1:5500/favicon.ico",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5500/new-ems/assets/pdf/vn-logo.png",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5500/new-ems/assets/pdf/vn-logo.png",
+        "status": 304
+      }
+    ],
+    "faviconOk": true,
+    "favicon404": false
+  },
+  "console": [
+    {
+      "type": "log",
+      "text": "Live reload enabled."
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_SCRIPT_LOADED]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_INIT_START]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_ROOT_FOUND]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_RENDER_DONE]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_ROOT_FOUND]"
+    },
+    {
+      "type": "log",
+      "text": "[UNIFIED_LOGIN_RENDER_DONE]"
+    },
+    {
+      "type": "mobile-log",
+      "text": "Live reload enabled."
+    },
+    {
+      "type": "mobile-log",
+      "text": "[UNIFIED_LOGIN_SCRIPT_LOADED]"
+    },
+    {
+      "type": "mobile-log",
+      "text": "[UNIFIED_LOGIN_INIT_START]"
+    },
+    {
+      "type": "mobile-log",
+      "text": "[UNIFIED_LOGIN_ROOT_FOUND]"
+    },
+    {
+      "type": "mobile-log",
+      "text": "[UNIFIED_LOGIN_RENDER_DONE]"
+    },
+    {
+      "type": "mobile-log",
+      "text": "[UNIFIED_LOGIN_ROOT_FOUND]"
+    },
+    {
+      "type": "mobile-log",
+      "text": "[UNIFIED_LOGIN_RENDER_DONE]"
+    }
+  ],
+  "desktop": {
+    "branding": {
+      "brand": true,
+      "brandText": "Varada Nexus",
+      "moduleText": "TRANSPORTER PORTAL",
+      "topbarText": "BHANU MODIUM"
+    },
+    "kpi": {
+      "cols": "208.812px 208.812px 208.812px 208.812px 208.828px",
+      "cards": [
+        {
+          "index": 0,
+          "x": 279.1875,
+          "y": 175.484375,
+          "width": 208.8125,
+          "gridColumn": "auto"
+        },
+        {
+          "index": 1,
+          "x": 501.59375,
+          "y": 175.484375,
+          "width": 208.8125,
+          "gridColumn": "auto"
+        },
+        {
+          "index": 2,
+          "x": 724,
+          "y": 175.484375,
+          "width": 208.8125,
+          "gridColumn": "auto"
+        },
+        {
+          "index": 3,
+          "x": 946.40625,
+          "y": 175.484375,
+          "width": 208.8125,
+          "gridColumn": "auto"
+        },
+        {
+          "index": 4,
+          "x": 1168.8125,
+          "y": 175.484375,
+          "width": 208.828125,
+          "gridColumn": "auto"
+        }
+      ]
+    },
+    "truckSummaryTitle": "Truck-wise Summary",
+    "dieselHeadingVisible": true,
+    "screenshot": "D:\\Varada EMS 2.0\\test-results\\transporter-branding-favicon\\desktop-branding.png",
+    "finalUrl": "http://127.0.0.1:5500/new-ems/modules/transport-transporter-app/index.html"
+  },
+  "mobile": {
+    "brandVisible": true,
+    "screenshot": "D:\\Varada EMS 2.0\\test-results\\transporter-branding-favicon\\mobile-branding.png",
+    "finalUrl": "http://127.0.0.1:5500/new-ems/modules/transport-transporter-app/index.html"
+  },
+  "pass": true
+}

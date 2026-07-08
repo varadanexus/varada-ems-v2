@@ -5,6 +5,15 @@ const MODULE_PERMISSION_ALIASES = {
   [MODULES.TRANSPORT_FINANCE_APPROVAL]: [MODULES.TRANSPORT_FINANCE_APPROVAL, MODULES.TRANSPORT_LEDGER],
   [MODULES.ACCOUNTS]: [MODULES.ACCOUNTS, MODULES.CENTRAL_ACCOUNTS_DASHBOARD, MODULES.CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS, MODULES.CENTRAL_ACCOUNTS_POSTING_QUEUE, MODULES.CENTRAL_ACCOUNTS_JOURNALS, MODULES.CENTRAL_ACCOUNTS_AUDIT, MODULES.CENTRAL_ACCOUNTS_RECEIVABLES, MODULES.CENTRAL_ACCOUNTS_PAYABLES, MODULES.CENTRAL_ACCOUNTS_TREASURY, MODULES.CENTRAL_ACCOUNTS_REPORTING],
   [MODULES.CENTRAL_ACCOUNTS_POSTING_QUEUE]: [MODULES.CENTRAL_ACCOUNTS_POSTING_QUEUE],
+  [MODULES.LEGAL]: [MODULES.LEGAL, MODULES.LEGAL_COMMAND_CENTER, MODULES.LEGAL_DRAFTING, MODULES.LEGAL_SEND, MODULES.LEGAL_AGREEMENTS, MODULES.LEGAL_SIGNING, MODULES.LEGAL_ARCHIVE, MODULES.LEGAL_AUDIT, MODULES.LEGAL_SETTINGS],
+  [MODULES.LEGAL_COMMAND_CENTER]: [MODULES.LEGAL_COMMAND_CENTER, MODULES.LEGAL],
+  [MODULES.LEGAL_DRAFTING]: [MODULES.LEGAL_DRAFTING, MODULES.LEGAL_COMMAND_CENTER, MODULES.LEGAL],
+  [MODULES.LEGAL_SEND]: [MODULES.LEGAL_SEND, MODULES.LEGAL_COMMAND_CENTER, MODULES.LEGAL],
+  [MODULES.LEGAL_AGREEMENTS]: [MODULES.LEGAL_AGREEMENTS, MODULES.LEGAL_COMMAND_CENTER, MODULES.LEGAL],
+  [MODULES.LEGAL_SIGNING]: [MODULES.LEGAL_SIGNING, MODULES.LEGAL_COMMAND_CENTER, MODULES.LEGAL],
+  [MODULES.LEGAL_ARCHIVE]: [MODULES.LEGAL_ARCHIVE, MODULES.LEGAL_COMMAND_CENTER, MODULES.LEGAL],
+  [MODULES.LEGAL_AUDIT]: [MODULES.LEGAL_AUDIT, MODULES.LEGAL_COMMAND_CENTER, MODULES.LEGAL],
+  [MODULES.LEGAL_SETTINGS]: [MODULES.LEGAL_SETTINGS, MODULES.LEGAL_COMMAND_CENTER, MODULES.LEGAL],
   [MODULES.CENTRAL_ACCOUNTS_REPORTING]: [MODULES.CENTRAL_ACCOUNTS_REPORTING, MODULES.ACCOUNTS, MODULES.CENTRAL_ACCOUNTS_DASHBOARD],
   [MODULES.INTERIORS]: [MODULES.INTERIORS, MODULES.INTERIORS_DASHBOARD],
   [MODULES.INTERIORS_DASHBOARD]: [MODULES.INTERIORS_DASHBOARD, MODULES.INTERIORS],
@@ -32,6 +41,24 @@ const MODULE_PERMISSION_ALIASES = {
   [MODULES.INTERIORS_MATERIAL_SPECS]: [MODULES.INTERIORS_MATERIAL_SPECS, MODULES.INTERIORS_PROJECT_DETAIL, MODULES.INTERIORS_MATERIALS, MODULES.INTERIORS]
 };
 
+// Sprint 13F.14: DB-granted permissions for the current user, loaded once by
+// bootstrapProtectedPage from get_my_permissions(). Entries are "module:action".
+// The hardcoded ROLE_MODULE_PERMISSIONS map below remains authoritative ONLY for
+// super_admin (lockout safety valve); every other role is driven by these grants.
+let DB_PERMISSION_SET = new Set();
+
+export function setDbPermissionSet(rows) {
+  DB_PERMISSION_SET = new Set((rows || []).map((r) => `${r.module_code}:${r.action_code}`));
+}
+
+function hasDbPermission(moduleCode, action) {
+  return getModuleCandidates(moduleCode).some((candidate) => DB_PERMISSION_SET.has(`${candidate}:${action}`));
+}
+
+export function hasCurrentUserPermission(moduleCode, action = PERMISSIONS.VIEW) {
+  return hasDbPermission(moduleCode, action);
+}
+
 function normalizeRoleCodes(userRoleOrRoles) {
   if (Array.isArray(userRoleOrRoles)) return userRoleOrRoles.filter(Boolean);
   return userRoleOrRoles ? [userRoleOrRoles] : [];
@@ -46,27 +73,33 @@ function getModuleCandidates(moduleCode) {
 }
 
 export function hasModulePermission(userRole, moduleCode, action) {
-  const roleMap = ROLE_MODULE_PERMISSIONS[userRole] || {};
-  return getModuleCandidates(moduleCode).some((candidate) => (roleMap[candidate] || []).includes(action));
+  // Super admin keeps the full hardcoded map (cannot be locked out via the matrix).
+  if (userRole === ROLES.SUPER_ADMIN) {
+    const roleMap = ROLE_MODULE_PERMISSIONS[ROLES.SUPER_ADMIN] || {};
+    return getModuleCandidates(moduleCode).some((candidate) => (roleMap[candidate] || []).includes(action));
+  }
+  // Everyone else: the Roles & Permissions matrix (DB) is the source of truth.
+  return hasDbPermission(moduleCode, action);
 }
 
 export function hasAnyRolePermission(userRoleOrRoles, moduleCode, action, options = {}) {
   const roleCodes = normalizeRoleCodes(userRoleOrRoles);
-  const localPermission = roleCodes.some((roleCode) => hasModulePermission(roleCode, moduleCode, action));
-  if (localPermission) return true;
+  if (roleCodes.some((roleCode) => hasModulePermission(roleCode, moduleCode, action))) return true;
   if (action !== PERMISSIONS.VIEW) return false;
+  // View fallback for callers that resolved allowed modules before the DB
+  // permission set was loaded (e.g. early bootstrap).
   const allowedModules = Array.isArray(options.allowedModules) ? options.allowedModules : [];
   return getModuleCandidates(moduleCode).some((candidate) => allowedModules.includes(candidate));
 }
 
 export function getAccessibleModules(userRoleOrRoles, allowedModules = []) {
   const result = new Set(Array.isArray(allowedModules) ? allowedModules : []);
-  normalizeRoleCodes(userRoleOrRoles).forEach((roleCode) => {
-    const roleMap = ROLE_MODULE_PERMISSIONS[roleCode] || {};
+  if (normalizeRoleCodes(userRoleOrRoles).includes(ROLES.SUPER_ADMIN)) {
+    const roleMap = ROLE_MODULE_PERMISSIONS[ROLES.SUPER_ADMIN] || {};
     Object.entries(roleMap).forEach(([moduleCode, actions]) => {
       if (Array.isArray(actions) && actions.includes(PERMISSIONS.VIEW)) result.add(moduleCode);
     });
-  });
+  }
   return [...result];
 }
 

@@ -3,6 +3,7 @@ import { cancelTransporterPayment, confirmTransporterPayment, createTransporterP
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { addOldEmsCompanyHeader, addOldEmsDeclarationBlock, addOldEmsSignatureStampBlock, addOldEmsTaxSummaryBlock, addTable, createPdfDocument, formatPdfCurrency, formatPdfDate, formatPdfFilename, savePdf } from "./pdf-utils.js";
+import { notifyTransportPaymentCreated } from "./transport-integrations-api.js";
 import { qs, showToast } from "./utils.js";
 
 const PAYMENT_MODES = ["Cash", "Bank Transfer", "Cheque", "UPI", "Other"];
@@ -134,6 +135,16 @@ function renderPaymentList() {
       const confirmed = await confirmTransporterPayment(paymentId);
       await logAuditEvent("transport_transporter_payment_confirm", { moduleCode: MODULES.TRANSPORT_TRANSPORTER_PAYMENTS, entityType: "transport_transporter_payments", entityId: paymentId, beforeData: before, afterData: confirmed, action: "update" });
       showToast(`Payment confirmed: ${confirmed?.payment_no || ""}`, TOAST_TYPES.SUCCESS);
+      try {
+        const notification = await notifyTransportPaymentCreated(paymentId);
+        if (notification?.whatsapp?.sent) {
+          showToast("Payment WhatsApp sent.", TOAST_TYPES.INFO);
+        } else if (notification?.whatsapp?.reason) {
+          showToast(`Payment WhatsApp skipped: ${notification.whatsapp.reason}`, TOAST_TYPES.WARNING);
+        }
+      } catch (notifyError) {
+        showToast(`Payment confirmed, but WhatsApp failed: ${notifyError?.message || "Unknown error"}`, TOAST_TYPES.WARNING);
+      }
       await reloadStatementOptionsAndOutstanding();
       await loadPaymentList();
       if (PAGE_STATE.viewingPayment?.id === paymentId) await openDetailsModal(paymentId);

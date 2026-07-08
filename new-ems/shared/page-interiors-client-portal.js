@@ -2,7 +2,6 @@ import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { PERMISSIONS } from "../config/roles.js";
 import { logAuditEvent } from "./audit.js";
-import { listUsers, provisionUserViaEdge, requestUserPasswordReset, updateUserStatus } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { hasAnyRolePermission } from "./permissions.js";
 import { showToast } from "./utils.js";
@@ -21,7 +20,6 @@ const PAGE_STATE = {
   siteUpdates: [],
   designs: [],
   billingHeaders: [],
-  appUsers: [],
   auditLogs: [],
   selectedPortalUserId: "",
   selectedClientId: "",
@@ -62,7 +60,7 @@ async function loadData() {
   const projectIds = PAGE_STATE.projects.map((row) => row.id);
   const sharedProjectIds = PAGE_STATE.projects.map((row) => row.shared_project_id).filter(Boolean);
 
-  const [portalUsersRes, accessRes, approvalsRes, photosRes, updatesRes, designsRes, billingRes, appUsers] = await Promise.all([
+  const [portalUsersRes, accessRes, approvalsRes, photosRes, updatesRes, designsRes, billingRes, portalAuditRes] = await Promise.all([
     clientIds.length ? client.from("interior_client_portal_users").select("*").in("interior_client_id", clientIds).order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
     projectIds.length ? client.from("interior_client_project_access").select("*").in("interior_project_id", projectIds).order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
     projectIds.length ? client.from("interior_client_approvals").select("*").in("interior_project_id", projectIds).order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
@@ -70,7 +68,7 @@ async function loadData() {
     sharedProjectIds.length ? client.from("interior_site_updates").select("*").in("project_id", sharedProjectIds).order("update_date", { ascending: false }) : Promise.resolve({ data: [], error: null }),
     sharedProjectIds.length ? client.from("interior_designs").select("*").in("project_id", sharedProjectIds).order("uploaded_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
     sharedProjectIds.length ? client.from("interior_billing_headers").select("*").in("project_id", sharedProjectIds).order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
-    listUsers().catch(() => [])
+    clientIds.length ? client.from("interior_client_portal_audit_logs").select("*").order("created_at", { ascending: false }).limit(200) : Promise.resolve({ data: [], error: null })
   ]);
 
   if (portalUsersRes.error) throw portalUsersRes.error;
@@ -88,20 +86,7 @@ async function loadData() {
   PAGE_STATE.siteUpdates = updatesRes.data || [];
   PAGE_STATE.designs = designsRes.data || [];
   PAGE_STATE.billingHeaders = billingRes.data || [];
-  PAGE_STATE.appUsers = Array.isArray(appUsers) ? appUsers : [];
-
-  const authIds = PAGE_STATE.portalUsers.map((row) => row.auth_user_id).filter(Boolean);
-  if (authIds.length) {
-    const { data, error } = await client
-      .from("audit_logs")
-      .select("id,event_type,action,module_code,actor_auth_user_id,entity_type,entity_id,details,created_at")
-      .in("actor_auth_user_id", authIds)
-      .order("created_at", { ascending: false })
-      .limit(200);
-    PAGE_STATE.auditLogs = error ? [] : (data || []);
-  } else {
-    PAGE_STATE.auditLogs = [];
-  }
+  PAGE_STATE.auditLogs = portalAuditRes.error ? [] : (portalAuditRes.data || []);
 
   if (!PAGE_STATE.selectedPortalUserId && PAGE_STATE.portalUsers[0]?.id) PAGE_STATE.selectedPortalUserId = PAGE_STATE.portalUsers[0].id;
 }
@@ -127,16 +112,16 @@ function render() {
         .cp-shell{display:grid;grid-template-columns:1.05fr .95fr;gap:1rem}.cp-title{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap}.cp-actions{display:flex;gap:.4rem;flex-wrap:wrap}.cp-note{border:1px dashed #cbd5e1;border-radius:12px;padding:.85rem;background:#f8fafc}
         @media (max-width:1100px){.cp-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.cp-shell{grid-template-columns:1fr}}@media (max-width:720px){.cp-grid,.cp-kpis{grid-template-columns:1fr}}
       </style>
-      <div class="cp-title"><div><h3>Portal Management</h3><p class="muted">Portal user administration, access matrix, visibility controls, client timeline, dashboard, and portal audit trail on the existing EMS auth and portal tables.</p></div><div class="hero-kpis"><span class="meta-pill">Portal Users: ${PAGE_STATE.portalUsers.length}</span><span class="meta-pill">Access Links: ${PAGE_STATE.projectAccess.length}</span><span class="meta-pill">Visible Photos: ${PAGE_STATE.photos.filter((row) => row.is_client_visible).length}</span></div></div>
+      <div class="cp-title"><div><h3>Portal Management</h3><p class="muted">Portal user administration, access matrix, visibility controls, client timeline, dashboard, and portal audit trail on the dedicated Interiors portal identity tables.</p></div><div class="hero-kpis"><span class="meta-pill">Portal Users: ${PAGE_STATE.portalUsers.length}</span><span class="meta-pill">Access Links: ${PAGE_STATE.projectAccess.length}</span><span class="meta-pill">Visible Photos: ${PAGE_STATE.photos.filter((row) => row.is_client_visible).length}</span></div></div>
       <div class="cp-kpis" style="margin-top:1rem;"><article class="cp-kpi"><label>Projects</label><strong>${dashboard.projects}</strong></article><article class="cp-kpi"><label>Pending Approvals</label><strong>${dashboard.pendingApprovals}</strong></article><article class="cp-kpi"><label>Bills</label><strong>${dashboard.bills}</strong></article><article class="cp-kpi"><label>Outstanding</label><strong>${formatMoney(dashboard.outstanding)}</strong></article><article class="cp-kpi"><label>Avg Progress</label><strong>${dashboard.avgProgress}%</strong></article><article class="cp-kpi"><label>Recent Activity</label><strong>${dashboard.recentActivity}</strong></article></div>
     </section>
 
-    <section class="card" style="margin-top:1rem;"><div class="cp-grid"><div><label for="portalUserScope">Portal User</label><select id="portalUserScope"><option value="">All Portal Users</option>${PAGE_STATE.portalUsers.map((row) => `<option value="${row.id}" ${String(PAGE_STATE.selectedPortalUserId) === String(row.id) ? 'selected' : ''}>${escapeHtml(row.contact_name || row.email || row.id)} · ${escapeHtml(clientName(row.interior_client_id))}</option>`).join('')}</select></div><div><label for="portalClientScope">Client Filter</label><select id="portalClientScope"><option value="">All Clients</option>${PAGE_STATE.clients.map((row) => `<option value="${row.id}" ${String(PAGE_STATE.selectedClientId) === String(row.id) ? 'selected' : ''}>${escapeHtml(row.client_name)}${row.client_code ? ` (${escapeHtml(row.client_code)})` : ''}</option>`).join('')}</select></div></div></section>
+    <section class="card" style="margin-top:1rem;"><div class="cp-grid"><div><label for="portalUserScope">Portal User</label><select id="portalUserScope"><option value="">All Portal Users</option>${PAGE_STATE.portalUsers.map((row) => `<option value="${row.id}" ${String(PAGE_STATE.selectedPortalUserId) === String(row.id) ? 'selected' : ''}>${escapeHtml(row.portal_user_code || row.contact_name || row.email || row.id)} · ${escapeHtml(clientName(row.interior_client_id))}</option>`).join('')}</select></div><div><label for="portalClientScope">Client Filter</label><select id="portalClientScope"><option value="">All Clients</option>${PAGE_STATE.clients.map((row) => `<option value="${row.id}" ${String(PAGE_STATE.selectedClientId) === String(row.id) ? 'selected' : ''}>${escapeHtml(row.client_name)}${row.client_code ? ` (${escapeHtml(row.client_code)})` : ''}</option>`).join('')}</select></div></div></section>
 
     <section class="cp-shell" style="margin-top:1rem;">
       <section class="card">
         <div class="cp-title"><div><h4>Portal User Administration</h4><p class="muted">Create, edit, enable/disable, reset password, resend invite, and see last login.</p></div></div>
-        ${canCreate ? `<div class="cp-grid" style="margin-top:1rem;"><div><label for="portalClientId">Client *</label><select id="portalClientId"><option value="">Select Client</option>${PAGE_STATE.clients.map((row) => `<option value="${row.id}">${escapeHtml(row.client_name)}${row.client_code ? ` (${escapeHtml(row.client_code)})` : ''}</option>`).join('')}</select></div><div><label for="portalUserName">Contact Name *</label><input id="portalUserName" type="text" /></div><div><label for="portalUserPhone">Phone</label><input id="portalUserPhone" type="text" /></div><div><label for="portalUserEmail">Email *</label><input id="portalUserEmail" type="email" /></div><div><label for="portalUserPassword">Temporary Password</label><input id="portalUserPassword" type="password" /></div><div><label for="portalAccessLevel">Initial Access Level</label><select id="portalAccessLevel"><option value="view_only">view_only</option><option value="approve">approve</option></select></div><div class="full"><label for="portalInitialProjectIds">Initial Project Access</label><select id="portalInitialProjectIds" multiple size="6">${PAGE_STATE.projects.filter((row) => !PAGE_STATE.selectedClientId || String(row.interior_client_id) === String(PAGE_STATE.selectedClientId)).map((row) => `<option value="${row.id}">${escapeHtml(projectName(row.id))}</option>`).join('')}</select><p class="muted" style="margin-top:.35rem;">Optional during user creation, but at least one active project access is required for client login routing.</p></div></div><div class="cp-actions" style="margin-top:1rem;"><button class="btn" id="createPortalUserBtn" type="button">Create Portal User</button></div>` : `<div class="cp-note" style="margin-top:1rem;">You do not have create access for portal user administration.</div>`}
+        ${canCreate ? `<div class="cp-grid" style="margin-top:1rem;"><div><label for="portalClientId">Client *</label><select id="portalClientId"><option value="">Select Client</option>${PAGE_STATE.clients.map((row) => `<option value="${row.id}">${escapeHtml(row.client_name)}${row.client_code ? ` (${escapeHtml(row.client_code)})` : ''}</option>`).join('')}</select></div><div><label for="portalUserName">Contact Name *</label><input id="portalUserName" type="text" /></div><div><label for="portalUsername">Portal Username *</label><input id="portalUsername" type="text" /></div><div><label for="portalUserPhone">Phone</label><input id="portalUserPhone" type="text" /></div><div><label for="portalUserEmail">Email</label><input id="portalUserEmail" type="email" /></div><div><label for="portalUserPassword">Temporary Password</label><input id="portalUserPassword" type="password" /></div><div><label for="portalAccessLevel">Initial Access Level</label><select id="portalAccessLevel"><option value="view_only">view_only</option><option value="approve">approve</option></select></div><div class="full"><label for="portalInitialProjectIds">Initial Project Access</label><select id="portalInitialProjectIds" multiple size="6">${PAGE_STATE.projects.filter((row) => !PAGE_STATE.selectedClientId || String(row.interior_client_id) === String(PAGE_STATE.selectedClientId)).map((row) => `<option value="${row.id}">${escapeHtml(projectName(row.id))}</option>`).join('')}</select><p class="muted" style="margin-top:.35rem;">Portal Access only maps credentials to existing client and project records.</p></div></div><div class="cp-actions" style="margin-top:1rem;"><button class="btn" id="createPortalUserBtn" type="button">Create Portal User</button></div>` : `<div class="cp-note" style="margin-top:1rem;">You do not have create access for portal user administration.</div>`}
         <div class="table-container" style="margin-top:1rem;"><table><thead><tr><th>Client</th><th>Contact</th><th>Status</th><th>Last Login</th><th>Invited</th><th>Actions</th></tr></thead><tbody>${renderPortalUserRows(canEdit)}</tbody></table></div>
       </section>
 
@@ -160,12 +145,11 @@ function renderPortalUserRows(canEdit) {
   const rows = PAGE_STATE.portalUsers.filter((row) => !PAGE_STATE.selectedClientId || String(row.interior_client_id) === String(PAGE_STATE.selectedClientId));
   if (!rows.length) return `<tr><td colspan="6" style="text-align:center;padding:2rem;">No portal users yet.</td></tr>`;
   return rows.map((row) => {
-    const linkedUser = findAppUserByAuthId(row.auth_user_id);
-    const lastLogin = linkedUser?.last_login_at ? new Date(linkedUser.last_login_at).toLocaleString() : 'Never';
+    const lastLogin = row.last_login_at ? new Date(row.last_login_at).toLocaleString() : 'Never';
     const nextEnabled = row.access_status === 'active' ? 'disable' : 'enable';
     const activeAccessCount = PAGE_STATE.projectAccess.filter((accessRow) => String(accessRow.portal_user_id) === String(row.id) && accessRow.is_active && projectById(accessRow.interior_project_id)?.shared_project_id).length;
     const accessStateLabel = activeAccessCount > 0 ? `${activeAccessCount} active project${activeAccessCount === 1 ? '' : 's'}` : 'No active project access';
-    return `<tr><td>${escapeHtml(clientName(row.interior_client_id))}</td><td><strong>${escapeHtml(row.contact_name || '-')}</strong>${row.phone ? `<br/><span class="muted">${escapeHtml(row.phone)}</span>` : ''}<br/><span class="muted">${escapeHtml(row.email || '-')}</span></td><td>${escapeHtml(row.access_status || 'invited')}${linkedUser?.status ? `<br/><span class="muted">EMS: ${escapeHtml(linkedUser.status)}</span>` : ''}<br/><span class="muted">Portal Access: ${escapeHtml(accessStateLabel)}</span></td><td>${escapeHtml(lastLogin)}</td><td>${escapeHtml(formatDateTime(row.invited_at || row.created_at))}</td><td>${canEdit ? `<div class="cp-actions"><button class="btn btn-sm" data-edit-portal-user="${row.id}" type="button">Edit</button><button class="btn btn-sm" data-portal-user-status="${row.id}" data-next-enabled="${nextEnabled}" type="button">${nextEnabled === 'enable' ? 'Enable' : 'Disable'}</button><button class="btn btn-sm" data-portal-user-reset="${row.id}" type="button">Reset Password</button><button class="btn btn-sm" data-portal-user-resend="${row.id}" type="button">Resend Invite</button></div>` : '-'}</td></tr>`;
+    return `<tr><td>${escapeHtml(clientName(row.interior_client_id))}</td><td><strong>${escapeHtml(row.contact_name || '-')}</strong><br/><span class="muted">${escapeHtml(row.portal_user_code || row.username || row.id)}</span>${row.phone ? `<br/><span class="muted">${escapeHtml(row.phone)}</span>` : ''}<br/><span class="muted">${escapeHtml(row.email || '-')}</span></td><td>${escapeHtml(row.portal_status || row.access_status || 'invited')}<br/><span class="muted">Portal Access: ${escapeHtml(accessStateLabel)}</span></td><td>${escapeHtml(lastLogin)}</td><td>${escapeHtml(formatDateTime(row.invited_at || row.created_at))}</td><td>${canEdit ? `<div class="cp-actions"><button class="btn btn-sm" data-edit-portal-user="${row.id}" type="button">Edit</button><button class="btn btn-sm" data-portal-user-status="${row.id}" data-next-enabled="${nextEnabled}" type="button">${nextEnabled === 'enable' ? 'Enable' : 'Disable'}</button><button class="btn btn-sm" data-portal-user-reset="${row.id}" type="button">Reset Password</button><button class="btn btn-sm" data-portal-user-logout="${row.id}" type="button">Force Logout</button></div>` : '-'}</td></tr>`;
   }).join('');
 }
 
@@ -177,7 +161,7 @@ function bindEvents() {
   document.querySelectorAll('[data-edit-portal-user]').forEach((button) => button.addEventListener('click', () => editPortalUser(button.dataset.editPortalUser)));
   document.querySelectorAll('[data-portal-user-status]').forEach((button) => button.addEventListener('click', () => togglePortalUser(button.dataset.portalUserStatus, button.dataset.nextEnabled)));
   document.querySelectorAll('[data-portal-user-reset]').forEach((button) => button.addEventListener('click', () => resetPortalUserPassword(button.dataset.portalUserReset)));
-  document.querySelectorAll('[data-portal-user-resend]').forEach((button) => button.addEventListener('click', () => resendPortalInvite(button.dataset.portalUserResend)));
+  document.querySelectorAll('[data-portal-user-logout]').forEach((button) => button.addEventListener('click', () => forcePortalUserLogout(button.dataset.portalUserLogout)));
   document.querySelectorAll('[data-toggle-access]').forEach((button) => button.addEventListener('click', () => toggleProjectAccess(button.dataset.toggleAccess)));
   document.querySelectorAll('[data-toggle-project-photos]').forEach((button) => button.addEventListener('click', () => toggleProjectPhotos(button.dataset.toggleProjectPhotos)));
 }
@@ -186,24 +170,18 @@ async function createPortalUser() {
   if (PAGE_STATE.isSavingUser) return;
   const interiorClientId = document.getElementById('portalClientId')?.value || '';
   const contactName = String(document.getElementById('portalUserName')?.value || '').trim();
+  const username = String(document.getElementById('portalUsername')?.value || '').trim().toLowerCase();
   const phone = String(document.getElementById('portalUserPhone')?.value || '').trim() || null;
   const email = String(document.getElementById('portalUserEmail')?.value || '').trim().toLowerCase();
   const password = String(document.getElementById('portalUserPassword')?.value || '').trim() || undefined;
   const accessLevel = document.getElementById('portalAccessLevel')?.value || 'view_only';
   const initialProjectIds = getSelectedValues(document.getElementById('portalInitialProjectIds'));
-  if (!interiorClientId || !contactName || !email || !password) return showToast('Client, contact name, email, and temporary password are required.', TOAST_TYPES.ERROR);
-  if (PAGE_STATE.portalUsers.some((row) => String(row.email || '').toLowerCase() === email)) return showToast('A portal user already exists with this email.', TOAST_TYPES.ERROR);
+  if (!interiorClientId || !contactName || !username || !password) return showToast('Client, contact name, portal username, and temporary password are required.', TOAST_TYPES.ERROR);
+  if (PAGE_STATE.portalUsers.some((row) => String(row.username || '').toLowerCase() === username)) return showToast('A portal user already exists with this username.', TOAST_TYPES.ERROR);
   PAGE_STATE.isSavingUser = true;
   try {
-    const provisioned = await provisionUserViaEdge({ email, password, displayName: contactName, roleCode: 'client' });
-    const { data, error } = await client.from('interior_client_portal_users').insert({ interior_client_id: interiorClientId, auth_user_id: provisioned?.authUserId || null, contact_name: contactName, phone, email, access_status: 'invited', invited_at: new Date().toISOString() }).select('*').single();
+    const { data, error } = await client.rpc('interiors_portal_admin_create_user', { p_interior_client_id: interiorClientId, p_contact_name: contactName, p_phone: phone, p_email: email || null, p_username: username, p_password: password, p_access_level: accessLevel, p_project_ids: initialProjectIds });
     if (error) throw error;
-    if (initialProjectIds.length) {
-      for (const projectId of initialProjectIds) {
-        const { error: accessError } = await client.from('interior_client_project_access').insert({ portal_user_id: data.id, interior_project_id: projectId, access_level: accessLevel, is_active: true });
-        if (accessError) throw accessError;
-      }
-    }
     await logAuditEvent('interiors_portal_user_create', { moduleCode: MODULES.INTERIORS_CLIENT_PORTAL, actorAuthUserId: PAGE_STATE.boot?.appUser?.auth_user_id || null, actorAppUserId: PAGE_STATE.boot?.appUser?.id || null, entityType: 'interior_client_portal_users', entityId: data.id, afterData: data, action: 'create' });
     showToast(initialProjectIds.length ? 'Portal user created with project access.' : 'Portal user created. Grant at least one active project to enable client login routing.', TOAST_TYPES.SUCCESS);
     await loadData(); render(); bindEvents();
@@ -235,14 +213,12 @@ async function editPortalUser(id) {
 async function togglePortalUser(id, nextEnabled) {
   const row = PAGE_STATE.portalUsers.find((item) => String(item.id) === String(id));
   if (!row) return;
-  const linkedUser = findAppUserByAuthId(row.auth_user_id);
   const enable = nextEnabled === 'enable';
   try {
-    const before = { ...row, linked_status: linkedUser?.status || null };
-    const { data, error } = await client.from('interior_client_portal_users').update({ access_status: enable ? 'active' : 'suspended', activated_at: enable ? (row.activated_at || new Date().toISOString()) : row.activated_at }).eq('id', row.id).select('*').single();
+    const before = { ...row };
+    const { data, error } = await client.rpc('interiors_portal_admin_set_status', { p_portal_user_id: row.id, p_status: enable ? 'active' : 'suspended' });
     if (error) throw error;
-    if (linkedUser?.id) await updateUserStatus(linkedUser.id, enable ? 'active' : 'disabled');
-    await logAuditEvent('interiors_portal_user_status', { moduleCode: MODULES.INTERIORS_CLIENT_PORTAL, actorAuthUserId: PAGE_STATE.boot?.appUser?.auth_user_id || null, actorAppUserId: PAGE_STATE.boot?.appUser?.id || null, entityType: 'interior_client_portal_users', entityId: row.id, beforeData: before, afterData: { ...data, linked_status: enable ? 'active' : 'disabled' }, action: 'update' });
+    await logAuditEvent('interiors_portal_user_status', { moduleCode: MODULES.INTERIORS_CLIENT_PORTAL, actorAuthUserId: PAGE_STATE.boot?.appUser?.auth_user_id || null, actorAppUserId: PAGE_STATE.boot?.appUser?.id || null, entityType: 'interior_client_portal_users', entityId: row.id, beforeData: before, afterData: data, action: 'update' });
     showToast(enable ? 'Portal user enabled.' : 'Portal user disabled.', TOAST_TYPES.SUCCESS);
     await loadData(); render(); bindEvents();
   } catch (error) {
@@ -252,28 +228,29 @@ async function togglePortalUser(id, nextEnabled) {
 
 async function resetPortalUserPassword(id) {
   const row = PAGE_STATE.portalUsers.find((item) => String(item.id) === String(id));
-  if (!row?.email) return showToast('Portal user email missing.', TOAST_TYPES.ERROR);
   try {
-    await requestUserPasswordReset(row.email);
-    await logAuditEvent('interiors_portal_user_password_reset', { moduleCode: MODULES.INTERIORS_CLIENT_PORTAL, actorAuthUserId: PAGE_STATE.boot?.appUser?.auth_user_id || null, actorAppUserId: PAGE_STATE.boot?.appUser?.id || null, entityType: 'interior_client_portal_users', entityId: row.id, details: { email: row.email }, action: 'update' });
-    showToast('Password reset triggered.', TOAST_TYPES.SUCCESS);
+    const nextPassword = window.prompt(`Set a new password for ${row.portal_user_code || row.username || row.contact_name}:`, '');
+    if (!nextPassword) return;
+    const { error } = await client.rpc('interiors_portal_admin_reset_password', { p_portal_user_id: row.id, p_new_password: nextPassword });
+    if (error) throw error;
+    await logAuditEvent('interiors_portal_user_password_reset', { moduleCode: MODULES.INTERIORS_CLIENT_PORTAL, actorAuthUserId: PAGE_STATE.boot?.appUser?.auth_user_id || null, actorAppUserId: PAGE_STATE.boot?.appUser?.id || null, entityType: 'interior_client_portal_users', entityId: row.id, details: { portal_user_code: row.portal_user_code, username: row.username }, action: 'update' });
+    showToast('Portal password reset.', TOAST_TYPES.SUCCESS);
   } catch (error) {
     showToast(error?.message || 'Failed to trigger password reset.', TOAST_TYPES.ERROR);
   }
 }
 
-async function resendPortalInvite(id) {
+async function forcePortalUserLogout(id) {
   const row = PAGE_STATE.portalUsers.find((item) => String(item.id) === String(id));
-  if (!row?.email) return showToast('Portal user email missing.', TOAST_TYPES.ERROR);
+  if (!row) return;
   try {
-    await requestUserPasswordReset(row.email);
-    const { data, error } = await client.from('interior_client_portal_users').update({ invited_at: new Date().toISOString(), access_status: row.access_status === 'revoked' ? 'invited' : row.access_status }).eq('id', row.id).select('*').single();
+    const { error } = await client.rpc('interiors_portal_admin_force_logout', { p_portal_user_id: row.id });
     if (error) throw error;
-    await logAuditEvent('interiors_portal_user_resend_invite', { moduleCode: MODULES.INTERIORS_CLIENT_PORTAL, actorAuthUserId: PAGE_STATE.boot?.appUser?.auth_user_id || null, actorAppUserId: PAGE_STATE.boot?.appUser?.id || null, entityType: 'interior_client_portal_users', entityId: row.id, afterData: data, details: { email: row.email }, action: 'update' });
-    showToast('Invite resent.', TOAST_TYPES.SUCCESS);
+    await logAuditEvent('interiors_portal_force_logout', { moduleCode: MODULES.INTERIORS_CLIENT_PORTAL, actorAuthUserId: PAGE_STATE.boot?.appUser?.auth_user_id || null, actorAppUserId: PAGE_STATE.boot?.appUser?.id || null, entityType: 'interior_client_portal_sessions', entityId: row.id, details: { portal_user_code: row.portal_user_code, username: row.username }, action: 'update' });
+    showToast('Portal user logged out from all active sessions.', TOAST_TYPES.SUCCESS);
     await loadData(); render(); bindEvents();
   } catch (error) {
-    showToast(error?.message || 'Failed to resend invite.', TOAST_TYPES.ERROR);
+    showToast(error?.message || 'Failed to force logout.', TOAST_TYPES.ERROR);
   }
 }
 
@@ -379,11 +356,10 @@ function buildTimelineRows(selectedPortalUser) {
 
 function buildAuditRows(selectedPortalUser) {
   const scopedUsers = selectedPortalUser ? [selectedPortalUser] : PAGE_STATE.portalUsers;
-  const authIds = new Set(scopedUsers.map((row) => String(row.auth_user_id || '')).filter(Boolean));
   const rows = [];
   PAGE_STATE.auditLogs.forEach((row) => {
-    if (authIds.size && !authIds.has(String(row.actor_auth_user_id || ''))) return;
-    rows.push({ at: row.created_at, portalUserLabel: portalUserNameByAuth(row.actor_auth_user_id), eventType: row.event_type || row.action || 'audit', reference: row.entity_type || row.entity_id || '-', details: row.action || '-' });
+    if (selectedPortalUser && String(row.portal_user_id || '') !== String(selectedPortalUser.id)) return;
+    rows.push({ at: row.created_at, portalUserLabel: portalUserName(row.portal_user_id), eventType: row.event_type || row.action || 'audit', reference: row.portal_user_id || '-', details: JSON.stringify(row.details || {}) });
   });
   PAGE_STATE.approvals.forEach((row) => {
     if (selectedPortalUser && String(row.portal_user_id) !== String(selectedPortalUser.id)) return;
@@ -433,11 +409,8 @@ function getAccessibleSharedProjectIds(selectedPortalUser) {
   return new Set(PAGE_STATE.projects.filter((row) => ids.has(String(row.id))).map((row) => String(row.shared_project_id || '')).filter(Boolean));
 }
 
-function findAppUserByAuthId(authUserId) { return PAGE_STATE.appUsers.find((row) => String(row.auth_user_id || '') === String(authUserId || '')) || null; }
 function projectById(id) { return PAGE_STATE.projects.find((row) => String(row.id) === String(id)) || null; }
-function clientName(id) { const row = PAGE_STATE.clients.find((item) => String(item.id) === String(id)); return row ? `${row.client_name || ''}${row.client_code ? ` (${row.client_code})` : ''}` : String(id || '-'); }
-function portalUserName(id) { const row = PAGE_STATE.portalUsers.find((item) => String(item.id) === String(id)); return row ? row.contact_name || row.email || row.id : String(id || '-'); }
-function portalUserNameByAuth(authUserId) { const row = PAGE_STATE.portalUsers.find((item) => String(item.auth_user_id || '') === String(authUserId || '')); return row ? row.contact_name || row.email || row.id : String(authUserId || '-'); }
+function portalUserName(id) { const row = PAGE_STATE.portalUsers.find((item) => String(item.id) === String(id)); return row ? row.portal_user_code || row.contact_name || row.email || row.id : String(id || '-'); }
 function projectName(id) { const row = PAGE_STATE.projects.find((item) => String(item.id) === String(id)); return row ? `${row.project_code || ''} - ${row.project_title || row.project_name || 'Project'}` : String(id || '-'); }
 function projectNameByShared(id) { const row = PAGE_STATE.projects.find((item) => String(item.shared_project_id) === String(id)); return row ? `${row.project_code || ''} - ${row.project_title || row.project_name || 'Project'}` : String(id || '-'); }
 

@@ -382,7 +382,34 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
+# Sprint 13F: ems-auth mints the local-staff JWT. It must be callable by anon
+# (the user has no JWT yet at login), so JWT verification is disabled — the
+# function authenticates the caller via the session token it validates server-side.
+[functions.ems-auth]
+verify_jwt = false
+
+# Legal public signing links and provider webhooks need to receive browser
+# preflight requests and unauthenticated public/provider callbacks. The function
+# performs its own action-level authorization internally.
+[functions.legal-integrations]
+verify_jwt = false
+static_files = [
+  "./functions/legal-integrations/vn-logo-clean.png",
+  "./functions/legal-integrations/vn-stamp-clean.png"
+]
+
+# WhatsApp inbox and template webhooks must be callable by Twilio and browser
+# clients that do their own auth checks before invoking the edge function.
+[functions.whatsapp-integrations]
+verify_jwt = false
+
+# Meeting guest join links and host JWT minting share one function. Public guest
+# joins must work without an authenticated EMS session, while host tokens are
+# authorized server-side based on the caller's EMS roles.
+[functions.meetings-integrations]
+verify_jwt = false
+
+  # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
 [analytics]

@@ -7,7 +7,12 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "check:migrations": "node scripts/check-supabase-migrations.cjs",
+    "db:status": "cd new-ems && supabase migration list --linked",
+    "db:dry-run": "npm run check:migrations && cd new-ems && supabase db push --linked --dry-run",
+    "db:push": "npm run check:migrations && cd new-ems && supabase db push --linked",
+    "site:serve": "npx serve . -p 5501"
   },
   "repository": {
     "type": "git",

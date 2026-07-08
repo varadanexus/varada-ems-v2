@@ -1,0 +1,13 @@
+{
+  "token": "20260703104742",
+  "startedAt": "2026-07-03T05:17:42.393Z",
+  "fixtures": {
+    "transportClientId": "cd9e6da9-c5d3-4fff-8cf9-169981191d24",
+    "transportTransporterId": "dd7845a8-1928-4698-a9ec-9320b8c37f90",
+    "approvedTransporterStatementId": "fd26ce9d-9ede-4c18-ad4b-4ce8f32c745f",
+    "interiorClientId": "7565127c-e86f-4e37-b104-9e25d7c4e68c",
+    "existingInteriorProjectId": "bc846cb6-74d7-49e1-9aa6-b644308d4c9c"
+  },
+  "steps": [],
+  "finishedAt": "2026-07-03T05:17:59.876Z"
+}

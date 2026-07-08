@@ -148,9 +148,10 @@ This file documents understanding only. It does not change application behavior.
 - Some record-level access (e.g. "own trips," "own commissions") is still
   app-enforced rather than backed by SQL RLS — do not assume DB-level protection
   exists for "own/assigned" scoping.
-- Root `supabase/` folder and `new-ems/supabase/` folder may cause confusion about
-  which migration set is authoritative — verify which is actually applied/active
-  before assuming.
+- `new-ems/supabase/` is the sole active Supabase project and migration source.
+  The repository-root `supabase/` directory contains only a guard README and must
+  never contain migrations. Historical direct-production SQL lives under
+  `docs/archive/migrations/` and must never be applied.
 - Several `docs/*.md` files describe target architecture, not implementation
   truth. Cross-check against code before treating them as current state.
 

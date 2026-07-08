@@ -2,6 +2,7 @@ import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { approveTransportClientBill, cancelTransportClientBill, createTransportClientBill, getTransportClientBillDetails, listActiveOptions, listTransportClientBillableTrips, listTransportClientBills, listTransportClientCreditNotes, resolveWorkspaceDivision } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
+import { notifyTransportBillGenerated } from "./transport-integrations-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { addOldEmsBankDetailsBlock, addOldEmsClientDetailsBlock, addOldEmsCompanyHeader, addOldEmsCreditNotesSection, addOldEmsDeclarationBlock, addOldEmsSignatureStampBlock, addOldEmsTaxSummaryBlock, addTable, createPdfDocument, formatPdfCurrency, formatPdfDate, formatPdfFilename, formatPdfQuantity, savePdf } from "./pdf-utils.js";
 import { qs, showToast } from "./utils.js";
@@ -291,6 +292,9 @@ function bindEvents() {
       if (resultNode) resultNode.innerHTML = `<div class="billing-result">Generated Bill No: ${escapeHtml(result?.bill_no || "—")}</div>`;
       await loadEligibleTrips(transportClientId);
       await loadBillList();
+      if (result?.bill_id) {
+        notifyTransportBillGenerated(result.bill_id).catch((err) => console.warn("Bill WhatsApp notify failed", err));
+      }
     } catch (error) {
       showToast(error?.message || "Client bill creation failed", TOAST_TYPES.ERROR);
     }
@@ -399,7 +403,7 @@ function renderBillList() {
   body.querySelectorAll("button[data-bill-cancel]").forEach((button) => button.addEventListener("click", async () => {
     const billId = button.getAttribute("data-bill-cancel");
     if (!billId) return;
-    const confirmed = window.confirm("Cancel this bill? This is a soft-cancel and will make its trips eligible for rebilling.");
+    const confirmed = window.confirm("Cancel this bill? It will be permanently removed, its number reused, and its trips become eligible for rebilling.");
     if (!confirmed) return;
     try {
       const before = PAGE_STATE.bills.find((x) => String(x.id) === String(billId)) || null;

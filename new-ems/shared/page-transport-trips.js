@@ -1,8 +1,10 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, findTransportRateForTrip, getActiveAgentByTruck, getTransporterByTruck, getTripById, listActiveOptions, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
+import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, findTransportRateForTrip, getActiveAgentByTruck, getTransporterByTruck, getTripById, listActiveOptions, listRateRoutesForCommodity, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { getCurrentAppUser } from "./auth.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { dispatchNotification } from "./notification-api.js";
+import { notifyTransportTripCreated } from "./transport-integrations-api.js";
 import { qs, showToast } from "./utils.js";
 
 async function init() {
@@ -10,11 +12,21 @@ async function init() {
   const boot = await bootstrapProtectedPage({ moduleCode: MODULES.TRANSPORT_TRIPS, pageTitle: "Trips", pageDescription: "Create, track, and update transportation trips", workspace: WORKSPACES.TRANSPORTATION });
   if (!boot) return;
   const fixedDivisionId = boot.divisionId || null;
+  const permissionSet = new Set((boot.permissions || []).map((p) => `${p.module_code}:${p.action_code}`));
+  const isPrivileged = boot.roleCodes?.some((role) => role === "super_admin" || role === "admin");
+  const canCreate = isPrivileged || permissionSet.has(`${MODULES.TRANSPORT_TRIPS}:create`);
+  const canEdit = isPrivileged || permissionSet.has(`${MODULES.TRANSPORT_TRIPS}:edit`);
+  const canDelete = isPrivileged || permissionSet.has(`${MODULES.TRANSPORT_TRIPS}:delete`);
   let page = 1; const pageSize = 10; let rows = [];
 
-  renderModuleContent(`<section class="card"><h3>Create Trip</h3><form id="tripCreateForm" class="form-row"></form><div id="tripCreateMeta" class="muted" style="margin-top:.5rem;"></div></section>
+  renderModuleContent(`${canCreate ? `<details class="card pm-collapse"><summary>Create Trip</summary><form id="tripCreateForm" class="form-row" style="margin-top:.85rem;"></form><div id="tripCreateMeta" class="muted" style="margin-top:.5rem;"></div></details>` : ""}
   <section class="card" style="margin-top:1rem;"><h3>Trip List</h3><input id="tripSearch" placeholder="Search trip no/notes"/><select id="tripStatus"><option value="">All Status</option>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}">${s}</option>`).join("")}</select><div class="table-shell" style="margin-top:.75rem;"><table><thead><tr><th>Trip No</th><th>Date</th><th>Status</th><th>Qty</th><th>Actions</th></tr></thead><tbody id="tripBody"></tbody></table></div><div style="margin-top:.75rem;display:flex;gap:.5rem;"><button class="btn" id="tripPrev">Prev</button><span id="tripMeta"></span><button class="btn" id="tripNext">Next</button></div></section>
-  <section class="card" style="margin-top:1rem;"><h3>Trip Details & Timeline</h3><div id="tripDetails" class="empty-state">Select a trip from list to view details and timeline.</div></section>
+  <div id="tripDetailsModal" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,.62);backdrop-filter:blur(4px);z-index:70;align-items:center;justify-content:center;">
+    <div class="card" style="width:min(1000px,95vw);max-height:90vh;overflow:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.5rem;"><h3 style="margin:0;">Trip Details &amp; Timeline</h3><button class="btn" id="tripDetailsClose" type="button">Close</button></div>
+      <div id="tripDetails" class="empty-state">Select a trip from list to view details and timeline.</div>
+    </div>
+  </div>
   <div id="tripEditModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:60;align-items:center;justify-content:center;">
     <div class="card" style="width:min(900px,95vw);max-height:90vh;overflow:auto;">
       <h3>Edit Trip</h3>
@@ -28,7 +40,7 @@ async function init() {
 
   const form = qs("#tripCreateForm");
   let pendingCreateDocs = [];
-  form.innerHTML = `
+  if (form) form.innerHTML = `
     <div class="meta-pill">Workspace: Transportation</div>
     <input type="hidden" data-f="division_id" value="${fixedDivisionId || ""}" />
     <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 1: Movement</h4>
@@ -55,7 +67,7 @@ async function init() {
     <div id="tripCreateFinancialPreview" class="meta-pill" style="grid-column:1/-1;background:#f3f4f6;color:#111827;">Preview: Qty MT 0.000 | Client Gross ₹0.00 | Transporter Gross ₹0.00 | Estimated Margin ₹0.00</div>
     <label>Notes</label><input data-f="notes" />
     <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 6: Documents</h4>
-    <div style="grid-column:1/-1;margin-top:.5rem;"><h4 style="margin:.25rem 0;">Trip Documents</h4><div id="tripDocCreateRows"></div></div>
+    <details class="pm-collapse pm-collapse--sub" style="grid-column:1/-1;margin-top:.5rem;"><summary>Trip Documents</summary><div id="tripDocCreateRows" style="margin-top:.6rem;"></div></details>
     <button class="btn" type="submit">Create Trip</button>`;
 
   function renderCreateDocRows() {
@@ -63,7 +75,7 @@ async function init() {
     if (!host) return;
     const mkRow = (label, type, mandatory = false) => {
       const rec = pendingCreateDocs.find((d) => d.document_type === type && (!d.custom_document_name || d.custom_document_name === ""));
-      return `<tr><td>${label}${mandatory ? " <span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Mandatory</span>" : ""}</td><td>${rec ? (rec.is_uploaded ? "Uploaded" : "Pending Upload") : (mandatory ? "Missing" : "Missing")}</td><td><button class='btn' data-c-up='${type}'>Upload Placeholder</button></td><td><button class='btn' ${rec?.file_url ? "" : "disabled"}>View</button></td><td><button class='btn' data-c-rep='${type}' ${rec ? "" : "disabled"}>Replace</button></td><td><button class='btn btn-danger' data-c-del='${type}' ${rec ? "" : "disabled"}>Delete</button></td></tr>`;
+      return `<tr><td>${label}${mandatory ? " <span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Mandatory</span>" : ""}</td><td>${rec ? (rec.is_uploaded ? "Uploaded" : "Pending Upload") : (mandatory ? "Missing" : "Missing")}</td><td><button type='button' class='btn' data-c-up='${type}'>Upload Placeholder</button></td><td><button type='button' class='btn' ${rec?.file_url ? "" : "disabled"}>View</button></td><td><button type='button' class='btn' data-c-rep='${type}' ${rec ? "" : "disabled"}>Replace</button></td><td><button type='button' class='btn btn-danger' data-c-del='${type}' ${rec ? "" : "disabled"}>Delete</button></td></tr>`;
     };
     host.innerHTML = `<div class='table-shell'><table><thead><tr><th>Document</th><th>Status</th><th>Upload</th><th>View</th><th>Replace</th><th>Delete</th></tr></thead><tbody>
       ${mkRow("Weight Bill", "WEIGHT_BILL", true)}
@@ -86,14 +98,38 @@ async function init() {
       renderCreateDocRows();
     }));
   }
-  renderCreateDocRows();
+  if (form) renderCreateDocRows();
 
   const map = [["transport_client_id","transport_clients",fixedDivisionId],["transport_transporter_id","transport_transporters",fixedDivisionId],["truck_id","transport_trucks",fixedDivisionId],["driver_id","transport_drivers",fixedDivisionId],["route_id","transport_route_master",fixedDivisionId],["transport_commodity_id","transport_commodities",fixedDivisionId]];
+  let allRouteOpts = [];
   for (const [field, table, div] of map) {
     const sel = qs(`[data-f='${field}']`); if (!sel) continue;
     const opts = await listActiveOptions(table, { labelField: "name", valueField: "id", divisionId: div });
+    if (field === "route_id") allRouteOpts = opts;
     sel.innerHTML = `<option value="">Select...</option>${opts.map((o)=>`<option value="${o.value}">${o.label}</option>`).join("")}`;
   }
+
+  async function applyRouteFilter(sel, commodityId) {
+    if (!sel) return;
+    const current = sel.value;
+    let opts = allRouteOpts;
+    if (commodityId) {
+      try {
+        const ids = await listRateRoutesForCommodity({ divisionId: fixedDivisionId, transportCommodityId: commodityId });
+        if (ids && ids.length) {
+          opts = allRouteOpts.filter((o) => ids.map(String).includes(String(o.value)));
+        } else {
+          showToast("No rate-linked routes for this commodity yet; showing all routes.", TOAST_TYPES.INFO);
+        }
+      } catch { /* fall back to all routes */ }
+    }
+    sel.innerHTML = `<option value="">Select...</option>${opts.map((o)=>`<option value="${o.value}">${o.label}</option>`).join("")}`;
+    if (current && opts.some((o) => String(o.value) === String(current))) sel.value = current;
+  }
+
+  qs("[data-f='transport_commodity_id']")?.addEventListener("change", async () => {
+    await applyRouteFilter(qs("[data-f='route_id']"), qs("[data-f='transport_commodity_id']")?.value || "");
+  });
 
   async function derivePartiesFromTruckCreate() {
     const truckId = qs("[data-f='truck_id']")?.value || "";
@@ -131,8 +167,9 @@ async function init() {
     }
   }
 
-  form.addEventListener("submit", async (e) => {
+  form?.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (form.dataset.busy === "1") return;
     const payload = { status: "draft", is_active: true };
     ["division_id","trip_date","transport_client_id","transport_transporter_id","truck_id","driver_id","route_id","transport_commodity_id","quantity_kg","quantity_mt","client_rate_per_mt","transporter_rate_per_mt","notes"].forEach((k)=>{ const v = qs(`[data-f='${k}']`)?.value?.trim(); if (v) payload[k]=v; });
     if (!fixedDivisionId) return showToast("Canonical Transportation division not found", TOAST_TYPES.ERROR);
@@ -151,6 +188,9 @@ async function init() {
     if (Number(payload.transporter_rate_per_mt || 0) > Number(payload.client_rate_per_mt || 0)) {
       showToast("Warning: transporter rate is higher than client rate. This trip will create negative margin.", TOAST_TYPES.WARNING);
     }
+    form.dataset.busy = "1";
+    const submitBtn = form.querySelector("button[type='submit']");
+    if (submitBtn) submitBtn.disabled = true;
     try {
       const created = await createTrip(payload);
       const appUser = await getCurrentAppUser();
@@ -160,9 +200,40 @@ async function init() {
       }
       await addTripTimeline({ trip_id: created.id, status: "draft", remarks: "Trip created", changed_by: appUser?.id || null });
       await logAuditEvent("trip_create", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trips", entityId: created.id, afterData: created, action: "create" });
+      try {
+        await dispatchNotification({
+          moduleCode: MODULES.TRANSPORT_TRIPS,
+          eventCode: "trip_created",
+          category: "operations",
+          title: `Trip created: ${created.trip_no || "New Trip"}`,
+          message: `A transportation trip was created for ${payload.trip_date || "the selected date"} with quantity ${payload.quantity_kg || 0} KG.`,
+          severity: "success",
+          actionLabel: "Open Trips",
+          actionUrl: "/new-ems/modules/transport-trips/index.html",
+          entityType: "transport_trips",
+          entityId: String(created.id || ""),
+          targetMode: "smart",
+          targetRoleCodes: ["super_admin", "admin", "manager", "accounts", "accounts_manager"],
+          context: {
+            trip_no: created.trip_no || null,
+            division_id: fixedDivisionId,
+            quantity_kg: payload.quantity_kg || null
+          }
+        });
+      } catch {}
       const meta = qs("#tripCreateMeta");
       if (meta) meta.textContent = `Generated Trip No: ${created.trip_no || "(pending)"}`;
       showToast(`Trip created: ${created.trip_no}`, TOAST_TYPES.SUCCESS);
+      try {
+        const notification = await notifyTransportTripCreated(created.id);
+        if (notification?.whatsapp?.sent) {
+          showToast("Trip WhatsApp sent to transporter.", TOAST_TYPES.INFO);
+        } else if (notification?.whatsapp?.reason) {
+          showToast(`Trip WhatsApp skipped: ${notification.whatsapp.reason}`, TOAST_TYPES.WARNING);
+        }
+      } catch (notifyError) {
+        showToast(`Trip created, but WhatsApp failed: ${notifyError?.message || "Unknown error"}`, TOAST_TYPES.WARNING);
+      }
       form.reset();
       pendingCreateDocs = [];
       renderCreateDocRows();
@@ -170,6 +241,10 @@ async function init() {
     } catch (err) {
       const detail = [err?.code, err?.message, err?.details, err?.hint].filter(Boolean).join(" | ");
       showToast(detail || "Create failed", TOAST_TYPES.ERROR);
+    } finally {
+      form.dataset.busy = "";
+      const sBtn = form.querySelector("button[type='submit']");
+      if (sBtn) sBtn.disabled = false;
     }
   });
 
@@ -243,6 +318,8 @@ async function init() {
       <ul class="activity-list">${timeline.map((t)=>`<li><strong>${t.status}</strong> · ${new Date(t.created_at).toLocaleString()}${t.remarks ? ` · ${t.remarks}` : ""}</li>`).join("")}</ul>
     `;
 
+    const dModal = qs("#tripDetailsModal");
+    if (dModal) dModal.style.display = "flex";
     qs("#tripDetails").querySelectorAll("button[data-da]").forEach((b) => b.addEventListener("click", async () => {
       const type = b.getAttribute("data-da");
       const custom = type === "OTHER" ? window.prompt("Document Name (required for OTHER)", "") : null;
@@ -408,6 +485,9 @@ async function init() {
     bindOptions("transport_commodity_id", "transport_commodities", row.transport_commodity_id);
     bindOptions("transport_client_id", "transport_clients", row.transport_client_id);
     bindOptions("transport_transporter_id", "transport_transporters", row.transport_transporter_id);
+    qs("[data-e='transport_commodity_id']")?.addEventListener("change", async () => {
+      await applyRouteFilter(qs("[data-e='route_id']"), qs("[data-e='transport_commodity_id']")?.value || "");
+    });
 
     const derivePartiesFromTruckEdit = async () => {
       const truckId = qs("[data-e='truck_id']")?.value || "";
@@ -458,6 +538,9 @@ async function init() {
     renderFinancialPreview("edit");
 
     qs("#tripEditSave").onclick = async () => {
+      const saveBtn = qs("#tripEditSave");
+      if (saveBtn?.disabled) return;
+      if (saveBtn) saveBtn.disabled = true;
       try {
         const payload = { notes: qs("[data-e='notes']")?.value?.trim() || null };
         if (!isCompleted) {
@@ -495,12 +578,18 @@ async function init() {
         await load();
       } catch (err) {
         showToast(err?.message || "Edit failed", TOAST_TYPES.ERROR);
+      } finally {
+        const sb = qs("#tripEditSave");
+        if (sb) sb.disabled = false;
       }
     };
 
     qs("#tripEditCancel").onclick = () => { modal.style.display = "none"; };
     modal.style.display = "flex";
   }
+
+  qs("#tripDetailsClose")?.addEventListener("click", () => { const m = qs("#tripDetailsModal"); if (m) m.style.display = "none"; });
+  qs("#tripDetailsModal")?.addEventListener("click", (e) => { if (e.target === qs("#tripDetailsModal")) qs("#tripDetailsModal").style.display = "none"; });
 
   async function load() {
     const search = qs("#tripSearch")?.value?.trim() || "";
@@ -510,20 +599,20 @@ async function init() {
     qs("#tripMeta").textContent = `Page ${page}/${Math.max(1, Math.ceil((out.count || 0) / pageSize))}`;
     const body = qs("#tripBody");
     if (!rows.length) { body.innerHTML = `<tr><td colspan="5">No trips found</td></tr>`; return; }
-    body.innerHTML = rows.map((r)=>`<tr><td>${r.trip_no}</td><td>${r.trip_date || ""}</td><td><select data-s="${r.id}">${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}" ${r.status===s?"selected":""}>${s}</option>`).join("")}</select></td><td>${(r.quantity_kg ?? "")} KG (${Number(r.quantity_mt || 0).toFixed(2)} MT)</td><td><button class="btn" data-u="${r.id}">Update Status</button> <button class="btn" data-e="${r.id}">Edit</button> <button class="btn" data-v="${r.id}">Details</button> <button class="btn btn-danger" data-d="${r.id}">Delete</button></td></tr>`).join("");
+    body.innerHTML = rows.map((r)=>`<tr><td>${r.trip_no}</td><td>${r.trip_date || ""}</td><td><select data-s="${r.id}" ${canEdit ? "" : "disabled"}>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}" ${r.status===s?"selected":""}>${s}</option>`).join("")}</select></td><td>${(r.quantity_kg ?? "")} KG (${Number(r.quantity_mt || 0).toFixed(2)} MT)</td><td>${canEdit ? `<button class="btn" data-e="${r.id}">Edit</button>` : ""} <button class="btn" data-v="${r.id}">Details</button> ${canDelete ? `<button class="btn btn-danger" data-d="${r.id}">Delete</button>` : ""}</td></tr>`).join("");
     body.querySelectorAll("button[data-v]").forEach((b)=>b.addEventListener("click", ()=>openDetails(b.getAttribute("data-v"))));
     body.querySelectorAll("button[data-e]").forEach((b)=>b.addEventListener("click", ()=>{
       const id = b.getAttribute("data-e");
       const row = rows.find((x)=>x.id===id);
       openEditModal(row);
     }));
-    body.querySelectorAll("button[data-u]").forEach((b)=>b.addEventListener("click", async ()=>{
-      const id = b.getAttribute("data-u");
+    body.querySelectorAll("select[data-s]").forEach((sel)=>sel.addEventListener("change", async ()=>{
+      const id = sel.getAttribute("data-s");
       const before = rows.find((x)=>x.id===id);
-      const status = qs(`[data-s='${id}']`)?.value;
+      const status = sel.value;
       const nextIdx = TRIP_STATUS_FLOW.indexOf(status);
       const prevIdx = TRIP_STATUS_FLOW.indexOf(before?.status);
-      if (nextIdx < prevIdx) return showToast("Backward status transition not allowed", TOAST_TYPES.ERROR);
+      if (nextIdx < prevIdx) { sel.value = before?.status || status; return showToast("Backward status transition not allowed", TOAST_TYPES.ERROR); }
       try {
         const updated = await updateTrip(id, { status });
         const appUser = await getCurrentAppUser();
@@ -533,35 +622,42 @@ async function init() {
         await load();
       } catch (error) {
         console.error("trip_status_update_failed", { id, status, error });
-        showToast(error?.message || `Failed to update trip status to ${status}.`, TOAST_TYPES.ERROR);
+        const emsg = String(error?.message || "");
+        if (emsg.includes("WEIGHT_BILL")) {
+          showToast("Weight Bill required: open Details and add a WEIGHT_BILL document before marking this trip completed / financial review.", TOAST_TYPES.ERROR);
+        } else {
+          showToast(emsg || `Failed to update trip status to ${status}.`, TOAST_TYPES.ERROR);
+        }
+        await load();
       }
     }));
     body.querySelectorAll("button[data-d]").forEach((b)=>b.addEventListener("click", async ()=>{
       const id = b.getAttribute("data-d");
       const before = rows.find((x)=>x.id===id);
-      await softDeleteTrip(id);
-      const appUser = await getCurrentAppUser();
-      await addTripTimeline({
-        trip_id: id,
-        status: before?.status || "draft",
-        remarks: "Trip soft-deleted with linked support/deductions and documents",
-        changed_by: appUser?.id || null
-      });
-      await logAuditEvent("trip_soft_delete_cascade", {
-        moduleCode: MODULES.TRANSPORT_TRIPS,
-        entityType: "transport_trips",
-        entityId: id,
-        beforeData: before,
-        action: "soft_delete"
-      });
+      if (!window.confirm(`Delete trip ${before?.trip_no || ""}? This permanently removes it along with its documents and expenses.`)) return;
+      try {
+        await softDeleteTrip(id);
+        await logAuditEvent("trip_delete", {
+          moduleCode: MODULES.TRANSPORT_TRIPS,
+          entityType: "transport_trips",
+          entityId: id,
+          beforeData: before,
+          action: "delete"
+        });
+        showToast(`Trip ${before?.trip_no || ""} deleted`, TOAST_TYPES.SUCCESS);
+      } catch (error) {
+        showToast(error?.message || "Delete failed", TOAST_TYPES.ERROR);
+      }
       await load();
     }));
   }
 
   qs("#tripSearch")?.addEventListener("input", async ()=>{ page = 1; await load(); });
   qs("#tripStatus")?.addEventListener("change", async ()=>{ page = 1; await load(); });
-  const cSrc = document.createElement("input"); cSrc.type = "hidden"; cSrc.setAttribute("data-f", "client_rate_source"); cSrc.value = "MANUAL_OVERRIDE"; form.appendChild(cSrc);
-  const tSrc = document.createElement("input"); tSrc.type = "hidden"; tSrc.setAttribute("data-f", "transporter_rate_source"); tSrc.value = "MANUAL_OVERRIDE"; form.appendChild(tSrc);
+  if (form) {
+    const cSrc = document.createElement("input"); cSrc.type = "hidden"; cSrc.setAttribute("data-f", "client_rate_source"); cSrc.value = "MANUAL_OVERRIDE"; form.appendChild(cSrc);
+    const tSrc = document.createElement("input"); tSrc.type = "hidden"; tSrc.setAttribute("data-f", "transporter_rate_source"); tSrc.value = "MANUAL_OVERRIDE"; form.appendChild(tSrc);
+  }
   const setCreateRateStatus = (text, kind = "info") => {
     const host = qs("#tripCreateRateStatus"); if (!host) return; host.textContent = text;
     if (kind === "success") { host.style.background = "#dcfce7"; host.style.color = "#166534"; }

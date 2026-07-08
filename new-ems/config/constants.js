@@ -2,10 +2,20 @@ export const APP_NAME = "EMS 2.0";
 
 export const ROUTES = {
   ROOT: "/new-ems/index.html",
-  LOGIN: "/new-ems/login.html",
+  // Public website login is the canonical EMS login entry point.
+  LOGIN: "/login.html",
+  LOGIN_LEGACY: "/new-ems/login.html",
   PORTAL_SELECTOR: "/new-ems/modules/portal-selector/index.html",
   DASHBOARD: "/new-ems/modules/dashboard/index.html",
+  INTERIORS_PORTAL_LOGIN: "/new-ems/modules/interiors-portal-login/index.html",
   INTERIORS_CLIENT_APP: "/new-ems/modules/interiors-client-app/index.html",
+  PORTAL_MANAGEMENT: "/new-ems/modules/portal-management/index.html"
+  ,PORTAL_ACCESS: "/new-ems/modules/portal-access/index.html"
+  ,TRANSPORT_PORTAL_LOGIN: "/new-ems/modules/transport-portal-login/index.html",
+  TRANSPORT_PORTAL_SELECTOR: "/new-ems/modules/transport-portal-selector/index.html",
+  TRANSPORT_CLIENT_APP: "/new-ems/modules/transport-client-app/index.html",
+  TRANSPORT_TRANSPORTER_APP: "/new-ems/modules/transport-transporter-app/index.html",
+  TRANSPORT_AGENT_APP: "/new-ems/modules/transport-agent-app/index.html",
   CENTRAL_ACCOUNTS_DASHBOARD: "/new-ems/modules/central-accounts-dashboard/index.html",
   CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS: "/new-ems/modules/central-accounts-financial-documents/index.html",
   CENTRAL_ACCOUNTS_POSTING_QUEUE: "/new-ems/modules/central-accounts-posting-queue/index.html",
@@ -15,6 +25,52 @@ export const ROUTES = {
   CENTRAL_ACCOUNTS_PAYABLES: "/new-ems/modules/central-accounts-payables/index.html",
   CENTRAL_ACCOUNTS_TREASURY: "/new-ems/modules/central-accounts-treasury/index.html",
   CENTRAL_ACCOUNTS_REPORTING: "/new-ems/modules/central-accounts-reporting/index.html",
+  CENTRAL_ACCOUNTS_TAX_SETTINGS: "/new-ems/modules/central-accounts-tax-settings/index.html",
+  CENTRAL_ACCOUNTS_CONSOLIDATED: "/new-ems/modules/central-accounts-consolidated/index.html",
+  CENTRAL_ACCOUNTS_GST_COMPLIANCE: "/new-ems/modules/central-accounts-gst-compliance/index.html",
+  CENTRAL_ACCOUNTS_ANNUAL_TAX: "/new-ems/modules/central-accounts-annual-tax/index.html",
+  CENTRAL_ACCOUNTS_VOUCHERS: "/new-ems/modules/central-accounts-vouchers/index.html",
+  CENTRAL_ACCOUNTS_TDS: "/new-ems/modules/central-accounts-tds/index.html",
+  CENTRAL_ACCOUNTS_FIXED_ASSETS: "/new-ems/modules/central-accounts-fixed-assets/index.html",
+  CENTRAL_ACCOUNTS_CLOSE_CONTROLS: "/new-ems/modules/central-accounts-close-controls/index.html",
+  CENTRAL_ACCOUNTS_BUDGETS: "/new-ems/modules/central-accounts-budgets/index.html",
+  LEGAL_COMMAND_CENTER: "/new-ems/modules/legal-command-center/index.html",
+  LEGAL_DRAFTING: "/new-ems/modules/legal-drafting/index.html",
+  LEGAL_SEND: "/new-ems/modules/legal-send/index.html",
+  LEGAL_AGREEMENTS: "/new-ems/modules/legal-agreements/index.html",
+  LEGAL_AGREEMENT_VIEW: "/new-ems/modules/legal-agreement-view/index.html",
+  LEGAL_SIGNING: "/new-ems/modules/legal-signing/index.html",
+  LEGAL_PUBLIC_SIGN: "/new-ems/modules/legal-public-sign/index.html",
+  LEGAL_ARCHIVE: "/new-ems/modules/legal-archive/index.html",
+  LEGAL_AUDIT: "/new-ems/modules/legal-audit/index.html",
+  LEGAL_SETTINGS: "/new-ems/modules/legal-settings/index.html",
+  WHATSAPP_COMMAND_CENTER: "/new-ems/modules/whatsapp-command-center/index.html",
+  WHATSAPP_INBOX: "/new-ems/modules/whatsapp-inbox/index.html",
+  WHATSAPP_CONTACTS: "/new-ems/modules/whatsapp-contacts/index.html",
+  WHATSAPP_HISTORY: "/new-ems/modules/whatsapp-history/index.html",
+  WHATSAPP_TEMPLATES: "/new-ems/modules/whatsapp-templates/index.html",
+  WHATSAPP_SETTINGS: "/new-ems/modules/whatsapp-settings/index.html",
+  EMAIL_COMMAND_CENTER: "/new-ems/modules/email-command-center/index.html",
+  EMAIL_COMPOSE: "/new-ems/modules/email-compose/index.html",
+  EMAIL_INBOX: "/new-ems/modules/email-inbox/index.html",
+  EMAIL_HISTORY: "/new-ems/modules/email-history/index.html",
+  EMAIL_TEMPLATES: "/new-ems/modules/email-templates/index.html",
+  EMAIL_SETTINGS: "/new-ems/modules/email-settings/index.html",
+  MEETINGS_COMMAND_CENTER: "/new-ems/modules/meetings-command-center/index.html",
+  MEETINGS_SCHEDULER: "/new-ems/modules/meetings-scheduler/index.html",
+  MEETINGS_ROOM: "/new-ems/modules/meetings-room/index.html",
+  MEETINGS_SETTINGS: "/new-ems/modules/meetings-settings/index.html",
+  MEETINGS_GUEST: "/new-ems/modules/meetings-guest/index.html",
+  MEETINGS_LOGIN: "/portals/meeting/meeting-login.html",
+  MEETINGS_WAITING: "/new-ems/modules/meetings-waiting/index.html",
+  MEETINGS_PUBLIC_ROOM: "/new-ems/modules/meetings-public-room/index.html",
+  DIGITAL_SERVICES_DASHBOARD: "/new-ems/modules/digital-services-dashboard/index.html",
+  DIGITAL_SERVICES_LEADS: "/new-ems/modules/digital-services-leads/index.html",
+  DIGITAL_SERVICES_CLIENTS: "/new-ems/modules/digital-services-clients/index.html",
+  DIGITAL_SERVICES_PROJECTS: "/new-ems/modules/digital-services-projects/index.html",
+  DIGITAL_SERVICES_BILLING: "/new-ems/modules/digital-services-billing/index.html",
+  DIGITAL_SERVICES_SETTINGS: "/new-ems/modules/digital-services-settings/index.html",
+  NOTIFICATIONS_CENTER: "/new-ems/modules/notifications-center/index.html",
   USERS: "/new-ems/modules/users/index.html",
   ROLES: "/new-ems/modules/roles/index.html",
   SETTINGS: "/new-ems/modules/settings/index.html",
@@ -54,6 +110,8 @@ export const ROUTES = {
   ,TRANSPORT_CLIENT_RECEIPTS: "/new-ems/modules/transport-client-receipts/index.html"
   ,TRANSPORT_TRANSPORTER_PAYMENTS: "/new-ems/modules/transport-transporter-payments/index.html"
   ,TRANSPORT_FINANCE_APPROVAL: "/new-ems/modules/transport-finance-approval/index.html"
+  ,TRANSPORT_AGENT_WITHDRAWALS: "/new-ems/modules/transport-agent-withdrawals/index.html"
+  ,TRANSPORT_AGENT_PENALTIES: "/new-ems/modules/transport-agent-penalties/index.html"
   ,TRANSPORT_LEDGER: "/new-ems/modules/transport-ledger/index.html"
   ,PROJECT_ENGINE_DASHBOARD: "/new-ems/modules/project-engine-dashboard/index.html"
   ,PROJECT_ENGINE_PROJECTS: "/new-ems/modules/project-engine-projects/index.html"
@@ -113,6 +171,55 @@ export const MODULES = {
   CENTRAL_ACCOUNTS_RECEIVABLES: "central-accounts-receivables",
   CENTRAL_ACCOUNTS_PAYABLES: "central-accounts-payables",
   CENTRAL_ACCOUNTS_TREASURY: "central-accounts-treasury",
+  CENTRAL_ACCOUNTS_TAX_SETTINGS: "central-accounts-tax-settings",
+  CENTRAL_ACCOUNTS_CONSOLIDATED: "central-accounts-consolidated",
+  CENTRAL_ACCOUNTS_GST_COMPLIANCE: "central-accounts-gst-compliance",
+  CENTRAL_ACCOUNTS_ANNUAL_TAX: "central-accounts-annual-tax",
+  CENTRAL_ACCOUNTS_VOUCHERS: "central-accounts-vouchers",
+  CENTRAL_ACCOUNTS_TDS: "central-accounts-tds",
+  CENTRAL_ACCOUNTS_FIXED_ASSETS: "central-accounts-fixed-assets",
+  CENTRAL_ACCOUNTS_CLOSE_CONTROLS: "central-accounts-close-controls",
+  CENTRAL_ACCOUNTS_BUDGETS: "central-accounts-budgets",
+  LEGAL: "legal",
+  LEGAL_COMMAND_CENTER: "legal-command-center",
+  LEGAL_DRAFTING: "legal-drafting",
+  LEGAL_SEND: "legal-send",
+  LEGAL_AGREEMENTS: "legal-agreements",
+  LEGAL_SIGNING: "legal-signing",
+  LEGAL_PUBLIC_SIGN: "legal-public-sign",
+  LEGAL_ARCHIVE: "legal-archive",
+  LEGAL_AUDIT: "legal-audit",
+  LEGAL_SETTINGS: "legal-settings",
+  WHATSAPP: "whatsapp",
+  WHATSAPP_COMMAND_CENTER: "whatsapp-command-center",
+  WHATSAPP_INBOX: "whatsapp-inbox",
+  WHATSAPP_CONTACTS: "whatsapp-contacts",
+  WHATSAPP_HISTORY: "whatsapp-history",
+  WHATSAPP_TEMPLATES: "whatsapp-templates",
+  WHATSAPP_SETTINGS: "whatsapp-settings",
+  EMAIL: "email",
+  EMAIL_COMMAND_CENTER: "email-command-center",
+  EMAIL_COMPOSE: "email-compose",
+  EMAIL_INBOX: "email-inbox",
+  EMAIL_HISTORY: "email-history",
+  EMAIL_TEMPLATES: "email-templates",
+  EMAIL_SETTINGS: "email-settings",
+  MEETINGS: "meetings",
+  MEETINGS_COMMAND_CENTER: "meetings-command-center",
+  MEETINGS_SCHEDULER: "meetings-scheduler",
+  MEETINGS_ROOM: "meetings-room",
+  MEETINGS_SETTINGS: "meetings-settings",
+  MEETINGS_GUEST: "meetings-guest",
+  MEETINGS_WAITING: "meetings-waiting",
+  MEETINGS_PUBLIC_ROOM: "meetings-public-room",
+  DIGITAL_SERVICES: "digital-services",
+  DIGITAL_SERVICES_DASHBOARD: "digital-services-dashboard",
+  DIGITAL_SERVICES_LEADS: "digital-services-leads",
+  DIGITAL_SERVICES_CLIENTS: "digital-services-clients",
+  DIGITAL_SERVICES_PROJECTS: "digital-services-projects",
+  DIGITAL_SERVICES_BILLING: "digital-services-billing",
+  DIGITAL_SERVICES_SETTINGS: "digital-services-settings",
+  NOTIFICATIONS_CENTER: "notifications-center",
   USERS: "users",
   ROLES: "roles",
   SETTINGS: "settings",
@@ -157,6 +264,8 @@ export const MODULES = {
   ,TRANSPORT_CLIENT_RECEIPTS: "transport-client-receipts"
   ,TRANSPORT_TRANSPORTER_PAYMENTS: "transport-transporter-payments"
   ,TRANSPORT_FINANCE_APPROVAL: "transport-finance-approval"
+  ,TRANSPORT_AGENT_WITHDRAWALS: "transport-agent-withdrawals"
+  ,TRANSPORT_AGENT_PENALTIES: "transport-agent-penalties"
   ,TRANSPORT_LEDGER: "transport-ledger"
   ,PROJECT_ENGINE_DASHBOARD: "project-engine-dashboard"
   ,PROJECT_ENGINE_PROJECTS: "project-engine-projects"
@@ -186,6 +295,8 @@ export const MODULES = {
   ,INTERIORS_VARIATION_REQUESTS: "interiors-variation-requests"
   ,INTERIORS_CHANGE_ORDERS: "interiors-change-orders"
   ,INTERIORS_PROJECT_CLOSURE: "interiors-project-closure"
+  ,PORTAL_MANAGEMENT: "portal-management"
+  ,PORTAL_ACCESS: "portal-access"
 };
 
 export const CONTROL_CENTER_MODULES = [
@@ -200,6 +311,11 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.ARBITRAGE, title: "Arbitrage", subtitle: "Opportunity and risk desk", href: null },
   { module: MODULES.ECOMMERCE, title: "E-Commerce", subtitle: "Storefront operations", href: null },
   { module: MODULES.ACCOUNTS, title: "Accounts", subtitle: "Finance operations cockpit", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
+  { module: MODULES.DIGITAL_SERVICES, title: "Digital Services", subtitle: "Web, SEO, social & PR delivery with billing", href: ROUTES.DIGITAL_SERVICES_DASHBOARD },
+  { module: MODULES.LEGAL, title: "Legal", subtitle: "Drafting, KYC, signing evidence and secure archive", href: ROUTES.LEGAL_COMMAND_CENTER },
+  { module: MODULES.WHATSAPP, title: "WhatsApp", subtitle: "Inbox, templates, Twilio health and outbound delivery", href: ROUTES.WHATSAPP_COMMAND_CENTER },
+  { module: MODULES.EMAIL, title: "Email", subtitle: "Compose, templates, inbox, history and ZeptoMail delivery", href: ROUTES.EMAIL_COMMAND_CENTER },
+  { module: MODULES.MEETINGS, title: "Meetings", subtitle: "Scheduling, waiting room control, and Jitsi video sessions", href: ROUTES.MEETINGS_COMMAND_CENTER },
   { module: MODULES.SETTINGS, title: "Administration", subtitle: "System controls and policy", href: ROUTES.SETTINGS },
   { module: MODULES.MASTER_CLIENTS, title: "Master Data", subtitle: "Reference entities and codes", href: ROUTES.MASTER_CLIENTS }
 ];
@@ -216,7 +332,12 @@ export const WORKSPACES = {
   MASTER_DATA: "master-data",
   TRANSPORTATION: "transportation",
   ACCOUNTS: "accounts",
-  INTERIORS: "interiors"
+  INTERIORS: "interiors",
+  LEGAL: "legal",
+  WHATSAPP: "whatsapp",
+  EMAIL: "email",
+  MEETINGS: "meetings",
+  DIGITAL_SERVICES: "digital-services"
 };
 
 export const PORTAL_TYPES = {

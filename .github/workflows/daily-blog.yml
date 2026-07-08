@@ -1,0 +1,23 @@
+name: Daily AI news blog posts
+
+on:
+  schedule:
+    - cron: "30 3 * * *"   # every day 03:30 UTC = 09:00 IST
+  workflow_dispatch: {}     # allow manual runs from the Actions tab
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Generate and publish daily news posts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AI_MODEL: ${{ vars.AI_MODEL }}          # optional override
+          POSTS_PER_DAY: "5"
+        run: node scripts/generate-daily-news-posts.mjs

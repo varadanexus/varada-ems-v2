@@ -3,6 +3,7 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { getLedgerEntryDetails, getTransportClientBillDetails, getTransportClientCreditNoteDetails, getTransportClientReceiptDetails, getTransportGstInvoiceDetails, getTransporterPaymentDetails, getTransporterStatementDetails, listLedgerEntries, resolveWorkspaceDivision } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
+import { exportPortalClientBillPdf, exportPortalClientCreditNotePdf, exportPortalClientGstInvoicePdf, exportPortalTransporterStatementPdf } from "./portal-pdf-exports.js";
 
 const SOURCE_TYPES = ["CLIENT_BILL", "GST_INVOICE", "CLIENT_RECEIPT", "CREDIT_NOTE", "TRANSPORTER_STATEMENT", "TRANSPORTER_PAYMENT"];
 const TYPE_LABELS = {
@@ -194,8 +195,11 @@ function renderLedgerRegister(transactions) {
     body.innerHTML = `<tr><td colspan="11">No ledger transactions found.</td></tr>`;
     return;
   }
-  body.innerHTML = transactions.map((transaction) => `<tr><td>${escapeHtml(transaction.entryDate || "—")}</td><td>${escapeHtml(transaction.typeLabel || "—")}</td><td class="reference-cell"><button type="button" data-ledger-open="${escapeHtml(transaction.entryNo)}">${escapeHtml(transaction.reference || transaction.entryNo || "—")}</button></td><td>${escapeHtml(transaction.party || "N/A")}</td><td class="amount-debit">${formatMoney(transaction.debit)}</td><td class="amount-credit">${formatMoney(transaction.credit)}</td><td class="${transaction.netPosition < 0 ? "balance-negative" : "balance-positive"}">${formatSignedMoney(transaction.netPosition)}</td><td class="${transaction.cashBalance < 0 ? "balance-negative" : "balance-positive"}">${formatSignedMoney(transaction.cashBalance)}</td><td>${escapeHtml(transaction.method || "—")}</td><td>${escapeHtml(transaction.txnId || "—")}</td><td><button class="btn" type="button" data-ledger-view="${escapeHtml(transaction.entryNo)}">View Details</button></td></tr>`).join("");
-  body.querySelectorAll("button[data-ledger-view], button[data-ledger-open]").forEach((button) => button.addEventListener("click", async () => { await openDetailsModal(button.getAttribute("data-ledger-view") || button.getAttribute("data-ledger-open")); }));
+  body.innerHTML = transactions.map((transaction) => `<tr><td>${escapeHtml(transaction.entryDate || "—")}</td><td>${escapeHtml(transaction.typeLabel || "—")}</td><td class="reference-cell"><button type="button" title="Download PDF" data-ledger-dl="${escapeHtml(transaction.entryNo)}" data-source-type="${escapeHtml(transaction.sourceType || "")}" data-source-id="${escapeHtml(transaction.sourceId || "")}">${escapeHtml(transaction.reference || transaction.entryNo || "—")}</button></td><td>${escapeHtml(transaction.party || "N/A")}</td><td class="amount-debit">${formatMoney(transaction.debit)}</td><td class="amount-credit">${formatMoney(transaction.credit)}</td><td class="${transaction.netPosition < 0 ? "balance-negative" : "balance-positive"}">${formatSignedMoney(transaction.netPosition)}</td><td class="${transaction.cashBalance < 0 ? "balance-negative" : "balance-positive"}">${formatSignedMoney(transaction.cashBalance)}</td><td>${escapeHtml(transaction.method || "—")}</td><td>${escapeHtml(transaction.txnId || "—")}</td><td><button class="btn" type="button" data-ledger-view="${escapeHtml(transaction.entryNo)}">View Details</button></td></tr>`).join("");
+  body.querySelectorAll("button[data-ledger-view]").forEach((button) => button.addEventListener("click", async () => { await openDetailsModal(button.getAttribute("data-ledger-view")); }));
+  body.querySelectorAll("button[data-ledger-dl]").forEach((button) => button.addEventListener("click", async () => {
+    await downloadLedgerDocumentPdf(button.getAttribute("data-source-type"), button.getAttribute("data-source-id"), button.getAttribute("data-ledger-dl"));
+  }));
 }
 
 async function openDetailsModal(entryNo) {
@@ -242,6 +246,37 @@ async function resolveLedgerSourceNo(rows) {
   const { data, error } = await client.from(sourceConfig.table).select(sourceConfig.field).eq("id", sourceId).is("deleted_at", null).maybeSingle();
   if (error) return firstRow?.entry_no || "—";
   return data?.[sourceConfig.field] || firstRow?.entry_no || "—";
+}
+
+async function downloadLedgerDocumentPdf(sourceType, sourceId, entryNo) {
+  if (!sourceType || !sourceId) return openDetailsModal(entryNo);
+  try {
+    if (sourceType === "CLIENT_BILL") {
+      const details = await getTransportClientBillDetails(sourceId);
+      if (!details) throw new Error("Bill not found");
+      return exportPortalClientBillPdf({ bill: details, clientName: resolveClientName(details.transport_clients) });
+    }
+    if (sourceType === "GST_INVOICE") {
+      const details = await getTransportGstInvoiceDetails(sourceId);
+      if (!details) throw new Error("Invoice not found");
+      return exportPortalClientGstInvoicePdf({ invoice: details, clientName: resolveClientName(details.transport_clients) });
+    }
+    if (sourceType === "TRANSPORTER_STATEMENT") {
+      const details = await getTransporterStatementDetails(sourceId);
+      if (!details) throw new Error("Statement not found");
+      return exportPortalTransporterStatementPdf({ statement: details, transporterName: resolveTransporterName(details.transport_transporters) });
+    }
+    if (sourceType === "CREDIT_NOTE") {
+      const details = await getTransportClientCreditNoteDetails(sourceId);
+      if (!details) throw new Error("Credit note not found");
+      return exportPortalClientCreditNotePdf({ creditNote: { ...details, bill_no: details.transport_client_bills?.bill_no }, clientName: resolveClientName(details.transport_clients) });
+    }
+    // receipts / payments have no printable document yet — show details instead
+    return openDetailsModal(entryNo);
+  } catch (error) {
+    console.error("ledger_pdf_download_failed", { sourceType, sourceId, error });
+    showToast(error?.message || "Failed to download document PDF.", TOAST_TYPES.ERROR);
+  }
 }
 
 function resolveClientName(clientRow) { if (Array.isArray(clientRow)) clientRow = clientRow[0] || null; return clientRow?.company_name || clientRow?.name || "N/A"; }

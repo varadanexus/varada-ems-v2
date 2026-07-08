@@ -1,6 +1,7 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { cancelTransportClientReceipt, confirmTransportClientReceipt, createTransportClientReceipt, getClientReceiptOutstanding, getTransportClientReceiptDetails, listActiveOptions, listClientReceiptBillOptions, listTransportClientReceipts, resolveWorkspaceDivision } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
+import { notifyTransportReceiptCreated } from "./transport-integrations-api.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { addOldEmsCompanyHeader, addOldEmsDeclarationBlock, addOldEmsSignatureStampBlock, addOldEmsTaxSummaryBlock, addTable, createPdfDocument, formatPdfCurrency, formatPdfDate, formatPdfFilename, savePdf } from "./pdf-utils.js";
@@ -99,6 +100,9 @@ async function recordReceipt() {
     showToast(`Client receipt recorded: ${result?.receipt_no || "(generated)"}`, TOAST_TYPES.SUCCESS);
     await reloadBillOptionsAndOutstanding();
     await loadReceiptList();
+    if (result?.receipt_id) {
+      notifyTransportReceiptCreated(result.receipt_id).catch((err) => console.warn("Receipt WhatsApp notify failed", err));
+    }
   } catch (error) {
     showToast(error?.message || "Receipt create failed", TOAST_TYPES.ERROR);
   }

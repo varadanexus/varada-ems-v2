@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hospital Infrastructure Systems | Varada Nexus</title>
+<base href="/public-site/index.html">
+
+<link rel="icon" type="image/png" sizes="32x32" href="/public-site/images/logo.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/public-site/images/logo.png">
+
+  
+<style>
+
+/* ===== BASE ===== */
+body{
+margin:0;
+font-family:'Inter',sans-serif;
+background:#020617;
+color:#fff;
+line-height:1.6;
+overflow-x:hidden;
+}
+
+/* SUBTLE DEPTH BACKGROUND */
+body::before{
+content:"";
+position:fixed;
+width:100%;
+height:100%;
+background:
+radial-gradient(circle at 20% 20%, rgba(30,58,138,0.35), transparent),
+radial-gradient(circle at 80% 80%, rgba(14,165,233,0.25), transparent);
+z-index:-1;
+}
+
+/* ===== NAVBAR ===== */
+header{
+position:sticky;
+top:0;
+background:rgba(2,6,23,0.65);
+backdrop-filter:blur(14px);
+border-bottom:1px solid rgba(255,255,255,0.06);
+z-index:1000;
+}
+
+.nav-container{
+max-width:1200px;
+margin:auto;
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:16px 20px;
+}
+
+.nav-left{display:flex;align-items:center;gap:12px;}
+.logo{height:40px;}
+
+.brand-name{font-weight:600;}
+.brand-sub{font-size:10px;color:#94a3b8;}
+
+.nav-links{display:flex;gap:26px;}
+.nav-links a{
+color:#cbd5f5;
+text-decoration:none;
+font-size:14px;
+}
+.nav-links a:hover{color:#fff;}
+
+/* ===== HERO ===== */
+.hero{
+max-width:1200px;
+margin:auto;
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:140px 20px 100px;
+gap:60px;
+}
+
+.hero-left{max-width:640px;}
+
+.hero h1{
+font-size:56px;
+line-height:1.05;
+letter-spacing:-1px;
+font-weight:600;
+}
+
+.hero p{
+margin-top:20px;
+color:#94a3b8;
+font-size:17px;
+}
+
+.hero-right{
+width:360px;
+}
+
+/* GLASS PANEL */
+.panel{
+background:rgba(255,255,255,0.04);
+border:1px solid rgba(255,255,255,0.08);
+border-radius:20px;
+padding:30px;
+backdrop-filter:blur(16px);
+}
+
+/* ===== SECTION ===== */
+.section{
+max-width:1100px;
+margin:120px auto;
+padding:0 20px;
+}
+
+.section h2{
+font-size:34px;
+margin-bottom:16px;
+}
+
+.section p{
+color:#94a3b8;
+max-width:780px;
+}
+
+/* GRID */
+.grid{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:28px;
+margin-top:40px;
+}
+
+/* CARDS */
+.card{
+padding:30px;
+border-radius:16px;
+background:rgba(255,255,255,0.03);
+border:1px solid rgba(255,255,255,0.06);
+transition:0.3s;
+}
+
+.card:hover{
+transform:translateY(-6px);
+background:rgba(255,255,255,0.05);
+}
+
+/* STACK */
+.stack{
+margin-top:40px;
+display:flex;
+flex-direction:column;
+gap:20px;
+}
+
+.stack .panel{
+padding:22px 26px;
+}
+
+/* ===== FOUNDER AUTHORITY ===== */
+.founder{
+max-width:1000px;
+margin:140px auto;
+padding:40px;
+border-radius:20px;
+background:rgba(255,255,255,0.03);
+border:1px solid rgba(255,255,255,0.06);
+text-align:left;
+}
+
+.founder h3{
+margin-bottom:10px;
+}
+
+.founder p{
+color:#94a3b8;
+}
+
+/* ===== PROCESS ===== */
+.process{
+max-width:900px;
+margin:120px auto;
+padding:0 20px;
+}
+
+.process-step{
+display:flex;
+gap:20px;
+margin-bottom:36px;
+}
+
+.dot{
+width:8px;
+height:8px;
+background:#60a5fa;
+border-radius:50%;
+margin-top:8px;
+}
+
+/* ===== CTA ===== */
+.cta{
+text-align:center;
+padding:140px 20px;
+}
+
+.cta h2{
+font-size:32px;
+}
+
+.cta p{
+color:#94a3b8;
+margin-top:10px;
+}
+
+.btn{
+display:inline-block;
+margin-top:30px;
+padding:14px 34px;
+border-radius:999px;
+background:#fff;
+color:#000;
+text-decoration:none;
+font-weight:600;
+transition:0.3s;
+}
+
+.btn:hover{
+transform:translateY(-2px);
+}
+
+/* ===== REVEAL ===== */
+.reveal{
+opacity:0;
+transform:translateY(40px);
+transition:0.8s ease;
+}
+
+.reveal.active{
+opacity:1;
+transform:translateY(0);
+}
+
+/* MOBILE */
+@media(max-width:900px){
+.hero{flex-direction:column;text-align:center;}
+.grid{grid-template-columns:1fr;}
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+<div class="nav-container">
+
+<div class="nav-left">
+<img src="/public-site/images/logo.png" class="logo">
+<div>
+<div class="brand-name">Varada Nexus</div>
+<div class="brand-sub">Private Limited</div>
+</div>
+</div>
+
+<nav class="nav-links">
+<nav class="nav-links">
+<a href="/public-site/index.html">Home</a>
+<a href="/public-site/website/founder.html">Founder</a>
+<a href="/public-site/website/services.html">Services</a>
+<a href="/public-site/website/team.html">Team</a>
+<a href="/public-site/website/contact.html">Contact</a>
+<a href="/public-site/website/login.html">Login</a>
+<a href="/public-site/portals/meeting/meeting-login.html">Join Meeting</a> 
+</nav>
+</nav>
+
+</div>
+</header>
+
+<!-- HERO -->
+<section class="hero reveal">
+
+<div class="hero-left">
+<h1>Hospital Infrastructure Systems</h1>
+<p>
+Designed and executed under clinical insight —
+we build healthcare facilities that function efficiently from day one.
+</p>
+<a href="/public-site/website/contact.html" class="btn">Request Consultation</a>
+</div>
+
+<div class="hero-right">
+<div class="panel">
+<h3>Doctor-Led Infrastructure</h3>
+<p>Clinical Insight • Execution • Scale</p>
+</div>
+</div>
+
+</section>
+
+<!-- SYSTEM -->
+<section class="section reveal">
+<h2>Designed as a System</h2>
+<p>
+Hospitals are operational ecosystems. Our approach integrates infrastructure,
+clinical workflows, and systems into a unified architecture.
+</p>
+
+<div class="grid">
+<div class="card"><h3>Infrastructure</h3></div>
+<div class="card"><h3>Clinical Systems</h3></div>
+<div class="card"><h3>Operations</h3></div>
+</div>
+</section>
+
+<!-- FOUNDER -->
+<section class="founder reveal">
+<h3>Built with Clinical Understanding</h3>
+<p>
+Varada Nexus is founded and led by <strong>Dr. Althi Prudhvi</strong>,
+bringing real-world medical experience into infrastructure design.
+</p>
+<p>
+This ensures every hospital is clinically practical, operationally efficient,
+and aligned with patient care workflows.
+</p>
+</section>
+
+<!-- SERVICES -->
+<section class="section reveal">
+<h2>Comprehensive Hospital Solutions</h2>
+
+<div class="stack">
+
+<div class="panel"><strong>Hospital Design & Construction</strong></div>
+<div class="panel"><strong>Regulatory Approvals & Compliance</strong></div>
+<div class="panel"><strong>Medical Equipment Procurement & Installation</strong></div>
+<div class="panel"><strong>Healthcare Staffing</strong></div>
+<div class="panel"><strong>Hospital Expansion & Upgrades</strong></div>
+
+</div>
+</section>
+
+<!-- PROJECTS -->
+<section class="section reveal">
+<h2>Selected Projects</h2>
+
+<div class="grid">
+
+<div class="card">
+<h3>Subadhra Hospital</h3>
+<p>Rajahmundry</p>
+</div>
+
+<div class="card">
+<h3>RRAMS</h3>
+<p>Equipment procurement</p>
+</div>
+
+<div class="card">
+<h3>Sri Krishna Hospital</h3>
+<p>Vizag</p>
+</div>
+
+</div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="section reveal">
+<h2>Client Testimonials</h2>
+
+<div class="stack">
+
+<div class="panel">“Improved patient flow and efficiency.”</div>
+<div class="panel">“Reliable execution and procurement.”</div>
+<div class="panel">“Trusted healthcare infrastructure partner.”</div>
+
+</div>
+</section>
+
+<!-- PROCESS -->
+<section class="process reveal">
+<h2>Execution Process</h2>
+
+<div class="process-step">
+<div class="dot"></div>
+<div><h3>Planning</h3><p>Feasibility & scope</p></div>
+</div>
+
+<div class="process-step">
+<div class="dot"></div>
+<div><h3>Design</h3><p>System architecture</p></div>
+</div>
+
+<div class="process-step">
+<div class="dot"></div>
+<div><h3>Execution</h3><p>Full delivery</p></div>
+</div>
+
+<div class="process-step">
+<div class="dot"></div>
+<div><h3>Operational Readiness</h3><p>Launch-ready hospital</p></div>
+</div>
+
+</section>
+
+<!-- CTA -->
+<section class="cta reveal">
+<h2>From Concept to Operational Hospital</h2>
+<p>Built with clinical understanding and execution expertise.</p>
+<a href="/public-site/website/contact.html" class="btn">Start Your Project</a>
+</section>
+
+<script>
+const observer=new IntersectionObserver(entries=>{
+entries.forEach(entry=>{
+if(entry.isIntersecting){
+entry.target.classList.add("active");
+}
+});
+});
+document.querySelectorAll(".reveal").forEach(el=>observer.observe(el));
+</script>
+
+</body>
+</html>

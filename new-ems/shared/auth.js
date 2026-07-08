@@ -1,7 +1,8 @@
 import { MODULES, PORTAL_TYPES, ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
-import { getAllowedModulesForRoles, getAppUserByAuthId, getUserRoleCodes } from "./admin-api.js";
+import { getAllowedModulesForRoles, getAppUserByAuthId, getUserRoleCodes, getMyAllowedModules } from "./admin-api.js";
 import { logAuthEvent } from "./audit.js";
+import { getLocalSession, restoreLocalSession, emsLocalLogout, clearLocalAuthState } from "./ems-local-auth.js";
 
 function debugLog(message, data = null) {
   if (!window.EMS_DEBUG_AUTH_FLOW) return;
@@ -23,10 +24,25 @@ export async function getSession() {
   return data?.session || null;
 }
 
-export async function getCurrentAppUser() {
+// Sprint 13F: the effective authenticated identity, resolving LOCAL staff
+// (JWT bound via ems-local-auth) first, then Supabase Auth users. `userId` is
+// always the app_users.auth_user_id that RLS keys off via current_app_user_id().
+async function getIdentity() {
+  const local = getLocalSession();
+  if (local?.authUserId) {
+    return { userId: local.authUserId, email: local.email || null, isLocal: true };
+  }
   const session = await getSession();
-  if (!session?.user?.id) return null;
-  const appUser = await getAppUserByAuthId(session.user.id);
+  if (session?.user?.id) {
+    return { userId: session.user.id, email: session.user.email || null, isLocal: false };
+  }
+  return null;
+}
+
+export async function getCurrentAppUser() {
+  const identity = await getIdentity();
+  if (!identity?.userId) return null;
+  const appUser = await getAppUserByAuthId(identity.userId);
   if (!appUser?.id) return appUser;
   const client = getSupabaseClient();
   const { data: userDivisions, error } = await client
@@ -38,8 +54,8 @@ export async function getCurrentAppUser() {
 }
 
 export async function validateActiveUnlockedUser() {
-  const session = await getSession();
-  if (!session?.user?.id) {
+  const identity = await getIdentity();
+  if (!identity?.userId) {
     debugLog("auth validation result", { ok: false, reason: "not_authenticated" });
     throw new Error("Please login");
   }
@@ -47,7 +63,7 @@ export async function validateActiveUnlockedUser() {
   const { data: appUser, error } = await client
     .from("app_users")
     .select("id,status,is_locked")
-    .eq("auth_user_id", session.user.id)
+    .eq("auth_user_id", identity.userId)
     .maybeSingle();
 
   if (error) {
@@ -78,54 +94,22 @@ export async function validateActiveUnlockedUser() {
 }
 
 export async function requireAuth() {
+  // LOCAL staff: re-mint and rebind the JWT before any RLS query runs on this
+  // page load. If the local session is still valid, return a synthetic session.
+  const local = getLocalSession();
+  if (local?.authUserId) {
+    const ok = await restoreLocalSession();
+    if (ok) {
+      return { user: { id: local.authUserId, email: local.email || null }, isLocal: true };
+    }
+    // Local session died server-side — fall through to Supabase / login redirect.
+  }
   const session = await getSession();
   if (!session) {
     window.location.replace(ROUTES.LOGIN);
     return null;
   }
   return session;
-}
-
-async function resolveInteriorsClientPortal(authUserId) {
-  if (!authUserId) return null;
-  const client = getSupabaseClient();
-  const { data, error } = await client
-    .from("interior_client_portal_users")
-    .select("id,interior_client_id,contact_name,email,access_status")
-    .eq("auth_user_id", authUserId)
-    .eq("access_status", "active")
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  if (!data?.length) return null;
-
-  const portalUserIds = data.map((row) => row.id).filter(Boolean);
-  const { data: accessRows, error: accessError } = await client
-    .from("interior_client_project_access")
-    .select("id,portal_user_id,interior_project_id,is_active")
-    .in("portal_user_id", portalUserIds)
-    .eq("is_active", true);
-  if (accessError) throw accessError;
-  if (!accessRows?.length) return null;
-
-  const interiorProjectIds = Array.from(new Set(accessRows.map((row) => row.interior_project_id).filter(Boolean)));
-  const { data: projects, error: projectError } = await client
-    .from("interior_projects")
-    .select("id,shared_project_id")
-    .in("id", interiorProjectIds);
-  if (projectError) throw projectError;
-  const validProjectIds = new Set((projects || []).filter((row) => row?.id && row?.shared_project_id).map((row) => String(row.id)));
-  const eligiblePortalUsers = data.filter((portalUser) => accessRows.some((accessRow) => String(accessRow.portal_user_id) === String(portalUser.id) && validProjectIds.has(String(accessRow.interior_project_id))));
-  if (!eligiblePortalUsers.length) return null;
-
-  return {
-    type: PORTAL_TYPES.INTERIORS_CLIENT,
-    title: "Interiors Client Portal",
-    subtitle: "Track project progress, designs, approvals, bills, and visible updates.",
-    route: ROUTES.INTERIORS_CLIENT_APP,
-    badge: `${eligiblePortalUsers.length} active client link${eligiblePortalUsers.length === 1 ? "" : "s"}`,
-    priority: 20,
-    context: { portalUsers: eligiblePortalUsers, accessRows }
-  };
 }
 
 function resolveInternalPortal(allowedModules = []) {
@@ -144,8 +128,9 @@ function resolveInternalPortal(allowedModules = []) {
 async function tryGetInternalPortal(appUserId) {
   if (!appUserId) return null;
   try {
-    const roleCodes = await getUserRoleCodes(appUserId);
-    const allowedModules = await getAllowedModulesForRoles(roleCodes);
+    // Uses a SECURITY DEFINER RPC so non-admins can resolve their own modules
+    // despite the admin-only RLS on role_permissions.
+    const allowedModules = await getMyAllowedModules();
     return resolveInternalPortal(allowedModules);
   } catch (error) {
     debugLog("internal portal resolution skipped", {
@@ -157,15 +142,13 @@ async function tryGetInternalPortal(appUserId) {
 }
 
 export async function resolveAvailablePortals() {
-  const session = await getSession();
-  if (!session?.user?.id) return [];
-  const appUser = await getAppUserByAuthId(session.user.id);
+  const identity = await getIdentity();
+  if (!identity?.userId) return [];
+  const appUser = await getAppUserByAuthId(identity.userId);
   if (!appUser || appUser.status !== "active" || appUser.is_locked) return [];
   const portals = [];
   const internalPortal = await tryGetInternalPortal(appUser.id);
   if (internalPortal) portals.push(internalPortal);
-  const interiorsClientPortal = await resolveInteriorsClientPortal(session.user.id);
-  if (interiorsClientPortal) portals.push(interiorsClientPortal);
   return portals.sort((a, b) => Number(a.priority || 999) - Number(b.priority || 999));
 }
 
@@ -185,6 +168,25 @@ export async function redirectToResolvedPortal() {
 }
 
 export async function redirectIfAuthenticated() {
+  // LOCAL staff first: rebind the JWT, then route by resolved portals.
+  const local = getLocalSession();
+  if (local?.authUserId) {
+    const ok = await restoreLocalSession();
+    if (ok) {
+      const localPortals = await resolveAvailablePortals();
+      if (localPortals.length === 1) {
+        window.location.replace(localPortals[0].route);
+        return true;
+      }
+      if (localPortals.length > 1) {
+        window.location.replace(ROUTES.PORTAL_SELECTOR);
+        return true;
+      }
+    }
+    await emsLocalLogout();
+    return false;
+  }
+
   const session = await getSession();
   if (session) {
     const appUser = await getAppUserByAuthId(session.user.id);
@@ -215,6 +217,10 @@ export async function redirectIfAuthenticated() {
 }
 
 export async function loginWithPassword(email, password) {
+  // Ensure no leftover LOCAL-staff token is bound to the client, otherwise this
+  // Supabase login (and its RLS-scoped provisioning check) would run as that
+  // previous local user instead of the account signing in now.
+  clearLocalAuthState();
   const client = getSupabaseClient();
   const { data, error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -243,16 +249,31 @@ export async function loginWithPassword(email, password) {
 
 export async function logout() {
   const isLoginPage = window.location.pathname.endsWith("/new-ems/login.html") || window.location.pathname.endsWith("login.html");
-  const client = getSupabaseClient();
-  const session = await getSession();
-  await client.auth.signOut();
-  if (session?.user?.id) await logAuthEvent("logout", session.user.id);
+
+  // Clear BOTH session types so no stale session can hijack the next login.
+  const local = getLocalSession();
+  if (local?.authUserId) {
+    if (local.appUserId) await logAuthEvent("logout", local.authUserId).catch(() => {});
+    await emsLocalLogout();
+  }
+  try {
+    const client = getSupabaseClient();
+    const session = await getSession();
+    await client.auth.signOut();
+    if (session?.user?.id) await logAuthEvent("logout", session.user.id).catch(() => {});
+  } catch {}
+
   if (isLoginPage) return;
-  await new Promise((resolve) => setTimeout(resolve, 2200));
+  await new Promise((resolve) => setTimeout(resolve, 500));
   window.location.replace(ROUTES.LOGIN);
 }
 
 export async function signOutSessionOnly() {
+  const local = getLocalSession();
+  if (local?.authUserId) {
+    await emsLocalLogout();
+    return;
+  }
   const client = getSupabaseClient();
   const session = await getSession();
   await client.auth.signOut();
