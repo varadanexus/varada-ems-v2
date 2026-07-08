@@ -21,6 +21,7 @@ window.VN = (function () {
       ["new", "/blog/console/new-post.html", "New post"],
       ["settings", "/blog/console/settings.html", "Auto-publish"],
       ["backfill", "/blog/console/backfill.html", "Backdated publishing"],
+      ["ai-costs", "/blog/console/ai-costs.html", "AI Costs"],
     ].map(function (l) {
       return '<a href="' + l[1] + '"' + (active === l[0] ? ' class="active"' : "") + ">" + l[2] + "</a>";
     }).join("");

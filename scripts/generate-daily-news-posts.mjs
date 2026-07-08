@@ -5,16 +5,15 @@
 // Every post carries a "References" section with the genuine source links —
 // links are taken directly from the feeds, never invented by the AI.
 //
-// Runs free: GitHub Actions (scheduler) + public RSS feeds + Gemini free tier.
-//
-// Required env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY
-// Optional env: AI_MODEL (default gemini-2.5-flash), POSTS_PER_DAY (default 5)
+// AI routing handled by ai-router.mjs — set at least one provider key:
+//   OPENROUTER_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY
+// Optional env: POSTS_PER_DAY (default 5)
+
+import { callAI } from "./ai-router.mjs";
 
 const {
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
-  GEMINI_API_KEY,
-  AI_MODEL,
   POSTS_PER_DAY,
 } = process.env;
 
@@ -22,13 +21,8 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
   process.exit(1);
 }
-if (!GEMINI_API_KEY) {
-  console.error("Missing GEMINI_API_KEY");
-  process.exit(1);
-}
 
 const MAX_POSTS = Math.min(Math.max(parseInt(POSTS_PER_DAY || "5", 10) || 5, 1), 6);
-const MODEL = AI_MODEL || "gemini-2.5-flash";
 const FRESH_HOURS = 48; // only cover news from the last 48 hours
 
 // ---------------------------------------------------------------------------
@@ -179,7 +173,7 @@ async function logGeneration(entry) {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/blog_generation_logs`, {
       method: "POST", headers: SB_HEADERS,
-      body: JSON.stringify({ run_kind: "daily", model: MODEL, ...entry }),
+      body: JSON.stringify({ run_kind: "daily", model: "ai-router", ...entry }),
     });
   } catch { /* logging must never break the run */ }
 }
@@ -216,9 +210,12 @@ async function insertPost(rec) {
 }
 
 // ---------------------------------------------------------------------------
-// Gemini (free tier)
+// AI generation (routed through ai-router.mjs)
 // ---------------------------------------------------------------------------
 async function generatePost(item, sector) {
+  // Government news is more important — eligible for quality escalation to a better model.
+  const importance = item.kind === "government" ? "high" : "medium";
+
   const SYSTEM =
     "You are the news editor for Varada Nexus Private Limited, a multi-sector Indian enterprise " +
     "(healthcare infrastructure, mining, logistics, import-export, digital commerce, HR). " +
@@ -252,30 +249,7 @@ async function generatePost(item, sector) {
     "quality_score (0-100 honest rating of writing quality and usefulness), " +
     "confidence_score (0-100 how confident you are that every claim is supported by the provided source).";
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM }] },
-        contents: [{ role: "user", parts: [{ text: USER }] }],
-        generationConfig: {
-          temperature: 0.5,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json",
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      }),
-    }
-  );
-  if (!res.ok) throw new Error("Gemini error " + res.status + ": " + (await res.text()));
-  const data = await res.json();
-  const text = ((data.candidates?.[0]?.content?.parts) || []).map((p) => p.text || "").join("");
-  if (!text) throw new Error("Gemini returned no text");
-  const a = text.indexOf("{"), b = text.lastIndexOf("}");
-  if (a === -1 || b === -1) throw new Error("No JSON in AI response");
-  return JSON.parse(text.slice(a, b + 1));
+  return callAI({ task: "article_writing", system: SYSTEM, user: USER, importance, runKind: "daily" });
 }
 
 function escapeHtml(s) {

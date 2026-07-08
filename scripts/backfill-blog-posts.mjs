@@ -16,18 +16,19 @@
 //      CATEGORIES (csv of slugs), PUBLISH_MODE (draft|publish)
 //   b. Queued rows in blog_backfill_jobs (created from the Blog Console)
 //
-// Required env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY
+// AI is handled by ai-router.mjs — configure providers via env keys.
+
+import { callAI, RUN_ID } from "./ai-router.mjs";
 
 const {
-  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY,
-  AI_MODEL, DATE_FROM, DATE_TO, POST_COUNT, CATEGORIES, PUBLISH_MODE,
+  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+  DATE_FROM, DATE_TO, POST_COUNT, CATEGORIES, PUBLISH_MODE,
 } = process.env;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !GEMINI_API_KEY) {
-  console.error("Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY or GEMINI_API_KEY");
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
   process.exit(1);
 }
-const MODEL = AI_MODEL || "gemini-2.5-flash";
 
 const TRUSTED_DOMAINS = [
   "pib.gov.in", "rbi.org.in", "gov.in", "nic.in",
@@ -98,7 +99,7 @@ async function sbPatch(path, body) {
   if (!r.ok) throw new Error(`Supabase PATCH ${path} -> ${r.status}`);
 }
 async function logGen(entry) {
-  try { await sbPost("blog_generation_logs", { run_kind: "backfill", model: MODEL, ...entry }); } catch {}
+  try { await sbPost("blog_generation_logs", { run_kind: "backfill", model: "ai-router", ...entry }); } catch {}
 }
 
 // --- GDELT: real articles that existed around a given date (free API) -------
@@ -125,23 +126,8 @@ async function gdeltArticle(dateISO, category) {
   } catch { return null; }
 }
 
-// --- Gemini ------------------------------------------------------------------
-async function gemini(system, user) {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: "user", parts: [{ text: user }] }],
-      generationConfig: { temperature: 0.6, maxOutputTokens: 8192, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } },
-    }),
-  });
-  if (!r.ok) throw new Error("Gemini " + r.status + ": " + (await r.text()).slice(0, 300));
-  const data = await r.json();
-  const text = ((data.candidates?.[0]?.content?.parts) || []).map((p) => p.text || "").join("");
-  const a = text.indexOf("{"), b = text.lastIndexOf("}");
-  if (a === -1 || b === -1) throw new Error("no JSON from AI");
-  return JSON.parse(text.slice(a, b + 1));
-}
+// AI calls go through ai-router.mjs (imported at the top of this file).
+// The router handles provider selection, retry, fallback, budget, and cost logging.
 
 const JSON_SHAPE =
   "Return ONLY strict JSON with keys: title (<=70 chars), excerpt (<=160 chars), " +
@@ -156,7 +142,7 @@ async function evergreenPost(category, topic) {
     "Write a TIMELESS evergreen article. HARD RULES: no references to 'this year', 'recently', current " +
     "events, specific dates, or news. No invented statistics or fake case studies. Practical, useful, Indian English.";
   const user = `Write a 500-800 word evergreen blog article on: "${topic}" (category: ${category}). ${JSON_SHAPE}`;
-  return gemini(system, user);
+  return callAI({ task: "article_writing", system, user, importance: "medium", runKind: "backfill" });
 }
 
 async function newsPost(category, art, dateISO) {
@@ -169,23 +155,27 @@ async function newsPost(category, art, dateISO) {
     `Real news item published ${dateISO} by ${art.publisher}:\nHEADLINE: ${art.title}\n\n` +
     `Write a 350-550 word analysis: what happened, why it mattered for the ${category} space in India, ` +
     `and practical implications. ${JSON_SHAPE}`;
-  return gemini(system, user);
+  return callAI({ task: "article_writing", system, user, importance: "medium", runKind: "backfill" });
 }
 
 // --- date spreading -----------------------------------------------------------
-function spreadDates(fromISO, toISO, n) {
+// preFilledDays: { "YYYY-MM-DD": count } — posts already in DB for that day.
+// Combined (existing + new) is capped at 2 per day so retries never overfill a day.
+function spreadDates(fromISO, toISO, n, preFilledDays = {}) {
   const from = new Date(fromISO + "T00:00:00Z").getTime();
   const to = Math.min(new Date(toISO + "T00:00:00Z").getTime(), Date.now() - 24 * 3600 * 1000);
   const days = Math.max(1, Math.floor((to - from) / 86400000));
-  const perDay = {};
+  const perDay = {}; // slots allocated in this run
   const out = [];
   let guard = 0;
   while (out.length < n && guard++ < n * 50) {
-    const day = Math.floor(Math.random() * (days + 1));
-    const key = String(day);
-    if ((perDay[key] || 0) >= 2) continue; // never bunch: max 2 posts on any day
-    perDay[key] = (perDay[key] || 0) + 1;
-    const d = new Date(from + day * 86400000);
+    const dayOffset = Math.floor(Math.random() * (days + 1));
+    const dateKey = new Date(from + dayOffset * 86400000).toISOString().slice(0, 10);
+    const existing = preFilledDays[dateKey] || 0;
+    const thisRun  = perDay[dateKey]  || 0;
+    if (existing + thisRun >= 2) continue; // max 2 posts per day across all runs
+    perDay[dateKey] = thisRun + 1;
+    const d = new Date(from + dayOffset * 86400000);
     d.setUTCHours(3 + Math.floor(Math.random() * 12), Math.floor(Math.random() * 60), 0, 0); // 08:30–20:30 IST
     out.push(d);
   }
@@ -196,15 +186,55 @@ function spreadDates(fromISO, toISO, n) {
 async function runJob(job) {
   const cats = (job.categories && job.categories.length ? job.categories : ALL_CATEGORIES)
     .filter((c) => ALL_CATEGORIES.includes(c));
-  const dates = spreadDates(job.date_from, job.date_to, job.post_count);
   const publish = job.publish_mode === "publish";
-  console.log(`Backfill: ${dates.length} posts, ${job.date_from} → ${job.date_to}, mode=${job.publish_mode}, categories=${cats.length}`);
 
-  const existing = await sbGet("blog_posts?select=title&limit=1000&order=created_at.desc");
-  const usedTitles = new Set(existing.map((p) => slugify(p.title)));
+  // ------------------------------------------------------------------
+  // Load posts already published in this date range so that retries:
+  //   1. Don't schedule new slots on days already at the 2-post cap.
+  //   2. Don't re-use evergreen topics that were already written.
+  //   3. Don't create articles whose titles already exist in the DB.
+  // ------------------------------------------------------------------
+  const rangeFrom = job.date_from + "T00:00:00Z";
+  const rangeTo   = job.date_to   + "T23:59:59Z";
+  const inRange = await sbGet(
+    `blog_posts?select=title,published_at&published_at=gte.${rangeFrom}&published_at=lte.${rangeTo}&limit=500`
+  ).catch(() => []);
+
+  // Per-day post counts already in DB (for date-spreading dedup).
+  const preFilledDays = {};
+  const inRangeSlugs  = new Set();
+  for (const p of inRange) {
+    const day = p.published_at.slice(0, 10);
+    preFilledDays[day] = (preFilledDays[day] || 0) + 1;
+    inRangeSlugs.add(slugify(p.title));
+  }
+
+  const dates = spreadDates(job.date_from, job.date_to, job.post_count, preFilledDays);
+  console.log(`Backfill: ${dates.length} posts, ${job.date_from} → ${job.date_to}, mode=${job.publish_mode}, categories=${cats.length} (${inRange.length} posts already in range)`);
+
+  // All existing titles (global — catches cross-run title clashes).
+  const allExisting = await sbGet("blog_posts?select=title&limit=2000&order=created_at.desc");
+  const usedTitles  = new Set([
+    ...allExisting.map((p) => slugify(p.title)),
+    ...inRangeSlugs,
+  ]);
+
+  // Pre-seed usedTopics: if an existing in-range title looks like it came from
+  // a known evergreen topic, mark that topic as used so it won't be picked again.
+  const usedTopics = new Set();
+  for (const [, topics] of Object.entries(EVERGREEN)) {
+    for (const topic of topics) {
+      const ts = slugify(topic).slice(0, 25); // first 25 chars is a reliable fingerprint
+      for (const existing of inRangeSlugs) {
+        if (existing.includes(ts) || ts.includes(existing.slice(0, 25))) {
+          usedTopics.add(topic);
+          break;
+        }
+      }
+    }
+  }
 
   let done = 0, failed = 0;
-  const usedTopics = new Set();
   for (let i = 0; i < dates.length; i++) {
     const when = dates[i];
     const dateISO = when.toISOString().slice(0, 10);
@@ -265,6 +295,12 @@ async function runJob(job) {
       done++;
       console.log(`  [${i + 1}/${dates.length}] ${dateISO} ${contentType}/${category}: ${rec.title}`);
     } catch (e) {
+      // Budget exhausted, AI paused, or all providers failed → stop and re-queue the job.
+      if (e.shouldRequeue) {
+        console.warn(`  [${i + 1}/${dates.length}] Router halted after ${done} posts — ${e.message}`);
+        await logGen({ status: "failed", detail: `router_halt after ${done} posts: ${e.message.slice(0, 200)}` });
+        return { done, failed, shouldRequeue: true };
+      }
       failed++;
       console.warn(`  [${i + 1}/${dates.length}] FAILED (${e.message})`);
       await logGen({ status: "failed", detail: `backfill ${dateISO}/${category}: ${e.message}` });
@@ -277,7 +313,7 @@ async function runJob(job) {
     }
     await sleep(12000); // Gemini free-tier pacing
   }
-  return { done, failed };
+  return { done, failed, shouldRequeue: false };
 }
 
 // --- main ----------------------------------------------------------------------
@@ -310,12 +346,26 @@ async function runJob(job) {
   for (const job of jobs) {
     if (job.id) await sbPatch(`blog_backfill_jobs?id=eq.${job.id}`, { status: "running", started_at: new Date().toISOString() });
     try {
-      const { done, failed } = await runJob(job);
-      if (job.id) await sbPatch(`blog_backfill_jobs?id=eq.${job.id}`, {
-        status: "completed", finished_at: new Date().toISOString(),
-        detail: `${done} created, ${failed} failed`,
-      });
-      console.log(`Job complete: ${done} created, ${failed} failed.`);
+      const { done, failed, shouldRequeue } = await runJob(job);
+      if (shouldRequeue && job.id) {
+        // Budget exhausted, AI paused, or all providers failed.
+        // Re-queue with the remaining post count so the next hourly cron
+        // automatically resumes and finishes the job.
+        const remaining = Math.max(job.post_count - done, 0);
+        await sbPatch(`blog_backfill_jobs?id=eq.${job.id}`, {
+          status: "queued",
+          started_at: null,
+          post_count: remaining,
+          detail: `router_halt: ${done} created, ${remaining} remaining — auto re-queued`,
+        });
+        console.log(`Router halted — re-queued with ${remaining} posts remaining.`);
+      } else {
+        if (job.id) await sbPatch(`blog_backfill_jobs?id=eq.${job.id}`, {
+          status: "completed", finished_at: new Date().toISOString(),
+          detail: `${done} created, ${failed} failed`,
+        });
+        console.log(`Job complete: ${done} created, ${failed} failed.`);
+      }
     } catch (e) {
       if (job.id) await sbPatch(`blog_backfill_jobs?id=eq.${job.id}`, { status: "failed", finished_at: new Date().toISOString(), detail: String(e.message).slice(0, 500) });
       console.error("Job failed:", e.message);
