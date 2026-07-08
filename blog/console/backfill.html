@@ -38,7 +38,11 @@
     </div>
     <div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h3>Backfill jobs</h3><button class="btn-sm" id="refreshJobs">Refresh</button>
+        <h3>Backfill jobs</h3>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="refreshTs" style="font-size:11px;opacity:0.5"></span>
+          <button class="btn-sm" id="refreshJobs">Refresh</button>
+        </div>
       </div>
       <div class="adm-list" id="jobs"><p class="blog-status">Loading…</p></div>
     </div>
@@ -67,25 +71,63 @@
     $("b_to").value = now.toISOString().slice(0, 10);
   } catch (e) {}
 
-  async function loadJobs() {
+  var pollTimer = null;
+
+  async function loadJobs(fromButton) {
     var box = $("jobs");
+    var btn = $("refreshJobs");
+    var ts  = $("refreshTs");
+
+    // Show spinner on button
+    if (fromButton) {
+      btn.disabled = true;
+      btn.textContent = "Refreshing…";
+    }
+
     var r = await sb.from("blog_backfill_jobs").select("*").order("created_at", { ascending: false }).limit(30);
-    if (r.error) { box.innerHTML = '<p class="blog-status">Jobs unavailable — apply the Sprint 18B migration first.</p>'; return; }
-    if (!r.data.length) { box.innerHTML = '<p class="blog-status">No backfill jobs yet.</p>'; return; }
+
+    // Restore button + show timestamp
+    btn.disabled = false;
+    btn.textContent = "Refresh";
+    ts.textContent = "Updated " + new Date().toLocaleTimeString();
+
+    if (r.error) { box.innerHTML = '<p class="blog-status">Jobs unavailable — apply the Sprint 18B migration first.</p>'; stopPoll(); return; }
+    if (!r.data.length) { box.innerHTML = '<p class="blog-status">No backfill jobs yet.</p>'; stopPoll(); return; }
+
     box.innerHTML = "";
+    var hasActive = false;
     r.data.forEach(function (j) {
+      if (j.status === "queued" || j.status === "running") hasActive = true;
+      var timeLabel = j.status === "running" && j.started_at
+        ? "started " + new Date(j.started_at).toLocaleTimeString()
+        : j.status === "completed" && j.finished_at
+          ? "finished " + new Date(j.finished_at).toLocaleTimeString()
+          : "queued " + new Date(j.created_at).toLocaleTimeString();
       var el = document.createElement("div"); el.className = "adm-item";
       el.innerHTML = "<h4>" + j.date_from + " → " + j.date_to + " · " + j.post_count + " posts · " + j.publish_mode + "</h4>"
-        + '<div class="meta">' + (j.categories && j.categories.length ? VN.esc(j.categories.join(", ")) : "all categories") + " · queued " + new Date(j.created_at).toLocaleString() + (j.detail ? " · " + VN.esc(j.detail) : "") + "</div>"
+        + '<div class="meta">' + (j.categories && j.categories.length ? VN.esc(j.categories.join(", ")) : "all categories") + " · " + timeLabel + (j.detail ? " · " + VN.esc(j.detail) : "") + "</div>"
         + '<div class="row"><span class="pill ' + j.status + '">' + j.status + "</span>"
         + (j.status === "queued" ? '<button class="btn-sm danger" data-act="cancel">Cancel</button>' : "")
         + "</div>";
       var c = el.querySelector('[data-act="cancel"]');
-      if (c) c.onclick = async function () { await sb.from("blog_backfill_jobs").update({ status: "cancelled" }).eq("id", j.id); loadJobs(); };
+      if (c) c.onclick = async function () { await sb.from("blog_backfill_jobs").update({ status: "cancelled" }).eq("id", j.id); loadJobs(false); };
       box.appendChild(el);
     });
+
+    // Auto-poll every 10s while jobs are active
+    if (hasActive) startPoll();
+    else stopPoll();
   }
-  $("refreshJobs").addEventListener("click", loadJobs);
+
+  function startPoll() {
+    if (pollTimer) return;
+    pollTimer = setInterval(function () { loadJobs(false); }, 10000);
+  }
+  function stopPoll() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  $("refreshJobs").addEventListener("click", function () { loadJobs(true); });
 
   $("queueBackfill").addEventListener("click", async function () {
     var from = $("b_from").value, to = $("b_to").value;
