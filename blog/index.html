@@ -71,18 +71,21 @@
           <button class="chip active" data-cat="">All</button>
         </div>
         <div class="blog-adv" id="advFilters">
-          <select id="f_type" aria-label="Content type">
-            <option value="">All content types</option>
-            <option value="evergreen">Evergreen</option>
-            <option value="trending_news">Trending news</option>
-            <option value="how_to">How-to guide</option>
-            <option value="comparison">Comparison</option>
-            <option value="case_study">Case study</option>
-            <option value="opinion">Opinion / insight</option>
-            <option value="product_service">Product / service</option>
-            <option value="global_news_explainer">Global news explainer</option>
-            <option value="faq">FAQ</option>
-          </select>
+          <div class="vn-sel" id="f_type_wrap">
+            <div class="vn-sel-trigger" id="f_type_trigger">All content types</div>
+            <div class="vn-sel-drop" id="f_type_drop">
+              <div class="vn-sel-opt selected" data-val="">All content types</div>
+              <div class="vn-sel-opt" data-val="evergreen">Evergreen</div>
+              <div class="vn-sel-opt" data-val="trending_news">Trending news</div>
+              <div class="vn-sel-opt" data-val="how_to">How-to guide</div>
+              <div class="vn-sel-opt" data-val="comparison">Comparison</div>
+              <div class="vn-sel-opt" data-val="case_study">Case study</div>
+              <div class="vn-sel-opt" data-val="opinion">Opinion / insight</div>
+              <div class="vn-sel-opt" data-val="product_service">Product / service</div>
+              <div class="vn-sel-opt" data-val="global_news_explainer">Global news explainer</div>
+              <div class="vn-sel-opt" data-val="faq">FAQ</div>
+            </div>
+          </div>
           <input type="date" id="f_from" aria-label="From date">
           <input type="date" id="f_to" aria-label="To date">
         </div>
@@ -104,7 +107,15 @@
   .chip:hover{border-color:var(--border-gold,#a8873a)}
   .chip.active{background:var(--gold-soft,rgba(200,164,86,.15));color:var(--gold,#c8a456);border-color:var(--border-gold,#a8873a)}
   .blog-adv{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-  .blog-adv select,.blog-adv input{padding:8px 12px;border-radius:10px;border:1px solid var(--border,#333);background:var(--surface,#161616);color:var(--text-2,#bbb);font-size:13px}
+  .blog-adv input{padding:8px 12px;border-radius:10px;border:1px solid var(--border,#333);background:var(--surface,#161616);color:var(--text-2,#bbb);font-size:13px;-webkit-appearance:none;appearance:none}
+  .vn-sel{position:relative;font-size:13px}
+  .vn-sel-trigger{padding:8px 32px 8px 12px;border-radius:10px;border:1px solid var(--border,rgba(150,185,255,.20));background:var(--surface,rgba(120,165,255,.055));color:var(--text-2,#b9c9e6);cursor:pointer;white-space:nowrap;user-select:none}
+  .vn-sel-trigger::after{content:"▾";position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-3,#7f92b6);pointer-events:none}
+  .vn-sel-drop{display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:100%;background:var(--bg-elev,#0c1830);border:1px solid var(--border,rgba(150,185,255,.20));border-radius:10px;z-index:200;overflow:hidden;box-shadow:0 8px 32px rgba(2,8,23,.6)}
+  .vn-sel.open .vn-sel-drop{display:block}
+  .vn-sel-opt{padding:9px 14px;color:var(--text-2,#b9c9e6);cursor:pointer;font-size:13px;white-space:nowrap}
+  .vn-sel-opt:hover{background:var(--surface-2,rgba(120,165,255,.10));color:var(--text,#f2f6fd)}
+  .vn-sel-opt.selected{color:var(--gold,#e0c274)}
 </style>
 
 <footer class="site-footer">
@@ -148,7 +159,7 @@
     return {
       q: (document.getElementById("q").value || "").trim() || null,
       cat: (document.querySelector(".chip.active")||{}).dataset ? (document.querySelector(".chip.active").dataset.cat || null) : null,
-      p_type: document.getElementById("f_type").value || null,
+      p_type: (document.getElementById("f_type_wrap") && document.getElementById("f_type_wrap").dataset.val) || null,
       date_from: document.getElementById("f_from").value || null,
       date_to: document.getElementById("f_to").value || null,
       p_tag: qs.get("tag") || null,
@@ -212,7 +223,24 @@
   });
 
   document.getElementById("searchForm").addEventListener("submit", function(e){ e.preventDefault(); run(true); });
-  ["f_type","f_from","f_to"].forEach(function(id){ document.getElementById(id).addEventListener("change", function(){ run(true); }); });
+  // Custom content-type dropdown
+  (function(){
+    var wrap    = document.getElementById("f_type_wrap");
+    var trigger = document.getElementById("f_type_trigger");
+    var drop    = document.getElementById("f_type_drop");
+    trigger.addEventListener("click", function(e){ e.stopPropagation(); wrap.classList.toggle("open"); });
+    document.addEventListener("click", function(){ wrap.classList.remove("open"); });
+    drop.addEventListener("click", function(e){
+      var opt = e.target.closest(".vn-sel-opt"); if (!opt) return;
+      drop.querySelectorAll(".vn-sel-opt").forEach(function(o){ o.classList.remove("selected"); });
+      opt.classList.add("selected");
+      trigger.textContent = opt.textContent;
+      wrap.dataset.val = opt.dataset.val;
+      wrap.classList.remove("open");
+      run(true);
+    });
+  })();
+  ["f_from","f_to"].forEach(function(id){ document.getElementById(id).addEventListener("change", function(){ run(true); }); });
   var debounce; document.getElementById("q").addEventListener("input", function(){
     clearTimeout(debounce); debounce = setTimeout(function(){ run(true); }, 350);
   });

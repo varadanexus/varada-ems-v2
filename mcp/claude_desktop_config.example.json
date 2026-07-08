@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "varada-blog-admin": {
+      "command": "node",
+      "args": ["C:\\Users\\YOU\\path\\to\\Varada EMS 2.0\\mcp\\server.mjs"],
+      "env": {
+        "SUPABASE_URL": "https://YOUR-PROJECT.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "your-service-role-key",
+        "BLOG_ADMIN_SECRET": "any-long-random-string-you-choose",
+        "SITE_URL": "https://varadanexus.com",
+        "OPENROUTER_API_KEY": "your-openrouter-key",
+        "OPENROUTER_MODEL": "google/gemini-2.5-flash",
+        "GEMINI_API_KEY": "optional",
+        "OPENAI_API_KEY": "optional",
+        "ANTHROPIC_API_KEY": "optional",
+        "LINKEDIN_ACCESS_TOKEN": "optional",
+        "LINKEDIN_AUTHOR_URN": "urn:li:organization:00000000"
+      }
+    }
+  }
+}

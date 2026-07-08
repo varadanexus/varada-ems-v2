@@ -1,0 +1,22 @@
+{
+  "name": "varada-blog-admin-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MCP server that lets Claude Desktop act as the manual blog admin for the Varada Nexus website (Supabase + AI router).",
+  "type": "module",
+  "main": "server.mjs",
+  "bin": {
+    "varada-blog-admin-mcp": "server.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test-mcp.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  }
+}

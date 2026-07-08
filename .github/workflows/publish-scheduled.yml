@@ -1,0 +1,23 @@
+name: Publish scheduled blog posts
+
+# Makes schedule_blog (from the Claude Desktop MCP or the console) safe:
+# the actual go-live is driven here, not by any local process being open.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes: publish any scheduled posts now due
+  workflow_dispatch: {}       # allow a manual run from the Actions tab
+
+jobs:
+  publish-scheduled:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Publish due scheduled posts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/publish-scheduled-posts.mjs

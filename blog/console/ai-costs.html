@@ -35,13 +35,32 @@
 .panel-box{background:var(--surface,#161616);border:1px solid var(--border-soft,#2a2a2a);border-radius:14px;padding:16px}
 .sparkbar{display:flex;align-items:flex-end;gap:3px;height:40px;margin-top:10px}
 .sparkbar-col{flex:1;background:var(--gold-soft,rgba(200,164,86,.25));border-radius:3px 3px 0 0;min-height:2px}
-.settings-section{background:var(--surface,#161616);border:1px solid var(--border-soft,#2a2a2a);border-radius:14px;padding:18px 20px;margin-top:24px}
-.settings-section h3{font-size:14px;font-weight:600;margin-bottom:14px}
-.settings-grid-ai{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-.priority-list{list-style:none;padding:0;margin:0}
-.priority-list li{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border,#333);border-radius:10px;margin-bottom:6px;font-size:12.5px;background:var(--surface-2,#222);cursor:default}
-.priority-list li .rank{font-size:10px;color:var(--gold,#c8a456);font-weight:700;min-width:16px}
-.priority-list li .enabled{margin-left:auto}
+.settings-section{background:var(--surface,rgba(120,165,255,.04));border:1px solid var(--border-soft,rgba(150,185,255,.10));border-radius:20px;padding:28px 30px;margin-top:28px}
+.settings-section h3{font-size:16px;font-weight:700;margin-bottom:6px;font-family:var(--font-serif)}
+.settings-sub{font-size:12px;color:var(--text-3);margin-bottom:24px}
+.settings-divider{height:1px;background:var(--border-soft,rgba(150,185,255,.10));margin:24px 0}
+.settings-group-label{font-size:10.5px;font-weight:600;letter-spacing:.10em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px}
+.settings-grid-ai{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
+.settings-grid-ai .field{margin-bottom:0}
+.settings-grid-ai .field label{font-size:11px;letter-spacing:.07em;color:var(--text-3);margin-bottom:7px}
+.settings-grid-ai .field input{font-size:14px;padding:11px 14px;border-radius:12px}
+.settings-grid-ai .field .stat-note{font-size:11px;margin-top:5px;line-height:1.5}
+.pause-row{display:flex;align-items:center;gap:14px;padding:14px 18px;border:1px solid var(--border-soft,rgba(150,185,255,.10));border-radius:14px;background:rgba(255,122,122,.04);margin-top:4px}
+.pause-row label{font-size:13.5px;font-weight:500;color:var(--text);cursor:pointer;flex:1}
+.pause-row .stat-note{font-size:11.5px;color:var(--text-3);margin:0}
+.toggle-wrap{position:relative;width:42px;height:24px;flex-shrink:0}
+.toggle-wrap input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{position:absolute;inset:0;border-radius:99px;background:var(--border,rgba(150,185,255,.2));transition:background .2s;cursor:pointer}
+.toggle-track::after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s}
+.toggle-wrap input:checked + .toggle-track{background:#ff7a7a}
+.toggle-wrap input:checked + .toggle-track::after{transform:translateX(18px)}
+.priority-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.priority-list li{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border-soft,rgba(150,185,255,.10));border-radius:14px;background:rgba(120,165,255,.04)}
+.priority-list li .rank{width:24px;height:24px;border-radius:50%;background:var(--gold-soft,rgba(224,194,116,.14));color:var(--gold,#e0c274);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.priority-list li .pname{font-size:13.5px;font-weight:500;flex:1}
+.priority-list li .pmove{display:flex;gap:4px;margin-left:auto}
+.pmove-btn{width:28px;height:28px;border-radius:8px;border:1px solid var(--border-soft,rgba(150,185,255,.10));background:rgba(120,165,255,.06);color:var(--text-2);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,background .2s}
+.pmove-btn:hover{border-color:var(--border-gold,rgba(217,185,110,.28));background:var(--gold-soft,rgba(224,194,116,.10));color:var(--gold)}
 .log-wrap{max-height:340px;overflow:auto}
 </style>
 </head>
@@ -100,49 +119,75 @@
 <!-- ── Admin controls ────────────────────────────────────────── -->
 <div class="settings-section">
   <h3>AI Router Settings</h3>
+  <p class="settings-sub">Changes take effect on the next generation run.</p>
+
+  <!-- Budget -->
+  <div class="settings-group-label">Budget</div>
   <div class="settings-grid-ai">
     <div class="field">
       <label>Monthly budget (USD)</label>
       <input type="number" id="set_monthly" min="1" max="500" step="1">
     </div>
     <div class="field">
-      <label>Daily budget (USD) — leave blank for no daily cap</label>
+      <label>Daily budget (USD)</label>
       <input type="number" id="set_daily" min="0" max="50" step="0.5" placeholder="No cap">
+      <span class="stat-note">Leave blank for no daily cap.</span>
     </div>
     <div class="field">
       <label>Max cost per article (USD)</label>
       <input type="number" id="set_maxart" min="0.001" max="5" step="0.01">
     </div>
     <div class="field">
-      <label>Quality escalation threshold (0–100)</label>
+      <label>Quality escalation threshold</label>
       <input type="number" id="set_quality" min="0" max="100">
-      <span class="stat-note">If quality score &lt; this, regenerate with next-tier model (once).</span>
-    </div>
-    <div class="field">
-      <label>Cheap model override (blank = provider default)</label>
-      <input type="text" id="set_cheap" placeholder="e.g. google/gemini-2.0-flash-lite:free">
-    </div>
-    <div class="field">
-      <label>Medium model override</label>
-      <input type="text" id="set_medium" placeholder="e.g. google/gemini-2.5-flash">
-    </div>
-    <div class="field">
-      <label>Premium model override</label>
-      <input type="text" id="set_premium" placeholder="e.g. anthropic/claude-sonnet-4-6">
-    </div>
-    <div class="field">
-      <label><input type="checkbox" id="set_paused"> Pause all AI generation</label>
-      <span class="stat-note">Queued jobs will re-queue until AI is resumed.</span>
+      <span class="stat-note">Score 0–100. Below this, router retries with the next tier.</span>
     </div>
   </div>
 
-  <div class="section-head" style="margin-top:16px">Provider priority</div>
-  <ul class="priority-list" id="priorityList"></ul>
-  <span class="stat-note">Providers without a configured API key are automatically skipped.</span>
+  <div class="settings-divider"></div>
 
-  <br>
-  <button class="btn btn-primary" id="saveSettings" style="margin-top:12px">Save settings</button>
-  <p class="adm-msg" id="setMsg"></p>
+  <!-- Model overrides -->
+  <div class="settings-group-label">Model overrides <span style="font-weight:400;text-transform:none;letter-spacing:0">&nbsp;—&nbsp; leave blank to use provider defaults</span></div>
+  <div class="settings-grid-ai">
+    <div class="field">
+      <label>Cheap tier</label>
+      <input type="text" id="set_cheap" placeholder="e.g. google/gemini-2.0-flash-lite:free">
+    </div>
+    <div class="field">
+      <label>Medium tier</label>
+      <input type="text" id="set_medium" placeholder="e.g. google/gemini-2.5-flash">
+    </div>
+    <div class="field">
+      <label>Premium tier</label>
+      <input type="text" id="set_premium" placeholder="e.g. anthropic/claude-sonnet-4-6">
+    </div>
+  </div>
+
+  <div class="settings-divider"></div>
+
+  <!-- Provider priority -->
+  <div class="settings-group-label">Provider priority</div>
+  <ul class="priority-list" id="priorityList"></ul>
+  <p style="font-size:11.5px;color:var(--text-3);margin-top:10px">Providers without a configured API key are automatically skipped at runtime.</p>
+
+  <div class="settings-divider"></div>
+
+  <!-- Pause toggle -->
+  <div class="pause-row">
+    <div>
+      <label for="set_paused" style="font-size:13.5px;font-weight:500;color:var(--text);cursor:pointer;display:block;margin-bottom:3px">Pause all AI generation</label>
+      <span class="stat-note">Queued jobs will re-queue automatically until AI is resumed.</span>
+    </div>
+    <label class="toggle-wrap">
+      <input type="checkbox" id="set_paused">
+      <span class="toggle-track"></span>
+    </label>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:16px;margin-top:22px">
+    <button class="btn btn-primary" id="saveSettings">Save settings</button>
+    <p class="adm-msg" id="setMsg" style="margin:0"></p>
+  </div>
 </div>
 
 </main>
