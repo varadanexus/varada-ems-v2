@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notice Period Calculator — Last Working Day Calculator India | Varada Nexus</title>
+<meta name="description" content="Free notice period calculator. Calculate last working day and notice completion date with working days count and notice buy-out salary.">
+<meta name="author" content="Varada Nexus Private Limited">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.varadanexus.com/professional-tools/hr-public-relations/notice-period-calculator/">
+<meta property="og:title" content="Notice Period Calculator — Last Working Day Calculator India | Varada Nexus"><meta property="og:description" content="Free notice period calculator. Calculate last working day and notice completion date with working days count and notice buy-out salary.">
+<meta property="og:type" content="website"><meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/professional-tools/assets/tools.css">
+<link rel="icon" type="image/png" href="/images/logo.png">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.varadanexus.com/"},{"@type":"ListItem","position":2,"name":"Professional Tools","item":"https://www.varadanexus.com/professional-tools/"},{"@type":"ListItem","position":3,"name":"HR & Public Relations","item":"https://www.varadanexus.com/professional-tools/hr-public-relations/"},{"@type":"ListItem","position":4,"name":"Notice Period & Last Working Day Calculator","item":"https://www.varadanexus.com/professional-tools/hr-public-relations/notice-period-calculator/"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Can I buy out my notice period?","acceptedAnswer":{"@type":"Answer","text":"Yes, most employment contracts allow notice buy-out (paying salary in lieu of notice). The cost is typically basic salary for the remaining notice days."}},{"@type":"Question","name":"Do public holidays count in notice period?","acceptedAnswer":{"@type":"Answer","text":"Usually yes — public holidays are counted as part of the calendar notice period. Confirm with your employment contract."}},{"@type":"Question","name":"What if I am on leave during notice period?","acceptedAnswer":{"@type":"Answer","text":"Leaves availed during the notice period do not extend it unless specified in your contract. Some companies require you to complete the notice after the leave."}}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Notice Period & Last Working Day Calculator","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
+</head>
+<body>
+<div class="ambient"></div>
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap vt-main">
+<div class="vt-crumb"><a href="/">Home</a> / <a href="/professional-tools/">Professional Tools</a> / <a href="/professional-tools/hr-public-relations/">HR &amp; Public Relations</a> / Notice Period &amp; Last Working Day Calculator</div>
+<span class="eyebrow reveal">HR &amp; Public Relations</span><h1 class="display reveal reveal-d1" style="font-size:clamp(28px,4.5vw,44px)">Notice Period &amp; Last Working Day Calculator</h1><p class="sub reveal reveal-d2">Calculate your last working day and notice period end date, accounting for weekends, public holidays and notice buy-out options.</p>
+  <div class="vt-card no-print"><div class="vt-grid" id="vt-inputs"></div><button class="vt-btn" id="vt-calcBtn">Calculate</button></div>
+  <div class="vt-card vt-results" id="vt-results"><h3 style="margin-top:0;font-family:var(--font-serif)">Result</h3><div class="vt-kpis" id="vt-kpis"></div>
+    <table class="vt-table" id="vt-breakdown"><thead><tr><th>Component</th><th class="num"></th><th class="num">Value</th></tr></thead><tbody></tbody></table>
+    <div id="vt-notes"></div>
+    <div class="vt-btn-row no-print"><button class="vt-btn sec" id="vt-printBtn">Save / Print as PDF</button><button class="vt-btn wa" id="vt-waBtn">Send on WhatsApp</button></div>
+    <div class="vt-note"><b>Notes &amp; assumptions:</b> Working days = notice days − (notice days ÷ 7 × 2) Sundays − Saturdays + working weekends − leave days. Buy-out = remaining working days × daily basic. Assumes 5-day work week.</div>
+    <p class="vt-disc"><b>Disclaimer:</b> This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.</p>
+    <div class="no-print" style="border-top:1px solid var(--border-soft);margin-top:18px;padding-top:16px"><h3 style="margin:0 0 4px;font-family:var(--font-serif)">Get expert help</h3>
+      <form id="vt-leadForm"><div class="vt-grid">
+        <div><label class="vt-label" for="vt-lName">Name*</label><input id="vt-lName" required></div><div><label class="vt-label" for="vt-lPhone">Phone*</label><input id="vt-lPhone" type="tel" required></div>
+        <div><label class="vt-label" for="vt-lEmail">Email</label><input id="vt-lEmail" type="email"></div><div><label class="vt-label" for="vt-lLoc">Project location</label><input id="vt-lLoc"></div></div>
+        <div style="margin-top:12px"><label class="vt-label" for="vt-lMsg">Message</label><textarea id="vt-lMsg"></textarea></div>
+        <button class="vt-btn" type="submit">Request Consultation</button><div class="vt-ok" id="vt-leadOk">Thanks! Your enquiry app will open.</div></form></div>
+  </div>
+  <div class="vt-card"><b>Related tools:</b> <a href="/professional-tools/hr-public-relations/attendance-calculator/">Attendance &amp; Salary Deduction Calculator</a> · <a href="/professional-tools/hr-public-relations/ctc-calculator/">CTC Structure Calculator</a> · <a href="/professional-tools/hr-public-relations/employee-attrition-calculator/">Employee Attrition Cost Calculator</a> · <a href="/professional-tools/hr-public-relations/employee-cost-calculator/">Employee Total Cost Calculator</a><br><b>Related services:</b> <a href="/services.html">HR &amp; PR Services</a> · <a href="/contact.html">Contact Us</a><br><b>Browse:</b> <a href="/professional-tools/hr-public-relations/">HR &amp; Public Relations tools</a> · <a href="/professional-tools/">All tools</a> · <a href="/contact.html">Contact</a></div>
+  <div class="vt-cta"><h3>Planning a project?</h3><p>Share your numbers and we will help you plan the next step.</p><a href="/contact.html?tool=notice-period-calculator">Contact Varada Nexus for detailed consultation</a></div>
+  <div class="vt-card"><h3 style="margin-top:0;font-family:var(--font-serif)">FAQ</h3><details><summary>Can I buy out my notice period?</summary><p>Yes, most employment contracts allow notice buy-out (paying salary in lieu of notice). The cost is typically basic salary for the remaining notice days.</p></details><details><summary>Do public holidays count in notice period?</summary><p>Usually yes — public holidays are counted as part of the calendar notice period. Confirm with your employment contract.</p></details><details><summary>What if I am on leave during notice period?</summary><p>Leaves availed during the notice period do not extend it unless specified in your contract. Some companies require you to complete the notice after the leave.</p></details></div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">
+          <img src="/images/logo.png" alt="Varada Nexus">
+          <div>
+            <div class="fb-name">Varada Nexus Private Limited</div>
+            <p>Building and operating systems across healthcare, mining, logistics, global trade, and digital commerce.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="/">Home</a>
+        <a href="/founder.html">Founder</a>
+        <a href="/team.html">Team</a>
+        <a href="/contact.html">Contact</a>
+      </div>
+      <div class="footer-col">
+        <h4>Services</h4>
+        <a href="/hospital.html">Hospital Infrastructure</a>
+        <a href="/consultancy.html">Hospital Consultancy</a>
+        <a href="/logistics.html">Mining &amp; Logistics</a>
+        <a href="/import-export.html">Import &amp; Export</a>
+        <a href="/ecommerce.html">E-Commerce</a>
+        <a href="/hr.html">HR &amp; PR</a>
+        <a href="/arbitrage.html">Strategic Arbitrage</a>
+      </div>
+      <div class="footer-col">
+        <h4>Access</h4>
+        <a href="/login.html">EMS Login</a>
+        <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
+        <a href="/services.html">All Services</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span>Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+
+<script>window.__TOOL__={"name":"Notice Period & Last Working Day Calculator","kind":"calculator","inputs":[{"id":"notice_days","label":"Notice period (calendar days)","type":"number","default":30,"min":1},{"id":"daily_basic","label":"Basic salary (₹/day) for buy-out","type":"number","default":1000,"min":0},{"id":"leaves_availed","label":"Leave days to adjust off notice","type":"number","default":0,"min":0},{"id":"weekends","label":"Working weekends in notice period","type":"number","default":0,"min":0}],"results":{"rowFmt":"raw","columns":["Component","","Value"],"kpis":[{"key":"k1","label":"Notice period (days)","format":"text"},{"key":"k2","label":"Buy-out cost","format":"text"},{"key":"k3","label":"Working days in notice","format":"text"}]},"checklist":null};window.__LOGIC__="/professional-tools/hr-public-relations/notice-period-calculator/logic.js";</script><script type="module" src="/professional-tools/assets/tools.js"></script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+{
+  "id": "content-calendar-generator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Content Calendar Generator",
+  "shortBenefit": "Monthly content plan by channel and posting frequency.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Generate a structured monthly content calendar with post counts per channel based on your marketing goals, team size and active platforms.",
+  "seo": {
+    "title": "Content Calendar Generator — Monthly Social Media Plan | Varada Nexus",
+    "description": "Free content calendar generator. Create a monthly content plan with posts per channel for blog, Instagram, LinkedIn, Facebook and email.",
+    "keywords": [
+      "content calendar generator",
+      "social media content plan",
+      "monthly content calendar tool"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "blog_freq",
+      "label": "Blog posts per month",
+      "type": "number",
+      "default": 4,
+      "min": 0
+    },
+    {
+      "id": "ig_freq",
+      "label": "Instagram posts per week",
+      "type": "number",
+      "default": 4,
+      "min": 0
+    },
+    {
+      "id": "linkedin_freq",
+      "label": "LinkedIn posts per week",
+      "type": "number",
+      "default": 3,
+      "min": 0
+    },
+    {
+      "id": "fb_freq",
+      "label": "Facebook posts per week",
+      "type": "number",
+      "default": 4,
+      "min": 0
+    },
+    {
+      "id": "email_freq",
+      "label": "Email newsletters per month",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "video_freq",
+      "label": "YouTube / Reel videos per month",
+      "type": "number",
+      "default": 4,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Channel",
+      "Posts/Month",
+      "Est. Hours/Month"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total content pieces",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Est. production hours",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Content pieces/week",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Hours per piece: blog 4h, Instagram 1.5h, LinkedIn 1h, Facebook 1h, email 3h, video 5h. Weekly frequencies multiplied by 4.3 weeks/month.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many blog posts should I publish per month for SEO?",
+      "a": "1–2 high-quality posts (1,500+ words) per week is ideal for SEO; even 2–4 per month with strong internal linking is effective for small businesses."
+    },
+    {
+      "q": "How often should I post on Instagram?",
+      "a": "3–5 times per week is optimal for most business accounts; consistency matters more than frequency. Stories can be daily without fatigue."
+    },
+    {
+      "q": "How do I build a content calendar?",
+      "a": "Start with business goals → identify audience questions → map content types to funnel stages (awareness/consideration/conversion) → schedule for consistent publishing."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

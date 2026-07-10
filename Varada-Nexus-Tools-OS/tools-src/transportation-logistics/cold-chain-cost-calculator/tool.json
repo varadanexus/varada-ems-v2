@@ -1,0 +1,121 @@
+{
+  "id": "cold-chain-cost-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Cold Chain Logistics Cost Calculator",
+  "shortBenefit": "Temperature-controlled logistics cost for perishables.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the cost of cold chain logistics including refrigerated transport, cold storage, handling and temperature monitoring for perishable goods.",
+  "seo": {
+    "title": "Cold Chain Cost Calculator — Refrigerated Logistics India | Varada Nexus",
+    "description": "Free cold chain cost calculator. Calculate refrigerated transport, cold storage and temperature monitoring costs for perishable goods logistics.",
+    "keywords": [
+      "cold chain cost calculator",
+      "refrigerated logistics cost india",
+      "cold storage transport cost"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "weight",
+      "label": "Shipment weight (kg)",
+      "type": "number",
+      "default": 5000,
+      "min": 1
+    },
+    {
+      "id": "distance",
+      "label": "Distance (km)",
+      "type": "number",
+      "default": 800,
+      "min": 1
+    },
+    {
+      "id": "temp_zone",
+      "label": "Temperature zone",
+      "type": "select",
+      "default": "chilled",
+      "options": [
+        {
+          "v": "frozen",
+          "t": "Frozen (below −18°C)"
+        },
+        {
+          "v": "chilled",
+          "t": "Chilled (2–8°C)"
+        },
+        {
+          "v": "ambient_ctrl",
+          "t": "Ambient controlled (15–25°C)"
+        }
+      ]
+    },
+    {
+      "id": "storage_days",
+      "label": "Cold storage days",
+      "type": "number",
+      "default": 3,
+      "min": 0
+    },
+    {
+      "id": "storage_area",
+      "label": "Cold storage area (sq ft)",
+      "type": "number",
+      "default": 200,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Cost (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total cold chain cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost premium vs normal freight",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cold chain cost per kg",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Approximate reefer rates: Frozen ₹4.50/kg/100km, Chilled ₹3.50/kg/100km, Ambient controlled ₹2.50/kg/100km. Cold storage: Frozen ₹60/sq ft/day, Chilled ₹40, Ambient ₹20. Normal road freight ₹2/kg/100km.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is cold chain logistics?",
+      "a": "Cold chain logistics maintains perishable goods at required temperatures throughout transit and storage — from production to end consumer. It is critical for food (frozen/fresh), pharma (vaccines, biologics) and chemicals."
+    },
+    {
+      "q": "What is the cold chain premium in India?",
+      "a": "Cold chain transport costs 1.5–2.5× normal road freight. Cold chain infrastructure is still developing in India, with significant losses (30% of perishables) due to inadequate cold chain."
+    },
+    {
+      "q": "How do I ensure temperature integrity in cold chain?",
+      "a": "Use validated temperature-controlled vehicles (with calibrated reefer units), real-time temperature monitoring IoT sensors, qualified packaging (insulated, dry ice, gel packs), and documented temperature logs for each shipment."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

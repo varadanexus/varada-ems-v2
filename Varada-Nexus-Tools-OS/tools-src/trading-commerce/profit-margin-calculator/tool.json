@@ -1,0 +1,83 @@
+{
+  "id": "profit-margin-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Profit Margin Calculator",
+  "shortBenefit": "Turn cost and selling price into profit, margin % and markup %.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate profit, profit margin and markup from cost price and selling price — essential for pricing decisions in trading and retail.",
+  "seo": {
+    "title": "Profit Margin Calculator — Margin % & Markup % from Cost & Price | Varada Nexus",
+    "description": "Free profit margin calculator. Enter cost and selling price to get profit, profit margin % and markup % instantly.",
+    "keywords": [
+      "profit margin calculator",
+      "markup calculator",
+      "margin vs markup calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cost",
+      "label": "Cost price (₹)",
+      "type": "number",
+      "default": 800,
+      "min": 0
+    },
+    {
+      "id": "sell",
+      "label": "Selling price (₹)",
+      "type": "number",
+      "default": 1000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Profit",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Margin %",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Markup %",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Margin is profit as a percentage of selling price; markup is profit as a percentage of cost. Taxes and overheads are not included.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the difference between margin and markup?",
+      "a": "Margin = profit ÷ selling price × 100 (share of the sale kept as profit). Markup = profit ÷ cost × 100 (mark-up over cost). Markup is always higher than margin."
+    },
+    {
+      "q": "How do I calculate profit margin?",
+      "a": "Profit = selling price − cost. Margin % = profit ÷ selling price × 100."
+    },
+    {
+      "q": "What is a good profit margin?",
+      "a": "It varies by industry — low-margin trading may run at 5–15% while services can exceed 40%. Compare against your sector benchmark."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

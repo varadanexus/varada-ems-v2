@@ -1,0 +1,91 @@
+{
+  "id": "revpar-calculator",
+  "category": "hospitality-tourism",
+  "kind": "calculator",
+  "name": "RevPAR & Occupancy Calculator",
+  "shortBenefit": "RevPAR and room revenue from ADR and occupancy.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate RevPAR (revenue per available room) and daily and monthly room revenue from the number of rooms, average daily rate and occupancy.",
+  "seo": {
+    "title": "RevPAR Calculator — Revenue Per Available Room & Occupancy | Varada Nexus",
+    "description": "Free RevPAR calculator for hotels. Get RevPAR and room revenue from rooms, ADR and occupancy percentage.",
+    "keywords": [
+      "revpar calculator",
+      "hotel revenue calculator",
+      "adr occupancy calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "rooms",
+      "label": "Total rooms",
+      "type": "number",
+      "default": 50,
+      "min": 0
+    },
+    {
+      "id": "adr",
+      "label": "Average daily rate — ADR (₹)",
+      "type": "number",
+      "default": 4000,
+      "min": 0
+    },
+    {
+      "id": "occ",
+      "label": "Occupancy (%)",
+      "type": "number",
+      "default": 70,
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "RevPAR",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Daily room revenue",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Monthly room revenue",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "RevPAR = ADR × occupancy%. Daily revenue = rooms × RevPAR. Monthly revenue assumes 30 days.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is RevPAR?",
+      "a": "Revenue Per Available Room = ADR × occupancy rate. It reflects both pricing and how full the hotel is."
+    },
+    {
+      "q": "How is RevPAR different from ADR?",
+      "a": "ADR is the average rate of rooms actually sold; RevPAR spreads revenue across all available rooms, sold or not."
+    },
+    {
+      "q": "How can I improve RevPAR?",
+      "a": "Raise ADR, improve occupancy, or both — through better pricing, distribution and demand generation."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

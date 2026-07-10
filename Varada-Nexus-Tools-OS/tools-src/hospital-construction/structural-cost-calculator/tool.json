@@ -1,0 +1,100 @@
+{
+  "id": "structural-cost-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Structural Cost Calculator",
+  "shortBenefit": "RCC structural (frame) cost by built-up area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the structural (RCC frame) cost of a building — concrete, steel and formwork — from built-up area and a structural rate.",
+  "seo": {
+    "title": "Structural Cost Calculator — RCC Frame Cost by Area | Varada Nexus",
+    "description": "Free structural cost calculator. Estimate RCC frame cost (concrete, steel, formwork) from built-up area.",
+    "keywords": [
+      "structural cost calculator",
+      "rcc frame cost",
+      "structure cost per sqft"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Built-up area (sq ft)",
+      "type": "number",
+      "default": 50000,
+      "min": 0
+    },
+    {
+      "id": "rate",
+      "label": "Structural rate (₹/sq ft)",
+      "type": "select",
+      "default": "1000",
+      "options": [
+        {
+          "v": "800",
+          "t": "Low-rise (₹800)"
+        },
+        {
+          "v": "1000",
+          "t": "Mid-rise (₹1,000)"
+        },
+        {
+          "v": "1300",
+          "t": "High-rise/heavy (₹1,300)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Element",
+      "share",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total structural cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Concrete",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Steel",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Structural cost = area × structural rate. Indicative split: concrete 40%, steel 35%, formwork & labour 25%. The structure is usually 25–30% of total civil cost.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the structural cost per sq ft?",
+      "a": "Roughly ₹800–1,300 per sq ft for the RCC frame, depending on building height and loading."
+    },
+    {
+      "q": "What share of cost is the structure?",
+      "a": "The structural frame is typically about a quarter to a third of total civil construction cost."
+    },
+    {
+      "q": "What drives structural cost up?",
+      "a": "Height, spans, seismic zone, soil condition and heavy floor loads all increase steel and concrete quantities."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

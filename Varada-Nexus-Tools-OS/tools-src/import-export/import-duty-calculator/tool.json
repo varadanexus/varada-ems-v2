@@ -1,0 +1,113 @@
+{
+  "id": "import-duty-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Import Duty Calculator",
+  "shortBenefit": "Calculate BCD, SWS and IGST on any import shipment",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the complete import duty burden — Basic Customs Duty (BCD), Social Welfare Surcharge (SWS) and IGST — so you can plan pricing and cash flow before goods arrive.",
+  "seo": {
+    "title": "Import Duty Calculator India – BCD SWS IGST Estimator",
+    "description": "Calculate import duty, Social Welfare Surcharge and IGST on imported goods in India. Enter CIF value, BCD rate and IGST rate to get total duty payable.",
+    "keywords": [
+      "import duty calculator",
+      "BCD calculator India",
+      "IGST on imports",
+      "customs duty estimator",
+      "import tax India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cif_inr",
+      "label": "CIF Value (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 1000,
+      "hint": "Cost + Insurance + Freight in Indian Rupees (assessable value)"
+    },
+    {
+      "id": "bcd_rate",
+      "label": "Basic Customs Duty (%)",
+      "type": "number",
+      "default": 10,
+      "min": 0,
+      "max": 150,
+      "hint": "BCD % as per HS code"
+    },
+    {
+      "id": "igst_rate",
+      "label": "IGST Rate (%)",
+      "type": "number",
+      "default": 18,
+      "min": 0,
+      "max": 28,
+      "hint": "0, 5, 12, 18 or 28%"
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity (units)",
+      "type": "number",
+      "default": 100,
+      "min": 1,
+      "hint": "For per-unit duty breakup"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Duty Component",
+      "Rate / Basis",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Duty Payable",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Effective Duty %",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Duty Per Unit",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "SWS = 10% of BCD. IGST base = CIF + BCD + SWS. No exemptions or FTA benefits applied.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the assessable value for import duty?",
+      "a": "The assessable value is the CIF value of goods converted to INR at the applicable exchange rate declared by Customs."
+    },
+    {
+      "q": "Is IGST on imports refundable?",
+      "a": "Yes. IGST paid on imports is available as ITC for GST-registered importers and can be offset against output GST."
+    },
+    {
+      "q": "What is Social Welfare Surcharge?",
+      "a": "SWS is 10% of BCD, levied in addition to BCD. Are there exemptions from BCD? Yes — under FTAs and certain notifications BCD may be nil or concessional."
+    },
+    {
+      "q": "Are there exemptions from BCD?",
+      "a": "Yes — under FTAs (ASEAN, UAE CEPA etc.), certain capital goods notifications and project imports, BCD may be nil or concessional. Check DGFT and Customs Tariff."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

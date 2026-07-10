@@ -1,0 +1,118 @@
+{
+  "id": "landed-cost-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Landed Cost Calculator",
+  "shortBenefit": "Total landed cost per unit including freight, duty and clearing.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the true landed cost of imported goods — product cost, freight, insurance, customs duty, IGST and clearing charges — and the cost per unit.",
+  "seo": {
+    "title": "Landed Cost Calculator (2026) — Import CIF, Duty & Per-Unit Cost | Varada Nexus",
+    "description": "Free landed cost calculator for imports. Add freight, insurance, customs duty, IGST and clearing to get total and per-unit landed cost.",
+    "keywords": [
+      "landed cost calculator",
+      "import cost calculator",
+      "cif duty calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "product",
+      "label": "Product cost / FOB (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    },
+    {
+      "id": "freight",
+      "label": "Freight (₹)",
+      "type": "number",
+      "default": 40000,
+      "min": 0
+    },
+    {
+      "id": "insurance",
+      "label": "Insurance (₹)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    },
+    {
+      "id": "duty",
+      "label": "Customs duty (%)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "igst",
+      "label": "IGST (%)",
+      "type": "number",
+      "default": 18,
+      "min": 0
+    },
+    {
+      "id": "clearing",
+      "label": "Clearing & handling (₹)",
+      "type": "number",
+      "default": 15000,
+      "min": 0
+    },
+    {
+      "id": "qty",
+      "label": "Quantity (units)",
+      "type": "number",
+      "default": 1000,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Landed cost / unit",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total landed cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "IGST (creditable)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "CIF = product + freight + insurance. Duty = CIF × duty%. IGST = (CIF + duty) × IGST% and is usually creditable, so per-unit landed cost is shown excluding IGST; the total including all outflows is also shown.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is landed cost?",
+      "a": "Landed cost is the total cost of a product once it reaches your warehouse — product price plus freight, insurance, customs duty, taxes and clearing charges."
+    },
+    {
+      "q": "Is IGST part of landed cost?",
+      "a": "IGST paid on imports is generally available as input tax credit, so it is often excluded from the costing base. This tool shows landed cost both with and without IGST."
+    },
+    {
+      "q": "How is customs duty calculated?",
+      "a": "Basic customs duty is charged on the CIF value (cost + insurance + freight). Actual duty depends on the HS code of the product."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export",
+      "url": "/import-export.html"
+    }
+  ]
+}

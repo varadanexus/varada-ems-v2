@@ -1,0 +1,108 @@
+{
+  "id": "room-area-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Room Area & Material Calculator",
+  "shortBenefit": "Floor, wall and ceiling area with material quantities.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate floor area, total wall area, ceiling area and derived material quantities (tiles, paint, false ceiling) for any rectangular room.",
+  "seo": {
+    "title": "Room Area Calculator — Floor, Wall & Ceiling Area | Varada Nexus",
+    "description": "Free room area calculator. Calculate floor, wall and ceiling area and derive material quantities for tiles, paint and false ceiling.",
+    "keywords": [
+      "room area calculator",
+      "floor area calculator",
+      "wall area calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "length",
+      "label": "Room length (ft)",
+      "type": "number",
+      "default": 15,
+      "min": 1
+    },
+    {
+      "id": "width",
+      "label": "Room width (ft)",
+      "type": "number",
+      "default": 12,
+      "min": 1
+    },
+    {
+      "id": "height",
+      "label": "Height (ft)",
+      "type": "number",
+      "default": 10,
+      "min": 6
+    },
+    {
+      "id": "doors",
+      "label": "Door openings",
+      "type": "number",
+      "default": 1,
+      "min": 0
+    },
+    {
+      "id": "windows",
+      "label": "Window openings",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Surface",
+      "Area",
+      "Notes"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Floor area",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Net wall area",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Ceiling area",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Door opening ~21 sq ft (3×7 ft). Window opening ~12 sq ft (4×3 ft). Wall area = perimeter × height − openings. Paint coverage ~120 sq ft/litre (2 coats).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I calculate wall area for a room?",
+      "a": "Wall area = (2 × (length + width)) × height. Subtract door and window areas to get the net paintable or tile-able wall area."
+    },
+    {
+      "q": "How much paint do I need for a 12×15 room?",
+      "a": "A 12×15 ft room with 10 ft ceiling has about 460 sq ft of net wall area. At 120 sq ft/litre for 2 coats, you need about 4 litres of wall paint plus separate ceiling paint."
+    },
+    {
+      "q": "What is the difference between carpet area and floor area?",
+      "a": "In interior planning, floor area = length × width of the room. Carpet area (as defined by RERA) deducts wall thickness from built-up area — a different measurement."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

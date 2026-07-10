@@ -1,0 +1,122 @@
+{
+  "id": "vehicle-payload-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Vehicle Payload & GVW Calculator",
+  "shortBenefit": "Legal payload capacity and overloading check.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate legal payload capacity, gross vehicle weight and check if your load complies with axle load regulations to avoid overloading penalties.",
+  "seo": {
+    "title": "Vehicle Payload Calculator — GVW & Axle Load India | Varada Nexus",
+    "description": "Free vehicle payload calculator. Calculate legal payload, GVW and check axle load compliance for trucks in India under Motor Vehicles Act.",
+    "keywords": [
+      "vehicle payload calculator",
+      "truck gvw calculator",
+      "axle load calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "vehicle_type",
+      "label": "Vehicle type",
+      "type": "select",
+      "default": "12t",
+      "options": [
+        {
+          "v": "lmv",
+          "t": "LMV / 3.5t GVW"
+        },
+        {
+          "v": "7t",
+          "t": "7 tonne truck"
+        },
+        {
+          "v": "12t",
+          "t": "12 tonne truck"
+        },
+        {
+          "v": "25t",
+          "t": "25 tonne truck (6-wheel)"
+        },
+        {
+          "v": "40t",
+          "t": "40 tonne (multi-axle)"
+        }
+      ]
+    },
+    {
+      "id": "tare_weight",
+      "label": "Tare weight / unladen weight (kg)",
+      "type": "number",
+      "default": 8500,
+      "min": 500
+    },
+    {
+      "id": "cargo_weight",
+      "label": "Cargo weight to load (kg)",
+      "type": "number",
+      "default": 10000,
+      "min": 0
+    },
+    {
+      "id": "fuel_water",
+      "label": "Fuel, water, driver weight (kg)",
+      "type": "number",
+      "default": 500,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Parameter",
+      "Legal Limit",
+      "Actual"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Load status",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Overloading by",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Legal payload",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "GVW limits (approx): LMV 3,500kg; 7t truck 7,000kg; 12t truck 12,000kg; 25t 25,000kg; 40t 40,000kg. Legal payload = GVW − tare − fuel/driver weight. Overloading fine in India: ₹20,000 + ₹2,000/extra tonne.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the overloading penalty in India?",
+      "a": "Under the Motor Vehicles Act amendment 2019, overloading fine is ₹20,000 for the first offence and ₹2,000 per extra tonne. Vehicles can be detained until excess load is removed."
+    },
+    {
+      "q": "What is GVW?",
+      "a": "GVW (Gross Vehicle Weight) is the maximum permissible total weight of a vehicle — including the vehicle itself, fuel, driver, passengers and cargo. Exceeding GVW is overloading."
+    },
+    {
+      "q": "How is payload calculated?",
+      "a": "Payload = GVW − Kerb weight (tare weight + fuel + driver). Always check the RC book for the vehicle's registered GVW limit and tare weight."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

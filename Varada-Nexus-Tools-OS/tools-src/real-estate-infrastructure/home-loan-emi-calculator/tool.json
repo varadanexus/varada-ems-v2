@@ -1,0 +1,90 @@
+{
+  "id": "home-loan-emi-calculator",
+  "category": "real-estate-infrastructure",
+  "kind": "calculator",
+  "name": "Home Loan EMI Calculator",
+  "shortBenefit": "Monthly EMI, total interest and repayment for a home loan.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the EMI for a home loan from loan amount, interest rate and tenure, with total interest and total repayment over the loan.",
+  "seo": {
+    "title": "Home Loan EMI Calculator India (2026) — Monthly EMI & Interest | Varada Nexus",
+    "description": "Free home loan EMI calculator for India. Get monthly EMI, total interest and total repayment for any loan amount, rate and tenure.",
+    "keywords": [
+      "home loan emi calculator",
+      "housing loan emi",
+      "home loan calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "principal",
+      "label": "Loan amount (₹)",
+      "type": "number",
+      "default": 5000000,
+      "min": 0
+    },
+    {
+      "id": "rate",
+      "label": "Interest rate (% p.a.)",
+      "type": "number",
+      "default": 8.5,
+      "min": 0
+    },
+    {
+      "id": "tenureY",
+      "label": "Tenure (years)",
+      "type": "number",
+      "default": 20,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly EMI",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total interest",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total payment",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Reducing-balance EMI on the full sanctioned amount. Excludes processing fees, insurance and any moratorium period.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is home loan EMI calculated?",
+      "a": "EMI = P × i × (1+i)^n ÷ ((1+i)^n − 1), where i is the monthly rate and n the number of months (years × 12)."
+    },
+    {
+      "q": "How can I reduce my home loan interest?",
+      "a": "A shorter tenure, part-prepayments or a lower interest rate all reduce total interest paid."
+    },
+    {
+      "q": "Does this include registration and stamp duty?",
+      "a": "No. Those are one-time purchase costs and are separate from the loan EMI."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

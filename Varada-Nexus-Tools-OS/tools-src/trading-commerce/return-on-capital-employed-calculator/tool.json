@@ -1,0 +1,113 @@
+{
+  "id": "return-on-capital-employed-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Return on Capital Employed Calculator",
+  "shortBenefit": "Measure how efficiently your trading business uses its capital",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate ROCE (Return on Capital Employed) to evaluate how effectively your trading operations generate profit from the total capital deployed in the business.",
+  "seo": {
+    "title": "Return on Capital Employed Calculator – ROCE Trading Business India",
+    "description": "Calculate ROCE for trading businesses. Measure profitability relative to capital deployed including fixed assets and working capital.",
+    "keywords": [
+      "ROCE calculator India",
+      "return on capital employed trading",
+      "capital efficiency calculator",
+      "EBIT capital employed",
+      "trading business profitability ratio"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "ebit",
+      "label": "EBIT (Operating Profit) (₹)",
+      "type": "number",
+      "default": 1500000,
+      "min": 0,
+      "hint": "Earnings Before Interest and Tax"
+    },
+    {
+      "id": "fixed_assets",
+      "label": "Fixed Assets (₹)",
+      "type": "number",
+      "default": 3000000,
+      "min": 0
+    },
+    {
+      "id": "current_assets",
+      "label": "Current Assets (₹)",
+      "type": "number",
+      "default": 5000000,
+      "min": 0,
+      "hint": "Inventory + receivables + cash"
+    },
+    {
+      "id": "current_liabilities",
+      "label": "Current Liabilities (₹)",
+      "type": "number",
+      "default": 2000000,
+      "min": 0,
+      "hint": "Trade payables + short-term debt"
+    },
+    {
+      "id": "annual_revenue",
+      "label": "Annual Revenue (₹)",
+      "type": "number",
+      "default": 15000000,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "Formula",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "ROCE",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Asset Turnover",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Capital Employed",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Capital Employed = Fixed Assets + Net Working Capital. Net WC = Current Assets − Current Liabilities.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good ROCE for a trading business?",
+      "a": "A ROCE above 15–20% is considered healthy for trading businesses. It should exceed the cost of capital (WACC). Compare against industry benchmarks and your own trend."
+    },
+    {
+      "q": "How is ROCE different from ROE?",
+      "a": "ROCE uses total capital employed (debt + equity), giving a complete picture of business efficiency. ROE (Return on Equity) only measures returns to shareholders, inflated by high debt."
+    },
+    {
+      "q": "How do I improve ROCE?",
+      "a": "Increase operating margin (reduce costs, improve pricing), reduce capital employed (sell idle assets, negotiate better supplier credit), or grow revenue faster than capital grows."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

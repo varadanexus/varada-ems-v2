@@ -1,0 +1,118 @@
+{
+  "id": "offer-letter-generator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Offer Letter Summary Generator",
+  "shortBenefit": "Offer letter key terms and compensation summary.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Generate a structured offer letter summary with all key terms — compensation, joining date, benefits, conditions — ready for review and customisation.",
+  "seo": {
+    "title": "Offer Letter Generator — Employment Offer Summary | Varada Nexus",
+    "description": "Free offer letter generator. Create a structured offer letter summary with CTC, joining date, benefits and conditions for hiring.",
+    "keywords": [
+      "offer letter generator",
+      "employment offer letter template india",
+      "job offer letter format"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "ctc",
+      "label": "Annual CTC offered (₹)",
+      "type": "number",
+      "default": 600000,
+      "min": 1
+    },
+    {
+      "id": "basic_pct",
+      "label": "Basic salary (% of CTC)",
+      "type": "number",
+      "default": 40,
+      "min": 20,
+      "max": 60
+    },
+    {
+      "id": "variable_pct",
+      "label": "Variable / performance pay (% of CTC)",
+      "type": "number",
+      "default": 10,
+      "min": 0,
+      "max": 50
+    },
+    {
+      "id": "notice_days",
+      "label": "Notice period (days)",
+      "type": "number",
+      "default": 30,
+      "min": 0
+    },
+    {
+      "id": "probation_months",
+      "label": "Probation period (months)",
+      "type": "number",
+      "default": 3,
+      "min": 0,
+      "max": 12
+    },
+    {
+      "id": "joining_bonus",
+      "label": "Joining bonus (₹, 0 if none)",
+      "type": "number",
+      "default": 0,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Offer Term",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Fixed annual CTC",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly in-hand (est.)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Variable pay",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Fixed CTC = total CTC − variable. Monthly gross = fixed CTC ÷ 12. In-hand estimate assumes PF + PT deduction ~15%. Variable paid on achievement of targets.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What should an offer letter include?",
+      "a": "An offer letter should state: designation, CTC structure, fixed vs variable split, joining date, probation period, notice period, work location, conditions (background check, educational verification) and offer expiry date."
+    },
+    {
+      "q": "Is an offer letter legally binding?",
+      "a": "An offer letter is not a full employment contract but does create some legal obligations. An appointment letter (issued post-joining) is the formal employment agreement."
+    },
+    {
+      "q": "Can a company withdraw an offer letter?",
+      "a": "Companies can legally withdraw offers before the candidate joins, though it can attract claims for expenses incurred (resignation, relocation). Best practice is to include an \"offer subject to verification\" clause."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

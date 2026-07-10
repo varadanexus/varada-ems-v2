@@ -1,0 +1,194 @@
+{
+  "id": "landing-page-checklist",
+  "category": "digital-marketing",
+  "kind": "checklist",
+  "name": "Landing Page Optimisation Checklist",
+  "shortBenefit": "Conversion-focused landing page quality checklist.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Audit your landing page against proven conversion rate optimisation (CRO) best practices to maximise lead generation and sales from paid and organic traffic.",
+  "seo": {
+    "title": "Landing Page Checklist — CRO Best Practices | Varada Nexus",
+    "description": "Free landing page checklist. Audit your landing page against conversion rate optimisation best practices for better lead generation.",
+    "keywords": [
+      "landing page checklist",
+      "cro checklist",
+      "landing page optimisation"
+    ]
+  },
+  "buttonLabel": "Audit Landing Page",
+  "checklist": [
+    {
+      "name": "1. Above the Fold",
+      "items": [
+        {
+          "id": "a1",
+          "text": "Clear headline that states the value proposition",
+          "critical": true
+        },
+        {
+          "id": "a2",
+          "text": "Sub-headline supports headline with specific benefit",
+          "critical": true
+        },
+        {
+          "id": "a3",
+          "text": "Hero image or video relevant to offer",
+          "critical": true
+        },
+        {
+          "id": "a4",
+          "text": "Primary CTA button visible without scrolling",
+          "critical": true
+        },
+        {
+          "id": "a5",
+          "text": "No navigation menu (reduces distraction)"
+        }
+      ]
+    },
+    {
+      "name": "2. Trust & Credibility",
+      "items": [
+        {
+          "id": "t1",
+          "text": "Customer testimonials or case studies included",
+          "critical": true
+        },
+        {
+          "id": "t2",
+          "text": "Social proof numbers (clients, reviews, years) shown"
+        },
+        {
+          "id": "t3",
+          "text": "Trust badges (certifications, awards, media mentions) visible"
+        },
+        {
+          "id": "t4",
+          "text": "Privacy assurance near form/CTA"
+        }
+      ]
+    },
+    {
+      "name": "3. Form & CTA",
+      "items": [
+        {
+          "id": "f1",
+          "text": "Form has minimal required fields (≤5)",
+          "critical": true
+        },
+        {
+          "id": "f2",
+          "text": "CTA copy is action-oriented and benefit-led",
+          "critical": true
+        },
+        {
+          "id": "f3",
+          "text": "Form above the fold or immediately after value prop"
+        },
+        {
+          "id": "f4",
+          "text": "Confirmation / thank you page set up with next step"
+        }
+      ]
+    },
+    {
+      "name": "4. Content & Copy",
+      "items": [
+        {
+          "id": "c1",
+          "text": "Benefits (not just features) clearly listed",
+          "critical": true
+        },
+        {
+          "id": "c2",
+          "text": "Objection handling / FAQ section included"
+        },
+        {
+          "id": "c3",
+          "text": "Urgency or scarcity element present (if appropriate)"
+        },
+        {
+          "id": "c4",
+          "text": "Contact details / live chat available"
+        }
+      ]
+    },
+    {
+      "name": "5. Technical",
+      "items": [
+        {
+          "id": "tech1",
+          "text": "Page loads in under 3 seconds on mobile",
+          "critical": true
+        },
+        {
+          "id": "tech2",
+          "text": "Page is mobile-responsive"
+        },
+        {
+          "id": "tech3",
+          "text": "Conversion tracking pixel / goal set up",
+          "critical": true
+        },
+        {
+          "id": "tech4",
+          "text": "A/B test running or planned"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Critical items are those that most directly impact conversion rate based on CRO research.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the most important element of a landing page?",
+      "a": "The headline is the single most impactful element — it determines whether a visitor stays. It must immediately communicate the key benefit for the specific audience."
+    },
+    {
+      "q": "How long should a landing page be?",
+      "a": "Short pages (300–500 words, single CTA) work for warm traffic; longer pages (1,000–2,000 words) with multiple CTAs work better for cold traffic needing more convincing."
+    },
+    {
+      "q": "What conversion rate should I expect from a landing page?",
+      "a": "Industry average is 2–5% for general landing pages; optimised pages for warm audiences can achieve 10–20% or higher. Test, measure and iterate."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

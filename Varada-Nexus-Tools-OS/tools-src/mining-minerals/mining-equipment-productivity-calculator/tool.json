@@ -1,0 +1,143 @@
+{
+  "id": "mining-equipment-productivity-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mining Equipment Productivity Calculator",
+  "shortBenefit": "Calculate shovel, dumper and drill productivity and utilisation",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Measure the actual productivity and utilisation of key mining equipment — excavators, dump trucks and drills — to identify bottlenecks and improve fleet efficiency.",
+  "seo": {
+    "title": "Mining Equipment Productivity Calculator – Shovel Dumper India",
+    "description": "Calculate mining equipment productivity: excavator bucket cycles, dump truck payload and drill ROP. Measure utilisation and production per shift for Indian mines.",
+    "keywords": [
+      "mining equipment productivity",
+      "shovel productivity calculator",
+      "dump truck productivity",
+      "drill productivity mining",
+      "equipment utilisation mining India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "equipment_type",
+      "label": "Equipment Type",
+      "type": "select",
+      "default": "excavator",
+      "options": [
+        {
+          "v": "excavator",
+          "t": "Excavator / Shovel"
+        },
+        {
+          "v": "dumper",
+          "t": "Dump Truck / Dumper"
+        },
+        {
+          "v": "drill",
+          "t": "Rotary Drill Rig"
+        }
+      ]
+    },
+    {
+      "id": "shift_hours",
+      "label": "Shift Duration (hours)",
+      "type": "number",
+      "default": 8,
+      "min": 1,
+      "max": 12
+    },
+    {
+      "id": "availability_pct",
+      "label": "Mechanical Availability (%)",
+      "type": "number",
+      "default": 80,
+      "min": 10,
+      "max": 100
+    },
+    {
+      "id": "utilisation_pct",
+      "label": "Operational Utilisation (%)",
+      "type": "number",
+      "default": 75,
+      "min": 10,
+      "max": 100
+    },
+    {
+      "id": "cycle_time_min",
+      "label": "Cycle Time (minutes)",
+      "type": "number",
+      "default": 3.5,
+      "min": 0.5,
+      "hint": "For excavator: dig+swing+dump+return. Dumper: load+haul+dump+return."
+    },
+    {
+      "id": "payload_or_bucket",
+      "label": "Payload / Bucket Capacity (MT or m³)",
+      "type": "number",
+      "default": 10,
+      "min": 0.1
+    },
+    {
+      "id": "fill_factor",
+      "label": "Fill Factor (%)",
+      "type": "number",
+      "default": 90,
+      "min": 50,
+      "max": 110,
+      "hint": "Bucket fill efficiency vs rated capacity"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Parameter",
+      "Calculation",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Production per Shift",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Effective Hours",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cycles per Shift",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Effective hours = shift × availability% × utilisation%. Cycles = effective hours × 60 / cycle time. Production = cycles × payload × fill factor.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the difference between mechanical availability and utilisation?",
+      "a": "Mechanical Availability = % of time equipment is not under maintenance. Utilisation = % of available time actually worked. A machine at 85% MA and 80% utilisation works 68% of total shift time."
+    },
+    {
+      "q": "What is a good OEE for mining equipment?",
+      "a": "Overall Equipment Effectiveness (MA × Utilisation × Performance) of 65–75% is considered good for mining. World class mines achieve 80%+ OEE through predictive maintenance and queue management."
+    },
+    {
+      "q": "How do I improve dump truck cycle time?",
+      "a": "Reduce haul road grades, improve road surface quality (reduce rolling resistance), eliminate waiting time at loader, optimise truck spotting position, and use dispatch systems for truck allocation."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "id": "seed-rate-calculator",
+  "category": "agriculture-agribusiness",
+  "kind": "calculator",
+  "name": "Seed Rate Calculator",
+  "shortBenefit": "Total seed quantity and cost for a field by area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the total seed required and its cost from the field area and recommended seed rate per acre.",
+  "seo": {
+    "title": "Seed Rate Calculator — Seed Quantity & Cost by Acre | Varada Nexus",
+    "description": "Free seed rate calculator. Find the total seed needed and cost from field area and seed rate per acre.",
+    "keywords": [
+      "seed rate calculator",
+      "seed quantity calculator",
+      "seed per acre"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Field area (acres)",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "rate",
+      "label": "Seed rate (kg/acre)",
+      "type": "number",
+      "default": 20,
+      "min": 0
+    },
+    {
+      "id": "price",
+      "label": "Seed price (₹/kg)",
+      "type": "number",
+      "default": 80,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total seed",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Seed cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Area",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Total seed = area × seed rate per acre. Recommended seed rate varies by crop, variety, spacing and sowing method.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I calculate seed rate?",
+      "a": "Total seed = field area (acres) × recommended seed rate (kg/acre). Multiply by price per kg for cost."
+    },
+    {
+      "q": "What affects the seed rate?",
+      "a": "Crop type, seed size, germination rate, row spacing and sowing method all change the recommended seed rate."
+    },
+    {
+      "q": "Should I add extra seed?",
+      "a": "A small buffer (5–10%) is common to allow for poor germination and gap filling."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

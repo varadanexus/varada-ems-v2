@@ -1,0 +1,115 @@
+{
+  "id": "logistics-kpi-dashboard",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Logistics KPI Dashboard",
+  "shortBenefit": "Key logistics performance metrics: OTIF, fill rate, cost per order.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate key logistics KPIs including on-time in-full (OTIF) delivery rate, order fill rate, cost per order and return rate for supply chain performance reporting.",
+  "seo": {
+    "title": "Logistics KPI Dashboard — OTIF Fill Rate Cost Per Order | Varada Nexus",
+    "description": "Free logistics KPI calculator. Compute OTIF, order fill rate, cost per order, return rate and perfect order index for supply chain performance.",
+    "keywords": [
+      "logistics kpi calculator",
+      "otif calculator",
+      "order fill rate calculator supply chain"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "total_orders",
+      "label": "Total orders dispatched (month)",
+      "type": "number",
+      "default": 500,
+      "min": 1
+    },
+    {
+      "id": "on_time",
+      "label": "Orders delivered on time",
+      "type": "number",
+      "default": 440,
+      "min": 0
+    },
+    {
+      "id": "in_full",
+      "label": "Orders delivered in full (correct qty)",
+      "type": "number",
+      "default": 475,
+      "min": 0
+    },
+    {
+      "id": "damage_free",
+      "label": "Orders delivered damage-free",
+      "type": "number",
+      "default": 490,
+      "min": 0
+    },
+    {
+      "id": "total_logistics_cost",
+      "label": "Total monthly logistics cost (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    },
+    {
+      "id": "returns",
+      "label": "Orders returned",
+      "type": "number",
+      "default": 15,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "KPI",
+      "Value",
+      "Benchmark"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "OTIF rate",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Perfect order index",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per order",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "OTIF = (on-time AND in-full orders) ÷ total orders × 100. Perfect Order Index = (on-time × in-full × damage-free) ÷ total³. Return rate = returns ÷ total orders.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is OTIF?",
+      "a": "OTIF (On-Time In-Full) measures the percentage of orders delivered both on time AND in the correct quantity. It is the gold standard logistics KPI for supply chain reliability."
+    },
+    {
+      "q": "What is a good OTIF rate?",
+      "a": "Best-in-class companies achieve 95%+ OTIF. 85–90% is average for most Indian logistics operations. Below 80% indicates significant supply chain reliability issues."
+    },
+    {
+      "q": "What is the Perfect Order Index?",
+      "a": "Perfect Order Index measures orders that are on-time, in-full, damage-free and with correct documentation. It is a composite metric; achieving 90%+ across all dimensions is world-class."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

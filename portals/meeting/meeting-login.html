@@ -1,15 +1,121 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Redirecting to Meeting | Varada Nexus</title>
-  <script>
-    const target = "/new-ems/modules/meetings-guest/index.html" + window.location.search + window.location.hash;
-    window.location.replace(target);
-  </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Join a Meeting — Varada Nexus</title>
+<meta name="description" content="Join a secure Varada Nexus meeting using your invite link or code.">
+<meta name="robots" content="noindex, follow">
+<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<script>
+  // Backwards compatibility: invite links that point here with ?t=<token>
+  // (or #t=...) forward straight to the secure guest portal.
+  (function () {
+    var qs = new URLSearchParams(window.location.search);
+    var t = qs.get("t") || new URLSearchParams((window.location.hash || "").replace(/^#/, "?")).get("t");
+    if (t) window.location.replace("/new-ems/modules/meetings-guest/index.html?t=" + encodeURIComponent(t));
+  })();
+</script>
 </head>
 <body>
-  Redirecting to the secure meeting portal...
+<div class="ambient"></div>
+
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta active">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="auth-wrap">
+    <div class="auth-card reveal in">
+      <img class="logo" src="/images/logo.png" alt="Varada Nexus">
+      <h1>Join a Meeting</h1>
+      <p class="sub">Secure Communications Meeting Portal</p>
+      <div class="field">
+        <input type="text" id="invite" placeholder="Paste your invite link or code" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="btn btn-primary" id="joinBtn" style="width:100%;justify-content:center;margin-top:6px">Continue</button>
+      <div class="error-text" id="error"></div>
+      <p class="sub" style="font-size:13px;margin-top:16px;line-height:1.6">
+        Your personal invite link is sent to you on WhatsApp by the meeting host.
+        Paste the full link or just the code from it. You will verify a one-time
+        password before entering the waiting room.
+      </p>
+      <div class="auth-links">
+        <a href="/login.html">Staff login &rarr;</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/assets/site.js"></script>
+<script>
+(function () {
+  var input = document.getElementById("invite");
+  var btn = document.getElementById("joinBtn");
+  var err = document.getElementById("error");
+
+  function extractToken(raw) {
+    var v = String(raw || "").trim();
+    if (!v) return "";
+    // Full invite URL → pull the t parameter
+    try {
+      var u = new URL(v);
+      var t = u.searchParams.get("t");
+      if (t) return t.trim();
+    } catch (e) { /* not a URL — treat as a bare code */ }
+    // Bare code (strip accidental spaces)
+    if (/^[A-Za-z0-9_-]{6,}$/.test(v)) return v;
+    return "";
+  }
+
+  function go() {
+    err.innerText = "";
+    var token = extractToken(input.value);
+    if (!token) {
+      err.innerText = "That doesn't look like a valid invite link or code. Paste the full link from your WhatsApp invite.";
+      input.focus();
+      return;
+    }
+    btn.disabled = true;
+    btn.innerText = "Opening your invite…";
+    window.location.href = "/new-ems/modules/meetings-guest/index.html?t=" + encodeURIComponent(token);
+  }
+
+  btn.addEventListener("click", go);
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); go(); } });
+  input.focus();
+})();
+</script>
 </body>
 </html>

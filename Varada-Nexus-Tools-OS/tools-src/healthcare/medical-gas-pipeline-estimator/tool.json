@@ -1,0 +1,94 @@
+{
+  "id": "medical-gas-pipeline-estimator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Medical Gas Pipeline (MGPS) Estimator",
+  "shortBenefit": "Outlets and indicative cost for a medical gas pipeline system.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the number of medical gas outlets and indicative MGPS cost for a hospital from bed count and outlets per bed (oxygen, vacuum, air).",
+  "seo": {
+    "title": "Medical Gas Pipeline Estimator — MGPS Outlets & Cost | Varada Nexus",
+    "description": "Free medical gas pipeline (MGPS) estimator. Estimate outlets and indicative cost from beds and outlets per bed for a hospital.",
+    "keywords": [
+      "medical gas pipeline cost",
+      "mgps estimator",
+      "medical gas outlets calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 150,
+      "min": 1
+    },
+    {
+      "id": "outlets",
+      "label": "Outlets per bed",
+      "type": "number",
+      "default": 3,
+      "min": 1
+    },
+    {
+      "id": "costOutlet",
+      "label": "Cost per outlet incl. piping (₹)",
+      "type": "number",
+      "default": 18000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total outlets",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Indicative MGPS cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per bed",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Outlets = beds × outlets per bed (typically 3: oxygen, vacuum, medical air; ICU/OT need more). Cost = outlets × per-outlet cost including copper piping, and excludes source plant (manifold/PSA/LMO).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many medical gas outlets per bed?",
+      "a": "General wards need about 3 (oxygen, vacuum, air); ICU and OT beds need more, often 6–12 including nitrous oxide and AGSS."
+    },
+    {
+      "q": "What does MGPS cost depend on?",
+      "a": "Outlet count, copper piping runs, alarms and the source plant (manifold, PSA generator or LMO tank) drive the cost."
+    },
+    {
+      "q": "Is the source plant included?",
+      "a": "No, this estimate covers outlets and piping only; the gas source plant should be costed separately."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

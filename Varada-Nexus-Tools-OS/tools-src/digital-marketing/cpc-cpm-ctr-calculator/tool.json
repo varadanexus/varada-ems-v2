@@ -1,0 +1,98 @@
+{
+  "id": "cpc-cpm-ctr-calculator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "CPC, CPM & CTR Calculator",
+  "shortBenefit": "Ad metrics: CPC, CPM, CTR, conversion rate and CPA.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Turn ad spend, impressions, clicks and conversions into the core performance metrics: CPC, CPM, CTR, conversion rate and cost per acquisition.",
+  "seo": {
+    "title": "CPC, CPM & CTR Calculator — Ad Performance Metrics | Varada Nexus",
+    "description": "Free CPC, CPM, CTR and CPA calculator. Enter spend, impressions, clicks and conversions to get all key ad metrics.",
+    "keywords": [
+      "cpc calculator",
+      "cpm calculator",
+      "ctr calculator",
+      "cpa calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "spend",
+      "label": "Ad spend (₹)",
+      "type": "number",
+      "default": 50000,
+      "min": 0
+    },
+    {
+      "id": "impressions",
+      "label": "Impressions",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    },
+    {
+      "id": "clicks",
+      "label": "Clicks",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    },
+    {
+      "id": "conversions",
+      "label": "Conversions",
+      "type": "number",
+      "default": 400,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "CPC",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "CTR",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "CPA",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "CPC = spend ÷ clicks. CPM = spend ÷ impressions × 1000. CTR = clicks ÷ impressions × 100. Conversion rate = conversions ÷ clicks × 100. CPA = spend ÷ conversions.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is CTR calculated?",
+      "a": "CTR = clicks ÷ impressions × 100. It shows the percentage of people who clicked after seeing the ad."
+    },
+    {
+      "q": "What is the difference between CPC and CPM?",
+      "a": "CPC is cost per click (spend ÷ clicks); CPM is cost per thousand impressions (spend ÷ impressions × 1000)."
+    },
+    {
+      "q": "What is CPA?",
+      "a": "Cost per acquisition = ad spend ÷ number of conversions — the average cost to win one customer or lead."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing",
+      "url": "/services.html"
+    }
+  ]
+}

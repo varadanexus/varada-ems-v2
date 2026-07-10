@@ -1,0 +1,107 @@
+{
+  "id": "hospital-building-cost-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Hospital Building Cost Calculator",
+  "shortBenefit": "Civil + services construction cost from built-up area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate hospital building construction cost from built-up area and finishing grade, including civil, MEP, HVAC and a contingency.",
+  "seo": {
+    "title": "Hospital Building Cost Calculator — Construction Cost by Area | Varada Nexus",
+    "description": "Free hospital building cost calculator. Estimate civil, MEP and HVAC construction cost from built-up area and finish grade.",
+    "keywords": [
+      "hospital building cost calculator",
+      "hospital construction cost per sqft",
+      "building cost estimator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Built-up area (sq ft)",
+      "type": "number",
+      "default": 100000,
+      "min": 0
+    },
+    {
+      "id": "rate",
+      "label": "Civil rate (₹/sq ft)",
+      "type": "select",
+      "default": "3500",
+      "options": [
+        {
+          "v": "2500",
+          "t": "Standard ₹2,500"
+        },
+        {
+          "v": "3500",
+          "t": "Premium ₹3,500"
+        },
+        {
+          "v": "4500",
+          "t": "Super-premium ₹4,500"
+        }
+      ]
+    },
+    {
+      "id": "cont",
+      "label": "Contingency (%)",
+      "type": "number",
+      "default": 7,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost per sq ft",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Civil cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Civil = area × civil rate. MEP 25%, HVAC 15%, medical gas & fire 8% of civil. Contingency applied on the sum. Equipment and land are excluded.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the construction cost of a hospital per sq ft?",
+      "a": "Civil work is typically ₹2,500–4,500/sq ft; with MEP, HVAC and services the all-in building cost is often ₹4,000–7,000/sq ft."
+    },
+    {
+      "q": "Does this include medical equipment?",
+      "a": "No, this is building cost only. Equipment is usually an additional ₹5–15 lakh per bed."
+    },
+    {
+      "q": "What is contingency for?",
+      "a": "A buffer (typically 5–10%) for design changes, price escalation and site conditions."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

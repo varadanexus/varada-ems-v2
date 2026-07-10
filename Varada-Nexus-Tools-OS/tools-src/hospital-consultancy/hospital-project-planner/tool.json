@@ -1,0 +1,116 @@
+{
+  "id": "hospital-project-planner",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Hospital Project Planner",
+  "shortBenefit": "Timeline and cost milestones for a greenfield hospital project.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan key milestones, budget bands and team requirements for a greenfield or expansion hospital project based on bed count and hospital type.",
+  "seo": {
+    "title": "Hospital Project Planner — Greenfield Hospital Timeline & Budget | Varada Nexus",
+    "description": "Free hospital project planner. Estimate milestones, construction timeline and budget bands for greenfield hospital projects in India.",
+    "keywords": [
+      "hospital project planning",
+      "hospital timeline calculator",
+      "greenfield hospital cost india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Planned beds",
+      "type": "number",
+      "default": 150,
+      "min": 10
+    },
+    {
+      "id": "type",
+      "label": "Hospital type",
+      "type": "select",
+      "default": "multi",
+      "options": [
+        {
+          "v": "general",
+          "t": "General / Nursing Home"
+        },
+        {
+          "v": "multi",
+          "t": "Multispecialty"
+        },
+        {
+          "v": "super",
+          "t": "Super-specialty / Tertiary"
+        }
+      ]
+    },
+    {
+      "id": "land",
+      "label": "Land status",
+      "type": "select",
+      "default": "owned",
+      "options": [
+        {
+          "v": "owned",
+          "t": "Land owned"
+        },
+        {
+          "v": "search",
+          "t": "Land not yet finalised"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Phase",
+      "Duration",
+      "Indicative Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total project duration",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Estimated project cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Construction cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Construction cost: general ₹35–45L/bed, multispecialty ₹55–75L/bed, super-specialty ₹90–130L/bed. Equipment adds ~35–45% of civil cost. Timelines include licencing and commissioning.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How long does it take to build a 150-bed hospital?",
+      "a": "A typical 150-bed multispecialty hospital takes 36–48 months from DPR to commissioning, including design (6m), licences (6m), construction (18–24m) and fit-out (6m)."
+    },
+    {
+      "q": "What is the cost per bed for a hospital in India (2024)?",
+      "a": "Rough indicative ranges: ₹40–50 lakh/bed for general, ₹60–80 lakh for multispecialty and ₹100–140 lakh for super-specialty, all-in including equipment."
+    },
+    {
+      "q": "What are the main phases of a hospital project?",
+      "a": "Typically: land & concept → DPR & approvals → detailed design → construction → equipment & IT → commissioning → operations launch."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

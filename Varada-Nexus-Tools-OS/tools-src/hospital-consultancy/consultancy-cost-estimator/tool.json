@@ -1,0 +1,118 @@
+{
+  "id": "consultancy-cost-estimator",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Hospital Consultancy Cost Estimator",
+  "shortBenefit": "Fee estimate for hospital project management consultancy.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the professional fees for hospital project management and consultancy services across project phases — from DPR to operations handover.",
+  "seo": {
+    "title": "Hospital Consultancy Cost Estimator — PMC Fees India | Varada Nexus",
+    "description": "Free hospital consultancy cost estimator. Calculate hospital PMC fees across DPR, design, construction and commissioning phases.",
+    "keywords": [
+      "hospital consultancy fees",
+      "hospital pmc cost",
+      "hospital project management consultant india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "project_cost",
+      "label": "Total project cost (₹ crores)",
+      "type": "number",
+      "default": 60,
+      "min": 1
+    },
+    {
+      "id": "beds",
+      "label": "Beds",
+      "type": "number",
+      "default": 150,
+      "min": 10
+    },
+    {
+      "id": "scope",
+      "label": "Consultancy scope",
+      "type": "select",
+      "default": "full",
+      "options": [
+        {
+          "v": "dpr",
+          "t": "DPR only"
+        },
+        {
+          "v": "design",
+          "t": "DPR + Design support"
+        },
+        {
+          "v": "full",
+          "t": "Full PMC (DPR to commissioning)"
+        },
+        {
+          "v": "ops",
+          "t": "Operations advisory only"
+        }
+      ]
+    },
+    {
+      "id": "duration",
+      "label": "Project duration (months)",
+      "type": "number",
+      "default": 36,
+      "min": 6
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Phase",
+      "% of Project Cost",
+      "Fee"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total consultancy fee",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly retainer equiv.",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Fee as % of project",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Hospital PMC typically 2.5–5% of project cost for full scope. DPR-only 0.3–0.8%, design support add 0.5–1%, commissioning & ops add 0.5–1%. Based on Indian market rates 2024.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What does a hospital PMC consultant do?",
+      "a": "A Project Management Consultant oversees DPR, architectural briefing, vendor selection, construction monitoring, equipment procurement, licensing and commissioning on behalf of the promoter."
+    },
+    {
+      "q": "How much does hospital consultancy cost in India?",
+      "a": "Full-scope PMC typically costs 3–5% of project cost; for a ₹60 crore hospital, that is ₹1.8–3 crore in consultancy fees across 3 years."
+    },
+    {
+      "q": "When should I hire a hospital consultant?",
+      "a": "Ideally at the concept stage — before land purchase — so the consultant can advise on location feasibility, clinical programme and regulatory requirements from the outset."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

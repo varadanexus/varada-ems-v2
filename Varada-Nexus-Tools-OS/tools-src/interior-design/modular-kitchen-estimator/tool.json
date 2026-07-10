@@ -1,0 +1,148 @@
+{
+  "id": "modular-kitchen-estimator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Modular Kitchen Estimator",
+  "shortBenefit": "Modular kitchen cost by cabinet count and finish.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the cost of a modular kitchen based on linear feet of cabinetry, material type and accessories.",
+  "seo": {
+    "title": "Modular Kitchen Estimator — Cost Calculator India | Varada Nexus",
+    "description": "Free modular kitchen cost estimator. Calculate modular kitchen budget by linear feet, material (HDF, plywood, PVC) and hardware level.",
+    "keywords": [
+      "modular kitchen cost calculator",
+      "modular kitchen estimate india",
+      "kitchen cabinet cost per linear foot"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "linear_ft",
+      "label": "Total linear feet of cabinets",
+      "type": "number",
+      "default": 20,
+      "min": 4
+    },
+    {
+      "id": "material",
+      "label": "Cabinet material",
+      "type": "select",
+      "default": "plywood",
+      "options": [
+        {
+          "v": "hdf",
+          "t": "HDF / MDF (₹1,200–1,800/L ft)"
+        },
+        {
+          "v": "plywood",
+          "t": "Marine plywood (₹1,800–2,500/L ft)"
+        },
+        {
+          "v": "pvc",
+          "t": "PVC / WPC (₹1,500–2,200/L ft)"
+        },
+        {
+          "v": "solid",
+          "t": "Solid wood (₹3,500–5,000/L ft)"
+        }
+      ]
+    },
+    {
+      "id": "shutter",
+      "label": "Shutter finish",
+      "type": "select",
+      "default": "acrylic",
+      "options": [
+        {
+          "v": "laminate",
+          "t": "Laminate"
+        },
+        {
+          "v": "acrylic",
+          "t": "Acrylic / high-gloss"
+        },
+        {
+          "v": "membrane",
+          "t": "PU / membrane"
+        },
+        {
+          "v": "glass",
+          "t": "Glass / aluminium frame"
+        }
+      ]
+    },
+    {
+      "id": "countertop",
+      "label": "Countertop",
+      "type": "select",
+      "default": "granite",
+      "options": [
+        {
+          "v": "granite",
+          "t": "Granite (₹150–250/sq ft)"
+        },
+        {
+          "v": "quartz",
+          "t": "Quartz / engineered (₹300–500/sq ft)"
+        },
+        {
+          "v": "ss",
+          "t": "Stainless steel (₹250–400/sq ft)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total kitchen cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per linear foot",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Countertop cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Cabinet rates include carcass + shutter. Counter area ~ linear feet × 2 sq ft. Sink, fittings, chimney, hob and appliances excluded.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the cost of a modular kitchen in India per linear foot?",
+      "a": "Marine plywood kitchens with acrylic shutters cost ₹2,000–3,000 per linear foot; MDF with laminate starts at ₹1,200; solid wood premium kitchens ₹4,000–6,000."
+    },
+    {
+      "q": "How many linear feet is a typical Indian kitchen?",
+      "a": "A standard 2BHK kitchen is typically 10–14 linear feet; 3BHK kitchens are 14–20 linear feet of cabinetry (base + wall units combined)."
+    },
+    {
+      "q": "Are appliances included in modular kitchen cost?",
+      "a": "No — modular kitchen estimates cover cabinetry, shutters, countertop and hardware. Chimney, hob, dishwasher and refrigerator are separate budgets."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

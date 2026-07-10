@@ -1,0 +1,136 @@
+{
+  "id": "robots-txt-generator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Robots.txt Generator",
+  "shortBenefit": "Generate a robots.txt file for your website.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Generate a valid robots.txt file for your website with rules for major search engine crawlers, blocked paths and sitemap declaration.",
+  "seo": {
+    "title": "Robots.txt Generator — SEO Crawler Rules Builder | Varada Nexus",
+    "description": "Free robots.txt generator. Create a valid robots.txt file with allow/disallow rules for Googlebot and other crawlers with sitemap declaration.",
+    "keywords": [
+      "robots txt generator",
+      "robots.txt creator",
+      "seo crawler rules tool"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "sitemap_url",
+      "label": "Sitemap URL",
+      "type": "text",
+      "default": "https://example.com/sitemap.xml",
+      "placeholder": "https://yoursite.com/sitemap.xml"
+    },
+    {
+      "id": "block_admin",
+      "label": "Block /admin/ paths",
+      "type": "select",
+      "default": "yes",
+      "options": [
+        {
+          "v": "yes",
+          "t": "Yes"
+        },
+        {
+          "v": "no",
+          "t": "No"
+        }
+      ]
+    },
+    {
+      "id": "block_search",
+      "label": "Block search result pages (?s=, ?q=)",
+      "type": "select",
+      "default": "yes",
+      "options": [
+        {
+          "v": "yes",
+          "t": "Yes"
+        },
+        {
+          "v": "no",
+          "t": "No"
+        }
+      ]
+    },
+    {
+      "id": "block_login",
+      "label": "Block /login/ and /wp-login.php",
+      "type": "select",
+      "default": "yes",
+      "options": [
+        {
+          "v": "yes",
+          "t": "Yes"
+        },
+        {
+          "v": "no",
+          "t": "No"
+        }
+      ]
+    },
+    {
+      "id": "crawl_delay",
+      "label": "Crawl delay (seconds, 0 = none)",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 10
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Rule",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Rules generated",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Sitemap declared",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Status",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Generates standard robots.txt. Does not override sitemap URL if empty.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is robots.txt?",
+      "a": "robots.txt is a file at your domain root that tells search engine crawlers which pages or sections to crawl or avoid. It is a request, not a security measure."
+    },
+    {
+      "q": "Should I block /admin/ in robots.txt?",
+      "a": "Yes — admin pages have no SEO value and blocking them conserves crawl budget for important content. Note: robots.txt does not secure admin pages — use authentication for that."
+    },
+    {
+      "q": "Does robots.txt affect SEO?",
+      "a": "Blocking important pages from crawling will prevent them from ranking. Ensure key landing pages, blog and product pages are crawlable. Only block non-indexable paths."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

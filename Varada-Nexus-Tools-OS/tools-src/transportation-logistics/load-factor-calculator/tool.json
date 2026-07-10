@@ -1,0 +1,108 @@
+{
+  "id": "load-factor-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Load Factor & Capacity Utilisation Calculator",
+  "shortBenefit": "Vehicle load factor, deadweight loss and efficiency.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate vehicle load factor, revenue loss from empty running and optimal capacity utilisation for fleet management.",
+  "seo": {
+    "title": "Load Factor Calculator — Vehicle Capacity Utilisation | Varada Nexus",
+    "description": "Free load factor calculator. Calculate vehicle capacity utilisation, deadweight loss and revenue opportunity from empty running in logistics.",
+    "keywords": [
+      "load factor calculator",
+      "vehicle capacity utilisation",
+      "freight load factor logistics"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "capacity",
+      "label": "Vehicle capacity (tonnes)",
+      "type": "number",
+      "default": 10,
+      "min": 0.5
+    },
+    {
+      "id": "actual_load",
+      "label": "Actual load carried (tonnes)",
+      "type": "number",
+      "default": 7,
+      "min": 0
+    },
+    {
+      "id": "return_load",
+      "label": "Return journey load (tonnes)",
+      "type": "number",
+      "default": 3,
+      "min": 0
+    },
+    {
+      "id": "freight_rate",
+      "label": "Freight rate (₹/tonne)",
+      "type": "number",
+      "default": 2000,
+      "min": 0
+    },
+    {
+      "id": "trips_month",
+      "label": "Trips per month",
+      "type": "number",
+      "default": 20,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "Outbound",
+      "Return"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Average load factor",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly revenue loss",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Optimal monthly revenue",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Load factor = actual load ÷ capacity × 100%. Revenue loss = (capacity − actual load) × freight rate × trips. Optimal revenue = capacity × freight rate × trips × 2 (both ways).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good vehicle load factor?",
+      "a": "A load factor above 80% is considered efficient. Most Indian trucking operators achieve 70–85% on outbound loads; return loads are often 40–60%, reducing overall utilisation."
+    },
+    {
+      "q": "How do I reduce empty running?",
+      "a": "Load boards (e.g. RIVIGO, BlackBuck, Porter) match available capacity with return loads. Freight exchanges and backhaul arrangements can reduce empty kilometres by 20–30%."
+    },
+    {
+      "q": "What is the impact of low load factor on cost?",
+      "a": "A truck with 60% load factor incurs the same fixed costs as a full truck but generates only 60% of potential revenue. Each 10% load factor improvement directly improves profitability by 8–12%."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

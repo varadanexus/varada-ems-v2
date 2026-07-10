@@ -1,0 +1,108 @@
+{
+  "id": "equipment-requirement-planner",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Equipment Requirement Planner",
+  "shortBenefit": "Quantity and budget for key hospital equipment by bed count.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the quantity and indicative budget for major medical equipment categories required for a hospital, based on bed count and hospital tier.",
+  "seo": {
+    "title": "Hospital Equipment Requirement Planner — Quantity & Budget | Varada Nexus",
+    "description": "Free hospital equipment requirement planner. Estimate quantities and budget for major medical equipment by bed count and hospital tier.",
+    "keywords": [
+      "hospital equipment list",
+      "medical equipment planning",
+      "hospital equipment budget india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Operational beds",
+      "type": "number",
+      "default": 150,
+      "min": 10
+    },
+    {
+      "id": "icu_pct",
+      "label": "ICU beds (%)",
+      "type": "number",
+      "default": 10,
+      "min": 5,
+      "max": 30
+    },
+    {
+      "id": "tier",
+      "label": "Equipment tier",
+      "type": "select",
+      "default": "mid",
+      "options": [
+        {
+          "v": "basic",
+          "t": "Basic"
+        },
+        {
+          "v": "mid",
+          "t": "Mid-range"
+        },
+        {
+          "v": "premium",
+          "t": "Premium / Latest"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Equipment",
+      "Qty",
+      "Indicative Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total equipment budget",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "ICU equipment",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Imaging equipment",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Pricing: basic 0.7×, premium 1.5× of mid-range benchmark. CT 64-slice mid ₹2.5Cr, MRI 1.5T ₹5Cr, Ultrasound ₹18L, C-arm ₹25L, Ventilator ₹8L, Monitor ₹2L.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many ventilators does a hospital need?",
+      "a": "Typically 60–70% of ICU beds should have ventilator support; for a 15-bed ICU, plan for 10–12 ventilators."
+    },
+    {
+      "q": "Is MRI mandatory for a multispecialty hospital?",
+      "a": "Not mandatory, but highly recommended for neurology, oncology and orthopaedics referrals; many hospitals outsource or lease initially to manage capex."
+    },
+    {
+      "q": "Can hospital equipment be leased instead of purchased?",
+      "a": "Yes — medical equipment leasing and BOOT (Build-Operate-Own-Transfer) models are common in India for high-value imaging equipment."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

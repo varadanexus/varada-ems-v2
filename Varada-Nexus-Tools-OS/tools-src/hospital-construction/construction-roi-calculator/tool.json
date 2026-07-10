@@ -1,0 +1,87 @@
+{
+  "id": "construction-roi-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Construction ROI Calculator",
+  "shortBenefit": "ROI and payback for a construction/property project.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate return on investment and payback period for a construction or property project from total cost and expected annual rental or operating income.",
+  "seo": {
+    "title": "Construction ROI Calculator — Property Project Return & Payback | Varada Nexus",
+    "description": "Free construction ROI calculator. Get ROI percentage and payback period from project cost and annual income.",
+    "keywords": [
+      "construction roi calculator",
+      "property roi calculator",
+      "real estate payback calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cost",
+      "label": "Total project cost (₹)",
+      "type": "number",
+      "default": 100000000,
+      "min": 0
+    },
+    {
+      "id": "income",
+      "label": "Annual net income (₹)",
+      "type": "number",
+      "default": 12000000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Annual ROI",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Payback period",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "10-year income",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "ROI% = annual net income ÷ project cost × 100. Payback = cost ÷ annual income. Ignores financing cost, appreciation and the time value of money.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is construction ROI calculated?",
+      "a": "ROI% = annual net income ÷ total project cost × 100; payback = cost ÷ annual income."
+    },
+    {
+      "q": "Does it include capital appreciation?",
+      "a": "No, this is income yield only; property value growth would improve the true total return."
+    },
+    {
+      "q": "What is a good ROI for property?",
+      "a": "It varies by market and asset type; compare against local rental yields and alternative investments."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

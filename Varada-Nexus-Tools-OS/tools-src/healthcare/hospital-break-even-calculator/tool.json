@@ -1,0 +1,101 @@
+{
+  "id": "hospital-break-even-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Hospital Break-even Calculator",
+  "shortBenefit": "Break-even occupancy for a hospital from costs and ARPOB.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Find the bed occupancy a hospital needs to break even, from monthly fixed costs, revenue per occupied bed-day (ARPOB) and variable cost per bed-day.",
+  "seo": {
+    "title": "Hospital Break-even Calculator — Break-even Occupancy | Varada Nexus",
+    "description": "Free hospital break-even calculator. Compute the occupancy needed to break even from fixed costs, ARPOB and variable cost per bed-day.",
+    "keywords": [
+      "hospital break even calculator",
+      "break even occupancy",
+      "hospital financial planning"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 150,
+      "min": 1
+    },
+    {
+      "id": "fixed",
+      "label": "Monthly fixed cost (₹)",
+      "type": "number",
+      "default": 15000000,
+      "min": 0
+    },
+    {
+      "id": "arpob",
+      "label": "Revenue per occupied bed-day — ARPOB (₹)",
+      "type": "number",
+      "default": 12000,
+      "min": 0
+    },
+    {
+      "id": "varcost",
+      "label": "Variable cost per bed-day (₹)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Break-even occupancy",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Break-even bed-days/mo",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Contribution/bed-day",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Contribution per bed-day = ARPOB − variable cost. Break-even bed-days = fixed cost ÷ contribution. Occupancy% = break-even bed-days ÷ (beds × 30) × 100.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is ARPOB?",
+      "a": "Average Revenue Per Occupied Bed-day — the average revenue a hospital earns for each occupied bed each day."
+    },
+    {
+      "q": "How is hospital break-even occupancy calculated?",
+      "a": "Break-even bed-days = monthly fixed cost ÷ (ARPOB − variable cost per bed-day). Occupancy% = that ÷ (beds × 30) × 100."
+    },
+    {
+      "q": "What if break-even occupancy exceeds 100%?",
+      "a": "It means the current pricing and cost structure cannot break even at full occupancy — ARPOB must rise or costs must fall."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

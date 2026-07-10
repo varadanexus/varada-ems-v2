@@ -1,0 +1,108 @@
+{
+  "id": "sitemap-planner",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "XML Sitemap Planner",
+  "shortBenefit": "Sitemap structure, priority settings and URL count guide.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan your XML sitemap structure with URL priority settings, change frequency guidance and page count to optimise crawl budget and indexation.",
+  "seo": {
+    "title": "XML Sitemap Planner — Sitemap Structure & Priority Guide | Varada Nexus",
+    "description": "Free XML sitemap planner. Plan sitemap structure with priority settings, change frequency and URL limits for optimal crawl budget and indexation.",
+    "keywords": [
+      "sitemap generator",
+      "xml sitemap planner",
+      "sitemap priority settings seo"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "home_pages",
+      "label": "Homepage + core service pages",
+      "type": "number",
+      "default": 10,
+      "min": 1
+    },
+    {
+      "id": "blog_pages",
+      "label": "Blog / article pages",
+      "type": "number",
+      "default": 50,
+      "min": 0
+    },
+    {
+      "id": "product_pages",
+      "label": "Product / service detail pages",
+      "type": "number",
+      "default": 20,
+      "min": 0
+    },
+    {
+      "id": "location_pages",
+      "label": "Location / city pages",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "other_pages",
+      "label": "Other pages (about, contact, legal)",
+      "type": "number",
+      "default": 8,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Page Type",
+      "Priority",
+      "Change Freq"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total URLs in sitemap",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "High-priority URLs",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Sitemap file size",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Priority settings: homepage 1.0, services 0.9, blog 0.7, products 0.8, location 0.7, other 0.5. Approx 1KB per URL in XML sitemap.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is an XML sitemap?",
+      "a": "An XML sitemap lists all important URLs on your website with priority and change frequency hints, helping search engines discover and crawl your pages efficiently."
+    },
+    {
+      "q": "How often should I update my sitemap?",
+      "a": "Update and resubmit your sitemap whenever you add or remove significant content. Most CMS platforms (WordPress, Shopify) auto-generate and update sitemaps."
+    },
+    {
+      "q": "What is the maximum number of URLs in a sitemap?",
+      "a": "A single sitemap file can contain up to 50,000 URLs and must be under 50MB uncompressed. Larger sites use sitemap index files pointing to multiple sitemaps."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

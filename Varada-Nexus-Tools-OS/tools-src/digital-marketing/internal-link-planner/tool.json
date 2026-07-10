@@ -1,0 +1,101 @@
+{
+  "id": "internal-link-planner",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Internal Link Planner",
+  "shortBenefit": "Internal linking strategy and anchor text plan.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan your website's internal linking strategy by calculating optimal link density, identifying pillar pages and generating anchor text guidance.",
+  "seo": {
+    "title": "Internal Link Planner — SEO Internal Linking Strategy | Varada Nexus",
+    "description": "Free internal link planner. Calculate internal link density, pillar page structure and anchor text distribution for SEO-optimised website architecture.",
+    "keywords": [
+      "internal link planner",
+      "internal linking strategy seo",
+      "website link structure planner"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "pages",
+      "label": "Total website pages",
+      "type": "number",
+      "default": 50,
+      "min": 1
+    },
+    {
+      "id": "pillar_pages",
+      "label": "Pillar / cornerstone pages",
+      "type": "number",
+      "default": 5,
+      "min": 1
+    },
+    {
+      "id": "blog_posts",
+      "label": "Blog posts / cluster content",
+      "type": "number",
+      "default": 30,
+      "min": 0
+    },
+    {
+      "id": "avg_wc",
+      "label": "Average content word count",
+      "type": "number",
+      "default": 1200,
+      "min": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Recommendation",
+      "",
+      "Target"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Links per pillar page",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Links per blog post",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total internal links needed",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "SEO best practice: 1 internal link per 200–300 words of content. Pillar pages should receive links from all related cluster content. Minimum 3 links per piece of content.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many internal links should each page have?",
+      "a": "Aim for 3–8 internal links per page (1 per 200–300 words of content). Pillar pages should receive links from all cluster/blog content related to their topic."
+    },
+    {
+      "q": "What is a pillar page?",
+      "a": "A pillar page is a comprehensive, authoritative piece covering a broad topic. It links out to and receives links from more specific cluster content, forming a topic cluster structure."
+    },
+    {
+      "q": "What anchor text should I use for internal links?",
+      "a": "Use descriptive, keyword-rich anchor text that tells both users and search engines what the linked page is about. Avoid generic \"click here\" or \"read more\" anchors."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

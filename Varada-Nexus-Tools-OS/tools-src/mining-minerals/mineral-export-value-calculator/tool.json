@@ -1,0 +1,134 @@
+{
+  "id": "mineral-export-value-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mineral Export Value Calculator",
+  "shortBenefit": "Calculate FOB and CIF value of mineral exports from India",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Compute the export value of minerals including royalty-adjusted cost, freight, insurance and applicable export duty to arrive at FOB and CIF price for mineral exports.",
+  "seo": {
+    "title": "Mineral Export Value Calculator – Iron Ore Export India",
+    "description": "Calculate FOB and CIF value of mineral exports from India. Accounts for mining cost, royalty, transport to port, export duty and freight.",
+    "keywords": [
+      "mineral export value calculator",
+      "iron ore export price India",
+      "mineral FOB price calculator",
+      "export duty minerals India",
+      "mineral export profitability"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "production_cost_mt",
+      "label": "Mining Cost per MT (₹)",
+      "type": "number",
+      "default": 700,
+      "min": 0
+    },
+    {
+      "id": "royalty_mt",
+      "label": "Royalty & DMF per MT (₹)",
+      "type": "number",
+      "default": 540,
+      "min": 0,
+      "hint": "Royalty + DMF + NMET combined"
+    },
+    {
+      "id": "transport_to_port",
+      "label": "Transport to Port (₹/MT)",
+      "type": "number",
+      "default": 350,
+      "min": 0
+    },
+    {
+      "id": "port_handling",
+      "label": "Port Handling (₹/MT)",
+      "type": "number",
+      "default": 120,
+      "min": 0
+    },
+    {
+      "id": "export_duty_pct",
+      "label": "Export Duty (%)",
+      "type": "number",
+      "default": 30,
+      "min": 0,
+      "max": 100,
+      "hint": "Iron ore: 30% (as of 2022); check current notification"
+    },
+    {
+      "id": "quantity_mt",
+      "label": "Export Quantity (MT)",
+      "type": "number",
+      "default": 10000,
+      "min": 1
+    },
+    {
+      "id": "freight_mt",
+      "label": "Sea Freight (₹/MT)",
+      "type": "number",
+      "default": 800,
+      "min": 0
+    },
+    {
+      "id": "insurance_pct",
+      "label": "Marine Insurance (% of FOB)",
+      "type": "number",
+      "default": 0.5,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Export Value Component",
+      "Per MT (₹)",
+      "Total (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "FOB Value / MT",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Export Duty Payable",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Net Margin / MT",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Cost base = mining + royalty + transport + port. Export duty on FOB value. CIF = FOB + freight + insurance.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What export duty applies on iron ore from India?",
+      "a": "The Government of India raised export duty on iron ore to 30% (lump and fines) and 45% on iron ore pellets in May 2022. Always verify the current rate from CBIC Custom Tariff notifications."
+    },
+    {
+      "q": "Can iron ore be exported freely from India?",
+      "a": "Iron ore export requires Customs clearance and Shipping Bill. High export duty discourages large-scale exports to protect domestic steel industry. Some low-grade fines may be less restricted."
+    },
+    {
+      "q": "What is the role of MMTC in mineral exports?",
+      "a": "MMTC (Metals and Minerals Trading Corporation) is a government canalising agency for certain minerals. Some mineral exports must be routed through MMTC or other designated agencies."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

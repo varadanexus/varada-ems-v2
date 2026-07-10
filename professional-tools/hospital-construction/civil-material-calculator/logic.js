@@ -1,0 +1,3 @@
+export function compute(v){const a=+v.area||0;const cem=a*0.4,steel=a*4,sand=a*1.2,agg=a*1.35,brick=a*8;
+ const rows=[['Cement','0.4 bags/sqft',Math.round(cem).toLocaleString('en-IN')+' bags'],['Steel','4 kg/sqft',Math.round(steel).toLocaleString('en-IN')+' kg'],['Sand','1.2 cft/sqft',Math.round(sand).toLocaleString('en-IN')+' cft'],['Aggregate','1.35 cft/sqft',Math.round(agg).toLocaleString('en-IN')+' cft'],['Bricks','8 /sqft',Math.round(brick).toLocaleString('en-IN')+' nos']];
+ return{rows,k1:Math.round(cem).toLocaleString('en-IN')+' bags',k2:Math.round(steel).toLocaleString('en-IN')+' kg',k3:Math.round(brick).toLocaleString('en-IN')+' nos'};}

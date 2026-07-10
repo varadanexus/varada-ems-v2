@@ -1,0 +1,83 @@
+{
+  "id": "inventory-turnover-calculator",
+  "category": "retail-distribution",
+  "kind": "calculator",
+  "name": "Inventory Turnover Calculator",
+  "shortBenefit": "Inventory turnover ratio and days of inventory on hand.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the inventory turnover ratio and days inventory outstanding from cost of goods sold and average inventory — a key retail efficiency metric.",
+  "seo": {
+    "title": "Inventory Turnover Calculator — Turnover Ratio & Days on Hand | Varada Nexus",
+    "description": "Free inventory turnover calculator. Get the turnover ratio and days of inventory from COGS and average inventory.",
+    "keywords": [
+      "inventory turnover calculator",
+      "stock turnover ratio",
+      "days inventory outstanding"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cogs",
+      "label": "Cost of goods sold — annual (₹)",
+      "type": "number",
+      "default": 6000000,
+      "min": 0
+    },
+    {
+      "id": "inventory",
+      "label": "Average inventory (₹)",
+      "type": "number",
+      "default": 750000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Turnover ratio",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Days on hand",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Turns per year",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Inventory turnover = COGS ÷ average inventory. Days inventory = 365 ÷ turnover. Higher turnover means stock sells faster.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is inventory turnover calculated?",
+      "a": "Turnover = cost of goods sold ÷ average inventory. It shows how many times stock is sold and replaced in a year."
+    },
+    {
+      "q": "What is days inventory outstanding?",
+      "a": "Days = 365 ÷ turnover ratio — the average number of days stock sits before it sells."
+    },
+    {
+      "q": "Is a higher turnover always better?",
+      "a": "Generally yes, but very high turnover can signal understocking and lost sales; balance it against availability."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "E-Commerce",
+      "url": "/ecommerce.html"
+    }
+  ]
+}

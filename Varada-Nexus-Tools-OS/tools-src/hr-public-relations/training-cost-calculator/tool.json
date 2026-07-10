@@ -1,0 +1,122 @@
+{
+  "id": "training-cost-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Training Cost & ROI Calculator",
+  "shortBenefit": "Training cost per employee and learning ROI.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the total cost of employee training programmes and the return on investment from improved productivity and reduced errors.",
+  "seo": {
+    "title": "Training Cost & ROI Calculator — L&D Investment India | Varada Nexus",
+    "description": "Free training ROI calculator. Calculate total training cost per employee and return on investment from productivity gains and error reduction.",
+    "keywords": [
+      "training cost calculator",
+      "learning and development roi",
+      "training roi calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "participants",
+      "label": "Number of participants",
+      "type": "number",
+      "default": 20,
+      "min": 1
+    },
+    {
+      "id": "trainer_cost",
+      "label": "Trainer / content cost (₹)",
+      "type": "number",
+      "default": 50000,
+      "min": 0
+    },
+    {
+      "id": "venue_materials",
+      "label": "Venue, materials, catering (₹)",
+      "type": "number",
+      "default": 30000,
+      "min": 0
+    },
+    {
+      "id": "participant_daily_cost",
+      "label": "Participant salary cost/day (₹)",
+      "type": "number",
+      "default": 1500,
+      "min": 0
+    },
+    {
+      "id": "training_days",
+      "label": "Training duration (days)",
+      "type": "number",
+      "default": 2,
+      "min": 0.5
+    },
+    {
+      "id": "productivity_gain_pct",
+      "label": "Expected productivity gain (%)",
+      "type": "number",
+      "default": 15,
+      "min": 0
+    },
+    {
+      "id": "avg_annual_salary",
+      "label": "Average participant annual salary (₹)",
+      "type": "number",
+      "default": 400000,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Cost per participant",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Training ROI",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total training cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Lost productivity = participants × days × daily salary cost. Annual productivity gain = participants × annual salary × productivity gain %. ROI = (gain − cost) ÷ cost × 100.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good training ROI?",
+      "a": "Industry benchmark ROI for effective training programmes is 150–300%. Even a 10% productivity improvement on a ₹400,000 salary gives ₹40,000/year — often exceeding training cost."
+    },
+    {
+      "q": "How do I measure training effectiveness?",
+      "a": "Use Kirkpatrick's 4 levels: Reaction (participant feedback), Learning (pre/post assessment), Behaviour (manager observation 30–90 days later), Results (KPI improvement)."
+    },
+    {
+      "q": "What is the average training spend per employee in India?",
+      "a": "Average L&D spend in India is ₹15,000–40,000 per employee per year. Technology companies and multinationals tend to invest significantly more."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

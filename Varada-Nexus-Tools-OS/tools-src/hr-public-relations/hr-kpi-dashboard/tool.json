@@ -1,0 +1,122 @@
+{
+  "id": "hr-kpi-dashboard",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "HR KPI Dashboard Calculator",
+  "shortBenefit": "Key HR metrics: attrition, CPH, absenteeism and productivity.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate your organisation's key HR metrics — attrition rate, cost per hire, absenteeism rate, revenue per employee and training hours per FTE.",
+  "seo": {
+    "title": "HR KPI Dashboard — Key HR Metrics Calculator India | Varada Nexus",
+    "description": "Free HR KPI calculator. Compute attrition rate, cost per hire, absenteeism, revenue per employee and training hours for HR dashboards and reporting.",
+    "keywords": [
+      "hr kpi calculator",
+      "hr metrics dashboard",
+      "attrition rate calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "headcount",
+      "label": "Total headcount (FTEs)",
+      "type": "number",
+      "default": 100,
+      "min": 1
+    },
+    {
+      "id": "resigned",
+      "label": "Employees resigned in 12 months",
+      "type": "number",
+      "default": 15,
+      "min": 0
+    },
+    {
+      "id": "new_hires",
+      "label": "New hires in 12 months",
+      "type": "number",
+      "default": 20,
+      "min": 0
+    },
+    {
+      "id": "total_rec_cost",
+      "label": "Total recruitment cost (₹)",
+      "type": "number",
+      "default": 1000000,
+      "min": 0
+    },
+    {
+      "id": "absent_days",
+      "label": "Total absent days (all employees, month)",
+      "type": "number",
+      "default": 80,
+      "min": 0
+    },
+    {
+      "id": "annual_revenue",
+      "label": "Annual company revenue (₹)",
+      "type": "number",
+      "default": 50000000,
+      "min": 1
+    },
+    {
+      "id": "training_hrs",
+      "label": "Total training hours delivered (year)",
+      "type": "number",
+      "default": 500,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "KPI",
+      "Value",
+      "Benchmark"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Attrition rate",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost per hire",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Revenue per employee",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Attrition = resigned ÷ avg headcount × 100. Absenteeism = absent days ÷ (headcount × working days) × 100. CPH = total recruitment cost ÷ new hires. Revenue per employee = revenue ÷ headcount.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a healthy attrition rate?",
+      "a": "10–15% annual attrition is generally considered healthy for most industries in India. IT sector averages 20–25%. Below 5% may indicate lack of growth opportunities."
+    },
+    {
+      "q": "What is a good absenteeism rate?",
+      "a": "Absenteeism below 1.5% per month (18% per year) is generally acceptable. Above 2% warrants investigation into employee wellness, engagement or management issues."
+    },
+    {
+      "q": "How do I improve revenue per employee?",
+      "a": "Revenue per employee improves through automation, upskilling, better sales processes and reducing headcount in low-value activities. Benchmark varies widely by industry."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

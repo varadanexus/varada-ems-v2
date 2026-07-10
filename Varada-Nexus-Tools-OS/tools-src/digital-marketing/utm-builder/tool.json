@@ -1,0 +1,115 @@
+{
+  "id": "utm-builder",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "UTM Parameter Builder",
+  "shortBenefit": "Build UTM tracking URLs for campaigns.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Generate UTM-tagged campaign URLs for accurate tracking in Google Analytics. Enter your destination URL and campaign parameters to build the tracking link.",
+  "seo": {
+    "title": "UTM Parameter Builder — Campaign URL Tracker | Varada Nexus",
+    "description": "Free UTM builder. Create UTM-tagged campaign URLs for Google Analytics tracking. Add source, medium, campaign, term and content parameters.",
+    "keywords": [
+      "utm builder",
+      "utm parameter generator",
+      "campaign url builder google analytics"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "url",
+      "label": "Destination URL",
+      "type": "text",
+      "default": "https://example.com/landing",
+      "placeholder": "https://yoursite.com/page"
+    },
+    {
+      "id": "source",
+      "label": "utm_source",
+      "type": "text",
+      "default": "google",
+      "placeholder": "e.g. google, facebook, newsletter"
+    },
+    {
+      "id": "medium",
+      "label": "utm_medium",
+      "type": "text",
+      "default": "cpc",
+      "placeholder": "e.g. cpc, email, social, organic"
+    },
+    {
+      "id": "campaign",
+      "label": "utm_campaign",
+      "type": "text",
+      "default": "summer-sale-2025",
+      "placeholder": "e.g. brand-awareness, product-launch"
+    },
+    {
+      "id": "term",
+      "label": "utm_term (optional)",
+      "type": "text",
+      "default": "",
+      "placeholder": "e.g. keyword for paid search"
+    },
+    {
+      "id": "content",
+      "label": "utm_content (optional)",
+      "type": "text",
+      "default": "",
+      "placeholder": "e.g. banner-a, text-link"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Parameter",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "UTM URL (copy below)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Parameters added",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "URL length (chars)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Parameters are URL-encoded. Spaces replaced with hyphens. utm_term and utm_content omitted if blank.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What are UTM parameters?",
+      "a": "UTM parameters are tags added to URLs that tell Google Analytics where your traffic came from — the source (e.g. Google), medium (e.g. CPC) and campaign name."
+    },
+    {
+      "q": "Which UTM parameters are mandatory?",
+      "a": "utm_source and utm_medium are the minimum required for GA to attribute traffic correctly. utm_campaign is strongly recommended for campaign reporting."
+    },
+    {
+      "q": "Do UTM parameters affect SEO?",
+      "a": "No — UTM parameters are not visible to search engines in a way that affects ranking. Use canonical tags on pages to prevent any duplicate content issues from UTM variants."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

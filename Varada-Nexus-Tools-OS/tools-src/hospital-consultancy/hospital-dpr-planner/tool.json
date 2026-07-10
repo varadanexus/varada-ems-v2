@@ -1,0 +1,120 @@
+{
+  "id": "hospital-dpr-planner",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Hospital DPR Planner",
+  "shortBenefit": "Checklist and budget for a hospital Detailed Project Report.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan the components and professional fees for a hospital Detailed Project Report (DPR) including market study, architectural concept, financial projections and regulatory requirements.",
+  "seo": {
+    "title": "Hospital DPR Planner — Detailed Project Report Checklist | Varada Nexus",
+    "description": "Free hospital DPR planner. Checklist and cost estimate for a hospital Detailed Project Report including feasibility, design and financial modelling.",
+    "keywords": [
+      "hospital dpr",
+      "hospital detailed project report",
+      "hospital project report india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Planned beds",
+      "type": "number",
+      "default": 150,
+      "min": 10
+    },
+    {
+      "id": "type",
+      "label": "Hospital type",
+      "type": "select",
+      "default": "multi",
+      "options": [
+        {
+          "v": "small",
+          "t": "Small (<50 beds)"
+        },
+        {
+          "v": "multi",
+          "t": "Multispecialty (50–250 beds)"
+        },
+        {
+          "v": "large",
+          "t": "Large / Tertiary (>250 beds)"
+        }
+      ]
+    },
+    {
+      "id": "scope",
+      "label": "DPR scope",
+      "type": "select",
+      "default": "full",
+      "options": [
+        {
+          "v": "basic",
+          "t": "Basic (internal use)"
+        },
+        {
+          "v": "full",
+          "t": "Full (bank / investor)"
+        },
+        {
+          "v": "premium",
+          "t": "Premium (JCI / detailed)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Effort",
+      "Fee"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total DPR fee",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Typical duration",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Key deliverables",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Fee estimates: basic ₹3–6L, full ₹8–18L, premium ₹20–40L. Covers consultancy fees only; statutory fees, surveys and primary research billed separately.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a hospital DPR?",
+      "a": "A Detailed Project Report is the master planning document covering market analysis, clinical program, space planning, equipment list, regulatory approvals and financial projections."
+    },
+    {
+      "q": "Who prepares a hospital DPR?",
+      "a": "Hospital management consultants or project management consultants with healthcare expertise, often working alongside architects and financial advisors."
+    },
+    {
+      "q": "Is a DPR required for bank loans?",
+      "a": "Yes — banks and NBFCs typically require a comprehensive DPR for healthcare project loans, covering financial projections, collateral and regulatory clearances."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

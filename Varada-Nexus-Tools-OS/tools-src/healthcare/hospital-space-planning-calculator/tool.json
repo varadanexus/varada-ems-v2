@@ -1,0 +1,100 @@
+{
+  "id": "hospital-space-planning-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Hospital Space Planning Calculator",
+  "shortBenefit": "Built-up area and departmental space split by bed count.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the total built-up area a hospital needs and how it splits across clinical, diagnostic, support and administrative zones, based on bed count and hospital type.",
+  "seo": {
+    "title": "Hospital Space Planning Calculator — Area Per Bed & Zone Split | Varada Nexus",
+    "description": "Free hospital space planning calculator. Estimate total built-up area and departmental space split by bed count and hospital type.",
+    "keywords": [
+      "hospital space planning",
+      "area per bed hospital",
+      "hospital built up area calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 150,
+      "min": 1
+    },
+    {
+      "id": "type",
+      "label": "Hospital type",
+      "type": "select",
+      "default": "1100",
+      "options": [
+        {
+          "v": "900",
+          "t": "General (~900 sq ft/bed)"
+        },
+        {
+          "v": "1100",
+          "t": "Multispecialty (~1,100)"
+        },
+        {
+          "v": "1400",
+          "t": "Super-specialty (~1,400)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Zone",
+      "share",
+      "Area"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total built-up",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Clinical area",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Support area",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Total area = beds × area per bed. Indicative zone split: clinical/wards 40%, diagnostics & OT 20%, support & services 25%, administration & circulation 15%.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much area does a hospital need per bed?",
+      "a": "Roughly 900 sq ft/bed for a general hospital, 1,000–1,200 for multispecialty and 1,200–1,600 for super-specialty, including support areas."
+    },
+    {
+      "q": "How is hospital space divided between departments?",
+      "a": "A typical split is ~40% clinical/wards, 20% diagnostics and OT, 25% support services and 15% administration and circulation."
+    },
+    {
+      "q": "Does this include parking and expansion?",
+      "a": "No, external parking, services yards and future expansion should be planned separately over and above this built-up area."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "id": "medical-gas-cost-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Medical Gas System Cost Calculator",
+  "shortBenefit": "Cost of a medical gas system incl. outlets and source.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the cost of a hospital medical gas system — outlets and piping plus the source plant (manifold or PSA) — from bed count and outlets per bed.",
+  "seo": {
+    "title": "Medical Gas System Cost Calculator — MGPS Cost incl. Source | Varada Nexus",
+    "description": "Free medical gas system cost calculator. Estimate MGPS cost from outlets, piping and source plant for a hospital.",
+    "keywords": [
+      "medical gas cost calculator",
+      "mgps cost",
+      "hospital gas pipeline cost"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 150,
+      "min": 0
+    },
+    {
+      "id": "outlets",
+      "label": "Outlets per bed",
+      "type": "number",
+      "default": 3,
+      "min": 1
+    },
+    {
+      "id": "rate",
+      "label": "Cost per outlet incl. piping (₹)",
+      "type": "number",
+      "default": 18000,
+      "min": 0
+    },
+    {
+      "id": "source",
+      "label": "Source plant cost (₹)",
+      "type": "number",
+      "default": 2500000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total MGPS cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Outlets & piping",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per bed",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Outlets = beds × outlets per bed. Outlet+piping cost = outlets × rate. Total = that + source plant (manifold/PSA/LMO). Alarms and validation may be extra.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What does a medical gas system cost?",
+      "a": "It depends on outlet count, piping runs and the source plant; outlets+piping plus a manifold/PSA plant make up most of the cost."
+    },
+    {
+      "q": "What is included in the source plant?",
+      "a": "The oxygen manifold or PSA generator, medical air compressors and vacuum plant that feed the pipeline."
+    },
+    {
+      "q": "Are alarms included?",
+      "a": "Area alarms and validation are sometimes separate line items — confirm with your MGPS vendor."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

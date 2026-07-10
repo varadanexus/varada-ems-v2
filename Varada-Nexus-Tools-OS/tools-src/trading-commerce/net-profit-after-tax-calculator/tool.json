@@ -1,0 +1,134 @@
+{
+  "id": "net-profit-after-tax-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Net Profit After Tax Calculator",
+  "shortBenefit": "Calculate net profit after corporate tax and effective tax rate",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Compute net profit after income tax for trading entities — covering gross profit, allowable deductions, taxable income, tax slab and final PAT for partnership firms, LLPs and companies.",
+  "seo": {
+    "title": "Net Profit After Tax Calculator – Corporate Tax Trading India",
+    "description": "Calculate net profit after tax for trading businesses. Supports proprietorship, partnership, LLP and private company tax rates. Get effective tax rate and PAT.",
+    "keywords": [
+      "net profit after tax calculator India",
+      "corporate tax calculator trading",
+      "PAT calculator India",
+      "effective tax rate business",
+      "income tax trading firm India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "revenue",
+      "label": "Annual Revenue (₹)",
+      "type": "number",
+      "default": 10000000,
+      "min": 0
+    },
+    {
+      "id": "cogs",
+      "label": "Cost of Goods Sold (₹)",
+      "type": "number",
+      "default": 7000000,
+      "min": 0
+    },
+    {
+      "id": "operating_expenses",
+      "label": "Operating Expenses (₹)",
+      "type": "number",
+      "default": 1200000,
+      "min": 0
+    },
+    {
+      "id": "depreciation",
+      "label": "Depreciation (₹)",
+      "type": "number",
+      "default": 150000,
+      "min": 0
+    },
+    {
+      "id": "interest_expense",
+      "label": "Interest Expense (₹)",
+      "type": "number",
+      "default": 200000,
+      "min": 0
+    },
+    {
+      "id": "entity_type",
+      "label": "Business Entity Type",
+      "type": "select",
+      "default": "company",
+      "options": [
+        {
+          "v": "proprietor",
+          "t": "Proprietor / Individual"
+        },
+        {
+          "v": "firm",
+          "t": "Partnership Firm / LLP"
+        },
+        {
+          "v": "company",
+          "t": "Private Limited Company"
+        },
+        {
+          "v": "company_concessional",
+          "t": "Company (concessional 22% rate)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "P&L Component",
+      "Amount (₹)",
+      "Notes"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Net Profit (PAT)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Effective Tax Rate",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "PBT / Revenue",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Surcharge and cess not modelled for simplicity. Concessional rate (22%) for existing companies opting Section 115BAA. Firm rate = 30% flat. Individual = 30% slab applied.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the tax rate for a Private Limited Company in India?",
+      "a": "Base rate: 25% for companies with turnover ≤ ₹400 crore, 30% above. Concessional rate 22% (Section 115BAA) for companies not claiming certain exemptions. Plus 4% health and education cess."
+    },
+    {
+      "q": "What is the tax rate for a Partnership Firm / LLP?",
+      "a": "Partnership firms and LLPs are taxed at a flat 30% plus 4% cess = 31.2% effective. No benefit of slab rates like individuals."
+    },
+    {
+      "q": "Should a trader operate as a company or proprietor?",
+      "a": "Company: lower tax at 22–25%, easier to raise capital, limited liability, but compliance heavy. Proprietor: simple, low compliance, but personal tax at 30% for profit > ₹10 lakh. LLP is a good middle ground."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "id": "currency-conversion-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Currency Conversion Calculator",
+  "shortBenefit": "Convert trade currencies with bank charges for import/export payments",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Convert foreign currency to INR for trade invoices and payment planning, factoring in bank spread, TT charges and GST on bank fees.",
+  "seo": {
+    "title": "Currency Conversion Calculator for Importers Exporters – INR Trade",
+    "description": "Calculate INR equivalent of foreign currency payments with bank spread, TT charges and GST. For import LC and export realisation planning.",
+    "keywords": [
+      "currency conversion trade India",
+      "forex calculator exporter",
+      "LC value INR conversion",
+      "TT charges bank forex",
+      "USD to INR import payment"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "foreign_amount",
+      "label": "Foreign Currency Amount",
+      "type": "number",
+      "default": 10000,
+      "min": 1
+    },
+    {
+      "id": "currency",
+      "label": "Currency",
+      "type": "select",
+      "default": "USD",
+      "options": [
+        {
+          "v": "USD",
+          "t": "USD – US Dollar"
+        },
+        {
+          "v": "EUR",
+          "t": "EUR – Euro"
+        },
+        {
+          "v": "GBP",
+          "t": "GBP – British Pound"
+        },
+        {
+          "v": "AED",
+          "t": "AED – UAE Dirham"
+        },
+        {
+          "v": "SGD",
+          "t": "SGD – Singapore Dollar"
+        }
+      ]
+    },
+    {
+      "id": "exchange_rate",
+      "label": "Exchange Rate (₹ per unit)",
+      "type": "number",
+      "default": 83.5,
+      "min": 0.1,
+      "hint": "Bank TT rate"
+    },
+    {
+      "id": "bank_spread",
+      "label": "Bank Spread / Commission (%)",
+      "type": "number",
+      "default": 0.25,
+      "min": 0,
+      "max": 5
+    },
+    {
+      "id": "tt_charges",
+      "label": "TT / Wire Charges (₹)",
+      "type": "number",
+      "default": 500,
+      "min": 0
+    },
+    {
+      "id": "direction",
+      "label": "Direction",
+      "type": "select",
+      "default": "import",
+      "options": [
+        {
+          "v": "import",
+          "t": "Import — paying (buying foreign currency)"
+        },
+        {
+          "v": "export",
+          "t": "Export — receiving (selling foreign currency)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "Rate / Detail",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Net INR Amount",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Effective Rate",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total Bank Charges",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "GST 18% on bank commission only. TT charges fixed per transaction. Spread applied to gross INR.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is TT rate vs card rate?",
+      "a": "TT (Telegraphic Transfer) rate is used for wire transfers, closer to interbank rate. Card rate is for retail forex with a wider spread. Always use TT rate for trade payments."
+    },
+    {
+      "q": "How does bank spread affect import payment?",
+      "a": "At 0.25% spread over ₹83.50, you pay ₹83.71/dollar. On $10,000 this costs ₹210 extra. Negotiate the spread for large or regular transactions."
+    },
+    {
+      "q": "What is an LC and when to use it?",
+      "a": "A Letter of Credit is a bank guarantee of payment for large import/export transactions. It costs 0.5–1% of LC value but significantly reduces payment risk."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

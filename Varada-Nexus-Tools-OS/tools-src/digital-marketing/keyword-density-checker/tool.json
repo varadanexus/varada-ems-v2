@@ -1,0 +1,101 @@
+{
+  "id": "keyword-density-checker",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Keyword Density Checker",
+  "shortBenefit": "Keyword density and occurrence count for SEO content.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Check the keyword density and occurrence count in your content. Enter your content word count and keyword frequency to calculate density and get SEO guidance.",
+  "seo": {
+    "title": "Keyword Density Checker — SEO Content Optimisation | Varada Nexus",
+    "description": "Free keyword density checker. Calculate keyword density and occurrence from word count for SEO-optimised content writing.",
+    "keywords": [
+      "keyword density checker",
+      "keyword frequency calculator",
+      "seo content optimisation tool"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "word_count",
+      "label": "Total word count of content",
+      "type": "number",
+      "default": 1200,
+      "min": 50
+    },
+    {
+      "id": "kw1_count",
+      "label": "Primary keyword occurrences",
+      "type": "number",
+      "default": 12,
+      "min": 0
+    },
+    {
+      "id": "kw2_count",
+      "label": "Secondary keyword occurrences",
+      "type": "number",
+      "default": 6,
+      "min": 0
+    },
+    {
+      "id": "kw3_count",
+      "label": "LSI / related keyword occurrences",
+      "type": "number",
+      "default": 8,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Keyword Type",
+      "Count",
+      "Density"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Primary keyword density",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "SEO assessment",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total keyword coverage",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Density = occurrences ÷ total words × 100. Optimal primary keyword density: 0.5–1.5%. Above 2% risks keyword stuffing penalty.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the ideal keyword density for SEO?",
+      "a": "Google does not publish an official ideal; 0.5–1.5% for the primary keyword is a widely accepted guideline. Focus on natural writing over exact density."
+    },
+    {
+      "q": "Does keyword density still matter for SEO?",
+      "a": "Less so than a decade ago — Google's NLP understands context and synonyms. What matters more is covering the topic comprehensively with relevant related terms."
+    },
+    {
+      "q": "What is LSI keyword?",
+      "a": "LSI (Latent Semantic Indexing) keywords are related terms and synonyms that reinforce the topic of your content, helping search engines understand context."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

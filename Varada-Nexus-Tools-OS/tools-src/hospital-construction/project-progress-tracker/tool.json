@@ -1,0 +1,95 @@
+{
+  "id": "project-progress-tracker",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Project Progress Tracker",
+  "shortBenefit": "Schedule status: planned vs actual progress and variance.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Track a project’s schedule health by comparing planned progress (from time elapsed) against actual work done, with a variance and projected completion.",
+  "seo": {
+    "title": "Project Progress Tracker — Planned vs Actual & Schedule Variance | Varada Nexus",
+    "description": "Free project progress tracker. Compare planned vs actual progress, get schedule variance and projected completion.",
+    "keywords": [
+      "project progress tracker",
+      "schedule variance calculator",
+      "planned vs actual progress"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "duration",
+      "label": "Total duration (months)",
+      "type": "number",
+      "default": 18,
+      "min": 1
+    },
+    {
+      "id": "elapsed",
+      "label": "Months elapsed",
+      "type": "number",
+      "default": 9,
+      "min": 0
+    },
+    {
+      "id": "done",
+      "label": "Actual work done (%)",
+      "type": "number",
+      "default": 45,
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Variance",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Projected completion",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Planned progress = elapsed ÷ duration × 100 (linear). Variance = actual − planned. Projected duration = elapsed ÷ (actual% ÷ 100). A linear plan is assumed; real S-curves differ.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is schedule variance measured?",
+      "a": "Compare actual work done against the planned progress for the time elapsed; a negative gap means the project is behind."
+    },
+    {
+      "q": "What does projected completion mean?",
+      "a": "Extrapolating the current pace: elapsed months ÷ fraction of work done estimates the total months needed."
+    },
+    {
+      "q": "Is linear planned progress realistic?",
+      "a": "It is a simplification; most projects follow an S-curve, slower at start and finish."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

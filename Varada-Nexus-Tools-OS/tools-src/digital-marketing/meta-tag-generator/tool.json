@@ -1,0 +1,108 @@
+{
+  "id": "meta-tag-generator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Meta Tag Generator",
+  "shortBenefit": "Generate SEO-optimised title and meta description tags.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Generate properly formatted HTML title and meta description tags for any web page with character count guidance and SEO best practices.",
+  "seo": {
+    "title": "Meta Tag Generator — SEO Title & Description Builder | Varada Nexus",
+    "description": "Free meta tag generator. Build SEO-optimised title tags and meta descriptions with character count validation for better search rankings.",
+    "keywords": [
+      "meta tag generator",
+      "seo title tag generator",
+      "meta description generator tool"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "brand",
+      "label": "Brand / site name",
+      "type": "text",
+      "default": "Varada Nexus",
+      "placeholder": "Your Brand Name"
+    },
+    {
+      "id": "primary_kw",
+      "label": "Primary keyword",
+      "type": "text",
+      "default": "hospital consultancy",
+      "placeholder": "main target keyword"
+    },
+    {
+      "id": "page_topic",
+      "label": "Page topic / service",
+      "type": "text",
+      "default": "Hospital Project Planning",
+      "placeholder": "what this page is about"
+    },
+    {
+      "id": "benefit",
+      "label": "Key user benefit (short)",
+      "type": "text",
+      "default": "Expert guidance for new hospital projects",
+      "placeholder": "what the user gains"
+    },
+    {
+      "id": "location",
+      "label": "Location (optional)",
+      "type": "text",
+      "default": "India",
+      "placeholder": "City / Country or leave blank"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Tag",
+      "Chars",
+      "Output"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Title tag",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Meta description",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Title length",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Title: keyword first, brand last, pipe separator, 50–60 chars ideal. Meta: benefit-led, keyword included, 120–158 chars.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the ideal title tag length?",
+      "a": "50–60 characters is the optimal range — Google typically displays up to 600px width (~60 chars). Longer titles are truncated in search results."
+    },
+    {
+      "q": "Should the keyword be at the start of the title tag?",
+      "a": "Yes — placing the primary keyword at or near the beginning of the title tag is recommended, as Google gives more weight to early-appearing terms."
+    },
+    {
+      "q": "Do meta descriptions affect Google rankings?",
+      "a": "Meta descriptions are not a direct ranking factor but strongly affect click-through rate (CTR). A compelling description can significantly increase organic clicks."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

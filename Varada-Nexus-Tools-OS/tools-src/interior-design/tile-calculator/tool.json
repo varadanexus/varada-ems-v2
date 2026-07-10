@@ -1,0 +1,121 @@
+{
+  "id": "tile-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Tile Calculator",
+  "shortBenefit": "Number of tiles, boxes and cost for a floor or wall area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Work out how many tiles and boxes you need for a given area, including wastage, plus the estimated material cost.",
+  "seo": {
+    "title": "Tile Calculator — Tiles, Boxes & Cost by Area | Varada Nexus",
+    "description": "Free tile calculator. Get the number of tiles, boxes and cost for any floor or wall area, including wastage allowance.",
+    "keywords": [
+      "tile calculator",
+      "floor tile calculator",
+      "how many tiles do i need"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Area to tile (sq ft)",
+      "type": "number",
+      "default": 400,
+      "min": 0
+    },
+    {
+      "id": "size",
+      "label": "Tile size",
+      "type": "select",
+      "default": "4",
+      "options": [
+        {
+          "v": "1",
+          "t": "1x1 ft (1 sq ft)"
+        },
+        {
+          "v": "4",
+          "t": "2x2 ft (4 sq ft)"
+        },
+        {
+          "v": "8",
+          "t": "2x4 ft (8 sq ft)"
+        },
+        {
+          "v": "2.67",
+          "t": "16x24 in (2.67 sq ft)"
+        }
+      ]
+    },
+    {
+      "id": "wastage",
+      "label": "Wastage (%)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "perBox",
+      "label": "Tiles per box",
+      "type": "number",
+      "default": 4,
+      "min": 1
+    },
+    {
+      "id": "boxPrice",
+      "label": "Price per box (₹)",
+      "type": "number",
+      "default": 800,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Tiles needed",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Boxes needed",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Estimated cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Tiles = ceil(area ÷ tile area × (1 + wastage%)). Boxes = ceil(tiles ÷ tiles per box). Add extra wastage for diagonal layouts or many cuts.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many tiles do I need?",
+      "a": "Tiles = area ÷ tile area, then add wastage (typically 10%). Round up to whole tiles."
+    },
+    {
+      "q": "Why add a wastage allowance?",
+      "a": "Cutting at edges, breakage and future replacements mean you should buy 5–15% extra."
+    },
+    {
+      "q": "How many boxes should I buy?",
+      "a": "Divide the total tiles (including wastage) by tiles per box and round up to full boxes."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design",
+      "url": "/services.html"
+    }
+  ]
+}

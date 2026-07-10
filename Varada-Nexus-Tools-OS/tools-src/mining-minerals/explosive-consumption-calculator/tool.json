@@ -1,0 +1,127 @@
+{
+  "id": "explosive-consumption-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Explosive Consumption Calculator",
+  "shortBenefit": "Estimate explosive requirement and cost for mining blasts",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the quantity of explosives and detonators required for a blast pattern in open-cast or underground mines, based on powder factor and rock volume.",
+  "seo": {
+    "title": "Explosive Consumption Calculator – Blasting Cost Mining India",
+    "description": "Calculate explosive consumption, detonator quantity and total blasting cost for mining operations. Based on powder factor and rock volume.",
+    "keywords": [
+      "explosive consumption calculator mining",
+      "blasting cost calculator India",
+      "powder factor mining",
+      "emulsion explosive cost",
+      "mine blast design calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "rock_volume_bcm",
+      "label": "Rock Volume to Blast (BCM)",
+      "type": "number",
+      "default": 50000,
+      "min": 1
+    },
+    {
+      "id": "powder_factor",
+      "label": "Powder Factor (kg/BCM)",
+      "type": "number",
+      "default": 0.35,
+      "min": 0.05,
+      "max": 5,
+      "hint": "Typical: 0.25–0.45 kg/BCM for open-cast"
+    },
+    {
+      "id": "explosive_cost",
+      "label": "Explosive Cost (₹/kg)",
+      "type": "number",
+      "default": 55,
+      "min": 0,
+      "hint": "Bulk emulsion: ₹45–₹65/kg"
+    },
+    {
+      "id": "detonator_per_hole",
+      "label": "Detonators per Hole",
+      "type": "number",
+      "default": 2,
+      "min": 1
+    },
+    {
+      "id": "holes_per_blast",
+      "label": "Number of Holes in Blast",
+      "type": "number",
+      "default": 200,
+      "min": 1
+    },
+    {
+      "id": "detonator_cost",
+      "label": "Detonator Cost (₹/unit)",
+      "type": "number",
+      "default": 350,
+      "min": 0
+    },
+    {
+      "id": "accessories_pct",
+      "label": "Blasting Accessories (% of explosive cost)",
+      "type": "number",
+      "default": 15,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "Quantity",
+      "Cost (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Blast Cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost per BCM",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Explosive Quantity (kg)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Explosive quantity = rock volume × powder factor. Accessories include primers, boosters, detonating cord.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is powder factor and how is it determined?",
+      "a": "Powder factor (specific charge) is kg of explosive per BCM of rock blasted. It depends on rock hardness (RMR), burden-spacing design, desired fragmentation size and explosive energy. Hard granite may need 0.5+ kg/BCM."
+    },
+    {
+      "q": "What types of explosives are used in Indian mines?",
+      "a": "Bulk emulsion (most common in open-cast), ANFO, Slurry/Watergel for wet conditions, and cartridge emulsion for smaller operations. All must be sourced from licensed manufacturers and stored in licensed magazines."
+    },
+    {
+      "q": "What licences are required for explosives in mining?",
+      "a": "Under Explosives Act 1884 and Explosives Rules 2008: Licence for manufacture, storage (magazine), transport and use. PESO (Petroleum and Explosives Safety Organisation) is the regulating authority."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

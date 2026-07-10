@@ -1,0 +1,187 @@
+{
+  "id": "seo-audit-checklist",
+  "category": "digital-marketing",
+  "kind": "checklist",
+  "name": "SEO Audit Checklist",
+  "shortBenefit": "Comprehensive on-page and technical SEO audit.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Run a structured SEO audit across technical, on-page, content and off-page factors to identify gaps and prioritise fixes.",
+  "seo": {
+    "title": "SEO Audit Checklist — Technical & On-Page SEO Tool | Varada Nexus",
+    "description": "Free SEO audit checklist. Check technical SEO, on-page factors, content quality and off-page signals to identify and prioritise SEO improvements.",
+    "keywords": [
+      "seo audit checklist",
+      "technical seo checklist",
+      "on page seo audit tool"
+    ]
+  },
+  "buttonLabel": "Run SEO Audit",
+  "checklist": [
+    {
+      "name": "1. Technical SEO",
+      "items": [
+        {
+          "id": "t1",
+          "text": "Site loads in under 3 seconds on mobile",
+          "critical": true
+        },
+        {
+          "id": "t2",
+          "text": "HTTPS / SSL certificate active",
+          "critical": true
+        },
+        {
+          "id": "t3",
+          "text": "XML sitemap submitted to Google Search Console",
+          "critical": true
+        },
+        {
+          "id": "t4",
+          "text": "Robots.txt configured correctly (no valuable pages blocked)",
+          "critical": true
+        },
+        {
+          "id": "t5",
+          "text": "No crawl errors in Google Search Console"
+        },
+        {
+          "id": "t6",
+          "text": "Canonical tags on duplicate / paginated pages"
+        },
+        {
+          "id": "t7",
+          "text": "Structured data (Schema.org) implemented for key page types"
+        }
+      ]
+    },
+    {
+      "name": "2. On-Page SEO",
+      "items": [
+        {
+          "id": "o1",
+          "text": "Unique title tag (50–60 chars) on every page",
+          "critical": true
+        },
+        {
+          "id": "o2",
+          "text": "Unique meta description (120–158 chars) on every page",
+          "critical": true
+        },
+        {
+          "id": "o3",
+          "text": "H1 tag present and matches page topic on every page",
+          "critical": true
+        },
+        {
+          "id": "o4",
+          "text": "Target keyword in first 100 words of content"
+        },
+        {
+          "id": "o5",
+          "text": "Images have descriptive alt text"
+        },
+        {
+          "id": "o6",
+          "text": "Internal links to related pages on every content page"
+        }
+      ]
+    },
+    {
+      "name": "3. Content Quality",
+      "items": [
+        {
+          "id": "c1",
+          "text": "Primary pages have 800+ words of unique, useful content",
+          "critical": true
+        },
+        {
+          "id": "c2",
+          "text": "No thin or duplicate content pages exist"
+        },
+        {
+          "id": "c3",
+          "text": "Blog / content updated in last 30 days"
+        },
+        {
+          "id": "c4",
+          "text": "FAQ or structured Q&A on key landing pages"
+        }
+      ]
+    },
+    {
+      "name": "4. Off-Page & Local",
+      "items": [
+        {
+          "id": "p1",
+          "text": "Google Business Profile claimed and optimised"
+        },
+        {
+          "id": "p2",
+          "text": "NAP (name, address, phone) consistent across directories"
+        },
+        {
+          "id": "p3",
+          "text": "10+ quality backlinks from relevant sites"
+        },
+        {
+          "id": "p4",
+          "text": "No toxic / spammy backlinks (checked in GSC)"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Checklist covers core Google ranking factors. Critical items have direct impact on crawlability and indexation.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How often should I run an SEO audit?",
+      "a": "A full technical and content audit quarterly; monitor crawl errors and page speed monthly via Google Search Console and PageSpeed Insights."
+    },
+    {
+      "q": "What are the most important SEO fixes?",
+      "a": "Page speed on mobile, HTTPS, fixing crawl errors and ensuring unique title/meta tags are the highest-ROI fixes for most websites."
+    },
+    {
+      "q": "How long does SEO take to show results?",
+      "a": "Technical fixes can show results in 2–6 weeks (faster crawling, error removal); content and link building take 3–12 months to impact rankings."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

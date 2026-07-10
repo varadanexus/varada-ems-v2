@@ -1,0 +1,134 @@
+{
+  "id": "wardrobe-cost-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Wardrobe Cost Calculator",
+  "shortBenefit": "Wardrobe cost by size, material and fitting type.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the cost of a custom wardrobe based on size, material and internal fittings.",
+  "seo": {
+    "title": "Wardrobe Cost Calculator — Custom Built-in Wardrobe Estimate | Varada Nexus",
+    "description": "Free wardrobe cost calculator. Estimate built-in wardrobe cost by size, material, shutter type and internal accessories for homes in India.",
+    "keywords": [
+      "wardrobe cost calculator",
+      "built in wardrobe cost india",
+      "almirah cost estimate"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "width",
+      "label": "Wardrobe width (ft)",
+      "type": "number",
+      "default": 6,
+      "min": 1
+    },
+    {
+      "id": "height",
+      "label": "Height (ft)",
+      "type": "number",
+      "default": 8,
+      "min": 4
+    },
+    {
+      "id": "depth",
+      "label": "Depth (ft)",
+      "type": "number",
+      "default": 2,
+      "min": 1
+    },
+    {
+      "id": "material",
+      "label": "Material",
+      "type": "select",
+      "default": "plywood",
+      "options": [
+        {
+          "v": "hdf",
+          "t": "HDF/MDF"
+        },
+        {
+          "v": "plywood",
+          "t": "Marine plywood"
+        },
+        {
+          "v": "solid",
+          "t": "Solid wood"
+        }
+      ]
+    },
+    {
+      "id": "shutter",
+      "label": "Shutter type",
+      "type": "select",
+      "default": "sliding",
+      "options": [
+        {
+          "v": "swing",
+          "t": "Swing door"
+        },
+        {
+          "v": "sliding",
+          "t": "Sliding door"
+        },
+        {
+          "v": "glass",
+          "t": "Glass / mirror sliding"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "",
+      "Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total wardrobe cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per sq ft (face)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Face area",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Cost = face area × rate/sq ft. HDF swing ~₹1,000/sq ft, plywood sliding ~₹1,600, solid glass ~₹2,800. Internal fittings (loft, drawers, trouser rack) add 20%.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the cost of a 6 ft wardrobe in India?",
+      "a": "A 6×8 ft plywood wardrobe with sliding doors costs ₹55,000–90,000; MDF with swing doors ₹35,000–55,000; solid wood ₹1,20,000–2,00,000 depending on internal fittings."
+    },
+    {
+      "q": "Sliding vs swing wardrobe — which is better for small rooms?",
+      "a": "Sliding wardrobes are better for rooms with limited floor space in front of the wardrobe; swing doors need 2–2.5 ft of clearance."
+    },
+    {
+      "q": "Should I choose plywood or MDF for a wardrobe?",
+      "a": "Plywood is more durable and moisture-resistant, recommended in humid climates. MDF gives a smoother finish but is heavier and less moisture-tolerant."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "id": "hvac-capacity-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "HVAC Capacity Calculator",
+  "shortBenefit": "Air-conditioning tonnage (TR) and cost by area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the air-conditioning capacity in tons of refrigeration (TR) and indicative cost for a space from area and cooling load density.",
+  "seo": {
+    "title": "HVAC Capacity Calculator — AC Tonnage (TR) & Cost by Area | Varada Nexus",
+    "description": "Free HVAC capacity calculator. Estimate air-conditioning tonnage (TR) and cost from area and space type.",
+    "keywords": [
+      "hvac calculator",
+      "ac tonnage calculator",
+      "tr calculator for area"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Area (sq ft)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    },
+    {
+      "id": "sqftTR",
+      "label": "Space type (sq ft per TR)",
+      "type": "select",
+      "default": "120",
+      "options": [
+        {
+          "v": "150",
+          "t": "General/office (150)"
+        },
+        {
+          "v": "120",
+          "t": "Hospital ward (120)"
+        },
+        {
+          "v": "100",
+          "t": "Public/lobby (100)"
+        },
+        {
+          "v": "80",
+          "t": "OT / ICU (80)"
+        }
+      ]
+    },
+    {
+      "id": "costTR",
+      "label": "Cost per TR (₹)",
+      "type": "number",
+      "default": 45000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Cooling capacity",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Indicative cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Area",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "TR = area ÷ sq ft per TR (lower for high-heat spaces like OT/ICU). Cost = TR × cost per TR (equipment + basic install). Detailed heat-load calculations override this thumb rule.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many square feet per ton of AC?",
+      "a": "Roughly 120–150 sq ft per TR for offices/wards, dropping to ~80 for high-load OT/ICU spaces."
+    },
+    {
+      "q": "How is HVAC cost estimated?",
+      "a": "Multiply the required TR by a per-TR cost; ducting, AHUs and controls can add significantly for central systems."
+    },
+    {
+      "q": "Why do OT and ICU need more cooling?",
+      "a": "They require tighter temperature, humidity and air-change control, increasing the effective cooling load."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

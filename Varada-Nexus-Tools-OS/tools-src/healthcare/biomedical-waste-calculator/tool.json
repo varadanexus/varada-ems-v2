@@ -1,0 +1,102 @@
+{
+  "id": "biomedical-waste-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Biomedical Waste Calculator",
+  "shortBenefit": "Daily biomedical waste by category and disposal cost.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate a hospital’s daily biomedical waste generation, its colour-coded category split under BMW Rules 2016, and the monthly disposal cost.",
+  "seo": {
+    "title": "Biomedical Waste Calculator — Daily BMW by Category & Cost | Varada Nexus",
+    "description": "Free biomedical waste calculator. Estimate daily hospital BMW, yellow/red/white/blue category split and disposal cost.",
+    "keywords": [
+      "biomedical waste calculator",
+      "bmw calculator hospital",
+      "hospital waste generation"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 150,
+      "min": 0
+    },
+    {
+      "id": "occ",
+      "label": "Occupancy (%)",
+      "type": "number",
+      "default": 80,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "rate",
+      "label": "Waste per occupied bed (kg/day)",
+      "type": "number",
+      "default": 0.5,
+      "min": 0
+    },
+    {
+      "id": "cost",
+      "label": "Disposal cost (₹/kg)",
+      "type": "number",
+      "default": 25,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Category",
+      "share",
+      "kg/day"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total BMW/day",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly disposal cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Occupied beds",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Total BMW/day = occupied beds × waste per bed (typically 0.4–0.6 kg of BMW per occupied bed/day). Indicative colour split: yellow 45%, red 30%, white 10%, blue 15%. Disposal cost is monthly (×30).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much biomedical waste does a hospital generate?",
+      "a": "Roughly 0.4–0.6 kg of segregated biomedical waste per occupied bed per day, over and above general waste."
+    },
+    {
+      "q": "What are the BMW colour codes?",
+      "a": "Under BMW Rules 2016: yellow (anatomical/soiled), red (contaminated plastics), white (sharps) and blue (glass/metal)."
+    },
+    {
+      "q": "How is disposal cost estimated?",
+      "a": "Multiply total BMW by the per-kg charge from your authorised Common Bio-medical Waste Treatment Facility (CBWTF)."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

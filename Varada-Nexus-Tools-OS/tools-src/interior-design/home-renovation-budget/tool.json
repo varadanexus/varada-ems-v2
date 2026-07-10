@@ -1,0 +1,131 @@
+{
+  "id": "home-renovation-budget",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Home Renovation Budget Planner",
+  "shortBenefit": "Room-by-room renovation cost for an existing home.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan a renovation budget for an existing home, room by room, covering civil repairs, new flooring, paint, kitchen and bathroom upgrades.",
+  "seo": {
+    "title": "Home Renovation Budget Planner — Room-by-Room Estimate | Varada Nexus",
+    "description": "Free home renovation budget planner. Estimate room-by-room renovation costs for existing homes in India including civil, flooring and wet areas.",
+    "keywords": [
+      "home renovation budget",
+      "house renovation cost india",
+      "renovation cost calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Total home area (sq ft)",
+      "type": "number",
+      "default": 1200,
+      "min": 200
+    },
+    {
+      "id": "bhk",
+      "label": "Configuration",
+      "type": "select",
+      "default": "2bhk",
+      "options": [
+        {
+          "v": "1bhk",
+          "t": "1 BHK"
+        },
+        {
+          "v": "2bhk",
+          "t": "2 BHK"
+        },
+        {
+          "v": "3bhk",
+          "t": "3 BHK"
+        },
+        {
+          "v": "villa",
+          "t": "4 BHK / Villa"
+        }
+      ]
+    },
+    {
+      "id": "scope",
+      "label": "Renovation scope",
+      "type": "select",
+      "default": "partial",
+      "options": [
+        {
+          "v": "cosmetic",
+          "t": "Cosmetic (paint + minor fixes)"
+        },
+        {
+          "v": "partial",
+          "t": "Partial (flooring + kitchen + baths)"
+        },
+        {
+          "v": "full",
+          "t": "Full gut renovation"
+        }
+      ]
+    },
+    {
+      "id": "age",
+      "label": "Home age (years)",
+      "type": "number",
+      "default": 10,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Work Item",
+      "",
+      "Budget"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total renovation cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per sq ft",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Contingency (15%)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Cosmetic: ₹200–400/sq ft; partial: ₹500–900/sq ft; full gut: ₹1,000–1,800/sq ft. Old homes (>15 years) add 20% for hidden civil work.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the cost of full home renovation in India?",
+      "a": "Full gut renovation of a 1,200 sq ft apartment runs ₹12–22 lakh; partial renovation ₹6–11 lakh; cosmetic freshening ₹2–5 lakh."
+    },
+    {
+      "q": "Why do renovation costs exceed estimates?",
+      "a": "Hidden plumbing and electrical issues, waterproofing failures and material price changes are common cost escalators in renovation projects — always keep a 15–20% contingency."
+    },
+    {
+      "q": "Should I renovate before or after buying furniture?",
+      "a": "Always renovate first — civil work, flooring and paint must be done before furniture and soft furnishings are placed, as dust and debris will damage them."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

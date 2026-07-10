@@ -1,0 +1,125 @@
+{
+  "id": "fob-price-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "FOB Price Calculator",
+  "shortBenefit": "Build your FOB export quotation step by step from factory cost",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Systematically build your Free on Board export price from ex-works cost, adding inland transport, packaging, export licence fees, CHA charges and port dues.",
+  "seo": {
+    "title": "FOB Price Calculator – Free on Board Export Quotation Builder",
+    "description": "Calculate your FOB export price step by step. Add factory cost, packaging, inland transport, export clearance and port charges. Get FOB per unit and total.",
+    "keywords": [
+      "FOB price calculator",
+      "FOB export price India",
+      "free on board calculator",
+      "export quotation builder",
+      "FOB per unit calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "exw_unit",
+      "label": "Ex-Works Price per Unit (₹)",
+      "type": "number",
+      "default": 850,
+      "min": 1
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity (units)",
+      "type": "number",
+      "default": 500,
+      "min": 1
+    },
+    {
+      "id": "packing_cost",
+      "label": "Export Packing Cost (₹ total)",
+      "type": "number",
+      "default": 12000,
+      "min": 0
+    },
+    {
+      "id": "inland_transport",
+      "label": "Inland Transport to Port (₹)",
+      "type": "number",
+      "default": 10000,
+      "min": 0
+    },
+    {
+      "id": "cha_charges",
+      "label": "CHA & Shipping Bill Charges (₹)",
+      "type": "number",
+      "default": 6500,
+      "min": 0
+    },
+    {
+      "id": "port_charges",
+      "label": "Port / THC Charges (₹)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    },
+    {
+      "id": "other_charges",
+      "label": "Other Charges (₹)",
+      "type": "number",
+      "default": 2000,
+      "min": 0,
+      "hint": "Inspection, fumigation, COO, etc."
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Component",
+      "Total (₹)",
+      "Per Unit (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "FOB / Unit",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total FOB Value",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Charges above EXW",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "FOB = EXW + packing + inland transport + CHA + port + other. Convert to USD at prevailing TT rate for quotation.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "When does seller's responsibility end under FOB?",
+      "a": "Under FOB, seller's responsibility ends when goods pass the ship's rail at the named port of shipment. After that, the buyer bears all costs and risks."
+    },
+    {
+      "q": "Should I quote FOB or CIF to foreign buyers?",
+      "a": "FOB is simpler for the seller. However, some buyers prefer CIF as it gives a single landed price. Offering both builds credibility."
+    },
+    {
+      "q": "What documents are needed for FOB export clearance?",
+      "a": "Shipping Bill, Commercial Invoice, Packing List, Certificate of Origin, L/C or PO, and any product-specific certificates (phytosanitary, quality inspection)."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "id": "digital-marketing-budget-planner",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Digital Marketing Budget Planner",
+  "shortBenefit": "Channel-by-channel digital marketing budget allocation.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan your monthly digital marketing budget across channels — SEO, paid search, social media, content, email and analytics — based on business goals and total spend.",
+  "seo": {
+    "title": "Digital Marketing Budget Planner — Channel Budget Calculator | Varada Nexus",
+    "description": "Free digital marketing budget planner. Allocate your marketing budget across SEO, paid search, social, content, email and automation by business stage.",
+    "keywords": [
+      "digital marketing budget planner",
+      "marketing budget allocation",
+      "digital marketing spend calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "total",
+      "label": "Monthly marketing budget (₹)",
+      "type": "number",
+      "default": 100000,
+      "min": 1000
+    },
+    {
+      "id": "goal",
+      "label": "Primary business goal",
+      "type": "select",
+      "default": "leads",
+      "options": [
+        {
+          "v": "brand",
+          "t": "Brand awareness"
+        },
+        {
+          "v": "leads",
+          "t": "Lead generation"
+        },
+        {
+          "v": "ecom",
+          "t": "E-commerce sales"
+        },
+        {
+          "v": "retention",
+          "t": "Customer retention"
+        }
+      ]
+    },
+    {
+      "id": "stage",
+      "label": "Business stage",
+      "type": "select",
+      "default": "growth",
+      "options": [
+        {
+          "v": "startup",
+          "t": "Startup (0–2 years)"
+        },
+        {
+          "v": "growth",
+          "t": "Growth (2–5 years)"
+        },
+        {
+          "v": "mature",
+          "t": "Established (5+ years)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Channel",
+      "Allocation",
+      "Monthly Budget"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Paid media budget",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Content & SEO budget",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Monthly total",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Allocations based on industry benchmarks. Startups invest more in paid (faster results); mature businesses invest more in SEO/content (compounding returns).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How should I split my digital marketing budget?",
+      "a": "A common starting split for lead generation: 40% paid search/social, 25% SEO/content, 15% email, 10% analytics/tools, 10% creative/design. Adjust based on results."
+    },
+    {
+      "q": "How much should a small business spend on digital marketing?",
+      "a": "5–12% of revenue on marketing is typical for SMBs; digital should be 50–70% of total marketing spend for most businesses today."
+    },
+    {
+      "q": "Should I invest in SEO or paid ads first?",
+      "a": "Paid ads for immediate leads; SEO for long-term cost-effective growth. Ideally do both — SEO takes 6–12 months to mature but then delivers leads at lower CPL."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

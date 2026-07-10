@@ -1,0 +1,112 @@
+{
+  "id": "icu-bed-requirement-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "ICU Bed Requirement Calculator",
+  "shortBenefit": "ICU/HDU beds and ventilators needed for a hospital.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the number of ICU and HDU beds and ventilators a hospital needs, based on total bed strength and the recommended critical-care share.",
+  "seo": {
+    "title": "ICU Bed Requirement Calculator — Critical Care Beds & Ventilators | Varada Nexus",
+    "description": "Free ICU bed requirement calculator. Estimate ICU/HDU beds and ventilators from total hospital beds and critical-care percentage.",
+    "keywords": [
+      "icu bed calculator",
+      "critical care bed requirement",
+      "ventilator requirement calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Total hospital beds",
+      "type": "number",
+      "default": 200,
+      "min": 1
+    },
+    {
+      "id": "pct",
+      "label": "Critical-care share (%)",
+      "type": "select",
+      "default": "10",
+      "options": [
+        {
+          "v": "5",
+          "t": "5% (basic)"
+        },
+        {
+          "v": "8",
+          "t": "8%"
+        },
+        {
+          "v": "10",
+          "t": "10% (typical multispecialty)"
+        },
+        {
+          "v": "15",
+          "t": "15% (tertiary)"
+        }
+      ]
+    },
+    {
+      "id": "vent",
+      "label": "Ventilators per ICU bed (%)",
+      "type": "number",
+      "default": 60,
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "ICU beds",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "HDU beds",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Ventilators",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "ICU beds ≈ total beds × critical-care %. HDU beds are taken as half the ICU count. Ventilators ≈ ICU beds × ventilator ratio. Actual needs depend on case mix and specialty.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many ICU beds does a hospital need?",
+      "a": "A common planning norm is 8–12% of total beds as ICU for a multispecialty hospital, rising to 15%+ for tertiary/critical-care hospitals."
+    },
+    {
+      "q": "How many ventilators per ICU bed?",
+      "a": "Roughly 50–70% of ICU beds should have ventilator support, though dedicated respiratory units may need one per bed."
+    },
+    {
+      "q": "What is HDU?",
+      "a": "A High Dependency Unit provides a step-down level of care between ICU and general wards, typically sized at about half the ICU capacity."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

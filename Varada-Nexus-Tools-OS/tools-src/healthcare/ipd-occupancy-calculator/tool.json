@@ -1,0 +1,101 @@
+{
+  "id": "ipd-occupancy-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "IPD Occupancy Calculator",
+  "shortBenefit": "Bed occupancy rate from admissions and length of stay.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate inpatient bed occupancy rate and occupied bed-days from bed strength, monthly admissions and average length of stay (ALOS).",
+  "seo": {
+    "title": "IPD Bed Occupancy Calculator — Occupancy Rate & Bed Days | Varada Nexus",
+    "description": "Free hospital bed occupancy calculator. Compute occupancy rate and occupied bed-days from beds, admissions and average length of stay.",
+    "keywords": [
+      "bed occupancy calculator",
+      "ipd occupancy rate",
+      "hospital occupancy calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Total beds",
+      "type": "number",
+      "default": 150,
+      "min": 1
+    },
+    {
+      "id": "admissions",
+      "label": "Admissions per month",
+      "type": "number",
+      "default": 900,
+      "min": 0
+    },
+    {
+      "id": "alos",
+      "label": "Average length of stay (days)",
+      "type": "number",
+      "default": 4,
+      "min": 0.1
+    },
+    {
+      "id": "days",
+      "label": "Days in period",
+      "type": "number",
+      "default": 30,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Occupancy rate",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Occupied bed-days",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Available bed-days",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Occupied bed-days = admissions × ALOS. Occupancy rate = occupied bed-days ÷ (beds × days) × 100. Ignores same-day transfers.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is bed occupancy rate calculated?",
+      "a": "Occupancy % = (admissions × average length of stay) ÷ (beds × days in period) × 100."
+    },
+    {
+      "q": "What is a healthy occupancy rate?",
+      "a": "Around 80–85% is often considered efficient; consistently above 90% can strain resources, while very low occupancy hurts viability."
+    },
+    {
+      "q": "What is ALOS?",
+      "a": "Average Length of Stay is the mean number of days a patient stays admitted, a key driver of bed demand."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

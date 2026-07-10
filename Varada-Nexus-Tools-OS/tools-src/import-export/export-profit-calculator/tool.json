@@ -1,0 +1,134 @@
+{
+  "id": "export-profit-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Export Profit Calculator",
+  "shortBenefit": "Find net export profit after all costs, duty drawback and incentives",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the real profitability of your export order from production through freight, insurance, customs and bank charges, adding duty drawback or RoDTEP incentives.",
+  "seo": {
+    "title": "Export Profit Calculator India – Net Export Margin RoDTEP",
+    "description": "Calculate net export profit after deducting freight, insurance, bank charges and adding duty drawback/RoDTEP incentives. Know your true export margin.",
+    "keywords": [
+      "export profit calculator",
+      "net export margin India",
+      "duty drawback calculator",
+      "RoDTEP benefit calculator",
+      "export order profitability"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "fob_value",
+      "label": "FOB Export Value (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 1000,
+      "hint": "Total FOB value of the export order"
+    },
+    {
+      "id": "production_cost",
+      "label": "Production / Purchase Cost (₹)",
+      "type": "number",
+      "default": 300000,
+      "min": 0
+    },
+    {
+      "id": "inland_freight",
+      "label": "Inland Freight (₹)",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    },
+    {
+      "id": "sea_freight",
+      "label": "Sea / Air Freight (₹)",
+      "type": "number",
+      "default": 25000,
+      "min": 0
+    },
+    {
+      "id": "insurance",
+      "label": "Marine Insurance (₹)",
+      "type": "number",
+      "default": 2500,
+      "min": 0
+    },
+    {
+      "id": "clearance_charges",
+      "label": "Export Clearance & CHA (₹)",
+      "type": "number",
+      "default": 7000,
+      "min": 0
+    },
+    {
+      "id": "bank_charges",
+      "label": "Bank / LC Charges (₹)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    },
+    {
+      "id": "drawback_pct",
+      "label": "Duty Drawback / RoDTEP Rate (%)",
+      "type": "number",
+      "default": 1.5,
+      "min": 0,
+      "max": 20,
+      "hint": "Enter 0 if not applicable"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "Details",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Net Profit",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Profit Margin %",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Incentive Received",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Drawback / RoDTEP on FOB value. Net profit = FOB − all costs + incentive.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is RoDTEP?",
+      "a": "Remission of Duties and Taxes on Exported Products refunds embedded taxes not rebated through other schemes. It replaced MEIS in 2021; rates vary by HS code (0.3%–4.3% of FOB)."
+    },
+    {
+      "q": "Is duty drawback different from RoDTEP?",
+      "a": "Yes. DBK refunds customs duty on imported inputs. RoDTEP refunds other embedded taxes. Both can be claimed simultaneously if eligible."
+    },
+    {
+      "q": "How do I improve export profit margin?",
+      "a": "Negotiate better freight rates, consolidate shipments, use scheme benefits (advance licence, EPCG), reduce packing waste and optimise duty drawback claims."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

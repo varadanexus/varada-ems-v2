@@ -1,0 +1,188 @@
+{
+  "id": "mining-statutory-returns-checklist",
+  "category": "mining-minerals",
+  "kind": "checklist",
+  "name": "Mining Statutory Returns & IBM Compliance Checklist",
+  "shortBenefit": "Ensure timely submission of all mining statutory returns and reports",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Verify that all mandatory returns, reports and intimations required under the MMDR Act, Mines Act, and IBM/DGMS regulations are submitted on time to avoid penalties.",
+  "seo": {
+    "title": "Mining Statutory Returns Checklist – IBM DGMS Compliance India",
+    "description": "Complete checklist for mining statutory returns and compliance in India. IBM annual returns, DGMS quarterly reports, royalty payment and surface rent compliance.",
+    "keywords": [
+      "mining statutory returns India",
+      "IBM compliance checklist",
+      "DGMS returns mining",
+      "mining annual return",
+      "mine compliance India MMDR"
+    ]
+  },
+  "buttonLabel": "Check Compliance Status",
+  "checklist": [
+    {
+      "name": "IBM & MMDR Returns",
+      "items": [
+        {
+          "id": "r1",
+          "text": "Annual Return of Mineral Production (Form K) to IBM by 31 January",
+          "critical": true
+        },
+        {
+          "id": "r2",
+          "text": "Half-yearly Return to State DMG/DMO by 31 July and 31 January",
+          "critical": true
+        },
+        {
+          "id": "r3",
+          "text": "Mining Plan review submitted to IBM every 5 years",
+          "critical": true
+        },
+        {
+          "id": "r4",
+          "text": "Mine closure plan (MCP) updated and progressive restoration report submitted",
+          "critical": true
+        },
+        {
+          "id": "r5",
+          "text": "Quarterly production and despatch data uploaded to IBM Unified Portal"
+        }
+      ]
+    },
+    {
+      "name": "DGMS & Safety Returns",
+      "items": [
+        {
+          "id": "r6",
+          "text": "Annual Safety Return (Form S) to DGMS by 31 January",
+          "critical": true
+        },
+        {
+          "id": "r7",
+          "text": "Serious accident / fatal accident reported to DGMS within 24 hours",
+          "critical": true
+        },
+        {
+          "id": "r8",
+          "text": "Quarterly occupational health returns submitted to DGMS"
+        },
+        {
+          "id": "r9",
+          "text": "Quarterly blasting return submitted to DGMS Inspector"
+        },
+        {
+          "id": "r10",
+          "text": "Annual report on statutory training and refresher courses submitted"
+        }
+      ]
+    },
+    {
+      "name": "Financial & Royalty Compliance",
+      "items": [
+        {
+          "id": "r11",
+          "text": "Monthly royalty paid to State Government within due date",
+          "critical": true
+        },
+        {
+          "id": "r12",
+          "text": "Annual surface rent and dead rent paid before due date",
+          "critical": true
+        },
+        {
+          "id": "r13",
+          "text": "DMF (District Mineral Foundation) contribution paid monthly",
+          "critical": true
+        },
+        {
+          "id": "r14",
+          "text": "NMET (National Mineral Exploration Trust) contribution paid"
+        },
+        {
+          "id": "r15",
+          "text": "Annual accounts of mine operations filed with State DMO"
+        }
+      ]
+    },
+    {
+      "name": "Environmental & Forest Returns",
+      "items": [
+        {
+          "id": "r16",
+          "text": "Half-yearly compliance report to MoEFCC / SEIAA on EC conditions",
+          "critical": true
+        },
+        {
+          "id": "r17",
+          "text": "Annual environment statement (Form V) to SPCB",
+          "critical": true
+        },
+        {
+          "id": "r18",
+          "text": "Afforestation progress report to CAMPA submitted annually"
+        },
+        {
+          "id": "r19",
+          "text": "Consent to Operate (CTO) renewed from SPCB before expiry"
+        },
+        {
+          "id": "r20",
+          "text": "Water consumption and effluent discharge returns filed with SPCB"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Deadlines and forms vary by state and mineral type. Always confirm with your IBM Regional Controller, DGMS Regional Inspector and State DMO for exact current requirements.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the penalty for late submission of IBM returns?",
+      "a": "Under MMDR Act, failure to submit returns is an offence punishable with fine up to ₹5,000 for the first offence and higher for continuing offences. IBM can also initiate action under MMDR for rule violations."
+    },
+    {
+      "q": "What is the IBM Unified Portal?",
+      "a": "The Indian Bureau of Mines (IBM) Online Portal (https://ibm.gov.in) is the mandatory digital platform for filing mining plans, annual returns, quarterly production data and applying for mine closure. Physical filings are no longer accepted for most submissions."
+    },
+    {
+      "q": "What happens if royalty payment is delayed?",
+      "a": "Interest at 24% per annum is charged on delayed royalty. Persistent default can lead to suspension or revocation of mining lease under MMDR Act provisions."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

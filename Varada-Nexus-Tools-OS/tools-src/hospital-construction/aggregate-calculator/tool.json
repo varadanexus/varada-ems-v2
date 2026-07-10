@@ -1,0 +1,100 @@
+{
+  "id": "aggregate-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Aggregate Calculator",
+  "shortBenefit": "Coarse aggregate for concrete by volume and grade.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the coarse aggregate required for a concrete volume at a chosen grade, in cubic feet and cubic metres.",
+  "seo": {
+    "title": "Aggregate Calculator — Coarse Aggregate for Concrete | Varada Nexus",
+    "description": "Free aggregate calculator for concrete. Get coarse aggregate in cft and m³ for any concrete volume and grade.",
+    "keywords": [
+      "aggregate calculator",
+      "coarse aggregate for concrete",
+      "jelly calculator concrete"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "vol",
+      "label": "Concrete volume (m³)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "grade",
+      "label": "Concrete grade",
+      "type": "select",
+      "default": "1-1.5-3",
+      "options": [
+        {
+          "v": "1-2-4",
+          "t": "M15 (1:2:4)"
+        },
+        {
+          "v": "1-1.5-3",
+          "t": "M20 (1:1.5:3)"
+        },
+        {
+          "v": "1-1-2",
+          "t": "M25 (1:1:2)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Material",
+      "",
+      "Quantity"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Aggregate",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Aggregate (m³)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cement",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Dry volume = 1.54 × wet. Aggregate = dry × (aggregate ÷ total ratio). 1 m³ = 35.315 cft.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much aggregate per m³ of concrete?",
+      "a": "About 0.84 m³ (≈30 cft) of coarse aggregate per m³ of M20 concrete (1:1.5:3)."
+    },
+    {
+      "q": "What size aggregate is used?",
+      "a": "20 mm is common for general RCC; 10 mm for thin or congested sections."
+    },
+    {
+      "q": "Does this include wastage?",
+      "a": "No — add roughly 3–5% for site wastage."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

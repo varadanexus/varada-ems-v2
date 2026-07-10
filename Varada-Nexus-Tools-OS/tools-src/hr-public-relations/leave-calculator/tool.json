@@ -1,0 +1,122 @@
+{
+  "id": "leave-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Leave Balance Calculator",
+  "shortBenefit": "Leave balance, accrual and encashment values.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate your leave balance including earned leave accrual, carry-forward, leave encashment value and leave liability for payroll.",
+  "seo": {
+    "title": "Leave Balance Calculator — Earned Leave & Encashment India | Varada Nexus",
+    "description": "Free leave calculator India. Calculate earned leave balance, carry-forward, leave encashment value and leave liability for employees.",
+    "keywords": [
+      "leave calculator india",
+      "earned leave calculator",
+      "leave encashment calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "annual_el",
+      "label": "Annual earned leave entitlement (days)",
+      "type": "number",
+      "default": 21,
+      "min": 0
+    },
+    {
+      "id": "cl",
+      "label": "Casual leave entitlement (days)",
+      "type": "number",
+      "default": 12,
+      "min": 0
+    },
+    {
+      "id": "sl",
+      "label": "Sick leave entitlement (days)",
+      "type": "number",
+      "default": 6,
+      "min": 0
+    },
+    {
+      "id": "el_availed",
+      "label": "Earned leave availed this year (days)",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "el_bf",
+      "label": "EL brought forward from last year (days)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "basic_monthly",
+      "label": "Basic salary (₹/month) for encashment",
+      "type": "number",
+      "default": 25000,
+      "min": 1
+    },
+    {
+      "id": "max_cf",
+      "label": "Max carry-forward limit (days)",
+      "type": "number",
+      "default": 30,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Leave Type",
+      "Entitlement",
+      "Balance"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "EL balance",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Encashable value",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total leave balance",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "EL accrual = annual entitlement. Balance = BF + accrued − availed. Carry-forward = min(balance, max CF limit). Encashment = days × (basic/26). Casual and sick leave cannot be encashed per most Indian company policies.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is earned leave encashment calculated?",
+      "a": "Leave encashment = number of leave days × (basic salary ÷ 26 working days). Government employees get more favourable terms under Section 10(10AA) with tax exemption up to ₹25 lakh."
+    },
+    {
+      "q": "What is the maximum earned leave that can be accumulated?",
+      "a": "Most companies allow 30–60 days carry-forward. The Factories Act and Shops & Establishments Act prescribe minimums but employers can be more generous."
+    },
+    {
+      "q": "Is leave encashment taxable?",
+      "a": "For private sector employees: fully taxable. For government employees: exempt up to ₹25 lakh under Section 10(10AA). Encashment at retirement is more favourably treated."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

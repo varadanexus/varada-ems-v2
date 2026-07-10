@@ -1,0 +1,111 @@
+{
+  "id": "shrinkage-wastage-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Shrinkage & Wastage Calculator",
+  "shortBenefit": "Measure stock shrinkage impact on profit and identify recovery needed",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Quantify the profit impact of inventory shrinkage from theft, damage, spoilage and administrative errors — and calculate the extra sales needed to recover those losses.",
+  "seo": {
+    "title": "Shrinkage Wastage Calculator – Inventory Loss Retail Trading India",
+    "description": "Calculate inventory shrinkage and wastage cost impact for trading and retail businesses. Find extra sales needed to recover shrinkage losses.",
+    "keywords": [
+      "shrinkage calculator retail India",
+      "inventory wastage calculator",
+      "stock loss calculator",
+      "theft loss trading India",
+      "retail shrinkage rate"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "opening_stock_value",
+      "label": "Opening Stock Value (₹)",
+      "type": "number",
+      "default": 2000000,
+      "min": 1000
+    },
+    {
+      "id": "purchases",
+      "label": "Purchases during Period (₹)",
+      "type": "number",
+      "default": 5000000,
+      "min": 0
+    },
+    {
+      "id": "closing_stock_value",
+      "label": "Closing Stock Value (₹)",
+      "type": "number",
+      "default": 1700000,
+      "min": 0
+    },
+    {
+      "id": "cogs",
+      "label": "Actual Cost of Goods Sold (₹)",
+      "type": "number",
+      "default": 5100000,
+      "min": 0
+    },
+    {
+      "id": "gross_margin_pct",
+      "label": "Gross Margin (%)",
+      "type": "number",
+      "default": 25,
+      "min": 1,
+      "max": 90
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "Calculation",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Shrinkage Amount",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Shrinkage Rate %",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Recovery Sales Needed",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Expected closing stock = opening + purchases − COGS. Shrinkage = expected − actual closing. Recovery sales = shrinkage loss / gross margin.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a normal shrinkage rate?",
+      "a": "Retail industry average is 1.4–2% of sales. Grocery/food: 2–4% (spoilage). Electronics: 0.5–1%. Above 2% warrants investigation into theft, process failures or supplier short-shipments."
+    },
+    {
+      "q": "How do I reduce shrinkage?",
+      "a": "Implement cycle counting, CCTV surveillance, staff background verification, two-person rules for inventory, supplier invoice reconciliation, and ERP-based real-time stock tracking."
+    },
+    {
+      "q": "Is shrinkage tax deductible?",
+      "a": "Stock loss/shrinkage is deductible as a business expense under Income Tax Act when it is normal/expected loss. Abnormal loss (theft/fraud) requires police report and management approval for deduction."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

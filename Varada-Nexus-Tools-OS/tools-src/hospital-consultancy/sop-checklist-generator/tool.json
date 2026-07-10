@@ -1,0 +1,191 @@
+{
+  "id": "sop-checklist-generator",
+  "category": "hospital-consultancy",
+  "kind": "checklist",
+  "name": "SOP Checklist Generator",
+  "shortBenefit": "Verify all key hospital SOPs are documented and current.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Check that your hospital has documented, approved and current Standard Operating Procedures (SOPs) for all critical clinical and administrative processes.",
+  "seo": {
+    "title": "Hospital SOP Checklist Generator — SOP Documentation Tracker | Varada Nexus",
+    "description": "Free hospital SOP checklist. Verify all critical clinical and administrative SOPs are documented, approved and current for accreditation readiness.",
+    "keywords": [
+      "hospital sop checklist",
+      "standard operating procedure hospital",
+      "hospital sop documentation"
+    ]
+  },
+  "buttonLabel": "Check SOP Status",
+  "checklist": [
+    {
+      "name": "1. Clinical SOPs",
+      "items": [
+        {
+          "id": "s1",
+          "text": "Patient admission and registration SOP",
+          "critical": true
+        },
+        {
+          "id": "s2",
+          "text": "Medication administration and double-check SOP",
+          "critical": true
+        },
+        {
+          "id": "s3",
+          "text": "Surgical safety (WHO checklist) SOP",
+          "critical": true
+        },
+        {
+          "id": "s4",
+          "text": "Infection prevention and hand hygiene SOP",
+          "critical": true
+        },
+        {
+          "id": "s5",
+          "text": "Code Blue / resuscitation protocol",
+          "critical": true
+        },
+        {
+          "id": "s6",
+          "text": "Blood transfusion safety SOP"
+        }
+      ]
+    },
+    {
+      "name": "2. Nursing SOPs",
+      "items": [
+        {
+          "id": "n1",
+          "text": "Patient identification (two-identifier) SOP",
+          "critical": true
+        },
+        {
+          "id": "n2",
+          "text": "Falls prevention protocol"
+        },
+        {
+          "id": "n3",
+          "text": "Pressure ulcer prevention SOP"
+        },
+        {
+          "id": "n4",
+          "text": "IV cannula care bundle SOP"
+        }
+      ]
+    },
+    {
+      "name": "3. Emergency SOPs",
+      "items": [
+        {
+          "id": "e1",
+          "text": "Fire evacuation and mock drill SOP",
+          "critical": true
+        },
+        {
+          "id": "e2",
+          "text": "Disaster and mass casualty SOP"
+        },
+        {
+          "id": "e3",
+          "text": "MLC (medico-legal case) reporting SOP",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "name": "4. Administrative SOPs",
+      "items": [
+        {
+          "id": "a1",
+          "text": "Complaint and grievance handling SOP",
+          "critical": true
+        },
+        {
+          "id": "a2",
+          "text": "Patient discharge and billing SOP"
+        },
+        {
+          "id": "a3",
+          "text": "Biomedical waste segregation SOP",
+          "critical": true
+        },
+        {
+          "id": "a4",
+          "text": "Housekeeping and terminal cleaning SOP"
+        }
+      ]
+    },
+    {
+      "name": "5. Quality & Records",
+      "items": [
+        {
+          "id": "q1",
+          "text": "Medical record completion and storage SOP",
+          "critical": true
+        },
+        {
+          "id": "q2",
+          "text": "Incident and near-miss reporting SOP"
+        },
+        {
+          "id": "q3",
+          "text": "CAPA (corrective action) procedure documented"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Critical SOPs are those required for patient safety and accreditation; gaps in these must be closed before any assessment.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many SOPs does a hospital need for NABH?",
+      "a": "NABH expects SOPs for all critical patient care and support processes — typically 150–300 SOPs for a full hospital, categorised by department."
+    },
+    {
+      "q": "Who should approve hospital SOPs?",
+      "a": "Clinical SOPs are approved by the Medical Director or department head; administrative SOPs by the CEO or COO. All SOPs must be version-controlled and review-dated."
+    },
+    {
+      "q": "How often should hospital SOPs be reviewed?",
+      "a": "At least annually, or whenever there is a significant change in process, equipment, regulation or adverse event related to the procedure."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

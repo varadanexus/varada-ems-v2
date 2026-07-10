@@ -1,0 +1,122 @@
+{
+  "id": "warehouse-storage-cost",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Warehouse Storage Cost Calculator",
+  "shortBenefit": "Monthly warehousing cost per unit and per pallet.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate monthly warehouse storage costs including space rent, labour, handling and inventory carrying costs.",
+  "seo": {
+    "title": "Warehouse Storage Cost Calculator — India Warehousing Rates | Varada Nexus",
+    "description": "Free warehouse cost calculator. Calculate monthly storage cost per unit, per pallet and total warehousing cost including space, labour and handling.",
+    "keywords": [
+      "warehouse storage cost calculator",
+      "warehousing cost per pallet india",
+      "inventory storage cost calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Warehouse area used (sq ft)",
+      "type": "number",
+      "default": 5000,
+      "min": 100
+    },
+    {
+      "id": "rent_per_sqft",
+      "label": "Rent per sq ft per month (₹)",
+      "type": "number",
+      "default": 25,
+      "min": 1
+    },
+    {
+      "id": "labour",
+      "label": "Monthly warehouse labour cost (₹)",
+      "type": "number",
+      "default": 80000,
+      "min": 0
+    },
+    {
+      "id": "utilities",
+      "label": "Monthly utilities (electricity, water) (₹)",
+      "type": "number",
+      "default": 20000,
+      "min": 0
+    },
+    {
+      "id": "pallets",
+      "label": "Average pallets stored",
+      "type": "number",
+      "default": 200,
+      "min": 1
+    },
+    {
+      "id": "units_per_pallet",
+      "label": "Units per pallet",
+      "type": "number",
+      "default": 50,
+      "min": 1
+    },
+    {
+      "id": "inventory_value",
+      "label": "Average inventory value (₹)",
+      "type": "number",
+      "default": 2000000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Component",
+      "Monthly (₹)",
+      "Per Pallet (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total monthly cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost per pallet/month",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per unit/month",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Space cost = area × rent rate. Inventory carrying cost = inventory value × 2% per month (industry benchmark). Total = space + labour + utilities + carrying cost.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the typical warehouse rent in India?",
+      "a": "Grade A warehouse rent in India: ₹20–35/sq ft/month in industrial hubs (Bhiwandi, NH8); ₹15–25 in Tier-2 cities. Cold storage commands 1.5–2× premium."
+    },
+    {
+      "q": "What is inventory carrying cost?",
+      "a": "Inventory carrying cost is the cost of holding stock and includes capital cost, storage, insurance, obsolescence and damage. Benchmark is 20–30% of inventory value per year (≈2% per month)."
+    },
+    {
+      "q": "What is a pallet?",
+      "a": "A standard pallet is 40×48 inches (1.2×1.0 m). A typical warehouse aisle-racking stores 100–150 pallets per 1,000 sq ft at single depth. Double-deep racking improves density."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

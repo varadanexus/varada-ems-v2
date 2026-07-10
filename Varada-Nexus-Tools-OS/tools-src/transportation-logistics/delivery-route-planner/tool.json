@@ -1,0 +1,115 @@
+{
+  "id": "delivery-route-planner",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Delivery Route Cost Planner",
+  "shortBenefit": "Multi-stop delivery cost and time planning.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan and estimate cost and time for multi-stop delivery routes based on number of stops, average distance between stops and vehicle operating cost.",
+  "seo": {
+    "title": "Delivery Route Cost Planner — Multi-Stop Logistics Calculator | Varada Nexus",
+    "description": "Free delivery route planner. Calculate total route distance, time and cost for multi-stop delivery runs for logistics and last-mile operations.",
+    "keywords": [
+      "delivery route planner",
+      "multi stop delivery cost calculator",
+      "last mile logistics cost"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "stops",
+      "label": "Number of delivery stops",
+      "type": "number",
+      "default": 10,
+      "min": 2
+    },
+    {
+      "id": "avg_distance",
+      "label": "Average distance between stops (km)",
+      "type": "number",
+      "default": 8,
+      "min": 0.5
+    },
+    {
+      "id": "cost_per_km",
+      "label": "Vehicle cost per km (₹)",
+      "type": "number",
+      "default": 30,
+      "min": 1
+    },
+    {
+      "id": "avg_stop_time",
+      "label": "Average time per stop (minutes)",
+      "type": "number",
+      "default": 15,
+      "min": 1
+    },
+    {
+      "id": "speed",
+      "label": "Average driving speed (km/h)",
+      "type": "number",
+      "default": 30,
+      "min": 5
+    },
+    {
+      "id": "driver_cost_hr",
+      "label": "Driver cost per hour (₹)",
+      "type": "number",
+      "default": 150,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total route cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total route distance",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total route time",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Total distance = (stops − 1) × avg distance between stops. Drive time = distance ÷ speed. Stop time = stops × avg stop time.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I optimise a delivery route?",
+      "a": "Use route optimisation software (Google Maps, Routific, OptimoRoute) for real-world routing. Key factors: cluster stops geographically, start from nearest stop, avoid backtracking and time-window constraints."
+    },
+    {
+      "q": "What is last-mile delivery cost?",
+      "a": "Last-mile delivery typically accounts for 41–53% of total supply chain cost. In India, average cost per last-mile delivery is ₹40–120 depending on city and volume."
+    },
+    {
+      "q": "How many deliveries can a truck make per day?",
+      "a": "A typical delivery truck in India completes 20–40 stops per day in urban areas, 10–20 in semi-urban. Factors: stop duration, traffic, vehicle capacity, route density."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

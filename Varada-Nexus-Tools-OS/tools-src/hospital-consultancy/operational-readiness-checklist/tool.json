@@ -1,0 +1,196 @@
+{
+  "id": "operational-readiness-checklist",
+  "category": "hospital-consultancy",
+  "kind": "checklist",
+  "name": "Hospital Operational Readiness Checklist",
+  "shortBenefit": "Pre-launch readiness for a new or expanded hospital.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Verify that all systems, processes, staff and regulatory requirements are in place before launching or expanding hospital operations.",
+  "seo": {
+    "title": "Hospital Operational Readiness Checklist — Pre-Launch Verification | Varada Nexus",
+    "description": "Free hospital operational readiness checklist. Verify all clinical, infrastructure, regulatory and HR requirements before hospital launch.",
+    "keywords": [
+      "hospital operational readiness",
+      "hospital pre launch checklist",
+      "new hospital opening checklist"
+    ]
+  },
+  "buttonLabel": "Check Readiness",
+  "checklist": [
+    {
+      "name": "1. Infrastructure",
+      "items": [
+        {
+          "id": "i1",
+          "text": "OT, ICU and wards fully fitted and cleaned",
+          "critical": true
+        },
+        {
+          "id": "i2",
+          "text": "Medical gas pipelines tested and certified",
+          "critical": true
+        },
+        {
+          "id": "i3",
+          "text": "Electrical backup (DG set / UPS) tested",
+          "critical": true
+        },
+        {
+          "id": "i4",
+          "text": "Fire suppression and alarm system tested",
+          "critical": true
+        },
+        {
+          "id": "i5",
+          "text": "HVAC / air handling units commissioned and validated"
+        }
+      ]
+    },
+    {
+      "name": "2. Clinical Systems",
+      "items": [
+        {
+          "id": "c1",
+          "text": "HMS (Hospital Management System) live and tested",
+          "critical": true
+        },
+        {
+          "id": "c2",
+          "text": "All equipment calibrated with operator training done",
+          "critical": true
+        },
+        {
+          "id": "c3",
+          "text": "Pharmacy stocked with essential drug list",
+          "critical": true
+        },
+        {
+          "id": "c4",
+          "text": "Lab set up with QC controls running"
+        },
+        {
+          "id": "c5",
+          "text": "Blood bank / cross-matching capability in place (if applicable)"
+        }
+      ]
+    },
+    {
+      "name": "3. Human Resources",
+      "items": [
+        {
+          "id": "h1",
+          "text": "All clinical positions filled or locum arranged",
+          "critical": true
+        },
+        {
+          "id": "h2",
+          "text": "Nursing team inducted and duty roster ready",
+          "critical": true
+        },
+        {
+          "id": "h3",
+          "text": "Support staff (housekeeping, security, F&B) in place"
+        },
+        {
+          "id": "h4",
+          "text": "Emergency response team trained (BLS/ACLS certified)"
+        }
+      ]
+    },
+    {
+      "name": "4. Regulatory",
+      "items": [
+        {
+          "id": "r1",
+          "text": "Clinical Establishment licence received",
+          "critical": true
+        },
+        {
+          "id": "r2",
+          "text": "Fire NOC and occupancy certificate obtained",
+          "critical": true
+        },
+        {
+          "id": "r3",
+          "text": "BMW authorisation received",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "name": "5. Commercial",
+      "items": [
+        {
+          "id": "m1",
+          "text": "Insurance / TPA empanelment completed for at least 3 payors"
+        },
+        {
+          "id": "m2",
+          "text": "Tariff list approved by management"
+        },
+        {
+          "id": "m3",
+          "text": "Website, signage and marketing materials ready"
+        },
+        {
+          "id": "m4",
+          "text": "Billing and cash collection process tested"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "All critical items must be fully complete before patient admission. Partial items may be acceptable for soft launch if risk-assessed.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the most common gap at hospital launch?",
+      "a": "HMS not fully tested, inadequate nursing staffing and pending BMW authorisation are the three most common gaps that delay launches."
+    },
+    {
+      "q": "Can a hospital do a soft launch before all licences are in place?",
+      "a": "No — the Clinical Establishment licence and fire NOC are mandatory before any patient can be admitted, with no exceptions."
+    },
+    {
+      "q": "How long before opening should the readiness checklist be started?",
+      "a": "Start 3–4 months before target opening; critical infrastructure and regulatory items should be tracked 6+ months in advance."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

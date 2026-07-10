@@ -1,0 +1,101 @@
+{
+  "id": "flooring-cost-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Flooring Cost Calculator",
+  "shortBenefit": "Flooring material + labour cost by area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate flooring cost from area, material rate and laying labour — for tiles, granite, marble or vitrified flooring.",
+  "seo": {
+    "title": "Flooring Cost Calculator — Tiles, Granite & Marble by Area | Varada Nexus",
+    "description": "Free flooring cost calculator. Estimate material and labour cost for tile, granite, marble or vitrified flooring by area.",
+    "keywords": [
+      "flooring cost calculator",
+      "tile flooring cost",
+      "granite flooring cost"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Floor area (sq ft)",
+      "type": "number",
+      "default": 1000,
+      "min": 0
+    },
+    {
+      "id": "material",
+      "label": "Material rate (₹/sq ft)",
+      "type": "number",
+      "default": 80,
+      "min": 0
+    },
+    {
+      "id": "labour",
+      "label": "Laying labour (₹/sq ft)",
+      "type": "number",
+      "default": 35,
+      "min": 0
+    },
+    {
+      "id": "wastage",
+      "label": "Wastage (%)",
+      "type": "number",
+      "default": 8,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost per sq ft",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Material cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Material cost = area × (1 + wastage%) × material rate. Labour = area × labour rate. Excludes skirting, adhesive and levelling unless included in the rates.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is flooring cost calculated?",
+      "a": "Flooring cost = area × material rate (plus wastage) + area × laying labour rate."
+    },
+    {
+      "q": "How much wastage should I allow for tiles?",
+      "a": "About 5–10%, more for diagonal patterns or rooms with many cuts."
+    },
+    {
+      "q": "Are adhesive and skirting included?",
+      "a": "Only if built into your rates; otherwise budget them separately."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

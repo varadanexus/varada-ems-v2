@@ -1,0 +1,96 @@
+{
+  "id": "brick-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Brick Calculator",
+  "shortBenefit": "Number of bricks, cement and sand for a wall.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the number of bricks plus cement and sand for mortar, from wall area and wall thickness (4.5-inch or 9-inch).",
+  "seo": {
+    "title": "Brick Calculator — Bricks, Cement & Sand for a Wall | Varada Nexus",
+    "description": "Free brick calculator. Find the number of bricks and mortar (cement, sand) for a wall by area and thickness.",
+    "keywords": [
+      "brick calculator",
+      "how many bricks for a wall",
+      "brick masonry calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Wall area (sq ft)",
+      "type": "number",
+      "default": 1000,
+      "min": 0
+    },
+    {
+      "id": "thick",
+      "label": "Wall thickness",
+      "type": "select",
+      "default": "9",
+      "options": [
+        {
+          "v": "4.5",
+          "t": "4.5 inch (half brick)"
+        },
+        {
+          "v": "9",
+          "t": "9 inch (full brick)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Material",
+      "",
+      "Quantity"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Bricks",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cement",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Sand",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Bricks per sq ft ≈ 5 for a 4.5-inch wall and ≈ 10 for a 9-inch wall (standard modular brick with mortar). Mortar ≈ 0.02 bag cement and 0.6 cft sand per sq ft for a 9-inch wall (half for 4.5-inch).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many bricks per square foot?",
+      "a": "About 5 bricks/sq ft for a 4.5-inch (half-brick) wall and about 10/sq ft for a 9-inch (full-brick) wall."
+    },
+    {
+      "q": "How much mortar is needed?",
+      "a": "Mortar is roughly 20–25% of the wall volume; this tool estimates the cement and sand for it."
+    },
+    {
+      "q": "Should I add wastage?",
+      "a": "Yes, add about 5% for breakage and cutting."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

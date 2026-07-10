@@ -1,0 +1,122 @@
+{
+  "id": "mine-revenue-estimator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mine Revenue Estimator",
+  "shortBenefit": "Project monthly and annual revenue from mineral production",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Forecast mining revenue by combining production volume, product grade, recovery rate and prevailing sale price — including price sensitivity analysis.",
+  "seo": {
+    "title": "Mine Revenue Estimator – Mining Revenue Forecast India",
+    "description": "Estimate monthly and annual mining revenue from production tonnage, grade and sale price. Includes price sensitivity and royalty deduction for Indian mines.",
+    "keywords": [
+      "mine revenue calculator India",
+      "mining revenue forecast",
+      "mineral production revenue",
+      "iron ore revenue estimator",
+      "mine income calculator India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "monthly_production",
+      "label": "Monthly Ore Production (MT)",
+      "type": "number",
+      "default": 50000,
+      "min": 1
+    },
+    {
+      "id": "product_grade",
+      "label": "Product Grade / Quality (%)",
+      "type": "number",
+      "default": 62,
+      "min": 0.01,
+      "max": 100,
+      "hint": "Fe% for iron ore, ash% for coal, etc."
+    },
+    {
+      "id": "sale_price",
+      "label": "Sale Price (₹/MT product)",
+      "type": "number",
+      "default": 4800,
+      "min": 0
+    },
+    {
+      "id": "recovery_pct",
+      "label": "Processing Recovery (%)",
+      "type": "number",
+      "default": 88,
+      "min": 1,
+      "max": 100
+    },
+    {
+      "id": "royalty_pct",
+      "label": "Royalty Rate (% of sale value)",
+      "type": "number",
+      "default": 15,
+      "min": 0,
+      "max": 50
+    },
+    {
+      "id": "dmc_pct",
+      "label": "DMF/NMET (% of royalty)",
+      "type": "number",
+      "default": 32,
+      "min": 0,
+      "max": 50
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Revenue Item",
+      "Calculation",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Gross Monthly Revenue",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Net Revenue (after levies)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Annual Net Revenue",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Product tonnes = ore × recovery%. Net revenue after royalty and DMF/NMET. No transport cost deducted.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What determines iron ore sale price in India?",
+      "a": "Iron ore price is benchmark against NMDC's published rates, Platts 62% Fe CFR China index, and local market demand. Fines and lumps attract different prices (lumps 15–20% premium)."
+    },
+    {
+      "q": "How often do mining companies settle royalty?",
+      "a": "Royalty is typically payable monthly or quarterly depending on state rules, within 30 days of dispatch or as specified in the mining lease conditions."
+    },
+    {
+      "q": "What price assumptions should I use for revenue projections?",
+      "a": "Use conservative long-term average prices (5-year average) for bank submissions. For internal planning use spot price. Always model at ±20% price sensitivity."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

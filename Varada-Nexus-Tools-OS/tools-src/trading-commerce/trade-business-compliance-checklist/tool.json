@@ -1,0 +1,185 @@
+{
+  "id": "trade-business-compliance-checklist",
+  "category": "trading-commerce",
+  "kind": "checklist",
+  "name": "Trade Business Compliance Checklist",
+  "shortBenefit": "Ensure your trading business meets all statutory and regulatory requirements",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Verify that your trading enterprise is fully compliant across entity registration, tax filings, labour law, FSSAI (if food), BIS and trade-specific licences.",
+  "seo": {
+    "title": "Trade Business Compliance Checklist India – Statutory Regulatory",
+    "description": "Complete compliance checklist for trading businesses in India. Covers company registration, GST, income tax, labour law, FSSAI, Shops Act and trade licences.",
+    "keywords": [
+      "trade business compliance checklist India",
+      "trading company statutory compliance",
+      "GST compliance trading",
+      "labour law trading India",
+      "FSSAI trading compliance"
+    ]
+  },
+  "buttonLabel": "Check Business Compliance",
+  "checklist": [
+    {
+      "name": "Business Registration & Licences",
+      "items": [
+        {
+          "id": "c1",
+          "text": "Business entity registered — company, LLP, partnership or proprietorship with PAN",
+          "critical": true
+        },
+        {
+          "id": "c2",
+          "text": "Shops & Establishment Act registration obtained from local municipality",
+          "critical": true
+        },
+        {
+          "id": "c3",
+          "text": "GST registration active; GSTIN displayed on premises and invoices",
+          "critical": true
+        },
+        {
+          "id": "c4",
+          "text": "Trade licence from local body / municipality renewed annually",
+          "critical": true
+        },
+        {
+          "id": "c5",
+          "text": "Import Export Code (IEC) from DGFT if doing cross-border trade"
+        }
+      ]
+    },
+    {
+      "name": "Tax & Financial Compliance",
+      "items": [
+        {
+          "id": "c6",
+          "text": "GST returns (GSTR-1 and GSTR-3B) filed monthly or quarterly",
+          "critical": true
+        },
+        {
+          "id": "c7",
+          "text": "Income Tax Return (ITR) filed annually; advance tax paid quarterly",
+          "critical": true
+        },
+        {
+          "id": "c8",
+          "text": "TDS deducted and deposited on rent, commission, professional fees",
+          "critical": true
+        },
+        {
+          "id": "c9",
+          "text": "Books of accounts maintained as per Companies Act / Income Tax Act"
+        },
+        {
+          "id": "c10",
+          "text": "Audit conducted by Chartered Accountant (if turnover > ₹1 crore / ₹10 crore digital)"
+        }
+      ]
+    },
+    {
+      "name": "Labour & HR Compliance",
+      "items": [
+        {
+          "id": "c11",
+          "text": "PF registration and monthly contributions if ≥ 20 employees",
+          "critical": true
+        },
+        {
+          "id": "c12",
+          "text": "ESI registration and contributions if ≥ 10 employees",
+          "critical": true
+        },
+        {
+          "id": "c13",
+          "text": "Professional Tax registration and deduction (state-wise)",
+          "critical": false
+        },
+        {
+          "id": "c14",
+          "text": "Minimum wages compliance as per state schedule"
+        },
+        {
+          "id": "c15",
+          "text": "Gratuity provisions for employees with 5+ years service"
+        }
+      ]
+    },
+    {
+      "name": "Product & Sector-Specific Licences",
+      "items": [
+        {
+          "id": "c16",
+          "text": "FSSAI licence if trading in food items (state or central based on turnover)",
+          "critical": true
+        },
+        {
+          "id": "c17",
+          "text": "Drug licence from State Drug Authority if trading in pharmaceuticals",
+          "critical": true
+        },
+        {
+          "id": "c18",
+          "text": "BIS dealer registration for products covered under Compulsory BIS (electronics, PPE, etc.)"
+        },
+        {
+          "id": "c19",
+          "text": "PESO licence if dealing in explosives, petroleum or pressurised products"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Thresholds and requirements vary by state, product category and business turnover. Consult a CA or compliance consultant for your specific situation.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the penalty for non-filing of GST returns?",
+      "a": "Late fee of ₹50/day (₹20/day for nil returns) up to ₹5,000 per return, plus 18% interest on tax liability. Consistent non-filing can lead to GST registration cancellation."
+    },
+    {
+      "q": "Is Shops Act registration mandatory for online trading businesses?",
+      "a": "Most states require S&E registration for any business with even one employee. Online / e-commerce businesses operating from an office or warehouse need this registration."
+    },
+    {
+      "q": "When does a trading firm need a Statutory Audit?",
+      "a": "Companies (all sizes) need CA audit. Proprietorships/partnerships need tax audit if turnover exceeds ₹1 crore (or ₹10 crore if 95%+ digital transactions). LLPs need audit if turnover > ₹40 lakh."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "id": "cif-price-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "CIF Price Calculator",
+  "shortBenefit": "Add freight and insurance to FOB for complete CIF quotation",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Add ocean freight and marine insurance to your FOB value to arrive at the CIF quotation — the standard basis for import duty assessment in India and most importing countries.",
+  "seo": {
+    "title": "CIF Price Calculator – Cost Insurance Freight Export Calculator",
+    "description": "Calculate CIF price by adding ocean freight and marine insurance to your FOB value. CIF is the basis for Indian customs duty assessment.",
+    "keywords": [
+      "CIF price calculator",
+      "cost insurance freight calculator",
+      "CIF export India",
+      "CIF vs FOB",
+      "CIF quotation calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "fob_total",
+      "label": "FOB Value (₹ total)",
+      "type": "number",
+      "default": 500000,
+      "min": 1000
+    },
+    {
+      "id": "sea_freight",
+      "label": "Ocean Freight (₹)",
+      "type": "number",
+      "default": 35000,
+      "min": 0
+    },
+    {
+      "id": "insurance_rate",
+      "label": "Insurance Rate (% of CIF)",
+      "type": "number",
+      "default": 0.5,
+      "min": 0,
+      "max": 5,
+      "hint": "Marine insurance: typically 0.3–0.5%"
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity (units)",
+      "type": "number",
+      "default": 500,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Total (₹)",
+      "Per Unit (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "CIF Total",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "CIF / Unit",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Insurance Premium",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "CIF = (FOB + Freight) / (1 − insurance rate/100). Single-pass iterative approximation.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Why is CIF used as basis for Indian import duty?",
+      "a": "India uses CIF as the assessable value for customs duty because it includes the cost of landing goods at the Indian port, giving a more accurate duty base than EXW or FOB."
+    },
+    {
+      "q": "What is the standard marine insurance rate?",
+      "a": "Marine cargo insurance typically costs 0.3–0.5% of CIF value. Fragile or high-value goods may attract higher rates up to 1–2%."
+    },
+    {
+      "q": "Is CIF the same as landed cost?",
+      "a": "No. CIF is the value at destination port before customs duty, port handling and inland freight. Landed cost = CIF + all import duties + local transport."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

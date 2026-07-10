@@ -1,0 +1,90 @@
+{
+  "id": "break-even-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Break-Even Point Calculator",
+  "shortBenefit": "Find the units and revenue needed to cover fixed costs.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Determine the break-even point in units and revenue from fixed costs, selling price per unit and variable cost per unit.",
+  "seo": {
+    "title": "Break-Even Point Calculator — Units & Revenue to Break Even | Varada Nexus",
+    "description": "Free break-even calculator. Enter fixed costs, price and variable cost per unit to find break-even units and revenue.",
+    "keywords": [
+      "break even calculator",
+      "break even point calculator",
+      "break even analysis"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "fixed",
+      "label": "Total fixed costs (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    },
+    {
+      "id": "price",
+      "label": "Selling price per unit (₹)",
+      "type": "number",
+      "default": 500,
+      "min": 0
+    },
+    {
+      "id": "variable",
+      "label": "Variable cost per unit (₹)",
+      "type": "number",
+      "default": 300,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Break-even units",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Break-even revenue",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Contribution / unit",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Break-even units = fixed costs ÷ (price − variable cost per unit). Assumes constant price and variable cost.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is the break-even point calculated?",
+      "a": "Break-even units = fixed costs ÷ contribution per unit, where contribution per unit = selling price − variable cost per unit."
+    },
+    {
+      "q": "What is contribution margin?",
+      "a": "It is the amount each unit contributes towards fixed costs after covering its variable cost."
+    },
+    {
+      "q": "What if price equals variable cost?",
+      "a": "Then contribution is zero and the business can never break even at that price — the price or cost must change."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

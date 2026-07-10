@@ -1,0 +1,133 @@
+{
+  "id": "logistics-rfq-evaluator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Logistics RFQ Evaluator & Comparison",
+  "shortBenefit": "Compare logistics vendor quotes on cost and service.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Compare logistics service provider quotes on weighted criteria including freight rate, transit time, reliability score and ancillary charges.",
+  "seo": {
+    "title": "Logistics RFQ Evaluator — Vendor Comparison Tool | Varada Nexus",
+    "description": "Free logistics RFQ evaluator. Compare freight and logistics vendor quotes on cost, transit time, reliability and service for tender evaluation.",
+    "keywords": [
+      "logistics rfq evaluator",
+      "freight vendor comparison",
+      "logistics tender evaluation tool"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "v1_rate",
+      "label": "Vendor A: freight rate (₹/tonne)",
+      "type": "number",
+      "default": 2500,
+      "min": 1
+    },
+    {
+      "id": "v1_transit",
+      "label": "Vendor A: transit time (days)",
+      "type": "number",
+      "default": 3,
+      "min": 0.5
+    },
+    {
+      "id": "v1_reliability",
+      "label": "Vendor A: reliability score (1–10)",
+      "type": "number",
+      "default": 8,
+      "min": 1,
+      "max": 10
+    },
+    {
+      "id": "v2_rate",
+      "label": "Vendor B: freight rate (₹/tonne)",
+      "type": "number",
+      "default": 2200,
+      "min": 1
+    },
+    {
+      "id": "v2_transit",
+      "label": "Vendor B: transit time (days)",
+      "type": "number",
+      "default": 4,
+      "min": 0.5
+    },
+    {
+      "id": "v2_reliability",
+      "label": "Vendor B: reliability score (1–10)",
+      "type": "number",
+      "default": 6,
+      "min": 1,
+      "max": 10
+    },
+    {
+      "id": "weight_cost",
+      "label": "Weight: cost (%)",
+      "type": "number",
+      "default": 50,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "weight_time",
+      "label": "Weight: transit time (%)",
+      "type": "number",
+      "default": 30,
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Criterion",
+      "Vendor A",
+      "Vendor B"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Recommended vendor",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Vendor A score",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Vendor B score",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Reliability weight = 100% − cost weight − time weight. Lower cost/time = higher score. Normalised 0–100 scale per criterion.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What criteria should I use to evaluate logistics vendors?",
+      "a": "Key criteria: freight rate, transit time, on-time delivery rate (OTD), damage/loss claims rate, technology (tracking), geographic coverage and financial stability. Weight by business priority."
+    },
+    {
+      "q": "Should I always choose the cheapest logistics provider?",
+      "a": "Not necessarily. Poor reliability adds hidden costs through customer complaints, rush orders, damage claims and lost business. Total cost of logistics service often favours slightly higher-priced reliable partners."
+    },
+    {
+      "q": "How do I negotiate freight rates?",
+      "a": "Consolidate volumes, commit to guaranteed volumes, tender at least 2–3 vendors, negotiate annual rate cards with fuel adjustment formulas, and benchmark against market indices (Crisil Trucking Index)."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

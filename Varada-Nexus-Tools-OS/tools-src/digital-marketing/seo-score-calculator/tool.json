@@ -1,0 +1,140 @@
+{
+  "id": "seo-score-calculator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "SEO Score Calculator",
+  "shortBenefit": "Weighted SEO score from key on-page and technical factors.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Get a weighted SEO score out of 100 by rating key on-page, technical, content and authority factors for your web page.",
+  "seo": {
+    "title": "SEO Score Calculator — On-Page SEO Rating Tool | Varada Nexus",
+    "description": "Free SEO score calculator. Get a weighted SEO score by rating title tags, meta descriptions, content quality, backlinks and technical factors.",
+    "keywords": [
+      "seo score calculator",
+      "on page seo score",
+      "website seo rating tool"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "title",
+      "label": "Title tag optimised? (1–5)",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5,
+      "hint": "5=unique, 50-60 chars, keyword first"
+    },
+    {
+      "id": "meta",
+      "label": "Meta description quality (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "content",
+      "label": "Content depth & quality (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5,
+      "hint": "5=800+ words, structured, unique"
+    },
+    {
+      "id": "speed",
+      "label": "Page speed (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5,
+      "hint": "5=PageSpeed score >90"
+    },
+    {
+      "id": "mobile",
+      "label": "Mobile friendliness (1–5)",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "backlinks",
+      "label": "Backlink quality (1–5)",
+      "type": "number",
+      "default": 2,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "schema",
+      "label": "Structured data / Schema (1–5)",
+      "type": "number",
+      "default": 2,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "internal_links",
+      "label": "Internal linking (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Factor",
+      "Weight",
+      "Score"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Overall SEO score",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "SEO grade",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Top priority",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Weighted scoring: content 25%, speed 20%, backlinks 15%, title+meta 15%, mobile 10%, schema 10%, internal links 5%.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What makes a perfect SEO score?",
+      "a": "No single tool defines \"perfect SEO\" — focus on unique valuable content, fast page speed, quality backlinks, proper technical setup and mobile experience."
+    },
+    {
+      "q": "Which SEO factor matters most?",
+      "a": "Content quality and relevance consistently rank as the top factor, followed by page experience (speed, mobile) and authoritative backlinks."
+    },
+    {
+      "q": "How do I improve my SEO score quickly?",
+      "a": "Fix technical issues first (speed, mobile, HTTPS), then optimise title and meta tags, then improve content depth. Backlinks take longer but have high impact."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

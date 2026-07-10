@@ -1,0 +1,130 @@
+{
+  "id": "pr-campaign-planner",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "PR Campaign Budget Planner",
+  "shortBenefit": "PR campaign cost estimator across media channels.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan and estimate your public relations campaign budget across press releases, media outreach, events, influencers and digital PR.",
+  "seo": {
+    "title": "PR Campaign Budget Planner — Public Relations Cost Calculator | Varada Nexus",
+    "description": "Free PR campaign planner. Estimate public relations budget across press releases, media outreach, events, influencer PR and digital PR for any campaign.",
+    "keywords": [
+      "pr campaign budget planner",
+      "public relations cost calculator",
+      "pr agency budget india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "press_releases",
+      "label": "Press releases to issue",
+      "type": "number",
+      "default": 4,
+      "min": 0
+    },
+    {
+      "id": "pr_release_cost",
+      "label": "Cost per press release (₹)",
+      "type": "number",
+      "default": 15000,
+      "min": 0
+    },
+    {
+      "id": "media_outreach",
+      "label": "Media outreach contacts to target",
+      "type": "number",
+      "default": 50,
+      "min": 0
+    },
+    {
+      "id": "outreach_cost_per",
+      "label": "Outreach cost per contact (₹)",
+      "type": "number",
+      "default": 500,
+      "min": 0
+    },
+    {
+      "id": "event_cost",
+      "label": "PR event / press conference cost (₹)",
+      "type": "number",
+      "default": 100000,
+      "min": 0
+    },
+    {
+      "id": "influencer_cost",
+      "label": "Influencer / blogger outreach budget (₹)",
+      "type": "number",
+      "default": 50000,
+      "min": 0
+    },
+    {
+      "id": "pr_agency",
+      "label": "PR agency monthly retainer (₹)",
+      "type": "number",
+      "default": 75000,
+      "min": 0
+    },
+    {
+      "id": "months",
+      "label": "Campaign duration (months)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 12
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Cost (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total campaign cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly PR cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Agency retainer total",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Agency retainer multiplied by campaign duration. Press release, media outreach and influencer costs are total campaign costs.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What does a PR campaign cost in India?",
+      "a": "A basic PR retainer in India starts at ₹50,000–1,00,000/month for small agencies. Mid-tier firms charge ₹1,50,000–3,00,000/month. For specific campaigns, budget ₹2–10 lakh total."
+    },
+    {
+      "q": "What is included in a PR agency retainer?",
+      "a": "A retainer typically covers: media relations, press release writing and distribution, journalist pitching, social media monitoring, crisis communications support and monthly reporting."
+    },
+    {
+      "q": "How do I measure PR campaign success?",
+      "a": "Key PR metrics: media coverage (clips), share of voice vs competitors, message pull-through rate, website traffic from PR, social shares and sentiment. Assign AVE (advertising value equivalent) for budget comparison."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

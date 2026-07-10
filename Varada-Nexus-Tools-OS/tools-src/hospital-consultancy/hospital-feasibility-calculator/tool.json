@@ -1,0 +1,110 @@
+{
+  "id": "hospital-feasibility-calculator",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Hospital Feasibility Study Calculator",
+  "shortBenefit": "5-year revenue and IRR projection for a new hospital.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Run a quick financial feasibility study for a new hospital — project revenue, operating costs and indicative IRR over 5 years based on bed count, occupancy ramp and ARPOB.",
+  "seo": {
+    "title": "Hospital Feasibility Study Calculator — IRR & Revenue Projection | Varada Nexus",
+    "description": "Free hospital feasibility calculator. Project 5-year revenue, EBITDA and indicative IRR for a new hospital from beds, occupancy and ARPOB.",
+    "keywords": [
+      "hospital feasibility calculator",
+      "hospital irr calculator",
+      "hospital revenue projection india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Operational beds",
+      "type": "number",
+      "default": 150,
+      "min": 10
+    },
+    {
+      "id": "arpob",
+      "label": "Average Revenue per Occupied Bed per Day (₹)",
+      "type": "number",
+      "default": 8000,
+      "min": 1000
+    },
+    {
+      "id": "capex",
+      "label": "Total project cost (₹ lakhs)",
+      "type": "number",
+      "default": 12000,
+      "min": 100
+    },
+    {
+      "id": "debt",
+      "label": "Debt portion (%)",
+      "type": "number",
+      "default": 65,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "occ3",
+      "label": "Occupancy by year 3 (%)",
+      "type": "number",
+      "default": 72,
+      "min": 10,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Year",
+      "Occupancy",
+      "Revenue"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Y5 annual revenue",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Indicative IRR",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Payback period",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Occupancy ramps: Y1=30%, Y2=50%, Y3=user-set, Y4=Y3+8%, Y5=min(Y3+15%,85%). EBITDA margin assumed 18% Y1, 22% Y2, 26% Y3-5. Debt at 11% pa, 12yr tenor. IRR is indicative equity IRR from EBITDA stream.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good IRR for a hospital project?",
+      "a": "Typically 15–22% equity IRR is considered acceptable for Indian private hospitals; super-specialty tertiary hospitals can target higher returns given higher ARPOB."
+    },
+    {
+      "q": "What is ARPOB?",
+      "a": "Average Revenue Per Occupied Bed per Day — a key hospital performance metric combining bed occupancy and revenue intensity."
+    },
+    {
+      "q": "How long to break even for a hospital?",
+      "a": "Cash break-even typically 2–4 years; accounting/investment break-even 6–10 years for a greenfield hospital depending on scale and payer mix."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

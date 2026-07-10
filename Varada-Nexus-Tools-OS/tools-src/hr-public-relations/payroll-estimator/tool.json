@@ -1,0 +1,123 @@
+{
+  "id": "payroll-estimator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Monthly Payroll Estimator",
+  "shortBenefit": "Total monthly payroll cost for teams of any size.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate total monthly and annual payroll cost for your team across employee bands, including all statutory contributions.",
+  "seo": {
+    "title": "Payroll Estimator — Monthly Payroll Cost Calculator India | Varada Nexus",
+    "description": "Free payroll estimator India. Calculate total monthly and annual payroll cost for teams with PF, ESIC, bonus and employer contributions.",
+    "keywords": [
+      "payroll estimator",
+      "monthly payroll cost calculator",
+      "team salary cost calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "band1_count",
+      "label": "Junior employees (count)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "band1_ctc",
+      "label": "Junior CTC (₹/year)",
+      "type": "number",
+      "default": 300000,
+      "min": 0
+    },
+    {
+      "id": "band2_count",
+      "label": "Mid-level employees (count)",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "band2_ctc",
+      "label": "Mid-level CTC (₹/year)",
+      "type": "number",
+      "default": 700000,
+      "min": 0
+    },
+    {
+      "id": "band3_count",
+      "label": "Senior employees (count)",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "band3_ctc",
+      "label": "Senior CTC (₹/year)",
+      "type": "number",
+      "default": 1500000,
+      "min": 0
+    },
+    {
+      "id": "bonus_month",
+      "label": "Annual bonus (months of CTC)",
+      "type": "number",
+      "default": 1,
+      "min": 0,
+      "max": 6
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Band",
+      "Employees",
+      "Annual Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly payroll",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Annual payroll",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total headcount",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Annual cost = CTC × headcount + bonus (months × monthly CTC). PF and other statutory contributions assumed included in CTC.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is included in payroll cost?",
+      "a": "Payroll cost includes gross salaries, employer PF contribution, employer ESIC (if applicable), bonuses, and any other variable pay. Leave encashment and gratuity are accrued but paid later."
+    },
+    {
+      "q": "How often should payroll be processed?",
+      "a": "Monthly payroll is standard in India. Payroll must be processed by the 7th of the following month (for most states under Shops & Establishments Act)."
+    },
+    {
+      "q": "What are payroll compliance requirements in India?",
+      "a": "Key requirements: PF filing and payment by 15th of following month, ESIC by 15th, PT (professional tax) per state, TDS on salary, and annual Form 24Q filing."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

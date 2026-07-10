@@ -26,6 +26,22 @@
     else links.appendChild(blog);
   })();
 
+  /* inject Professional Tools nav link on pages that don't already have it */
+  (function () {
+    var links = document.querySelector(".nav-links");
+    if (!links || links.querySelector('a[href="/professional-tools/"]')) return;
+    var tools = document.createElement("a");
+    tools.href = "/professional-tools/";
+    tools.textContent = "Professional Tools";
+    /* active state when browsing the tools platform */
+    if (location.pathname.indexOf("/professional-tools") === 0) tools.className = "active";
+    var blog = links.querySelector('a[href="/blog/"]');
+    var contact = links.querySelector('a[href="/contact.html"]');
+    if (blog && blog.parentNode === links) links.insertBefore(tools, blog.nextSibling);
+    else if (contact) links.insertBefore(tools, contact);
+    else links.appendChild(tools);
+  })();
+
   /* mobile menu */
   var toggle = document.querySelector(".nav-toggle");
   if (toggle) {

@@ -1,0 +1,83 @@
+{
+  "id": "salary-hike-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Salary Hike Calculator",
+  "shortBenefit": "Work out a new salary after a hike, or the hike % between two salaries.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the new salary after a percentage hike, or the percentage increase between a current and a revised salary.",
+  "seo": {
+    "title": "Salary Hike Calculator — New Salary & Increment Percentage | Varada Nexus",
+    "description": "Free salary hike calculator. Find your new salary after a percentage increment, or the hike percentage between two salaries.",
+    "keywords": [
+      "salary hike calculator",
+      "increment calculator",
+      "salary increase percentage"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "current",
+      "label": "Current salary (₹)",
+      "type": "number",
+      "default": 600000,
+      "min": 0
+    },
+    {
+      "id": "hike",
+      "label": "Hike (%)",
+      "type": "number",
+      "default": 15,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "New salary",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Increase amount",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Hike %",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "New salary = current salary × (1 + hike ÷ 100). A flat percentage on the stated salary figure.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I calculate a salary hike?",
+      "a": "New salary = current salary × (1 + hike% ÷ 100). The increase amount is current salary × hike% ÷ 100."
+    },
+    {
+      "q": "How do I find the hike percentage between two salaries?",
+      "a": "Hike % = (new − current) ÷ current × 100."
+    },
+    {
+      "q": "Is the hike applied on CTC or in-hand?",
+      "a": "Usually on CTC. Use whichever figure your offer specifies for a consistent comparison."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR",
+      "url": "/hr.html"
+    }
+  ]
+}

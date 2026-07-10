@@ -1,0 +1,119 @@
+{
+  "id": "vat-gst-payable-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "GST Payable Calculator",
+  "shortBenefit": "Calculate net GST liability after input tax credit",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Compute your net GST/VAT payable for any period by offsetting output tax on sales against input tax credit on purchases — for traders dealing in multiple GST slabs.",
+  "seo": {
+    "title": "GST Payable Calculator – Input Tax Credit Trading India",
+    "description": "Calculate net GST liability for traders. Offset input tax credit on purchases against output GST on sales. Supports multiple GST slabs and reverse charge.",
+    "keywords": [
+      "GST payable calculator India",
+      "input tax credit calculator",
+      "net GST liability trading",
+      "ITC offset calculator",
+      "GST for traders India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "sales_5",
+      "label": "Sales at 5% GST (₹)",
+      "type": "number",
+      "default": 0,
+      "min": 0
+    },
+    {
+      "id": "sales_12",
+      "label": "Sales at 12% GST (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    },
+    {
+      "id": "sales_18",
+      "label": "Sales at 18% GST (₹)",
+      "type": "number",
+      "default": 300000,
+      "min": 0
+    },
+    {
+      "id": "sales_28",
+      "label": "Sales at 28% GST (₹)",
+      "type": "number",
+      "default": 0,
+      "min": 0
+    },
+    {
+      "id": "purchase_itc",
+      "label": "Total ITC Available on Purchases (₹)",
+      "type": "number",
+      "default": 80000,
+      "min": 0,
+      "hint": "From purchase invoices this period"
+    },
+    {
+      "id": "itc_reversal",
+      "label": "ITC Reversal (₹)",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "hint": "Ineligible / blocked credits to reverse"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "GST Component",
+      "Amount (₹)",
+      "Notes"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Output GST",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Net GST Payable",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Effective GST Rate",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Output GST = sum across all slabs. Net payable = Output GST − (ITC − ITC reversal). ITC hierarchy (IGST first, then CGST/SGST) not applied here.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is Input Tax Credit (ITC)?",
+      "a": "ITC is the GST you paid on purchases that can be offset against GST payable on sales. Only GST-registered buyers with valid tax invoices can claim ITC."
+    },
+    {
+      "q": "When is ITC blocked or reversed?",
+      "a": "ITC is blocked on motor vehicles (unless for resale/transport), food, beauty, employee perks, and goods used for exempt supply. It must be reversed if payment to supplier is not made within 180 days."
+    },
+    {
+      "q": "What is the GST filing deadline for traders?",
+      "a": "Monthly GSTR-1 (sales): 11th of next month. GSTR-3B (payment): 20th of next month. Quarterly filers (turnover < ₹5 crore) follow quarterly deadlines under QRMP scheme."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

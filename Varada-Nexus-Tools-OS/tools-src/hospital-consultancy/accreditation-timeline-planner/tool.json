@@ -1,0 +1,125 @@
+{
+  "id": "accreditation-timeline-planner",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Accreditation Timeline Planner",
+  "shortBenefit": "Month-by-month accreditation roadmap for NABH / NABL / JCI.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan a realistic month-by-month timeline to achieve hospital accreditation (NABH, NABL or JCI) from baseline assessment to certificate, with key milestones and resource needs.",
+  "seo": {
+    "title": "Hospital Accreditation Timeline Planner — NABH NABL JCI Roadmap | Varada Nexus",
+    "description": "Free hospital accreditation timeline planner. Generate a month-by-month NABH, NABL or JCI accreditation roadmap with milestones.",
+    "keywords": [
+      "nabh accreditation timeline",
+      "nabl timeline planner",
+      "hospital accreditation roadmap india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "type",
+      "label": "Accreditation type",
+      "type": "select",
+      "default": "nabh",
+      "options": [
+        {
+          "v": "nabh",
+          "t": "NABH (Hospital)"
+        },
+        {
+          "v": "nabh_entry",
+          "t": "NABH Entry Level"
+        },
+        {
+          "v": "nabl",
+          "t": "NABL (Laboratory)"
+        },
+        {
+          "v": "jci",
+          "t": "JCI International"
+        }
+      ]
+    },
+    {
+      "id": "readiness",
+      "label": "Current readiness (%)",
+      "type": "number",
+      "default": 30,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "start",
+      "label": "Planned start month",
+      "type": "select",
+      "default": "1",
+      "options": [
+        {
+          "v": "1",
+          "t": "Month 1 (now)"
+        },
+        {
+          "v": "3",
+          "t": "Month 3"
+        },
+        {
+          "v": "6",
+          "t": "Month 6"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Phase",
+      "Start Month",
+      "Duration"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Expected certificate by",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total duration",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Estimated consultant cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Timelines: NABH entry 9–12m, NABH full 15–24m, NABL 12–18m, JCI 24–36m. Readiness <40% adds 3–6 months. Consultant fees: NABH entry ₹5–8L, NABH full ₹12–20L, NABL ₹6–12L, JCI ₹30–60L.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How long does NABH accreditation take?",
+      "a": "NABH Entry Level typically takes 9–12 months from a good baseline; full NABH accreditation takes 15–24 months, including a mandatory gap between entry and full assessment."
+    },
+    {
+      "q": "Can a hospital skip NABH Entry and apply directly for full accreditation?",
+      "a": "Yes — hospitals with >50 beds and strong existing systems can apply directly for full NABH accreditation, though most greenfield hospitals use Entry Level as a stepping stone."
+    },
+    {
+      "q": "What does JCI accreditation cost a hospital?",
+      "a": "JCI application and survey fees run USD 30,000–60,000 (varies by size), plus consultant preparation costs of ₹30–60 lakhs, making it a significant investment."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

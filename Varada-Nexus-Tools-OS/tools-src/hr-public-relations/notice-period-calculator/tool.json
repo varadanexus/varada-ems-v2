@@ -1,0 +1,101 @@
+{
+  "id": "notice-period-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Notice Period & Last Working Day Calculator",
+  "shortBenefit": "Last working day and notice period completion date.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate your last working day and notice period end date, accounting for weekends, public holidays and notice buy-out options.",
+  "seo": {
+    "title": "Notice Period Calculator — Last Working Day Calculator India | Varada Nexus",
+    "description": "Free notice period calculator. Calculate last working day and notice completion date with working days count and notice buy-out salary.",
+    "keywords": [
+      "notice period calculator",
+      "last working day calculator",
+      "notice period buyout calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "notice_days",
+      "label": "Notice period (calendar days)",
+      "type": "number",
+      "default": 30,
+      "min": 1
+    },
+    {
+      "id": "daily_basic",
+      "label": "Basic salary (₹/day) for buy-out",
+      "type": "number",
+      "default": 1000,
+      "min": 0
+    },
+    {
+      "id": "leaves_availed",
+      "label": "Leave days to adjust off notice",
+      "type": "number",
+      "default": 0,
+      "min": 0
+    },
+    {
+      "id": "weekends",
+      "label": "Working weekends in notice period",
+      "type": "number",
+      "default": 0,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Notice period (days)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Buy-out cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Working days in notice",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Working days = notice days − (notice days ÷ 7 × 2) Sundays − Saturdays + working weekends − leave days. Buy-out = remaining working days × daily basic. Assumes 5-day work week.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Can I buy out my notice period?",
+      "a": "Yes, most employment contracts allow notice buy-out (paying salary in lieu of notice). The cost is typically basic salary for the remaining notice days."
+    },
+    {
+      "q": "Do public holidays count in notice period?",
+      "a": "Usually yes — public holidays are counted as part of the calendar notice period. Confirm with your employment contract."
+    },
+    {
+      "q": "What if I am on leave during notice period?",
+      "a": "Leaves availed during the notice period do not extend it unless specified in your contract. Some companies require you to complete the notice after the leave."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

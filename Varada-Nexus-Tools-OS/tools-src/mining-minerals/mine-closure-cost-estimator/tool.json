@@ -1,0 +1,132 @@
+{
+  "id": "mine-closure-cost-estimator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mine Closure Cost Estimator",
+  "shortBenefit": "Estimate mine closure liability and rehabilitation bond requirement",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan for mine closure costs including decommissioning, land rehabilitation, water treatment and progressive restoration to meet legal obligations and MMDR requirements.",
+  "seo": {
+    "title": "Mine Closure Cost Estimator – Mine Rehabilitation India MMDR",
+    "description": "Estimate mine closure and rehabilitation cost for Indian mines. Covers site decommissioning, topsoil replacement, water treatment and afforestation per MMDR Act.",
+    "keywords": [
+      "mine closure cost India",
+      "mine rehabilitation cost",
+      "MMDR mine closure plan",
+      "mine decommissioning cost",
+      "progressive mine restoration India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "mine_area_ha",
+      "label": "Mine Lease Area (hectares)",
+      "type": "number",
+      "default": 100,
+      "min": 0.1
+    },
+    {
+      "id": "waste_dump_area",
+      "label": "Waste Dump / OB Area (hectares)",
+      "type": "number",
+      "default": 30,
+      "min": 0
+    },
+    {
+      "id": "water_treatment_years",
+      "label": "Water Treatment Period (years)",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "water_treatment_cost_pa",
+      "label": "Annual Water Treatment Cost (₹)",
+      "type": "number",
+      "default": 2000000,
+      "min": 0
+    },
+    {
+      "id": "topsoil_cost_per_ha",
+      "label": "Topsoil Replacement (₹/ha)",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    },
+    {
+      "id": "afforestation_cost_per_ha",
+      "label": "Afforestation (₹/ha)",
+      "type": "number",
+      "default": 300000,
+      "min": 0
+    },
+    {
+      "id": "demolition_cost",
+      "label": "Structures & Equipment Demolition (₹)",
+      "type": "number",
+      "default": 5000000,
+      "min": 0
+    },
+    {
+      "id": "contingency_pct",
+      "label": "Contingency (%)",
+      "type": "number",
+      "default": 20,
+      "min": 0,
+      "max": 50
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Closure Cost Component",
+      "Area / Basis",
+      "Cost (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Closure Cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Annual Bank Guarantee Needed",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per Hectare",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Bank Guarantee typically 1/5 of total closure cost under MMDR. Contingency on all direct closure costs.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What are legal requirements for mine closure in India?",
+      "a": "Under MMDR Act and Mineral Conservation & Development Rules, all mine holders must submit a Mine Closure Plan (MCP) before commencement and maintain a closure fund. Mandatory progressive restoration is required."
+    },
+    {
+      "q": "What is a Mine Closure Plan (MCP)?",
+      "a": "MCP is a detailed document submitted to IBM and State Government outlining physical, chemical and biological rehabilitation of the mined area. It must be submitted with the Mining Plan and updated every 5 years."
+    },
+    {
+      "q": "Can closure costs be reduced through progressive restoration?",
+      "a": "Yes. Progressive land rehabilitation during mining significantly reduces closure costs. Re-grading waste dumps, backfilling exhausted pits and early revegetation cut final costs by 40–60%."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

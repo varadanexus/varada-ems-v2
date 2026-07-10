@@ -1,0 +1,155 @@
+{
+  "id": "hospital-risk-assessment",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Hospital Risk Assessment Tool",
+  "shortBenefit": "Score hospital project risks by likelihood and impact.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Quantify and prioritise hospital project or operational risks using a likelihood × impact matrix. Enter scores for each risk category to get a weighted risk score and mitigation priority.",
+  "seo": {
+    "title": "Hospital Risk Assessment Tool — Likelihood × Impact Matrix | Varada Nexus",
+    "description": "Free hospital risk assessment calculator. Score project and operational risks by likelihood and impact to prioritise mitigation actions.",
+    "keywords": [
+      "hospital risk assessment",
+      "healthcare risk matrix",
+      "hospital project risk calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "r_finance",
+      "label": "Financial risk (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5,
+      "hint": "1=very low, 5=very high likelihood"
+    },
+    {
+      "id": "r_regulatory",
+      "label": "Regulatory / licence risk (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "r_doctor",
+      "label": "Key doctor availability risk (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "r_ops",
+      "label": "Operational ramp-up risk (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "r_competition",
+      "label": "Competitive threat risk (1–5)",
+      "type": "number",
+      "default": 2,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "i_finance",
+      "label": "Financial impact weight (1–5)",
+      "type": "number",
+      "default": 5,
+      "min": 1,
+      "max": 5,
+      "hint": "1=low impact, 5=critical"
+    },
+    {
+      "id": "i_regulatory",
+      "label": "Regulatory impact weight (1–5)",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "i_doctor",
+      "label": "Doctor dependency impact (1–5)",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "i_ops",
+      "label": "Operations impact (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "i_competition",
+      "label": "Competition impact (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Risk Area",
+      "Likelihood × Impact",
+      "Priority"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Weighted risk score",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Highest risk",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Overall risk band",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Risk score = likelihood (1–5) × impact (1–5) per area. Maximum possible score = 125. Priority: ≥15 = High, 8–14 = Medium, <8 = Low.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a risk matrix?",
+      "a": "A risk matrix scores each risk by multiplying its likelihood of occurring (1–5) by its potential impact (1–5), giving a score from 1–25 per risk."
+    },
+    {
+      "q": "What is a high-risk score in this tool?",
+      "a": "A per-risk score of 15 or above (e.g. likelihood 3 × impact 5) is flagged High priority and needs a documented mitigation plan."
+    },
+    {
+      "q": "Which risks matter most in a hospital project?",
+      "a": "Financial overruns and regulatory delays are typically highest impact; doctor availability and operational ramp-up are often high likelihood for new hospitals."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

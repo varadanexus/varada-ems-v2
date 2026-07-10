@@ -1,0 +1,101 @@
+{
+  "id": "hospital-expansion-planner",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Hospital Expansion Planner",
+  "shortBenefit": "Capex and staff for adding beds to a hospital.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan a hospital expansion: additional beds, capital cost (construction plus equipment) and the extra clinical staff needed to scale from current to target capacity.",
+  "seo": {
+    "title": "Hospital Expansion Planner — Capex & Staffing for Added Beds | Varada Nexus",
+    "description": "Free hospital expansion planner. Estimate additional beds, capital cost and staff needed to scale from current to target capacity.",
+    "keywords": [
+      "hospital expansion planner",
+      "hospital scale up cost",
+      "bed addition capex"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "current",
+      "label": "Current beds",
+      "type": "number",
+      "default": 100,
+      "min": 0
+    },
+    {
+      "id": "target",
+      "label": "Target beds",
+      "type": "number",
+      "default": 200,
+      "min": 0
+    },
+    {
+      "id": "costBed",
+      "label": "All-in cost per bed — civil+equipment (₹)",
+      "type": "number",
+      "default": 4000000,
+      "min": 0
+    },
+    {
+      "id": "staffBed",
+      "label": "Staff per bed",
+      "type": "number",
+      "default": 2.5,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Additional beds",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Expansion capex",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Additional staff",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Additional beds = target − current. Capex = additional beds × all-in cost per bed. Additional staff = additional beds × staff per bed (doctors, nurses and support; India norms are ~2–3 per bed for multispecialty).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much does it cost to add hospital beds?",
+      "a": "Multiply additional beds by an all-in per-bed cost (civil plus equipment), commonly ₹30–60 lakh per bed for multispecialty."
+    },
+    {
+      "q": "How many staff per bed does a hospital need?",
+      "a": "Roughly 2–3 staff per bed across doctors, nurses and support for a multispecialty hospital running 24×7."
+    },
+    {
+      "q": "What else should an expansion plan cover?",
+      "a": "Utilities, medical gas, licences, working capital and a ramp-up period before the new beds reach target occupancy."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

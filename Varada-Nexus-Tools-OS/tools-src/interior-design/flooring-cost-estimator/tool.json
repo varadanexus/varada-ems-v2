@@ -1,0 +1,144 @@
+{
+  "id": "flooring-cost-estimator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Flooring Cost Estimator",
+  "shortBenefit": "Flooring material and installation cost by area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate total flooring cost for any space based on area, flooring type and subfloor condition.",
+  "seo": {
+    "title": "Flooring Cost Estimator — Tiles, Marble, Wood & Vinyl | Varada Nexus",
+    "description": "Free flooring cost calculator. Estimate material and installation cost for tiles, marble, hardwood, laminate and vinyl flooring.",
+    "keywords": [
+      "flooring cost calculator",
+      "tile flooring cost india",
+      "wood flooring estimate"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Floor area (sq ft)",
+      "type": "number",
+      "default": 500,
+      "min": 10
+    },
+    {
+      "id": "material",
+      "label": "Flooring material",
+      "type": "select",
+      "default": "vitrified",
+      "options": [
+        {
+          "v": "ceramic",
+          "t": "Ceramic tile (₹40–80/sq ft)"
+        },
+        {
+          "v": "vitrified",
+          "t": "Vitrified tile (₹70–130/sq ft)"
+        },
+        {
+          "v": "marble",
+          "t": "Marble (₹120–400/sq ft)"
+        },
+        {
+          "v": "granite",
+          "t": "Granite (₹100–250/sq ft)"
+        },
+        {
+          "v": "laminate",
+          "t": "Laminate wood (₹80–150/sq ft)"
+        },
+        {
+          "v": "engineered",
+          "t": "Engineered wood (₹150–300/sq ft)"
+        },
+        {
+          "v": "vinyl",
+          "t": "Vinyl / SPC (₹60–120/sq ft)"
+        }
+      ]
+    },
+    {
+      "id": "grade",
+      "label": "Grade",
+      "type": "select",
+      "default": "standard",
+      "options": [
+        {
+          "v": "economy",
+          "t": "Economy"
+        },
+        {
+          "v": "standard",
+          "t": "Standard"
+        },
+        {
+          "v": "premium",
+          "t": "Premium"
+        }
+      ]
+    },
+    {
+      "id": "wastage",
+      "label": "Wastage allowance (%)",
+      "type": "number",
+      "default": 10,
+      "min": 5,
+      "max": 20
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "",
+      "Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total flooring cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per sq ft (all-in)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Material to order",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Material cost: ceramic ₹55, vitrified ₹100, marble ₹250, granite ₹180, laminate ₹120, engineered ₹220, vinyl ₹90 (standard grade). Labour: ₹25–60/sq ft. Premium grade +50%.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the best flooring for Indian homes?",
+      "a": "Vitrified tiles are the most popular for durability, low maintenance and cost. Marble is preferred for luxury homes; engineered wood for bedrooms where warmth is desired."
+    },
+    {
+      "q": "What is the labour cost for tile flooring in India?",
+      "a": "Labour for tile laying runs ₹25–50 per sq ft depending on tile size and design complexity; large format tiles (80×80 cm and above) cost more to lay."
+    },
+    {
+      "q": "Why order 10% extra flooring?",
+      "a": "Wastage from cuts, breakage during installation and matching future repairs means ordering 10–15% extra is standard practice."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

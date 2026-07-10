@@ -1,0 +1,137 @@
+{
+  "id": "performance-score-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Employee Performance Score Calculator",
+  "shortBenefit": "Weighted performance rating across KRA areas.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate a weighted employee performance score from Key Result Areas (KRAs) with manager and self-assessment inputs for annual appraisals.",
+  "seo": {
+    "title": "Employee Performance Score Calculator — KRA Appraisal Tool | Varada Nexus",
+    "description": "Free performance score calculator. Calculate weighted KRA-based employee performance score for annual appraisals and salary reviews.",
+    "keywords": [
+      "employee performance score calculator",
+      "kra appraisal calculator",
+      "performance rating calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "kra1",
+      "label": "KRA 1: Goal achievement (1–5)",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "kra1w",
+      "label": "KRA 1 weight (%)",
+      "type": "number",
+      "default": 40,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "kra2",
+      "label": "KRA 2: Quality of work (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "kra2w",
+      "label": "KRA 2 weight (%)",
+      "type": "number",
+      "default": 25,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "kra3",
+      "label": "KRA 3: Teamwork & collaboration (1–5)",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "kra3w",
+      "label": "KRA 3 weight (%)",
+      "type": "number",
+      "default": 20,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "kra4",
+      "label": "KRA 4: Learning & development (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "kra4w",
+      "label": "KRA 4 weight (%)",
+      "type": "number",
+      "default": 15,
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "KRA",
+      "Score",
+      "Weighted"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Overall performance score",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Performance band",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Recommended hike range",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Weighted score = Σ (KRA score × weight%). Weights should total 100%. Bands: 4.5–5 = Outstanding; 4.0–4.4 = Exceeds Expectations; 3.0–3.9 = Meets Expectations; 2.0–2.9 = Below Expectations; <2 = Unsatisfactory.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What are KRAs?",
+      "a": "Key Result Areas (KRAs) are the primary responsibilities and objectives for a role. Performance against KRAs is the basis for annual appraisals, promotions and salary hikes."
+    },
+    {
+      "q": "What is a good performance rating?",
+      "a": "A score of 3.5/5 or above typically qualifies for a salary hike. Scores above 4.0 warrant above-average hikes and fast-track promotion consideration."
+    },
+    {
+      "q": "How should performance appraisal weights be set?",
+      "a": "Weights should reflect the strategic importance of each KRA for the role. Typically 40–50% for core deliverables, 20–30% for quality, 15–25% for behavioural competencies."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

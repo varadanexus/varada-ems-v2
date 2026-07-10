@@ -1,0 +1,184 @@
+{
+  "id": "website-speed-checklist",
+  "category": "digital-marketing",
+  "kind": "checklist",
+  "name": "Website Speed Optimisation Checklist",
+  "shortBenefit": "Core Web Vitals and page speed optimisation checklist.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Check all key website speed and Core Web Vitals optimisations to improve page load time, user experience and SEO rankings.",
+  "seo": {
+    "title": "Website Speed Checklist — Core Web Vitals Optimisation | Varada Nexus",
+    "description": "Free website speed checklist. Check Core Web Vitals (LCP, CLS, FID) and page speed optimisation factors for better SEO and user experience.",
+    "keywords": [
+      "website speed checklist",
+      "core web vitals checklist",
+      "page speed optimisation seo"
+    ]
+  },
+  "buttonLabel": "Check Speed Readiness",
+  "checklist": [
+    {
+      "name": "1. Images",
+      "items": [
+        {
+          "id": "i1",
+          "text": "All images compressed (WebP / AVIF format preferred)",
+          "critical": true
+        },
+        {
+          "id": "i2",
+          "text": "Images have explicit width and height attributes (prevents CLS)",
+          "critical": true
+        },
+        {
+          "id": "i3",
+          "text": "Lazy loading applied to below-fold images"
+        },
+        {
+          "id": "i4",
+          "text": "Hero / LCP image preloaded with <link rel=\"preload\">"
+        }
+      ]
+    },
+    {
+      "name": "2. Code Optimisation",
+      "items": [
+        {
+          "id": "c1",
+          "text": "CSS and JS minified and combined",
+          "critical": true
+        },
+        {
+          "id": "c2",
+          "text": "Unused CSS removed (PurgeCSS or manual audit)",
+          "critical": true
+        },
+        {
+          "id": "c3",
+          "text": "Render-blocking scripts deferred or async"
+        },
+        {
+          "id": "c4",
+          "text": "Third-party scripts (chat, analytics) loaded asynchronously"
+        }
+      ]
+    },
+    {
+      "name": "3. Server & Caching",
+      "items": [
+        {
+          "id": "s1",
+          "text": "CDN (Content Delivery Network) in use",
+          "critical": true
+        },
+        {
+          "id": "s2",
+          "text": "Browser caching headers configured"
+        },
+        {
+          "id": "s3",
+          "text": "GZIP / Brotli compression enabled on server"
+        },
+        {
+          "id": "s4",
+          "text": "Server response time (TTFB) under 200ms"
+        }
+      ]
+    },
+    {
+      "name": "4. Core Web Vitals",
+      "items": [
+        {
+          "id": "w1",
+          "text": "LCP (Largest Contentful Paint) under 2.5 seconds",
+          "critical": true
+        },
+        {
+          "id": "w2",
+          "text": "CLS (Cumulative Layout Shift) score under 0.1",
+          "critical": true
+        },
+        {
+          "id": "w3",
+          "text": "FID / INP (Interaction to Next Paint) under 200ms",
+          "critical": true
+        },
+        {
+          "id": "w4",
+          "text": "Mobile PageSpeed score above 60 in Google PageSpeed Insights"
+        }
+      ]
+    },
+    {
+      "name": "5. Fonts & Resources",
+      "items": [
+        {
+          "id": "f1",
+          "text": "Web fonts subset and preloaded"
+        },
+        {
+          "id": "f2",
+          "text": "Font-display: swap used to prevent invisible text"
+        },
+        {
+          "id": "f3",
+          "text": "No redirect chains (HTTP→HTTPS→www)"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Based on Google Core Web Vitals thresholds (2024). Critical items directly affect CWV scores and Google ranking.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What are Core Web Vitals?",
+      "a": "Core Web Vitals are Google's page experience signals: LCP (load speed), CLS (layout stability) and INP (interactivity). Poor scores can hurt search rankings."
+    },
+    {
+      "q": "How do I check my website speed?",
+      "a": "Use Google PageSpeed Insights (pagespeed.web.dev) for a free score and recommendations; also check with GTmetrix and WebPageTest for more detail."
+    },
+    {
+      "q": "What is the quickest win for page speed?",
+      "a": "Compressing and converting images to WebP format typically gives the biggest speed improvement with the least development effort."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "id": "interior-design-timeline",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Interior Design Timeline Planner",
+  "shortBenefit": "Week-by-week timeline for a home or office interior project.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan a realistic week-by-week timeline for a home or office interior design and fit-out project based on area and scope.",
+  "seo": {
+    "title": "Interior Design Timeline Planner — Project Schedule | Varada Nexus",
+    "description": "Free interior design timeline planner. Generate a week-by-week schedule for home or office interior projects from design to handover.",
+    "keywords": [
+      "interior design timeline",
+      "interior project schedule",
+      "home interior project plan"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Project area (sq ft)",
+      "type": "number",
+      "default": 1500,
+      "min": 100
+    },
+    {
+      "id": "type",
+      "label": "Project type",
+      "type": "select",
+      "default": "home",
+      "options": [
+        {
+          "v": "home",
+          "t": "Home (new fit-out)"
+        },
+        {
+          "v": "reno",
+          "t": "Home renovation"
+        },
+        {
+          "v": "office",
+          "t": "Office fit-out"
+        },
+        {
+          "v": "hospital",
+          "t": "Hospital / healthcare"
+        }
+      ]
+    },
+    {
+      "id": "scope",
+      "label": "Scope",
+      "type": "select",
+      "default": "full",
+      "options": [
+        {
+          "v": "partial",
+          "t": "Partial (1–2 rooms)"
+        },
+        {
+          "v": "full",
+          "t": "Full home/office"
+        },
+        {
+          "v": "turnkey",
+          "t": "Turnkey (design + execution)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Phase",
+      "Start",
+      "Duration"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total duration",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "On-site construction",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Design phase",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Timeline scales with area: +1 week per 500 sq ft above base. Hospital projects add 4 weeks for compliance documentation. Renovation adds 2 weeks for demolition.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How long does interior design take for a 1,500 sq ft home?",
+      "a": "A full turnkey interior for 1,500 sq ft typically takes 3–5 months — design 4–6 weeks, approvals/procurement 2–4 weeks, civil and carpentry 8–12 weeks, finishing 2–4 weeks."
+    },
+    {
+      "q": "Why does interior design take so long?",
+      "a": "Custom furniture has 4–8 week lead times, tile and material selection adds 1–2 weeks, on-site work depends on crew size, and painting/finishing cannot be rushed due to drying time."
+    },
+    {
+      "q": "How can I speed up my interior project?",
+      "a": "Finalise design decisions early, pay material advances upfront for faster delivery, run parallel workstreams (flooring, electrical, carpentry) where safe, and avoid design changes mid-execution."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "id": "hospital-staffing-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Hospital Nurse Staffing Calculator",
+  "shortBenefit": "Nurses required per shift and per day from beds and ratios.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the number of nurses required per shift and per day for a hospital ward from bed count, occupancy, nurse-to-patient ratio and a leave-relief factor.",
+  "seo": {
+    "title": "Hospital Nurse Staffing Calculator — Nurses by Beds & Ratio | Varada Nexus",
+    "description": "Free hospital nurse staffing calculator. Estimate nurses per shift and per day from beds, occupancy and nurse-to-patient ratio.",
+    "keywords": [
+      "nurse staffing calculator",
+      "hospital staffing calculator",
+      "nurse patient ratio calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 100,
+      "min": 0
+    },
+    {
+      "id": "occupancy",
+      "label": "Occupancy (%)",
+      "type": "number",
+      "default": 80,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "ratio",
+      "label": "Patients per nurse (per shift)",
+      "type": "select",
+      "default": "6",
+      "options": [
+        {
+          "v": "1",
+          "t": "1:1 (ICU)"
+        },
+        {
+          "v": "4",
+          "t": "1:4 (high dependency)"
+        },
+        {
+          "v": "6",
+          "t": "1:6 (general ward)"
+        },
+        {
+          "v": "8",
+          "t": "1:8 (low acuity)"
+        }
+      ]
+    },
+    {
+      "id": "shifts",
+      "label": "Shifts per day",
+      "type": "number",
+      "default": 3,
+      "min": 1
+    },
+    {
+      "id": "leave",
+      "label": "Leave-relief factor",
+      "type": "number",
+      "default": 1.3,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Nurses per shift",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Nurses per day (with relief)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Patients",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Patients = beds × occupancy%. Nurses per shift = patients ÷ patients-per-nurse. Nurses per day = per-shift × shifts × leave-relief factor (covers offs, leave and training).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I calculate nurse staffing?",
+      "a": "Nurses per shift = occupied beds ÷ patients-per-nurse ratio. Multiply by shifts per day and a leave-relief factor for the daily headcount."
+    },
+    {
+      "q": "What is a leave-relief factor?",
+      "a": "A multiplier (often 1.3–1.5) that adds nurses to cover weekly offs, leave, training and absenteeism."
+    },
+    {
+      "q": "What nurse-to-patient ratio should I use?",
+      "a": "It depends on acuity — roughly 1:1 for ICU, 1:4 for high dependency and 1:6 for general wards."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

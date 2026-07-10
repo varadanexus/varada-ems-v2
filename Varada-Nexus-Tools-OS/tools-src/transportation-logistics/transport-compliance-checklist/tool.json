@@ -1,0 +1,194 @@
+{
+  "id": "transport-compliance-checklist",
+  "category": "transportation-logistics",
+  "kind": "checklist",
+  "name": "Transport & Logistics Compliance Checklist",
+  "shortBenefit": "Vehicle, driver and freight compliance audit.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Audit your transport and logistics operation against key compliance requirements including vehicle fitness, driver licences, insurance, permits and freight documentation.",
+  "seo": {
+    "title": "Transport Compliance Checklist India — Logistics Audit | Varada Nexus",
+    "description": "Free transport compliance checklist India. Audit vehicle fitness, driver licences, insurance, permits and freight documentation for logistics operations.",
+    "keywords": [
+      "transport compliance checklist india",
+      "logistics audit checklist",
+      "truck compliance checklist"
+    ]
+  },
+  "buttonLabel": "Run Transport Compliance Audit",
+  "checklist": [
+    {
+      "name": "1. Vehicle Documents",
+      "items": [
+        {
+          "id": "v1",
+          "text": "Registration Certificate (RC) valid and not expired",
+          "critical": true
+        },
+        {
+          "id": "v2",
+          "text": "Fitness Certificate (FC) valid",
+          "critical": true
+        },
+        {
+          "id": "v3",
+          "text": "Motor Vehicles Insurance (Third Party + Own Damage)",
+          "critical": true
+        },
+        {
+          "id": "v4",
+          "text": "National Permit / State Permit valid",
+          "critical": true
+        },
+        {
+          "id": "v5",
+          "text": "PUC (Pollution Under Control) certificate valid"
+        }
+      ]
+    },
+    {
+      "name": "2. Driver Compliance",
+      "items": [
+        {
+          "id": "d1",
+          "text": "Commercial Driving Licence (CDL) valid for vehicle class",
+          "critical": true
+        },
+        {
+          "id": "d2",
+          "text": "Driver medical fitness certificate current"
+        },
+        {
+          "id": "d3",
+          "text": "Driver rest hours compliant (max 8h driving, rest required)",
+          "critical": true
+        },
+        {
+          "id": "d4",
+          "text": "Speed governor / vehicle tracking unit (VTU) fitted and active"
+        }
+      ]
+    },
+    {
+      "name": "3. Freight Documentation",
+      "items": [
+        {
+          "id": "f1",
+          "text": "E-way bill generated for goods ≥₹50,000 value (GST)",
+          "critical": true
+        },
+        {
+          "id": "f2",
+          "text": "Lorry Receipt (LR) / consignment note issued",
+          "critical": true
+        },
+        {
+          "id": "f3",
+          "text": "Goods and Services Tax (GST) documents in order"
+        },
+        {
+          "id": "f4",
+          "text": "Dangerous goods declaration (if applicable)"
+        }
+      ]
+    },
+    {
+      "name": "4. Load Compliance",
+      "items": [
+        {
+          "id": "l1",
+          "text": "Load within permissible GVW limit",
+          "critical": true
+        },
+        {
+          "id": "l2",
+          "text": "Cargo properly secured to prevent shifting",
+          "critical": true
+        },
+        {
+          "id": "l3",
+          "text": "Hazardous cargo labelled per HMRT rules (if applicable)"
+        },
+        {
+          "id": "l4",
+          "text": "Oversized / ODC cargo with special permit (if applicable)"
+        }
+      ]
+    },
+    {
+      "name": "5. Operational",
+      "items": [
+        {
+          "id": "o1",
+          "text": "First aid kit, fire extinguisher and reflective triangles in vehicle"
+        },
+        {
+          "id": "o2",
+          "text": "Fleet maintenance records up to date"
+        },
+        {
+          "id": "o3",
+          "text": "GPS/vehicle tracking active and reporting"
+        },
+        {
+          "id": "o4",
+          "text": "Driver training records maintained"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Based on Motor Vehicles Act 1988, Central Motor Vehicles Rules and GST E-way bill requirements. State-specific rules may add requirements.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is an E-way bill?",
+      "a": "An E-way bill is an electronic document generated on the GST portal for movement of goods worth more than ₹50,000. It is mandatory for interstate transport and for intrastate movement in most states."
+    },
+    {
+      "q": "What permits does a truck need for interstate transport?",
+      "a": "For interstate goods transport: National Permit from the MV Department, RC, FC, insurance, PUC and driver's commercial licence. Goods requiring special handling (chemicals, food, pharma) may need additional permits."
+    },
+    {
+      "q": "What are the penalties for driving without a fitness certificate?",
+      "a": "Driving without a valid FC attracts a fine and vehicle detention. For commercial vehicles, the fine can be up to ₹10,000. Repeat offences can lead to suspension of the vehicle permit."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

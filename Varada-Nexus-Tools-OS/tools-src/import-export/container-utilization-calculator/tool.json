@@ -1,0 +1,116 @@
+{
+  "id": "container-utilization-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Container Utilization Calculator",
+  "shortBenefit": "Maximise container fill and minimise dead freight costs",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate how efficiently you are filling a shipping container by comparing cargo CBM and weight against container capacity. Avoid under-loading and over-stuffing risks.",
+  "seo": {
+    "title": "Container Utilization Calculator – CBM Weight Fill Rate",
+    "description": "Calculate container utilization by CBM and weight. Supports 20ft, 40ft and 40ft HC containers. Determine if you need FCL or LCL shipping.",
+    "keywords": [
+      "container utilization calculator",
+      "CBM calculator shipping",
+      "20ft 40ft container capacity",
+      "FCL LCL calculator",
+      "container fill rate"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "container_type",
+      "label": "Container Type",
+      "type": "select",
+      "default": "40ft",
+      "options": [
+        {
+          "v": "20ft",
+          "t": "20ft Standard (25 CBM / 21,700 kg)"
+        },
+        {
+          "v": "40ft",
+          "t": "40ft Standard (55 CBM / 26,500 kg)"
+        },
+        {
+          "v": "40hc",
+          "t": "40ft High Cube (67 CBM / 26,500 kg)"
+        }
+      ]
+    },
+    {
+      "id": "cargo_cbm",
+      "label": "Cargo Volume (CBM)",
+      "type": "number",
+      "default": 40,
+      "min": 0.1
+    },
+    {
+      "id": "cargo_weight",
+      "label": "Cargo Weight (kg)",
+      "type": "number",
+      "default": 15000,
+      "min": 1
+    },
+    {
+      "id": "freight_rate",
+      "label": "Container Freight Rate (₹)",
+      "type": "number",
+      "default": 120000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "Your Cargo",
+      "Container Limit"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Volume Utilization",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Weight Utilization",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Freight / CBM",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Capacities: 20ft=25CBM/21,700kg; 40ft=55CBM/26,500kg; 40HC=67CBM/26,500kg. 85%+ utilization recommended for FCL.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the difference between FCL and LCL?",
+      "a": "FCL — you book the entire container. LCL — cargo is consolidated with others. FCL is generally cheaper per CBM above ~12–15 CBM."
+    },
+    {
+      "q": "How do I calculate CBM?",
+      "a": "Measure length × width × height of each carton in metres, multiply by number of cartons. Add 5–10% buffer for pallets."
+    },
+    {
+      "q": "What happens if I exceed the weight limit?",
+      "a": "Overloaded containers are rejected at port or attract heavy fines. Shipping lines strictly enforce payload limits."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

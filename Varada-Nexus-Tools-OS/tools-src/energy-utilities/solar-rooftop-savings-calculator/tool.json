@@ -1,0 +1,90 @@
+{
+  "id": "solar-rooftop-savings-calculator",
+  "category": "energy-utilities",
+  "kind": "calculator",
+  "name": "Solar Rooftop Savings Calculator",
+  "shortBenefit": "System size, cost, monthly savings and payback for rooftop solar.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the rooftop solar system size, roof area, indicative cost, monthly bill savings and payback period from your monthly electricity usage.",
+  "seo": {
+    "title": "Solar Rooftop Calculator India — System Size, Cost & Payback | Varada Nexus",
+    "description": "Free solar rooftop calculator. Estimate kW system size, roof area, cost, monthly savings and payback from your electricity usage.",
+    "keywords": [
+      "solar calculator india",
+      "rooftop solar calculator",
+      "solar payback calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "units",
+      "label": "Monthly electricity use (kWh/units)",
+      "type": "number",
+      "default": 600,
+      "min": 0
+    },
+    {
+      "id": "tariff",
+      "label": "Tariff (₹/unit)",
+      "type": "number",
+      "default": 8,
+      "min": 0
+    },
+    {
+      "id": "costKw",
+      "label": "System cost (₹/kW)",
+      "type": "number",
+      "default": 60000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "System size",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly savings",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Payback",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Assumes ~4 units generated per kW per day (~120 units/kW/month). Roof area ≈ 100 sq ft per kW. Cost and generation vary by location, shading and subsidy (not included).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What size solar system do I need?",
+      "a": "Roughly, kW = monthly units ÷ 120, since 1 kW generates about 120 units a month in much of India."
+    },
+    {
+      "q": "How much roof area is needed?",
+      "a": "About 100 sq ft of shadow-free roof per kW of solar capacity."
+    },
+    {
+      "q": "How is payback calculated?",
+      "a": "Payback (years) = system cost ÷ annual bill savings. Subsidies, where applicable, shorten this further."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

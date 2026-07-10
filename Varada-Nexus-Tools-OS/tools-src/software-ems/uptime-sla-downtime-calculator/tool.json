@@ -1,0 +1,77 @@
+{
+  "id": "uptime-sla-downtime-calculator",
+  "category": "software-ems",
+  "kind": "calculator",
+  "name": "Uptime SLA Downtime Calculator",
+  "shortBenefit": "Allowed downtime per day, month and year for any SLA %.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Convert an uptime SLA percentage into the maximum allowed downtime per day, week, month and year — useful for SLAs and reliability targets.",
+  "seo": {
+    "title": "Uptime SLA Calculator — Allowed Downtime for 99.9% & More | Varada Nexus",
+    "description": "Free uptime SLA calculator. See allowed downtime per day, month and year for 99%, 99.9%, 99.99% and custom SLAs.",
+    "keywords": [
+      "uptime calculator",
+      "sla downtime calculator",
+      "99.9 uptime downtime"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "sla",
+      "label": "Uptime SLA (%)",
+      "type": "number",
+      "default": 99.9,
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Period",
+      "",
+      "Allowed downtime"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Per month",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per year",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Per day",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Allowed downtime = (1 − SLA ÷ 100) × period. Based on 24×7 operation, 30-day months and 365-day years.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much downtime does 99.9% uptime allow?",
+      "a": "99.9% (\"three nines\") allows about 43.8 minutes per month and 8.77 hours per year."
+    },
+    {
+      "q": "How is allowed downtime calculated?",
+      "a": "Downtime = (1 − SLA%) × total time in the period. For 99.9%, that is 0.001 × the period."
+    },
+    {
+      "q": "What is the difference between 99.9% and 99.99%?",
+      "a": "99.99% (\"four nines\") allows only ~4.4 minutes of downtime per month versus ~43.8 minutes for 99.9%."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

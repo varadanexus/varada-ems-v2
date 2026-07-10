@@ -1,0 +1,115 @@
+{
+  "id": "interior-roi-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Interior Design ROI Calculator",
+  "shortBenefit": "Return on investment from a home or office interior upgrade.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the financial return on an interior design investment — whether for rental income increase, property value uplift or productivity gains from an office redesign.",
+  "seo": {
+    "title": "Interior Design ROI Calculator — Return on Investment | Varada Nexus",
+    "description": "Free interior ROI calculator. Estimate return on investment from home or office interior upgrades through rental yield, property value or productivity gains.",
+    "keywords": [
+      "interior design roi",
+      "home renovation return on investment",
+      "interior upgrade value calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "investment",
+      "label": "Interior investment (₹ lakhs)",
+      "type": "number",
+      "default": 15,
+      "min": 1
+    },
+    {
+      "id": "type",
+      "label": "Property type",
+      "type": "select",
+      "default": "rental",
+      "options": [
+        {
+          "v": "rental",
+          "t": "Rental property"
+        },
+        {
+          "v": "resale",
+          "t": "Resale / flip"
+        },
+        {
+          "v": "office",
+          "t": "Office (productivity)"
+        }
+      ]
+    },
+    {
+      "id": "value_before",
+      "label": "Property value / rent before (₹ lakhs / month)",
+      "type": "number",
+      "default": 80,
+      "min": 1,
+      "hint": "For rental, enter monthly rent in ₹ lakhs"
+    },
+    {
+      "id": "value_after",
+      "label": "Expected value / rent after (₹ lakhs / month)",
+      "type": "number",
+      "default": 95,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Net value gain",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "ROI",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Payback period",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Rental ROI: annual rent increase × 20-year value. Resale ROI: direct uplift net of investment. Office ROI based on 10% productivity gain on assumed staff cost of ₹12L/seat/yr.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Does interior design increase property value?",
+      "a": "A well-executed premium interior can increase resale value by 10–20% for residential and 15–25% for commercial spaces, though market conditions dominate."
+    },
+    {
+      "q": "What is the ROI of renovating a rental property?",
+      "a": "If interior investment increases monthly rent by ₹10,000 on a ₹15 lakh spend, payback is 12.5 years (rental basis); but property value uplift often makes total ROI positive in 5–7 years."
+    },
+    {
+      "q": "Does office interior affect productivity?",
+      "a": "Research suggests a well-designed workplace (lighting, acoustics, ergonomics) can improve employee productivity by 5–15%, with measurable impact on retention and recruitment."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

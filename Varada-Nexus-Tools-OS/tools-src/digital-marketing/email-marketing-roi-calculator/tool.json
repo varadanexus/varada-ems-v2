@@ -1,0 +1,118 @@
+{
+  "id": "email-marketing-roi-calculator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Email Marketing ROI Calculator",
+  "shortBenefit": "ROI, revenue and cost per email from campaign metrics.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the ROI of your email marketing campaigns from list size, open rate, click rate and conversion rate.",
+  "seo": {
+    "title": "Email Marketing ROI Calculator — Campaign Revenue & Cost | Varada Nexus",
+    "description": "Free email marketing ROI calculator. Calculate email campaign revenue, cost per email and ROI from list size, open rate and conversion rate.",
+    "keywords": [
+      "email marketing roi calculator",
+      "email campaign roi",
+      "email cost per conversion"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "list_size",
+      "label": "Email list size",
+      "type": "number",
+      "default": 10000,
+      "min": 1
+    },
+    {
+      "id": "open_rate",
+      "label": "Open rate (%)",
+      "type": "number",
+      "default": 22,
+      "min": 0.1,
+      "max": 100
+    },
+    {
+      "id": "ctr",
+      "label": "Click-through rate (%)",
+      "type": "number",
+      "default": 3,
+      "min": 0.1,
+      "max": 100
+    },
+    {
+      "id": "conv_rate",
+      "label": "Purchase conversion rate (%)",
+      "type": "number",
+      "default": 5,
+      "min": 0.1,
+      "max": 100
+    },
+    {
+      "id": "aov",
+      "label": "Average order value (₹)",
+      "type": "number",
+      "default": 2000,
+      "min": 1
+    },
+    {
+      "id": "cost",
+      "label": "Campaign cost (₹ — ESP + design)",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Campaign revenue",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "ROI",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Revenue per email",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Opens = list × open rate. Clicks = opens × CTR. Buyers = clicks × conversion rate. Revenue = buyers × AOV. ROI = (revenue − cost) ÷ cost × 100.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the average ROI of email marketing?",
+      "a": "Email marketing averages ₹36–42 return per ₹1 spent (global benchmark); in India, well-segmented B2C email can deliver 30–50× ROI for e-commerce."
+    },
+    {
+      "q": "What is a good email open rate in India?",
+      "a": "Average open rates vary: e-commerce 18–25%, B2B services 22–30%, healthcare 25–35%. Personalised subject lines and segmentation can improve rates significantly."
+    },
+    {
+      "q": "How do I grow my email list ethically?",
+      "a": "Lead magnets (free guides, checklists), pop-ups with value offers, gated content and event registrations are the most effective opt-in methods. Never buy lists."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

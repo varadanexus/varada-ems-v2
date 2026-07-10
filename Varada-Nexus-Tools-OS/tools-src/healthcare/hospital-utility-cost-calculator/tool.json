@@ -1,0 +1,108 @@
+{
+  "id": "hospital-utility-cost-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Hospital Utility Cost Calculator",
+  "shortBenefit": "Monthly electricity and water cost for a hospital.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate a hospital’s monthly electricity and water running cost from bed count, per-bed consumption and utility tariffs.",
+  "seo": {
+    "title": "Hospital Utility Cost Calculator — Electricity & Water Running Cost | Varada Nexus",
+    "description": "Free hospital utility cost calculator. Estimate monthly electricity and water cost from beds, per-bed usage and tariffs.",
+    "keywords": [
+      "hospital utility cost",
+      "hospital electricity cost",
+      "hospital running cost calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 150,
+      "min": 0
+    },
+    {
+      "id": "kwh",
+      "label": "Power use (kWh/bed/day)",
+      "type": "number",
+      "default": 30,
+      "min": 0
+    },
+    {
+      "id": "tariff",
+      "label": "Electricity tariff (₹/kWh)",
+      "type": "number",
+      "default": 9,
+      "min": 0
+    },
+    {
+      "id": "water",
+      "label": "Water use (litres/bed/day)",
+      "type": "number",
+      "default": 500,
+      "min": 0
+    },
+    {
+      "id": "waterRate",
+      "label": "Water cost (₹/1000 L)",
+      "type": "number",
+      "default": 60,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Utility",
+      "",
+      "Monthly cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total monthly utilities",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Electricity",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Water",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Electricity/month = beds × kWh/bed/day × tariff × 30. Water/month = beds × litres/bed/day ÷ 1000 × water rate × 30. Hospitals typically use 20–40 kWh and 400–600 L per bed per day.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much electricity does a hospital use per bed?",
+      "a": "Typically 20–40 kWh per bed per day depending on HVAC load, imaging and climate."
+    },
+    {
+      "q": "How is monthly utility cost estimated?",
+      "a": "Multiply per-bed daily usage by beds, the tariff and 30 days for each utility, then add them."
+    },
+    {
+      "q": "What drives hospital energy cost?",
+      "a": "HVAC/air-conditioning, sterilisation, imaging equipment and 24×7 operation are the largest contributors."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

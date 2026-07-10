@@ -1,0 +1,101 @@
+{
+  "id": "pharmacy-inventory-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Pharmacy Inventory Calculator",
+  "shortBenefit": "Reorder level, order quantity and safety stock for pharmacy.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate reorder level, average inventory and safety stock value for a hospital or retail pharmacy from monthly consumption, lead time and a safety buffer.",
+  "seo": {
+    "title": "Pharmacy Inventory Calculator — Reorder Level & Safety Stock | Varada Nexus",
+    "description": "Free pharmacy inventory calculator. Get reorder level, safety stock and average inventory value from consumption and lead time.",
+    "keywords": [
+      "pharmacy inventory calculator",
+      "reorder level calculator",
+      "safety stock calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "monthly",
+      "label": "Monthly consumption value (₹)",
+      "type": "number",
+      "default": 2000000,
+      "min": 0
+    },
+    {
+      "id": "lead",
+      "label": "Supplier lead time (days)",
+      "type": "number",
+      "default": 7,
+      "min": 0
+    },
+    {
+      "id": "safety",
+      "label": "Safety stock (days)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "review",
+      "label": "Review/order cycle (days)",
+      "type": "number",
+      "default": 15,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Reorder level",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Safety stock",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Suggested order value",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Daily consumption = monthly ÷ 30. Reorder level = daily × (lead time + safety days). Safety stock = daily × safety days. Suggested order = daily × review cycle. Values, not units.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a reorder level?",
+      "a": "The stock level at which you place a new order so replenishment arrives before you run out: daily use × (lead time + safety days)."
+    },
+    {
+      "q": "How much safety stock should a pharmacy hold?",
+      "a": "Enough to cover demand variability and delays — commonly 7–15 days of consumption for fast-moving drugs."
+    },
+    {
+      "q": "Does this work in value or units?",
+      "a": "This version works in rupee value across the basket; for critical single items, compute in units with the same logic."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

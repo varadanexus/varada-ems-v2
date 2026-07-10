@@ -1,0 +1,185 @@
+{
+  "id": "nabl-readiness-checklist",
+  "category": "hospital-consultancy",
+  "kind": "checklist",
+  "name": "NABL Readiness Checklist",
+  "shortBenefit": "Assess lab readiness for NABL accreditation.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Evaluate your hospital laboratory's preparedness for NABL (National Accreditation Board for Testing and Calibration Laboratories) accreditation across documentation, equipment, personnel and quality management.",
+  "seo": {
+    "title": "NABL Readiness Checklist — Lab Accreditation Assessment | Varada Nexus",
+    "description": "Free NABL readiness checklist. Assess your hospital laboratory across documentation, equipment, QMS and personnel requirements for accreditation.",
+    "keywords": [
+      "nabl readiness checklist",
+      "nabl accreditation laboratory",
+      "lab quality checklist india"
+    ]
+  },
+  "buttonLabel": "Assess NABL Readiness",
+  "checklist": [
+    {
+      "name": "1. Documentation & QMS",
+      "items": [
+        {
+          "id": "c1i1",
+          "text": "Quality Manual (QM) drafted and approved",
+          "critical": true
+        },
+        {
+          "id": "c1i2",
+          "text": "Standard Operating Procedures (SOPs) for all test processes",
+          "critical": true
+        },
+        {
+          "id": "c1i3",
+          "text": "Document control system in place (version, review, distribution)",
+          "critical": true
+        },
+        {
+          "id": "c1i4",
+          "text": "Internal audit programme established"
+        },
+        {
+          "id": "c1i5",
+          "text": "Corrective & Preventive Action (CAPA) system active"
+        }
+      ]
+    },
+    {
+      "name": "2. Equipment & Calibration",
+      "items": [
+        {
+          "id": "c2i1",
+          "text": "All equipment calibrated with valid certificates",
+          "critical": true
+        },
+        {
+          "id": "c2i2",
+          "text": "Equipment maintenance logs maintained",
+          "critical": true
+        },
+        {
+          "id": "c2i3",
+          "text": "Reference standards traceable to national/international standards"
+        },
+        {
+          "id": "c2i4",
+          "text": "Equipment breakdown and repair records kept"
+        }
+      ]
+    },
+    {
+      "name": "3. Personnel & Training",
+      "items": [
+        {
+          "id": "c3i1",
+          "text": "Lab personnel qualifications documented",
+          "critical": true
+        },
+        {
+          "id": "c3i2",
+          "text": "Training records and competency assessments maintained"
+        },
+        {
+          "id": "c3i3",
+          "text": "Authorised signatory meeting NABL educational requirements",
+          "critical": true
+        }
+      ]
+    },
+    {
+      "name": "4. Sample Handling & Testing",
+      "items": [
+        {
+          "id": "c4i1",
+          "text": "Sample collection, handling and storage procedures defined",
+          "critical": true
+        },
+        {
+          "id": "c4i2",
+          "text": "Proficiency testing / EQA participation active",
+          "critical": true
+        },
+        {
+          "id": "c4i3",
+          "text": "Uncertainty of measurement calculated for key tests"
+        },
+        {
+          "id": "c4i4",
+          "text": "Reference ranges validated for patient population"
+        }
+      ]
+    },
+    {
+      "name": "5. Facility & Safety",
+      "items": [
+        {
+          "id": "c5i1",
+          "text": "Dedicated lab space meeting biosafety requirements"
+        },
+        {
+          "id": "c5i2",
+          "text": "Biomedical waste management per BMWM rules"
+        },
+        {
+          "id": "c5i3",
+          "text": "Personnel protective equipment available and used"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Checklist maps to ISO 15189:2022 / NABL Doc 112 requirements. Critical items are mandatory for initial assessment.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is NABL accreditation for hospitals?",
+      "a": "NABL (under QCI) accredits medical testing laboratories to ISO 15189, assuring patients and regulators that test results are accurate and reliable."
+    },
+    {
+      "q": "How long does NABL accreditation take?",
+      "a": "Typically 9–18 months from readiness to certificate, covering application, pre-assessment, assessment and any corrective actions."
+    },
+    {
+      "q": "What are the most common NABL audit failures?",
+      "a": "Missing or outdated SOPs, gaps in equipment calibration records, absence of EQA participation and incomplete uncertainty of measurement calculations."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

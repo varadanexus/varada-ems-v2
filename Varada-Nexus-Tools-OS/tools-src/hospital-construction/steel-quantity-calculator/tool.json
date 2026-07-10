@@ -1,0 +1,111 @@
+{
+  "id": "steel-quantity-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Steel Quantity Calculator",
+  "shortBenefit": "Reinforcement steel for RCC members by concrete volume.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate reinforcement steel (rebar) quantity and cost for RCC members from concrete volume and member type, using standard kg-per-m³ rates.",
+  "seo": {
+    "title": "Steel Quantity Calculator — Rebar for RCC by Concrete Volume | Varada Nexus",
+    "description": "Free steel quantity calculator. Estimate reinforcement steel and cost for slabs, beams, columns and footings by concrete volume.",
+    "keywords": [
+      "steel calculator",
+      "rebar quantity calculator",
+      "reinforcement steel per m3"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "vol",
+      "label": "Concrete volume (m³)",
+      "type": "number",
+      "default": 20,
+      "min": 0
+    },
+    {
+      "id": "member",
+      "label": "RCC member",
+      "type": "select",
+      "default": "100",
+      "options": [
+        {
+          "v": "75",
+          "t": "Footings (~75 kg/m³)"
+        },
+        {
+          "v": "100",
+          "t": "Slabs (~100 kg/m³)"
+        },
+        {
+          "v": "130",
+          "t": "Beams (~130 kg/m³)"
+        },
+        {
+          "v": "160",
+          "t": "Columns (~160 kg/m³)"
+        }
+      ]
+    },
+    {
+      "id": "rate",
+      "label": "Steel price (₹/kg)",
+      "type": "number",
+      "default": 65,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Steel weight",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "In tonnes",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Steel cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Steel = concrete volume × kg-per-m³ for the member type (footings ~75, slabs ~100, beams ~130, columns ~160 kg/m³). Rates are typical; exact steel comes from the bar bending schedule.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much steel is required per m³ of concrete?",
+      "a": "Roughly 75 kg/m³ for footings, 100 for slabs, 130 for beams and 160 for columns."
+    },
+    {
+      "q": "How do I convert to tonnes?",
+      "a": "Divide the steel weight in kg by 1,000."
+    },
+    {
+      "q": "Is this exact?",
+      "a": "No — it is a thumb-rule estimate; the bar bending schedule from structural drawings gives exact quantities."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}
