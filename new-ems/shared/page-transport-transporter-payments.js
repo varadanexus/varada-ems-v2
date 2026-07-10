@@ -251,7 +251,14 @@ async function downloadPaymentPdf(paymentId, details = null) {
     y = summaryEndY + 8;
     addOldEmsDeclarationBlock(doc, { startY: y, text: declarationText, width: 90, title: "Declaration:" });
     await addOldEmsSignatureStampBlock(doc, { startY: 248 });
-    savePdf(doc, formatPdfFilename("TP", resolved.payment_no || "transporter-payment"));
+    savePdf(doc, formatPdfFilename("TP", resolved.payment_no || "transporter-payment"), {
+      category: "TRANSPORTER_PAYMENT",
+      entityType: "transport_transporter_payments",
+      entityId: resolved.id,
+      documentNo: resolved.payment_no,
+      divisionId: resolved.division_id,
+      date: resolved.payment_date || resolved.created_at
+    });
   } catch (error) {
     console.error("payment_pdf_failed", error);
     showToast(error?.message || "Transporter payment PDF generation failed", TOAST_TYPES.ERROR);

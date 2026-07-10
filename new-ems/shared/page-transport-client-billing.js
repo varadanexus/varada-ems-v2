@@ -731,7 +731,14 @@ async function downloadBillPdf(billId, details = null) {
       width: 90
     });
     await addOldEmsSignatureStampBlock(doc, { startY: 248 });
-    savePdf(doc, formatPdfFilename(resolved.billing_type === "GST" ? "INV" : "CB", resolved.bill_no || "client-bill"));
+    savePdf(doc, formatPdfFilename(resolved.billing_type === "GST" ? "INV" : "CB", resolved.bill_no || "client-bill"), {
+      category: resolved.billing_type === "GST" ? "GST_INVOICE" : "CLIENT_BILL",
+      entityType: "transport_client_bills",
+      entityId: resolved.id,
+      documentNo: resolved.bill_no,
+      divisionId: resolved.division_id,
+      date: resolved.bill_date || resolved.created_at
+    });
   } catch (error) {
     showToast(error?.message || "Client bill PDF generation failed", TOAST_TYPES.ERROR);
   }
