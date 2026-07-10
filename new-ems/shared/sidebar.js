@@ -50,30 +50,45 @@ const MENU_BY_WORKSPACE = {
       ]
     },
     {
-      title: "Master Data",
+      title: "Client",
       items: [
-        { module: MODULES.TRANSPORT_COMMODITIES, label: "Commodities", href: ROUTES.TRANSPORT_COMMODITIES },
-        { module: MODULES.TRANSPORT_ROUTE_MASTER, label: "Routes", href: ROUTES.TRANSPORT_ROUTE_MASTER },
-        { module: MODULES.TRANSPORT_CLIENTS, label: "Clients", href: ROUTES.TRANSPORT_CLIENTS },
-        { module: MODULES.TRANSPORT_TRANSPORTERS, label: "Transporters", href: ROUTES.TRANSPORT_TRANSPORTERS },
-        { module: MODULES.TRANSPORT_DRIVERS, label: "Drivers", href: ROUTES.TRANSPORT_DRIVERS },
-        { module: MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING, label: "Agents / Truck Mapping", href: ROUTES.TRANSPORT_TRUCK_AGENT_COMMISSION },
-        { module: MODULES.TRANSPORT_TRUCKS, label: "Trucks", href: ROUTES.TRANSPORT_TRUCKS }
+        { module: MODULES.TRANSPORT_CLIENT_BILLING, label: "Client Billing", href: ROUTES.TRANSPORT_CLIENT_BILLING },
+        { module: MODULES.TRANSPORT_CLIENT_CREDIT_NOTES, label: "Client Credit Notes", href: ROUTES.TRANSPORT_CLIENT_CREDIT_NOTES },
+        { module: MODULES.TRANSPORT_CLIENT_RECEIPTS, label: "Client Receipts", href: ROUTES.TRANSPORT_CLIENT_RECEIPTS }
       ]
     },
     {
-      title: "Commercials",
+      title: "Transporter",
       items: [
-        { module: MODULES.TRANSPORT_RATE_MASTER, label: "Rate Master", href: ROUTES.TRANSPORT_RATE_MASTER },
-        { module: MODULES.TRANSPORT_CLIENT_BILLING, label: "Client Billing", href: ROUTES.TRANSPORT_CLIENT_BILLING },
-        { module: MODULES.TRANSPORT_CLIENT_CREDIT_NOTES, label: "Client Credit Notes", href: ROUTES.TRANSPORT_CLIENT_CREDIT_NOTES },
         { module: MODULES.TRANSPORT_TRANSPORTER_STATEMENTS, label: "Transporter Statements", href: ROUTES.TRANSPORT_TRANSPORTER_STATEMENTS },
-        { module: MODULES.TRANSPORT_CLIENT_RECEIPTS, label: "Client Receipts", href: ROUTES.TRANSPORT_CLIENT_RECEIPTS },
-        { module: MODULES.TRANSPORT_TRANSPORTER_PAYMENTS, label: "Transporter Payments", href: ROUTES.TRANSPORT_TRANSPORTER_PAYMENTS },
-        { module: MODULES.TRANSPORT_FINANCE_APPROVAL, label: "Finance Approval", href: ROUTES.TRANSPORT_FINANCE_APPROVAL },
+        { module: MODULES.TRANSPORT_TRANSPORTER_PAYMENTS, label: "Transporter Payments", href: ROUTES.TRANSPORT_TRANSPORTER_PAYMENTS }
+      ]
+    },
+    {
+      title: "Agent",
+      items: [
         { module: MODULES.TRANSPORT_AGENT_WITHDRAWALS, label: "Agent Withdrawals", href: ROUTES.TRANSPORT_AGENT_WITHDRAWALS },
-        { module: MODULES.TRANSPORT_AGENT_PENALTIES, label: "Agent Penalties", href: ROUTES.TRANSPORT_AGENT_PENALTIES },
+        { module: MODULES.TRANSPORT_AGENT_PENALTIES, label: "Agent Penalties", href: ROUTES.TRANSPORT_AGENT_PENALTIES }
+      ]
+    },
+    {
+      title: "Finance",
+      items: [
+        { module: MODULES.TRANSPORT_FINANCE_APPROVAL, label: "Finance Approval", href: ROUTES.TRANSPORT_FINANCE_APPROVAL },
         { module: MODULES.TRANSPORT_LEDGER, label: "Ledger", href: ROUTES.TRANSPORT_LEDGER }
+      ]
+    },
+    {
+      title: "Master Data",
+      items: [
+        { module: MODULES.TRANSPORT_ROUTE_MASTER, label: "Routes", href: ROUTES.TRANSPORT_ROUTE_MASTER },
+        { module: MODULES.TRANSPORT_COMMODITIES, label: "Commodities", href: ROUTES.TRANSPORT_COMMODITIES },
+        { module: MODULES.TRANSPORT_CLIENTS, label: "Clients", href: ROUTES.TRANSPORT_CLIENTS },
+        { module: MODULES.TRANSPORT_TRANSPORTERS, label: "Transporters", href: ROUTES.TRANSPORT_TRANSPORTERS },
+        { module: MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING, label: "Agents / Truck Mapping", href: ROUTES.TRANSPORT_TRUCK_AGENT_COMMISSION },
+        { module: MODULES.TRANSPORT_TRUCKS, label: "Trucks", href: ROUTES.TRANSPORT_TRUCKS },
+        { module: MODULES.TRANSPORT_DRIVERS, label: "Drivers", href: ROUTES.TRANSPORT_DRIVERS },
+        { module: MODULES.TRANSPORT_RATE_MASTER, label: "Rate Master", href: ROUTES.TRANSPORT_RATE_MASTER }
       ]
     }
   ],
@@ -269,8 +284,9 @@ export function getSearchIndex() {
 export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACES.ADMIN) {
   const sectionsForWorkspace = MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN];
   const sections = sectionsForWorkspace.map((section) => {
-    const items = section.items
-      .filter((item) => item.disabled || (allowedModules || []).includes(item.module))
+    const visibleItems = section.items.filter((item) => item.disabled || (allowedModules || []).includes(item.module));
+    const sectionHasActive = visibleItems.some((item) => !item.disabled && item.href && currentPath.includes(item.href));
+    const items = visibleItems
       .map((item) => {
         if (item.disabled) {
           const icon = item.label.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase();
@@ -282,7 +298,10 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
       })
       .join("");
     if (!items) return "";
-    return `<div class="nav-section"><div class="nav-section-title">${section.title}</div><div class="nav-list">${items}</div></div>`;
+    // Collapsible section. Open the group that contains the current page (and
+    // always the "Home" group) so the active item is visible on load.
+    const open = sectionHasActive || section.title === "Home" ? "open" : "";
+    return `<details class="nav-section" ${open}><summary class="nav-section-title"><span class="nav-section-label">${section.title}</span><span class="nav-caret" aria-hidden="true">›</span></summary><div class="nav-list">${items}</div></details>`;
   }).join("");
 
   return `

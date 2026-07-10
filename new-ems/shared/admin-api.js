@@ -583,6 +583,91 @@ export async function getActiveAgentByTruck(truckId, tripDate = null) {
   };
 }
 
+// All active agents mapped to a truck for a given trip date (multi-agent).
+// Returns one entry per agent with their commission rate and share %.
+export async function getAgentsByTruck(truckId, tripDate = null) {
+  if (!truckId) return [];
+  const client = getSupabaseClient();
+  let query = client
+    .from("transport_truck_agent_commission_mapping")
+    .select("id,truck_id,transport_agent_id,commission_type,commission_value,commission_share_percentage,effective_from,effective_to,created_at,transport_agents(id,name)")
+    .eq("truck_id", truckId)
+    .eq("is_active", true)
+    .is("deleted_at", null)
+    .order("effective_from", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (tripDate) {
+    query = query.lte("effective_from", tripDate).or(`effective_to.is.null,effective_to.gte.${tripDate}`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  // Keep only the most-recent effective mapping per agent (mirrors the SQL
+  // commission functions, which pick one row per agent).
+  const seen = new Set();
+  const out = [];
+  for (const row of data || []) {
+    const aid = String(row.transport_agent_id || "");
+    if (!aid || seen.has(aid)) continue;
+    seen.add(aid);
+    out.push({
+      mapping_id: row.id,
+      transport_agent_id: row.transport_agent_id,
+      transport_agent_name: row.transport_agents?.name || null,
+      commission_type: row.commission_type || null,
+      commission_value: row.commission_value != null ? Number(row.commission_value) : null,
+      commission_share_percentage: row.commission_share_percentage != null ? Number(row.commission_share_percentage) : 100
+    });
+  }
+  return out;
+}
+
+// --- Profit-share partners (internal agents on the residual-margin tier) -----
+export async function listProfitSharePartners() {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from("transport_profit_share_partners")
+    .select("id,transport_agent_id,share_percentage,is_active,transport_agents(id,name,code)")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data || []).map((r) => ({
+    id: r.id,
+    transport_agent_id: r.transport_agent_id,
+    transport_agent_name: r.transport_agents?.name || null,
+    transport_agent_code: r.transport_agents?.code || null,
+    share_percentage: r.share_percentage != null ? Number(r.share_percentage) : 0,
+    is_active: r.is_active
+  }));
+}
+
+export async function upsertProfitSharePartner(payload) {
+  const client = getSupabaseClient();
+  const row = { ...payload, updated_at: new Date().toISOString() };
+  if (payload.id) {
+    const { data, error } = await client.from("transport_profit_share_partners").update(row).eq("id", payload.id).select("*").single();
+    if (error) throw error;
+    return data;
+  }
+  const { data, error } = await client.from("transport_profit_share_partners").insert(row).select("*").single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteProfitSharePartner(id) {
+  const client = getSupabaseClient();
+  const { error } = await client.from("transport_profit_share_partners").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function getTruckProfitShareEnabled(truckId) {
+  if (!truckId) return true;
+  const client = getSupabaseClient();
+  const { data, error } = await client.from("transport_trucks").select("profit_share_enabled").eq("id", truckId).maybeSingle();
+  if (error) throw error;
+  return data ? data.profit_share_enabled !== false : true;
+}
+
 export async function findTransportRateForTrip({
   divisionId,
   tripDate,

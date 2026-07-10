@@ -88,6 +88,8 @@ function renderPageShell(divisionLabel) {
         <input id="truckCapacity" data-field="capacity_mt" placeholder="Capacity MT" />
         <label for="truckStatus">Status *</label>
         <select id="truckStatus" data-field="is_active"><option value="true" selected>Active</option><option value="false">Inactive</option></select>
+        <label for="truckProfitShare">Partner Profit-Share</label>
+        <select id="truckProfitShare" data-field="profit_share_enabled"><option value="true" selected>On (internal partners share margin)</option><option value="false">Off (no partner share on this truck)</option></select>
         <div id="transportTruckFormError" class="muted"></div>
         <button class="btn" type="submit">Save Truck</button>
       </form>
@@ -177,7 +179,7 @@ function renderTruckRow(row) {
   const statusLabel = row.is_active ? "Active" : "Inactive";
   return `
     <div class="transport-truck-list-row">
-      <div class="transport-truck-primary"><strong class="transport-truck-ellipsis" title="${escapeHtml(registrationNo)}">${escapeHtml(registrationNo)}</strong><span class="transport-truck-meta">Code: ${escapeHtml(row.code || "—")}</span></div>
+      <div class="transport-truck-primary"><strong class="transport-truck-ellipsis" title="${escapeHtml(registrationNo)}">${escapeHtml(registrationNo)}</strong><span class="transport-truck-meta">Code: ${escapeHtml(row.code || "—")}${row.profit_share_enabled === false ? " · Partner share: Off" : ""}</span></div>
       <div class="transport-truck-ellipsis" title="${escapeHtml(transporterName)}">${escapeHtml(transporterName)}</div>
       <div>${escapeHtml(String(capacity))}</div>
       <div><span class="transport-truck-status ${statusClass}">${statusLabel}</span></div>
@@ -217,6 +219,7 @@ function openEditModal(id) {
     <div><label for="edit-truck-transporter">Transporter *</label><select id="edit-truck-transporter" data-edit-field="transport_transporter_id" required><option value="">Select Transporter</option>${PAGE_STATE.transporterOptions.map((option) => `<option value="${option.value}" ${String(option.value) === String(row.transport_transporter_id || "") ? "selected" : ""}>${option.label}</option>`).join("")}</select></div>
     <div><label for="edit-truck-capacity">Capacity</label><input id="edit-truck-capacity" data-edit-field="capacity_mt" value="${escapeHtml(row.capacity_mt ?? "")}" /></div>
     <div><label for="edit-truck-status">Status *</label><select id="edit-truck-status" data-edit-field="is_active"><option value="true" ${row.is_active ? "selected" : ""}>Active</option><option value="false" ${!row.is_active ? "selected" : ""}>Inactive</option></select></div>
+    <div><label for="edit-truck-profitshare">Partner Profit-Share</label><select id="edit-truck-profitshare" data-edit-field="profit_share_enabled"><option value="true" ${row.profit_share_enabled !== false ? "selected" : ""}>On (internal partners share margin)</option><option value="false" ${row.profit_share_enabled === false ? "selected" : ""}>Off (no partner share on this truck)</option></select></div>
   `;
   showEditError("");
   qs("#transportTruckEditModal")?.removeAttribute("hidden");
@@ -256,6 +259,8 @@ function collectPayload(mode, before = null) {
   payload.registration_no = qs(regSelector)?.value?.trim() || null;
   payload.transport_transporter_id = qs(transporterSelector)?.value?.trim() || null;
   payload.capacity_mt = qs(capacitySelector)?.value?.trim() || null;
+  const profitSelector = isCreate ? "[data-field='profit_share_enabled']" : "[data-edit-field='profit_share_enabled']";
+  payload.profit_share_enabled = (qs(profitSelector)?.value || "true") === "true";
   normalizePayload(payload, before);
   return payload;
 }

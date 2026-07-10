@@ -108,7 +108,28 @@ body.page-transition-active .page-transition-overlay {
   color: #8ea0be;
   margin: 0.25rem 0 0.35rem;
 }
-.nav-list { display: grid; gap: 0.35rem; }
+/* Collapsible nav sections (details/summary) */
+details.nav-section { min-width: 0; }
+summary.nav-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  padding: 0.25rem 0.35rem;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+summary.nav-section-title::-webkit-details-marker { display: none; }
+summary.nav-section-title:hover { color: #cdd8ea; background: rgba(255, 255, 255, 0.03); }
+.nav-caret { font-size: 0.9rem; opacity: 0.6; transition: transform 0.2s ease; }
+details.nav-section[open] > summary .nav-caret { transform: rotate(90deg); }
+.nav-list { display: grid; gap: 0.35rem; margin-top: 0.35rem; }
+/* Icon-rail (collapsed sidebar): always show items, hide section chrome */
+.app-shell.sidebar-collapsed summary.nav-section-title { display: none; }
+.app-shell.sidebar-collapsed details.nav-section > .nav-list { display: grid !important; margin-top: 0; }
 .nav-link {
   display: flex;
   align-items: center;

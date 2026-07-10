@@ -636,6 +636,45 @@ function docTypeLabel(type) {
   return { WEIGHT_BILL: "Weigh Bill", TRIP_SHEET: "Trip Sheet", EXPENSE_RECEIPT: "Expense Receipt" }[String(type || "").toUpperCase()] || type || "Document";
 }
 
+// Uploadable document types. EXPENSE_RECEIPT can repeat; the others are unique
+// per trip, so once uploaded (and not rejected) they drop out of the dropdown.
+const PORTAL_DOC_TYPES = [
+  { value: "WEIGHT_BILL", label: "Weigh Bill", multiple: false },
+  { value: "TRIP_SHEET", label: "Trip Sheet", multiple: false },
+  { value: "EXPENSE_RECEIPT", label: "Expense Receipt", multiple: true }
+];
+
+function usedDocTypesForTrip(tripId) {
+  const docs = PAGE_STATE.documents || [];
+  return new Set(docs
+    .filter((d) => String(d.trip_id) === String(tripId) && String(d.approval_status || "").toLowerCase() !== "rejected")
+    .map((d) => String(d.document_type || "").toUpperCase()));
+}
+
+function availableDocTypesForTrip(tripId) {
+  const used = usedDocTypesForTrip(tripId);
+  return PORTAL_DOC_TYPES.filter((t) => t.multiple || !used.has(t.value));
+}
+
+function docTypeOptionsHtml(tripId) {
+  const avail = availableDocTypesForTrip(tripId);
+  if (!avail.length) return `<option value="" disabled selected>All documents already uploaded</option>`;
+  return avail.map((t) => `<option value="${t.value}">${t.label}</option>`).join("");
+}
+
+// Repopulate the Document Type dropdown for the currently-selected trip and
+// enable/disable Upload accordingly.
+function refreshDocTypeOptions() {
+  const sel = qs("#docTypeSelect");
+  if (!sel) return;
+  const tripId = qs("#docTripSelect")?.value || "";
+  sel.innerHTML = docTypeOptionsHtml(tripId);
+  const none = !availableDocTypesForTrip(tripId).length;
+  sel.disabled = none;
+  const btn = qs("#docUploadBtn");
+  if (btn) btn.disabled = none || PAGE_STATE.uploadingDocument || !((PAGE_STATE.trips || []).length);
+}
+
 function docStatusBadge(status) {
   const s = String(status || "pending").toLowerCase();
   const map = {
@@ -653,14 +692,7 @@ function renderDocuments() {
   const tripOptions = trips.length
     ? trips.map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.trip_no || t.id)}${t.route_name ? " · " + escapeHtml(t.route_name) : ""}</option>`).join("")
     : `<option value="" disabled>No assigned trips</option>`;
-  const rows = docs.map((d) => `
-    <tr>
-      <td>${escapeHtml(d.trip_no || "-")}</td>
-      <td>${escapeHtml(docTypeLabel(d.document_type))}</td>
-      <td>${docStatusBadge(d.approval_status)}${d.approval_status === "rejected" && d.rejection_reason ? `<div class="muted" style="font-size:.74rem;margin-top:3px">${escapeHtml(d.rejection_reason)}</div>` : ""}</td>
-      <td>${escapeHtml(formatDate(d.created_at))}</td>
-      <td>${d.web_view_link ? `<a class="btn btn-sm" href="${escapeHtml(d.web_view_link)}" target="_blank" rel="noopener">View</a>` : "-"}</td>
-    </tr>`).join("");
+  const tree = renderDocumentTree(docs);
 
   return `
     <section class="card" style="margin-bottom:1rem">
@@ -673,11 +705,7 @@ function renderDocuments() {
         </div>
         <div>
           <label class="muted" for="docTypeSelect">Document Type</label>
-          <select id="docTypeSelect">
-            <option value="WEIGHT_BILL">Weigh Bill</option>
-            <option value="TRIP_SHEET">Trip Sheet</option>
-            <option value="EXPENSE_RECEIPT">Expense Receipt</option>
-          </select>
+          <select id="docTypeSelect" ${trips.length && availableDocTypesForTrip(trips[0].id).length ? "" : "disabled"}>${trips.length ? docTypeOptionsHtml(trips[0].id) : `<option value="" disabled>No assigned trips</option>`}</select>
         </div>
         <div>
           <label class="muted" for="docFileInput">File (PDF or image)</label>
@@ -688,17 +716,54 @@ function renderDocuments() {
           <input id="docRemarksInput" type="text" placeholder="e.g. Diesel receipt at Vijayawada">
         </div>
       </div>
-      <button class="btn btn-primary" id="docUploadBtn" type="button" style="margin-top:.75rem" ${trips.length && !PAGE_STATE.uploadingDocument ? "" : "disabled"}>
+      <button class="btn btn-primary" id="docUploadBtn" type="button" style="margin-top:.75rem" ${trips.length && !PAGE_STATE.uploadingDocument && availableDocTypesForTrip(trips[0].id).length ? "" : "disabled"}>
         ${PAGE_STATE.uploadingDocument ? "Uploading…" : "Upload Document"}
       </button>
     </section>
     <section class="card">
       <h3>My Uploaded Documents</h3>
-      <div class="table-container"><table><thead><tr><th>Trip</th><th>Type</th><th>Status</th><th>Uploaded</th><th>File</th></tr></thead><tbody>
-        ${rows || `<tr><td colspan="5" style="text-align:center;padding:2rem" class="muted">No documents uploaded yet.</td></tr>`}
-      </tbody></table></div>
+      <div id="docTree">${tree}</div>
     </section>
   `;
+}
+
+// File-explorer view of uploaded documents: Trip folder → document-type folder → files.
+function renderDocumentTree(docs) {
+  if (!docs || !docs.length) {
+    return `<div class="muted" style="text-align:center;padding:2rem">No documents uploaded yet.</div>`;
+  }
+  const byTrip = {};
+  docs.forEach((d) => {
+    const trip = d.trip_no || "—";
+    (byTrip[trip] = byTrip[trip] || []).push(d);
+  });
+  return Object.keys(byTrip).sort().map((trip) => {
+    const tripDocs = byTrip[trip];
+    const byType = {};
+    tripDocs.forEach((d) => {
+      const t = String(d.document_type || "OTHER").toUpperCase();
+      (byType[t] = byType[t] || []).push(d);
+    });
+    const typeBlocks = Object.keys(byType).sort().map((type) => {
+      const items = byType[type];
+      const files = items.map((d) => `
+        <div style="display:flex;align-items:center;gap:.6rem;padding:.45rem .6rem;border-top:1px solid rgba(150,150,150,.18)">
+          <span aria-hidden="true">📄</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d.original_file_name || docTypeLabel(d.document_type))}${d.remarks ? ` <span class="muted" style="font-size:.74rem">— ${escapeHtml(d.remarks)}</span>` : ""}</span>
+          <span class="muted" style="font-size:.74rem;white-space:nowrap">${escapeHtml(formatDate(d.created_at))}</span>
+          ${docStatusBadge(d.approval_status)}
+          ${d.web_view_link ? `<a class="btn btn-sm" href="${escapeHtml(d.web_view_link)}" target="_blank" rel="noopener">View</a>` : `<span class="muted" style="font-size:.74rem">—</span>`}
+        </div>${d.approval_status === "rejected" && d.rejection_reason ? `<div class="muted" style="font-size:.74rem;padding:0 .6rem .35rem 2rem">Reason: ${escapeHtml(d.rejection_reason)}</div>` : ""}`).join("");
+      return `<details style="margin:.3rem 0 .3rem 1.1rem">
+          <summary style="cursor:pointer;font-weight:600;padding:.25rem 0">📁 ${escapeHtml(docTypeLabel(type))} <span class="muted" style="font-weight:400">(${items.length})</span></summary>
+          ${files}
+        </details>`;
+    }).join("");
+    return `<details open style="margin-bottom:.5rem;border:1px solid rgba(150,150,150,.22);border-radius:10px;padding:.4rem .75rem">
+        <summary style="cursor:pointer;font-weight:700;padding:.25rem 0">🗂️ Trip ${escapeHtml(trip)} <span class="muted" style="font-weight:400">(${tripDocs.length})</span></summary>
+        ${typeBlocks}
+      </details>`;
+  }).join("");
 }
 
 function fileToBase64(file) {
@@ -716,6 +781,7 @@ async function handleDocumentUpload() {
   const remarks = String(qs("#docRemarksInput")?.value || "").trim();
   const file = qs("#docFileInput")?.files?.[0];
   if (!tripId) return showToast("Select a trip.", TOAST_TYPES.ERROR);
+  if (!documentType) return showToast("All documents are already uploaded for this trip.", TOAST_TYPES.ERROR);
   if (!file) return showToast("Choose a file to upload.", TOAST_TYPES.ERROR);
   if (file.size > 10 * 1024 * 1024) return showToast("File too large (max 10 MB).", TOAST_TYPES.ERROR);
 
@@ -927,6 +993,7 @@ function bindEvents() {
   }));
   document.querySelectorAll("[data-pdf-statement]").forEach((btn) => btn.addEventListener("click", () => downloadStatementPdf(btn.dataset.pdfStatement)));
   qs("#docUploadBtn")?.addEventListener("click", handleDocumentUpload);
+  qs("#docTripSelect")?.addEventListener("change", refreshDocTypeOptions);
   bindTripEvents();
 }
 

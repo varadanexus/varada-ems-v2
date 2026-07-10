@@ -1,5 +1,6 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { addTripTimeline, createTrip, createTripDocument, deleteTripDocument, findTransportRateForTrip, getActiveAgentByTruck, getTransporterByTruck, getTripById, listActiveOptions, listRateRoutesForCommodity, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
+import { addTripTimeline, approveTripDocument, createTrip, createTripDocument, deleteTripDocument, findTransportRateForTrip, getActiveAgentByTruck, getAgentsByTruck, getTransporterByTruck, getTripById, getTruckProfitShareEnabled, listActiveOptions, listProfitSharePartners, listRateRoutesForCommodity, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, rejectTripDocument, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
+import { uploadDocumentToDrive } from "./drive-api.js";
 import { logAuditEvent } from "./audit.js";
 import { getCurrentAppUser } from "./auth.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
@@ -20,7 +21,7 @@ async function init() {
   let page = 1; const pageSize = 10; let rows = [];
 
   renderModuleContent(`${canCreate ? `<details class="card pm-collapse"><summary>Create Trip</summary><form id="tripCreateForm" class="form-row" style="margin-top:.85rem;"></form><div id="tripCreateMeta" class="muted" style="margin-top:.5rem;"></div></details>` : ""}
-  <section class="card" style="margin-top:1rem;"><h3>Trip List</h3><input id="tripSearch" placeholder="Search trip no/notes"/><select id="tripStatus"><option value="">All Status</option>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}">${s}</option>`).join("")}</select><div class="table-shell" style="margin-top:.75rem;"><table><thead><tr><th>Trip No</th><th>Date</th><th>Status</th><th>Qty</th><th>Actions</th></tr></thead><tbody id="tripBody"></tbody></table></div><div style="margin-top:.75rem;display:flex;gap:.5rem;"><button class="btn" id="tripPrev">Prev</button><span id="tripMeta"></span><button class="btn" id="tripNext">Next</button></div></section>
+  <section class="card" style="margin-top:1rem;"><h3>Trip List</h3><input id="tripSearch" placeholder="Search trip no/notes"/><select id="tripStatus"><option value="">All Status</option>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}">${s}</option>`).join("")}<option value="closed">closed (fully paid)</option></select><div class="table-shell" style="margin-top:.75rem;"><table><thead><tr><th>Trip No</th><th>Date</th><th>Status</th><th>Qty</th><th>Actions</th></tr></thead><tbody id="tripBody"></tbody></table></div><div style="margin-top:.75rem;display:flex;gap:.5rem;"><button class="btn" id="tripPrev">Prev</button><span id="tripMeta"></span><button class="btn" id="tripNext">Next</button></div></section>
   <div id="tripDetailsModal" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,.62);backdrop-filter:blur(4px);z-index:70;align-items:center;justify-content:center;">
     <div class="card" style="width:min(1000px,95vw);max-height:90vh;overflow:auto;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:.5rem;"><h3 style="margin:0;">Trip Details &amp; Timeline</h3><button class="btn" id="tripDetailsClose" type="button">Close</button></div>
@@ -75,13 +76,13 @@ async function init() {
     if (!host) return;
     const mkRow = (label, type, mandatory = false) => {
       const rec = pendingCreateDocs.find((d) => d.document_type === type && (!d.custom_document_name || d.custom_document_name === ""));
-      return `<tr><td>${label}${mandatory ? " <span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Mandatory</span>" : ""}</td><td>${rec ? (rec.is_uploaded ? "Uploaded" : "Pending Upload") : (mandatory ? "Missing" : "Missing")}</td><td><button type='button' class='btn' data-c-up='${type}'>Upload Placeholder</button></td><td><button type='button' class='btn' ${rec?.file_url ? "" : "disabled"}>View</button></td><td><button type='button' class='btn' data-c-rep='${type}' ${rec ? "" : "disabled"}>Replace</button></td><td><button type='button' class='btn btn-danger' data-c-del='${type}' ${rec ? "" : "disabled"}>Delete</button></td></tr>`;
+      return `<tr><td>${label}${mandatory ? " <span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Mandatory</span>" : ""}</td><td>${rec ? (rec.is_uploaded ? "Uploaded" : "Pending Upload") : (mandatory ? "Missing" : "Missing")}</td><td><button type='button' class='btn' data-c-up='${type}'>Mark Required</button></td><td><button type='button' class='btn' ${rec?.file_url ? "" : "disabled"}>View</button></td><td><button type='button' class='btn' data-c-rep='${type}' ${rec ? "" : "disabled"}>Replace</button></td><td><button type='button' class='btn btn-danger' data-c-del='${type}' ${rec ? "" : "disabled"}>Delete</button></td></tr>`;
     };
     host.innerHTML = `<div class='table-shell'><table><thead><tr><th>Document</th><th>Status</th><th>Upload</th><th>View</th><th>Replace</th><th>Delete</th></tr></thead><tbody>
       ${mkRow("Weight Bill", "WEIGHT_BILL", true)}
       ${mkRow("Trip Sheet", "TRIP_SHEET", false)}
       ${mkRow("Other Documents", "OTHER", false)}
-    </tbody></table></div>`;
+    </tbody></table></div><p class="muted" style="margin:.4rem 0 0 0;">These declare which documents the trip needs. Upload the actual files (to Google Drive) from <strong>Details</strong> after the trip is created.</p>`;
 
     host.querySelectorAll("button[data-c-up],button[data-c-rep]").forEach((b) => b.addEventListener("click", () => {
       const type = b.getAttribute("data-c-up") || b.getAttribute("data-c-rep");
@@ -156,15 +157,30 @@ async function init() {
       if (tWrap) tWrap.style.display = "block";
       showToast("No transporter mapped for selected truck. Select Fallback Transporter.", TOAST_TYPES.WARNING);
     }
-    const agent = await getActiveAgentByTruck(truckId, tripDate || null);
-    if (agent?.transport_agent_id) {
-      if (aName) aName.value = agent.transport_agent_name || "";
-      if (aId) aId.value = agent.transport_agent_id;
+    const info = await agentAutoLabel(truckId, tripDate);
+    if (info.label) {
+      if (aName) aName.value = info.label;
+      if (aId) aId.value = info.firstAgentId;
     } else {
       if (aName) aName.value = "Not mapped";
       if (aId) aId.value = "";
       showToast("No active agent mapping found for selected truck.", TOAST_TYPES.WARNING);
     }
+  }
+
+  // Build the "Agent (Auto)" label: outside agents (with split %) plus internal
+  // profit-share partners (residual %) when enabled for the truck.
+  async function agentAutoLabel(truckId, tripDate) {
+    const agents = await getAgentsByTruck(truckId, tripDate || null);
+    let partners = [];
+    try {
+      if (await getTruckProfitShareEnabled(truckId)) partners = await listProfitSharePartners();
+    } catch { partners = []; }
+    const multi = agents.length > 1 || agents.some((a) => Number(a.commission_share_percentage) !== 100);
+    const parts = [];
+    agents.forEach((a) => parts.push(multi ? `${a.transport_agent_name || "Agent"} (${Number(a.commission_share_percentage)}%)` : (a.transport_agent_name || "Agent")));
+    partners.forEach((p) => parts.push(`${p.transport_agent_name || "Partner"} (${Number(p.share_percentage)}% residual)`));
+    return { label: parts.join(", "), firstAgentId: agents[0]?.transport_agent_id || partners[0]?.transport_agent_id || "" };
   }
 
   form?.addEventListener("submit", async (e) => {
@@ -248,6 +264,67 @@ async function init() {
     }
   });
 
+  // Open a native file picker and resolve to { base64, fileName, mimeType, size }.
+  function pickFileAsBase64(accept = "") {
+    return new Promise((resolve) => {
+      const inp = document.createElement("input");
+      inp.type = "file";
+      if (accept) inp.accept = accept;
+      inp.style.display = "none";
+      let settled = false;
+      const done = (v) => { if (!settled) { settled = true; try { inp.remove(); } catch { /* noop */ } resolve(v); } };
+      inp.addEventListener("change", () => {
+        const file = inp.files && inp.files[0];
+        if (!file) return done(null);
+        const reader = new FileReader();
+        reader.onload = () => done({ base64: String(reader.result || "").split(",").pop() || "", fileName: file.name, mimeType: file.type || "application/octet-stream", size: file.size });
+        reader.onerror = () => done(null);
+        reader.readAsDataURL(file);
+      }, { once: true });
+      document.body.appendChild(inp);
+      inp.click();
+      // Safety cleanup if the dialog is dismissed without a change event.
+      setTimeout(() => done(null), 120000);
+    });
+  }
+
+  // Staff-side upload: push the chosen file to Drive, then link it onto the doc
+  // row (is_uploaded=true, auto-approved because staff is the reviewer).
+  async function staffUploadIntoDoc(docRow, tripObj, { isReplace = false } = {}) {
+    const picked = await pickFileAsBase64();
+    if (!picked || !picked.base64) return false;
+    showToast("Uploading to Drive…", TOAST_TYPES.INFO);
+    const appUser = await getCurrentAppUser();
+    const res = await uploadDocumentToDrive({
+      category: "TRIP_DOCUMENT",
+      documentType: docRow.document_type,
+      entityType: "transport_trip_documents",
+      entityId: docRow.id,
+      documentNo: tripObj?.trip_no || null,
+      tripNo: tripObj?.trip_no || null,
+      tripId: tripObj?.id || null,
+      fileName: `${docRow.stored_file_name || docRow.document_type}-${picked.fileName}`,
+      mimeType: picked.mimeType,
+      divisionId: fixedDivisionId,
+      uploadedBy: appUser?.id || null
+    }, picked.base64);
+    const updated = await updateTripDocument(docRow.id, {
+      original_file_name: picked.fileName,
+      mime_type: picked.mimeType,
+      file_size: picked.size || null,
+      file_url: res?.webViewLink || null,
+      web_view_link: res?.webViewLink || null,
+      drive_file_id: res?.fileId || null,
+      is_uploaded: true,
+      approval_status: "approved",
+      approved_at: new Date().toISOString(),
+      uploaded_by_actor_type: "staff",
+      uploaded_by_actor_id: appUser?.id || null,
+      remarks: isReplace ? "Replaced by staff" : "Uploaded by staff"
+    });
+    return updated;
+  }
+
   async function openDetails(id) {
     const trip = await getTripById(id);
     const timeline = await listTripTimeline(id);
@@ -265,19 +342,29 @@ async function init() {
       : marginState === "negative"
         ? "<span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Margin Negative</span>"
         : "<span class='meta-pill' style='background:#fef3c7;color:#92400e;'>Margin Zero</span>";
-    const statusOf = (d) => d.is_uploaded ? "Uploaded" : "Pending Upload";
     const hasWeightBill = docs.some((d) => d.document_type === "WEIGHT_BILL" && d.deleted_at == null && d.is_active !== false);
     const hasTripSheet = docs.some((d) => d.document_type === "TRIP_SHEET" && d.deleted_at == null && d.is_active !== false);
     const completeness = Math.min(100, (hasWeightBill ? 70 : 0) + (hasTripSheet ? 30 : 0));
     const compColor = completeness >= 100 ? "#166534" : (completeness >= 50 ? "#92400e" : "#991b1b");
     const compBg = completeness >= 100 ? "#dcfce7" : (completeness >= 50 ? "#fef3c7" : "#fee2e2");
     const weightMissing = !docs.some((d) => d.document_type === "WEIGHT_BILL");
+    const uploadStatusOf = (d) => d.is_uploaded ? "Uploaded" : "Placeholder";
+    const reviewBadgeOf = (d) => {
+      if (!d.is_uploaded) return "<span class='meta-pill' style='background:#e5e7eb;color:#374151;'>No file</span>";
+      const s = String(d.approval_status || "pending").toLowerCase();
+      if (s === "approved") return "<span class='meta-pill' style='background:#dcfce7;color:#166534;'>Approved</span>";
+      if (s === "rejected") return `<span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Rejected</span>${d.rejection_reason ? ` <span class='muted'>(${d.rejection_reason})</span>` : ""}`;
+      return "<span class='meta-pill' style='background:#fef3c7;color:#92400e;'>Pending Review</span>";
+    };
+    const actorLabelOf = (d) => d.uploaded_by_actor_type === "transport_portal" ? "Transporter" : (d.uploaded_by_actor_type === "staff" ? "Staff" : "-");
+    // Lock: one active row per non-OTHER type so staff + transporter cannot create duplicates.
+    const usedTypes = new Set(docs.filter((d) => d.document_type !== "OTHER").map((d) => d.document_type));
     qs("#tripDetails").innerHTML = `
       <div class="card" style="padding:.75rem;margin-bottom:.75rem;">
         <h4 style="margin:0 0 .5rem 0;">${trip?.trip_no || "Trip"}</h4>
         <div class="hero-kpis" style="margin-bottom:.5rem;">
           <span class="meta-pill">Date: ${trip?.trip_date || "-"}</span>
-          <span class="meta-pill">Status: ${trip?.status || "-"}</span>
+          <span class="meta-pill"${trip?.status === "closed" ? " style='background:#dcfce7;color:#166534;font-weight:700;'" : ""}>Status: ${trip?.status === "closed" ? "✓ Closed (Fully Paid)" : (trip?.status || "-")}</span>
           <span class="meta-pill">Qty: ${(trip?.quantity_kg ?? "-")} KG (${trip?.quantity_mt ?? "-"} MT)</span>
         </div>
         <div class="muted">Notes: ${trip?.notes || "-"}</div>
@@ -308,11 +395,20 @@ async function init() {
       <div style="height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:.25rem 0 .75rem 0;">
         <div style="height:100%;width:${completeness}%;background:${compColor};transition:width .2s ease;"></div>
       </div>
-      <div class="table-shell" style="margin-bottom:.5rem;"><table><thead><tr><th>Document Type</th><th>Display Name</th><th>Stored Name</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-      ${docs.length ? docs.map((d) => `<tr><td>${d.document_type}</td><td>${d.custom_document_name || d.document_type}</td><td>${d.stored_file_name || "-"}</td><td>${statusOf(d)}</td><td><button class='btn' ${d.file_url ? "" : "disabled"}>View</button> <button class='btn' data-dr='${d.id}'>Replace</button> <button class='btn btn-danger' data-dd='${d.id}'>Delete</button></td></tr>`).join("") : `<tr><td colspan='5'>No documents</td></tr>`}
+      <div class="table-shell" style="margin-bottom:.5rem;"><table><thead><tr><th>Document Type</th><th>Display Name</th><th>Stored Name</th><th>File</th><th>Uploaded By</th><th>Review</th><th>Actions</th></tr></thead><tbody>
+      ${docs.length ? docs.map((d) => {
+        const link = d.web_view_link || d.file_url;
+        const view = `<button class='btn' data-dv='${d.id}' ${link ? "" : "disabled"}>View</button>`;
+        const upload = !d.is_uploaded ? ` <button class='btn' data-du='${d.id}'>Upload</button>` : "";
+        const review = (d.is_uploaded && String(d.approval_status || "pending").toLowerCase() === "pending" && canEdit)
+          ? ` <button class='btn' data-dap='${d.id}'>Approve</button> <button class='btn' data-drj='${d.id}'>Reject</button>` : "";
+        const replace = canEdit ? ` <button class='btn' data-dr='${d.id}'>Replace</button>` : "";
+        const del = canDelete ? ` <button class='btn btn-danger' data-dd='${d.id}'>Delete</button>` : "";
+        return `<tr><td>${d.document_type}</td><td>${d.custom_document_name || d.document_type}</td><td>${d.stored_file_name || "-"}</td><td>${uploadStatusOf(d)}</td><td>${actorLabelOf(d)}</td><td>${reviewBadgeOf(d)}</td><td>${view}${upload}${review}${replace}${del}</td></tr>`;
+      }).join("") : `<tr><td colspan='7'>No documents</td></tr>`}
       </tbody></table></div>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;">
-        ${DOC_TYPES.map((t) => `<button class='btn' data-da='${t}'>Add ${t}</button>`).join("")}
+        ${DOC_TYPES.filter((t) => t === "OTHER" || !usedTypes.has(t)).map((t) => `<button class='btn' data-da='${t}'>Add ${t}</button>`).join("")}
       </div>
       <h4 style="margin:.25rem 0 .5rem 0;">Timeline</h4>
       <ul class="activity-list">${timeline.map((t)=>`<li><strong>${t.status}</strong> · ${new Date(t.created_at).toLocaleString()}${t.remarks ? ` · ${t.remarks}` : ""}</li>`).join("")}</ul>
@@ -330,16 +426,66 @@ async function init() {
       await logAuditEvent("trip_document_add", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trip_documents", entityId: doc.id, afterData: doc, action: "create" });
       await openDetails(id);
     }));
-    qs("#tripDetails").querySelectorAll("button[data-dr]").forEach((b) => b.addEventListener("click", async () => {
-      const docId = b.getAttribute("data-dr");
-      const found = docs.find((d) => d.id === docId);
+    // View: open the stored Drive file (web_view_link) or legacy file_url.
+    qs("#tripDetails").querySelectorAll("button[data-dv]").forEach((b) => b.addEventListener("click", () => {
+      const found = docs.find((d) => d.id === b.getAttribute("data-dv"));
+      const link = found?.web_view_link || found?.file_url;
+      if (!link) return showToast("No file to view yet", TOAST_TYPES.ERROR);
+      window.open(link, "_blank", "noopener");
+    }));
+    // Upload: staff picks a real file, pushes it to Drive, links it onto the row.
+    qs("#tripDetails").querySelectorAll("button[data-du]").forEach((b) => b.addEventListener("click", async () => {
+      const found = docs.find((d) => d.id === b.getAttribute("data-du"));
       if (!found) return;
-      const custom = found.document_type === "OTHER" ? window.prompt("Document Name", found.custom_document_name || "") : found.custom_document_name;
-      if (found.document_type === "OTHER" && !String(custom || "").trim()) return showToast("Document Name required for OTHER", TOAST_TYPES.ERROR);
-      const updated = await updateTripDocument(docId, { custom_document_name: found.document_type === "OTHER" ? custom.trim() : custom, remarks: "Placeholder replaced", is_uploaded: false });
-      const appUser = await getCurrentAppUser();
-      await addTripTimeline({ trip_id: id, status: trip.status, remarks: `Document Replaced: ${updated.document_type} ${updated.stored_file_name || ""}`, changed_by: appUser?.id || null });
-      await logAuditEvent("trip_document_replace", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trip_documents", entityId: updated.id, beforeData: found, afterData: updated, action: "update" });
+      try {
+        const updated = await staffUploadIntoDoc(found, trip, { isReplace: false });
+        if (!updated) return;
+        const appUser = await getCurrentAppUser();
+        await addTripTimeline({ trip_id: id, status: trip.status, remarks: `Document Uploaded (staff): ${updated.document_type} ${updated.original_file_name || ""}`, changed_by: appUser?.id || null });
+        await logAuditEvent("trip_document_upload", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trip_documents", entityId: updated.id, beforeData: found, afterData: updated, action: "update" });
+        showToast("Uploaded to Drive", TOAST_TYPES.SUCCESS);
+      } catch (e) { showToast(e?.message || "Upload failed", TOAST_TYPES.ERROR); }
+      await openDetails(id);
+    }));
+    // Replace (staff only): swap the stored file with a newly picked one.
+    qs("#tripDetails").querySelectorAll("button[data-dr]").forEach((b) => b.addEventListener("click", async () => {
+      const found = docs.find((d) => d.id === b.getAttribute("data-dr"));
+      if (!found) return;
+      try {
+        const updated = await staffUploadIntoDoc(found, trip, { isReplace: true });
+        if (!updated) return;
+        const appUser = await getCurrentAppUser();
+        await addTripTimeline({ trip_id: id, status: trip.status, remarks: `Document Replaced (staff): ${updated.document_type} ${updated.original_file_name || ""}`, changed_by: appUser?.id || null });
+        await logAuditEvent("trip_document_replace", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trip_documents", entityId: updated.id, beforeData: found, afterData: updated, action: "update" });
+        showToast("File replaced", TOAST_TYPES.SUCCESS);
+      } catch (e) { showToast(e?.message || "Replace failed", TOAST_TYPES.ERROR); }
+      await openDetails(id);
+    }));
+    // Approve a transporter-uploaded document.
+    qs("#tripDetails").querySelectorAll("button[data-dap]").forEach((b) => b.addEventListener("click", async () => {
+      const docId = b.getAttribute("data-dap");
+      const found = docs.find((d) => d.id === docId);
+      try {
+        const updated = await approveTripDocument(docId);
+        const appUser = await getCurrentAppUser();
+        await addTripTimeline({ trip_id: id, status: trip.status, remarks: `Document Approved: ${found?.document_type || ""} ${found?.stored_file_name || ""}`, changed_by: appUser?.id || null });
+        await logAuditEvent("trip_document_approve", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trip_documents", entityId: docId, beforeData: found, afterData: updated, action: "update" });
+        showToast("Document approved", TOAST_TYPES.SUCCESS);
+      } catch (e) { showToast(e?.message || "Approve failed", TOAST_TYPES.ERROR); }
+      await openDetails(id);
+    }));
+    // Reject a transporter-uploaded document with a reason.
+    qs("#tripDetails").querySelectorAll("button[data-drj]").forEach((b) => b.addEventListener("click", async () => {
+      const docId = b.getAttribute("data-drj");
+      const found = docs.find((d) => d.id === docId);
+      const reason = window.prompt("Reason for rejection (optional)", "") || null;
+      try {
+        const updated = await rejectTripDocument(docId, reason);
+        const appUser = await getCurrentAppUser();
+        await addTripTimeline({ trip_id: id, status: trip.status, remarks: `Document Rejected: ${found?.document_type || ""}${reason ? ` — ${reason}` : ""}`, changed_by: appUser?.id || null });
+        await logAuditEvent("trip_document_reject", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trip_documents", entityId: docId, beforeData: found, afterData: updated, action: "update" });
+        showToast("Document rejected", TOAST_TYPES.SUCCESS);
+      } catch (e) { showToast(e?.message || "Reject failed", TOAST_TYPES.ERROR); }
       await openDetails(id);
     }));
     qs("#tripDetails").querySelectorAll("button[data-dd]").forEach((b) => b.addEventListener("click", async () => {
@@ -509,10 +655,10 @@ async function init() {
         if (tWrap) tWrap.style.display = "block";
         showToast("No transporter mapped for selected truck. Select Fallback Transporter.", TOAST_TYPES.WARNING);
       }
-      const agent = await getActiveAgentByTruck(truckId, tripDate || null);
-      if (agent?.transport_agent_id) {
-        if (aName) aName.value = agent.transport_agent_name || "";
-        if (aId) aId.value = agent.transport_agent_id;
+      const info = await agentAutoLabel(truckId, tripDate);
+      if (info.label) {
+        if (aName) aName.value = info.label;
+        if (aId) aId.value = info.firstAgentId;
       } else {
         if (aName) aName.value = "Not mapped";
         if (aId) aId.value = "";
@@ -599,7 +745,10 @@ async function init() {
     qs("#tripMeta").textContent = `Page ${page}/${Math.max(1, Math.ceil((out.count || 0) / pageSize))}`;
     const body = qs("#tripBody");
     if (!rows.length) { body.innerHTML = `<tr><td colspan="5">No trips found</td></tr>`; return; }
-    body.innerHTML = rows.map((r)=>`<tr><td>${r.trip_no}</td><td>${r.trip_date || ""}</td><td><select data-s="${r.id}" ${canEdit ? "" : "disabled"}>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}" ${r.status===s?"selected":""}>${s}</option>`).join("")}</select></td><td>${(r.quantity_kg ?? "")} KG (${Number(r.quantity_mt || 0).toFixed(2)} MT)</td><td>${canEdit ? `<button class="btn" data-e="${r.id}">Edit</button>` : ""} <button class="btn" data-v="${r.id}">Details</button> ${canDelete ? `<button class="btn btn-danger" data-d="${r.id}">Delete</button>` : ""}</td></tr>`).join("");
+    const statusCell = (r) => r.status === "closed"
+      ? `<span class="meta-pill" style="background:#dcfce7;color:#166534;font-weight:700;" title="Client payment received and transporter payment made — financially closed">✓ Closed (Fully Paid)</span>`
+      : `<select data-s="${r.id}" ${canEdit ? "" : "disabled"}>${TRIP_STATUS_FLOW.map((s)=>`<option value="${s}" ${r.status===s?"selected":""}>${s}</option>`).join("")}</select>`;
+    body.innerHTML = rows.map((r)=>`<tr><td>${r.trip_no}</td><td>${r.trip_date || ""}</td><td>${statusCell(r)}</td><td>${(r.quantity_kg ?? "")} KG (${Number(r.quantity_mt || 0).toFixed(2)} MT)</td><td>${canEdit && r.status !== "closed" ? `<button class="btn" data-e="${r.id}">Edit</button>` : ""} <button class="btn" data-v="${r.id}">Details</button> ${canDelete ? `<button class="btn btn-danger" data-d="${r.id}">Delete</button>` : ""}</td></tr>`).join("");
     body.querySelectorAll("button[data-v]").forEach((b)=>b.addEventListener("click", ()=>openDetails(b.getAttribute("data-v"))));
     body.querySelectorAll("button[data-e]").forEach((b)=>b.addEventListener("click", ()=>{
       const id = b.getAttribute("data-e");

@@ -1,5 +1,5 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { createMasterRecord, existsActiveDuplicate, getDivisionByCode, listActiveOptions, listMasterRecords, MASTER_TABLES, softDeleteMasterRecord, updateMasterRecord } from "./admin-api.js";
+import { createMasterRecord, deleteProfitSharePartner, existsActiveDuplicate, getDivisionByCode, listActiveOptions, listMasterRecords, listProfitSharePartners, MASTER_TABLES, softDeleteMasterRecord, updateMasterRecord, upsertProfitSharePartner } from "./admin-api.js";
 import { logAuditEvent } from "./audit.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
@@ -35,6 +35,7 @@ const STATE = {
   agentOptions: [],
   truckById: new Map(),
   agentById: new Map(),
+  partners: [],
   editingAgentId: null,
   viewingAgentId: null,
   editingMappingId: null
@@ -59,8 +60,80 @@ async function initPage() {
   bindMappingCreate();
   bindMappingControls();
   bindModalControls();
+  bindPartnerCreate();
+  renderPartnerSelect();
   await loadAgents();
   await loadMappings();
+  await loadPartners();
+}
+
+function renderPartnerSelect() {
+  const sel = qs("[data-partner-field='transport_agent_id']");
+  if (sel) sel.innerHTML = `<option value="">Select Agent</option>${STATE.agentOptions.map((o) => `<option value="${o.value}">${o.label}</option>`).join("")}`;
+}
+
+function bindPartnerCreate() {
+  qs("#partnerCreateForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const agentId = qs("[data-partner-field='transport_agent_id']")?.value || "";
+    const share = Number(qs("[data-partner-field='share_percentage']")?.value || 0);
+    if (!agentId) return setText("#partnerFormError", "Select an agent.");
+    if (Number.isNaN(share) || share < 0 || share > 100) return setText("#partnerFormError", "Share must be between 0 and 100.");
+    if (STATE.partners.some((p) => String(p.transport_agent_id) === String(agentId))) return setText("#partnerFormError", "That agent is already a profit-share partner.");
+    try {
+      await upsertProfitSharePartner({ transport_agent_id: agentId, share_percentage: share, is_active: true });
+      await logAuditEvent("master_create", { moduleCode: MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING, entityType: "transport_profit_share_partners", entityId: agentId, afterData: { transport_agent_id: agentId, share_percentage: share }, action: "create" });
+      qs("#partnerCreateForm")?.reset();
+      qs("[data-partner-field='share_percentage']").value = "30";
+      setText("#partnerFormError", "");
+      showToast("Profit-share partner added", TOAST_TYPES.SUCCESS);
+      await loadPartners();
+    } catch (err) {
+      setText("#partnerFormError", err?.message || "Add partner failed");
+    }
+  });
+}
+
+async function loadPartners() {
+  const host = qs("#partnerList");
+  if (!host) return;
+  try {
+    STATE.partners = await listProfitSharePartners();
+  } catch (err) {
+    host.innerHTML = `<div class="muted">Could not load partners: ${escapeHtml(err?.message || "error")}. Ensure the profit-share migration has been applied.</div>`;
+    return;
+  }
+  if (!STATE.partners.length) {
+    host.innerHTML = `<div class="empty-state"><strong>No profit-share partners</strong><div>Add internal partners above (e.g. 30% each).</div></div>`;
+    return;
+  }
+  const totalShare = STATE.partners.reduce((s, p) => s + Number(p.share_percentage || 0), 0);
+  host.innerHTML = `<div class="muted" style="margin-bottom:.5rem;">Total partner share of residual margin: <strong>${totalShare}%</strong> (company keeps the remaining ${Math.max(0, 100 - totalShare)}%).</div>` + STATE.partners.map((p) => `
+    <div class="agent-summary-row" style="grid-template-columns:1.6fr .8fr 1.2fr;">
+      <div class="agent-primary"><strong class="ellipsis">${escapeHtml(p.transport_agent_name || "—")}</strong><span class="meta">Code: ${escapeHtml(p.transport_agent_code || "—")}</span></div>
+      <div><input data-partner-share="${p.id}" type="number" min="0" max="100" step="0.001" value="${escapeHtml(p.share_percentage)}" style="width:90px;" /> %</div>
+      <div class="action-row"><button class="btn" data-partner-save="${p.id}">Save %</button><button class="btn btn-danger" data-partner-remove="${p.id}">Remove</button></div>
+    </div>`).join("");
+  host.querySelectorAll("button[data-partner-save]").forEach((b) => b.addEventListener("click", async () => {
+    const id = b.getAttribute("data-partner-save");
+    const share = Number(qs(`[data-partner-share='${id}']`)?.value || 0);
+    if (Number.isNaN(share) || share < 0 || share > 100) return showToast("Share must be between 0 and 100.", TOAST_TYPES.ERROR);
+    try {
+      await upsertProfitSharePartner({ id, share_percentage: share });
+      showToast("Partner share updated", TOAST_TYPES.SUCCESS);
+      await loadPartners();
+    } catch (err) { showToast(err?.message || "Update failed", TOAST_TYPES.ERROR); }
+  }));
+  host.querySelectorAll("button[data-partner-remove]").forEach((b) => b.addEventListener("click", async () => {
+    const id = b.getAttribute("data-partner-remove");
+    if (!window.confirm("Remove this profit-share partner? They will stop earning the residual share on new calculations.")) return;
+    try {
+      await deleteProfitSharePartner(id);
+      await logAuditEvent("master_soft_delete", { moduleCode: MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING, entityType: "transport_profit_share_partners", entityId: id, action: "soft_delete" });
+      showToast("Partner removed", TOAST_TYPES.SUCCESS);
+      await loadPartners();
+    } catch (err) { showToast(err?.message || "Remove failed", TOAST_TYPES.ERROR); }
+  }));
 }
 
 async function hydrateOptions() {
@@ -78,7 +151,7 @@ function renderShell(divisionLabel) {
   return `
     <style>
       .agent-summary-head,.agent-summary-row{display:grid;grid-template-columns:1.4fr 1fr 1fr .8fr 1.1fr;gap:.75rem;align-items:center}
-      .mapping-summary-head,.mapping-summary-row{display:grid;grid-template-columns:1fr 1fr 1fr .9fr .9fr .9fr .8fr 1.1fr;gap:.75rem;align-items:center}
+      .mapping-summary-head,.mapping-summary-row{display:grid;grid-template-columns:1fr 1fr 1fr .8fr .7fr .9fr .9fr .8fr 1.1fr;gap:.75rem;align-items:center}
       .agent-summary-head,.mapping-summary-head{padding:0 .25rem .65rem;border-bottom:1px solid rgba(148,163,184,.24);font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280)}
       .agent-summary-row,.mapping-summary-row{padding:.95rem .25rem;border-bottom:1px solid rgba(148,163,184,.14)}
       .agent-summary-row:last-child,.mapping-summary-row:last-child{border-bottom:none}
@@ -96,8 +169,9 @@ function renderShell(divisionLabel) {
     <section class="card" style="margin-bottom:1rem;"><h3>Agent Master</h3><form id="agentCreateForm" class="form-row">${AGENT_FIELDS.map(renderAgentCreateField).join("")}<label>Status *</label><select data-agent-field="is_active"><option value="true" selected>Active</option><option value="false">Inactive</option></select><div id="agentFormError" class="muted"></div><button class="btn" type="submit">Create Agent</button></form></section>
     <section class="card" style="margin-bottom:1rem;"><input id="agentSearch" type="text" placeholder="Search agent by name, phone, PAN" /></section>
     <section class="card" style="margin-bottom:1rem;"><div class="agent-summary-head"><div>Agent Name</div><div>Phone</div><div>PAN</div><div>Status</div><div>Actions</div></div><div id="agentList"></div><div style="margin-top:.75rem;display:flex;gap:.5rem;align-items:center;"><button class="btn" id="agentPrev">Prev</button><span id="agentPageMeta"></span><button class="btn" id="agentNext">Next</button></div></section>
-    <section class="card" style="margin-bottom:1rem;"><h3>Truck-Agent Mapping</h3><form id="mappingCreateForm" class="form-row"><label>Truck *</label><select data-map-field="truck_id" required></select><label>Agent *</label><select data-map-field="transport_agent_id" required></select><label>Commission Type *</label><select data-map-field="commission_type" required>${COMMISSION_OPTIONS.map((o)=>`<option value="${o.value}">${o.label}</option>`).join("")}</select><label>Commission Value *</label><input data-map-field="commission_value" type="number" min="0" step="0.001" required /><label>Effective From *</label><input data-map-field="effective_from" type="date" required /><label>Effective To</label><input data-map-field="effective_to" type="date" /><div id="mappingFormError" class="muted"></div><button class="btn" type="submit">Save Mapping</button></form></section>
-    <section class="card"><input id="mappingSearch" type="text" placeholder="Search truck-agent mapping" style="margin-bottom:1rem;" /><div class="mapping-summary-head"><div>Truck</div><div>Agent</div><div>Commission Type</div><div>Commission Value</div><div>Effective From</div><div>Effective To</div><div>Status</div><div>Actions</div></div><div id="mappingList"></div><div style="margin-top:.75rem;display:flex;gap:.5rem;align-items:center;"><button class="btn" id="mappingPrev">Prev</button><span id="mappingPageMeta"></span><button class="btn" id="mappingNext">Next</button></div></section>
+    <section class="card" style="margin-bottom:1rem;"><h3>Company Profit-Share Partners</h3><p class="muted">Internal partners who automatically take a % of each trip's margin <strong>after</strong> all other agents are paid, on every truck where Partner Profit-Share is On. Manage the toggle per truck on the Trucks page.</p><form id="partnerCreateForm" class="form-row"><label>Agent *</label><select data-partner-field="transport_agent_id" required></select><label>Share of Residual Margin % *</label><input data-partner-field="share_percentage" type="number" min="0" max="100" step="0.001" value="30" required /><div id="partnerFormError" class="muted"></div><button class="btn" type="submit">Add Partner</button></form><div id="partnerList" style="margin-top:1rem;"></div></section>
+    <section class="card" style="margin-bottom:1rem;"><h3>Truck-Agent Mapping</h3><form id="mappingCreateForm" class="form-row"><label>Truck *</label><select data-map-field="truck_id" required></select><label>Agent *</label><select data-map-field="transport_agent_id" required></select><label>Commission Type *</label><select data-map-field="commission_type" required>${COMMISSION_OPTIONS.map((o)=>`<option value="${o.value}">${o.label}</option>`).join("")}</select><label>Commission Value *</label><input data-map-field="commission_value" type="number" min="0" step="0.001" required /><label>Commission Share % *</label><input data-map-field="commission_share_percentage" type="number" min="0" max="100" step="0.001" value="100" required /><label>Effective From *</label><input data-map-field="effective_from" type="date" required /><label>Effective To</label><input data-map-field="effective_to" type="date" /><div id="mappingFormError" class="muted"></div><button class="btn" type="submit">Save Mapping</button></form></section>
+    <section class="card"><input id="mappingSearch" type="text" placeholder="Search truck-agent mapping" style="margin-bottom:1rem;" /><div class="mapping-summary-head"><div>Truck</div><div>Agent</div><div>Commission Type</div><div>Commission Value</div><div>Share %</div><div>Effective From</div><div>Effective To</div><div>Status</div><div>Actions</div></div><div id="mappingList"></div><div style="margin-top:.75rem;display:flex;gap:.5rem;align-items:center;"><button class="btn" id="mappingPrev">Prev</button><span id="mappingPageMeta"></span><button class="btn" id="mappingNext">Next</button></div></section>
     <div id="agentViewModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><div><h3 id="agentViewTitle">Agent Details</h3><p class="muted">Full agent details.</p></div><button class="btn" type="button" id="agentViewClose">Close</button></div><div id="agentViewBody"></div></div></div>
     <div id="agentEditModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><div><h3>Edit Agent</h3><p class="muted">Update agent master details.</p></div><button class="btn" type="button" id="agentEditClose">Close</button></div><form id="agentEditForm"><div class="edit-grid" id="agentEditFields"></div><div id="agentEditError" class="muted" style="margin-top:.75rem;"></div><div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem;"><button class="btn" type="button" id="agentEditCancel">Cancel</button><button class="btn" type="submit">Save Changes</button></div></form></div></div>
     <div id="mappingEditModal" class="modal" hidden><div class="modal-panel"><div class="modal-head"><div><h3>Edit Truck-Agent Mapping</h3><p class="muted">Existing mapping behavior preserved.</p></div><button class="btn" type="button" id="mappingEditClose">Close</button></div><form id="mappingEditForm"><div class="edit-grid" id="mappingEditFields"></div><div id="mappingEditError" class="muted" style="margin-top:.75rem;"></div><div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem;"><button class="btn" type="button" id="mappingEditCancel">Cancel</button><button class="btn" type="submit">Save Changes</button></div></form></div></div>
@@ -123,6 +197,7 @@ function bindAgentCreate() {
       showToast("Agent created successfully", TOAST_TYPES.SUCCESS);
       await hydrateOptions();
       renderCreateMappingSelects();
+    renderPartnerSelect();
       STATE.agentPage = 1;
       await loadAgents();
       await loadMappings();
@@ -149,6 +224,7 @@ function bindMappingCreate() {
       await logAuditEvent("master_create", { moduleCode: MODULES.TRANSPORT_TRUCK_AGENT_COMMISSION_MAPPING, entityType: MASTER_TABLES.transportTruckAgentCommissionMapping, entityId: created?.id, details: payload, afterData: payload, action: "create" });
       qs("#mappingCreateForm")?.reset();
       renderCreateMappingSelects();
+    renderPartnerSelect();
       setText("#mappingFormError", "");
       showToast("Mapping created successfully", TOAST_TYPES.SUCCESS);
       STATE.mappingPage = 1;
@@ -209,6 +285,7 @@ async function loadAgents() {
     showToast("Agent deleted", TOAST_TYPES.SUCCESS);
     await hydrateOptions();
     renderCreateMappingSelects();
+    renderPartnerSelect();
     await loadAgents();
     await loadMappings();
   }));
@@ -230,7 +307,7 @@ async function loadMappings() {
   host.innerHTML = rows.map((row) => {
     const status = row.is_active ? "active" : "inactive";
     const statusLabel = row.is_active ? "Active" : "Inactive";
-    return `<div class="mapping-summary-row"><div class="ellipsis">${escapeHtml(STATE.truckById.get(String(row.truck_id || "")) || "—")}</div><div class="ellipsis">${escapeHtml(STATE.agentById.get(String(row.transport_agent_id || "")) || "—")}</div><div>${escapeHtml(row.commission_type || "—")}</div><div>${escapeHtml(row.commission_value || "—")}</div><div>${escapeHtml(row.effective_from || "—")}</div><div>${escapeHtml(row.effective_to || "—")}</div><div><span class="status-pill ${status}">${statusLabel}</span></div><div class="action-row"><button class="btn" data-map-edit="${row.id}">Edit</button><button class="btn btn-danger" data-map-delete="${row.id}">Delete</button></div></div>`;
+    return `<div class="mapping-summary-row"><div class="ellipsis">${escapeHtml(STATE.truckById.get(String(row.truck_id || "")) || "—")}</div><div class="ellipsis">${escapeHtml(STATE.agentById.get(String(row.transport_agent_id || "")) || "—")}</div><div>${escapeHtml(row.commission_type || "—")}</div><div>${escapeHtml(row.commission_value || "—")}</div><div>${escapeHtml(row.commission_share_percentage != null ? row.commission_share_percentage + "%" : "100%")}</div><div>${escapeHtml(row.effective_from || "—")}</div><div>${escapeHtml(row.effective_to || "—")}</div><div><span class="status-pill ${status}">${statusLabel}</span></div><div class="action-row"><button class="btn" data-map-edit="${row.id}">Edit</button><button class="btn btn-danger" data-map-delete="${row.id}">Delete</button></div></div>`;
   }).join("");
   host.querySelectorAll("button[data-map-edit]").forEach((b) => b.addEventListener("click", () => openMappingEdit(b.getAttribute("data-map-edit"))));
   host.querySelectorAll("button[data-map-delete]").forEach((b) => b.addEventListener("click", async () => {
@@ -310,6 +387,7 @@ async function saveAgentEdit() {
     showToast("Agent updated", TOAST_TYPES.SUCCESS);
     await hydrateOptions();
     renderCreateMappingSelects();
+    renderPartnerSelect();
     await loadAgents();
     await loadMappings();
   } catch (err) {
@@ -326,6 +404,7 @@ function collectMappingPayload(mode) {
     transport_agent_id: pick("transport_agent_id"),
     commission_type: pick("commission_type"),
     commission_value: pick("commission_value"),
+    commission_share_percentage: pick("commission_share_percentage") ?? "100",
     effective_from: pick("effective_from"),
     effective_to: pick("effective_to"),
     is_active: (pick("is_active") || "true") === "true"
@@ -340,6 +419,8 @@ async function validateMapping(payload, context = null) {
   if (!payload.commission_type) return "Commission type is required.";
   if (payload.commission_value === undefined || payload.commission_value === null || payload.commission_value === "") return "Commission value is required.";
   if (Number(payload.commission_value) < 0) return "Commission value must be zero or positive.";
+  const share = Number(payload.commission_share_percentage ?? 100);
+  if (Number.isNaN(share) || share < 0 || share > 100) return "Commission share must be between 0 and 100.";
   if (!payload.effective_from) return "Effective From is required.";
   if (payload.effective_to && payload.effective_from && new Date(payload.effective_to) < new Date(payload.effective_from)) return "Effective To cannot be before Effective From.";
   const dup = await existsActiveDuplicate(MASTER_TABLES.transportTruckAgentCommissionMapping, {
@@ -359,7 +440,7 @@ function openMappingEdit(id) {
   STATE.editingMappingId = id;
   const host = qs("#mappingEditFields");
   if (host) {
-    host.innerHTML = `<div><label>Truck *</label><select data-map-edit-field="truck_id"><option value="">Select Truck</option>${STATE.truckOptions.map((o) => `<option value="${o.value}" ${String(o.value) === String(row.truck_id || "") ? "selected" : ""}>${o.label}</option>`).join("")}</select></div><div><label>Agent *</label><select data-map-edit-field="transport_agent_id"><option value="">Select Agent</option>${STATE.agentOptions.map((o) => `<option value="${o.value}" ${String(o.value) === String(row.transport_agent_id || "") ? "selected" : ""}>${o.label}</option>`).join("")}</select></div><div><label>Commission Type *</label><select data-map-edit-field="commission_type">${COMMISSION_OPTIONS.map((o) => `<option value="${o.value}" ${String(o.value) === String(row.commission_type || "") ? "selected" : ""}>${o.label}</option>`).join("")}</select></div><div><label>Commission Value *</label><input data-map-edit-field="commission_value" type="number" min="0" step="0.001" value="${escapeHtml(row.commission_value || "")}" /></div><div><label>Effective From *</label><input data-map-edit-field="effective_from" type="date" value="${escapeHtml(row.effective_from || "")}" /></div><div><label>Effective To</label><input data-map-edit-field="effective_to" type="date" value="${escapeHtml(row.effective_to || "")}" /></div><div><label>Status</label><select data-map-edit-field="is_active"><option value="true" ${row.is_active ? "selected" : ""}>Active</option><option value="false" ${!row.is_active ? "selected" : ""}>Inactive</option></select></div>`;
+    host.innerHTML = `<div><label>Truck *</label><select data-map-edit-field="truck_id"><option value="">Select Truck</option>${STATE.truckOptions.map((o) => `<option value="${o.value}" ${String(o.value) === String(row.truck_id || "") ? "selected" : ""}>${o.label}</option>`).join("")}</select></div><div><label>Agent *</label><select data-map-edit-field="transport_agent_id"><option value="">Select Agent</option>${STATE.agentOptions.map((o) => `<option value="${o.value}" ${String(o.value) === String(row.transport_agent_id || "") ? "selected" : ""}>${o.label}</option>`).join("")}</select></div><div><label>Commission Type *</label><select data-map-edit-field="commission_type">${COMMISSION_OPTIONS.map((o) => `<option value="${o.value}" ${String(o.value) === String(row.commission_type || "") ? "selected" : ""}>${o.label}</option>`).join("")}</select></div><div><label>Commission Value *</label><input data-map-edit-field="commission_value" type="number" min="0" step="0.001" value="${escapeHtml(row.commission_value || "")}" /></div><div><label>Commission Share % *</label><input data-map-edit-field="commission_share_percentage" type="number" min="0" max="100" step="0.001" value="${escapeHtml(row.commission_share_percentage != null ? row.commission_share_percentage : 100)}" /></div><div><label>Effective From *</label><input data-map-edit-field="effective_from" type="date" value="${escapeHtml(row.effective_from || "")}" /></div><div><label>Effective To</label><input data-map-edit-field="effective_to" type="date" value="${escapeHtml(row.effective_to || "")}" /></div><div><label>Status</label><select data-map-edit-field="is_active"><option value="true" ${row.is_active ? "selected" : ""}>Active</option><option value="false" ${!row.is_active ? "selected" : ""}>Inactive</option></select></div>`;
   }
   setText("#mappingEditError", "");
   qs("#mappingEditModal")?.removeAttribute("hidden");

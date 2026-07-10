@@ -49,6 +49,8 @@
 .pause-row label{font-size:13.5px;font-weight:500;color:var(--text);cursor:pointer;flex:1}
 .pause-row .stat-note{font-size:11.5px;color:var(--text-3);margin:0}
 .toggle-wrap{position:relative;width:42px;height:24px;flex-shrink:0}
+/* .pause-row label{flex:1} also matches this toggle (it's a <label>) — pin its size back */
+.pause-row .toggle-wrap{flex:0 0 42px;width:42px}
 .toggle-wrap input{opacity:0;width:0;height:0;position:absolute}
 .toggle-track{position:absolute;inset:0;border-radius:99px;background:var(--border,rgba(150,185,255,.2));transition:background .2s;cursor:pointer}
 .toggle-track::after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s}
