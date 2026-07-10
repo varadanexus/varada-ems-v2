@@ -66,6 +66,7 @@ function renderShell(content) {
       .public-step:last-child{border-right:0}.public-step.active{color:#172033;font-weight:800;background:#fbf8ef}
       .public-step-no{display:grid;place-items:center;flex:0 0 26px;height:26px;border-radius:50%;background:#e8edf3;font-weight:800}
       .public-step.active .public-step-no{background:#c9a85c;color:#09172a}
+      .public-step.done{color:#166534}.public-step.done .public-step-no{background:#dcfce7;color:#166534}
       .public-sign-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.65fr);gap:1rem;align-items:start}
       .public-card{border:1px solid #ced7e3;border-radius:6px;background:#fff;padding:1rem;box-shadow:0 8px 24px rgba(23,32,51,.07)}
       .public-card-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding-bottom:.75rem;border-bottom:1px solid #e2e7ed}
@@ -146,7 +147,7 @@ function blockedRisk() {
 }
 
 function updateSubmitState() {
-  const canSubmit = document.querySelector("#consentCheck")?.checked && state.photoDataUrl && state.location && state.ipRisk && !blockedRisk();
+  const canSubmit = document.querySelector("#consentCheck")?.checked && state.photoDataUrl && state.location && state.ipRisk && !blockedRisk() && canLeaveKyc();
   const button = document.querySelector("#submitSignBtn");
   if (button) button.disabled = !canSubmit;
   const risk = document.querySelector("#riskWarning");
@@ -170,7 +171,7 @@ function capturePhoto() {
   preview.src = state.photoDataUrl;
   preview.hidden = false;
   document.querySelector("#photoStatus").textContent = `Captured at ${new Date().toLocaleString()}`;
-  updateSubmitState();
+  updateWizardNav();
 }
 
 async function refreshEvidence() {
@@ -183,7 +184,7 @@ async function refreshEvidence() {
     ? `${Number(location.latitude).toFixed(6)}, ${Number(location.longitude).toFixed(6)} (${Math.round(location.accuracyMeters || 0)}m)`
     : `${location.status}: ${location.message || "No GPS captured"}`;
   document.querySelector("#ipStatus").textContent = `${ipRisk.ip || "IP unavailable"} · ${ipRisk.provider || "risk provider"} · score ${ipRisk.riskScore || 0}`;
-  updateSubmitState();
+  updateWizardNav();
 }
 
 async function submitAcceptance() {
@@ -224,60 +225,193 @@ async function submitAcceptance() {
   }
 }
 
+// Status-aware KYC bar: only shows "Verify with Didit" while verification is
+// still needed; once Didit approves it flips to a "Verified" badge.
+function renderKycBar(r) {
+  if (!r.diditVerificationUrl) {
+    return `<div class="public-kyc"><div><strong>Identity provider unavailable</strong><span>Contact Varada Nexus before continuing.</span></div></div>`;
+  }
+  const ds = String(r.diditStatus || "").toLowerCase();
+  if (ds === "approved") {
+    return `<div class="public-kyc"><div><strong>Identity verified</strong><span>Your Didit KYC is approved. Complete the evidence steps and sign below.</span></div><span class="meta-pill" style="background:#dcfce7;color:#166534;font-weight:700;">✓ Verified</span></div>`;
+  }
+  if (ds === "declined" || ds === "rejected") {
+    return `<div class="public-kyc"><div><strong>Verification not approved</strong><span>Your identity check was declined. Please retry or contact Varada Nexus.</span></div><a class="btn" href="${escapeHtml(r.diditVerificationUrl)}" target="_blank" rel="noreferrer">Retry with Didit</a></div>`;
+  }
+  if (ds === "in review" || ds === "in_review") {
+    return `<div class="public-kyc"><div><strong>Identity check under review</strong><span>Your live checks passed and the ID is awaiting final review. This page updates automatically once approved.</span></div><button class="btn btn-ghost" id="kycRefreshBtn" type="button">Check status</button></div>`;
+  }
+  return `<div class="public-kyc"><div><strong>Identity verification required</strong><span>Complete secure Didit KYC before final acceptance.</span></div><a class="btn" href="${escapeHtml(r.diditVerificationUrl)}" target="_blank" rel="noreferrer">Verify with Didit</a></div>`;
+}
+
+function kycIsFinal() {
+  const ds = String(state.request?.diditStatus || "").toLowerCase();
+  return ds === "approved" || ds === "declined" || ds === "rejected";
+}
+
+function bindKycControls() {
+  document.querySelector("#kycRefreshBtn")?.addEventListener("click", () => { refreshKycStatus(); });
+}
+
+function repaintKycBar() {
+  const el = document.querySelector(".public-kyc");
+  if (el) {
+    el.outerHTML = renderKycBar(state.request);
+    bindKycControls();
+  }
+  const next2 = document.querySelector("#nextTo3");
+  if (next2) next2.disabled = !canLeaveKyc();
+  updateSubmitState();
+}
+
+async function refreshKycStatus() {
+  try {
+    const fresh = await getPublicSigningRequest(token);
+    if (fresh && (fresh.diditStatus !== state.request.diditStatus || fresh.status !== state.request.status)) {
+      state.request.diditStatus = fresh.diditStatus;
+      state.request.status = fresh.status;
+      repaintKycBar();
+    }
+  } catch { /* ignore transient poll errors */ }
+}
+
+let kycPollTimer = null;
+function startKycPolling() {
+  if (kycPollTimer || kycIsFinal()) return;
+  kycPollTimer = setInterval(async () => {
+    await refreshKycStatus();
+    if (kycIsFinal()) { clearInterval(kycPollTimer); kycPollTimer = null; }
+  }, 12000);
+}
+
+function kycApproved() {
+  return String(state.request?.diditStatus || "").toLowerCase() === "approved";
+}
+
+// A signer can leave the identity step once Didit approves, or immediately if
+// this request has no Didit provider configured (portal-evidence only).
+function canLeaveKyc() {
+  return kycApproved() || !state.request?.diditVerificationUrl;
+}
+
+function evidenceReady() {
+  return Boolean(state.photoDataUrl && state.location && state.ipRisk && !blockedRisk());
+}
+
+function stepsBar(step) {
+  const labels = ["Review agreement", "Verify identity", "Capture evidence", "Accept & sign"];
+  return labels.map((label, i) => {
+    const n = i + 1;
+    const cls = n === step ? "public-step active" : (n < step ? "public-step done" : "public-step");
+    return `<div class="${cls}"><span class="public-step-no">${n < step ? "✓" : n}</span><span>${label}</span></div>`;
+  }).join("");
+}
+
+function setStep(n) {
+  try { state.stream?.getTracks?.().forEach((t) => t.stop()); } catch { /* noop */ }
+  state.step = Math.max(1, Math.min(4, n));
+  renderSigning();
+}
+
+function updateWizardNav() {
+  if (state.step === 3) {
+    const btn = document.querySelector("#nextTo4");
+    if (btn) btn.disabled = !evidenceReady();
+    const risk = document.querySelector("#riskWarning");
+    if (risk) risk.hidden = !blockedRisk();
+  } else if (state.step === 4) {
+    updateSubmitState();
+  }
+}
+
 function renderSigning() {
   const r = state.request;
+  const step = state.step || 1;
+  let body = "";
+  if (step === 1) {
+    body = `<section class="public-card">
+      <div class="public-card-head"><h2>Agreement Document</h2><span>Read the complete document before continuing</span></div>
+      <div class="public-agreement">${renderDocument(r.bodyMarkdown || "Agreement preview is unavailable.")}</div>
+      <div class="public-actions" style="justify-content:flex-end;"><button class="btn public-primary" id="nextTo2" type="button" style="width:auto;">Next: Verify identity</button></div>
+    </section>`;
+  } else if (step === 2) {
+    body = `<section class="public-card">
+      <div class="public-card-head"><h2>Verify your identity</h2><span>Secure Didit KYC</span></div>
+      <p class="muted" style="margin:.25rem 0 .6rem;">Complete identity verification below. Once it is approved you can continue to the evidence step.</p>
+      ${renderKycBar(r)}
+      <div class="public-actions" style="justify-content:space-between;">
+        <button class="btn btn-ghost" id="wizBack" type="button">Back</button>
+        <button class="btn public-primary" id="nextTo3" type="button" style="width:auto;" ${canLeaveKyc() ? "" : "disabled"}>Next: Capture evidence</button>
+      </div>
+    </section>`;
+  } else if (step === 3) {
+    body = `<section class="public-card">
+      <div class="public-card-head"><h2>Signing Evidence</h2><span>Required for execution</span></div>
+      <div class="public-camera-frame">
+        <video id="camera" class="public-camera" autoplay playsinline muted></video>
+        <canvas id="canvas" hidden></canvas>
+        <img id="photoPreview" class="public-photo" alt="Captured signer" ${state.photoDataUrl ? `src="${state.photoDataUrl}"` : "hidden"} />
+        <span class="public-camera-label">Live identity capture</span>
+      </div>
+      <p id="photoStatus" class="muted">${state.photoDataUrl ? "Live photo captured." : "Camera is ready to be enabled."}</p>
+      <div class="public-actions">
+        <button class="btn" id="cameraBtn" type="button">Enable Camera</button>
+        <button class="btn" id="captureBtn" type="button" disabled>Capture Live Photo</button>
+        <button class="btn btn-ghost" id="evidenceBtn" type="button">Capture Location + IP</button>
+      </div>
+      <div class="public-status">
+        <div><strong>Location</strong><br><span id="locationStatus" class="muted">${state.location ? "Captured" : "Not captured"}</span></div>
+        <div><strong>IP / VPN Risk</strong><br><span id="ipStatus" class="muted">${state.ipRisk ? "Checked" : "Not checked"}</span></div>
+      </div>
+      <p id="riskWarning" class="danger-text" ${blockedRisk() ? "" : "hidden"}>Signing is blocked because VPN/proxy/Tor/high-risk network was detected.</p>
+      <div class="public-actions" style="justify-content:space-between;">
+        <button class="btn btn-ghost" id="wizBack" type="button">Back</button>
+        <button class="btn public-primary" id="nextTo4" type="button" style="width:auto;" ${evidenceReady() ? "" : "disabled"}>Next: Accept &amp; sign</button>
+      </div>
+    </section>`;
+  } else {
+    const dsLabel = kycApproved() ? "verified" : (String(state.request?.diditStatus || "").toLowerCase() || "pending");
+    body = `<section class="public-card">
+      <div class="public-card-head"><h2>Accept and sign</h2><span>Final step</span></div>
+      <ul style="list-style:none;padding:0;margin:.25rem 0 .6rem;color:#334155;font-size:.84rem;line-height:1.9;">
+        <li>✓ Identity ${escapeHtml(dsLabel)}</li>
+        <li>✓ Live photo captured</li>
+        <li>✓ Location &amp; IP recorded</li>
+      </ul>
+      <label class="public-consent">
+        <input id="consentCheck" type="checkbox" />
+        <span id="consentText">I have read and understood this agreement, voluntarily accept it, and consent to live photo, timestamp, location, IP address, device details, Didit KYC reference and Google Drive archive evidence being recorded.</span>
+      </label>
+      <div class="public-actions" style="justify-content:space-between;margin-top:.75rem;">
+        <button class="btn btn-ghost" id="wizBack" type="button">Back</button>
+      </div>
+      <div class="public-actions"><button class="btn public-primary" id="submitSignBtn" type="button" disabled>Accept and Sign Agreement</button></div>
+    </section>`;
+  }
   renderShell(`
     <header class="public-sign-head">
       <div><p class="public-eyebrow">Document awaiting your signature</p><h1>${escapeHtml(r.title || "Agreement Signing")}</h1><p>Prepared for ${escapeHtml(r.recipientName || "")}</p></div>
       <div class="public-reference">Reference: ${escapeHtml(r.agreementNo || "")}</div>
     </header>
-    <div class="public-progress">
-      <div class="public-step active"><span class="public-step-no">1</span><span>Review agreement</span></div>
-      <div class="public-step"><span class="public-step-no">2</span><span>Verify identity</span></div>
-      <div class="public-step"><span class="public-step-no">3</span><span>Capture evidence</span></div>
-      <div class="public-step"><span class="public-step-no">4</span><span>Accept and sign</span></div>
-    </div>
-    <div class="public-sign-grid">
-      <section class="public-card">
-        <div class="public-card-head"><h2>Agreement Document</h2><span>Read the complete document before accepting</span></div>
-        <div class="public-agreement">${renderDocument(r.bodyMarkdown || "Agreement preview is unavailable.")}</div>
-        ${r.diditVerificationUrl ? `<div class="public-kyc"><div><strong>Identity verification required</strong><span>Complete secure Didit KYC before final acceptance.</span></div><a class="btn" href="${escapeHtml(r.diditVerificationUrl)}" target="_blank" rel="noreferrer">Verify with Didit</a></div>` : `<div class="public-kyc"><div><strong>Identity provider unavailable</strong><span>Contact Varada Nexus before continuing.</span></div></div>`}
-      </section>
-      <section class="public-card">
-        <div class="public-card-head"><h2>Signing Evidence</h2><span>Required for execution</span></div>
-        <div class="public-camera-frame">
-          <video id="camera" class="public-camera" autoplay playsinline muted></video>
-          <canvas id="canvas" hidden></canvas>
-          <img id="photoPreview" class="public-photo" alt="Captured signer" hidden />
-          <span class="public-camera-label">Live identity capture</span>
-        </div>
-        <p id="photoStatus" class="muted">Camera is ready to be enabled.</p>
-        <div class="public-actions">
-          <button class="btn" id="cameraBtn" type="button">Enable Camera</button>
-          <button class="btn" id="captureBtn" type="button" disabled>Capture Live Photo</button>
-          <button class="btn btn-ghost" id="evidenceBtn" type="button">Capture Location + IP</button>
-        </div>
-        <div class="public-status">
-          <div><strong>Location</strong><br><span id="locationStatus" class="muted">Not captured</span></div>
-          <div><strong>IP / VPN Risk</strong><br><span id="ipStatus" class="muted">Not checked</span></div>
-        </div>
-        <p id="riskWarning" class="danger-text" hidden>Signing is blocked because VPN/proxy/Tor/high-risk network was detected.</p>
-        <label class="public-consent">
-          <input id="consentCheck" type="checkbox" />
-          <span id="consentText">I have read and understood this agreement, voluntarily accept it, and consent to live photo, timestamp, location, IP address, device details, Didit KYC reference and Google Drive archive evidence being recorded.</span>
-        </label>
-        <div class="public-actions">
-          <button class="btn public-primary" id="submitSignBtn" type="button" disabled>Accept and Sign Agreement</button>
-        </div>
-      </section>
-    </div>
+    <div class="public-progress">${stepsBar(step)}</div>
+    <div class="public-sign-grid" style="grid-template-columns:1fr;">${body}</div>
     <footer class="public-footer"><span>Protected by encrypted transport and tamper-evident evidence hashing.</span><span>Varada Nexus Private Limited · Legal Command</span></footer>
   `);
-  document.querySelector("#cameraBtn")?.addEventListener("click", () => startCamera().catch((error) => showToast(error.message, TOAST_TYPES.ERROR)));
-  document.querySelector("#captureBtn")?.addEventListener("click", capturePhoto);
-  document.querySelector("#evidenceBtn")?.addEventListener("click", () => refreshEvidence().catch((error) => showToast(error.message, TOAST_TYPES.ERROR)));
-  document.querySelector("#consentCheck")?.addEventListener("change", updateSubmitState);
-  document.querySelector("#submitSignBtn")?.addEventListener("click", submitAcceptance);
+  document.querySelector("#wizBack")?.addEventListener("click", () => setStep(step - 1));
+  document.querySelector("#nextTo2")?.addEventListener("click", () => setStep(2));
+  document.querySelector("#nextTo3")?.addEventListener("click", () => { if (canLeaveKyc()) setStep(3); });
+  document.querySelector("#nextTo4")?.addEventListener("click", () => { if (evidenceReady()) setStep(4); });
+  if (step === 2) { bindKycControls(); startKycPolling(); }
+  if (step === 3) {
+    document.querySelector("#cameraBtn")?.addEventListener("click", () => startCamera().catch((error) => showToast(error.message, TOAST_TYPES.ERROR)));
+    document.querySelector("#captureBtn")?.addEventListener("click", capturePhoto);
+    document.querySelector("#evidenceBtn")?.addEventListener("click", () => refreshEvidence().catch((error) => showToast(error.message, TOAST_TYPES.ERROR)));
+  }
+  if (step === 4) {
+    document.querySelector("#consentCheck")?.addEventListener("change", updateSubmitState);
+    document.querySelector("#submitSignBtn")?.addEventListener("click", submitAcceptance);
+    updateSubmitState();
+  }
 }
 
 async function init() {
