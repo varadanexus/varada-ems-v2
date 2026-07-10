@@ -47,7 +47,14 @@ function renderShell(divisionLabel) {
       .approval-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}.approval-card{padding:1rem;border:1px solid #e5e7eb;border-radius:16px;background:#fff;box-shadow:0 8px 20px rgba(15,23,42,.04)}
       .approval-card h4{margin:0 0 .75rem;font-size:1rem;color:#111827}.approval-card div{display:flex;justify-content:space-between;gap:1rem;margin-bottom:.45rem}.approval-card strong{color:#111827}
       .approval-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}
-      .approval-table th,.approval-table td{padding:.65rem .5rem;text-align:left;border-bottom:1px solid rgba(148,163,184,.16)}.approval-table th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted,#6b7280)}
+      .approval-table th,.approval-table td{padding:.65rem .5rem;text-align:left;border-bottom:1px solid rgba(148,163,184,.16)}
+      /* This modal panel is light; override the app's global dark table theme so
+         cells don't render as dark text on a dark table background (invisible). */
+      .approval-modal-panel .table-shell{background:#fff;border:1px solid #e5e7eb;box-shadow:none;border-radius:14px}
+      .approval-modal-panel .approval-table{min-width:0;background:#fff}
+      .approval-modal-panel .approval-table td{color:#111827;background:#fff}
+      .approval-modal-panel .approval-table th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;background:#f8fafc}
+      .approval-modal-panel .approval-table tr:hover td{background:#f8fafc}
       .approval-modal[hidden]{display:none}.approval-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}
       .approval-modal-panel{width:min(1000px,95vw);max-height:85vh;overflow:auto;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}.approval-modal-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem;margin-bottom:1rem}
       .approval-box{padding:.85rem 1rem;border-radius:14px;background:#f8fafc;border:1px solid #e5e7eb}.approval-box label{display:block;font-size:.78rem;color:#6b7280;text-transform:uppercase;margin-bottom:.35rem}.approval-box strong{font-size:1.05rem;color:#111827}
