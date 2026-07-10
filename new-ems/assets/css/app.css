@@ -349,6 +349,10 @@ select {
   color: var(--text);
 }
 
+/* Native dropdown option popup: pin solid bg + light text so options
+   never render light-on-white in the OS popup. */
+select option, select optgroup { background-color: #172235; color: #f5f7fb; }
+
 input:focus,
 select:focus {
   outline: 2px solid rgba(212, 178, 106, 0.35);

@@ -12,6 +12,9 @@
 .vt-label{display:block;font-weight:600;font-size:.86rem;margin:0 0 6px;color:var(--text-2)}
 .vt-card input,.vt-card select,.vt-card textarea{width:100%;padding:11px 13px;border:1px solid var(--border);border-radius:12px;
   font-size:1rem;background:var(--surface);color:var(--text);font-family:inherit}
+/* Native dropdown option popup needs a solid bg — the translucent select bg
+   made the OS popup render light option text on a white fallback (invisible). */
+.vt-card select option,.vt-card select optgroup,select option,select optgroup{background-color:#0d1a33;color:#f2f6fd}
 .vt-card textarea{min-height:84px;resize:vertical}
 .vt-card input::placeholder,.vt-card textarea::placeholder{color:var(--text-3)}
 .vt-hint{font-size:.78rem;color:var(--text-3);margin-top:4px}

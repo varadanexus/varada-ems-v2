@@ -611,6 +611,10 @@ body.modal-open{overflow:hidden}
   box-shadow:0 0 0 4px rgba(91,166,255,.16);
 }
 .field input::placeholder,.field textarea::placeholder{color:var(--text-3)}
+/* Native dropdown option popup: force solid dark bg + light text
+   (translucent select backgrounds make the OS popup fall back to white,
+   which rendered light option text invisibly on white). */
+select option,select optgroup{background-color:#0d1a33;color:#f2f6fd}
 .form-panel .btn{width:100%;justify-content:center;margin-top:8px}
 .form-note{font-size:12.5px;color:var(--text-3);margin-top:16px;text-align:center}
 .error-text{color:#ff7a7a;font-size:13.5px;min-height:18px;margin-top:12px;text-align:center}
