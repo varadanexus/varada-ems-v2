@@ -205,7 +205,29 @@ function renderGateConsent() {
   document.querySelector("#gateGrantBtn")?.addEventListener("click", runAccessGate);
 }
 
-function showGateBlocked(message) {
+// Returns the browser permission state ("granted" | "prompt" | "denied" |
+// "unknown"). When it is "prompt", requesting access will show the native
+// popup automatically; when it is "denied", the browser has blocked the site
+// and will NOT re-prompt — the signer must re-enable it from the address bar.
+async function permissionState(name) {
+  try {
+    if (!navigator.permissions || !navigator.permissions.query) return "unknown";
+    const status = await navigator.permissions.query({ name });
+    return status?.state || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function showGateBlocked(kind, state) {
+  const label = kind === "camera" ? "Camera" : "Location (GPS)";
+  const blocked = state === "denied";
+  const lead = blocked
+    ? `${label} access is <strong>blocked</strong> for this site, so your browser will not ask again automatically.`
+    : `${label} access was not granted.`;
+  const how = blocked
+    ? `To unblock: click the site-settings icon at the left of the address bar (next to the web address), set <strong>${escapeHtml(label)}</strong> to <strong>Allow</strong>, then press &ldquo;Grant access &amp; retry&rdquo;.`
+    : `Press &ldquo;Grant access &amp; retry&rdquo; and approve the ${escapeHtml(label.toLowerCase())} permission popup when your browser shows it.`;
   document.querySelector("#gateBlockModal")?.remove();
   const overlay = document.createElement("div");
   overlay.id = "gateBlockModal";
@@ -223,7 +245,7 @@ function showGateBlocked(message) {
     </style>
     <div class="g-modal" role="dialog" aria-modal="true" aria-labelledby="gateBlockTitle">
       <div class="g-head"><span class="g-mark">!</span><strong id="gateBlockTitle">Access required</strong></div>
-      <div class="g-body"><p>${escapeHtml(message)}</p><p>Please give access to location and camera for accessing the agreement. Enable both in your browser, then retry.</p></div>
+      <div class="g-body"><p>${lead}</p><p>Camera and location are mandatory to view and sign this agreement. ${how}</p></div>
       <div class="g-actions"><button class="g-btn" id="gateRetryBtn" type="button">Grant access &amp; retry</button></div>
     </div>`;
   document.body.appendChild(overlay);
@@ -235,20 +257,26 @@ async function runAccessGate() {
   if (btn) { btn.disabled = true; btn.textContent = "Requesting access..."; }
   // 1. Camera permission (permission check only — the stream is released
   // immediately; the disclosed live photo is captured later in the wizard).
+  // Calling getUserMedia shows the native popup automatically when the
+  // permission state is "prompt".
   let stream = null;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
   } catch (error) {
+    const camState = await permissionState("camera");
     if (btn) { btn.disabled = false; btn.textContent = "Grant camera & location access"; }
-    showGateBlocked("Camera access was not granted.");
+    showGateBlocked("camera", camState);
     return;
   }
   try { stream.getTracks().forEach((track) => track.stop()); } catch { /* noop */ }
-  // 2. Location permission (must be granted).
+  // 2. Location permission (must be granted). getCurrentPosition triggers the
+  // native popup automatically when the state is "prompt"; if it was previously
+  // blocked, the browser will not re-prompt, so we surface unblock steps.
   const location = await getLocation();
   if (!location || location.status !== "granted") {
+    const geoState = await permissionState("geolocation");
     if (btn) { btn.disabled = false; btn.textContent = "Grant camera & location access"; }
-    showGateBlocked("Location (GPS) access was not granted.");
+    showGateBlocked("location", geoState);
     return;
   }
   // 3. Network / IP details, timestamped at access.
