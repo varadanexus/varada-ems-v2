@@ -207,7 +207,9 @@ async function submitAcceptance() {
         didit: {
           verificationUrl: state.request?.diditVerificationUrl || null,
           status: state.request?.diditStatus || null
-        }
+        },
+        kycPendingAtSignature: Boolean(state.request?.diditVerificationUrl) && !kycApproved(),
+        kycPendingAcknowledgedAt: state.kycPendingAcknowledgedAt || null
       }
     });
     state.stream?.getTracks?.().forEach((track) => track.stop());
@@ -288,14 +290,70 @@ function kycApproved() {
   return String(state.request?.diditStatus || "").toLowerCase() === "approved";
 }
 
-// A signer can leave the identity step once Didit approves, or immediately if
-// this request has no Didit provider configured (portal-evidence only).
+function kycInReview() {
+  const ds = String(state.request?.diditStatus || "").toLowerCase();
+  return ds === "in review" || ds === "in_review";
+}
+
+// A signer can leave the identity step once Didit approves, immediately if this
+// request has no Didit provider configured (portal-evidence only), or while the
+// verification is still under review — in which case they proceed provisionally
+// after acknowledging the pending-verification warning. Declined/rejected and
+// not-yet-started states still block, so the signer must retry or complete KYC.
 function canLeaveKyc() {
-  return kycApproved() || !state.request?.diditVerificationUrl;
+  return kycApproved() || kycInReview() || !state.request?.diditVerificationUrl;
 }
 
 function evidenceReady() {
   return Boolean(state.photoDataUrl && state.location && state.ipRisk && !blockedRisk());
+}
+
+// Legally-worded confirmation shown when a signer chooses to continue while
+// their Didit identity verification is still under review. Resolves to true if
+// the signer explicitly accepts the provisional-signing terms, false otherwise.
+function showKycPendingWarning() {
+  return new Promise((resolve) => {
+    document.querySelector("#kycPendingModal")?.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "kycPendingModal";
+    overlay.innerHTML = `
+      <style>
+        #kycPendingModal{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(7,18,36,.55);padding:1rem}
+        #kycPendingModal .kyc-modal{width:min(540px,100%);background:#fff;border:1px solid #ddcfaa;border-radius:8px;box-shadow:0 24px 60px rgba(7,18,36,.35);overflow:hidden}
+        #kycPendingModal .kyc-modal-head{display:flex;align-items:center;gap:.6rem;padding:1rem 1.1rem;background:#fbf3e0;border-bottom:1px solid #eaddb8}
+        #kycPendingModal .kyc-modal-head strong{font-size:1rem;color:#7a5a12}
+        #kycPendingModal .kyc-warn-mark{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#f0c14b;color:#3b2a05;font-weight:800}
+        #kycPendingModal .kyc-modal-body{padding:1rem 1.1rem;color:#33425a;font-size:.86rem;line-height:1.6}
+        #kycPendingModal .kyc-modal-body p{margin:.5rem 0}
+        #kycPendingModal .kyc-modal-body ul{margin:.5rem 0 .25rem;padding-left:1.15rem}
+        #kycPendingModal .kyc-modal-body li{margin:.35rem 0}
+        #kycPendingModal .kyc-modal-actions{display:flex;justify-content:flex-end;gap:.5rem;padding:.85rem 1.1rem;border-top:1px solid #e2e7ed;background:#faf7f0}
+        #kycPendingModal .kyc-btn{min-height:38px;border-radius:5px;padding:.5rem .85rem;font-weight:700;cursor:pointer;border:1px solid #0b1b32;background:#0b1b32;color:#fff}
+        #kycPendingModal .kyc-btn.ghost{background:#fff;border-color:#b9c5d3;color:#172033}
+        #kycPendingModal .kyc-btn.warn{background:#b8923e;border-color:#b8923e;color:#101827}
+      </style>
+      <div class="kyc-modal" role="dialog" aria-modal="true" aria-labelledby="kycModalTitle">
+        <div class="kyc-modal-head"><span class="kyc-warn-mark">!</span><strong id="kycModalTitle">Identity verification still pending</strong></div>
+        <div class="kyc-modal-body">
+          <p>Your Didit identity verification is currently <strong>under review</strong> and has not yet been approved. You may continue and sign now, but by proceeding you acknowledge and agree that:</p>
+          <ul>
+            <li>Your acceptance is <strong>provisional</strong> and takes full legal effect only once identity verification is approved.</li>
+            <li>If verification is <strong>declined or fails review</strong>, this agreement may be treated as <strong>void and unenforceable</strong>, and you may be required to complete identity verification and re-sign a fresh copy.</li>
+            <li>Varada Nexus reserves the right to withhold execution or countersignature until verification is approved.</li>
+          </ul>
+          <p>Do you wish to continue while your verification is pending?</p>
+        </div>
+        <div class="kyc-modal-actions">
+          <button class="kyc-btn ghost" id="kycModalCancel" type="button">Wait for approval</button>
+          <button class="kyc-btn warn" id="kycModalContinue" type="button">Continue and sign provisionally</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector("#kycModalCancel")?.addEventListener("click", () => close(false));
+    overlay.querySelector("#kycModalContinue")?.addEventListener("click", () => close(true));
+    overlay.addEventListener("click", (event) => { if (event.target === overlay) close(false); });
+  });
 }
 
 function stepsBar(step) {
@@ -371,16 +429,18 @@ function renderSigning() {
     </section>`;
   } else {
     const dsLabel = kycApproved() ? "verified" : (String(state.request?.diditStatus || "").toLowerCase() || "pending");
+    const kycPending = Boolean(state.request?.diditVerificationUrl) && !kycApproved();
     body = `<section class="public-card">
       <div class="public-card-head"><h2>Accept and sign</h2><span>Final step</span></div>
       <ul style="list-style:none;padding:0;margin:.25rem 0 .6rem;color:#334155;font-size:.84rem;line-height:1.9;">
-        <li>✓ Identity ${escapeHtml(dsLabel)}</li>
+        <li>${kycApproved() ? "✓ Identity verified" : `⚠ Identity ${escapeHtml(dsLabel)} — signing provisionally`}</li>
         <li>✓ Live photo captured</li>
         <li>✓ Location &amp; IP recorded</li>
       </ul>
+      ${kycPending ? `<p class="danger-text" style="margin:.1rem 0 .6rem;font-weight:700;">Your identity verification is still under review. You are signing provisionally — if verification is declined, this agreement may be void and you may be required to re-sign.</p>` : ""}
       <label class="public-consent">
         <input id="consentCheck" type="checkbox" />
-        <span id="consentText">I have read and understood this agreement, voluntarily accept it, and consent to live photo, timestamp, location, IP address, device details, Didit KYC reference and Google Drive archive evidence being recorded.</span>
+        <span id="consentText">I have read and understood this agreement, voluntarily accept it, and consent to live photo, timestamp, location, IP address, device details, Didit KYC reference and secure Drive archive evidence being recorded.</span>
       </label>
       <div class="public-actions" style="justify-content:space-between;margin-top:.75rem;">
         <button class="btn btn-ghost" id="wizBack" type="button">Back</button>
@@ -399,7 +459,16 @@ function renderSigning() {
   `);
   document.querySelector("#wizBack")?.addEventListener("click", () => setStep(step - 1));
   document.querySelector("#nextTo2")?.addEventListener("click", () => setStep(2));
-  document.querySelector("#nextTo3")?.addEventListener("click", () => { if (canLeaveKyc()) setStep(3); });
+  document.querySelector("#nextTo3")?.addEventListener("click", async () => {
+    if (kycApproved() || !state.request?.diditVerificationUrl) { setStep(3); return; }
+    if (kycInReview()) {
+      const proceed = await showKycPendingWarning();
+      if (proceed) {
+        state.kycPendingAcknowledgedAt = new Date().toISOString();
+        setStep(3);
+      }
+    }
+  });
   document.querySelector("#nextTo4")?.addEventListener("click", () => { if (evidenceReady()) setStep(4); });
   if (step === 2) { bindKycControls(); startKycPolling(); }
   if (step === 3) {

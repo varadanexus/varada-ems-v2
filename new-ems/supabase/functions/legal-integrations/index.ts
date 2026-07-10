@@ -2465,6 +2465,35 @@ async function twilioMessageStatus(req: Request, body: any) {
   return json({ success: true, payload });
 }
 
+// Didit session statuses that are terminal — once reached, no further live
+// polling is required and the value is safe to trust from the stored row.
+const DIDIT_FINAL_STATUSES = new Set(["approved", "declined", "rejected"]);
+function isDiditFinalStatus(status: any) {
+  return DIDIT_FINAL_STATUSES.has(String(status || "").toLowerCase());
+}
+
+// Actively pull the live verification status from Didit rather than relying
+// solely on the last webhook we happened to receive. This lets "Check status"
+// (and the poller) self-recover even if a Didit webhook was dropped or arrived
+// out of order. Returns null on any failure so callers fall back to the stored
+// value without breaking the page.
+async function fetchDiditSessionStatus(sessionId: string) {
+  const apiKey = env("DIDIT_API_KEY");
+  if (!apiKey || !sessionId) return null;
+  try {
+    const res = await fetch(`https://verification.didit.me/v3/session/${encodeURIComponent(sessionId)}/decision/`, {
+      method: "GET",
+      headers: { "x-api-key": apiKey, "Accept": "application/json" }
+    });
+    if (!res.ok) return null;
+    const payload = await res.json().catch(() => null);
+    if (!payload || typeof payload.status === "undefined" || payload.status === null) return null;
+    return { status: payload.status, payload };
+  } catch {
+    return null;
+  }
+}
+
 async function publicGet(body: any) {
   const admin = adminClient();
   const token = body.token || "";
@@ -2478,15 +2507,42 @@ async function publicGet(body: any) {
   if (error) throw error;
   if (!request?.id) return json({ error: "Invalid signing link" }, 404);
   if (request.expires_at && new Date(request.expires_at).getTime() < Date.now()) return json({ error: "Signing link expired" }, 410);
+
+  // Live-refresh the KYC status from Didit while it is still non-terminal.
+  let diditStatus = request.didit_status;
+  let requestStatus = request.request_status;
+  if (request.didit_session_id && !isDiditFinalStatus(diditStatus)) {
+    const live = await fetchDiditSessionStatus(request.didit_session_id);
+    if (live && live.status && live.status !== diditStatus) {
+      diditStatus = live.status;
+      requestStatus = String(live.status).toUpperCase() === "APPROVED" ? "opened" : requestStatus;
+      await admin.from("legal_signing_requests").update({
+        didit_status: live.status,
+        didit_payload: live.payload,
+        request_status: requestStatus,
+        updated_at: new Date().toISOString()
+      }).eq("id", request.id);
+      await admin.from("legal_provider_events").insert({
+        agreement_id: request.agreement_id,
+        signing_request_id: request.id,
+        provider: "didit",
+        provider_event_id: request.didit_session_id,
+        event_type: "session.status_pull",
+        status: live.status,
+        payload: live.payload
+      });
+    }
+  }
+
   return json({
     signingRequestId: request.id,
     agreementNo: request.legal_agreements?.agreement_no,
     title: request.legal_agreements?.title,
     partyName: request.legal_agreements?.party_name,
     recipientName: request.recipient_name,
-    status: request.request_status,
+    status: requestStatus,
     diditVerificationUrl: request.didit_verification_url,
-    diditStatus: request.didit_status,
+    diditStatus: diditStatus,
     bodyMarkdown: request.legal_agreement_versions?.body_markdown || "",
     expiresAt: request.expires_at
   });
@@ -2875,6 +2931,15 @@ async function diditWebhook(req: Request, rawBody: string) {
   const sessionId = payload.session_id || payload.id || payload.verificationSessionId || payload?.data?.session_id || payload?.data?.id;
   const vendorRequestId = payload.vendor_data || payload?.data?.vendor_data || payload?.metadata?.signing_request_id || payload?.data?.metadata?.signing_request_id;
   const status = payload.status || payload?.data?.status || payload.webhook_type || "received";
+  // Didit emits two distinct event families on the same webhook endpoint:
+  // verification/session events (status.updated, data.updated, session.*) whose
+  // status is the KYC decision, and user-account events (user.*) whose status is
+  // the account lifecycle state (e.g. "ACTIVE"). Only the former should drive
+  // didit_status; letting a user.* event through would overwrite the KYC status
+  // with "ACTIVE", which the signer page does not recognise and would wrongly
+  // bounce the user back to "Verify with Didit".
+  const eventType = String(payload.webhook_type || payload?.data?.webhook_type || "").toLowerCase();
+  const isVerificationEvent = !eventType.startsWith("user.");
   let request = null;
   if (sessionId) {
     const result = await admin.from("legal_signing_requests").select("*").eq("didit_session_id", sessionId).maybeSingle();
@@ -2893,7 +2958,7 @@ async function diditWebhook(req: Request, rawBody: string) {
     status,
     payload
   });
-  if (request?.id) {
+  if (request?.id && isVerificationEvent) {
     await admin.from("legal_signing_requests").update({
       didit_status: status,
       didit_payload: payload,
@@ -2978,7 +3043,7 @@ async function submit(){const btn=document.querySelector("#submit");btn.disabled
 function render(r){document.querySelector("#app").innerHTML=\`
 <header><h1>\${esc(r.title||"Agreement Signing")}</h1><p class="muted">\${esc(r.agreementNo||"")} · Signer: \${esc(r.recipientName||"")}</p></header>
 <div class="grid"><section class="card"><h3>Agreement Preview</h3><div class="agreement">\${esc(r.bodyMarkdown||"Agreement preview unavailable.")}</div>\${r.diditVerificationUrl?\`<div class="actions"><a class="btn" href="\${esc(r.diditVerificationUrl)}" target="_blank" rel="noreferrer">Complete Didit KYC</a></div>\`:\`<p class="muted">Didit session is not configured yet.</p>\`}</section>
-<section class="card"><h3>Signing Evidence</h3><video id="camera" autoplay playsinline muted></video><canvas id="canvas" hidden></canvas><img id="preview" alt="Captured signer" hidden style="margin-top:.65rem"><p id="photoStatus" class="muted">Live photo not captured.</p><div class="actions"><button id="cameraBtn" type="button">Enable Camera</button><button id="capture" type="button" disabled>Capture Live Photo</button><button id="evidence" type="button">Capture Location + IP</button></div><div class="status"><div><strong>Location</strong><br><span id="locationStatus" class="muted">Not captured</span></div><div><strong>IP / VPN Risk</strong><br><span id="ipStatus" class="muted">Not checked</span></div></div><p id="risk" class="danger" hidden>Signing is blocked because VPN/proxy/Tor/high-risk network was detected.</p><label><input id="consent" type="checkbox"><span id="consentText">I have read and understood this agreement, voluntarily accept it, and consent to live photo, timestamp, location, IP address, device details, Didit KYC reference and archive evidence being recorded.</span></label><div class="actions"><button id="submit" type="button" disabled>Accept and Submit</button></div></section></div>\`;
+<section class="card"><h3>Signing Evidence</h3><video id="camera" autoplay playsinline muted></video><canvas id="canvas" hidden></canvas><img id="preview" alt="Captured signer" hidden style="margin-top:.65rem"><p id="photoStatus" class="muted">Live photo not captured.</p><div class="actions"><button id="cameraBtn" type="button">Enable Camera</button><button id="capture" type="button" disabled>Capture Live Photo</button><button id="evidence" type="button">Capture Location + IP</button></div><div class="status"><div><strong>Location</strong><br><span id="locationStatus" class="muted">Not captured</span></div><div><strong>IP / VPN Risk</strong><br><span id="ipStatus" class="muted">Not checked</span></div></div><p id="risk" class="danger" hidden>Signing is blocked because VPN/proxy/Tor/high-risk network was detected.</p><label><input id="consent" type="checkbox"><span id="consentText">I have read and understood this agreement, voluntarily accept it, and consent to live photo, timestamp, location, IP address, device details, Didit KYC reference and secure Drive archive evidence being recorded.</span></label><div class="actions"><button id="submit" type="button" disabled>Accept and Submit</button></div></section></div>\`;
 document.querySelector("#cameraBtn").onclick=()=>startCamera().catch(e=>alert(e.message));document.querySelector("#capture").onclick=capture;document.querySelector("#evidence").onclick=()=>evidence().catch(e=>alert(e.message));document.querySelector("#consent").onchange=update;document.querySelector("#submit").onclick=submit;}
 (async()=>{try{if(!token)throw new Error("Missing signing token");state.request=await api("public_get",{token});render(state.request);}catch(e){document.querySelector("#app").innerHTML=\`<section class="card"><h1>Signing link unavailable</h1><p class="muted">\${esc(e.message||"This link cannot be opened.")}</p></section>\`;}})();
 addEventListener("beforeunload",()=>state.stream?.getTracks?.().forEach(t=>t.stop()));
