@@ -557,26 +557,34 @@ async function saveDraftAgreement(req: Request, body: any) {
     agreement = updated.data;
   }
 
-  const { data: latestVersion } = await admin
-    .from("legal_agreement_versions")
-    .select("version_no")
-    .eq("agreement_id", agreement.id)
-    .order("version_no", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const versionNo = Number(latestVersion?.version_no || 0) + 1;
-  const version = await admin.from("legal_agreement_versions").insert({
-    agreement_id: agreement.id,
-    version_no: versionNo,
-    draft_source: draftSource,
-    title,
-    body_markdown: draftText,
-    content_sha256: contentHash,
-    is_locked: false,
-    created_by: caller.id
-  }).select("*").single();
-  if (version.error) throw version.error;
+  // Assign the next version number, retrying on a (agreement_id, version_no)
+  // unique collision so rapid/concurrent saves don't 400.
+  let versionNo = 0;
+  let version: any = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: latestVersion } = await admin
+      .from("legal_agreement_versions")
+      .select("version_no")
+      .eq("agreement_id", agreement.id)
+      .order("version_no", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    versionNo = Number(latestVersion?.version_no || 0) + 1;
+    const attemptInsert = await admin.from("legal_agreement_versions").insert({
+      agreement_id: agreement.id,
+      version_no: versionNo,
+      draft_source: draftSource,
+      title,
+      body_markdown: draftText,
+      content_sha256: contentHash,
+      is_locked: false,
+      created_by: caller.id
+    }).select("*").single();
+    if (!attemptInsert.error) { version = attemptInsert; break; }
+    // 23505 = unique_violation: another save grabbed this version_no first — retry.
+    if (attemptInsert.error.code !== "23505") throw attemptInsert.error;
+  }
+  if (!version) throw new Error("Could not assign a new version number after multiple attempts. Please retry.");
 
   await admin.from("legal_agreements").update({
     current_version_id: version.data.id,

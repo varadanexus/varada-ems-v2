@@ -1,7 +1,7 @@
 import { MODULES, ROUTES, WORKSPACES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { escapeHtml, statusPill } from "./legal-workflow-data.js";
-import { countersignLegalAgreement, deleteLegalAgreement, downloadExecutedLegalPdf, getLegalAgreement } from "./legal-api.js";
+import { countersignLegalAgreement, deleteLegalAgreement, downloadExecutedLegalPdf, getLegalAgreement, saveLegalDraft } from "./legal-api.js";
 import { showToast } from "./utils.js";
 import { TOAST_TYPES } from "../config/constants.js";
 
@@ -41,11 +41,14 @@ function renderAgreement(agreement, versions, signatures) {
   const body = current.body_markdown || "No draft content was saved for this agreement.";
   const externalSignature = signatures.find((item) => item.signer_role === "external_party" && item.agreement_version_id === current.id);
   const companySignature = signatures.find((item) => item.signer_role === "company_authorised_signatory" && item.agreement_version_id === current.id);
+  const hasAnySignature = signatures.length > 0 || Boolean(externalSignature) || Boolean(companySignature);
+  const canEditDraft = !hasAnySignature && String(agreement.status || "draft").toLowerCase() !== "signed";
   renderModuleContent(`
     <div class="actions" style="margin-bottom:1rem;">
       <a class="btn btn-secondary" href="${ROUTES.LEGAL_AGREEMENTS}">Back to Agreements</a>
       <a class="btn" href="${ROUTES.LEGAL_SEND}?agreement=${encodeURIComponent(agreement.agreement_no)}">Send to User</a>
       <a class="btn btn-secondary" href="${ROUTES.LEGAL_SIGNING}?agreement=${encodeURIComponent(agreement.agreement_no)}">Evidence</a>
+      ${canEditDraft ? '<button class="btn" id="editDraftBtn" type="button">Edit Draft</button>' : ""}
       <button class="btn btn-danger" id="deleteAgreementBtn" type="button">Delete Agreement</button>
       ${externalSignature && companySignature ? '<button class="btn" id="downloadExecutedPdfBtn" type="button">Download Executed PDF</button>' : ""}
     </div>
@@ -68,7 +71,7 @@ function renderAgreement(agreement, versions, signatures) {
         ${detail("Last updated", formatDate(agreement.updated_at))}
       </div>
     </section>
-    <section class="card" style="margin-top:1rem;">
+    <section class="card" id="draftCard" style="margin-top:1rem;">
       <div class="legal-title-row">
         <h3>Agreement Draft</h3>
         <span class="meta-pill">Version ${escapeHtml(current.version_no || 1)}</span>
@@ -157,6 +160,58 @@ function renderAgreement(agreement, versions, signatures) {
       button.disabled = false;
       button.textContent = "Download Executed PDF";
     }
+  });
+
+  document.querySelector("#editDraftBtn")?.addEventListener("click", () => {
+    const card = document.querySelector("#draftCard");
+    if (!card) return;
+    const nextVersionNo = Number(current.version_no || 1) + 1;
+    card.innerHTML = `
+      <div class="legal-title-row">
+        <h3>Edit Draft</h3>
+        <span class="meta-pill">Saves as Version ${nextVersionNo}</span>
+      </div>
+      <p class="muted" style="margin:.25rem 0 .75rem;">Editing creates a new version; the previous version stays in the history.</p>
+      <textarea id="draftEditor" class="legal-document" style="width:100%;min-height:460px;font-family:inherit;font-size:.95rem;line-height:1.5;white-space:pre-wrap;resize:vertical;">${escapeHtml(body)}</textarea>
+      <div class="actions" style="margin-top:.75rem;">
+        <button class="btn" id="saveDraftEditBtn" type="button">Save as New Version</button>
+        <button class="btn btn-secondary" id="cancelDraftEditBtn" type="button">Cancel</button>
+      </div>`;
+    document.querySelector("#cancelDraftEditBtn")?.addEventListener("click", () => renderAgreement(agreement, versions, signatures));
+    document.querySelector("#saveDraftEditBtn")?.addEventListener("click", async () => {
+      const text = document.querySelector("#draftEditor")?.value?.trim() || "";
+      if (!text) {
+        showToast("Draft cannot be empty.", TOAST_TYPES.ERROR);
+        return;
+      }
+      const button = document.querySelector("#saveDraftEditBtn");
+      button.disabled = true;
+      button.textContent = "Saving...";
+      try {
+        await saveLegalDraft({
+          agreementNo: agreement.agreement_no,
+          title: agreement.title,
+          agreementTitle: agreement.title,
+          agreementType: agreement.agreement_type,
+          partyType: agreement.party_type,
+          partyName: agreement.party_name,
+          counterpartyName: agreement.party_name,
+          signerName: agreement.signer_name,
+          signerMobile: agreement.signer_mobile,
+          signerEmail: agreement.signer_email,
+          riskLevel: agreement.risk_level,
+          draftText: text,
+          draftSource: "manual"
+        });
+        showToast("Draft saved as a new version.", TOAST_TYPES.SUCCESS);
+        const refreshed = await getLegalAgreement(agreement.id);
+        renderAgreement(refreshed.agreement, refreshed.versions || [], refreshed.signatures || []);
+      } catch (error) {
+        showToast(error?.message || "Draft save failed.", TOAST_TYPES.ERROR);
+        button.disabled = false;
+        button.textContent = "Save as New Version";
+      }
+    });
   });
 
   document.querySelector("#deleteAgreementBtn")?.addEventListener("click", async () => {
