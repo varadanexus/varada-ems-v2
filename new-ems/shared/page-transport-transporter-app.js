@@ -4,6 +4,7 @@ import { exportPortalTransporterStatementPdf, exportPortalTransporterTripPdf } f
 import { showToast, qs } from "./utils.js";
 import { initTheme, toggleTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
+import { uploadTripDocumentToDrive } from "./drive-api.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
 
@@ -30,6 +31,8 @@ const PAGE_STATE = {
   statements: [],
   dieselAdvances: [],
   payments: [],
+  documents: [],
+  uploadingDocument: false,
   loading: false,
   tripFilters: {
     search: "",
@@ -105,6 +108,11 @@ async function loadSection() {
       const { data, error } = await client.rpc("transport_transporter_portal_payments", { p_session_token: token, p_transport_transporter_id: transporterId });
       if (error) throw error;
       PAGE_STATE.payments = data || [];
+    }
+    if (PAGE_STATE.activeSection === "documents") {
+      const { data, error } = await client.rpc("transport_transporter_portal_documents", { p_session_token: token, p_transport_transporter_id: transporterId });
+      if (error) throw error;
+      PAGE_STATE.documents = data || [];
     }
   } catch (error) {
     showToast(error?.message || "Failed to load data.", TOAST_TYPES.ERROR);
@@ -624,14 +632,115 @@ function renderTruckSummary() {
   );
 }
 
+function docTypeLabel(type) {
+  return { WEIGHT_BILL: "Weigh Bill", TRIP_SHEET: "Trip Sheet", EXPENSE_RECEIPT: "Expense Receipt" }[String(type || "").toUpperCase()] || type || "Document";
+}
+
+function statusBadge(status) {
+  const s = String(status || "pending").toLowerCase();
+  const map = {
+    pending: ["#a97b12", "rgba(217,185,110,.16)", "Pending"],
+    approved: ["#1c7c3a", "rgba(46,160,67,.16)", "Approved"],
+    rejected: ["#b3261e", "rgba(255,120,120,.16)", "Rejected"]
+  };
+  const [color, bg, label] = map[s] || map.pending;
+  return `<span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:.72rem;font-weight:700;color:${color};background:${bg}">${label}</span>`;
+}
+
 function renderDocuments() {
+  const trips = PAGE_STATE.trips || [];
+  const docs = PAGE_STATE.documents || [];
+  const tripOptions = trips.length
+    ? trips.map((t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.trip_no || t.id)}${t.route_name ? " · " + escapeHtml(t.route_name) : ""}</option>`).join("")
+    : `<option value="" disabled>No assigned trips</option>`;
+  const rows = docs.map((d) => `
+    <tr>
+      <td>${escapeHtml(d.trip_no || "-")}</td>
+      <td>${escapeHtml(docTypeLabel(d.document_type))}</td>
+      <td>${statusBadge(d.approval_status)}${d.approval_status === "rejected" && d.rejection_reason ? `<div class="muted" style="font-size:.74rem;margin-top:3px">${escapeHtml(d.rejection_reason)}</div>` : ""}</td>
+      <td>${escapeHtml(formatDate(d.created_at))}</td>
+      <td>${d.web_view_link ? `<a class="btn btn-sm" href="${escapeHtml(d.web_view_link)}" target="_blank" rel="noopener">View</a>` : "-"}</td>
+    </tr>`).join("");
+
   return `
+    <section class="card" style="margin-bottom:1rem">
+      <h3>Upload Trip Document</h3>
+      <p class="muted">Upload a weigh bill, trip sheet, or expense receipt for one of your trips. Uploaded documents go to Varada Nexus staff for approval.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem;margin-top:.5rem">
+        <div>
+          <label class="muted" for="docTripSelect">Trip</label>
+          <select id="docTripSelect" ${trips.length ? "" : "disabled"}>${tripOptions}</select>
+        </div>
+        <div>
+          <label class="muted" for="docTypeSelect">Document Type</label>
+          <select id="docTypeSelect">
+            <option value="WEIGHT_BILL">Weigh Bill</option>
+            <option value="TRIP_SHEET">Trip Sheet</option>
+            <option value="EXPENSE_RECEIPT">Expense Receipt</option>
+          </select>
+        </div>
+        <div>
+          <label class="muted" for="docFileInput">File (PDF or image)</label>
+          <input id="docFileInput" type="file" accept="application/pdf,image/*">
+        </div>
+        <div>
+          <label class="muted" for="docRemarksInput">Remarks (optional)</label>
+          <input id="docRemarksInput" type="text" placeholder="e.g. Diesel receipt at Vijayawada">
+        </div>
+      </div>
+      <button class="btn btn-primary" id="docUploadBtn" type="button" style="margin-top:.75rem" ${trips.length && !PAGE_STATE.uploadingDocument ? "" : "disabled"}>
+        ${PAGE_STATE.uploadingDocument ? "Uploading…" : "Upload Document"}
+      </button>
+    </section>
     <section class="card">
-      <h3>Document Upload</h3>
-      <p class="muted">Document upload (POD, invoices, compliance documents) is planned for a future release. This section is a placeholder.</p>
-      <button class="btn" disabled type="button">Upload Document (Coming Soon)</button>
+      <h3>My Uploaded Documents</h3>
+      <div class="table-container"><table><thead><tr><th>Trip</th><th>Type</th><th>Status</th><th>Uploaded</th><th>File</th></tr></thead><tbody>
+        ${rows || `<tr><td colspan="5" style="text-align:center;padding:2rem" class="muted">No documents uploaded yet.</td></tr>`}
+      </tbody></table></div>
     </section>
   `;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",").pop());
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleDocumentUpload() {
+  const tripId = qs("#docTripSelect")?.value || "";
+  const documentType = qs("#docTypeSelect")?.value || "";
+  const remarks = String(qs("#docRemarksInput")?.value || "").trim();
+  const file = qs("#docFileInput")?.files?.[0];
+  if (!tripId) return showToast("Select a trip.", TOAST_TYPES.ERROR);
+  if (!file) return showToast("Choose a file to upload.", TOAST_TYPES.ERROR);
+  if (file.size > 10 * 1024 * 1024) return showToast("File too large (max 10 MB).", TOAST_TYPES.ERROR);
+
+  PAGE_STATE.uploadingDocument = true;
+  render();
+  try {
+    const base64 = await fileToBase64(file);
+    await uploadTripDocumentToDrive({
+      sessionToken: PAGE_STATE.session.sessionToken,
+      transporterId: PAGE_STATE.activeTransporterId,
+      tripId,
+      documentType,
+      fileName: file.name,
+      mimeType: file.type || "application/octet-stream",
+      remarks
+    }, base64);
+    PAGE_STATE.uploadingDocument = false;
+    showToast("Document uploaded. Awaiting staff approval.", TOAST_TYPES.SUCCESS);
+    await loadSection();
+    render();
+  } catch (error) {
+    PAGE_STATE.uploadingDocument = false;
+    showToast(error?.message || "Upload failed.", TOAST_TYPES.ERROR);
+    render();
+  }
 }
 
 function pdfButton(row) {
@@ -817,6 +926,7 @@ function bindEvents() {
     render();
   }));
   document.querySelectorAll("[data-pdf-statement]").forEach((btn) => btn.addEventListener("click", () => downloadStatementPdf(btn.dataset.pdfStatement)));
+  qs("#docUploadBtn")?.addEventListener("click", handleDocumentUpload);
   bindTripEvents();
 }
 

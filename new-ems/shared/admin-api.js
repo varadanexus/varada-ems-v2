@@ -2018,6 +2018,21 @@ export async function listTripDocuments(tripId) {
   return data || [];
 }
 
+// Staff approval of a transporter-uploaded trip document.
+export async function approveTripDocument(id) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("approve_transport_trip_document", { p_document_id: id });
+  if (error) throw error;
+  return data;
+}
+
+export async function rejectTripDocument(id, reason = null) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("reject_transport_trip_document", { p_document_id: id, p_reason: reason });
+  if (error) throw error;
+  return data;
+}
+
 export async function getCompanyTaxProfile() {
   const client = getSupabaseClient();
   const { data, error } = await client.from("company_tax_profiles").select("*").eq("company_key", "PRIMARY").maybeSingle();

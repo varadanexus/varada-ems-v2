@@ -256,6 +256,7 @@ const TRIP_SUBFOLDER: Record<string, string> = {
   UNLOADING_SLIP: "Loading & Unloading Slips",
   EWAY_BILL: "E-Way Bill & Invoice Copies",
   INVOICE_COPY: "E-Way Bill & Invoice Copies",
+  EXPENSE_RECEIPT: "Expenses",
   POD: "POD & Other"
 };
 
@@ -454,6 +455,98 @@ async function handleList(payload: any) {
   return { ok: true, documents: data || [] };
 }
 
+// Transporter-portal upload: authorize via the portal session token + trip
+// ownership (the caller is anon, so we cannot trust anything client-side), then
+// store the file in the trip's Drive folder and record a PENDING trip document.
+async function handleUploadTripDocument(payload: any) {
+  const sessionToken = payload.sessionToken;
+  const transporterId = payload.transporterId;
+  const tripId = payload.tripId;
+  const docType = String(payload.documentType || "").toUpperCase();
+  if (!sessionToken) throw new Error("Missing session token");
+  if (!transporterId || !tripId) throw new Error("Missing transporter or trip");
+  if (!payload.base64) throw new Error("base64 file content is required");
+  if (!["WEIGHT_BILL", "TRIP_SHEET", "EXPENSE_RECEIPT"].includes(docType)) {
+    throw new Error("Unsupported document type");
+  }
+
+  const db = adminClient();
+
+  // 1. Validate the portal session → portal_user_id.
+  const { data: sess, error: sErr } = await db.rpc("transport_portal_validate_session", { p_session_token: sessionToken });
+  if (sErr) throw new Error(sErr.message);
+  const portalUserId = Array.isArray(sess) ? sess[0]?.portal_user_id : sess?.portal_user_id;
+  if (!portalUserId) throw new Error("Not authenticated");
+
+  // 2. Portal user must have access to this transporter.
+  const { data: access } = await db.from("transport_transporter_portal_access")
+    .select("id").eq("portal_user_id", portalUserId)
+    .eq("transport_transporter_id", transporterId).eq("is_active", true).limit(1);
+  if (!access || !access.length) throw new Error("Access denied for this transporter");
+
+  // 3. Trip must belong to this transporter.
+  const { data: trip, error: tErr } = await db.from("transport_trips")
+    .select("id, division_id, trip_no, transport_transporter_id")
+    .eq("id", tripId).is("deleted_at", null).single();
+  if (tErr || !trip) throw new Error("Trip not found");
+  if (String(trip.transport_transporter_id) !== String(transporterId)) {
+    throw new Error("Trip is not assigned to this transporter");
+  }
+
+  // 4. Upload into the trip's Drive folder.
+  const rootId = folderMap()["TRIP_DOCUMENT"] || folderMap().DEFAULT || env("GDRIVE_ROOT_FOLDER_ID");
+  if (!rootId) throw new Error("Drive folder is not configured");
+  const now = new Date();
+  const segments = categoryLayout("TRIP_DOCUMENT", { tripNo: trip.trip_no, documentType: docType },
+    financialYear(now), monthFolder(now), useDateSubfolders());
+  const token = await getAccessToken();
+  const folderId = await ensureFolderPath(token, rootId, segments);
+  const safeName = String(payload.fileName || `${docType}-${trip.trip_no}`).trim();
+  const mimeType = payload.mimeType || "application/pdf";
+  const bytes = base64ToBytes(payload.base64);
+  const uploaded = await uploadFile(token, folderId, safeName, mimeType, bytes);
+
+  // 5. Record the trip document as PENDING approval.
+  const { data: docRow, error: dErr } = await db.from("transport_trip_documents").insert({
+    division_id: trip.division_id,
+    trip_id: trip.id,
+    document_type: docType,
+    original_file_name: safeName,
+    mime_type: mimeType,
+    file_size: uploaded.size ? Number(uploaded.size) : bytes.length,
+    file_url: uploaded.webViewLink || null,
+    drive_file_id: uploaded.id,
+    drive_folder_id: folderId,
+    web_view_link: uploaded.webViewLink || null,
+    is_uploaded: true,
+    is_active: true,
+    approval_status: "pending",
+    uploaded_by_actor_type: "transport_portal",
+    uploaded_by_actor_id: portalUserId,
+    remarks: payload.remarks || null
+  }).select("id").single();
+  if (dErr) throw new Error(`Save failed: ${dErr.message}`);
+
+  // 6. Mirror into the drive_documents registry (best-effort).
+  try {
+    await db.from("drive_documents").insert({
+      division_id: trip.division_id, category: "TRIP_DOCUMENT", document_type: docType,
+      entity_type: "transport_trip_documents", entity_id: docRow.id, document_no: trip.trip_no,
+      trip_id: trip.id, file_name: safeName, mime_type: mimeType, file_size: bytes.length,
+      drive_file_id: uploaded.id, drive_folder_id: folderId, web_view_link: uploaded.webViewLink || null,
+      upload_status: "stored", uploaded_by: portalUserId
+    });
+  } catch { /* best-effort */ }
+
+  return {
+    ok: true,
+    recordId: docRow.id,
+    fileId: uploaded.id,
+    webViewLink: uploaded.webViewLink || null,
+    folderPath: segments.join(" / ")
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -474,6 +567,8 @@ Deno.serve(async (req) => {
         return json(await handleUpload(payload));
       case "list":
         return json(await handleList(payload));
+      case "upload_trip_document":
+        return json(await handleUploadTripDocument(payload));
       default:
         return json({ error: `Unknown action: ${action || "(none)"}` }, 400);
     }
