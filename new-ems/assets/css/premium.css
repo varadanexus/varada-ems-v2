@@ -255,6 +255,9 @@ input, select, textarea {
   border-radius: 10px;
   color: var(--pm-text);
 }
+/* Native dropdown option popup: solid bg + light text (translucent select
+   bg made the OS popup render light option text on a white fallback). */
+select option, select optgroup { background-color: #0b1220; color: #f6f9fe; }
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--pm-gold-border);
