@@ -450,7 +450,14 @@ async function downloadStatementPdf(statementId, details = null) {
     y = summaryEndY + 8;
     addOldEmsDeclarationBlock(doc, { startY: y, text: declarationText, width: 90, title: "Declaration:" });
     await addOldEmsSignatureStampBlock(doc, { startY: 248 });
-    savePdf(doc, formatPdfFilename("TS", resolved.statement_no || "transporter-statement"));
+    savePdf(doc, formatPdfFilename("TS", resolved.statement_no || "transporter-statement"), {
+      category: "TRANSPORTER_STATEMENT",
+      entityType: "transport_transporter_statements",
+      entityId: resolved.id,
+      documentNo: resolved.statement_no,
+      divisionId: resolved.division_id,
+      date: resolved.statement_date || resolved.created_at
+    });
   } catch (error) {
     showToast(error?.message || "Transporter statement PDF generation failed", TOAST_TYPES.ERROR);
   }

@@ -293,7 +293,14 @@ async function downloadInvoicePdf(invoiceId, details = null) {
   if (!resolved || resolved.status !== "approved") return showToast("PDF is available only for approved invoices.", TOAST_TYPES.WARNING);
   try {
     const doc = await buildInvoiceDoc(resolved);
-    savePdf(doc, formatPdfFilename("INV", resolved.invoice_no || "gst-invoice"));
+    savePdf(doc, formatPdfFilename("INV", resolved.invoice_no || "gst-invoice"), {
+      category: "GST_INVOICE",
+      entityType: "transport_gst_invoices",
+      entityId: resolved.id,
+      documentNo: resolved.invoice_no,
+      divisionId: resolved.division_id,
+      date: resolved.invoice_date || resolved.created_at
+    });
   } catch (error) {
     showToast(error?.message || "GST invoice PDF generation failed", TOAST_TYPES.ERROR);
   }

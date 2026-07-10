@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Posts — Blog Console — Varada Nexus</title>
+<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/blog/console/console.css">
+</head>
+<body>
+<div class="ambient"></div>
+
+<main class="console-wrap">
+  <div class="filter-bar">
+    <input type="search" id="s_q" placeholder="Search title/content…">
+    <select id="s_status">
+      <option value="">All statuses</option>
+      <option value="draft">Draft</option><option value="scheduled">Scheduled</option>
+      <option value="published">Published</option><option value="auto_published">Auto-published</option>
+      <option value="backdated">Backdated</option><option value="needs_review">Needs review</option>
+      <option value="failed_review">Failed review</option><option value="deleted">Deleted</option>
+      <option value="archived">Archived</option>
+    </select>
+    <select id="s_cat"><option value="">All categories</option></select>
+    <select id="s_source"><option value="">Any source</option><option value="ai">AI</option><option value="manual">Manual</option></select>
+    <select id="s_ctype">
+      <option value="">All content types</option>
+      <option value="evergreen">Evergreen</option><option value="trending_news">Trending news</option>
+      <option value="how_to">How-to</option><option value="comparison">Comparison</option>
+      <option value="case_study">Case study</option><option value="opinion">Opinion</option>
+      <option value="product_service">Product/Service</option><option value="global_news_explainer">Global explainer</option>
+      <option value="faq">FAQ</option>
+    </select>
+    <input type="date" id="s_from" title="From date">
+    <input type="date" id="s_to" title="To date">
+    <input type="number" id="s_seo" placeholder="Min SEO score" min="0" max="100">
+    <input type="number" id="s_conf" placeholder="Min confidence" min="0" max="100">
+    <button class="btn-sm" id="applyFilters">Apply</button>
+  </div>
+
+  <div class="bulk-bar">
+    <label style="font-size:12.5px"><input type="checkbox" id="selAll"> Select all</label>
+    <span id="selCount" style="font-size:12px;color:var(--text-3,#888)">0 selected</span>
+    <button class="btn-sm" data-bulk="publish">Publish</button>
+    <button class="btn-sm" data-bulk="draft">Mark draft</button>
+    <button class="btn-sm" data-bulk="archive">Archive</button>
+    <button class="btn-sm" data-bulk="restore">Restore</button>
+    <button class="btn-sm danger" data-bulk="delete">Delete</button>
+    <select id="bulkCat"><option value="">Set category…</option></select>
+    <input type="date" id="bulkDate" title="Set publish date">
+    <button class="btn-sm" id="bulkApply">Apply to selected</button>
+  </div>
+
+  <div class="adm-list" id="list"><p class="blog-status">Loading…</p></div>
+  <p class="adm-msg" id="listMsg"></p>
+</main>
+
+<script src="/new-ems/config/runtime.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/blog/console/shared.js"></script>
+<script>
+(async function () {
+  VN.shell("posts", "Posts");
+  if (!(await VN.requireAuth())) return;
+  var sb = VN.sb, esc = VN.esc, $ = function (id) { return document.getElementById(id); };
+  var V2 = true, selected = {};
+
+  var CATS = await VN.loadCats();
+  if (!CATS.length) V2 = false;
+  $("s_cat").innerHTML = '<option value="">All categories</option>' + CATS.map(function (c) { return '<option value="' + c.slug + '">' + esc(c.name) + "</option>"; }).join("");
+  $("bulkCat").innerHTML = '<option value="">Set category…</option>' + CATS.map(function (c) { return '<option value="' + c.slug + '">' + esc(c.name) + "</option>"; }).join("");
+
+  function updateSelCount() { $("selCount").textContent = selIds().length + " selected"; }
+  function selIds() { return Object.keys(selected).filter(function (k) { return selected[k]; }); }
+
+  function postRow(p) {
+    var el = document.createElement("div"); el.className = "adm-item";
+    var scores = (p.seo_score != null || p.confidence_score != null)
+      ? " · seo " + (p.seo_score == null ? "—" : Math.round(p.seo_score)) + " · conf " + (p.confidence_score == null ? "—" : Math.round(p.confidence_score)) : "";
+    el.innerHTML =
+      '<div style="display:flex;gap:10px;align-items:flex-start">'
+      + '<input type="checkbox" class="selBox" data-id="' + p.id + '" style="margin-top:4px">'
+      + '<div style="flex:1"><h4>' + esc(p.title || "(untitled)") + "</h4>"
+      + '<div class="meta">' + esc(p.slug || "") + " · " + new Date(p.published_at || p.created_at).toLocaleDateString()
+      + (p.primary_category ? " · " + esc(p.primary_category) : "") + (p.content_type ? " · " + esc(p.content_type) : "") + scores + "</div>"
+      + '<div class="row">'
+        + '<span class="pill ' + p.status + '">' + String(p.status).replace(/_/g, " ") + "</span>"
+        + (p.source === "ai" ? '<span class="pill ai">AI</span>' : "")
+        + (p.is_backdated ? '<span class="pill backd">Backdated</span>' : "")
+        + '<a class="btn-sm" style="text-decoration:none" href="/blog/console/new-post.html?id=' + p.id + '">Edit</a>'
+        + '<a class="btn-sm" style="text-decoration:none" target="_blank" href="/blog/post.html?slug=' + encodeURIComponent(p.slug || "") + '">View</a>'
+        + (p.status === "deleted"
+            ? '<button class="btn-sm" data-act="restore">Restore</button>'
+            : '<button class="btn-sm" data-act="toggle">' + ((VN.LIVE.indexOf(p.status) > -1) ? "Unpublish" : "Publish") + "</button>"
+              + '<button class="btn-sm" data-act="regen">Regenerate</button>'
+              + '<button class="btn-sm danger" data-act="del">Delete</button>')
+      + "</div></div></div>";
+    el.querySelector(".selBox").addEventListener("change", function (e) { selected[p.id] = e.target.checked; updateSelCount(); });
+    var q = function (a) { return el.querySelector('[data-act="' + a + '"]'); };
+    if (q("toggle")) q("toggle").onclick = function () { setStatus([p.id], VN.LIVE.indexOf(p.status) > -1 ? "draft" : "published"); };
+    if (q("del")) q("del").onclick = function () { if (confirm('Delete "' + (p.title || "") + '"? It moves to Deleted and can be restored.')) setStatus([p.id], "deleted"); };
+    if (q("restore")) q("restore").onclick = function () { setStatus([p.id], "draft"); };
+    if (q("regen")) q("regen").onclick = function () { regenerate(p); };
+    return el;
+  }
+
+  async function loadPosts() {
+    var list = $("list"); list.innerHTML = '<p class="blog-status">Loading…</p>'; selected = {}; updateSelCount(); $("selAll").checked = false;
+    var qy = sb.from("blog_posts").select("*").order("created_at", { ascending: false }).limit(300);
+    var s;
+    if ((s = $("s_status").value)) qy = qy.eq("status", s);
+    if ((s = $("s_q").value.trim())) qy = qy.or("title.ilike.%" + s + "%,content.ilike.%" + s + "%");
+    if (V2) {
+      if ((s = $("s_cat").value)) qy = qy.eq("primary_category", s);
+      if ((s = $("s_ctype").value)) qy = qy.eq("content_type", s);
+      if ((s = $("s_seo").value)) qy = qy.gte("seo_score", Number(s));
+      if ((s = $("s_conf").value)) qy = qy.gte("confidence_score", Number(s));
+    }
+    if ((s = $("s_source").value)) qy = qy.eq("source", s);
+    if ((s = $("s_from").value)) qy = qy.gte("published_at", s);
+    if ((s = $("s_to").value)) qy = qy.lte("published_at", s + "T23:59:59Z");
+    var r = await qy;
+    if (r.error) { list.innerHTML = '<p class="blog-status">' + esc(r.error.message) + "</p>"; return; }
+    if (!r.data.length) { list.innerHTML = '<p class="blog-status">No posts match.</p>'; return; }
+    list.innerHTML = ""; r.data.forEach(function (p) { list.appendChild(postRow(p)); });
+  }
+  $("applyFilters").addEventListener("click", loadPosts);
+  $("s_q").addEventListener("keydown", function (e) { if (e.key === "Enter") loadPosts(); });
+
+  $("selAll").addEventListener("change", function (e) {
+    document.querySelectorAll(".selBox").forEach(function (b) { b.checked = e.target.checked; selected[b.dataset.id] = e.target.checked; });
+    updateSelCount();
+  });
+
+  async function setStatus(ids, status, extra) {
+    if (!ids.length) return;
+    var patch = Object.assign({ status: status }, extra || {});
+    if (VN.LIVE.indexOf(status) > -1) patch.published_at = patch.published_at || new Date().toISOString();
+    var r = await sb.from("blog_posts").update(patch).in("id", ids);
+    if (r.error) VN.msg($("listMsg"), r.error.message, false);
+    else { VN.msg($("listMsg"), ids.length + " post(s) updated.", true); loadPosts(); }
+  }
+  document.querySelectorAll("[data-bulk]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var ids = selIds(); if (!ids.length) { VN.msg($("listMsg"), "Select posts first.", false); return; }
+      var a = b.dataset.bulk;
+      if (a === "publish") setStatus(ids, "published");
+      if (a === "draft" || a === "restore") setStatus(ids, "draft");
+      if (a === "archive") setStatus(ids, "archived");
+      if (a === "delete" && confirm("Move " + ids.length + " post(s) to Deleted? You can restore them later.")) setStatus(ids, "deleted");
+    });
+  });
+  $("bulkApply").addEventListener("click", async function () {
+    var ids = selIds(); if (!ids.length) { VN.msg($("listMsg"), "Select posts first.", false); return; }
+    var patch = {};
+    if ($("bulkCat").value) patch.primary_category = $("bulkCat").value;
+    if ($("bulkDate").value) patch.published_at = $("bulkDate").value + "T09:00:00Z";
+    if (!Object.keys(patch).length) { VN.msg($("listMsg"), "Choose a category and/or date to apply.", false); return; }
+    var r = await sb.from("blog_posts").update(patch).in("id", ids);
+    if (r.error) VN.msg($("listMsg"), r.error.message, false);
+    else { VN.msg($("listMsg"), "Applied to " + ids.length + " post(s).", true); loadPosts(); }
+  });
+
+  async function regenerate(p) {
+    if (!confirm("Queue a fresh AI article for the same category and date, and archive this one?")) return;
+    var d = (p.published_at || p.created_at || "").slice(0, 10) || new Date().toISOString().slice(0, 10);
+    var r = await sb.from("blog_backfill_jobs").insert({
+      date_from: d, date_to: d, post_count: 1,
+      categories: p.primary_category ? [p.primary_category] : [],
+      publish_mode: "draft", requested_by: "console-regenerate",
+    });
+    if (r.error) { VN.msg($("listMsg"), r.error.message, false); return; }
+    await setStatus([p.id], "archived");
+    VN.msg($("listMsg"), "Regeneration queued — a fresh draft arrives within the hour.", true);
+  }
+
+  loadPosts();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insights — Varada Nexus</title>
+<meta name="description" content="Insights and perspectives on healthcare infrastructure, mining, logistics, global trade, and digital commerce from Varada Nexus.">
+<link rel="canonical" href="https://www.varadanexus.com/blog/">
+<link rel="icon" type="image/png" href="/images/logo.png">
+<meta property="og:title" content="Insights — Varada Nexus">
+<meta property="og:description" content="Perspectives across healthcare, mining, logistics, global trade, and digital commerce.">
+<meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<div class="ambient"></div>
+
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/blog/" class="active">Blog</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="page-hero">
+    <span class="eyebrow reveal">Insights</span>
+    <h1 class="display reveal reveal-d1" style="font-size:clamp(38px,6vw,72px)">Perspectives on execution.</h1>
+    <p class="sub reveal reveal-d2">Ideas and analysis across healthcare, mining, logistics, global trade, and digital commerce.</p>
+  </section>
+
+  <div class="divider"></div>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="blog-toolbar">
+        <form id="searchForm" class="blog-search" role="search" action="/blog/" method="get">
+          <input type="search" id="q" name="q" placeholder="Search by title, keyword, tag, author, sector, topic&hellip;" aria-label="Search blog posts" autocomplete="off">
+          <button type="submit" class="btn btn-primary" id="searchBtn">Search</button>
+        </form>
+        <div class="blog-filters" id="filters" role="tablist" aria-label="Filter by category">
+          <button class="chip active" data-cat="">All</button>
+        </div>
+        <div class="blog-adv" id="advFilters">
+          <div class="vn-sel" id="f_type_wrap">
+            <div class="vn-sel-trigger" id="f_type_trigger">All content types</div>
+            <div class="vn-sel-drop" id="f_type_drop">
+              <div class="vn-sel-opt selected" data-val="">All content types</div>
+              <div class="vn-sel-opt" data-val="evergreen">Evergreen</div>
+              <div class="vn-sel-opt" data-val="trending_news">Trending news</div>
+              <div class="vn-sel-opt" data-val="how_to">How-to guide</div>
+              <div class="vn-sel-opt" data-val="comparison">Comparison</div>
+              <div class="vn-sel-opt" data-val="case_study">Case study</div>
+              <div class="vn-sel-opt" data-val="opinion">Opinion / insight</div>
+              <div class="vn-sel-opt" data-val="product_service">Product / service</div>
+              <div class="vn-sel-opt" data-val="global_news_explainer">Global news explainer</div>
+              <div class="vn-sel-opt" data-val="faq">FAQ</div>
+            </div>
+          </div>
+          <input type="date" id="f_from" aria-label="From date">
+          <input type="date" id="f_to" aria-label="To date">
+        </div>
+      </div>
+      <div id="posts" class="grid grid-3" aria-live="polite">
+        <p class="blog-status">Loading the latest posts&hellip;</p>
+      </div>
+      <div style="text-align:center;margin-top:26px"><button class="btn btn-ghost" id="moreBtn" style="display:none">Load more</button></div>
+    </div>
+  </section>
+</main>
+
+<style>
+  .blog-toolbar{margin-bottom:30px}
+  .blog-search{display:flex;gap:10px;max-width:640px;margin:0 auto 18px}
+  .blog-search input{flex:1;padding:12px 16px;border-radius:12px;border:1px solid var(--border,#333);background:var(--surface,#161616);color:var(--text,#eee);font-size:15px}
+  .blog-filters{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:12px}
+  .chip{font-size:12.5px;padding:6px 14px;border-radius:99px;border:1px solid var(--border,#333);background:var(--surface,#161616);color:var(--text-2,#bbb);cursor:pointer;letter-spacing:.03em}
+  .chip:hover{border-color:var(--border-gold,#a8873a)}
+  .chip.active{background:var(--gold-soft,rgba(200,164,86,.15));color:var(--gold,#c8a456);border-color:var(--border-gold,#a8873a)}
+  .blog-adv{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .blog-adv input{padding:8px 12px;border-radius:10px;border:1px solid var(--border,#333);background:var(--surface,#161616);color:var(--text-2,#bbb);font-size:13px;-webkit-appearance:none;appearance:none}
+  .vn-sel{position:relative;font-size:13px}
+  .vn-sel-trigger{padding:8px 32px 8px 12px;border-radius:10px;border:1px solid var(--border,rgba(150,185,255,.20));background:var(--surface,rgba(120,165,255,.055));color:var(--text-2,#b9c9e6);cursor:pointer;white-space:nowrap;user-select:none}
+  .vn-sel-trigger::after{content:"▾";position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--text-3,#7f92b6);pointer-events:none}
+  .vn-sel-drop{display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:100%;background:var(--bg-elev,#0c1830);border:1px solid var(--border,rgba(150,185,255,.20));border-radius:10px;z-index:200;overflow:hidden;box-shadow:0 8px 32px rgba(2,8,23,.6)}
+  .vn-sel.open .vn-sel-drop{display:block}
+  .vn-sel-opt{padding:9px 14px;color:var(--text-2,#b9c9e6);cursor:pointer;font-size:13px;white-space:nowrap}
+  .vn-sel-opt:hover{background:var(--surface-2,rgba(120,165,255,.10));color:var(--text,#f2f6fd)}
+  .vn-sel-opt.selected{color:var(--gold,#e0c274)}
+</style>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span id="vn-loc">Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+<script src="/new-ems/config/runtime.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function () {
+  var cfg = window.EMS_RUNTIME_CONFIG || {};
+  var wrap = document.getElementById("posts");
+  if (!window.supabase || !cfg.supabaseUrl || !cfg.supabaseAnonKey) { wrap.innerHTML = '<p class="blog-status">Blog is warming up. Please refresh in a moment.</p>'; return; }
+  var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+
+  function esc(s){ return (s||"").replace(/[&<>"']/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]; }); }
+  function fmtDate(d){ if(!d) return ""; try { return new Date(d).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}); } catch(e){ return ""; } }
+
+  function card(p){
+    var tags = (p.tags||[]).slice(0,3).map(function(t){return '<span>'+esc(t)+'</span>';}).join("");
+    return '<a class="card blog-card reveal" href="/blog/post.html?slug='+encodeURIComponent(p.slug)+'">'
+      + (p.cover_image ? '<div class="blog-cover"><img loading="lazy" decoding="async" src="'+esc(p.cover_image)+'" alt="'+esc(p.title)+'"></div>' : '')
+      + '<div class="blog-meta">'+esc(fmtDate(p.published_at))+(p.author?' &middot; '+esc(p.author):'')+'</div>'
+      + '<h3>'+esc(p.title)+'</h3>'
+      + (p.excerpt ? '<p>'+esc(p.excerpt)+'</p>' : '')
+      + (tags ? '<div class="blog-tags">'+tags+'</div>' : '')
+      + '<span class="card-more">Read more &rarr;</span></a>';
+  }
+
+  var PAGE = 18, offset = 0, lastParams = null;
+  var moreBtn = document.getElementById("moreBtn");
+
+  function currentParams(){
+    var qs = new URLSearchParams(location.search);
+    return {
+      q: (document.getElementById("q").value || "").trim() || null,
+      cat: (document.querySelector(".chip.active")||{}).dataset ? (document.querySelector(".chip.active").dataset.cat || null) : null,
+      p_type: (document.getElementById("f_type_wrap") && document.getElementById("f_type_wrap").dataset.val) || null,
+      date_from: document.getElementById("f_from").value || null,
+      date_to: document.getElementById("f_to").value || null,
+      p_tag: qs.get("tag") || null,
+      p_author: qs.get("author") || null,
+      p_sector: qs.get("sector") || null
+    };
+  }
+
+  function run(reset){
+    if (reset) { offset = 0; wrap.innerHTML = '<p class="blog-status">Searching&hellip;</p>'; }
+    var p = currentParams(); lastParams = p;
+    var args = { q: p.q, cat: p.cat, p_tag: p.p_tag, p_author: p.p_author, p_sector: p.p_sector,
+                 p_type: p.p_type, date_from: p.date_from, date_to: p.date_to, lim: PAGE, off: offset };
+    sb.rpc("search_blog_posts", args).then(function(res){
+      if (res.error) { legacyLoad(); return; }   // graceful fallback if migration not yet applied
+      var rows = res.data || [];
+      if (reset && !rows.length) {
+        wrap.innerHTML = '<div class="blog-empty"><h3>No matching posts</h3><p>Try a different keyword or category.</p></div>';
+        moreBtn.style.display = "none";
+      } else {
+        if (reset) wrap.innerHTML = "";
+        wrap.insertAdjacentHTML("beforeend", rows.map(card).join(""));
+        wrap.querySelectorAll(".reveal").forEach(function(el){ el.classList.add("in"); });
+        moreBtn.style.display = rows.length === PAGE ? "inline-flex" : "none";
+      }
+      offset += rows.length;
+      if (reset && (p.q || p.cat)) {
+        sb.from("blog_search_logs").insert({ query: p.q, category: p.cat, results: rows.length }).then(function(){});
+      }
+    });
+  }
+
+  // Fallback to the original query when the search RPC isn't deployed yet.
+  function legacyLoad(){
+    sb.from("blog_posts")
+      .select("slug,title,excerpt,cover_image,tags,author,published_at")
+      .eq("status","published")
+      .order("published_at",{ascending:false})
+      .then(function(res){
+        if (res.error) { wrap.innerHTML = '<p class="blog-status">Unable to load posts right now.</p>'; return; }
+        var rows = res.data || [];
+        if (!rows.length) { wrap.innerHTML = '<div class="blog-empty"><h3>No posts yet</h3><p>New insights are published here daily. Check back soon.</p></div>'; return; }
+        wrap.innerHTML = rows.map(card).join("");
+        wrap.querySelectorAll(".reveal").forEach(function(el){ el.classList.add("in"); });
+      });
+  }
+
+  // Category chips from blog_categories (falls back to All only).
+  var filters = document.getElementById("filters");
+  sb.from("blog_categories").select("slug,name").eq("is_active", true).order("sort_order").then(function(res){
+    (res.data || []).forEach(function(c){
+      var b = document.createElement("button");
+      b.className = "chip"; b.dataset.cat = c.slug; b.textContent = c.name;
+      filters.appendChild(b);
+    });
+  });
+  filters.addEventListener("click", function(e){
+    var chip = e.target.closest(".chip"); if (!chip) return;
+    filters.querySelectorAll(".chip").forEach(function(c){ c.classList.remove("active"); });
+    chip.classList.add("active"); run(true);
+  });
+
+  document.getElementById("searchForm").addEventListener("submit", function(e){ e.preventDefault(); run(true); });
+  // Custom content-type dropdown
+  (function(){
+    var wrap    = document.getElementById("f_type_wrap");
+    var trigger = document.getElementById("f_type_trigger");
+    var drop    = document.getElementById("f_type_drop");
+    trigger.addEventListener("click", function(e){ e.stopPropagation(); wrap.classList.toggle("open"); });
+    document.addEventListener("click", function(){ wrap.classList.remove("open"); });
+    drop.addEventListener("click", function(e){
+      var opt = e.target.closest(".vn-sel-opt"); if (!opt) return;
+      drop.querySelectorAll(".vn-sel-opt").forEach(function(o){ o.classList.remove("selected"); });
+      opt.classList.add("selected");
+      trigger.textContent = opt.textContent;
+      wrap.dataset.val = opt.dataset.val;
+      wrap.classList.remove("open");
+      run(true);
+    });
+  })();
+  ["f_from","f_to"].forEach(function(id){ document.getElementById(id).addEventListener("change", function(){ run(true); }); });
+  var debounce; document.getElementById("q").addEventListener("input", function(){
+    clearTimeout(debounce); debounce = setTimeout(function(){ run(true); }, 350);
+  });
+  moreBtn.addEventListener("click", function(){ run(false); });
+
+  // Concealed console access (owner only): 5 quick clicks on the footer
+  // location text, or Ctrl+Shift+L anywhere on this page.
+  (function concealedEntry(){
+    var el = document.getElementById("vn-loc"), taps = 0, timer;
+    if (el) el.addEventListener("click", function(){
+      taps++; clearTimeout(timer);
+      timer = setTimeout(function(){ taps = 0; }, 1600);
+      if (taps >= 5) { taps = 0; location.href = "/blog/console/"; }
+    });
+    document.addEventListener("keydown", function(e){
+      if (e.ctrlKey && e.shiftKey && (e.key === "L" || e.key === "l")) { e.preventDefault(); location.href = "/blog/console/"; }
+    });
+  })();
+
+  // Deep-link support: /blog/?q=...&cat=...
+  (function init(){
+    var qs = new URLSearchParams(location.search);
+    if (qs.get("q")) document.getElementById("q").value = qs.get("q");
+    if (qs.get("cat")) {
+      var t = setInterval(function(){
+        var chip = filters.querySelector('.chip[data-cat="' + qs.get("cat") + '"]');
+        if (chip) { clearInterval(t); chip.click(); }
+      }, 150);
+      setTimeout(function(){ clearInterval(t); }, 3000);
+    }
+    run(true);
+  })();
+})();
+</script>
+</body>
+</html>

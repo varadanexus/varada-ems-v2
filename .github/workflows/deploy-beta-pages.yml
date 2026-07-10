@@ -38,6 +38,7 @@ jobs:
           cp -R images .pages-dist/images
           cp -R portals .pages-dist/portals
           cp -R blog .pages-dist/blog
+          cp -R professional-tools .pages-dist/professional-tools
           cp favicon.ico .pages-dist/favicon.ico
           cp -R new-ems/. .pages-dist/new-ems/
           cp CNAME .pages-dist/CNAME

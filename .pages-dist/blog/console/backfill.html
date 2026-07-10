@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Backdated publishing — Blog Console — Varada Nexus</title>
+<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/blog/console/console.css">
+</head>
+<body>
+<div class="ambient"></div>
+
+<main class="console-wrap">
+  <div style="display:grid;grid-template-columns:420px 1fr;gap:22px" class="bk-grid">
+    <style>@media (max-width:980px){.bk-grid{grid-template-columns:1fr!important}}</style>
+    <div class="form-panel">
+      <h3 style="margin-bottom:6px">Generate backdated posts</h3>
+      <p class="stat-note">One-time historical publishing. Posts are spread across the range (max 2 per day). News-type posts use only real articles that genuinely existed on those dates, with original source links; the rest are timeless evergreen articles. Queued jobs run automatically within the hour — or trigger the “Blog backfill” workflow in GitHub Actions to run immediately.</p>
+      <div class="two-col" style="margin-top:14px">
+        <div class="field"><label>From</label><input type="date" id="b_from"></div>
+        <div class="field"><label>To</label><input type="date" id="b_to"></div>
+      </div>
+      <div class="field"><label>Number of posts (1–200)</label><input type="number" id="b_count" value="30" min="1" max="200"></div>
+      <div class="field"><label>Categories (none checked = all)</label><div class="cat-checks" id="b_cats"></div></div>
+      <div class="field"><label>Mode</label>
+        <select id="b_mode">
+          <option value="draft">Draft — preview &amp; approve before publishing</option>
+          <option value="publish">Publish immediately (backdated)</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="queueBackfill" style="width:100%">Queue backfill job</button>
+      <p class="adm-msg" id="bMsg"></p>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3>Backfill jobs</h3>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="refreshTs" style="font-size:11px;opacity:0.5"></span>
+          <button class="btn-sm" id="refreshJobs">Refresh</button>
+        </div>
+      </div>
+      <div class="adm-list" id="jobs"><p class="blog-status">Loading…</p></div>
+    </div>
+  </div>
+</main>
+
+<script src="/new-ems/config/runtime.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/blog/console/shared.js"></script>
+<script>
+(async function () {
+  VN.shell("backfill", "Backdated publishing");
+  if (!(await VN.requireAuth())) return;
+  var sb = VN.sb, $ = function (id) { return document.getElementById(id); };
+
+  var CATS = await VN.loadCats();
+  $("b_cats").innerHTML = CATS.map(function (c) { return '<label><input type="checkbox" value="' + c.slug + '"> ' + VN.esc(c.name) + "</label>"; }).join("");
+
+  // Default range: financial year start → today
+  try {
+    var st = await sb.from("blog_settings").select("fy_start_month").eq("id", 1).maybeSingle();
+    var m = (st.data && st.data.fy_start_month) || 4;
+    var now = new Date();
+    var y = (now.getMonth() + 1 >= m) ? now.getFullYear() : now.getFullYear() - 1;
+    $("b_from").value = y + "-" + String(m).padStart(2, "0") + "-01";
+    $("b_to").value = now.toISOString().slice(0, 10);
+  } catch (e) {}
+
+  var pollTimer = null;
+
+  async function loadJobs(fromButton) {
+    var box = $("jobs");
+    var btn = $("refreshJobs");
+    var ts  = $("refreshTs");
+
+    // Show spinner on button
+    if (fromButton) {
+      btn.disabled = true;
+      btn.textContent = "Refreshing…";
+    }
+
+    var r = await sb.from("blog_backfill_jobs").select("*").order("created_at", { ascending: false }).limit(30);
+
+    // Restore button + show timestamp
+    btn.disabled = false;
+    btn.textContent = "Refresh";
+    ts.textContent = "Updated " + new Date().toLocaleTimeString();
+
+    if (r.error) { box.innerHTML = '<p class="blog-status">Jobs unavailable — apply the Sprint 18B migration first.</p>'; stopPoll(); return; }
+    if (!r.data.length) { box.innerHTML = '<p class="blog-status">No backfill jobs yet.</p>'; stopPoll(); return; }
+
+    box.innerHTML = "";
+    var hasActive = false;
+    r.data.forEach(function (j) {
+      if (j.status === "queued" || j.status === "running") hasActive = true;
+      var timeLabel = j.status === "running" && j.started_at
+        ? "started " + new Date(j.started_at).toLocaleTimeString()
+        : j.status === "completed" && j.finished_at
+          ? "finished " + new Date(j.finished_at).toLocaleTimeString()
+          : "queued " + new Date(j.created_at).toLocaleTimeString();
+      var el = document.createElement("div"); el.className = "adm-item";
+      el.innerHTML = "<h4>" + j.date_from + " → " + j.date_to + " · " + j.post_count + " posts · " + j.publish_mode + "</h4>"
+        + '<div class="meta">' + (j.categories && j.categories.length ? VN.esc(j.categories.join(", ")) : "all categories") + " · " + timeLabel + (j.detail ? " · " + VN.esc(j.detail) : "") + "</div>"
+        + '<div class="row"><span class="pill ' + j.status + '">' + j.status + "</span>"
+        + (j.status === "queued" ? '<button class="btn-sm danger" data-act="cancel">Cancel</button>' : "")
+        + "</div>";
+      var c = el.querySelector('[data-act="cancel"]');
+      if (c) c.onclick = async function () { await sb.from("blog_backfill_jobs").update({ status: "cancelled" }).eq("id", j.id); loadJobs(false); };
+      box.appendChild(el);
+    });
+
+    // Auto-poll every 10s while jobs are active
+    if (hasActive) startPoll();
+    else stopPoll();
+  }
+
+  function startPoll() {
+    if (pollTimer) return;
+    pollTimer = setInterval(function () { loadJobs(false); }, 10000);
+  }
+  function stopPoll() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  }
+
+  $("refreshJobs").addEventListener("click", function () { loadJobs(true); });
+
+  $("queueBackfill").addEventListener("click", async function () {
+    var from = $("b_from").value, to = $("b_to").value;
+    if (!from || !to) { VN.msg($("bMsg"), "Choose both dates.", false); return; }
+    var cats = Array.prototype.map.call(document.querySelectorAll("#b_cats input:checked"), function (cb) { return cb.value; });
+    var r = await sb.from("blog_backfill_jobs").insert({
+      date_from: from, date_to: to,
+      post_count: Math.min(Math.max(Number($("b_count").value) || 30, 1), 200),
+      categories: cats, publish_mode: $("b_mode").value, requested_by: "console",
+    });
+    VN.msg($("bMsg"), r.error ? r.error.message : "Job queued. It runs automatically within the hour (or trigger the GitHub 'Blog backfill' workflow now).", !r.error);
+    if (!r.error) loadJobs();
+  });
+
+  loadJobs();
+})();
+</script>
+</body>
+</html>

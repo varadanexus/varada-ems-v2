@@ -242,7 +242,14 @@ async function downloadReceiptPdf(receiptId, details = null) {
     y = summaryEndY + 8;
     addOldEmsDeclarationBlock(doc, { startY: y, text: declarationText, width: 90, title: "Declaration:" });
     await addOldEmsSignatureStampBlock(doc, { startY: 248 });
-    savePdf(doc, formatPdfFilename("CR", resolved.receipt_no || "client-receipt"));
+    savePdf(doc, formatPdfFilename("CR", resolved.receipt_no || "client-receipt"), {
+      category: "CLIENT_RECEIPT",
+      entityType: "transport_client_receipts",
+      entityId: resolved.id,
+      documentNo: resolved.receipt_no,
+      divisionId: resolved.division_id,
+      date: resolved.receipt_date || resolved.created_at
+    });
   } catch (error) {
     console.error("receipt_pdf_failed", error);
     showToast(error?.message || "Receipt PDF generation failed", TOAST_TYPES.ERROR);

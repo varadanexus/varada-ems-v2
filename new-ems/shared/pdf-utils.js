@@ -632,8 +632,26 @@ export async function addDocumentFooter(doc, footerText = "This is a system gene
   }
 }
 
-export function savePdf(doc, filename) {
-  doc.save(filename || "document.pdf");
+export function savePdf(doc, filename, driveMeta = null) {
+  const name = filename || "document.pdf";
+  doc.save(name);
+  // Optional: also archive the generated PDF to Google Drive. Best-effort and
+  // fully non-blocking — a failed/unconfigured Drive upload never affects the
+  // local download. Pass a driveMeta object (see drive-api.js) to enable.
+  if (driveMeta && typeof driveMeta === "object") {
+    queueDriveArchive(doc, name, driveMeta);
+  }
+}
+
+async function queueDriveArchive(doc, filename, driveMeta) {
+  try {
+    const mod = await import("./drive-api.js");
+    if (!mod.isDriveAutoSaveEnabled()) return;
+    const base64 = mod.pdfDocToBase64(doc);
+    await mod.uploadDocumentToDrive({ ...driveMeta, fileName: driveMeta.fileName || filename }, base64);
+  } catch (error) {
+    console.warn("Drive auto-save skipped:", error?.message || error);
+  }
 }
 
 export function formatPdfCurrency(value) {
