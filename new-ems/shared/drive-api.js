@@ -64,3 +64,13 @@ export function uploadPdfDocToDrive(doc, meta = {}) {
 export function listDriveDocuments(filter = {}) {
   return driveIntegration("list", filter);
 }
+
+// Transporter-portal upload of a trip document (weigh bill / trip sheet /
+// expense receipt). The edge function authorizes via the portal session token
+// and trip ownership, stores the file in the trip's Drive folder, and records a
+// PENDING transport_trip_documents row for staff approval.
+//   meta = { sessionToken, transporterId, tripId, documentType, fileName, mimeType, remarks }
+export function uploadTripDocumentToDrive(meta = {}, base64) {
+  if (!base64) return Promise.reject(new Error("Missing file content for upload"));
+  return driveIntegration("upload_trip_document", { ...meta, base64 });
+}

@@ -13,20 +13,17 @@ function readJson(key) {
 }
 
 export function getChatSessionTokens() {
-  const hasSupabaseSession = (() => {
-    try {
-      return Object.keys(localStorage).some((key) => key.startsWith("sb-") && key.includes("-auth-token") && Boolean(localStorage.getItem(key)));
-    } catch {
-      return false;
-    }
-  })();
-  if (hasSupabaseSession) {
-    return { transport: null, external: null };
+  const transport = readJson(TRANSPORT_SESSION_KEY)?.sessionToken || null;
+  const external = readJson(EXTERNAL_SESSION_KEY)?.sessionToken || null;
+  // A transport/external portal session token means the user is acting as a
+  // portal user — send it so token-based RPCs resolve the portal actor, even if
+  // a stale Supabase Auth session (e.g. from a prior staff login in the same
+  // browser) is also present. Staff/interiors have no portal token, so they
+  // fall through to { null, null } and resolve via their Supabase Auth session.
+  if (transport || external) {
+    return { transport, external };
   }
-  return {
-    transport: readJson(TRANSPORT_SESSION_KEY)?.sessionToken || null,
-    external: readJson(EXTERNAL_SESSION_KEY)?.sessionToken || null
-  };
+  return { transport: null, external: null };
 }
 
 function rpcArgs(extra = {}) {

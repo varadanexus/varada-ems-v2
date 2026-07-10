@@ -69,6 +69,7 @@ export async function authenticate(type, identifier, password, authProvider = nu
 // EMS staff: LOCAL accounts authenticate via ems_local_login + minted JWT; the
 // super admin uses Supabase Auth. Unknown provider → try local, then Supabase.
 async function handleEmsLogin(identifier, password, authProvider = null) {
+  clearPortalSessionTokens();
   if (authProvider === "supabase") {
     const loginData = await loginWithPassword(identifier, password);
     if (loginData?.user?.id) await markUserLogin(loginData.user.id);
@@ -98,6 +99,14 @@ async function clearStaleSupabaseSession() {
   try { await getSupabaseClient().auth.signOut({ scope: "local" }); } catch {}
 }
 
+// Symmetric cleanup: staff / interiors sessions must not carry a stale transport
+// or external portal token, otherwise getChatSessionTokens() (which prefers a
+// portal token when present) could resolve a staff user as a portal actor.
+function clearPortalSessionTokens() {
+  try { clearTransportSession(); } catch {}
+  try { localStorage.removeItem("ems_external_portal_session"); } catch {}
+}
+
 async function handleTransportLogin(username, password) {
   await clearStaleSupabaseSession();
   const session = await portalLogin(username, password);
@@ -123,6 +132,7 @@ function redirectToTransportAccess(access) {
 }
 
 async function handleInteriorsLogin(email, password) {
+  clearPortalSessionTokens();
   await interiorsPortalLogin(email, password);
   window.location.assign(ROUTES.INTERIORS_CLIENT_APP);
   return { status: "redirecting" };
