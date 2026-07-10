@@ -72,14 +72,17 @@
       <img class="logo" src="/images/logo.png" alt="Varada Nexus">
       <h1>Welcome Back</h1>
       <p class="sub">Secure access to Varada Nexus ERP</p>
-      <div class="field">
-        <input type="email" id="email" placeholder="Email" autocomplete="username">
+      <div id="loginForm">
+        <div class="field">
+          <input type="text" id="email" placeholder="Email" autocomplete="username">
+        </div>
+        <div class="field pw-wrap">
+          <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+          <button type="button" class="pw-toggle" onclick="togglePassword()">Show</button>
+        </div>
+        <button class="btn btn-primary" id="loginBtn" onclick="login()" style="width:100%;justify-content:center;margin-top:6px">Login</button>
       </div>
-      <div class="field pw-wrap">
-        <input type="password" id="password" placeholder="Password" autocomplete="current-password">
-        <button type="button" class="pw-toggle" onclick="togglePassword()">Show</button>
-      </div>
-      <button class="btn btn-primary" id="loginBtn" onclick="login()" style="width:100%;justify-content:center;margin-top:6px">Login</button>
+      <div id="portalPicker" hidden></div>
       <div class="error-text" id="error"></div>
       <div class="auth-links">
         <a href="/portals/meeting/meeting-login.html">Join a Meeting →</a>
@@ -94,16 +97,18 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/new-ems/config/runtime.js?v=beta-site-1"></script>
 <script type="module">
-import { loginWithPassword, redirectIfAuthenticated, redirectToResolvedPortal, validateActiveUnlockedUser, signOutSessionOnly } from "/new-ems/shared/auth.js";
-import { markUserLogin } from "/new-ems/shared/admin-api.js";
+// Unified login: keep this page's look, but auto-detect the account type
+// (EMS staff, transport/interiors/external portal) and route to the right auth
+// system. If one identifier maps to multiple portals, show a portal picker.
+import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js";
 
-function setError(message = "") {
-  const node = document.getElementById("error");
-  if (node) node.innerText = message;
-}
+function el(id) { return document.getElementById(id); }
+function setError(message = "") { const node = el("error"); if (node) node.innerText = message; }
+function setBtn(disabled, text) { const b = el("loginBtn"); if (b) { b.disabled = disabled; b.innerText = text || "Login"; } }
+function escapeHtml(v) { return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
 window.togglePassword = function togglePassword() {
-  const pass = document.getElementById("password");
+  const pass = el("password");
   if (!pass) return;
   const btn = document.querySelector(".pw-toggle");
   const showing = pass.type === "password";
@@ -111,49 +116,89 @@ window.togglePassword = function togglePassword() {
   if (btn) btn.innerText = showing ? "Hide" : "Show";
 };
 
-window.login = async function login() {
-  const btn = document.getElementById("loginBtn");
-  const email = document.getElementById("email")?.value?.trim() || "";
-  const password = document.getElementById("password")?.value || "";
+let PENDING = null;
 
-  if (btn?.disabled) return;
+function showLoginForm() {
+  const picker = el("portalPicker");
+  picker.hidden = true;
+  picker.innerHTML = "";
+  el("loginForm").hidden = false;
+  setBtn(false, "Login");
+}
+
+function handleAuthResult(result) {
+  // ems / transport / interiors redirect away; only the external no-dashboard
+  // case returns here with a message to show.
+  if (result?.status === "external_no_dashboard") {
+    el("loginForm").hidden = true;
+    el("portalPicker").hidden = true;
+    setError("");
+    const note = document.createElement("div");
+    note.style.cssText = "margin-top:12px;color:var(--text-2);font-size:14px;line-height:1.6";
+    note.innerHTML = `Welcome, <strong>${escapeHtml(result.displayName || "Portal User")}</strong>. Your ${escapeHtml(result.userType || "external")} access is active, but its portal isn't available yet. Please contact your administrator.`;
+    document.querySelector(".auth-card").appendChild(note);
+  }
+}
+
+function renderPicker(accounts) {
+  const picker = el("portalPicker");
+  el("loginForm").hidden = true;
   setError("");
+  picker.hidden = false;
+  picker.innerHTML =
+    `<p class="sub" style="margin-top:0">This login has access to multiple portals. Choose one:</p>` +
+    accounts.map((a, i) => {
+      const hint = a.masked_email || a.masked_phone || "";
+      return `<button class="btn btn-primary portal-opt" data-i="${i}" style="width:100%;justify-content:center;margin-top:8px">${escapeHtml(a.label || a.login_type)}${hint ? ` <small style="opacity:.7;margin-left:6px">${escapeHtml(hint)}</small>` : ""}</button>`;
+    }).join("") +
+    `<button class="pw-toggle" id="pickerBack" type="button" style="margin-top:12px;background:none;border:none;cursor:pointer">← Back to login</button>`;
 
-  if (!email || !password) {
-    setError("Enter email and password");
-    return;
-  }
+  picker.querySelectorAll(".portal-opt").forEach((btn) => btn.addEventListener("click", async () => {
+    const acc = accounts[Number(btn.dataset.i)];
+    picker.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    setError("");
+    try {
+      const result = await authenticate(acc.login_type, PENDING.identifier, PENDING.password, acc.auth_provider);
+      handleAuthResult(result);
+    } catch (error) {
+      setError(error?.message || "Login failed");
+      showLoginForm();
+    }
+  }));
+  el("pickerBack")?.addEventListener("click", showLoginForm);
+}
 
-  if (btn) {
-    btn.disabled = true;
-    btn.innerText = "Logging in...";
-  }
+window.login = async function login() {
+  const identifier = el("email")?.value?.trim() || "";
+  const password = el("password")?.value || "";
+  if (el("loginBtn")?.disabled) return;
+  setError("");
+  if (!identifier || !password) { setError("Enter email and password"); return; }
 
+  setBtn(true, "Looking up account…");
   try {
-    const loginData = await loginWithPassword(email, password);
-    await validateActiveUnlockedUser();
-    if (loginData?.user?.id) {
-      await markUserLogin(loginData.user.id);
+    const accounts = usableAccounts(await lookupIdentifier(identifier));
+    if (!accounts.length) throw new Error("Invalid login credentials");
+    PENDING = { identifier, password };
+    if (accounts.length === 1) {
+      setBtn(true, "Signing in…");
+      const result = await authenticate(accounts[0].login_type, identifier, password, accounts[0].auth_provider);
+      handleAuthResult(result);
+      return;
     }
-    await redirectToResolvedPortal();
+    renderPicker(accounts);
   } catch (error) {
-    await signOutSessionOnly().catch(() => {});
     setError(error?.message || "Login failed");
-    if (btn) {
-      btn.disabled = false;
-      btn.innerText = "Login";
-    }
+    setBtn(false, "Login");
   }
 };
 
-document.getElementById("password")?.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    window.login();
-  }
+el("password")?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); window.login(); }
 });
 
-redirectIfAuthenticated().catch(() => {});
+// If already signed in (any system), redirect straight to the right portal.
+checkExistingSession().catch(() => {});
 </script>
 
 </body>

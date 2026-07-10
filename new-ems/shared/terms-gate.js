@@ -450,7 +450,17 @@ function showGate(status) {
 }
 
 export async function enforceTermsAcceptance() {
-  const status = await getStatus();
+  // If the acceptance status can't be resolved (null / transient error), don't
+  // block or blank the app — fall through to the gate so the user can accept
+  // the terms and continue the login. showGate() renders sensible defaults when
+  // status is null.
+  let status = null;
+  try {
+    status = await getStatus();
+  } catch (error) {
+    console.warn("Terms status unavailable; prompting acceptance to continue:", error?.message || error);
+    status = null;
+  }
   if (status?.popup_enabled === false) return true;
   if (status?.accepted) return true;
   return await showGate(status);
