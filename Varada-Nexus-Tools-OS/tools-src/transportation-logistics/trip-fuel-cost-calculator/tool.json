@@ -1,0 +1,97 @@
+{
+  "id": "trip-fuel-cost-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Trip Fuel Cost Calculator",
+  "shortBenefit": "Fuel used, fuel cost, tolls and total cost per trip and per km.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the fuel and total running cost of a trip from distance, mileage, fuel price and tolls, including cost per kilometre.",
+  "seo": {
+    "title": "Trip Fuel Cost Calculator — Fuel, Tolls & Cost Per Km | Varada Nexus",
+    "description": "Free trip fuel cost calculator. Get fuel used, fuel cost, tolls and total cost per trip and per kilometre.",
+    "keywords": [
+      "fuel cost calculator",
+      "trip cost calculator",
+      "cost per km calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "distance",
+      "label": "Distance (km)",
+      "type": "number",
+      "default": 500,
+      "min": 0
+    },
+    {
+      "id": "mileage",
+      "label": "Mileage (km/litre)",
+      "type": "number",
+      "default": 12,
+      "min": 0.1
+    },
+    {
+      "id": "price",
+      "label": "Fuel price (₹/litre)",
+      "type": "number",
+      "default": 95,
+      "min": 0
+    },
+    {
+      "id": "tolls",
+      "label": "Tolls & other (₹)",
+      "type": "number",
+      "default": 800,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total trip cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Fuel needed",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per km",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Fuel needed = distance ÷ mileage. Fuel cost = fuel × price. Total = fuel cost + tolls. Cost per km = total ÷ distance.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I calculate fuel cost for a trip?",
+      "a": "Fuel needed = distance ÷ mileage (km per litre); fuel cost = fuel × price per litre."
+    },
+    {
+      "q": "How is cost per km calculated?",
+      "a": "Cost per km = total trip cost (fuel + tolls) ÷ distance."
+    },
+    {
+      "q": "Does load affect mileage?",
+      "a": "Yes, heavier loads, terrain and driving style all reduce mileage — use a realistic figure for your vehicle."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Logistics",
+      "url": "/logistics.html"
+    }
+  ]
+}

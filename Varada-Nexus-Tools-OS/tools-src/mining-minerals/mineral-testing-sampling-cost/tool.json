@@ -1,0 +1,128 @@
+{
+  "id": "mineral-testing-sampling-cost",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mineral Testing & Sampling Cost Calculator",
+  "shortBenefit": "Budget for mineral quality testing and sampling programmes",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the total cost of a mineral sampling and testing programme — covering sample collection, preparation, assay charges and reporting for exploration or operational quality control.",
+  "seo": {
+    "title": "Mineral Testing Sampling Cost Calculator – Mining Quality India",
+    "description": "Calculate mineral sampling and laboratory testing costs. Covers sample collection, preparation, XRF/ICP assay, moisture and reporting for Indian mining QC.",
+    "keywords": [
+      "mineral testing cost calculator India",
+      "ore sampling cost",
+      "mining laboratory cost",
+      "XRF assay cost India",
+      "ore quality testing budget"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "samples_per_month",
+      "label": "Samples per Month",
+      "type": "number",
+      "default": 100,
+      "min": 1
+    },
+    {
+      "id": "collection_cost_per_sample",
+      "label": "Sample Collection Cost (₹/sample)",
+      "type": "number",
+      "default": 300,
+      "min": 0,
+      "hint": "Labour, equipment, transport"
+    },
+    {
+      "id": "preparation_cost_per_sample",
+      "label": "Sample Preparation (₹/sample)",
+      "type": "number",
+      "default": 200,
+      "min": 0,
+      "hint": "Crushing, splitting, pulverising"
+    },
+    {
+      "id": "assay_cost_per_sample",
+      "label": "Laboratory Assay Cost (₹/sample)",
+      "type": "number",
+      "default": 800,
+      "min": 0,
+      "hint": "XRF, ICP, wet chemistry"
+    },
+    {
+      "id": "moisture_test_pct",
+      "label": "Samples for Moisture Testing (%)",
+      "type": "number",
+      "default": 20,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "moisture_cost",
+      "label": "Moisture Test Cost (₹/sample)",
+      "type": "number",
+      "default": 200,
+      "min": 0
+    },
+    {
+      "id": "reporting_monthly",
+      "label": "QC Reporting & Certification (₹/month)",
+      "type": "number",
+      "default": 15000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Testing Component",
+      "Quantity × Rate",
+      "Monthly Cost (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly Testing Cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost per Sample",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Annual Budget",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Moisture samples = total samples × moisture %. Reporting is a fixed monthly cost.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What analytical methods are used for iron ore testing?",
+      "a": "XRF (X-Ray Fluorescence) for major element oxides (Fe, SiO2, Al2O3, P, S), ICP for trace elements, Leco for C/S content. ISO methods (ISO 2597 series) are standard for international trade."
+    },
+    {
+      "q": "How many samples are needed for quality control?",
+      "a": "Open-cast mines: 1 sample per 500–1,000 MT for ROM ore, 1 per 2,000–5,000 MT for product. Exploration: 1 per 3–5 m of drill core or at specific geological intervals. Statistical sampling frequency should be per ISO 3085."
+    },
+    {
+      "q": "What is Third Party Sampling?",
+      "a": "Independent sampling and testing by an accredited agency at the time of dispatch/receipt. Required for large export consignments and for dispute resolution. Cost is ₹5,000–₹20,000 per consignment."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

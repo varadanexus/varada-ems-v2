@@ -1,0 +1,110 @@
+{
+  "id": "patient-flow-estimator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Patient Flow Estimator",
+  "shortBenefit": "Daily admissions and bed demand from OPD and ER load.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate daily inpatient admissions and the beds required from OPD footfall, IPD conversion rate, emergency visits and average length of stay.",
+  "seo": {
+    "title": "Patient Flow Estimator — Admissions & Bed Demand | Varada Nexus",
+    "description": "Free patient flow estimator. Project daily admissions and beds required from OPD footfall, conversion rate and length of stay.",
+    "keywords": [
+      "patient flow calculator",
+      "hospital admissions estimator",
+      "bed demand calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "opd",
+      "label": "OPD patients per day",
+      "type": "number",
+      "default": 400,
+      "min": 0
+    },
+    {
+      "id": "conv",
+      "label": "OPD-to-IPD conversion (%)",
+      "type": "number",
+      "default": 8,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "er",
+      "label": "Emergency visits per day",
+      "type": "number",
+      "default": 60,
+      "min": 0
+    },
+    {
+      "id": "erAdm",
+      "label": "ER admission rate (%)",
+      "type": "number",
+      "default": 20,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "alos",
+      "label": "Average length of stay (days)",
+      "type": "number",
+      "default": 4,
+      "min": 0.1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Admissions/day",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Beds required",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Admissions/month",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Admissions/day = OPD × conversion% + ER × ER-admission%. Beds required ≈ admissions/day × ALOS. Monthly assumes 30 days.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I estimate hospital admissions?",
+      "a": "Admissions per day = OPD footfall × IPD conversion rate plus emergency visits × ER admission rate."
+    },
+    {
+      "q": "How many beds does my patient flow need?",
+      "a": "Beds ≈ daily admissions × average length of stay, since each admission occupies a bed for its stay."
+    },
+    {
+      "q": "What is a typical OPD-to-IPD conversion?",
+      "a": "It varies widely by specialty and setting, commonly around 5–12% of OPD visits leading to admission."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

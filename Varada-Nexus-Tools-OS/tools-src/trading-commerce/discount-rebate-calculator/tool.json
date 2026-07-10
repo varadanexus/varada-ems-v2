@@ -1,0 +1,121 @@
+{
+  "id": "discount-rebate-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Discount & Rebate Calculator",
+  "shortBenefit": "Calculate trade discounts, cash discounts and annual rebates",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Model different discount and rebate structures for buyers — trade discounts, cash discounts and annual volume rebates — to understand net price and true margin impact.",
+  "seo": {
+    "title": "Discount Rebate Calculator – Trade Cash Discount India",
+    "description": "Calculate trade discount, cash discount and annual volume rebates. Understand net effective price and margin impact for trading and wholesale businesses.",
+    "keywords": [
+      "trade discount calculator India",
+      "cash discount calculator",
+      "volume rebate calculator",
+      "discount rebate trading",
+      "net price after discount India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "list_price",
+      "label": "List Price per Unit (₹)",
+      "type": "number",
+      "default": 1000,
+      "min": 1
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity (units)",
+      "type": "number",
+      "default": 200,
+      "min": 1
+    },
+    {
+      "id": "trade_discount",
+      "label": "Trade Discount (%)",
+      "type": "number",
+      "default": 10,
+      "min": 0,
+      "max": 80
+    },
+    {
+      "id": "cash_discount",
+      "label": "Cash Discount (%) — if paid early",
+      "type": "number",
+      "default": 2,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "id": "annual_rebate",
+      "label": "Annual Volume Rebate (%)",
+      "type": "number",
+      "default": 1.5,
+      "min": 0,
+      "max": 20,
+      "hint": "End-of-year rebate on annual purchase value"
+    },
+    {
+      "id": "annual_purchase_value",
+      "label": "Expected Annual Purchase Value (₹)",
+      "type": "number",
+      "default": 2000000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Discount Layer",
+      "On Amount (₹)",
+      "Savings (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Net Price / Unit",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Effective Discount %",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Annual Rebate",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Discounts applied sequentially: trade then cash. Annual rebate separate, credited at year end.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Should I offer cash discounts or better trade terms?",
+      "a": "Cash discounts (e.g., 2/10 net 30) improve collection and reduce financing cost — cost is typically lower than bank finance. Trade discounts build channel loyalty but directly reduce realisation."
+    },
+    {
+      "q": "What is a volume rebate and how is it structured?",
+      "a": "A volume rebate is a credit given at year end when a buyer hits a purchase target. It can be flat (1.5% on all purchases above ₹10 lakh) or tiered (higher slabs for higher volumes)."
+    },
+    {
+      "q": "How do I set effective discount limits?",
+      "a": "Work backwards from your minimum acceptable margin. If minimum margin is 15% and COGS is ₹800, maximum net price is ₹800/(1−0.15) = ₹941. Any combination of discounts must still yield ≥₹941."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

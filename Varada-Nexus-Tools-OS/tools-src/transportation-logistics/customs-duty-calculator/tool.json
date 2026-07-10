@@ -1,0 +1,111 @@
+{
+  "id": "customs-duty-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Customs Duty & Import Cost Calculator",
+  "shortBenefit": "Total import cost with customs duty, IGST and landing charges.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the total landed cost of imported goods including customs duty, IGST, social welfare surcharge, landing charges and port handling costs.",
+  "seo": {
+    "title": "Customs Duty Calculator India — Import Cost & Landed Cost | Varada Nexus",
+    "description": "Free customs duty calculator India. Calculate total import landed cost with basic customs duty, IGST, social welfare surcharge and port charges.",
+    "keywords": [
+      "customs duty calculator india",
+      "import duty calculator",
+      "landed cost calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cif_value",
+      "label": "CIF value (₹ — cost + insurance + freight)",
+      "type": "number",
+      "default": 500000,
+      "min": 1
+    },
+    {
+      "id": "basic_duty",
+      "label": "Basic customs duty (%)",
+      "type": "number",
+      "default": 10,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "igst",
+      "label": "IGST rate (%)",
+      "type": "number",
+      "default": 18,
+      "min": 0,
+      "max": 28
+    },
+    {
+      "id": "sws",
+      "label": "Social Welfare Surcharge (% of basic duty)",
+      "type": "number",
+      "default": 10,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "id": "handling",
+      "label": "Port handling & CHA charges (₹)",
+      "type": "number",
+      "default": 15000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Rate",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total landed cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total duty burden",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Effective duty %",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Assessable value = CIF value. Basic duty on assessable value. SWS on basic duty. IGST on (assessable value + basic duty + SWS). Does not include anti-dumping duty or cess.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is CIF value?",
+      "a": "CIF (Cost, Insurance, Freight) is the assessable value for customs duty. It includes the cost of goods, insurance and freight to the Indian port of entry."
+    },
+    {
+      "q": "What is Social Welfare Surcharge?",
+      "a": "SWS is levied at 10% of the total customs duty (basic + other duties) under the Finance Act. It replaced the Education Cess from 2018."
+    },
+    {
+      "q": "Can IGST paid on imports be claimed as input tax credit?",
+      "a": "Yes — IGST paid on imports is fully available as input tax credit (ITC) for registered GST businesses, as long as the goods are used for taxable supply."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

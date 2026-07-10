@@ -1,0 +1,100 @@
+{
+  "id": "sand-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Sand Calculator",
+  "shortBenefit": "Sand quantity for concrete by volume and grade.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the sand (fine aggregate) required for a concrete volume at a chosen grade, in cubic feet and cubic metres, with cement and aggregate shown too.",
+  "seo": {
+    "title": "Sand Calculator — Sand for Concrete by Volume & Grade | Varada Nexus",
+    "description": "Free sand calculator for concrete. Get sand quantity in cft and m³ for any concrete volume at M15, M20 or M25.",
+    "keywords": [
+      "sand calculator",
+      "sand for concrete",
+      "fine aggregate calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "vol",
+      "label": "Concrete volume (m³)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "grade",
+      "label": "Concrete grade",
+      "type": "select",
+      "default": "1-1.5-3",
+      "options": [
+        {
+          "v": "1-2-4",
+          "t": "M15 (1:2:4)"
+        },
+        {
+          "v": "1-1.5-3",
+          "t": "M20 (1:1.5:3)"
+        },
+        {
+          "v": "1-1-2",
+          "t": "M25 (1:1:2)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Material",
+      "",
+      "Quantity"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Sand",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Sand (m³)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cement",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Dry volume = 1.54 × wet. Sand = dry × (sand ÷ total ratio). 1 m³ = 35.315 cft. Cement and aggregate follow their ratios.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much sand per m³ of concrete?",
+      "a": "About 0.42 m³ (≈15 cft) of sand per m³ of M20 concrete (1:1.5:3)."
+    },
+    {
+      "q": "Why multiply by 1.54?",
+      "a": "It converts wet concrete volume to the dry material volume required before mixing."
+    },
+    {
+      "q": "Cft or m³?",
+      "a": "Sand is often sold in cft in India; this tool shows both."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

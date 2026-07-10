@@ -1,0 +1,83 @@
+{
+  "id": "marketing-roi-calculator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Marketing ROI Calculator",
+  "shortBenefit": "ROI %, ROAS and net profit from spend and revenue.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Measure marketing return on investment: enter campaign spend and revenue to get ROI %, ROAS and net profit.",
+  "seo": {
+    "title": "Marketing ROI Calculator — ROI %, ROAS & Net Profit | Varada Nexus",
+    "description": "Free marketing ROI calculator. Enter spend and revenue to get ROI percentage, ROAS and net profit for any campaign.",
+    "keywords": [
+      "marketing roi calculator",
+      "roas calculator",
+      "campaign roi"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "revenue",
+      "label": "Revenue generated (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    },
+    {
+      "id": "cost",
+      "label": "Marketing spend (₹)",
+      "type": "number",
+      "default": 100000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "ROI %",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "ROAS",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Net profit",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "ROI % = (revenue − cost) ÷ cost × 100. ROAS = revenue ÷ cost. Revenue should be attributable to the campaign for an accurate figure.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is marketing ROI calculated?",
+      "a": "ROI % = (revenue − marketing cost) ÷ marketing cost × 100. A positive figure means the campaign earned more than it cost."
+    },
+    {
+      "q": "What is the difference between ROI and ROAS?",
+      "a": "ROAS = revenue ÷ ad spend (a ratio); ROI factors in that the spend itself is subtracted, expressed as a percentage of cost."
+    },
+    {
+      "q": "What is a good ROAS?",
+      "a": "It depends on margins, but many businesses target a ROAS of 3–4× or higher to stay profitable after costs."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing",
+      "url": "/services.html"
+    }
+  ]
+}

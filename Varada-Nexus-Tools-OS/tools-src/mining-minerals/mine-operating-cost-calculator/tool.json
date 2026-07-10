@@ -1,0 +1,131 @@
+{
+  "id": "mine-operating-cost-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mine Operating Cost Calculator",
+  "shortBenefit": "Estimate cost per tonne of mineral production",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the total operating cost per metric tonne of mineral production by aggregating drilling, blasting, loading, hauling, processing and overhead costs.",
+  "seo": {
+    "title": "Mine Operating Cost Calculator – Cost Per Tonne Mining India",
+    "description": "Calculate mining operating cost per tonne. Covers drilling, blasting, loading, hauling, processing and overheads for open-cast and underground mines.",
+    "keywords": [
+      "mine operating cost calculator",
+      "cost per tonne mining India",
+      "mining OPEX calculator",
+      "open cast mining cost",
+      "underground mine cost calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "production_mt",
+      "label": "Monthly Production (MT)",
+      "type": "number",
+      "default": 50000,
+      "min": 1
+    },
+    {
+      "id": "drilling_blasting",
+      "label": "Drilling & Blasting Cost (₹/MT)",
+      "type": "number",
+      "default": 120,
+      "min": 0
+    },
+    {
+      "id": "loading_excavation",
+      "label": "Loading & Excavation (₹/MT)",
+      "type": "number",
+      "default": 80,
+      "min": 0
+    },
+    {
+      "id": "hauling_transport",
+      "label": "Hauling & Internal Transport (₹/MT)",
+      "type": "number",
+      "default": 150,
+      "min": 0
+    },
+    {
+      "id": "crushing_processing",
+      "label": "Crushing & Processing (₹/MT)",
+      "type": "number",
+      "default": 90,
+      "min": 0
+    },
+    {
+      "id": "overburden_removal",
+      "label": "Overburden Removal (₹/MT ore)",
+      "type": "number",
+      "default": 60,
+      "min": 0
+    },
+    {
+      "id": "labour_cost",
+      "label": "Labour Cost (₹/MT)",
+      "type": "number",
+      "default": 100,
+      "min": 0
+    },
+    {
+      "id": "overhead_monthly",
+      "label": "Monthly Fixed Overheads (₹)",
+      "type": "number",
+      "default": 2000000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Component",
+      "₹/MT",
+      "Monthly Total (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Cost / MT",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly OPEX",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Fixed Cost / MT",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Fixed overheads divided equally across production tonnes. All variable costs in ₹/MT.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a typical cost per tonne for iron ore mining in India?",
+      "a": "Open-cast iron ore mining in India typically costs ₹500–₹900/MT all-in including royalty. High strip ratio sites or underground operations can cost ₹1,200–₹2,000/MT."
+    },
+    {
+      "q": "What is the strip ratio and how does it affect cost?",
+      "a": "Strip ratio is the volume of overburden removed per tonne of ore. A ratio of 3:1 means 3 cubic metres of rock removed per tonne of ore. Higher strip ratios significantly increase hauling and overburden costs."
+    },
+    {
+      "q": "How do I reduce mining operating cost?",
+      "a": "Optimise blast design to reduce secondary breaking, use larger capacity equipment (lower unit cost), improve utilisation rates, reduce downtime through predictive maintenance, and negotiate bulk fuel supply contracts."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "id": "freight-cost-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Freight Cost Calculator",
+  "shortBenefit": "Road, rail and air freight cost by weight and distance.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate freight transportation cost by mode (road, rail, air) based on weight, distance and applicable freight rates.",
+  "seo": {
+    "title": "Freight Cost Calculator — Road Rail Air Freight India | Varada Nexus",
+    "description": "Free freight cost calculator India. Calculate road, rail and air freight costs by weight and distance for logistics planning.",
+    "keywords": [
+      "freight cost calculator india",
+      "road freight rate calculator",
+      "logistics cost per km"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "weight",
+      "label": "Shipment weight (kg)",
+      "type": "number",
+      "default": 1000,
+      "min": 1
+    },
+    {
+      "id": "distance",
+      "label": "Distance (km)",
+      "type": "number",
+      "default": 500,
+      "min": 1
+    },
+    {
+      "id": "mode",
+      "label": "Transport mode",
+      "type": "select",
+      "default": "road",
+      "options": [
+        {
+          "v": "road",
+          "t": "Road (truck)"
+        },
+        {
+          "v": "rail",
+          "t": "Rail"
+        },
+        {
+          "v": "air",
+          "t": "Air cargo"
+        }
+      ]
+    },
+    {
+      "id": "volume_weight",
+      "label": "Volume weight (kg) — if higher than actual",
+      "type": "number",
+      "default": 0,
+      "min": 0
+    },
+    {
+      "id": "loading_cost",
+      "label": "Loading / unloading cost (₹)",
+      "type": "number",
+      "default": 2000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Cost (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total freight cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost per km",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per kg",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Approximate rates: Road ₹1.50–2.50/kg/100km; Rail ₹0.80–1.20/kg/100km; Air ₹35–60/kg flat (distance-adjusted). Chargeable weight = max(actual, volume weight).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is volume weight (dimensional weight)?",
+      "a": "Volume weight = (length × width × height in cm) ÷ 5000 for air freight, ÷ 4000 for courier. Carrier charges whichever is higher — actual or volume weight."
+    },
+    {
+      "q": "What is the cheapest freight mode in India?",
+      "a": "Rail is the cheapest for bulk cargo over long distances (>500km). Road is most flexible for door-to-door. Air is fastest but 10–20× the cost of road freight."
+    },
+    {
+      "q": "How is road freight rate calculated in India?",
+      "a": "Road freight rates in India are typically quoted per tonne per km or as a flat vehicle hire rate. Rates vary by vehicle type, route, fuel prices and seasonal demand."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

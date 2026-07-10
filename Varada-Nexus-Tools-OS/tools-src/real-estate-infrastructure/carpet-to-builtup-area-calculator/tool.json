@@ -1,0 +1,83 @@
+{
+  "id": "carpet-to-builtup-area-calculator",
+  "category": "real-estate-infrastructure",
+  "kind": "calculator",
+  "name": "Carpet to Built-up Area Calculator",
+  "shortBenefit": "Convert carpet area to built-up and super built-up area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Convert carpet area into built-up and super built-up area using a wall factor and a loading percentage — useful when comparing property quotes.",
+  "seo": {
+    "title": "Carpet to Built-up Area Calculator — Super Built-up & Loading | Varada Nexus",
+    "description": "Free carpet-to-built-up area calculator. Convert carpet area to built-up and super built-up area using loading %.",
+    "keywords": [
+      "carpet area calculator",
+      "built up area calculator",
+      "super built up area loading"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "carpet",
+      "label": "Carpet area (sq ft)",
+      "type": "number",
+      "default": 1000,
+      "min": 0
+    },
+    {
+      "id": "loading",
+      "label": "Loading factor (%)",
+      "type": "number",
+      "default": 30,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Area type",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Super built-up",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Built-up",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Carpet",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Built-up ≈ carpet × 1.10 (about 10% for walls). Super built-up = carpet × (1 + loading ÷ 100), where loading covers shared/common areas.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the difference between carpet, built-up and super built-up area?",
+      "a": "Carpet area is usable floor area; built-up adds wall thickness (~10%); super built-up adds a share of common areas via a loading factor."
+    },
+    {
+      "q": "What is a loading factor?",
+      "a": "It is the percentage added to carpet area for common spaces like lobbies and stairs. Typical loading is 25–40%."
+    },
+    {
+      "q": "Which area should I compare?",
+      "a": "RERA requires carpet area to be disclosed, so compare carpet area for a like-for-like price comparison."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

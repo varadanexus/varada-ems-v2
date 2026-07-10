@@ -1,0 +1,136 @@
+{
+  "id": "trade-finance-cost-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Trade Finance Cost Calculator",
+  "shortBenefit": "Calculate total cost of trade credit and working capital finance",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the total cost of trade finance options — bank overdraft, CC limit, bill discounting or LC — to choose the cheapest funding for your trading cycle.",
+  "seo": {
+    "title": "Trade Finance Cost Calculator – CC OD Bill Discounting India",
+    "description": "Calculate trade finance cost: cash credit, overdraft, bill discounting and LC. Compare annualised costs to choose the cheapest working capital for your trade cycle.",
+    "keywords": [
+      "trade finance cost calculator",
+      "cash credit cost India",
+      "bill discounting calculator",
+      "working capital cost trading",
+      "LC cost calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "finance_amount",
+      "label": "Finance Required (₹)",
+      "type": "number",
+      "default": 2000000,
+      "min": 10000
+    },
+    {
+      "id": "finance_type",
+      "label": "Finance Type",
+      "type": "select",
+      "default": "cc",
+      "options": [
+        {
+          "v": "cc",
+          "t": "Cash Credit / OD (rotating)"
+        },
+        {
+          "v": "bill",
+          "t": "Bill Discounting"
+        },
+        {
+          "v": "lc",
+          "t": "Letter of Credit (LC)"
+        },
+        {
+          "v": "term",
+          "t": "Short-Term Loan"
+        }
+      ]
+    },
+    {
+      "id": "interest_rate",
+      "label": "Interest / Discount Rate (% p.a.)",
+      "type": "number",
+      "default": 10.5,
+      "min": 1,
+      "max": 30
+    },
+    {
+      "id": "utilization_days",
+      "label": "Utilization Period (days)",
+      "type": "number",
+      "default": 90,
+      "min": 1,
+      "max": 365
+    },
+    {
+      "id": "processing_fee",
+      "label": "Processing / LC Opening Fee (₹)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    },
+    {
+      "id": "other_charges",
+      "label": "Other Bank Charges (₹)",
+      "type": "number",
+      "default": 2000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Component",
+      "Basis",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Finance Cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Annualised Cost %",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per ₹1 Lakh",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Interest = principal × rate × days / 365. Annualised cost = total cost / principal × (365 / days).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "When is bill discounting better than CC?",
+      "a": "Bill discounting (against sales invoices) is typically cheaper (9–11%) and self-liquidating. CC is more flexible but carries higher non-utilization penalties. Use bill discounting for short, defined cycles."
+    },
+    {
+      "q": "What is the effective cost of an LC?",
+      "a": "LC costs include opening commission (0.5–1% p.a.), advising fees, document handling, and any deferred payment premium. Total effective cost is typically 1–2% above plain bank rate."
+    },
+    {
+      "q": "What is MCLR and how does it affect my rate?",
+      "a": "MCLR (Marginal Cost of Lending Rate) is the minimum rate below which banks cannot lend. CC/OD rates are MCLR + spread (1–3%). Always negotiate the spread and monitor MCLR resets quarterly."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

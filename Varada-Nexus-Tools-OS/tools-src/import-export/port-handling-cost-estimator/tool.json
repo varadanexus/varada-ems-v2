@@ -1,0 +1,151 @@
+{
+  "id": "port-handling-cost-estimator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Port Handling Cost Estimator",
+  "shortBenefit": "Estimate THC, demurrage and port charges for import/export shipments",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the complete set of port-side costs including THC, documentation fees, scanning charges and demurrage to budget accurately for shipment execution.",
+  "seo": {
+    "title": "Port Handling Cost Estimator – THC Port Charges Calculator India",
+    "description": "Estimate port handling charges for imports and exports in India. Includes THC, stevedoring, documentation, container scanning and demurrage calculation.",
+    "keywords": [
+      "port handling cost India",
+      "THC charges calculator",
+      "demurrage calculator shipping",
+      "port charges estimator",
+      "container port fees India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "container_type",
+      "label": "Container Type",
+      "type": "select",
+      "default": "20ft",
+      "options": [
+        {
+          "v": "20ft",
+          "t": "20ft Standard"
+        },
+        {
+          "v": "40ft",
+          "t": "40ft Standard"
+        },
+        {
+          "v": "40hc",
+          "t": "40ft High Cube"
+        }
+      ]
+    },
+    {
+      "id": "direction",
+      "label": "Direction",
+      "type": "select",
+      "default": "export",
+      "options": [
+        {
+          "v": "export",
+          "t": "Export (Origin Port)"
+        },
+        {
+          "v": "import",
+          "t": "Import (Destination Port)"
+        }
+      ]
+    },
+    {
+      "id": "port",
+      "label": "Port",
+      "type": "select",
+      "default": "jnpt",
+      "options": [
+        {
+          "v": "jnpt",
+          "t": "JNPT Mumbai"
+        },
+        {
+          "v": "chennai",
+          "t": "Chennai Port"
+        },
+        {
+          "v": "mundra",
+          "t": "Mundra Port"
+        },
+        {
+          "v": "kolkata",
+          "t": "Kolkata Port"
+        }
+      ]
+    },
+    {
+      "id": "extra_days",
+      "label": "Days Beyond Free Period",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "hint": "Demurrage days (typical free: 7 export, 3 import)"
+    },
+    {
+      "id": "lcl_cbm",
+      "label": "LCL Cargo Volume (CBM)",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "hint": "Enter 0 for FCL shipment"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Charge Type",
+      "Basis",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Port Charges",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Demurrage / Detention",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per Day (if delayed)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "THC (2024 ref): JNPT 20ft ₹6,250 / 40ft ₹9,375; Chennai -10%; Mundra -5%; Kolkata -8%. Demurrage ₹4,000/day. Scanning ₹1,200 flat. BL/SB fee ₹2,500. LCL ₹650/CBM.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is THC in port charges?",
+      "a": "Terminal Handling Charges are fees levied by the port terminal for loading/unloading and moving containers. They are separate from ocean freight."
+    },
+    {
+      "q": "What is demurrage vs detention?",
+      "a": "Demurrage is the charge for keeping a container inside the port terminal beyond the free period. Detention is for keeping it outside at your premises. Both can be ₹3,000–₹8,000/day."
+    },
+    {
+      "q": "How do I avoid demurrage charges?",
+      "a": "Plan customs clearance before vessel arrival, submit import documents promptly, and choose ports with longer free periods for time-sensitive cargo."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

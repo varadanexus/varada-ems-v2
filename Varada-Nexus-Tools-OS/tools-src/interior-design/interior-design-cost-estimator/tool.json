@@ -1,0 +1,128 @@
+{
+  "id": "interior-design-cost-estimator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Interior Design Cost Estimator",
+  "shortBenefit": "Total interior design budget by area and finish level.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the total interior design and fit-out cost for a residential or commercial space based on carpet area and finish level.",
+  "seo": {
+    "title": "Interior Design Cost Estimator — Fit-out Budget Calculator India | Varada Nexus",
+    "description": "Free interior design cost estimator. Calculate fit-out budget for homes and offices by area and finish level — basic, standard or premium.",
+    "keywords": [
+      "interior design cost calculator",
+      "home interior cost india",
+      "interior fit out budget"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Carpet area (sq ft)",
+      "type": "number",
+      "default": 1000,
+      "min": 100
+    },
+    {
+      "id": "type",
+      "label": "Space type",
+      "type": "select",
+      "default": "home",
+      "options": [
+        {
+          "v": "home",
+          "t": "Residential / Home"
+        },
+        {
+          "v": "office",
+          "t": "Commercial / Office"
+        },
+        {
+          "v": "retail",
+          "t": "Retail / Showroom"
+        },
+        {
+          "v": "hospital",
+          "t": "Healthcare / Hospital"
+        }
+      ]
+    },
+    {
+      "id": "finish",
+      "label": "Finish level",
+      "type": "select",
+      "default": "standard",
+      "options": [
+        {
+          "v": "basic",
+          "t": "Basic (₹800–1,200/sq ft)"
+        },
+        {
+          "v": "standard",
+          "t": "Standard (₹1,500–2,200/sq ft)"
+        },
+        {
+          "v": "premium",
+          "t": "Premium (₹2,500–4,000/sq ft)"
+        },
+        {
+          "v": "luxury",
+          "t": "Luxury (₹4,500+/sq ft)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Category",
+      "Share",
+      "Budget"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total fit-out cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per sq ft",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Design fee (10%)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Rate ranges: basic ₹1,000, standard ₹1,800, premium ₹3,200, luxury ₹5,000 per sq ft. Commercial and healthcare spaces cost 15–30% more than residential at same finish level. Split: civil/flooring 30%, furniture 30%, electrical/lighting 15%, false ceiling 10%, furnishings 10%, design fee 5%.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the average interior design cost per sq ft in India?",
+      "a": "Basic finishes run ₹800–1,200/sq ft, standard ₹1,500–2,200, premium ₹2,500–4,000 and luxury ₹4,500+ for a fully furnished and fit-out home."
+    },
+    {
+      "q": "Is the design fee included in this estimate?",
+      "a": "This tool shows design fee as a separate 10% line. Interior designers in India typically charge 8–15% of project cost or a fixed fee per sq ft."
+    },
+    {
+      "q": "Does this include civil construction?",
+      "a": "Yes — fit-out includes civil modifications, flooring, electrical, false ceiling, furniture and furnishings but excludes structural changes and external works."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

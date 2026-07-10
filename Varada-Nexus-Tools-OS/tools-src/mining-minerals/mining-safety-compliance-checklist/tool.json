@@ -1,0 +1,190 @@
+{
+  "id": "mining-safety-compliance-checklist",
+  "category": "mining-minerals",
+  "kind": "checklist",
+  "name": "Mining Safety Compliance Checklist",
+  "shortBenefit": "Verify statutory safety requirements for mining operations",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Systematically audit your mining operation against the Mines Act 1952, Metalliferous Mines Regulations and Coal Mines Regulations to ensure zero-tolerance safety compliance.",
+  "seo": {
+    "title": "Mining Safety Compliance Checklist India – Mines Act DGMS",
+    "description": "Complete safety compliance checklist for Indian mines. Covers DGMS requirements, personal protection, explosives safety, equipment inspection and statutory returns.",
+    "keywords": [
+      "mining safety compliance checklist India",
+      "Mines Act 1952 compliance",
+      "DGMS safety requirements",
+      "mine safety audit checklist",
+      "coal mine safety India"
+    ]
+  },
+  "buttonLabel": "Check Safety Compliance",
+  "checklist": [
+    {
+      "name": "Statutory Licences & Notices",
+      "items": [
+        {
+          "id": "s1",
+          "text": "Mining lease valid and renewed — no operations after expiry",
+          "critical": true
+        },
+        {
+          "id": "s2",
+          "text": "Mining Plan approved by IBM and latest amendment on record",
+          "critical": true
+        },
+        {
+          "id": "s3",
+          "text": "Notice of commencement submitted to DGMS / District Mining Office",
+          "critical": true
+        },
+        {
+          "id": "s4",
+          "text": "Manager competency certificate (Mine Manager) valid and displayed",
+          "critical": true
+        },
+        {
+          "id": "s5",
+          "text": "Safety Committee constituted and meetings held quarterly"
+        }
+      ]
+    },
+    {
+      "name": "Personal Protection & Medical",
+      "items": [
+        {
+          "id": "s6",
+          "text": "PPE issued to all workers: helmet, safety shoes, high-vis, gloves",
+          "critical": true
+        },
+        {
+          "id": "s7",
+          "text": "Pre-employment and annual medical examination records maintained",
+          "critical": true
+        },
+        {
+          "id": "s8",
+          "text": "Mines Rescue team members trained and equipment serviceable"
+        },
+        {
+          "id": "s9",
+          "text": "First aid facilities with trained First Aider on each shift",
+          "critical": true
+        },
+        {
+          "id": "s10",
+          "text": "Noise level monitoring conducted; ear protection in high-noise areas"
+        }
+      ]
+    },
+    {
+      "name": "Explosives & Blasting Safety",
+      "items": [
+        {
+          "id": "s11",
+          "text": "Explosives magazine licensed by PESO and inspected annually",
+          "critical": true
+        },
+        {
+          "id": "s12",
+          "text": "Blasting done only by licensed shotfirer; records maintained",
+          "critical": true
+        },
+        {
+          "id": "s13",
+          "text": "Danger zone cleared and misfires handled per DGMS guidelines",
+          "critical": true
+        },
+        {
+          "id": "s14",
+          "text": "Explosives stock register maintained; reconciliation done daily"
+        },
+        {
+          "id": "s15",
+          "text": "Blasting permitted only at specified times; sirens and warning signs in place"
+        }
+      ]
+    },
+    {
+      "name": "Equipment & Electrical Safety",
+      "items": [
+        {
+          "id": "s16",
+          "text": "All vehicles and HME inspected daily — pre-shift checklist completed",
+          "critical": true
+        },
+        {
+          "id": "s17",
+          "text": "Third-party inspection of cranes, hoists and lifting equipment annually",
+          "critical": true
+        },
+        {
+          "id": "s18",
+          "text": "Electrical installations inspected and certified; no open wiring",
+          "critical": true
+        },
+        {
+          "id": "s19",
+          "text": "Haul roads graded, berms maintained, speed limits posted"
+        },
+        {
+          "id": "s20",
+          "text": "Monthly safety inspection by Manager; reports submitted to DGMS"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Checklist based on Mines Act 1952, MMR 1961 and CMR 2017. Specific requirements vary by mine type (coal/metalliferous/OC/UG). Consult DGMS notifications.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Who regulates mine safety in India?",
+      "a": "Directorate General of Mines Safety (DGMS), under Ministry of Labour & Employment, is the statutory authority. DGMS inspectors conduct periodic inspections and can issue closure orders for unsafe mines."
+    },
+    {
+      "q": "What is the penalty for violating Mines Act provisions?",
+      "a": "Violations attract fines up to ₹1 lakh and/or imprisonment up to 6 months for first offence; higher for repeat violations. Fatal accidents require mandatory inquiry by DGMS."
+    },
+    {
+      "q": "What is Section 23 of the Mines Act?",
+      "a": "Section 23 empowers the Inspector of Mines to order stoppage of operations or withdrawal of workers in any part of a mine if he believes a danger to life or safety exists. Compliance is immediate and mandatory."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

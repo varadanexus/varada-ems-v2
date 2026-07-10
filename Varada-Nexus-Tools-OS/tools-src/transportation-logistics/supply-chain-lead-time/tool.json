@@ -1,0 +1,122 @@
+{
+  "id": "supply-chain-lead-time",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Supply Chain Lead Time Calculator",
+  "shortBenefit": "Total end-to-end supply chain lead time from order to delivery.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate total end-to-end supply chain lead time from order placement to final delivery, covering sourcing, manufacturing, shipping and customs.",
+  "seo": {
+    "title": "Supply Chain Lead Time Calculator — Order to Delivery | Varada Nexus",
+    "description": "Free supply chain lead time calculator. Calculate total order-to-delivery lead time across sourcing, production, shipping, customs and last-mile delivery.",
+    "keywords": [
+      "supply chain lead time calculator",
+      "order to delivery lead time",
+      "procurement lead time calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "sourcing_days",
+      "label": "Supplier response / sourcing days",
+      "type": "number",
+      "default": 3,
+      "min": 0
+    },
+    {
+      "id": "production_days",
+      "label": "Manufacturing / production days",
+      "type": "number",
+      "default": 14,
+      "min": 0
+    },
+    {
+      "id": "quality_days",
+      "label": "Quality inspection days",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "transit_days",
+      "label": "Transit / shipping days",
+      "type": "number",
+      "default": 21,
+      "min": 0
+    },
+    {
+      "id": "customs_days",
+      "label": "Customs clearance days",
+      "type": "number",
+      "default": 3,
+      "min": 0
+    },
+    {
+      "id": "last_mile_days",
+      "label": "Last-mile delivery days",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "safety_stock_days",
+      "label": "Safety stock buffer (days)",
+      "type": "number",
+      "default": 7,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Supply Chain Stage",
+      "Days",
+      "Cumulative"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total lead time",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "With safety stock",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Reorder point (days out)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Reorder point = total lead time + safety stock. Orders should be placed when stock can last for (lead time + safety stock) days.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is supply chain lead time?",
+      "a": "Lead time is the total time from order placement to final delivery. It includes supplier lead time, production lead time, shipping and customs clearance. Reducing lead time improves cash flow and customer service."
+    },
+    {
+      "q": "What is safety stock?",
+      "a": "Safety stock is buffer inventory held to cover demand variability and supply delays. Typical safety stock = 1–2 weeks of demand for most items; higher for critical or long-lead components."
+    },
+    {
+      "q": "How can I reduce supply chain lead time?",
+      "a": "Source locally or regionally, qualify backup suppliers, use vendor-managed inventory (VMI), pre-position stock closer to customers, and implement demand forecasting to reduce production lead times."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

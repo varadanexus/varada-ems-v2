@@ -1,0 +1,118 @@
+{
+  "id": "salary-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Salary & Take-Home Calculator",
+  "shortBenefit": "CTC to in-hand salary with all deductions.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate your monthly in-hand (net) salary from your annual CTC by deducting PF, professional tax, income tax (simplified) and other components.",
+  "seo": {
+    "title": "Salary Calculator India — CTC to In-Hand Take-Home | Varada Nexus",
+    "description": "Free salary calculator India. Convert annual CTC to monthly in-hand salary with PF, professional tax and income tax deductions.",
+    "keywords": [
+      "salary calculator india",
+      "ctc to in hand salary calculator",
+      "take home salary calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "ctc",
+      "label": "Annual CTC (₹)",
+      "type": "number",
+      "default": 600000,
+      "min": 100000
+    },
+    {
+      "id": "basic_pct",
+      "label": "Basic salary (% of CTC)",
+      "type": "number",
+      "default": 40,
+      "min": 20,
+      "max": 60
+    },
+    {
+      "id": "hra_pct",
+      "label": "HRA (% of basic)",
+      "type": "number",
+      "default": 50,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "pf",
+      "label": "Employee PF contribution (%)",
+      "type": "number",
+      "default": 12,
+      "min": 0,
+      "max": 12
+    },
+    {
+      "id": "prof_tax",
+      "label": "Professional tax (₹/month)",
+      "type": "number",
+      "default": 200,
+      "min": 0
+    },
+    {
+      "id": "other_deductions",
+      "label": "Other monthly deductions (₹)",
+      "type": "number",
+      "default": 0,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Annual (₹)",
+      "Monthly (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly in-hand salary",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Annual in-hand salary",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total deductions/month",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "PF calculated on basic. Income tax estimate uses simplified slab (new regime FY2025): 0% up to ₹3L, 5% 3–7L, 10% 7–10L, 15% 10–12L, 20% 12–15L, 30% above 15L. Standard deduction ₹75,000 applied.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is CTC?",
+      "a": "CTC (Cost to Company) is the total annual expenditure a company incurs for an employee. It includes basic salary, HRA, PF contributions, bonuses and other allowances."
+    },
+    {
+      "q": "What is the difference between gross salary and net salary?",
+      "a": "Gross salary is the total pay before deductions. Net (in-hand) salary is what you actually receive after deducting PF, professional tax, income tax and other deductions."
+    },
+    {
+      "q": "How is PF calculated on salary?",
+      "a": "Employee PF is 12% of basic salary (up to ₹15,000 basic). Employer also contributes 12% of basic, of which 8.33% goes to EPS and 3.67% to EPF."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

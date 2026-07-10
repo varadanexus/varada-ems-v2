@@ -1,0 +1,123 @@
+{
+  "id": "employee-cost-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Employee Total Cost Calculator",
+  "shortBenefit": "True total cost of employing a person including all overheads.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the true total cost of an employee to the organisation, including CTC, statutory contributions, infrastructure, HR and admin overheads.",
+  "seo": {
+    "title": "Employee Cost Calculator — True Cost of Hiring India | Varada Nexus",
+    "description": "Free employee cost calculator. Calculate true total cost per employee including CTC, PF, ESIC, office space, equipment and admin overhead.",
+    "keywords": [
+      "employee cost calculator",
+      "true cost of employee india",
+      "total employment cost calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "ctc",
+      "label": "Annual CTC (₹)",
+      "type": "number",
+      "default": 600000,
+      "min": 1
+    },
+    {
+      "id": "office_cost",
+      "label": "Office space cost per employee (₹/month)",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    },
+    {
+      "id": "equipment",
+      "label": "Equipment & IT cost (₹/year)",
+      "type": "number",
+      "default": 50000,
+      "min": 0
+    },
+    {
+      "id": "hr_admin",
+      "label": "HR & admin overhead (₹/month)",
+      "type": "number",
+      "default": 3000,
+      "min": 0
+    },
+    {
+      "id": "training",
+      "label": "Annual training cost (₹)",
+      "type": "number",
+      "default": 20000,
+      "min": 0
+    },
+    {
+      "id": "bonus_pct",
+      "label": "Annual bonus (% of basic)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "basic_pct",
+      "label": "Basic % of CTC",
+      "type": "number",
+      "default": 40,
+      "min": 20,
+      "max": 60
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Component",
+      "Monthly (₹)",
+      "Annual (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "True annual cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Premium over CTC",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total cost multiplier",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "ESIC = 3.25% of gross monthly (if applicable). Office, HR, admin and equipment annualised. True cost = CTC + overhead costs.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Why does an employee cost more than their CTC?",
+      "a": "Beyond CTC, companies incur costs for office space, IT equipment, HR administration, training, recruitment, legal compliance and utilities. Total cost is typically 1.3–1.5× CTC."
+    },
+    {
+      "q": "What is the ESIC contribution?",
+      "a": "ESIC (Employee State Insurance) applies if gross monthly salary ≤ ₹21,000. Employee contributes 0.75%; employer contributes 3.25% of gross wages."
+    },
+    {
+      "q": "How do I calculate true cost per employee?",
+      "a": "Add CTC + employer PF + employer ESIC + office space + equipment + training + HR overhead + recruitment cost amortised over tenure."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

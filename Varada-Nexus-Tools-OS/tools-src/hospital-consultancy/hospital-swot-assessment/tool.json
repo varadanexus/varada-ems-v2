@@ -1,0 +1,172 @@
+{
+  "id": "hospital-swot-assessment",
+  "category": "hospital-consultancy",
+  "kind": "checklist",
+  "name": "Hospital SWOT Assessment Tool",
+  "shortBenefit": "Structured SWOT checklist for hospital strategic planning.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Rate your hospital's strategic position across Strengths, Weaknesses, Opportunities and Threats using this structured checklist. Use results to prioritise strategic initiatives.",
+  "seo": {
+    "title": "Hospital SWOT Assessment Tool — Strategic Planning | Varada Nexus",
+    "description": "Free hospital SWOT assessment checklist. Evaluate your hospital's strengths, weaknesses, opportunities and threats for strategic planning.",
+    "keywords": [
+      "hospital swot analysis",
+      "hospital strategic planning checklist",
+      "healthcare swot tool"
+    ]
+  },
+  "buttonLabel": "Run SWOT Assessment",
+  "checklist": [
+    {
+      "name": "Strengths",
+      "items": [
+        {
+          "id": "s1",
+          "text": "Strong specialist medical team in place"
+        },
+        {
+          "id": "s2",
+          "text": "Good patient satisfaction / NPS scores"
+        },
+        {
+          "id": "s3",
+          "text": "NABH / NABL or other accreditation held",
+          "critical": true
+        },
+        {
+          "id": "s4",
+          "text": "Strategic location / catchment area advantage"
+        },
+        {
+          "id": "s5",
+          "text": "Modern infrastructure and equipment"
+        },
+        {
+          "id": "s6",
+          "text": "Established insurance / TPA empanelments"
+        }
+      ]
+    },
+    {
+      "name": "Weaknesses",
+      "items": [
+        {
+          "id": "w1",
+          "text": "No critical specialist gaps identified"
+        },
+        {
+          "id": "w2",
+          "text": "Operating costs within benchmark range"
+        },
+        {
+          "id": "w3",
+          "text": "Staff attrition below 15% per year"
+        },
+        {
+          "id": "w4",
+          "text": "Collections cycle under 45 days"
+        }
+      ]
+    },
+    {
+      "name": "Opportunities",
+      "items": [
+        {
+          "id": "o1",
+          "text": "Identified unserved specialty in catchment area"
+        },
+        {
+          "id": "o2",
+          "text": "Digital health / telemedicine expansion potential"
+        },
+        {
+          "id": "o3",
+          "text": "Government scheme empanelment (PMJAY / State)"
+        },
+        {
+          "id": "o4",
+          "text": "Medical tourism potential exists"
+        },
+        {
+          "id": "o5",
+          "text": "Adjacent land for capacity expansion available"
+        }
+      ]
+    },
+    {
+      "name": "Threats",
+      "items": [
+        {
+          "id": "t1",
+          "text": "No major new competitor entering catchment area"
+        },
+        {
+          "id": "t2",
+          "text": "Tariff regulation risk identified and mitigated"
+        },
+        {
+          "id": "t3",
+          "text": "Regulatory compliance gaps addressed"
+        },
+        {
+          "id": "t4",
+          "text": "Key doctor retention plan in place"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Score reflects how many strategic factors are favourable. Critical item is accreditation status, a key market differentiator.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is a hospital SWOT different from a corporate SWOT?",
+      "a": "Healthcare SWOTs must factor in clinical quality metrics, regulatory compliance, doctor dependency risk and payer mix — these are healthcare-specific strategic variables."
+    },
+    {
+      "q": "How often should a hospital do a SWOT analysis?",
+      "a": "Annually as part of strategic planning, and additionally when considering expansion, entering new specialties or responding to competitive threats."
+    },
+    {
+      "q": "What actions should follow a hospital SWOT?",
+      "a": "Convert strengths into marketing differentiators, address critical weaknesses in the annual plan, create business cases for opportunities and build contingency plans for key threats."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

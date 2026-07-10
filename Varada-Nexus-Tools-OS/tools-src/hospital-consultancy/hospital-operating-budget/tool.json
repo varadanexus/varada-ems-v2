@@ -1,0 +1,107 @@
+{
+  "id": "hospital-operating-budget",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Hospital Operating Budget Planner",
+  "shortBenefit": "Annual operating expenditure budget by cost category.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan your hospital's annual operating budget split across staffing, drugs & consumables, utilities, maintenance, admin and overhead categories, benchmarked to revenue.",
+  "seo": {
+    "title": "Hospital Operating Budget Planner — Annual Opex by Category | Varada Nexus",
+    "description": "Free hospital operating budget planner. Estimate annual opex split across staffing, drugs, utilities, maintenance and admin from annual revenue.",
+    "keywords": [
+      "hospital operating budget",
+      "hospital opex calculator",
+      "hospital cost planning india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "revenue",
+      "label": "Annual revenue (₹ lakhs)",
+      "type": "number",
+      "default": 2000,
+      "min": 100
+    },
+    {
+      "id": "type",
+      "label": "Hospital type",
+      "type": "select",
+      "default": "multi",
+      "options": [
+        {
+          "v": "general",
+          "t": "General (lean cost structure)"
+        },
+        {
+          "v": "multi",
+          "t": "Multispecialty"
+        },
+        {
+          "v": "super",
+          "t": "Super-specialty (high cost)"
+        }
+      ]
+    },
+    {
+      "id": "beds",
+      "label": "Operational beds",
+      "type": "number",
+      "default": 150,
+      "min": 10
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Category",
+      "% Revenue",
+      "Annual Budget"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Opex",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "EBITDA",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "EBITDA margin",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Benchmarks (% of revenue): staffing 35–45%, drugs/consumables 20–25%, utilities 5–8%, maintenance 3–5%, admin & marketing 5–8%, other 3–5%. Super-specialty has higher staffing and drug costs.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What percentage of revenue goes to staff in a hospital?",
+      "a": "Typically 35–45% of revenue; super-specialty hospitals with heavy specialist compensation can see staffing costs at 45–50%."
+    },
+    {
+      "q": "What is a typical hospital EBITDA margin?",
+      "a": "Mature private hospitals in India typically operate at 18–28% EBITDA margin; new hospitals may be 5–15% for first 2–3 years."
+    },
+    {
+      "q": "How do I reduce hospital operating costs?",
+      "a": "Vendor consolidation, drug inventory management, energy audits, shared services for non-clinical functions and technology for staff productivity are key levers."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PR Campaign Budget Planner — Public Relations Cost Calculator | Varada Nexus</title>
+<meta name="description" content="Free PR campaign planner. Estimate public relations budget across press releases, media outreach, events, influencer PR and digital PR for any campaign.">
+<meta name="author" content="Varada Nexus Private Limited">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.varadanexus.com/professional-tools/hr-public-relations/pr-campaign-planner/">
+<meta property="og:title" content="PR Campaign Budget Planner — Public Relations Cost Calculator | Varada Nexus"><meta property="og:description" content="Free PR campaign planner. Estimate public relations budget across press releases, media outreach, events, influencer PR and digital PR for any campaign.">
+<meta property="og:type" content="website"><meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/professional-tools/assets/tools.css">
+<link rel="icon" type="image/png" href="/images/logo.png">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.varadanexus.com/"},{"@type":"ListItem","position":2,"name":"Professional Tools","item":"https://www.varadanexus.com/professional-tools/"},{"@type":"ListItem","position":3,"name":"HR & Public Relations","item":"https://www.varadanexus.com/professional-tools/hr-public-relations/"},{"@type":"ListItem","position":4,"name":"PR Campaign Budget Planner","item":"https://www.varadanexus.com/professional-tools/hr-public-relations/pr-campaign-planner/"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What does a PR campaign cost in India?","acceptedAnswer":{"@type":"Answer","text":"A basic PR retainer in India starts at ₹50,000–1,00,000/month for small agencies. Mid-tier firms charge ₹1,50,000–3,00,000/month. For specific campaigns, budget ₹2–10 lakh total."}},{"@type":"Question","name":"What is included in a PR agency retainer?","acceptedAnswer":{"@type":"Answer","text":"A retainer typically covers: media relations, press release writing and distribution, journalist pitching, social media monitoring, crisis communications support and monthly reporting."}},{"@type":"Question","name":"How do I measure PR campaign success?","acceptedAnswer":{"@type":"Answer","text":"Key PR metrics: media coverage (clips), share of voice vs competitors, message pull-through rate, website traffic from PR, social shares and sentiment. Assign AVE (advertising value equivalent) for budget comparison."}}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"PR Campaign Budget Planner","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
+</head>
+<body>
+<div class="ambient"></div>
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap vt-main">
+<div class="vt-crumb"><a href="/">Home</a> / <a href="/professional-tools/">Professional Tools</a> / <a href="/professional-tools/hr-public-relations/">HR &amp; Public Relations</a> / PR Campaign Budget Planner</div>
+<span class="eyebrow reveal">HR &amp; Public Relations</span><h1 class="display reveal reveal-d1" style="font-size:clamp(28px,4.5vw,44px)">PR Campaign Budget Planner</h1><p class="sub reveal reveal-d2">Plan and estimate your public relations campaign budget across press releases, media outreach, events, influencers and digital PR.</p>
+  <div class="vt-card no-print"><div class="vt-grid" id="vt-inputs"></div><button class="vt-btn" id="vt-calcBtn">Calculate</button></div>
+  <div class="vt-card vt-results" id="vt-results"><h3 style="margin-top:0;font-family:var(--font-serif)">Result</h3><div class="vt-kpis" id="vt-kpis"></div>
+    <table class="vt-table" id="vt-breakdown"><thead><tr><th>Component</th><th class="num"></th><th class="num">Cost (₹)</th></tr></thead><tbody></tbody></table>
+    <div id="vt-notes"></div>
+    <div class="vt-btn-row no-print"><button class="vt-btn sec" id="vt-printBtn">Save / Print as PDF</button><button class="vt-btn wa" id="vt-waBtn">Send on WhatsApp</button></div>
+    <div class="vt-note"><b>Notes &amp; assumptions:</b> Agency retainer multiplied by campaign duration. Press release, media outreach and influencer costs are total campaign costs.</div>
+    <p class="vt-disc"><b>Disclaimer:</b> This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.</p>
+    <div class="no-print" style="border-top:1px solid var(--border-soft);margin-top:18px;padding-top:16px"><h3 style="margin:0 0 4px;font-family:var(--font-serif)">Get expert help</h3>
+      <form id="vt-leadForm"><div class="vt-grid">
+        <div><label class="vt-label" for="vt-lName">Name*</label><input id="vt-lName" required></div><div><label class="vt-label" for="vt-lPhone">Phone*</label><input id="vt-lPhone" type="tel" required></div>
+        <div><label class="vt-label" for="vt-lEmail">Email</label><input id="vt-lEmail" type="email"></div><div><label class="vt-label" for="vt-lLoc">Project location</label><input id="vt-lLoc"></div></div>
+        <div style="margin-top:12px"><label class="vt-label" for="vt-lMsg">Message</label><textarea id="vt-lMsg"></textarea></div>
+        <button class="vt-btn" type="submit">Request Consultation</button><div class="vt-ok" id="vt-leadOk">Thanks! Your enquiry app will open.</div></form></div>
+  </div>
+  <div class="vt-card"><b>Related tools:</b> <a href="/professional-tools/hr-public-relations/attendance-calculator/">Attendance &amp; Salary Deduction Calculator</a> · <a href="/professional-tools/hr-public-relations/ctc-calculator/">CTC Structure Calculator</a> · <a href="/professional-tools/hr-public-relations/employee-attrition-calculator/">Employee Attrition Cost Calculator</a> · <a href="/professional-tools/hr-public-relations/employee-cost-calculator/">Employee Total Cost Calculator</a><br><b>Related services:</b> <a href="/services.html">HR &amp; PR Services</a> · <a href="/contact.html">Contact Us</a><br><b>Browse:</b> <a href="/professional-tools/hr-public-relations/">HR &amp; Public Relations tools</a> · <a href="/professional-tools/">All tools</a> · <a href="/contact.html">Contact</a></div>
+  <div class="vt-cta"><h3>Planning a project?</h3><p>Share your numbers and we will help you plan the next step.</p><a href="/contact.html?tool=pr-campaign-planner">Contact Varada Nexus for detailed consultation</a></div>
+  <div class="vt-card"><h3 style="margin-top:0;font-family:var(--font-serif)">FAQ</h3><details><summary>What does a PR campaign cost in India?</summary><p>A basic PR retainer in India starts at ₹50,000–1,00,000/month for small agencies. Mid-tier firms charge ₹1,50,000–3,00,000/month. For specific campaigns, budget ₹2–10 lakh total.</p></details><details><summary>What is included in a PR agency retainer?</summary><p>A retainer typically covers: media relations, press release writing and distribution, journalist pitching, social media monitoring, crisis communications support and monthly reporting.</p></details><details><summary>How do I measure PR campaign success?</summary><p>Key PR metrics: media coverage (clips), share of voice vs competitors, message pull-through rate, website traffic from PR, social shares and sentiment. Assign AVE (advertising value equivalent) for budget comparison.</p></details></div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">
+          <img src="/images/logo.png" alt="Varada Nexus">
+          <div>
+            <div class="fb-name">Varada Nexus Private Limited</div>
+            <p>Building and operating systems across healthcare, mining, logistics, global trade, and digital commerce.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="/">Home</a>
+        <a href="/founder.html">Founder</a>
+        <a href="/team.html">Team</a>
+        <a href="/contact.html">Contact</a>
+      </div>
+      <div class="footer-col">
+        <h4>Services</h4>
+        <a href="/hospital.html">Hospital Infrastructure</a>
+        <a href="/consultancy.html">Hospital Consultancy</a>
+        <a href="/logistics.html">Mining &amp; Logistics</a>
+        <a href="/import-export.html">Import &amp; Export</a>
+        <a href="/ecommerce.html">E-Commerce</a>
+        <a href="/hr.html">HR &amp; PR</a>
+        <a href="/arbitrage.html">Strategic Arbitrage</a>
+      </div>
+      <div class="footer-col">
+        <h4>Access</h4>
+        <a href="/login.html">EMS Login</a>
+        <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
+        <a href="/services.html">All Services</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span>Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+
+<script>window.__TOOL__={"name":"PR Campaign Budget Planner","kind":"calculator","inputs":[{"id":"press_releases","label":"Press releases to issue","type":"number","default":4,"min":0},{"id":"pr_release_cost","label":"Cost per press release (₹)","type":"number","default":15000,"min":0},{"id":"media_outreach","label":"Media outreach contacts to target","type":"number","default":50,"min":0},{"id":"outreach_cost_per","label":"Outreach cost per contact (₹)","type":"number","default":500,"min":0},{"id":"event_cost","label":"PR event / press conference cost (₹)","type":"number","default":100000,"min":0},{"id":"influencer_cost","label":"Influencer / blogger outreach budget (₹)","type":"number","default":50000,"min":0},{"id":"pr_agency","label":"PR agency monthly retainer (₹)","type":"number","default":75000,"min":0},{"id":"months","label":"Campaign duration (months)","type":"number","default":3,"min":1,"max":12}],"results":{"rowFmt":"raw","columns":["Component","","Cost (₹)"],"kpis":[{"key":"k1","label":"Total campaign cost","format":"text"},{"key":"k2","label":"Monthly PR cost","format":"text"},{"key":"k3","label":"Agency retainer total","format":"text"}]},"checklist":null};window.__LOGIC__="/professional-tools/hr-public-relations/pr-campaign-planner/logic.js";</script><script type="module" src="/professional-tools/assets/tools.js"></script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+{
+  "id": "mineral-dispatch-planning-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mineral Dispatch Planning Calculator",
+  "shortBenefit": "Plan and schedule mineral dispatch to meet annual targets",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Build a monthly dispatch plan for mineral production, balancing production rates, stockpile levels, transport availability and customer commitments to achieve annual targets.",
+  "seo": {
+    "title": "Mineral Dispatch Planning Calculator – Mine Dispatch Schedule India",
+    "description": "Plan mineral dispatch schedule from mine to match production with customer commitments. Balance stockpile, transport and annual target for mining businesses.",
+    "keywords": [
+      "mineral dispatch planning India",
+      "mine dispatch calculator",
+      "ore dispatch schedule",
+      "mining logistics planning",
+      "mineral supply chain India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "annual_target_mt",
+      "label": "Annual Dispatch Target (MT)",
+      "type": "number",
+      "default": 600000,
+      "min": 1000
+    },
+    {
+      "id": "current_stockpile",
+      "label": "Current Stockpile (MT)",
+      "type": "number",
+      "default": 50000,
+      "min": 0
+    },
+    {
+      "id": "monthly_production",
+      "label": "Monthly Production (MT)",
+      "type": "number",
+      "default": 55000,
+      "min": 0
+    },
+    {
+      "id": "plant_shutdown_days",
+      "label": "Plant Shutdown Days per Month",
+      "type": "number",
+      "default": 2,
+      "min": 0,
+      "max": 15
+    },
+    {
+      "id": "months_remaining",
+      "label": "Months Remaining in Year",
+      "type": "number",
+      "default": 12,
+      "min": 1,
+      "max": 12
+    },
+    {
+      "id": "min_stockpile",
+      "label": "Minimum Buffer Stockpile (MT)",
+      "type": "number",
+      "default": 10000,
+      "min": 0,
+      "hint": "Minimum stock to maintain at all times"
+    },
+    {
+      "id": "transport_capacity_monthly",
+      "label": "Max Transport Capacity (MT/month)",
+      "type": "number",
+      "default": 60000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Planning Parameter",
+      "Calculation",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly Dispatch Target",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Achievable by Year-End",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Transport Constraint",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Available production = monthly production × (1 − shutdown days/30). Dispatch limited by min of production + stockpile drawdown vs transport capacity.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I handle production shortfalls vs dispatch commitments?",
+      "a": "Maintain a strategic stockpile buffer (1–2 months production) to cover plant breakdowns or monsoon production drops. Communicate proactively with customers if shortfall is unavoidable; force majeure clauses in supply contracts."
+    },
+    {
+      "q": "What factors affect mine-to-customer logistics planning?",
+      "a": "Rake availability (rail), truck fleet availability, weather disruptions, port congestion, weighbridge queues, and regulatory stops (vehicle overload checks). Plan 10–15% buffer in transport commitment."
+    },
+    {
+      "q": "When should I build stockpile vs dispatch immediately?",
+      "a": "Build stockpile when prices are rising (hold for higher price), when transport is constrained (accumulate for bulk despatch), or before planned shutdown periods. Dispatch immediately when cashflow is critical or prices are declining."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

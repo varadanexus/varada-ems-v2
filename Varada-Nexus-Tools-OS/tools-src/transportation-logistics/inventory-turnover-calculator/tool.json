@@ -1,0 +1,102 @@
+{
+  "id": "inventory-turnover-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Inventory Turnover & Days Calculator",
+  "shortBenefit": "Inventory turnover ratio, DIO and carrying cost.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate inventory turnover ratio, days inventory outstanding (DIO), inventory carrying cost and identify slow-moving stock.",
+  "seo": {
+    "title": "Inventory Turnover Calculator — DIO & Stock Efficiency | Varada Nexus",
+    "description": "Free inventory turnover calculator. Calculate inventory turnover ratio, days inventory outstanding and carrying cost for supply chain efficiency.",
+    "keywords": [
+      "inventory turnover calculator",
+      "days inventory outstanding calculator",
+      "stock turnover ratio india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cogs",
+      "label": "Cost of goods sold / COGS (₹/year)",
+      "type": "number",
+      "default": 10000000,
+      "min": 1
+    },
+    {
+      "id": "opening_inv",
+      "label": "Opening inventory (₹)",
+      "type": "number",
+      "default": 2000000,
+      "min": 0
+    },
+    {
+      "id": "closing_inv",
+      "label": "Closing inventory (₹)",
+      "type": "number",
+      "default": 1800000,
+      "min": 0
+    },
+    {
+      "id": "carrying_rate",
+      "label": "Inventory carrying cost rate (%/year)",
+      "type": "number",
+      "default": 25,
+      "min": 5,
+      "max": 50
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Inventory turnover ratio",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Days inventory outstanding",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Annual carrying cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Average inventory = (opening + closing) ÷ 2. Turnover ratio = COGS ÷ average inventory. DIO = 365 ÷ turnover ratio. Carrying cost = average inventory × carrying rate.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good inventory turnover ratio?",
+      "a": "Benchmarks vary by industry. FMCG/retail targets 6–12×; manufacturing 4–8×; engineering 2–4×. Higher is generally better — it means less capital tied up in stock."
+    },
+    {
+      "q": "What is Days Inventory Outstanding (DIO)?",
+      "a": "DIO is the average number of days a company holds inventory before selling it. Lower DIO means faster-moving stock. DIO = 365 ÷ inventory turnover ratio."
+    },
+    {
+      "q": "How do I improve inventory turnover?",
+      "a": "Improve demand forecasting, reduce safety stock where possible, implement ABC analysis (focus on fast movers), run promotions on slow movers, and negotiate shorter supplier lead times."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

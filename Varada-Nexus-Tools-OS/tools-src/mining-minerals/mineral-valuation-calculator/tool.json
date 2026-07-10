@@ -1,0 +1,123 @@
+{
+  "id": "mineral-valuation-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mineral Grade & Valuation Calculator",
+  "shortBenefit": "Calculate mineral value based on grade, recovery and market price",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the in-situ and realizable value of a mineral deposit based on resource tonnage, head grade, metallurgical recovery and current commodity price.",
+  "seo": {
+    "title": "Mineral Valuation Calculator – Grade Recovery Value India",
+    "description": "Calculate mineral deposit value from resource tonnage, head grade, recovery factor and commodity price. For iron ore, coal, bauxite and other minerals.",
+    "keywords": [
+      "mineral valuation calculator",
+      "ore grade recovery calculator",
+      "mining deposit value India",
+      "in-situ mineral value",
+      "metallurgical recovery calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "resource_mt",
+      "label": "Total Resource / Reserve (MT)",
+      "type": "number",
+      "default": 1000000,
+      "min": 1,
+      "hint": "Geological resource estimate in metric tonnes"
+    },
+    {
+      "id": "head_grade",
+      "label": "Head Grade (%)",
+      "type": "number",
+      "default": 58,
+      "min": 0.01,
+      "max": 100,
+      "hint": "Metal / mineral content of the ore"
+    },
+    {
+      "id": "recovery_pct",
+      "label": "Metallurgical Recovery (%)",
+      "type": "number",
+      "default": 85,
+      "min": 1,
+      "max": 100,
+      "hint": "% of mineral recovered after processing"
+    },
+    {
+      "id": "commodity_price",
+      "label": "Commodity Price (₹/MT of product)",
+      "type": "number",
+      "default": 4500,
+      "min": 0,
+      "hint": "Market price of finished mineral"
+    },
+    {
+      "id": "mining_cost_per_mt",
+      "label": "All-In Mining Cost (₹/MT ore)",
+      "type": "number",
+      "default": 700,
+      "min": 0
+    },
+    {
+      "id": "processing_cost_per_mt",
+      "label": "Processing Cost (₹/MT ore)",
+      "type": "number",
+      "default": 200,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "Calculation",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Gross In-Situ Value",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Net Realisable Value",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Value per MT Ore",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Product tonnes = resource × head grade% × recovery%. Net value = gross − total cost. Royalty not included.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the difference between resource and reserve?",
+      "a": "Mineral Resource is the total estimated mineral in-ground (Inferred/Indicated/Measured). Mineral Reserve is the economic part (Probable/Proven) — planned to be mined. Reserve ≤ Resource always."
+    },
+    {
+      "q": "What is metallurgical recovery?",
+      "a": "Recovery is the % of metal/mineral in the ore that ends up in the final product after processing. Loss occurs due to fines, tailings and process inefficiencies. Iron ore typically 78–92%, coal 85–95%."
+    },
+    {
+      "q": "What is head grade and why does it matter?",
+      "a": "Head grade is the concentration of valuable mineral in the ore fed to the processing plant. Higher grade = less ore to mine per tonne of product = lower cost. Grade significantly drives project economics."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

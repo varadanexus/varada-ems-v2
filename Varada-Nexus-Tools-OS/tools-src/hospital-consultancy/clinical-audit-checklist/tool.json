@@ -1,0 +1,167 @@
+{
+  "id": "clinical-audit-checklist",
+  "category": "hospital-consultancy",
+  "kind": "checklist",
+  "name": "Clinical Audit Checklist",
+  "shortBenefit": "Structure and completeness check for hospital clinical audits.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Use this checklist to ensure your hospital's clinical audit process is properly structured, covers all required domains and meets accreditation expectations.",
+  "seo": {
+    "title": "Clinical Audit Checklist — Hospital Quality Audit Tool | Varada Nexus",
+    "description": "Free clinical audit checklist for hospitals. Ensure audit programme covers required domains, sampling, outcomes and feedback loops for accreditation.",
+    "keywords": [
+      "clinical audit checklist",
+      "hospital audit tool",
+      "medical audit india"
+    ]
+  },
+  "buttonLabel": "Check Audit Readiness",
+  "checklist": [
+    {
+      "name": "1. Audit Programme",
+      "items": [
+        {
+          "id": "a1",
+          "text": "Annual clinical audit calendar documented and approved",
+          "critical": true
+        },
+        {
+          "id": "a2",
+          "text": "Audit topics selected based on high volume / high risk",
+          "critical": true
+        },
+        {
+          "id": "a3",
+          "text": "Multidisciplinary audit committee constituted"
+        }
+      ]
+    },
+    {
+      "name": "2. Audit Process",
+      "items": [
+        {
+          "id": "b1",
+          "text": "Standard / criterion defined before each audit",
+          "critical": true
+        },
+        {
+          "id": "b2",
+          "text": "Sample size and sampling method documented",
+          "critical": true
+        },
+        {
+          "id": "b3",
+          "text": "Data collection tool (form/checklist) in place"
+        },
+        {
+          "id": "b4",
+          "text": "Baseline and re-audit cycles planned"
+        }
+      ]
+    },
+    {
+      "name": "3. Key Audit Areas",
+      "items": [
+        {
+          "id": "c1",
+          "text": "Medication error audit conducted quarterly",
+          "critical": true
+        },
+        {
+          "id": "c2",
+          "text": "Hand hygiene compliance audit monthly",
+          "critical": true
+        },
+        {
+          "id": "c3",
+          "text": "Antibiotic stewardship audit active"
+        },
+        {
+          "id": "c4",
+          "text": "Surgical site infection surveillance ongoing"
+        },
+        {
+          "id": "c5",
+          "text": "Re-admission rate monitored and reviewed"
+        }
+      ]
+    },
+    {
+      "name": "4. Feedback & Action",
+      "items": [
+        {
+          "id": "d1",
+          "text": "Audit findings presented to clinical team",
+          "critical": true
+        },
+        {
+          "id": "d2",
+          "text": "CAPA raised for every significant finding",
+          "critical": true
+        },
+        {
+          "id": "d3",
+          "text": "Improvement in subsequent re-audit documented"
+        },
+        {
+          "id": "d4",
+          "text": "CME / in-service training linked to audit gaps"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Framework aligned to NABH Standard QPS and Joint Commission audit requirements.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a clinical audit in a hospital?",
+      "a": "A clinical audit systematically reviews actual practice against defined standards to identify gaps, implement improvements and verify that care quality has improved."
+    },
+    {
+      "q": "What must a hospital audit for NABH?",
+      "a": "NABH expects audits covering medication safety, infection control, clinical documentation, patient satisfaction and surgical outcomes as minimum."
+    },
+    {
+      "q": "How is a clinical audit different from an inspection?",
+      "a": "Audits are internally driven quality improvement exercises; inspections are external regulatory checks. Audit results are used internally; inspection findings may have legal consequences."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

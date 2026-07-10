@@ -1,0 +1,117 @@
+{
+  "id": "gst-calculator",
+  "category": "general-business-productivity",
+  "kind": "calculator",
+  "name": "GST Calculator",
+  "shortBenefit": "Add or remove GST and split into CGST/SGST instantly.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate GST for any amount under Indian GST slabs (5%, 12%, 18%, 28%). Add GST to a base price or extract GST from a GST-inclusive price, with automatic CGST/SGST split.",
+  "seo": {
+    "title": "GST Calculator India (2026) — Add & Remove GST, CGST/SGST Split | Varada Nexus",
+    "description": "Free online GST calculator for India. Add or remove GST at 5%, 12%, 18% or 28% and see the CGST and SGST split instantly. No signup.",
+    "keywords": [
+      "gst calculator",
+      "gst calculator india",
+      "cgst sgst calculator",
+      "reverse gst calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "amount",
+      "label": "Amount (₹)",
+      "type": "number",
+      "default": 10000,
+      "min": 0
+    },
+    {
+      "id": "gstRate",
+      "label": "GST rate",
+      "type": "select",
+      "default": "18",
+      "options": [
+        {
+          "v": "5",
+          "t": "5%"
+        },
+        {
+          "v": "12",
+          "t": "12%"
+        },
+        {
+          "v": "18",
+          "t": "18%"
+        },
+        {
+          "v": "28",
+          "t": "28%"
+        }
+      ]
+    },
+    {
+      "id": "mode",
+      "label": "Mode",
+      "type": "select",
+      "default": "add",
+      "options": [
+        {
+          "v": "add",
+          "t": "Add GST (exclusive amount)"
+        },
+        {
+          "v": "remove",
+          "t": "Remove GST (inclusive amount)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Rate",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total (incl. GST)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "GST amount",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Base amount",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Uses standard Indian GST slabs. For intra-state supply GST splits equally into CGST and SGST; for inter-state supply the same total applies as IGST.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is GST calculated on an amount?",
+      "a": "To add GST, GST = amount × rate ÷ 100 and total = amount + GST. To remove GST from an inclusive price, base = amount × 100 ÷ (100 + rate)."
+    },
+    {
+      "q": "What is the CGST and SGST split?",
+      "a": "For intra-state sales the GST is shared equally: CGST = SGST = half the total GST. For inter-state sales the full amount is charged as IGST."
+    },
+    {
+      "q": "What are the GST slabs in India?",
+      "a": "The common GST rates are 5%, 12%, 18% and 28%, with some goods at 0% or special rates."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "id": "civil-material-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Civil Material Calculator",
+  "shortBenefit": "Cement, steel, sand, aggregate and bricks for a building.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the main civil materials — cement, steel, sand, aggregate and bricks — for a building using standard per-sq-ft thumb rules.",
+  "seo": {
+    "title": "Civil Material Calculator — Cement, Steel, Sand & Bricks by Area | Varada Nexus",
+    "description": "Free civil material calculator. Estimate cement, steel, sand, aggregate and bricks for a building from built-up area.",
+    "keywords": [
+      "civil material calculator",
+      "construction material estimate",
+      "building material calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Built-up area (sq ft)",
+      "type": "number",
+      "default": 2000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Material",
+      "thumb rule",
+      "Quantity"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Cement",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Steel",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Bricks",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Per-sq-ft thumb rules for RCC-framed construction: cement 0.4 bags, steel 4 kg, sand 1.2 cft, aggregate 1.35 cft, bricks 8 nos. These are approximate averages and vary with design.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much cement is needed per sq ft?",
+      "a": "About 0.4 bags of cement per sq ft of built-up area for typical RCC-framed construction."
+    },
+    {
+      "q": "How much steel per sq ft?",
+      "a": "Roughly 4 kg of steel per sq ft; heavily loaded or tall structures can need more."
+    },
+    {
+      "q": "Are these exact?",
+      "a": "No — they are planning thumb rules. Exact quantities come from a structural design and detailed BOQ."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "id": "shipment-eta-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Shipment ETA & Transit Time Calculator",
+  "shortBenefit": "Expected delivery date from dispatch and transit time.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate expected delivery date (ETA), factoring in transit time, customs clearance, weekends and buffer days for planning and customer communication.",
+  "seo": {
+    "title": "Shipment ETA Calculator — Expected Delivery Date | Varada Nexus",
+    "description": "Free shipment ETA calculator. Calculate expected delivery date from dispatch date, transit days, customs clearance and delivery buffer.",
+    "keywords": [
+      "shipment eta calculator",
+      "delivery date calculator",
+      "transit time calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "transit_days",
+      "label": "Transit / shipping days",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "customs_days",
+      "label": "Customs clearance days (if applicable)",
+      "type": "number",
+      "default": 0,
+      "min": 0
+    },
+    {
+      "id": "last_mile_days",
+      "label": "Last-mile delivery days",
+      "type": "number",
+      "default": 1,
+      "min": 0
+    },
+    {
+      "id": "buffer_days",
+      "label": "Buffer / contingency days",
+      "type": "number",
+      "default": 1,
+      "min": 0
+    },
+    {
+      "id": "working_days_only",
+      "label": "Count working days only?",
+      "type": "select",
+      "default": "no",
+      "options": [
+        {
+          "v": "yes",
+          "t": "Yes (Mon–Sat)"
+        },
+        {
+          "v": "no",
+          "t": "No (calendar days)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Stage",
+      "Days",
+      "Cumulative"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total transit days",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "ETA (days from dispatch)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Recommended promise date",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Working days = 6 days/week (Mon–Sat). Calendar days include all days. Recommended promise date adds buffer to ETA. Customs clearance assumed 0 for domestic.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is transit time vs lead time?",
+      "a": "Transit time is the time goods are physically in motion. Lead time (order to delivery) includes order processing, production, transit and customs clearance. ETA is calculated from dispatch."
+    },
+    {
+      "q": "How do I communicate ETA to customers?",
+      "a": "Share a range (best case to worst case), be proactive about delays, share tracking information and provide a single point of contact. Surprising customers with delays damages more trust than an upfront longer ETA."
+    },
+    {
+      "q": "What causes transit time delays in India?",
+      "a": "Common causes: port congestion, transshipment delays, customs holds, document errors, inland transport delays and weather. Budget extra days for festive seasons and year-end."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

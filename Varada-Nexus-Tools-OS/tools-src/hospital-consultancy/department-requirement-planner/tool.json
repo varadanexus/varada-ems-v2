@@ -1,0 +1,107 @@
+{
+  "id": "department-requirement-planner",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Department Requirement Planner",
+  "shortBenefit": "Rooms, staff and equipment per clinical department.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the number of rooms, core staffing and key equipment required for each major clinical department based on planned bed count and specialty mix.",
+  "seo": {
+    "title": "Hospital Department Requirement Planner — Rooms, Staff & Equipment | Varada Nexus",
+    "description": "Free hospital department requirement planner. Estimate consulting rooms, staff and key equipment per department from bed count and specialty mix.",
+    "keywords": [
+      "hospital department planning",
+      "clinical department requirement",
+      "hospital staffing rooms equipment"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Total beds",
+      "type": "number",
+      "default": 150,
+      "min": 10
+    },
+    {
+      "id": "type",
+      "label": "Hospital type",
+      "type": "select",
+      "default": "multi",
+      "options": [
+        {
+          "v": "general",
+          "t": "General"
+        },
+        {
+          "v": "multi",
+          "t": "Multispecialty"
+        },
+        {
+          "v": "super",
+          "t": "Super-specialty"
+        }
+      ]
+    },
+    {
+      "id": "opd_daily",
+      "label": "Daily OPD target",
+      "type": "number",
+      "default": 300,
+      "min": 10
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Department",
+      "OPD Rooms",
+      "IPD Beds (est.)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total OPD rooms",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "OT tables recommended",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "ICU beds (10%)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "OPD rooms = daily OPD × consult time (12 min) ÷ 480 min × 1.2 buffer, apportioned by specialty. IPD beds apportioned by typical case-mix. OT: 1 table per 35 surgical beds.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many OPD rooms does a 150-bed hospital need?",
+      "a": "For 300 OPD/day at 12 minutes per consult and 8-hour sessions, roughly 8–10 consulting rooms are needed at 80% utilisation."
+    },
+    {
+      "q": "How many OTs are needed per bed?",
+      "a": "A common norm is one operating table per 30–40 surgical beds; a 150-bed multispecialty hospital typically needs 4–6 OT tables."
+    },
+    {
+      "q": "What departments must a multispecialty hospital have?",
+      "a": "Core departments include internal medicine, surgery, orthopaedics, obstetrics & gynaecology, paediatrics, emergency and supporting specialties like anaesthesia and radiology."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

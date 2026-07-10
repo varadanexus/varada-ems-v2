@@ -1,0 +1,94 @@
+{
+  "id": "contractor-cost-estimator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Contractor Cost Estimator",
+  "shortBenefit": "Contractor price from base cost, overhead and GST.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate a contractor’s quoted price from the base construction cost, contractor overhead & profit margin and applicable GST.",
+  "seo": {
+    "title": "Contractor Cost Estimator — Contractor Price incl. Margin & GST | Varada Nexus",
+    "description": "Free contractor cost estimator. Add overhead, profit and GST to a base construction cost to get the contractor price.",
+    "keywords": [
+      "contractor cost estimator",
+      "contractor margin calculator",
+      "construction contractor price"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "base",
+      "label": "Base construction cost (₹)",
+      "type": "number",
+      "default": 50000000,
+      "min": 0
+    },
+    {
+      "id": "oh",
+      "label": "Overhead & profit (%)",
+      "type": "number",
+      "default": 15,
+      "min": 0
+    },
+    {
+      "id": "gst",
+      "label": "GST (%)",
+      "type": "number",
+      "default": 18,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Contract price (incl. GST)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Overhead & profit",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "GST",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Contractor price before tax = base × (1 + overhead & profit%). GST is applied on that. Works-contract GST is commonly 18%.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What overhead and profit do contractors add?",
+      "a": "Commonly 10–20% over direct cost to cover site overheads, supervision, risk and profit."
+    },
+    {
+      "q": "What GST applies to construction contracts?",
+      "a": "Most works contracts attract 18% GST, though certain affordable housing and government works differ."
+    },
+    {
+      "q": "Is this the final price?",
+      "a": "It is indicative; the actual quote depends on scope, specifications and contract terms."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

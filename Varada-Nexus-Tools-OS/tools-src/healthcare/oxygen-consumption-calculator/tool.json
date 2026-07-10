@@ -1,0 +1,108 @@
+{
+  "id": "oxygen-consumption-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Hospital Oxygen Consumption Calculator",
+  "shortBenefit": "Daily medical oxygen demand and cylinder/LMO sizing.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate a hospital’s daily medical oxygen demand in litres and cubic metres from ICU and ward bed usage, and convert it into jumbo cylinders or LMO tank sizing.",
+  "seo": {
+    "title": "Hospital Oxygen Consumption Calculator — Daily O2 Demand & Cylinders | Varada Nexus",
+    "description": "Free medical oxygen consumption calculator. Estimate daily hospital oxygen demand and cylinder/LMO requirement from ICU and ward beds.",
+    "keywords": [
+      "medical oxygen calculator",
+      "hospital oxygen demand",
+      "oxygen cylinder requirement"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "icu",
+      "label": "ICU/critical beds",
+      "type": "number",
+      "default": 20,
+      "min": 0
+    },
+    {
+      "id": "ward",
+      "label": "Ward/oxygen beds",
+      "type": "number",
+      "default": 80,
+      "min": 0
+    },
+    {
+      "id": "icuLpm",
+      "label": "ICU flow (LPM/bed)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "wardLpm",
+      "label": "Ward flow (LPM/bed)",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "hours",
+      "label": "Hours of use/day",
+      "type": "number",
+      "default": 24,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "O2 per day",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cubic metres/day",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Jumbo cylinders/day",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Litres/day = (ICU beds × ICU LPM + ward beds × ward LPM) × 60 × hours. 1 cubic metre = 1,000 L. A jumbo D-type cylinder holds ~7,000 L. Peak/surge demand can be much higher.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I calculate hospital oxygen demand?",
+      "a": "Total litres/day = (ICU beds × flow + ward beds × flow) × 60 minutes × hours of use. Divide by 1,000 for cubic metres."
+    },
+    {
+      "q": "How many cylinders is that?",
+      "a": "A jumbo (D-type) cylinder holds about 7,000 litres, so divide daily litres by 7,000 for cylinders per day."
+    },
+    {
+      "q": "When should I consider an LMO tank or PSA plant?",
+      "a": "High or continuous demand (large ICUs) is usually cheaper and safer served by a liquid medical oxygen tank or an on-site PSA plant."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

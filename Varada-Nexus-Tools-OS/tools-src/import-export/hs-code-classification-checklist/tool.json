@@ -1,0 +1,183 @@
+{
+  "id": "hs-code-classification-checklist",
+  "category": "import-export",
+  "kind": "checklist",
+  "name": "HS Code Classification Checklist",
+  "shortBenefit": "Systematically classify goods to the correct HS code for customs",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Use this structured checklist to gather all the information needed for accurate HS code classification — preventing misclassification penalties and duty disputes.",
+  "seo": {
+    "title": "HS Code Classification Checklist – Harmonised System Code Finder India",
+    "description": "Checklist to classify goods under the correct HS code for Indian customs. Covers product description, material, end-use, processing stage and trade documentation.",
+    "keywords": [
+      "HS code classification checklist",
+      "harmonised system code India",
+      "customs tariff classification",
+      "HS code finder India",
+      "correct HS code export import"
+    ]
+  },
+  "buttonLabel": "Check Classification Readiness",
+  "checklist": [
+    {
+      "name": "Product Information Gathering",
+      "items": [
+        {
+          "id": "hs1",
+          "text": "Complete product name and trade name documented",
+          "critical": true
+        },
+        {
+          "id": "hs2",
+          "text": "Primary material / composition noted (e.g. cotton 80%, polyester 20%)",
+          "critical": true
+        },
+        {
+          "id": "hs3",
+          "text": "Stage of processing identified (raw, semi-processed, finished)",
+          "critical": true
+        },
+        {
+          "id": "hs4",
+          "text": "Principal function / end-use of the product clearly defined",
+          "critical": true
+        },
+        {
+          "id": "hs5",
+          "text": "Technical specifications, drawings or MSDS available"
+        }
+      ]
+    },
+    {
+      "name": "Classification Research",
+      "items": [
+        {
+          "id": "hs6",
+          "text": "Section and Chapter of ITC-HS tentatively identified",
+          "critical": true
+        },
+        {
+          "id": "hs7",
+          "text": "GRI (General Rules of Interpretation) Rules 1–6 applied",
+          "critical": true
+        },
+        {
+          "id": "hs8",
+          "text": "Customs Tariff Act 1975 — relevant chapter notes reviewed"
+        },
+        {
+          "id": "hs9",
+          "text": "WCO Explanatory Notes checked for ambiguous products"
+        },
+        {
+          "id": "hs10",
+          "text": "Previous CESTAT / advance ruling on similar product checked"
+        }
+      ]
+    },
+    {
+      "name": "Duty & Compliance Verification",
+      "items": [
+        {
+          "id": "hs11",
+          "text": "BCD rate confirmed from Customs Tariff (Basic + AIDC if any)",
+          "critical": true
+        },
+        {
+          "id": "hs12",
+          "text": "IGST rate on imports confirmed from GST schedule",
+          "critical": true
+        },
+        {
+          "id": "hs13",
+          "text": "SCOMET / export licensing requirement checked",
+          "critical": true
+        },
+        {
+          "id": "hs14",
+          "text": "Import policy (Free / Restricted / Prohibited / Canalized) confirmed"
+        },
+        {
+          "id": "hs15",
+          "text": "Anti-Dumping / CVD / Safeguard duty notification checked"
+        }
+      ]
+    },
+    {
+      "name": "Documentation & Declaration",
+      "items": [
+        {
+          "id": "hs16",
+          "text": "Same HS code used in Invoice, Packing List, BL and Shipping Bill",
+          "critical": true
+        },
+        {
+          "id": "hs17",
+          "text": "Advance Ruling obtained from CAAR if classification is uncertain"
+        },
+        {
+          "id": "hs18",
+          "text": "CHA has reviewed and agreed to the classification"
+        },
+        {
+          "id": "hs19",
+          "text": "Sample product retained for potential physical examination"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "HS codes have 8 digits in India (ITC-HS). First 6 digits internationally harmonised. Digits 7–8 are India-specific. Classify fresh for each new product.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is an HS code and why is it important?",
+      "a": "HS (Harmonised System) code is a 6–8 digit number classifying every traded product for customs. It determines duty rate, import policy, export incentives and trade statistics. Wrong classification attracts penalties up to 5× the duty evaded."
+    },
+    {
+      "q": "What is an Advance Ruling for HS classification?",
+      "a": "An Advance Ruling from CAAR is a binding decision on correct HS classification, binding on all customs stations. It provides certainty and protects against retrospective classification disputes."
+    },
+    {
+      "q": "Who can help with HS classification?",
+      "a": "A licensed CHA can advise on classification. For complex products, consult a trade compliance specialist or apply to CAAR for an Advance Ruling before importing/exporting for the first time."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "id": "export-budget-planner",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Export Budget Planner",
+  "shortBenefit": "Plan your complete annual export operation budget",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Build a comprehensive annual export budget covering production, packaging, freight, certifications, trade fairs, agent commissions and finance costs.",
+  "seo": {
+    "title": "Export Budget Planner – Annual Export Cost Planning Tool India",
+    "description": "Plan your annual export budget: production, freight, certification, trade fairs, agent commission and finance costs. Know your capital requirement and break-even.",
+    "keywords": [
+      "export budget planner",
+      "export cost planning India",
+      "annual export budget",
+      "export working capital",
+      "export business budget template"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "annual_export_value",
+      "label": "Target Annual Export Value (₹)",
+      "type": "number",
+      "default": 10000000,
+      "min": 100000
+    },
+    {
+      "id": "cogs_pct",
+      "label": "Production / Purchase Cost (%)",
+      "type": "number",
+      "default": 55,
+      "min": 1,
+      "max": 95
+    },
+    {
+      "id": "freight_pct",
+      "label": "Freight & Insurance (%)",
+      "type": "number",
+      "default": 6,
+      "min": 0,
+      "max": 20
+    },
+    {
+      "id": "agent_commission_pct",
+      "label": "Agent / Distributor Commission (%)",
+      "type": "number",
+      "default": 5,
+      "min": 0,
+      "max": 25
+    },
+    {
+      "id": "certification_cost",
+      "label": "Annual Certification & Compliance (₹)",
+      "type": "number",
+      "default": 150000,
+      "min": 0,
+      "hint": "ISO, BIS, phytosanitary, CE marks"
+    },
+    {
+      "id": "trade_fair_cost",
+      "label": "Trade Fair & Marketing (₹)",
+      "type": "number",
+      "default": 200000,
+      "min": 0
+    },
+    {
+      "id": "finance_cost_pct",
+      "label": "Export Finance Cost (%)",
+      "type": "number",
+      "default": 2,
+      "min": 0,
+      "max": 10
+    },
+    {
+      "id": "overhead_pct",
+      "label": "Overhead Allocation (%)",
+      "type": "number",
+      "default": 5,
+      "min": 0,
+      "max": 20
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Budget Head",
+      "Rate / Details",
+      "Annual Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Export Budget",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Expected Net Profit",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Net Profit Margin",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Fixed costs distributed across full-year export value. Finance cost on full export value. Incentives not included.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What export finance options are available in India?",
+      "a": "ECGC-backed pre-shipment credit (PCFC) and post-shipment credit at concessional rates (7–9% p.a.), export bills discounting, and buyers credit under SOFR-linked rates for large exporters."
+    },
+    {
+      "q": "How do I account for exchange rate risk?",
+      "a": "Build a 2–3% forex buffer in your budget. Use forward contracts or options to hedge USD/EUR receivables for shipments beyond 30 days."
+    },
+    {
+      "q": "What certifications are mandatory for export?",
+      "a": "Depends on product and destination: FSSAI (food), BIS (electronics/toys), phytosanitary (agriculture), RCMC from Export Promotion Council, and destination-specific marks (CE for Europe, FCC for US)."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

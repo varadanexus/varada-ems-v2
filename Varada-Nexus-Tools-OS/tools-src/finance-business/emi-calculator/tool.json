@@ -1,0 +1,91 @@
+{
+  "id": "emi-calculator",
+  "category": "finance-business",
+  "kind": "calculator",
+  "name": "EMI Calculator",
+  "shortBenefit": "Compute monthly EMI, total interest and total payment for any loan.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the Equated Monthly Instalment (EMI) for any loan from the principal, annual interest rate and tenure, with total interest and total repayment.",
+  "seo": {
+    "title": "EMI Calculator (2026) — Loan EMI, Interest & Total Payment | Varada Nexus",
+    "description": "Free EMI calculator for personal, car and business loans in India. Get monthly EMI, total interest payable and total repayment instantly.",
+    "keywords": [
+      "emi calculator",
+      "loan emi calculator",
+      "emi calculator india",
+      "monthly instalment calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "principal",
+      "label": "Loan amount (₹)",
+      "type": "number",
+      "default": 1000000,
+      "min": 0
+    },
+    {
+      "id": "rate",
+      "label": "Interest rate (% p.a.)",
+      "type": "number",
+      "default": 9.5,
+      "min": 0
+    },
+    {
+      "id": "tenure",
+      "label": "Tenure (months)",
+      "type": "number",
+      "default": 120,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly EMI",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total interest",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total payment",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Uses the standard reducing-balance EMI formula EMI = P·i·(1+i)^n ÷ ((1+i)^n − 1), where i is the monthly rate and n the number of months.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is EMI calculated?",
+      "a": "EMI = P × i × (1+i)^n ÷ ((1+i)^n − 1), where P is principal, i is the monthly interest rate (annual ÷ 12 ÷ 100) and n is the number of monthly instalments."
+    },
+    {
+      "q": "Does a longer tenure reduce EMI?",
+      "a": "Yes, a longer tenure lowers the monthly EMI but increases the total interest paid over the loan."
+    },
+    {
+      "q": "Is this EMI figure final?",
+      "a": "It is indicative. Actual EMI may include processing fees, insurance or a different compounding basis set by your lender."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

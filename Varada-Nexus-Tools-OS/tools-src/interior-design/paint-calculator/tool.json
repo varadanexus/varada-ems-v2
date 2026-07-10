@@ -1,0 +1,97 @@
+{
+  "id": "paint-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Paint Calculator",
+  "shortBenefit": "Litres of paint and cost from wall area and number of coats.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate how many litres of paint you need and the cost, from the total wall area, number of coats and paint coverage.",
+  "seo": {
+    "title": "Paint Calculator — Litres of Paint & Cost by Wall Area | Varada Nexus",
+    "description": "Free paint calculator. Estimate litres of paint and cost from wall area, coats and coverage per litre.",
+    "keywords": [
+      "paint calculator",
+      "wall paint calculator",
+      "how much paint do i need"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Total wall area (sq ft)",
+      "type": "number",
+      "default": 1200,
+      "min": 0
+    },
+    {
+      "id": "coats",
+      "label": "Number of coats",
+      "type": "number",
+      "default": 2,
+      "min": 1
+    },
+    {
+      "id": "coverage",
+      "label": "Coverage per litre (sq ft/coat)",
+      "type": "number",
+      "default": 120,
+      "min": 1
+    },
+    {
+      "id": "price",
+      "label": "Paint price (₹/litre)",
+      "type": "number",
+      "default": 350,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Paint needed",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Estimated cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Area painted",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Litres = wall area × coats ÷ coverage per litre. Typical emulsion covers ~110–140 sq ft per litre per coat; adjust for surface and colour.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much paint do I need?",
+      "a": "Litres = total wall area × number of coats ÷ coverage per litre. For 1200 sq ft, 2 coats at 120 sq ft/litre you need about 20 litres."
+    },
+    {
+      "q": "How many coats of paint are recommended?",
+      "a": "Two coats are standard for even colour; dark shades or fresh plaster may need a primer plus two coats."
+    },
+    {
+      "q": "Does texture affect coverage?",
+      "a": "Yes, rough or porous surfaces absorb more paint, reducing coverage per litre."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design",
+      "url": "/services.html"
+    }
+  ]
+}

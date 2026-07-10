@@ -1,0 +1,137 @@
+{
+  "id": "stockpile-inventory-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Stockpile Inventory Calculator",
+  "shortBenefit": "Estimate stockpile volume, tonnage and value at mine site",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the estimated tonnage and value of mineral stockpiles using surveyed dimensions and bulk density — essential for inventory accounting and sales planning.",
+  "seo": {
+    "title": "Stockpile Inventory Calculator – Ore Stockpile Volume Tonnage India",
+    "description": "Calculate mineral stockpile volume, tonnage and value from pile dimensions. Supports conical and trapezoidal stockpile shapes for mining inventory.",
+    "keywords": [
+      "stockpile inventory calculator mining",
+      "ore stockpile tonnage calculator",
+      "mineral stockpile volume",
+      "bulk density stockpile",
+      "mine inventory valuation"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "stockpile_shape",
+      "label": "Stockpile Shape",
+      "type": "select",
+      "default": "cone",
+      "options": [
+        {
+          "v": "cone",
+          "t": "Conical (round base)"
+        },
+        {
+          "v": "trap",
+          "t": "Trapezoidal / Ridge pile"
+        }
+      ]
+    },
+    {
+      "id": "length",
+      "label": "Base Length (m)",
+      "type": "number",
+      "default": 60,
+      "min": 1,
+      "hint": "Long axis of trapezoidal pile"
+    },
+    {
+      "id": "width",
+      "label": "Base Width (m)",
+      "type": "number",
+      "default": 40,
+      "min": 1
+    },
+    {
+      "id": "height",
+      "label": "Height / Apex (m)",
+      "type": "number",
+      "default": 8,
+      "min": 0.5
+    },
+    {
+      "id": "bulk_density",
+      "label": "Bulk Density (MT/m³)",
+      "type": "number",
+      "default": 2,
+      "min": 0.5,
+      "hint": "Iron ore: 1.8–2.2; coal: 0.8–1.0; limestone: 1.4–1.6"
+    },
+    {
+      "id": "sale_price_mt",
+      "label": "Sale Price (₹/MT)",
+      "type": "number",
+      "default": 4500,
+      "min": 0
+    },
+    {
+      "id": "moisture_pct",
+      "label": "Moisture Content (%)",
+      "type": "number",
+      "default": 5,
+      "min": 0,
+      "max": 40,
+      "hint": "Deducted from dry weight for billing"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Parameter",
+      "Formula",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Dry Tonne (for billing)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Stockpile Value",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Volume (m³)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Cone volume = (1/3)πr²h. Trapezoidal: (1/3)h(A1 + A2 + √(A1×A2)). Dry tonnes = wet tonnes × (1 − moisture/100).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is ore stockpile measured in practice?",
+      "a": "Drone/UAV volumetric survey (most accurate), total station survey, or simple geometric measurement. Drone surveys can achieve ±1–2% accuracy on large stockpiles."
+    },
+    {
+      "q": "What is bulk density and how do I determine it?",
+      "a": "Bulk density = mass per unit volume including voids between particles. Measured by filling a known-volume container and weighing. Varies with moisture, particle size and compaction. Use lab-measured value."
+    },
+    {
+      "q": "Why is moisture correction important?",
+      "a": "Iron ore and coal are sold on dry-weight basis (or specified moisture basis). Excess moisture means you are effectively selling water at ore price. Moisture content directly reduces realisation."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

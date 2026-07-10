@@ -1,0 +1,184 @@
+{
+  "id": "hospital-compliance-checklist",
+  "category": "hospital-consultancy",
+  "kind": "checklist",
+  "name": "Hospital Compliance Checklist",
+  "shortBenefit": "Ongoing statutory compliance for operating hospitals.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Track ongoing statutory and operational compliance obligations for a running hospital across licences, employee law, environment and quality standards.",
+  "seo": {
+    "title": "Hospital Compliance Checklist — Statutory & Regulatory Obligations | Varada Nexus",
+    "description": "Free hospital compliance checklist. Track ongoing statutory obligations including licence renewals, labour law, environment and quality standards.",
+    "keywords": [
+      "hospital compliance checklist",
+      "hospital regulatory compliance india",
+      "hospital statutory obligations"
+    ]
+  },
+  "buttonLabel": "Check Compliance Status",
+  "checklist": [
+    {
+      "name": "1. Licence Renewals",
+      "items": [
+        {
+          "id": "cr1",
+          "text": "Clinical Establishment registration renewed annually",
+          "critical": true
+        },
+        {
+          "id": "cr2",
+          "text": "Blood bank / pharmacy licence renewal current",
+          "critical": true
+        },
+        {
+          "id": "cr3",
+          "text": "PCPNDT renewal and Form F records up to date",
+          "critical": true
+        },
+        {
+          "id": "cr4",
+          "text": "AERB licence renewal current (if applicable)"
+        }
+      ]
+    },
+    {
+      "name": "2. Labour & HR",
+      "items": [
+        {
+          "id": "lr1",
+          "text": "ESI contributions paid and records current",
+          "critical": true
+        },
+        {
+          "id": "lr2",
+          "text": "PF contributions up to date",
+          "critical": true
+        },
+        {
+          "id": "lr3",
+          "text": "Minimum wage compliance verified"
+        },
+        {
+          "id": "lr4",
+          "text": "Sexual Harassment (POSH) policy and committee in place"
+        },
+        {
+          "id": "lr5",
+          "text": "Contract labour (if any) registered with Labour Commissioner"
+        }
+      ]
+    },
+    {
+      "name": "3. Environment",
+      "items": [
+        {
+          "id": "er1",
+          "text": "BMW segregation, collection and handover records maintained",
+          "critical": true
+        },
+        {
+          "id": "er2",
+          "text": "Annual returns filed with State Pollution Control Board",
+          "critical": true
+        },
+        {
+          "id": "er3",
+          "text": "Effluent treatment plant (ETP) functioning and records kept"
+        }
+      ]
+    },
+    {
+      "name": "4. Patient Safety",
+      "items": [
+        {
+          "id": "pr1",
+          "text": "Adverse event / near-miss reporting system active",
+          "critical": true
+        },
+        {
+          "id": "pr2",
+          "text": "Fire safety equipment serviced quarterly"
+        },
+        {
+          "id": "pr3",
+          "text": "Patient consent forms in use for all procedures"
+        },
+        {
+          "id": "pr4",
+          "text": "Drug expiry checks done monthly"
+        }
+      ]
+    },
+    {
+      "name": "5. Finance & Tax",
+      "items": [
+        {
+          "id": "fr1",
+          "text": "GST returns filed on time"
+        },
+        {
+          "id": "fr2",
+          "text": "TDS deducted and deposited as due"
+        },
+        {
+          "id": "fr3",
+          "text": "Charitable trust / society annual returns filed (if applicable)"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Checklist covers central and general state obligations. Specific state laws may add further requirements.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What are the most common hospital compliance failures in India?",
+      "a": "PCPNDT record gaps, BMW manifest irregularities, POSH non-compliance and delayed PF/ESI deposits are the most frequently cited violations in government inspections."
+    },
+    {
+      "q": "How often should a hospital do a compliance audit?",
+      "a": "A full internal compliance audit quarterly and an external audit annually is best practice; high-risk areas like BMW and labour law should be reviewed monthly."
+    },
+    {
+      "q": "Can a hospital be penalised for PCPNDT violations?",
+      "a": "Yes — penalties include licence suspension, equipment seizure and criminal prosecution under the PCPNDT Act. Regular record-keeping and display compliance are essential."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

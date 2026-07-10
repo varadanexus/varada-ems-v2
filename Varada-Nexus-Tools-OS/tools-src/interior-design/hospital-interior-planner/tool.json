@@ -1,0 +1,124 @@
+{
+  "id": "hospital-interior-planner",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Hospital Interior Planner",
+  "shortBenefit": "Interior fit-out cost for hospital zones by area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the interior fit-out cost for different hospital zones (OPD, IPD wards, OT, reception, corridors) with healthcare-grade materials and compliance requirements.",
+  "seo": {
+    "title": "Hospital Interior Planner — Healthcare Fit-out Cost Calculator | Varada Nexus",
+    "description": "Free hospital interior planner. Estimate fit-out costs for OPD, IPD wards, OT and reception areas with healthcare-grade materials.",
+    "keywords": [
+      "hospital interior cost",
+      "healthcare interior fit out",
+      "hospital interior design cost india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "opd_area",
+      "label": "OPD & consultation area (sq ft)",
+      "type": "number",
+      "default": 3000,
+      "min": 0
+    },
+    {
+      "id": "ward_area",
+      "label": "IPD wards & rooms (sq ft)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    },
+    {
+      "id": "ot_area",
+      "label": "OT complex & ICU (sq ft)",
+      "type": "number",
+      "default": 2000,
+      "min": 0
+    },
+    {
+      "id": "reception",
+      "label": "Reception & lobby (sq ft)",
+      "type": "number",
+      "default": 1000,
+      "min": 0
+    },
+    {
+      "id": "corridor",
+      "label": "Corridors & common areas (sq ft)",
+      "type": "number",
+      "default": 2000,
+      "min": 0
+    },
+    {
+      "id": "finish",
+      "label": "Finish level",
+      "type": "select",
+      "default": "standard",
+      "options": [
+        {
+          "v": "standard",
+          "t": "Standard NABH-compliant"
+        },
+        {
+          "v": "premium",
+          "t": "Premium (JCI / boutique hospital)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Zone",
+      "Area",
+      "Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total interior cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "OT complex cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Per sq ft average",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Zone rates (standard): OPD ₹1,400, ward ₹1,200, OT/ICU ₹3,500 (modular panels, epoxy, AHU provisions), reception ₹2,200, corridor ₹900/sq ft. Premium 1.5×.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the interior cost for a hospital OT in India?",
+      "a": "A modular OT fit-out including stainless steel panels, epoxy flooring, clean room provisions and AHU integration costs ₹3,000–6,000 per sq ft depending on specification."
+    },
+    {
+      "q": "What makes hospital interiors more expensive than offices?",
+      "a": "Infection control requirements (seamless flooring, coving, antimicrobial surfaces), medical gas outlets, higher MEP density and compliance with NABH/AERB standards all add cost."
+    },
+    {
+      "q": "Is epoxy flooring mandatory for hospitals?",
+      "a": "Not mandatory everywhere, but epoxy or polyurethane seamless flooring is strongly recommended for OTs, ICUs and sterile areas; regular tiles are acceptable for wards and OPD."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

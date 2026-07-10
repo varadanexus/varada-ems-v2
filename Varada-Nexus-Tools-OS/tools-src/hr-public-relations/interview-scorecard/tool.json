@@ -1,0 +1,121 @@
+{
+  "id": "interview-scorecard",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Interview Evaluation Scorecard",
+  "shortBenefit": "Structured candidate scoring across competency areas.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Score job candidates consistently across technical skills, communication, problem-solving, cultural fit and experience using a weighted interview scorecard.",
+  "seo": {
+    "title": "Interview Scorecard — Candidate Evaluation Tool | Varada Nexus",
+    "description": "Free interview scorecard tool. Score candidates consistently across technical skills, communication, problem-solving and culture fit with weighted scoring.",
+    "keywords": [
+      "interview scorecard",
+      "candidate evaluation tool",
+      "structured interview scoring template"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "technical",
+      "label": "Technical / functional skills (1–5)",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "communication",
+      "label": "Communication skills (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "problem_solving",
+      "label": "Problem-solving & analytical (1–5)",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "culture_fit",
+      "label": "Culture & values fit (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "leadership",
+      "label": "Leadership / teamwork (1–5)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 5
+    },
+    {
+      "id": "experience",
+      "label": "Relevant experience & education (1–5)",
+      "type": "number",
+      "default": 4,
+      "min": 1,
+      "max": 5
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Competency",
+      "Score",
+      "Weighted Score"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Overall score",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Recommendation",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Strongest area",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Weights: Technical 30%, Problem-solving 20%, Experience 20%, Communication 15%, Culture fit 10%, Leadership 5%. Score /100.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Why use a structured interview scorecard?",
+      "a": "Structured scorecards reduce hiring bias, enable fair candidate comparison and improve prediction of job performance. Research shows structured interviews are 2× more predictive than unstructured ones."
+    },
+    {
+      "q": "What is a passing score on this scorecard?",
+      "a": "A score above 70/100 typically indicates a strong candidate; 80+ is an excellent candidate. Below 60 suggests significant gaps that should be discussed before proceeding."
+    },
+    {
+      "q": "What weight should cultural fit have in hiring?",
+      "a": "Cultural fit is important but should not override skill and performance. Keep it at 10–20% to prevent bias — focus on shared values and work style, not personal similarity."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "id": "project-budget-planner",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Construction Project Budget Planner",
+  "shortBenefit": "Split a project budget across all cost heads.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Break a total construction project budget into civil, MEP, equipment, preliminaries, consultancy and contingency for early financial planning.",
+  "seo": {
+    "title": "Construction Project Budget Planner — Budget Split by Head | Varada Nexus",
+    "description": "Free construction project budget planner. Split a total budget into civil, MEP, equipment, consultancy and contingency.",
+    "keywords": [
+      "project budget planner",
+      "construction budget split",
+      "capex planning construction"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "budget",
+      "label": "Total project budget (₹)",
+      "type": "number",
+      "default": 100000000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Head",
+      "share",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Civil",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "MEP & services",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Equipment",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Indicative allocation: civil 45%, MEP & services 22%, equipment 18%, preliminaries 5%, consultancy 4%, contingency 6%. Tune to project type; equipment is far higher for hospitals.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How should a construction budget be split?",
+      "a": "Broadly civil ~45%, MEP ~22%, equipment ~18%, with the rest across preliminaries, consultancy and contingency."
+    },
+    {
+      "q": "Why hold a contingency?",
+      "a": "To absorb scope changes, escalation and unforeseen site conditions without derailing the project."
+    },
+    {
+      "q": "Is equipment always 18%?",
+      "a": "No — for hospitals and labs equipment can be 30%+; adjust the split to your project."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

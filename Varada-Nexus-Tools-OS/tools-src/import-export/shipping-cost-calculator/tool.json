@@ -1,0 +1,143 @@
+{
+  "id": "shipping-cost-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Shipping Cost Calculator",
+  "shortBenefit": "Compare sea vs air freight costs for your cargo",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate total shipping costs by sea or air, factoring in base freight, fuel surcharges, THC, BL fees and destination charges.",
+  "seo": {
+    "title": "Shipping Cost Calculator India – Sea vs Air Freight Estimator",
+    "description": "Calculate sea freight or air freight cost for exports/imports. Includes fuel surcharge, THC, BL fees and destination charges. Compare shipping modes.",
+    "keywords": [
+      "shipping cost calculator India",
+      "sea freight cost estimator",
+      "air freight calculator",
+      "THC charges calculator",
+      "container freight rate India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "mode",
+      "label": "Shipping Mode",
+      "type": "select",
+      "default": "sea",
+      "options": [
+        {
+          "v": "sea",
+          "t": "Sea Freight (per CBM)"
+        },
+        {
+          "v": "air",
+          "t": "Air Freight (per kg)"
+        }
+      ]
+    },
+    {
+      "id": "cargo_cbm",
+      "label": "Cargo Volume (CBM)",
+      "type": "number",
+      "default": 10,
+      "min": 0.1,
+      "hint": "For sea freight"
+    },
+    {
+      "id": "cargo_weight",
+      "label": "Cargo Weight (kg)",
+      "type": "number",
+      "default": 500,
+      "min": 1,
+      "hint": "For air freight"
+    },
+    {
+      "id": "base_rate",
+      "label": "Base Freight Rate (₹/CBM or ₹/kg)",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    },
+    {
+      "id": "fuel_surcharge_pct",
+      "label": "Fuel Surcharge (%)",
+      "type": "number",
+      "default": 15,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "thc",
+      "label": "THC / Handling Charges (₹)",
+      "type": "number",
+      "default": 6500,
+      "min": 0
+    },
+    {
+      "id": "bl_fee",
+      "label": "BL / AWB Fee (₹)",
+      "type": "number",
+      "default": 2500,
+      "min": 0
+    },
+    {
+      "id": "destination_charges",
+      "label": "Destination Charges (₹)",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Charge Component",
+      "Basis",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Freight Cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost per CBM / kg",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Chargeable Units",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Air chargeable weight = max(actual kg, CBM×167). Sea: base × CBM. Fuel surcharge on base freight only.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is chargeable weight in air freight?",
+      "a": "Air freight is charged on whichever is higher — actual weight or volumetric weight (CBM × 167). Lightweight bulky cargo is billed on volumetric weight."
+    },
+    {
+      "q": "What is THC in shipping?",
+      "a": "Terminal Handling Charges are levied by the port for handling containers. Charged per container (FCL) or per CBM (LCL), separate from ocean freight rate."
+    },
+    {
+      "q": "How can I reduce shipping costs?",
+      "a": "Consolidate shipments to fill containers, negotiate long-term contracts with shipping lines, use less congested ports, and plan shipments to avoid peak season surcharges."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

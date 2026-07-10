@@ -1,0 +1,155 @@
+{
+  "id": "mining-royalty-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mining Royalty Calculator",
+  "shortBenefit": "Calculate mineral royalty payable to state government on production",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Compute the royalty liability on mineral extraction based on production quantity, grade and the applicable ad valorem or specific rate notified by the state government.",
+  "seo": {
+    "title": "Mining Royalty Calculator India – Mineral Royalty Rate Estimator",
+    "description": "Calculate mining royalty payable to state government. Supports ad valorem and specific rate royalties for coal, iron ore, bauxite and other minerals in India.",
+    "keywords": [
+      "mining royalty calculator India",
+      "mineral royalty rate",
+      "MMDR royalty",
+      "ad valorem royalty mining",
+      "state royalty mineral extraction"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "mineral",
+      "label": "Mineral",
+      "type": "select",
+      "default": "iron_ore",
+      "options": [
+        {
+          "v": "iron_ore",
+          "t": "Iron Ore (15% ad valorem)"
+        },
+        {
+          "v": "coal",
+          "t": "Coal (₹400/tonne specific)"
+        },
+        {
+          "v": "bauxite",
+          "t": "Bauxite (0.5% ad valorem)"
+        },
+        {
+          "v": "limestone",
+          "t": "Limestone (80 paise/tonne)"
+        },
+        {
+          "v": "sand",
+          "t": "Sand & Gravel (2% ad valorem)"
+        },
+        {
+          "v": "custom",
+          "t": "Custom Rate"
+        }
+      ]
+    },
+    {
+      "id": "quantity_mt",
+      "label": "Production Quantity (metric tonnes)",
+      "type": "number",
+      "default": 10000,
+      "min": 1
+    },
+    {
+      "id": "sale_value_per_mt",
+      "label": "Sale Value per MT (₹)",
+      "type": "number",
+      "default": 3500,
+      "min": 0,
+      "hint": "For ad valorem minerals"
+    },
+    {
+      "id": "custom_rate",
+      "label": "Custom Royalty Rate (₹/MT or %)",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "hint": "If Custom Rate selected above"
+    },
+    {
+      "id": "custom_type",
+      "label": "Custom Rate Type",
+      "type": "select",
+      "default": "advalorem",
+      "options": [
+        {
+          "v": "advalorem",
+          "t": "Ad Valorem (% of value)"
+        },
+        {
+          "v": "specific",
+          "t": "Specific Rate (₹ per tonne)"
+        }
+      ]
+    },
+    {
+      "id": "dmc_rate",
+      "label": "DMF / NMET Contribution (%)",
+      "type": "number",
+      "default": 30,
+      "min": 0,
+      "max": 50,
+      "hint": "District Mineral Foundation: 30% of royalty for major, 10% for minor minerals"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Levy",
+      "Rate / Basis",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Royalty Payable",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "DMF Contribution",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total Mineral Tax",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Rates per MMDR Act 2015 (indicative — verify current schedule). NMET 2% of royalty for major minerals included in DMF calc.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Who levies mineral royalty in India?",
+      "a": "Under the Mines and Minerals (Development and Regulation) Act 1957, royalty is levied by the State Government and the rate schedule is notified by the Central Government. The holder of mining lease pays royalty."
+    },
+    {
+      "q": "What is the District Mineral Foundation (DMF)?",
+      "a": "DMF is a statutory trust set up in mining districts to benefit communities affected by mining. For leases executed after 12 Jan 2015, royalty holders pay 30% (major minerals) or 10% (minor) of royalty to DMF."
+    },
+    {
+      "q": "What is the difference between royalty and premium?",
+      "a": "Royalty is the statutory levy on each tonne of mineral extracted. Premium is the additional amount paid by auction winners over the floor price in competitive bidding for mining leases."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

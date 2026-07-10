@@ -1,0 +1,119 @@
+{
+  "id": "ore-transport-logistics-cost",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Ore Transport & Logistics Cost Calculator",
+  "shortBenefit": "Calculate cost of transporting ore from mine to plant or port",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the end-to-end logistics cost of moving ore from the mine gate to the processing plant or export port — covering road, rail and port handling.",
+  "seo": {
+    "title": "Ore Transport Logistics Cost Calculator – Mining India",
+    "description": "Calculate ore transport cost from mine to plant or port. Road haulage, rail freight, port handling and stacking costs for mining operations in India.",
+    "keywords": [
+      "ore transport cost calculator",
+      "mining logistics cost India",
+      "mine to plant transport",
+      "ore freight rate India",
+      "mineral logistics calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "production_mt",
+      "label": "Monthly Ore Volume (MT)",
+      "type": "number",
+      "default": 50000,
+      "min": 1
+    },
+    {
+      "id": "road_distance",
+      "label": "Road Haul Distance (km)",
+      "type": "number",
+      "default": 50,
+      "min": 0
+    },
+    {
+      "id": "road_rate_per_mt_km",
+      "label": "Road Rate (₹/MT/km)",
+      "type": "number",
+      "default": 3.5,
+      "min": 0
+    },
+    {
+      "id": "rail_freight_per_mt",
+      "label": "Rail Freight (₹/MT total)",
+      "type": "number",
+      "default": 400,
+      "min": 0,
+      "hint": "Enter 0 if no rail leg"
+    },
+    {
+      "id": "port_handling",
+      "label": "Port Handling / Stacking (₹/MT)",
+      "type": "number",
+      "default": 120,
+      "min": 0,
+      "hint": "For export consignments"
+    },
+    {
+      "id": "loading_charges",
+      "label": "Loading / Unloading Charges (₹/MT)",
+      "type": "number",
+      "default": 80,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Logistics Component",
+      "Rate",
+      "Monthly Cost (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Logistics / MT",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly Logistics Cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Logistics % of ₹4500/MT",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Road cost = distance × rate × volume. All rates in ₹/MT unless noted. ₹4,500/MT benchmark for logistics % calculation.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the typical road freight rate for ore in India?",
+      "a": "Road freight for ore: ₹2.50–₹5/MT/km depending on truck size, road condition and region. Tipper trucks (10–15 MT) are common for short hauls; semi-trailers (25 MT) for longer distances."
+    },
+    {
+      "q": "When is rail transport more economical for ore?",
+      "a": "Rail becomes economical beyond 150–200 km for bulk minerals. Dedicated rail sidings at mines (private/captive) can further reduce cost. CONCOR and zone railways offer special bulk mineral rates."
+    },
+    {
+      "q": "What is a weighbridge and why is it important?",
+      "a": "A weighbridge (weigh-in-motion or static) at the mine gate ensures accurate billing and prevents overloading penalties. Trucks overloaded beyond permissible limits face heavy fines under Motor Vehicles Act."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "id": "customs-duty-estimator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Customs Duty Estimator",
+  "shortBenefit": "Quick customs cost including anti-dumping duty and compensation cess",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Get a comprehensive customs duty estimate covering BCD, SWS, Anti-Dumping Duty and Compensation Cess to budget accurately for any import shipment.",
+  "seo": {
+    "title": "Customs Duty Estimator India – BCD ADD Cess Calculator",
+    "description": "Estimate total customs duty in India including BCD, SWS, Anti-Dumping Duty, Compensation Cess and IGST. Comprehensive import customs cost calculator.",
+    "keywords": [
+      "customs duty estimator",
+      "anti dumping duty calculator",
+      "compensation cess imports",
+      "total customs cost India",
+      "import customs calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cif_inr",
+      "label": "CIF Value (₹)",
+      "type": "number",
+      "default": 800000,
+      "min": 1000
+    },
+    {
+      "id": "bcd",
+      "label": "Basic Customs Duty (%)",
+      "type": "number",
+      "default": 10,
+      "min": 0,
+      "max": 150
+    },
+    {
+      "id": "add_rate",
+      "label": "Anti-Dumping Duty (%)",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 100,
+      "hint": "Enter 0 if not applicable"
+    },
+    {
+      "id": "cess_rate",
+      "label": "Compensation Cess (%)",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 290,
+      "hint": "Applicable on sin / luxury goods"
+    },
+    {
+      "id": "igst_rate",
+      "label": "IGST Rate (%)",
+      "type": "number",
+      "default": 18,
+      "min": 0,
+      "max": 28
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Duty Head",
+      "Basis",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Duty Payable",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Effective Duty Rate",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Landed Value",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "SWS = 10% of BCD. ADD on CIF value. Cess base = CIF + BCD + SWS. IGST base includes all duties.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is Anti-Dumping Duty?",
+      "a": "ADD is imposed on imports sold below fair market value, harming domestic industry. It is notified by Ministry of Finance based on DGTR recommendations."
+    },
+    {
+      "q": "When does Compensation Cess apply?",
+      "a": "Compensation Cess applies to coal, tobacco, aerated drinks, luxury cars and paan masala. Rates range from 5% to 290%."
+    },
+    {
+      "q": "Is ADD the same for all countries?",
+      "a": "No. ADD rates vary by country of origin and exporter. Always check the latest DGTR notification for product-specific rates."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

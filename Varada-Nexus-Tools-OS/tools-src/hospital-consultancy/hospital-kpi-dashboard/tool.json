@@ -1,0 +1,101 @@
+{
+  "id": "hospital-kpi-dashboard",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Hospital KPI Dashboard Calculator",
+  "shortBenefit": "Calculate ALOS, BOR, BTO, TOI and GDR from admission data.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Compute the four core hospital operational KPIs — Average Length of Stay (ALOS), Bed Occupancy Rate (BOR), Bed Turnover (BTO) and Turn-over Interval (TOI) — from monthly admission and discharge data.",
+  "seo": {
+    "title": "Hospital KPI Dashboard Calculator — ALOS BOR BTO TOI | Varada Nexus",
+    "description": "Free hospital KPI calculator. Compute ALOS, BOR, BTO and Turnover Interval from monthly hospital admissions and bed data.",
+    "keywords": [
+      "hospital kpi calculator",
+      "alos bor bto calculator",
+      "hospital bed metrics india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Available beds",
+      "type": "number",
+      "default": 150,
+      "min": 1
+    },
+    {
+      "id": "admissions",
+      "label": "Monthly admissions",
+      "type": "number",
+      "default": 900,
+      "min": 1
+    },
+    {
+      "id": "days_occupied",
+      "label": "Total patient-days (month)",
+      "type": "number",
+      "default": 3200,
+      "min": 1
+    },
+    {
+      "id": "period",
+      "label": "Days in period",
+      "type": "number",
+      "default": 30,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "KPI",
+      "Formula",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "ALOS (days)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "BOR (%)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "BTO (turnovers)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "ALOS = total patient-days ÷ admissions. BOR = patient-days ÷ (beds × days) × 100. BTO = admissions ÷ beds. TOI = (beds × days − patient-days) ÷ admissions.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good ALOS for an Indian hospital?",
+      "a": "For a multispecialty hospital, 3–5 days is typical; higher for tertiary/complex cases and lower for surgical day-care. National average is around 4–5 days."
+    },
+    {
+      "q": "What is an ideal BOR?",
+      "a": "Around 80–85% is widely considered optimal — efficient without creating capacity pressure. Consistently above 90% risks quality and safety."
+    },
+    {
+      "q": "What does BTO measure?",
+      "a": "Bed Turnover tells you how many patients are admitted per bed per month; higher values indicate more efficient bed utilisation."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

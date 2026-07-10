@@ -1,0 +1,137 @@
+{
+  "id": "wood-requirement-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Wood & Timber Requirement Calculator",
+  "shortBenefit": "Timber volume and cost for furniture or construction.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the volume of wood or timber required for a carpentry project and estimate material cost based on wood type and grade.",
+  "seo": {
+    "title": "Wood & Timber Requirement Calculator — CFT & Cost Estimator | Varada Nexus",
+    "description": "Free wood requirement calculator. Estimate timber volume in cubic feet and cost for furniture, doors or structural wood work.",
+    "keywords": [
+      "wood requirement calculator",
+      "timber cost calculator india",
+      "cft wood calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "pieces",
+      "label": "Number of pieces",
+      "type": "number",
+      "default": 10,
+      "min": 1
+    },
+    {
+      "id": "length",
+      "label": "Piece length (ft)",
+      "type": "number",
+      "default": 7,
+      "min": 0.5
+    },
+    {
+      "id": "width",
+      "label": "Piece width (inches)",
+      "type": "number",
+      "default": 4,
+      "min": 1
+    },
+    {
+      "id": "thickness",
+      "label": "Thickness (inches)",
+      "type": "number",
+      "default": 2,
+      "min": 0.5
+    },
+    {
+      "id": "wood",
+      "label": "Wood type",
+      "type": "select",
+      "default": "teak",
+      "options": [
+        {
+          "v": "teak",
+          "t": "Teak (₹3,500–5,000/CFT)"
+        },
+        {
+          "v": "sal",
+          "t": "Sal / Shisham (₹1,800–2,800/CFT)"
+        },
+        {
+          "v": "pine",
+          "t": "Pine / Deodar (₹800–1,200/CFT)"
+        },
+        {
+          "v": "plywood",
+          "t": "Plywood sheet (₹90–180/sq ft)"
+        },
+        {
+          "v": "mdf",
+          "t": "MDF sheet (₹60–100/sq ft)"
+        }
+      ]
+    },
+    {
+      "id": "price",
+      "label": "Price per CFT (₹)",
+      "type": "number",
+      "default": 4000,
+      "min": 100,
+      "hint": "1 CFT = 1 ft × 1 ft × 1 ft"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total volume (CFT)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total wood cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Per piece",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "1 CFT = 1 ft × 1 ft × 1 ft. Volume per piece = length × (width/12) × (thickness/12). Wastage 15% added for cutting. Sheet materials billed per sq ft.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is timber volume calculated in CFT?",
+      "a": "Volume (CFT) = length (ft) × width (ft) × thickness (ft). For a 7 ft × 4 inch × 2 inch piece: 7 × (4/12) × (2/12) = 0.389 CFT."
+    },
+    {
+      "q": "What is the price of teak wood in India?",
+      "a": "Teak (Sagwan) typically costs ₹3,000–6,000 per CFT depending on grade and region; premium Burma teak can go up to ₹8,000–12,000 per CFT."
+    },
+    {
+      "q": "Why add 15% wastage for timber?",
+      "a": "Sawing, planning, defect removal and joint cutting typically waste 10–20% of rough timber volume; 15% is a standard allowance for carpentry work."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

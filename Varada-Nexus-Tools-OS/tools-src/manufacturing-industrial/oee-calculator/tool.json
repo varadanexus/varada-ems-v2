@@ -1,0 +1,93 @@
+{
+  "id": "oee-calculator",
+  "category": "manufacturing-industrial",
+  "kind": "calculator",
+  "name": "OEE Calculator",
+  "shortBenefit": "Overall Equipment Effectiveness from availability, performance, quality.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate Overall Equipment Effectiveness (OEE) from availability, performance and quality percentages, and see how it compares to world-class benchmarks.",
+  "seo": {
+    "title": "OEE Calculator — Overall Equipment Effectiveness | Varada Nexus",
+    "description": "Free OEE calculator. Combine availability, performance and quality to get Overall Equipment Effectiveness and benchmark it.",
+    "keywords": [
+      "oee calculator",
+      "overall equipment effectiveness",
+      "manufacturing efficiency calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "availability",
+      "label": "Availability (%)",
+      "type": "number",
+      "default": 90,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "performance",
+      "label": "Performance (%)",
+      "type": "number",
+      "default": 95,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "quality",
+      "label": "Quality (%)",
+      "type": "number",
+      "default": 99,
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Factor",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "OEE",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Rating",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "World-class gap",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "OEE = Availability × Performance × Quality. World-class OEE is around 85%; 60% is typical and below 40% is low.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is OEE calculated?",
+      "a": "OEE = Availability% × Performance% × Quality%. For example, 90% × 95% × 99% ≈ 84.6%."
+    },
+    {
+      "q": "What is a good OEE score?",
+      "a": "85% is considered world-class for discrete manufacturing; 60% is fairly typical; under 40% indicates significant losses."
+    },
+    {
+      "q": "What do the three factors mean?",
+      "a": "Availability = uptime vs planned time; Performance = actual vs ideal speed; Quality = good units vs total units."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

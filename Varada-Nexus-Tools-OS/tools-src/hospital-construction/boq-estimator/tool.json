@@ -1,0 +1,87 @@
+{
+  "id": "boq-estimator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "BOQ Estimator",
+  "shortBenefit": "High-level bill of quantities cost split by area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Generate a high-level Bill of Quantities cost split — substructure, superstructure, finishes, MEP and external works — from built-up area and an average rate.",
+  "seo": {
+    "title": "BOQ Estimator — Bill of Quantities Cost Split by Area | Varada Nexus",
+    "description": "Free BOQ estimator. Split building cost into substructure, superstructure, finishes, MEP and external works from area and rate.",
+    "keywords": [
+      "boq estimator",
+      "bill of quantities calculator",
+      "construction boq split"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Built-up area (sq ft)",
+      "type": "number",
+      "default": 50000,
+      "min": 0
+    },
+    {
+      "id": "rate",
+      "label": "Average rate (₹/sq ft)",
+      "type": "number",
+      "default": 2500,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "BOQ head",
+      "share",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total BOQ",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Superstructure",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Finishes",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Total = area × rate. Indicative split: substructure 15%, superstructure 30%, finishes 25%, MEP 22%, external & site 8%. Actual BOQ depends on design and specifications.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a BOQ?",
+      "a": "A Bill of Quantities itemises the materials, parts and labour (and their costs) for a construction project."
+    },
+    {
+      "q": "How is a rough BOQ split?",
+      "a": "A common breakdown is substructure ~15%, superstructure ~30%, finishes ~25%, MEP ~22% and external works ~8%."
+    },
+    {
+      "q": "Is this a detailed BOQ?",
+      "a": "No, this is a high-level cost split for early budgeting; a detailed BOQ is prepared from drawings by a quantity surveyor."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

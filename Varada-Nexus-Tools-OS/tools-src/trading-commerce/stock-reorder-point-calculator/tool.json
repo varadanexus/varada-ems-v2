@@ -1,0 +1,127 @@
+{
+  "id": "stock-reorder-point-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Stock Reorder Point Calculator",
+  "shortBenefit": "Never stock out — calculate when to reorder and how much",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Determine the precise reorder point and Economic Order Quantity for each product in your inventory to minimise stockouts and excess holding costs simultaneously.",
+  "seo": {
+    "title": "Stock Reorder Point Calculator – EOQ Safety Stock India",
+    "description": "Calculate stock reorder point, safety stock and Economic Order Quantity (EOQ). Prevent stockouts while minimising holding costs for trading businesses.",
+    "keywords": [
+      "reorder point calculator",
+      "EOQ calculator India",
+      "safety stock calculator",
+      "inventory reorder level",
+      "economic order quantity"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "daily_demand",
+      "label": "Average Daily Demand (units)",
+      "type": "number",
+      "default": 50,
+      "min": 1
+    },
+    {
+      "id": "lead_time_days",
+      "label": "Supplier Lead Time (days)",
+      "type": "number",
+      "default": 7,
+      "min": 1
+    },
+    {
+      "id": "max_daily_demand",
+      "label": "Maximum Daily Demand (units)",
+      "type": "number",
+      "default": 80,
+      "min": 1,
+      "hint": "For safety stock calculation"
+    },
+    {
+      "id": "annual_demand",
+      "label": "Annual Demand (units)",
+      "type": "number",
+      "default": 18000,
+      "min": 1
+    },
+    {
+      "id": "ordering_cost",
+      "label": "Cost per Order (₹)",
+      "type": "number",
+      "default": 500,
+      "min": 1,
+      "hint": "Purchase order processing cost"
+    },
+    {
+      "id": "unit_cost",
+      "label": "Unit Purchase Cost (₹)",
+      "type": "number",
+      "default": 400,
+      "min": 1
+    },
+    {
+      "id": "holding_rate",
+      "label": "Annual Holding Cost (% of unit cost)",
+      "type": "number",
+      "default": 25,
+      "min": 1,
+      "max": 80
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Parameter",
+      "Formula",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Reorder Point",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Safety Stock",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "EOQ (units)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Safety stock = (Max daily demand − avg demand) × lead time. EOQ = √(2 × annual demand × ordering cost / holding cost per unit).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What happens if I reorder too late?",
+      "a": "Stockouts mean lost sales, emergency procurement at high cost, and damaged customer relationships. Missed deliveries can cause contract penalties in B2B trading."
+    },
+    {
+      "q": "What is safety stock?",
+      "a": "Safety stock is buffer inventory held to absorb demand spikes and supplier delays. It is the minimum stock you should never go below before placing the next order."
+    },
+    {
+      "q": "Should I use EOQ for all products?",
+      "a": "EOQ works best for items with relatively stable demand. For high-value, slow-moving items use Just-In-Time. For highly seasonal items, use seasonal demand profiles instead."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

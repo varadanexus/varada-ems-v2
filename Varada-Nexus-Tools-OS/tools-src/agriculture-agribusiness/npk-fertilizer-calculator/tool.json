@@ -1,0 +1,97 @@
+{
+  "id": "npk-fertilizer-calculator",
+  "category": "agriculture-agribusiness",
+  "kind": "calculator",
+  "name": "NPK Fertilizer Calculator",
+  "shortBenefit": "Convert N-P-K requirement into bags of Urea, DAP and MOP.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Convert your recommended nitrogen, phosphorus and potassium dose per acre into actual bags of Urea, DAP and MOP for your field.",
+  "seo": {
+    "title": "NPK Fertilizer Calculator — Urea, DAP & MOP Bags by Acre | Varada Nexus",
+    "description": "Free NPK fertilizer calculator. Convert N-P-K recommendation into bags of Urea, DAP and MOP for your field area.",
+    "keywords": [
+      "npk calculator",
+      "fertilizer calculator",
+      "urea dap mop calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Area (acres)",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "n",
+      "label": "Nitrogen N (kg/acre)",
+      "type": "number",
+      "default": 40,
+      "min": 0
+    },
+    {
+      "id": "p",
+      "label": "Phosphorus P₂O₅ (kg/acre)",
+      "type": "number",
+      "default": 20,
+      "min": 0
+    },
+    {
+      "id": "k",
+      "label": "Potassium K₂O (kg/acre)",
+      "type": "number",
+      "default": 20,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Fertilizer",
+      "nutrient basis",
+      "Quantity"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Urea",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "DAP",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "MOP",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Standard grades: Urea 46% N, DAP 46% P₂O₅ + 18% N, MOP 60% K₂O. Phosphorus is met via DAP first, the nitrogen it supplies is deducted, and the balance N is met with Urea. Bags are 50 kg.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I convert NPK recommendation to fertilizer bags?",
+      "a": "Meet P₂O₅ with DAP (46% P), subtract the N that DAP already supplies (18%), meet the remaining N with Urea (46% N) and K₂O with MOP (60% K)."
+    },
+    {
+      "q": "Why deduct nitrogen from DAP?",
+      "a": "DAP contains 18% nitrogen, so it already supplies part of your nitrogen need — ignoring it would over-apply urea."
+    },
+    {
+      "q": "What is the bag size assumed?",
+      "a": "Urea, DAP and MOP bags are taken as 50 kg each."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

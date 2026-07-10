@@ -1,0 +1,94 @@
+{
+  "id": "construction-timeline-planner",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Construction Timeline Planner",
+  "shortBenefit": "Project duration in months from area and build speed.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate a construction project’s duration from built-up area and monthly build speed, including design/approvals and finishing phases.",
+  "seo": {
+    "title": "Construction Timeline Planner — Project Duration by Area | Varada Nexus",
+    "description": "Free construction timeline planner. Estimate project duration in months from built-up area and build speed, with phase split.",
+    "keywords": [
+      "construction timeline calculator",
+      "project duration estimator",
+      "construction schedule planner"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Built-up area (sq ft)",
+      "type": "number",
+      "default": 100000,
+      "min": 0
+    },
+    {
+      "id": "speed",
+      "label": "Build speed (sq ft/month)",
+      "type": "number",
+      "default": 8000,
+      "min": 1
+    },
+    {
+      "id": "design",
+      "label": "Design & approvals (months)",
+      "type": "number",
+      "default": 3,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Phase",
+      "",
+      "Months"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total duration",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Construction",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Design & approvals",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Construction months = area ÷ build speed. Finishing & MEP commissioning ≈ 25% of construction. Total = design + construction + finishing. Weather, funding and approvals can extend this.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How long does construction take?",
+      "a": "Structure time ≈ area ÷ build speed; add design/approvals up front and finishing/commissioning at the end."
+    },
+    {
+      "q": "What build speed should I use?",
+      "a": "It varies with labour, method and site; a few thousand sq ft per month is common for conventional RCC work."
+    },
+    {
+      "q": "What can delay a project?",
+      "a": "Approvals, funding gaps, monsoon, material shortages and design changes are the usual causes."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

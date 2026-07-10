@@ -1,0 +1,118 @@
+{
+  "id": "overburden-removal-cost-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Overburden Removal Cost Calculator",
+  "shortBenefit": "Calculate overburden stripping cost for open-cast mining",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the total cost of removing overburden (waste rock and soil) to access ore in open-cast mines, using the strip ratio and excavation unit rates.",
+  "seo": {
+    "title": "Overburden Removal Cost Calculator – Strip Ratio Mining India",
+    "description": "Calculate overburden stripping cost for open cast mines. Uses strip ratio and unit excavation rates to estimate total OB removal and ore extraction cost.",
+    "keywords": [
+      "overburden removal calculator",
+      "strip ratio calculator mining",
+      "OB removal cost India",
+      "open cast mine stripping cost",
+      "waste rock removal mining"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "ore_production_mt",
+      "label": "Ore Production (MT/month)",
+      "type": "number",
+      "default": 50000,
+      "min": 1
+    },
+    {
+      "id": "strip_ratio",
+      "label": "Strip Ratio (BCM per MT ore)",
+      "type": "number",
+      "default": 3,
+      "min": 0,
+      "hint": "Bank cubic metres of waste per metric tonne of ore"
+    },
+    {
+      "id": "ob_excavation_cost",
+      "label": "OB Excavation Cost (₹/BCM)",
+      "type": "number",
+      "default": 120,
+      "min": 0
+    },
+    {
+      "id": "ob_transport_cost",
+      "label": "OB Transport / Dumping (₹/BCM)",
+      "type": "number",
+      "default": 80,
+      "min": 0
+    },
+    {
+      "id": "ore_excavation_cost",
+      "label": "Ore Excavation & Loading (₹/MT)",
+      "type": "number",
+      "default": 180,
+      "min": 0
+    },
+    {
+      "id": "drill_blast_cost",
+      "label": "Drill & Blast Cost (₹/BCM incl ore)",
+      "type": "number",
+      "default": 60,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Rate",
+      "Monthly Cost (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Stripping Cost / MT ore",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "OB Volume / Month",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total Mining Cost / Month",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "OB volume = ore production × strip ratio. All costs in ₹/BCM for waste and ₹/MT for ore.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is BCM and how is it different from MT?",
+      "a": "BCM (Bank Cubic Metre) is volume of rock in its natural (undisturbed) state. When blasted, rock swells 20–30% (Loose Cubic Metres). For cost purposes, BCM is used for design; after blasting use LCM."
+    },
+    {
+      "q": "What is a stripping ratio and how does it affect mine economics?",
+      "a": "Strip ratio = tonnes of waste / tonne of ore. A SR of 5:1 means you must remove 5 BCM of waste for every tonne of ore. High SR increases cost and is the primary reason mines become uneconomic."
+    },
+    {
+      "q": "When does a mine become economically unviable?",
+      "a": "When the cost of stripping + ore mining exceeds the net realisable value of the ore. Cut-off strip ratio = (ore value − ore processing cost) / OB removal cost per BCM."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

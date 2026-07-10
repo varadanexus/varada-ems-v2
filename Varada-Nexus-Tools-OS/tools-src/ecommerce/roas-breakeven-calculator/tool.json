@@ -1,0 +1,90 @@
+{
+  "id": "roas-breakeven-calculator",
+  "category": "ecommerce",
+  "kind": "calculator",
+  "name": "ROAS & Break-even ROAS Calculator",
+  "shortBenefit": "Actual ROAS plus the break-even ROAS your margin requires.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Compare your actual ROAS against the break-even ROAS implied by your product margin, so you know whether ad spend is truly profitable.",
+  "seo": {
+    "title": "ROAS Calculator — Actual vs Break-even ROAS by Margin | Varada Nexus",
+    "description": "Free ROAS calculator for e-commerce. Compare actual ROAS with the break-even ROAS set by your product margin.",
+    "keywords": [
+      "roas calculator",
+      "break even roas",
+      "ecommerce ad profitability"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "revenue",
+      "label": "Revenue from ads (₹)",
+      "type": "number",
+      "default": 300000,
+      "min": 0
+    },
+    {
+      "id": "spend",
+      "label": "Ad spend (₹)",
+      "type": "number",
+      "default": 75000,
+      "min": 0
+    },
+    {
+      "id": "margin",
+      "label": "Product margin (%)",
+      "type": "number",
+      "default": 35,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Actual ROAS",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Break-even ROAS",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Verdict",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "ROAS = revenue ÷ ad spend. Break-even ROAS = 100 ÷ margin%. If actual ROAS is above break-even ROAS, the campaign is profitable.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is break-even ROAS?",
+      "a": "It is the ROAS at which ad revenue exactly covers product cost and ad spend: 100 ÷ margin%. Above it you profit; below it you lose money."
+    },
+    {
+      "q": "How is ROAS calculated?",
+      "a": "ROAS = revenue attributable to ads ÷ ad spend."
+    },
+    {
+      "q": "Why does margin matter for ROAS?",
+      "a": "A low-margin product needs a much higher ROAS to be profitable than a high-margin one."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "E-Commerce",
+      "url": "/ecommerce.html"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "id": "employee-attrition-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Employee Attrition Cost Calculator",
+  "shortBenefit": "True cost of employee attrition and turnover.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the true financial cost of employee attrition including notice pay, recruitment, onboarding, productivity loss and knowledge transfer costs.",
+  "seo": {
+    "title": "Employee Attrition Cost Calculator — Turnover Cost India | Varada Nexus",
+    "description": "Free employee attrition calculator. Calculate true cost of employee turnover including recruitment, onboarding, productivity loss and knowledge transfer.",
+    "keywords": [
+      "employee attrition cost calculator",
+      "staff turnover cost calculator",
+      "employee retention roi india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "annual_ctc",
+      "label": "Departing employee annual CTC (₹)",
+      "type": "number",
+      "default": 700000,
+      "min": 1
+    },
+    {
+      "id": "notice_buyout",
+      "label": "Notice buy-out / garden leave cost (₹)",
+      "type": "number",
+      "default": 0,
+      "min": 0
+    },
+    {
+      "id": "recruitment_cost",
+      "label": "Recruitment cost for replacement (₹)",
+      "type": "number",
+      "default": 70000,
+      "min": 0
+    },
+    {
+      "id": "onboarding_months",
+      "label": "Onboarding & ramp-up time (months)",
+      "type": "number",
+      "default": 3,
+      "min": 1,
+      "max": 12
+    },
+    {
+      "id": "productivity_pct",
+      "label": "Productivity during ramp-up (%)",
+      "type": "number",
+      "default": 50,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "knowledge_loss",
+      "label": "Knowledge transfer / documentation cost (₹)",
+      "type": "number",
+      "default": 15000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Component",
+      "",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total attrition cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Attrition cost as % of CTC",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Productivity loss cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Monthly CTC = annual ÷ 12. Productivity loss = monthly CTC × ramp-up months × (1 − productivity%). Total includes recruitment + productivity loss + knowledge transfer + notice cost.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the average cost of employee attrition?",
+      "a": "Industry research suggests the cost of attrition is 50–200% of annual salary depending on role seniority. Specialised roles (tech, healthcare) are at the higher end."
+    },
+    {
+      "q": "How do I reduce employee attrition?",
+      "a": "Key levers: competitive compensation, career development paths, flexible working, strong manager relationships, recognition programmes and regular stay interviews."
+    },
+    {
+      "q": "What is the attrition rate formula?",
+      "a": "Attrition rate = (employees who left ÷ average employees) × 100. Healthy attrition in India is 10–15% for most industries; IT sector average is 20–25%."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

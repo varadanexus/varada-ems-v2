@@ -1,0 +1,131 @@
+{
+  "id": "freight-insurance-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Freight Insurance Cost Calculator",
+  "shortBenefit": "Cargo insurance premium for shipments.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate freight and cargo insurance premium for domestic and international shipments based on cargo value, route risk and coverage type.",
+  "seo": {
+    "title": "Freight Insurance Calculator — Cargo Insurance Premium | Varada Nexus",
+    "description": "Free freight insurance calculator. Calculate cargo insurance premium for domestic and international shipments based on cargo value and route risk.",
+    "keywords": [
+      "freight insurance calculator",
+      "cargo insurance premium",
+      "marine insurance calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cargo_value",
+      "label": "Cargo / shipment value (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 1000
+    },
+    {
+      "id": "mode",
+      "label": "Transport mode",
+      "type": "select",
+      "default": "road",
+      "options": [
+        {
+          "v": "road",
+          "t": "Road (domestic)"
+        },
+        {
+          "v": "rail",
+          "t": "Rail (domestic)"
+        },
+        {
+          "v": "sea",
+          "t": "Sea (international)"
+        },
+        {
+          "v": "air",
+          "t": "Air (international)"
+        }
+      ]
+    },
+    {
+      "id": "coverage",
+      "label": "Coverage type",
+      "type": "select",
+      "default": "icc_a",
+      "options": [
+        {
+          "v": "icc_a",
+          "t": "ICC A / All Risk (broadest)"
+        },
+        {
+          "v": "icc_c",
+          "t": "ICC C / Named Perils"
+        },
+        {
+          "v": "basic",
+          "t": "Basic cover only"
+        }
+      ]
+    },
+    {
+      "id": "deductible",
+      "label": "Deductible amount (₹)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Insurance premium",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Rate %",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Coverage (after deductible)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Indicative rates: Road 0.08–0.15%, Rail 0.06–0.12%, Sea ICC-A 0.10–0.20%, Air ICC-A 0.05–0.12%. All-risk coverage at 1.4× basic rate. Consult insurer for actual quotes.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Is freight insurance mandatory?",
+      "a": "No, it is not mandatory but strongly recommended. Most banks financing trade require marine insurance for L/C shipments. Carrier liability under Carriage of Goods Act is limited."
+    },
+    {
+      "q": "What does All Risk (ICC A) cargo insurance cover?",
+      "a": "ICC A covers all physical loss or damage to cargo from any external cause, including water damage, theft, rough handling and breakage. Exclusions include inherent vice, delay and intentional damage."
+    },
+    {
+      "q": "How do I file a cargo insurance claim?",
+      "a": "Immediately notify insurer (within 24 hours for visible damage). Get survey done by the insurer's surveyor. Document damage with photos, packing list and delivery note. File within the claim period (usually 60–90 days)."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

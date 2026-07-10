@@ -1,0 +1,51 @@
+{
+  "id":"hospital-construction-cost-calculator",
+  "category":"healthcare",
+  "name":"Hospital Construction Cost Calculator",
+  "shortBenefit":"Estimate hospital project cost per bed and per sq ft (India).",
+  "status":"published","phase":1,"updated":"2026-07-09",
+  "intro":"Estimate total project cost, cost per bed and cost per sq ft for a hospital in India — civil, MEP, HVAC, medical gas, equipment and contingency. Benchmarks tuned for 2026.",
+  "seo":{
+    "title":"Hospital Construction Cost Calculator India (2026) | Per Bed & Sq Ft | Varada Nexus",
+    "description":"Free hospital construction cost calculator for India. Estimate civil, MEP, HVAC, medical gas & equipment cost per bed and per sq ft. Instant project budget.",
+    "keywords":["hospital construction cost india","cost per bed","hospital project budget"]
+  },
+  "inputs":[
+    {"id":"beds","label":"Number of beds","type":"number","default":100,"min":1},
+    {"id":"type","label":"Hospital type","type":"select","default":"1100","options":[
+      {"v":"900","t":"General hospital (~900 sq ft/bed)"},
+      {"v":"1100","t":"Multispecialty (~1,100 sq ft/bed)"},
+      {"v":"1400","t":"Super-specialty / Tertiary (~1,400 sq ft/bed)"}]},
+    {"id":"location","label":"Project location (city / town / state)","type":"text","placeholder":"e.g. Nagpur, Maharashtra"},
+    {"id":"city","label":"City cost tier (multiplier)","type":"select","default":"1.0","options":[
+      {"v":"1.15","t":"Metro (Mumbai, Delhi, Bengaluru) x1.15"},
+      {"v":"1.0","t":"Tier-2 city x1.00"},
+      {"v":"0.9","t":"Tier-3 / rural x0.90"}]},
+    {"id":"areaOverride","label":"Built-up area override (sq ft) — optional","type":"number","min":0,"placeholder":"Leave blank to auto-calc"},
+    {"id":"quality","label":"Construction / finishing quality","type":"select","default":"3500","options":[
+      {"v":"2500","t":"Standard — Rs 2,500/sq ft civil"},
+      {"v":"3500","t":"Premium — Rs 3,500/sq ft civil"},
+      {"v":"4500","t":"Super-premium — Rs 4,500/sq ft civil"}]},
+    {"id":"equip","label":"Medical equipment budget (% of building)","type":"select","default":"40","options":[
+      {"v":"0","t":"Exclude equipment"},{"v":"30","t":"Basic — 30%"},
+      {"v":"40","t":"Standard multispecialty — 40%"},{"v":"55","t":"Advanced / super-specialty — 55%"}]},
+    {"id":"contingency","label":"Contingency (%)","type":"number","default":7,"min":0,"max":20},
+    {"id":"land","label":"Land cost (Rs) — optional","type":"number","min":0,"placeholder":"0"}
+  ],
+  "results":{"kpis":[
+    {"key":"area","label":"Total built-up area","format":"area"},
+    {"key":"total","label":"Total project cost","format":"lakhCr"},
+    {"key":"perBed","label":"Cost per bed","format":"lakhCr"}]},
+  "assumptions":"Rates are indicative 2026 India planning assumptions, not quotes. Civil Rs 2,500–4,500/sq ft by grade; MEP 25%, HVAC 15%, medical gas + fire 8% of civil; equipment 0–55% of building; contingency 7%. City multipliers Metro 1.15 / Tier-2 1.00 / Tier-3 0.90. Editable in logic.js CONFIG.",
+  "disclaimer":"This calculator provides a rough budgetary estimate for preliminary planning only. It does NOT constitute engineering, architectural, structural, financial, legal, or NABH/NABL advice and must not be used for tendering, funding or construction decisions. Obtain a validated, drawing-based estimate from qualified professionals. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq":[
+    {"q":"What is the average hospital construction cost per bed in India?","a":"For a multispecialty hospital, all-in cost typically ranges Rs 25–60 lakh per bed depending on city tier, specialty mix, finishing and equipment. Civil work alone is usually Rs 2,500–4,500 per sq ft."},
+    {"q":"How much built-up area is needed per hospital bed?","a":"General ~800–1,000 sq ft/bed, multispecialty ~1,000–1,200 sq ft/bed, super-specialty ~1,200–1,600 sq ft/bed including OTs, ICUs, diagnostics and support areas."},
+    {"q":"Does this include medical equipment cost?","a":"Yes, optionally. Equipment for a multispecialty hospital typically adds 30–50% on top of building cost."},
+    {"q":"Is land cost included?","a":"Land is optional and excluded by default. Enter a land value to see the full outlay."}
+  ],
+  "relatedServices":[
+    {"label":"Hospital Construction","url":"/services/hospital-construction/"},
+    {"label":"Hospital Consultancy","url":"/services/hospital-consultancy/"}
+  ]
+}

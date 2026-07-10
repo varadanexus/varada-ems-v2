@@ -1,0 +1,90 @@
+{
+  "id": "eoq-calculator",
+  "category": "procurement-supply-chain",
+  "kind": "calculator",
+  "name": "EOQ Calculator",
+  "shortBenefit": "Economic Order Quantity, orders per year and cycle length.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the Economic Order Quantity (EOQ) that minimises total ordering and holding cost, plus the number of orders per year and days between orders.",
+  "seo": {
+    "title": "EOQ Calculator — Economic Order Quantity & Reorder Frequency | Varada Nexus",
+    "description": "Free EOQ calculator. Find the economic order quantity, orders per year and order cycle from demand, ordering and holding cost.",
+    "keywords": [
+      "eoq calculator",
+      "economic order quantity",
+      "inventory ordering calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "demand",
+      "label": "Annual demand (units)",
+      "type": "number",
+      "default": 12000,
+      "min": 0
+    },
+    {
+      "id": "orderCost",
+      "label": "Cost per order (₹)",
+      "type": "number",
+      "default": 1200,
+      "min": 0
+    },
+    {
+      "id": "holding",
+      "label": "Holding cost per unit/year (₹)",
+      "type": "number",
+      "default": 30,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "EOQ",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Orders per year",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Days between orders",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "EOQ = √(2 × annual demand × ordering cost ÷ holding cost per unit per year). Assumes steady demand and constant costs.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is Economic Order Quantity?",
+      "a": "EOQ is the order size that minimises the combined cost of ordering and holding inventory: √(2DS ÷ H)."
+    },
+    {
+      "q": "How many times should I order per year?",
+      "a": "Orders per year = annual demand ÷ EOQ. Days between orders = 365 ÷ orders per year."
+    },
+    {
+      "q": "What are the assumptions of EOQ?",
+      "a": "Constant demand, fixed ordering cost and holding cost, and no stock-outs or quantity discounts."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Logistics",
+      "url": "/logistics.html"
+    }
+  ]
+}

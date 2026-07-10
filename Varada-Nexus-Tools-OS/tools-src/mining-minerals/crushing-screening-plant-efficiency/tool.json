@@ -1,0 +1,125 @@
+{
+  "id": "crushing-screening-plant-efficiency",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Crushing & Screening Plant Efficiency Calculator",
+  "shortBenefit": "Measure crushing and screening plant throughput and efficiency",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Evaluate the operational efficiency of mineral processing plants — crushers, screens and classifiers — to optimise throughput, reduce downtime and improve product quality.",
+  "seo": {
+    "title": "Crushing Screening Plant Efficiency Calculator – Mining India",
+    "description": "Calculate crushing and screening plant throughput, efficiency and cost per tonne. Identify bottlenecks in mineral processing for Indian mining operations.",
+    "keywords": [
+      "crushing plant efficiency calculator",
+      "screening plant throughput India",
+      "mineral processing efficiency",
+      "crusher productivity calculator",
+      "plant OEE mining India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "design_capacity_tph",
+      "label": "Design Capacity (TPH)",
+      "type": "number",
+      "default": 200,
+      "min": 1
+    },
+    {
+      "id": "actual_throughput_tph",
+      "label": "Actual Average Throughput (TPH)",
+      "type": "number",
+      "default": 160,
+      "min": 1
+    },
+    {
+      "id": "operating_hours_day",
+      "label": "Operating Hours per Day",
+      "type": "number",
+      "default": 16,
+      "min": 1,
+      "max": 24
+    },
+    {
+      "id": "downtime_hours_month",
+      "label": "Unplanned Downtime (hours/month)",
+      "type": "number",
+      "default": 40,
+      "min": 0
+    },
+    {
+      "id": "power_consumption_kw",
+      "label": "Total Power Consumption (kW)",
+      "type": "number",
+      "default": 500,
+      "min": 1
+    },
+    {
+      "id": "electricity_rate",
+      "label": "Electricity Rate (₹/kWh)",
+      "type": "number",
+      "default": 7,
+      "min": 1
+    },
+    {
+      "id": "maintenance_monthly",
+      "label": "Monthly Maintenance Cost (₹)",
+      "type": "number",
+      "default": 300000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Plant KPI",
+      "Calculation",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly Output (MT)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Processing Cost / MT",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Plant Efficiency %",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Available hours = operating hours × 30 − downtime. Monthly output = actual TPH × available hours. Efficiency = actual/design TPH.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What causes crushing plant downtime?",
+      "a": "Liner/jaw wear (scheduled), tramp metal (unscheduled), screen blinding, conveyor spillage, motor failures and feeder blockages. Predictive maintenance and online monitoring reduce unplanned downtime significantly."
+    },
+    {
+      "q": "What is a good crushing plant utilisation rate?",
+      "a": "Well-operated crushing plants achieve 75–85% utilisation. Below 65% indicates operational inefficiency or design issues. World-class operations target 90%+ with automated monitoring."
+    },
+    {
+      "q": "How do I reduce crushing cost per tonne?",
+      "a": "Maximise throughput (close to design), schedule maintenance in off-shifts, use wear-resistant liners for longer replacement intervals, feed consistent particle size to avoid oversize, and optimise screen aperture."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

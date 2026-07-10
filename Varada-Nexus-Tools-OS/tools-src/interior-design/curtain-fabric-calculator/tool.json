@@ -1,0 +1,137 @@
+{
+  "id": "curtain-fabric-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Curtain Fabric Calculator",
+  "shortBenefit": "Fabric quantity and cost for curtains by window size.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the fabric yardage and cost for curtains based on window dimensions, fullness ratio and lining choice.",
+  "seo": {
+    "title": "Curtain Fabric Calculator — Fabric Quantity & Cost Estimator | Varada Nexus",
+    "description": "Free curtain fabric calculator. Estimate fabric quantity and total cost for curtains by window size, fullness and lining.",
+    "keywords": [
+      "curtain fabric calculator",
+      "curtain material estimator",
+      "curtain cost calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "windows",
+      "label": "Number of windows",
+      "type": "number",
+      "default": 4,
+      "min": 1
+    },
+    {
+      "id": "win_w",
+      "label": "Window width (ft)",
+      "type": "number",
+      "default": 5,
+      "min": 1
+    },
+    {
+      "id": "win_h",
+      "label": "Drop / length (ft)",
+      "type": "number",
+      "default": 8,
+      "min": 1
+    },
+    {
+      "id": "fullness",
+      "label": "Fullness ratio",
+      "type": "select",
+      "default": "2",
+      "options": [
+        {
+          "v": "1.5",
+          "t": "1.5× (sheer, light)"
+        },
+        {
+          "v": "2",
+          "t": "2× (standard)"
+        },
+        {
+          "v": "2.5",
+          "t": "2.5× (pleated, full)"
+        }
+      ]
+    },
+    {
+      "id": "lining",
+      "label": "Lining",
+      "type": "select",
+      "default": "yes",
+      "options": [
+        {
+          "v": "no",
+          "t": "No lining"
+        },
+        {
+          "v": "yes",
+          "t": "Lining included"
+        }
+      ]
+    },
+    {
+      "id": "fabric_price",
+      "label": "Fabric price per metre (₹)",
+      "type": "number",
+      "default": 350,
+      "min": 50
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total fabric (metres)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Per window cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Fabric width assumed 54 inches (4.5 ft). Panels per window = 2. Fabric metres = (windows × 2 × width × fullness) ÷ fabric-width-in-ft × drop. Lining adds 25% to fabric cost. Stitching ~₹150/metre.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much fabric do I need for a 5 ft wide window?",
+      "a": "For a 5 ft window with 2× fullness and 8 ft drop, you need about 4–4.5 metres of 54-inch wide fabric per pair of curtains."
+    },
+    {
+      "q": "What is a fullness ratio for curtains?",
+      "a": "Fullness is how much wider the fabric is compared to the window. 1.5× is minimal; 2× is standard; 2.5–3× gives a luxurious gathered look."
+    },
+    {
+      "q": "What is the average stitching cost for curtains in India?",
+      "a": "Curtain stitching costs ₹100–200 per metre for plain curtains; eyelet/pinch-pleat work costs ₹150–250 per metre depending on complexity."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

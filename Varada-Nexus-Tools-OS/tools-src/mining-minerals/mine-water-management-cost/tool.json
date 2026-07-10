@@ -1,0 +1,121 @@
+{
+  "id": "mine-water-management-cost",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mine Water Management Cost Calculator",
+  "shortBenefit": "Estimate mine dewatering and water treatment costs",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the cost of mine dewatering, water treatment and effluent discharge compliance — a major recurring operating cost in both open-cast and underground mines.",
+  "seo": {
+    "title": "Mine Water Management Cost Calculator India – Dewatering",
+    "description": "Calculate mine dewatering and water treatment costs. Includes pump energy, sump capacity, treatment plant operation and discharge compliance for Indian mines.",
+    "keywords": [
+      "mine dewatering cost calculator",
+      "mine water treatment India",
+      "pit dewatering cost",
+      "mine effluent treatment",
+      "underground mine dewatering"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "water_inflow_m3h",
+      "label": "Water Inflow Rate (m³/hour)",
+      "type": "number",
+      "default": 200,
+      "min": 1
+    },
+    {
+      "id": "pump_head_m",
+      "label": "Total Pump Head (metres)",
+      "type": "number",
+      "default": 100,
+      "min": 10,
+      "hint": "Vertical lift + friction losses"
+    },
+    {
+      "id": "pump_efficiency",
+      "label": "Pump Efficiency (%)",
+      "type": "number",
+      "default": 70,
+      "min": 20,
+      "max": 95
+    },
+    {
+      "id": "electricity_rate",
+      "label": "Electricity Rate (₹/kWh)",
+      "type": "number",
+      "default": 7,
+      "min": 1
+    },
+    {
+      "id": "treatment_cost_per_m3",
+      "label": "Water Treatment Cost (₹/m³)",
+      "type": "number",
+      "default": 8,
+      "min": 0,
+      "hint": "Settling, pH correction, filtration"
+    },
+    {
+      "id": "operating_hours_day",
+      "label": "Pumping Hours per Day",
+      "type": "number",
+      "default": 20,
+      "min": 1,
+      "max": 24
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Parameter",
+      "Calculation",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly Dewatering Cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Cost per m³ Water",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Power Consumption (kW)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Power (kW) = (flow × head × density × g) / (pump efficiency × 1000). Water density = 1000 kg/m³, g = 9.81 m/s².",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the typical mine water inflow rate?",
+      "a": "Inflow varies significantly with rock type, depth and season. Coal mines may face 200–2,000 m³/hour in waterlogged regions. Hard rock mines typically 50–500 m³/hour. Monsoon inflows can be 5–10× normal."
+    },
+    {
+      "q": "Can mine water be reused?",
+      "a": "Yes. Treated mine water can be used for dust suppression, explosive preparation (controlled), and after treatment, for industrial cooling. CPCB/SPCB discharge norms must be met for any disposal to surface waters."
+    },
+    {
+      "q": "What pumping system is used in deep mines?",
+      "a": "Multi-stage dewatering: sump pumps at pit bottom transfer to intermediate sumps, main dewatering pumps lift to surface. Submersible and vertical turbine pumps are common for open-cast; shaft pumps for underground."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

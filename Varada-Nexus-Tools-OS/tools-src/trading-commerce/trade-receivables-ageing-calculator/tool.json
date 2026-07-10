@@ -1,0 +1,117 @@
+{
+  "id": "trade-receivables-ageing-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Trade Receivables Ageing Calculator",
+  "shortBenefit": "Analyse outstanding receivables and estimate bad debt exposure",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Bucket your outstanding trade receivables by ageing — current, 30, 60, 90+ days — to assess collection health, estimate bad debt provisions and focus recovery efforts.",
+  "seo": {
+    "title": "Trade Receivables Ageing Calculator – Debtor Ageing India",
+    "description": "Analyse trade receivables by ageing buckets. Calculate bad debt provision and collection efficiency for trading businesses in India.",
+    "keywords": [
+      "trade receivables ageing India",
+      "debtor ageing calculator",
+      "bad debt provision calculator",
+      "accounts receivable ageing",
+      "collection efficiency trading"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "current",
+      "label": "Current (0–30 days) (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    },
+    {
+      "id": "days_30_60",
+      "label": "31–60 Days (₹)",
+      "type": "number",
+      "default": 200000,
+      "min": 0
+    },
+    {
+      "id": "days_60_90",
+      "label": "61–90 Days (₹)",
+      "type": "number",
+      "default": 100000,
+      "min": 0
+    },
+    {
+      "id": "days_90_plus",
+      "label": "91–180 Days (₹)",
+      "type": "number",
+      "default": 80000,
+      "min": 0
+    },
+    {
+      "id": "days_180_plus",
+      "label": "180+ Days (₹)",
+      "type": "number",
+      "default": 40000,
+      "min": 0
+    },
+    {
+      "id": "monthly_sales",
+      "label": "Average Monthly Sales (₹)",
+      "type": "number",
+      "default": 600000,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Ageing Bucket",
+      "Amount (₹)",
+      "Est. Bad Debt %"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Receivables",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Debtors Days (DSO)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Bad Debt Provision",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Bad debt %: 0–30d: 0%, 31–60d: 2%, 61–90d: 10%, 91–180d: 25%, 180+d: 50%. DSO = total receivables / (monthly sales / 30).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is Days Sales Outstanding (DSO)?",
+      "a": "DSO = (total receivables / annual sales) × 365. It measures average number of days to collect payment after a sale. Industry benchmark is typically 30–45 days for trading businesses."
+    },
+    {
+      "q": "When should I write off a receivable?",
+      "a": "Receivables over 180 days require serious review. Under IT Act, bad debt deduction needs genuine write-off in books. Issue legal notice before writing off; engage a collection agency for large amounts."
+    },
+    {
+      "q": "How to reduce overdue receivables?",
+      "a": "Credit check new customers before extending terms, enforce credit limits, send reminders at 15/30/45 days, incentivise early payment with 2% discount, and act fast on overdue accounts."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

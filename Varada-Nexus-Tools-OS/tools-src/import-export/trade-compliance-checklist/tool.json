@@ -1,0 +1,182 @@
+{
+  "id": "trade-compliance-checklist",
+  "category": "import-export",
+  "kind": "checklist",
+  "name": "Trade Compliance Checklist",
+  "shortBenefit": "Ensure exports meet all regulatory and legal compliance requirements",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Verify compliance across all dimensions of international trade — DGFT, RBI, customs, sanctions screening and end-use checks — before executing any export or import transaction.",
+  "seo": {
+    "title": "Trade Compliance Checklist India – Export Import Regulatory Check",
+    "description": "Comprehensive trade compliance checklist for Indian exporters and importers. Covers DGFT, RBI, customs, ECGC, sanctions, end-use certificates and dual-use checks.",
+    "keywords": [
+      "trade compliance checklist India",
+      "export compliance",
+      "DGFT compliance",
+      "RBI FEMA compliance",
+      "import export regulatory check"
+    ]
+  },
+  "buttonLabel": "Check Trade Compliance",
+  "checklist": [
+    {
+      "name": "DGFT & Export Licensing",
+      "items": [
+        {
+          "id": "tc1",
+          "text": "IEC code is active and updated with current bank / address details",
+          "critical": true
+        },
+        {
+          "id": "tc2",
+          "text": "Product is not on SCOMET restricted list without a valid licence",
+          "critical": true
+        },
+        {
+          "id": "tc3",
+          "text": "Export licence obtained where required (munitions, dual-use, SCOMET)",
+          "critical": true
+        },
+        {
+          "id": "tc4",
+          "text": "RCMC from relevant Export Promotion Council obtained for incentive claims"
+        },
+        {
+          "id": "tc5",
+          "text": "EPCG / Advance Licence obligations tracked and within export timeline"
+        }
+      ]
+    },
+    {
+      "name": "RBI / FEMA Compliance",
+      "items": [
+        {
+          "id": "tc6",
+          "text": "AD Code registered at port of shipment with authorised bank",
+          "critical": true
+        },
+        {
+          "id": "tc7",
+          "text": "Export realization expected within 9 months (FEMA timeline)",
+          "critical": true
+        },
+        {
+          "id": "tc8",
+          "text": "BRC (Bank Realisation Certificate) filed for previous shipments"
+        },
+        {
+          "id": "tc9",
+          "text": "No overdue export proceeds beyond 9 months without RBI extension"
+        },
+        {
+          "id": "tc10",
+          "text": "ODI/FDI compliance checked if exporting to a related party"
+        }
+      ]
+    },
+    {
+      "name": "Sanctions & End-Use Screening",
+      "items": [
+        {
+          "id": "tc11",
+          "text": "Buyer / country not on OFAC, EU, UN or Indian MEA sanctions list",
+          "critical": true
+        },
+        {
+          "id": "tc12",
+          "text": "End-use certificate obtained for dual-use or restricted goods",
+          "critical": true
+        },
+        {
+          "id": "tc13",
+          "text": "No diversion risk — destination not known for re-export to sanctioned nations"
+        },
+        {
+          "id": "tc14",
+          "text": "AML / KYC on foreign buyer completed"
+        }
+      ]
+    },
+    {
+      "name": "Customs & Documentation",
+      "items": [
+        {
+          "id": "tc15",
+          "text": "Correct HS code declared — classification verified, not guessed",
+          "critical": true
+        },
+        {
+          "id": "tc16",
+          "text": "Transaction value declared accurately — no under-invoicing",
+          "critical": true
+        },
+        {
+          "id": "tc17",
+          "text": "Packing list, invoice and BL values match exactly"
+        },
+        {
+          "id": "tc18",
+          "text": "Letter of Undertaking (LUT) filed for zero-rated GST exports"
+        },
+        {
+          "id": "tc19",
+          "text": "GSTR-1 export entries filed and matched with Shipping Bills"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Checklist covers general trade. Sector-specific rules (pharma, defence, chemicals) may require additional compliance. Consult a licensed CHA or trade compliance consultant.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is SCOMET and why does it matter?",
+      "a": "SCOMET is India's dual-use export control list. Exporting SCOMET items without a licence from DGFT is a criminal offence under FTDR Act, 1992."
+    },
+    {
+      "q": "What happens if export proceeds are not realised within 9 months?",
+      "a": "Apply to RBI/AD bank for extension with valid reasons. Non-realisation beyond permitted period attracts FEMA penalties and can affect IEC and credit facilities."
+    },
+    {
+      "q": "Do I need to screen every buyer for sanctions?",
+      "a": "Yes. Exporting to a sanctioned entity — even unknowingly — can result in severe penalties, export privilege denial and criminal prosecution."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

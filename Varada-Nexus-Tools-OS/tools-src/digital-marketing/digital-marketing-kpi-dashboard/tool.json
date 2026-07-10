@@ -1,0 +1,115 @@
+{
+  "id": "digital-marketing-kpi-dashboard",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Digital Marketing KPI Dashboard",
+  "shortBenefit": "Blended ROAS, CPL, CAC and LTV from campaign data.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate your key digital marketing KPIs — ROAS, CPL, CAC, LTV and payback period — from campaign spend and revenue data across all channels.",
+  "seo": {
+    "title": "Digital Marketing KPI Dashboard — ROAS CPL CAC LTV Calculator | Varada Nexus",
+    "description": "Free digital marketing KPI calculator. Compute ROAS, CPL, CAC, customer lifetime value and payback period from campaign spend and revenue.",
+    "keywords": [
+      "digital marketing kpi calculator",
+      "roas calculator",
+      "cac ltv calculator digital marketing"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "total_spend",
+      "label": "Total monthly marketing spend (₹)",
+      "type": "number",
+      "default": 100000,
+      "min": 1
+    },
+    {
+      "id": "revenue",
+      "label": "Revenue attributed to marketing (₹)",
+      "type": "number",
+      "default": 400000,
+      "min": 1
+    },
+    {
+      "id": "leads",
+      "label": "Total leads generated",
+      "type": "number",
+      "default": 200,
+      "min": 1
+    },
+    {
+      "id": "customers",
+      "label": "New customers acquired",
+      "type": "number",
+      "default": 20,
+      "min": 1
+    },
+    {
+      "id": "avg_revenue_customer",
+      "label": "Average revenue per customer/year (₹)",
+      "type": "number",
+      "default": 25000,
+      "min": 1
+    },
+    {
+      "id": "customer_lifespan",
+      "label": "Average customer lifespan (years)",
+      "type": "number",
+      "default": 3,
+      "min": 0.5
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "KPI",
+      "Formula",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "ROAS",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "CAC",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "LTV:CAC ratio",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "ROAS = revenue ÷ spend. CPL = spend ÷ leads. CAC = spend ÷ customers. LTV = avg revenue/customer × lifespan × 0.7 (margin). Payback = CAC ÷ monthly customer revenue.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good ROAS?",
+      "a": "ROAS of 3–5× (₹3–5 revenue per ₹1 spent) is the typical target; e-commerce often targets 4× minimum. Higher-margin products can sustain positive ROI at 2×."
+    },
+    {
+      "q": "What is the LTV:CAC ratio?",
+      "a": "LTV:CAC of 3:1 is the commonly cited healthy benchmark — you get ₹3 lifetime value for every ₹1 acquisition cost. Below 2:1 is unsustainable; above 5:1 may mean underinvestment."
+    },
+    {
+      "q": "How do I calculate Customer Acquisition Cost?",
+      "a": "CAC = total sales and marketing spend ÷ number of new customers acquired in that period. Include all direct costs: ad spend, team salaries, tools and agency fees."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

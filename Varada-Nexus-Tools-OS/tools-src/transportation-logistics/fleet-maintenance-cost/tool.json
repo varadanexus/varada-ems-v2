@@ -1,0 +1,122 @@
+{
+  "id": "fleet-maintenance-cost",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Fleet Maintenance Cost Calculator",
+  "shortBenefit": "Monthly fleet maintenance cost and cost per vehicle.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate total fleet maintenance cost including preventive maintenance, repairs, tyres and annual service costs across your vehicle fleet.",
+  "seo": {
+    "title": "Fleet Maintenance Cost Calculator — Fleet Management India | Varada Nexus",
+    "description": "Free fleet maintenance cost calculator. Calculate total and per-vehicle maintenance costs for truck and commercial vehicle fleets in India.",
+    "keywords": [
+      "fleet maintenance cost calculator",
+      "truck fleet maintenance cost",
+      "commercial vehicle maintenance budget"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "fleet_size",
+      "label": "Fleet size (vehicles)",
+      "type": "number",
+      "default": 10,
+      "min": 1
+    },
+    {
+      "id": "monthly_km",
+      "label": "Average km per vehicle per month",
+      "type": "number",
+      "default": 8000,
+      "min": 100
+    },
+    {
+      "id": "pm_cost_km",
+      "label": "Preventive maintenance cost (₹/km)",
+      "type": "number",
+      "default": 1.5,
+      "min": 0
+    },
+    {
+      "id": "tyre_km",
+      "label": "Tyre life (km per set)",
+      "type": "number",
+      "default": 60000,
+      "min": 10000
+    },
+    {
+      "id": "tyre_set_cost",
+      "label": "Tyre set cost (₹)",
+      "type": "number",
+      "default": 80000,
+      "min": 0
+    },
+    {
+      "id": "annual_service",
+      "label": "Annual service cost per vehicle (₹)",
+      "type": "number",
+      "default": 30000,
+      "min": 0
+    },
+    {
+      "id": "breakdown_cost",
+      "label": "Average monthly breakdown cost per vehicle (₹)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Component",
+      "Per Vehicle/Month",
+      "Fleet Total/Month"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly fleet maintenance cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per vehicle per month",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Maintenance cost per km",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Tyre cost/month = (monthly km ÷ tyre life) × tyre set cost. Annual service amortised monthly. PM cost per km applied to monthly km.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the rule of thumb for fleet maintenance budget?",
+      "a": "Budget 8–15% of vehicle replacement cost per year for maintenance. For a ₹25L truck, budget ₹2–3.75L/year. Higher for older vehicles (10+ years)."
+    },
+    {
+      "q": "What is preventive vs corrective maintenance?",
+      "a": "Preventive maintenance (PM) is scheduled servicing — oil changes, filter replacements, inspections — done to prevent breakdowns. Corrective maintenance is reactive repair after a breakdown."
+    },
+    {
+      "q": "How do I reduce fleet maintenance costs?",
+      "a": "Implement PM schedules, track vehicle health via telematics, train drivers on eco-driving and vehicle care, negotiate tyre and parts contracts, and track MTBF (mean time between failures)."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

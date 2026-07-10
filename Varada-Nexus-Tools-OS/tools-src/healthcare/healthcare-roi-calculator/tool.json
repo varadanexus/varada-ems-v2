@@ -1,0 +1,87 @@
+{
+  "id": "healthcare-roi-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Healthcare ROI Calculator",
+  "shortBenefit": "ROI % and payback period for a healthcare investment.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate return on investment and payback period for a healthcare project from the total investment and expected annual net profit.",
+  "seo": {
+    "title": "Healthcare ROI Calculator — Return & Payback for Hospital Projects | Varada Nexus",
+    "description": "Free healthcare ROI calculator. Get ROI percentage and payback period from investment and annual net profit for a hospital project.",
+    "keywords": [
+      "healthcare roi calculator",
+      "hospital roi",
+      "payback period calculator hospital"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "investment",
+      "label": "Total investment (₹)",
+      "type": "number",
+      "default": 500000000,
+      "min": 0
+    },
+    {
+      "id": "profit",
+      "label": "Annual net profit (₹)",
+      "type": "number",
+      "default": 75000000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Annual ROI",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Payback period",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "5-year return",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "ROI% = annual net profit ÷ investment × 100. Payback = investment ÷ annual net profit. Assumes steady profit and ignores financing cost and the time value of money.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is healthcare ROI calculated?",
+      "a": "ROI% = annual net profit ÷ total investment × 100. It shows the annual return relative to capital deployed."
+    },
+    {
+      "q": "What is payback period?",
+      "a": "Payback = total investment ÷ annual net profit — the number of years to recover the initial outlay."
+    },
+    {
+      "q": "Does this account for interest and inflation?",
+      "a": "No. For financed projects, use a discounted cash-flow (NPV/IRR) analysis for a fuller picture."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

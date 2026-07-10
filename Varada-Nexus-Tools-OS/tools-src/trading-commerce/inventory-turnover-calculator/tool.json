@@ -1,0 +1,106 @@
+{
+  "id": "inventory-turnover-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Inventory Turnover Calculator",
+  "shortBenefit": "Measure how fast your stock converts to sales",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate inventory turnover ratio and days sales in inventory to identify slow-moving stock, optimise ordering cycles and improve working capital efficiency.",
+  "seo": {
+    "title": "Inventory Turnover Calculator – Days Sales Inventory India",
+    "description": "Calculate inventory turnover ratio and days sales in inventory (DSI). Identify slow-moving stock and improve working capital for trading businesses.",
+    "keywords": [
+      "inventory turnover calculator",
+      "days sales inventory",
+      "stock turnover ratio India",
+      "inventory management calculator",
+      "working capital inventory"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cogs_annual",
+      "label": "Annual Cost of Goods Sold (₹)",
+      "type": "number",
+      "default": 5000000,
+      "min": 10000,
+      "hint": "Total purchase cost of goods sold in the year"
+    },
+    {
+      "id": "opening_inventory",
+      "label": "Opening Inventory Value (₹)",
+      "type": "number",
+      "default": 800000,
+      "min": 0
+    },
+    {
+      "id": "closing_inventory",
+      "label": "Closing Inventory Value (₹)",
+      "type": "number",
+      "default": 600000,
+      "min": 0
+    },
+    {
+      "id": "holding_cost_pct",
+      "label": "Annual Inventory Holding Cost (%)",
+      "type": "number",
+      "default": 20,
+      "min": 0,
+      "max": 50,
+      "hint": "Storage, insurance, obsolescence, finance cost"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "KPI",
+      "Formula",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Turnover Ratio",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Days Sales in Inventory",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Annual Holding Cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Average inventory = (opening + closing) / 2. DSI = 365 / turnover ratio. Holding cost on average inventory.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good inventory turnover ratio?",
+      "a": "Varies by industry: grocery 12–24x, electronics 6–12x, furniture 4–6x, jewellery 2–4x. Higher turnover generally means better cash efficiency but watch for stockout risk."
+    },
+    {
+      "q": "How do I improve inventory turnover?",
+      "a": "ABC analysis to prioritise fast movers, reduce reorder quantities for slow movers, use demand forecasting, negotiate just-in-time delivery, and run clearance promotions on dead stock."
+    },
+    {
+      "q": "What is Dead Stock and how costly is it?",
+      "a": "Dead stock is inventory with no sales for 6+ months. The true cost includes purchase price, storage, finance cost, and opportunity cost — typically 25–40% of inventory value per year."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

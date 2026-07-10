@@ -1,0 +1,109 @@
+{
+  "id": "attendance-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Attendance & Salary Deduction Calculator",
+  "shortBenefit": "Per-day salary and LOP deductions from attendance.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate salary deductions for Loss of Pay (LOP) days based on actual attendance, working days and salary structure.",
+  "seo": {
+    "title": "Attendance & Salary Deduction Calculator — LOP India | Varada Nexus",
+    "description": "Free attendance calculator. Calculate per-day salary and Loss of Pay (LOP) deductions from monthly attendance for payroll processing.",
+    "keywords": [
+      "attendance calculator",
+      "loss of pay calculator india",
+      "lop salary deduction calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "gross_monthly",
+      "label": "Monthly gross salary (₹)",
+      "type": "number",
+      "default": 40000,
+      "min": 1
+    },
+    {
+      "id": "working_days",
+      "label": "Working days in month",
+      "type": "number",
+      "default": 26,
+      "min": 20,
+      "max": 31
+    },
+    {
+      "id": "present_days",
+      "label": "Days present",
+      "type": "number",
+      "default": 22,
+      "min": 0
+    },
+    {
+      "id": "approved_leave",
+      "label": "Approved paid leave days",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "holidays",
+      "label": "Public holidays in month",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Days",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Salary payable",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "LOP deduction",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "LOP days",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "LOP days = working days − present days − approved leave − public holidays. Per-day salary = monthly gross ÷ working days. Salary payable = gross − (LOP days × daily rate).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is Loss of Pay (LOP)?",
+      "a": "LOP (Loss of Pay) is an unpaid absence — days when an employee is absent without approved leave. Salary is deducted for LOP days at the per-day rate."
+    },
+    {
+      "q": "How is per-day salary calculated?",
+      "a": "Per-day salary = monthly gross ÷ number of working days in the month (typically 26 or actual working days). Some companies use calendar days (30 or 31)."
+    },
+    {
+      "q": "Are public holidays counted as working days for salary?",
+      "a": "No — public holidays are paid days off. They are excluded from the LOP calculation as employees are not expected to work on those days."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

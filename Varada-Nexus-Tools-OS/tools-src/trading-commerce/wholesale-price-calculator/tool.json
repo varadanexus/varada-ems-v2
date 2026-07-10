@@ -1,0 +1,121 @@
+{
+  "id": "wholesale-price-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Wholesale Price Calculator",
+  "shortBenefit": "Set competitive wholesale prices from cost to retail",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate optimal wholesale pricing by stacking all costs and desired margins, ensuring healthy returns while leaving room for your distributor and retailer to make a profit.",
+  "seo": {
+    "title": "Wholesale Price Calculator – Distributor Retail Price India",
+    "description": "Calculate wholesale, distributor and retailer prices from your cost. Set margins at each level to build a profitable pricing chain for your trading business.",
+    "keywords": [
+      "wholesale price calculator",
+      "distributor price calculator India",
+      "retail price calculator",
+      "pricing chain calculator",
+      "wholesale margin India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "cogs_unit",
+      "label": "Cost of Goods per Unit (₹)",
+      "type": "number",
+      "default": 300,
+      "min": 1
+    },
+    {
+      "id": "overheads_unit",
+      "label": "Overheads per Unit (₹)",
+      "type": "number",
+      "default": 40,
+      "min": 0
+    },
+    {
+      "id": "mfg_margin",
+      "label": "Your (Manufacturer/Trader) Margin (%)",
+      "type": "number",
+      "default": 20,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "distributor_margin",
+      "label": "Distributor Margin (%)",
+      "type": "number",
+      "default": 15,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "retailer_margin",
+      "label": "Retailer Margin (%)",
+      "type": "number",
+      "default": 30,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "gst_rate",
+      "label": "GST Rate (%)",
+      "type": "number",
+      "default": 12,
+      "min": 0,
+      "max": 28
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Price Level",
+      "Ex-GST (₹)",
+      "Incl GST (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Your Selling Price",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "MRP (Consumer Price)",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Your Profit / Unit",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Each level margin applied on own selling price (not on cost). GST computed on each level.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is MRP and is it mandatory?",
+      "a": "MRP (Maximum Retail Price) is the maximum price a retailer may charge consumers. Under Legal Metrology Act, it must be printed on pre-packaged goods. Selling above MRP is an offence."
+    },
+    {
+      "q": "What is the difference between trade discount and margin?",
+      "a": "Margin is profit as % of selling price. Trade discount is % off MRP given to channel. A 30% margin = 30% trade discount off the MRP to arrive at retailer landing price."
+    },
+    {
+      "q": "How do I set price bands for different channels?",
+      "a": "Set separate price lists: Manufacturer Selling Price (MSP) → Distributor Price (DP) → Retailer Price (RP) → Consumer Price (MRP). Each level should have 10–40% margin to stay motivated."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,135 @@
+{
+  "id": "mining-environmental-compliance-cost",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mining Environmental Compliance Cost Calculator",
+  "shortBenefit": "Estimate environmental compliance costs for mining operations",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Budget for environmental management obligations in mining — afforestation, water treatment, dust suppression, monitoring and statutory clearance fees.",
+  "seo": {
+    "title": "Mining Environmental Compliance Cost Calculator India",
+    "description": "Estimate environmental compliance costs for mines in India. Covers EMP, afforestation levy, dust suppression, effluent treatment and monitoring.",
+    "keywords": [
+      "mining environmental compliance cost",
+      "EMP cost mining India",
+      "forest diversion mining cost",
+      "afforestation levy mining",
+      "mine environment management"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "mine_area_ha",
+      "label": "Mining Lease Area (ha)",
+      "type": "number",
+      "default": 100,
+      "min": 0.1
+    },
+    {
+      "id": "forest_area_ha",
+      "label": "Forest Area Diverted (ha)",
+      "type": "number",
+      "default": 20,
+      "min": 0,
+      "hint": "For NPV and CA levy calculation"
+    },
+    {
+      "id": "npv_per_ha",
+      "label": "Net Present Value Levy (₹/ha)",
+      "type": "number",
+      "default": 1000000,
+      "min": 0,
+      "hint": "Payable to CAMPA for forest diversion"
+    },
+    {
+      "id": "ca_ratio",
+      "label": "Compensatory Afforestation Ratio",
+      "type": "number",
+      "default": 2,
+      "min": 1,
+      "max": 5,
+      "hint": "Typically 1:2 (non-forest) or 1:1 degraded forest"
+    },
+    {
+      "id": "afforestation_cost_per_ha",
+      "label": "Afforestation Cost (₹/ha)",
+      "type": "number",
+      "default": 300000,
+      "min": 0
+    },
+    {
+      "id": "dust_suppression_monthly",
+      "label": "Dust Suppression (₹/month)",
+      "type": "number",
+      "default": 100000,
+      "min": 0
+    },
+    {
+      "id": "water_treatment_monthly",
+      "label": "Effluent/Mine Water Treatment (₹/month)",
+      "type": "number",
+      "default": 150000,
+      "min": 0
+    },
+    {
+      "id": "monitoring_annual",
+      "label": "Environmental Monitoring & Audit (₹/year)",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Environmental Cost",
+      "Basis",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "One-Time Env. Costs",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Annual Recurring Cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total 5-Year Env. Cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "NPV and CA are one-time at project start. Annual recurring = (dust + water) × 12 + monitoring. 5-year total = one-time + 5 × annual.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is NPV levy for forest land diversion?",
+      "a": "NPV (Net Present Value) compensates for loss of ecosystem services when forest is diverted for mining. Rates range from ₹5 lakh to ₹10+ lakh per hectare based on forest density. Paid to CAMPA (Compensatory Afforestation Fund)."
+    },
+    {
+      "q": "What is Compensatory Afforestation?",
+      "a": "For every hectare of forest diverted for mining, 2 hectares of non-forest land must be afforested (or 1 ha degraded forest restored). The cost is borne by the user agency (mine operator)."
+    },
+    {
+      "q": "What environmental clearances are required for mining?",
+      "a": "Above 5 ha: Environmental Clearance from MoEFCC / SEIAA. Forest diversion > 5 ha: FC from MoEFCC. Mines near wildlife sanctuaries / national parks need additional clearances. CTE and CTO from State Pollution Control Board required."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,129 @@
+{
+  "id": "furniture-budget-planner",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Furniture Budget Planner",
+  "shortBenefit": "Room-by-room furniture budget for a home or office.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan a room-by-room furniture budget for a complete home or office fit-out, with indicative cost ranges by quality tier.",
+  "seo": {
+    "title": "Furniture Budget Planner — Room-by-Room Cost Estimator | Varada Nexus",
+    "description": "Free furniture budget planner. Estimate furniture costs room by room for a complete home or office fit-out — budget, standard or premium.",
+    "keywords": [
+      "furniture budget planner",
+      "home furniture cost india",
+      "furniture cost estimator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "bhk",
+      "label": "Configuration",
+      "type": "select",
+      "default": "3bhk",
+      "options": [
+        {
+          "v": "1bhk",
+          "t": "1 BHK"
+        },
+        {
+          "v": "2bhk",
+          "t": "2 BHK"
+        },
+        {
+          "v": "3bhk",
+          "t": "3 BHK"
+        },
+        {
+          "v": "villa",
+          "t": "4 BHK / Villa"
+        },
+        {
+          "v": "office_sm",
+          "t": "Small office (<20 seats)"
+        },
+        {
+          "v": "office_lg",
+          "t": "Large office (>50 seats)"
+        }
+      ]
+    },
+    {
+      "id": "tier",
+      "label": "Quality tier",
+      "type": "select",
+      "default": "standard",
+      "options": [
+        {
+          "v": "budget",
+          "t": "Budget / Economy"
+        },
+        {
+          "v": "standard",
+          "t": "Standard / Mid-range"
+        },
+        {
+          "v": "premium",
+          "t": "Premium"
+        },
+        {
+          "v": "luxury",
+          "t": "Luxury"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Room / Area",
+      "Items",
+      "Budget"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total furniture cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Living room",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Per room average",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Indicative room budgets based on Indian market 2024. Includes essential furniture only; soft furnishings, lighting and décor accessories are separate.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the average furniture cost for a 3BHK in India?",
+      "a": "A standard mid-range 3BHK furniture budget runs ₹4–7 lakh; premium ₹8–15 lakh; luxury ₹18 lakh and above, excluding modular kitchen."
+    },
+    {
+      "q": "Should I buy ready-made or custom furniture?",
+      "a": "Custom furniture gives better space utilisation for irregular rooms; ready-made is faster and easier to replace. Many homeowners combine both."
+    },
+    {
+      "q": "Does this include mattresses and bed linen?",
+      "a": "Furniture estimates cover structural pieces. Mattresses, curtains, cushions, rugs and linen are soft-furnishing budgets estimated separately."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "id": "hospital-revenue-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Hospital Revenue Calculator",
+  "shortBenefit": "Daily, monthly and annual revenue from occupancy and ARPOB.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Project hospital inpatient revenue from bed count, occupancy rate and average revenue per occupied bed-day (ARPOB).",
+  "seo": {
+    "title": "Hospital Revenue Calculator — Daily, Monthly & Annual Revenue | Varada Nexus",
+    "description": "Free hospital revenue calculator. Project daily, monthly and annual inpatient revenue from beds, occupancy and ARPOB.",
+    "keywords": [
+      "hospital revenue calculator",
+      "arpob calculator",
+      "hospital income projection"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 150,
+      "min": 0
+    },
+    {
+      "id": "occ",
+      "label": "Occupancy (%)",
+      "type": "number",
+      "default": 75,
+      "min": 0,
+      "max": 100
+    },
+    {
+      "id": "arpob",
+      "label": "ARPOB — revenue per occupied bed-day (₹)",
+      "type": "number",
+      "default": 12000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Period",
+      "",
+      "Revenue"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly revenue",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Annual revenue",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Daily revenue",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Occupied beds = beds × occupancy%. Daily revenue = occupied beds × ARPOB. Monthly = ×30, annual = ×365. Inpatient revenue only; OPD and diagnostics are additional.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is hospital revenue estimated?",
+      "a": "Daily revenue = beds × occupancy% × ARPOB (average revenue per occupied bed-day). Scale by 30 or 365 for monthly/annual."
+    },
+    {
+      "q": "Does this include OPD and diagnostics?",
+      "a": "No, this projects inpatient bed revenue; outpatient, pharmacy and diagnostic income should be added separately."
+    },
+    {
+      "q": "What ARPOB should I use?",
+      "a": "ARPOB varies by city, specialty and payer mix — use your own realised figure or a comparable hospital’s benchmark."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

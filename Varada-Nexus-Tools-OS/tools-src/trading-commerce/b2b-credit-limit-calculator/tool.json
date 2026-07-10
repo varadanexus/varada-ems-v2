@@ -1,0 +1,153 @@
+{
+  "id": "b2b-credit-limit-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "B2B Credit Limit Calculator",
+  "shortBenefit": "Set safe credit limits for wholesale buyers based on financial strength",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Determine the maximum credit exposure for a business buyer by evaluating their monthly sales, payment history, net worth and industry risk — protecting your receivables book.",
+  "seo": {
+    "title": "B2B Credit Limit Calculator – Trade Credit Assessment India",
+    "description": "Calculate appropriate B2B credit limit for wholesale buyers. Based on monthly sales, payment history, net worth and industry risk for trading businesses.",
+    "keywords": [
+      "B2B credit limit calculator",
+      "trade credit assessment India",
+      "buyer credit limit trading",
+      "wholesale credit limit",
+      "credit risk calculator India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "buyer_monthly_sales",
+      "label": "Buyer's Monthly Sales (₹)",
+      "type": "number",
+      "default": 1000000,
+      "min": 0
+    },
+    {
+      "id": "payment_history",
+      "label": "Payment History Score",
+      "type": "select",
+      "default": "good",
+      "options": [
+        {
+          "v": "excellent",
+          "t": "Excellent (always on time)"
+        },
+        {
+          "v": "good",
+          "t": "Good (minor delays)"
+        },
+        {
+          "v": "average",
+          "t": "Average (occasional 30-day delays)"
+        },
+        {
+          "v": "poor",
+          "t": "Poor (frequent delays / disputes)"
+        }
+      ]
+    },
+    {
+      "id": "years_in_business",
+      "label": "Buyer's Years in Business",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "secured",
+      "label": "Security Available",
+      "type": "select",
+      "default": "none",
+      "options": [
+        {
+          "v": "none",
+          "t": "No security"
+        },
+        {
+          "v": "partial",
+          "t": "Partial security (PDC / guarantee)"
+        },
+        {
+          "v": "full",
+          "t": "Full security (property / FD)"
+        }
+      ]
+    },
+    {
+      "id": "industry_risk",
+      "label": "Industry Risk Level",
+      "type": "select",
+      "default": "medium",
+      "options": [
+        {
+          "v": "low",
+          "t": "Low risk (FMCG, pharma, staples)"
+        },
+        {
+          "v": "medium",
+          "t": "Medium risk (industrial, B2B)"
+        },
+        {
+          "v": "high",
+          "t": "High risk (construction, hospitality)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Factor",
+      "Score / Multiplier",
+      "Contribution"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Recommended Credit Limit",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Credit Period",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Risk Band",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Base limit = 20% of buyer monthly sales. Multipliers applied for payment history, tenure, security and industry risk.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How often should I review credit limits?",
+      "a": "Review annually or after any significant event — large order, late payment, change in buyer business, credit bureau alerts. For new buyers, start with 50% of calculated limit and review after 6 months."
+    },
+    {
+      "q": "What payment security should I take?",
+      "a": "For B2B credit above ₹5 lakh: post-dated cheques or signed agreements. Above ₹20 lakh: personal guarantee of promoter. Above ₹50 lakh: property / FD / bank guarantee."
+    },
+    {
+      "q": "Should I use a credit bureau report?",
+      "a": "Yes. CIBIL Commercial report (₹300–500) shows defaults, pending suits and bank exposure. Essential for first-time buyers and for limits above ₹5 lakh."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

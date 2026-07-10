@@ -1,0 +1,127 @@
+{
+  "id": "office-interior-cost-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Office Interior Cost Calculator",
+  "shortBenefit": "Office fit-out budget by area, seats and finish level.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the total interior fit-out cost for a commercial office space based on carpet area, number of seats and finish level.",
+  "seo": {
+    "title": "Office Interior Cost Calculator — Commercial Fit-out Budget | Varada Nexus",
+    "description": "Free office interior cost calculator. Estimate commercial office fit-out cost per sq ft and per seat for turnkey office interiors in India.",
+    "keywords": [
+      "office interior cost calculator",
+      "office fit out cost india",
+      "commercial interior cost per sq ft"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Office area (sq ft)",
+      "type": "number",
+      "default": 2000,
+      "min": 200
+    },
+    {
+      "id": "seats",
+      "label": "Number of workstations",
+      "type": "number",
+      "default": 30,
+      "min": 1
+    },
+    {
+      "id": "finish",
+      "label": "Finish level",
+      "type": "select",
+      "default": "standard",
+      "options": [
+        {
+          "v": "basic",
+          "t": "Basic (₹700–900/sq ft)"
+        },
+        {
+          "v": "standard",
+          "t": "Standard (₹1,200–1,800/sq ft)"
+        },
+        {
+          "v": "premium",
+          "t": "Premium (₹2,000–3,000/sq ft)"
+        }
+      ]
+    },
+    {
+      "id": "type",
+      "label": "Office type",
+      "type": "select",
+      "default": "mixed",
+      "options": [
+        {
+          "v": "open",
+          "t": "Open plan"
+        },
+        {
+          "v": "mixed",
+          "t": "Mixed (open + cabins)"
+        },
+        {
+          "v": "cabin",
+          "t": "Full cabin layout"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Category",
+      "Share",
+      "Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total fit-out cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per seat cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Per sq ft",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Rates: basic ₹800, standard ₹1,500, premium ₹2,500/sq ft. Cabin layout adds 20% over open plan. Category split: civil & flooring 25%, MEP & lighting 20%, furniture 30%, false ceiling 10%, IT infra 10%, misc 5%.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the cost to fit out an office in India per sq ft?",
+      "a": "Standard commercial office fit-out costs ₹1,200–1,800 per sq ft; premium Grade-A finish runs ₹2,000–3,500; basic fit-out ₹700–1,000."
+    },
+    {
+      "q": "How much does one workstation cost in an office fit-out?",
+      "a": "A fully fitted workstation (desk, chair, partition, lighting, flooring share) costs ₹40,000–1,20,000 depending on finish level."
+    },
+    {
+      "q": "What is included in an office fit-out?",
+      "a": "Typically: civil modifications, flooring, false ceiling, MEP (mechanical/electrical/plumbing), partition walls, furniture, IT cabling and lighting. Loose appliances and AV systems are usually separate."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

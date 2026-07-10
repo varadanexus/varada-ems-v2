@@ -1,0 +1,100 @@
+{
+  "id": "cement-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Cement Calculator",
+  "shortBenefit": "Cement bags for concrete by volume and grade.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the cement bags, sand and aggregate needed for a concrete volume at a chosen mix grade (M15, M20, M25).",
+  "seo": {
+    "title": "Cement Calculator — Bags of Cement for Concrete by Grade | Varada Nexus",
+    "description": "Free cement calculator. Find cement bags, sand and aggregate for any concrete volume at M15, M20 or M25 grade.",
+    "keywords": [
+      "cement calculator",
+      "cement bags for concrete",
+      "concrete mix calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "vol",
+      "label": "Concrete volume (m³)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "grade",
+      "label": "Concrete grade",
+      "type": "select",
+      "default": "1-1.5-3",
+      "options": [
+        {
+          "v": "1-2-4",
+          "t": "M15 (1:2:4)"
+        },
+        {
+          "v": "1-1.5-3",
+          "t": "M20 (1:1.5:3)"
+        },
+        {
+          "v": "1-1-2",
+          "t": "M25 (1:1:2)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Material",
+      "",
+      "Quantity"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Cement",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Sand",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Aggregate",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Dry volume = 1.54 × wet volume. Cement bags = dry × (cement ÷ total ratio) × 1440 ÷ 50. Sand and aggregate by their ratio share, shown in cft (1 m³ = 35.315 cft).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many cement bags per m³ of concrete?",
+      "a": "About 8 bags per m³ for M20 (1:1.5:3), ~6.5 for M15 and ~9.5 for M25."
+    },
+    {
+      "q": "What is dry volume factor 1.54?",
+      "a": "Wet concrete volume shrinks; multiplying by 1.54 gives the dry material volume needed before mixing."
+    },
+    {
+      "q": "Does this include wastage?",
+      "a": "No — add about 3–5% for wastage on site."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

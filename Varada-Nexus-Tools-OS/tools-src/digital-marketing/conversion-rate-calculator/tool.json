@@ -1,0 +1,102 @@
+{
+  "id": "conversion-rate-calculator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Conversion Rate Optimisation Calculator",
+  "shortBenefit": "Conversion rate, revenue impact and A/B test lift.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate your current conversion rate, model the revenue impact of conversion rate improvements and estimate statistical significance for A/B tests.",
+  "seo": {
+    "title": "Conversion Rate Calculator — CRO & A/B Test Impact | Varada Nexus",
+    "description": "Free conversion rate calculator. Calculate CVR, model revenue impact of improvements and estimate A/B test lift needed to be statistically significant.",
+    "keywords": [
+      "conversion rate calculator",
+      "cro calculator",
+      "ab test calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "visitors",
+      "label": "Monthly visitors",
+      "type": "number",
+      "default": 10000,
+      "min": 1
+    },
+    {
+      "id": "conversions",
+      "label": "Current conversions/month",
+      "type": "number",
+      "default": 200,
+      "min": 0
+    },
+    {
+      "id": "order_value",
+      "label": "Average order value (₹)",
+      "type": "number",
+      "default": 2500,
+      "min": 1
+    },
+    {
+      "id": "target_cvr",
+      "label": "Target conversion rate (%)",
+      "type": "number",
+      "default": 3,
+      "min": 0.1,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "Current",
+      "Target"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Current CVR",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Revenue uplift",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Extra conversions/month",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Revenue = conversions × AOV. Uplift = (target conversions − current conversions) × AOV. Assumes traffic remains constant.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good conversion rate for an e-commerce website?",
+      "a": "Industry average e-commerce CVR in India is 1.5–3%; top performers achieve 4–6%. B2B lead gen pages typically convert at 3–8%."
+    },
+    {
+      "q": "What is the fastest way to improve conversion rate?",
+      "a": "Fix page speed, simplify checkout/form, add trust signals (reviews, certifications), improve CTA copy and reduce friction in the conversion path."
+    },
+    {
+      "q": "How many visitors do I need for an A/B test?",
+      "a": "For 95% confidence with a 20% relative improvement from a 2% baseline, you need roughly 6,000–8,000 visitors per variant — use a sample size calculator."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

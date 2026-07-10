@@ -1,0 +1,127 @@
+{
+  "id": "cut-off-grade-calculator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Cut-off Grade Calculator",
+  "shortBenefit": "Determine minimum viable ore grade for profitable extraction",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the break-even (cut-off) grade below which mining a block of ore is uneconomical — the fundamental tool for optimising mine planning and resource classification.",
+  "seo": {
+    "title": "Cut-off Grade Calculator – Mine Planning Optimization India",
+    "description": "Calculate break-even cut-off grade for mineral deposits. Determine minimum economic ore grade based on mining cost, processing cost and commodity price.",
+    "keywords": [
+      "cut-off grade calculator mining",
+      "break-even grade calculator",
+      "mine planning optimization India",
+      "economic ore grade",
+      "mineral cut-off grade"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "mining_cost_mt",
+      "label": "Mining Cost (₹/MT ore)",
+      "type": "number",
+      "default": 500,
+      "min": 0
+    },
+    {
+      "id": "processing_cost_mt",
+      "label": "Processing Cost (₹/MT ore)",
+      "type": "number",
+      "default": 200,
+      "min": 0
+    },
+    {
+      "id": "overhead_cost_mt",
+      "label": "G&A / Overhead (₹/MT ore)",
+      "type": "number",
+      "default": 100,
+      "min": 0
+    },
+    {
+      "id": "royalty_mt",
+      "label": "Royalty & Levies (₹/MT ore)",
+      "type": "number",
+      "default": 150,
+      "min": 0
+    },
+    {
+      "id": "product_price",
+      "label": "Product Sale Price (₹/MT product)",
+      "type": "number",
+      "default": 4500,
+      "min": 0
+    },
+    {
+      "id": "recovery_pct",
+      "label": "Processing Recovery (%)",
+      "type": "number",
+      "default": 88,
+      "min": 1,
+      "max": 100
+    },
+    {
+      "id": "target_margin_pct",
+      "label": "Target Profit Margin (%)",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "max": 50,
+      "hint": "Enter 0 for pure break-even; add % for minimum return"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Parameter",
+      "Calculation",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Break-even Grade",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Grade with Margin",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Revenue at Break-even",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Cut-off grade = total cost per MT ore / (product price × recovery%). Result is % mineral in ore that makes extraction viable.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is cut-off grade used in mine planning?",
+      "a": "Blocks below cut-off grade are classified as waste (even if they contain mineral). Only blocks at or above cut-off grade are included in ore reserve. This directly determines mineable reserve tonnage."
+    },
+    {
+      "q": "Does cut-off grade change over time?",
+      "a": "Yes. Rising commodity prices lower the cut-off grade (more ore is economic), while rising costs raise it. Cut-off grade should be recalculated annually or when costs/prices change significantly."
+    },
+    {
+      "q": "What is marginal ore and how is it handled?",
+      "a": "Marginal ore is material with grade just above or below cut-off. It is often stockpiled for reprocessing when prices improve. Internal cut-off grades separate stockpile material from waste."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

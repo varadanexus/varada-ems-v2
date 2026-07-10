@@ -2,6 +2,9 @@ import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getInviteRecordByToken, subscribeToMeeting, touchInviteWaiting, unsubscribe } from "./meeting-api.js";
 import { showToast } from "./utils.js";
 
+// Standalone page (no layout.js): reveal #app, which app.css hides by default.
+document.querySelector("#app")?.classList.add("page-enter-active");
+
 const token = new URLSearchParams(window.location.search).get("t") || "";
 const state = { invite: null, channel: null, pollHandle: null };
 

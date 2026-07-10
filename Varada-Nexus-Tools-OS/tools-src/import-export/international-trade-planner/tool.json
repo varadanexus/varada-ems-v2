@@ -1,0 +1,120 @@
+{
+  "id": "international-trade-planner",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "International Trade Planner",
+  "shortBenefit": "Plan annual import/export trade volumes, costs and revenue targets",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Set annual trade targets, allocate budgets, forecast revenue and profitability, and identify the working capital required to sustain your import/export business throughout the year.",
+  "seo": {
+    "title": "International Trade Planner – Annual Export Import Business Plan",
+    "description": "Plan your import/export business for the year. Set shipment targets, estimate costs, forecast revenue and calculate working capital requirement.",
+    "keywords": [
+      "international trade planner",
+      "export import business plan",
+      "annual export plan India",
+      "trade business forecast",
+      "import export capital planning"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "shipments_per_year",
+      "label": "Shipments per Year",
+      "type": "number",
+      "default": 12,
+      "min": 1
+    },
+    {
+      "id": "avg_shipment_value",
+      "label": "Average Shipment Value (₹)",
+      "type": "number",
+      "default": 1500000,
+      "min": 10000
+    },
+    {
+      "id": "avg_margin_pct",
+      "label": "Trade Margin (%)",
+      "type": "number",
+      "default": 15,
+      "min": 0,
+      "max": 60
+    },
+    {
+      "id": "working_capital_days",
+      "label": "Working Capital Cycle (days)",
+      "type": "number",
+      "default": 90,
+      "min": 1,
+      "hint": "Days from paying supplier to collecting payment"
+    },
+    {
+      "id": "finance_rate",
+      "label": "Working Capital Finance Rate (% p.a.)",
+      "type": "number",
+      "default": 10,
+      "min": 0,
+      "max": 30
+    },
+    {
+      "id": "fixed_overheads",
+      "label": "Annual Fixed Overheads (₹)",
+      "type": "number",
+      "default": 1200000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Planning Parameter",
+      "Calculation",
+      "Annual Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Annual Turnover",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Net Annual Profit",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Working Capital Required",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Working capital = avg shipment value × WC days / 365. Finance cost on working capital at given rate. Net profit after all costs including finance and overheads.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much working capital do I need for an import business?",
+      "a": "Working capital = total annual trade value × (average cycle days / 365). For ₹1 crore annual trade with 90-day cycle, you need ~₹25 lakh in working capital at any time."
+    },
+    {
+      "q": "What are key KPIs for a trade business?",
+      "a": "Trade turnover, gross margin %, net profit margin, working capital turnover, shipments per month, average shipment value, and return on working capital deployed."
+    },
+    {
+      "q": "How do I scale an import/export business?",
+      "a": "Increase shipment frequency, add product lines, enter new markets, secure long-term supply agreements, improve credit terms, and use export credit insurance to reduce buyer default risk."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

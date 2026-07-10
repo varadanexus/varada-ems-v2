@@ -1,0 +1,125 @@
+{
+  "id": "purchase-order-cost-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Purchase Order Cost Calculator",
+  "shortBenefit": "Calculate total cost of a purchase order including all charges",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Get the complete landed cost of a purchase order — covering supplier price, freight, insurance, taxes and handling — to make accurate bid pricing and margin decisions.",
+  "seo": {
+    "title": "Purchase Order Cost Calculator – Total PO Cost India",
+    "description": "Calculate complete purchase order cost including freight, insurance, taxes and handling. Get total PO value, cost per unit and landed cost for trading businesses.",
+    "keywords": [
+      "purchase order cost calculator",
+      "PO cost calculator India",
+      "landed cost calculator trading",
+      "total procurement cost",
+      "purchase cost per unit"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "unit_price",
+      "label": "Supplier Price per Unit (₹)",
+      "type": "number",
+      "default": 450,
+      "min": 1
+    },
+    {
+      "id": "quantity",
+      "label": "Order Quantity (units)",
+      "type": "number",
+      "default": 1000,
+      "min": 1
+    },
+    {
+      "id": "freight",
+      "label": "Freight Charges (₹)",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    },
+    {
+      "id": "insurance",
+      "label": "Insurance (₹)",
+      "type": "number",
+      "default": 1500,
+      "min": 0
+    },
+    {
+      "id": "gst_rate",
+      "label": "GST Rate (%)",
+      "type": "number",
+      "default": 18,
+      "min": 0,
+      "max": 28
+    },
+    {
+      "id": "handling_charges",
+      "label": "Handling / Unloading (₹)",
+      "type": "number",
+      "default": 2000,
+      "min": 0
+    },
+    {
+      "id": "inspection_cost",
+      "label": "Inspection / QC Cost (₹)",
+      "type": "number",
+      "default": 1000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Component",
+      "Details",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total PO Value",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Landed Cost / Unit",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "GST Paid (ITC)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "GST on supplier price × quantity only. Freight, insurance, handling added to arrive at landed cost.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is landed cost in trading?",
+      "a": "Landed cost is the total cost of goods at your warehouse — purchase price + all freight + insurance + taxes + handling. It is the true cost basis for margin calculations."
+    },
+    {
+      "q": "Can I claim ITC on purchase GST?",
+      "a": "Yes, GST-registered traders can claim Input Tax Credit on GST paid on purchases, reducing the net GST liability against sales. Ensure supplier provides a valid GST invoice."
+    },
+    {
+      "q": "When should I insure a purchase order?",
+      "a": "Insure shipments above ₹50,000 or any high-value / fragile goods. Marine / inland transit insurance costs 0.1–0.5% of goods value and protects against total loss."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

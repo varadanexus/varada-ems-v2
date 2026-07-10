@@ -1,0 +1,114 @@
+{
+  "id": "fd-calculator",
+  "category": "finance-business",
+  "kind": "calculator",
+  "name": "FD Calculator",
+  "shortBenefit": "Calculate fixed deposit maturity value and interest earned.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Work out the maturity amount and interest earned on a bank Fixed Deposit from the principal, interest rate, tenure and compounding frequency.",
+  "seo": {
+    "title": "FD Calculator (2026) — Fixed Deposit Maturity & Interest | Varada Nexus",
+    "description": "Free fixed deposit (FD) calculator for India. Compute FD maturity value and interest earned by tenure and compounding frequency.",
+    "keywords": [
+      "fd calculator",
+      "fixed deposit calculator",
+      "fd maturity calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "principal",
+      "label": "Deposit amount (₹)",
+      "type": "number",
+      "default": 100000,
+      "min": 0
+    },
+    {
+      "id": "rate",
+      "label": "Interest rate (% p.a.)",
+      "type": "number",
+      "default": 7,
+      "min": 0
+    },
+    {
+      "id": "years",
+      "label": "Tenure (years)",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "comp",
+      "label": "Compounding",
+      "type": "select",
+      "default": "4",
+      "options": [
+        {
+          "v": "1",
+          "t": "Yearly"
+        },
+        {
+          "v": "2",
+          "t": "Half-yearly"
+        },
+        {
+          "v": "4",
+          "t": "Quarterly"
+        },
+        {
+          "v": "12",
+          "t": "Monthly"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Maturity value",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Interest earned",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Principal",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Uses compound interest A = P(1 + r/(100f))^(ft), where f is the compounding frequency per year. TDS and premature-withdrawal effects are not included.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is FD maturity calculated?",
+      "a": "A = P × (1 + r/(100·f))^(f·t), where P is principal, r the annual rate, f the compounding frequency per year and t the tenure in years."
+    },
+    {
+      "q": "Which compounding frequency is best?",
+      "a": "More frequent compounding (e.g. quarterly or monthly) yields slightly more interest than yearly compounding for the same rate."
+    },
+    {
+      "q": "Is TDS included?",
+      "a": "No. Banks may deduct TDS on interest above the exemption limit; this calculator shows the gross maturity value."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

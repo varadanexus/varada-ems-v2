@@ -1,0 +1,80 @@
+{
+  "id": "clinical-department-planner",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Clinical Department Bed Planner",
+  "shortBenefit": "Distribute total beds across clinical departments.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan a balanced bed distribution across clinical departments for a multispecialty hospital from total bed strength, using standard specialty ratios.",
+  "seo": {
+    "title": "Clinical Department Bed Planner — Bed Split by Specialty | Varada Nexus",
+    "description": "Free clinical department planner. Distribute total hospital beds across medicine, surgery, ortho, OB-GYN, paediatrics, cardiology and ICU.",
+    "keywords": [
+      "clinical department planner",
+      "hospital bed distribution",
+      "department bed split"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Total beds",
+      "type": "number",
+      "default": 200,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Department",
+      "share",
+      "Beds"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "General Medicine",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Surgery",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "ICU",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Indicative multispecialty split: General Medicine 25%, Surgery 20%, Orthopaedics 10%, OB-GYN 15%, Paediatrics 10%, Cardiology 8%, ICU/critical 12%. Tune to your case mix and specialty focus.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How are hospital beds distributed across departments?",
+      "a": "A typical multispecialty split allocates the most beds to general medicine and surgery, with ICU around 10–12% and the rest across specialties."
+    },
+    {
+      "q": "Can I change the ratios?",
+      "a": "Yes — the split should reflect your case mix; a cardiac or maternity focus would shift beds accordingly."
+    },
+    {
+      "q": "Does this include day-care and OT?",
+      "a": "No, it distributes inpatient beds only; day-care, OT tables and diagnostics are planned separately."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

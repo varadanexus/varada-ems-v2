@@ -1,0 +1,75 @@
+{
+  "id":"nabh-readiness-checklist",
+  "category":"healthcare",
+  "kind":"checklist",
+  "name":"NABH Readiness Checklist",
+  "shortBenefit":"Self-assess your hospital's readiness for NABH accreditation across all 10 chapters.",
+  "status":"published","phase":1,"updated":"2026-07-09",
+  "buttonLabel":"Calculate NABH Readiness Score",
+  "intro":"Assess how prepared your hospital is for NABH accreditation (5th edition). Rate each requirement across the 10 NABH chapters and get an instant readiness score, chapter-wise compliance and a list of critical gaps to close before assessment.",
+  "seo":{
+    "title":"NABH Readiness Checklist (2026) | Free Hospital Accreditation Self-Assessment | Varada Nexus",
+    "description":"Free NABH readiness checklist for Indian hospitals. Self-assess accreditation preparedness across all 10 NABH chapters, get a compliance score and critical-gap report instantly.",
+    "keywords":["nabh readiness checklist","nabh accreditation","hospital accreditation india","nabh 5th edition standards"]
+  },
+  "checklist":[
+    {"name":"1. Access, Assessment & Continuity of Care (AAC)","items":[
+      {"id":"aac1","text":"Documented registration, admission and transfer/discharge process is in place","critical":false},
+      {"id":"aac2","text":"Initial assessment of every patient is documented within the defined timeframe","critical":true},
+      {"id":"aac3","text":"Defined process for patient referral and safe transfer to another facility","critical":false}]},
+    {"name":"2. Care of Patients (COP)","items":[
+      {"id":"cop1","text":"Uniform care is guided by written policies and clinical protocols","critical":false},
+      {"id":"cop2","text":"Emergency, resuscitation (code blue) and ambulance services are defined and drilled","critical":true},
+      {"id":"cop3","text":"Documented policies for high-risk procedures, surgery and anaesthesia","critical":false}]},
+    {"name":"3. Management of Medication (MOM)","items":[
+      {"id":"mom1","text":"Formulary and documented policy for procurement, storage and prescribing of medication","critical":false},
+      {"id":"mom2","text":"High-alert and look-alike/sound-alike (LASA) drugs are identified and controlled","critical":true},
+      {"id":"mom3","text":"Adverse drug event / medication error reporting system exists","critical":false}]},
+    {"name":"4. Patient Rights & Education (PRE)","items":[
+      {"id":"pre1","text":"Patient rights and responsibilities are documented and displayed","critical":false},
+      {"id":"pre2","text":"Informed consent process is defined for procedures requiring it","critical":true},
+      {"id":"pre3","text":"Process to obtain patient feedback and handle grievances","critical":false}]},
+    {"name":"5. Hospital Infection Control (HIC)","items":[
+      {"id":"hic1","text":"Infection control programme, committee and manual are in place","critical":false},
+      {"id":"hic2","text":"Hand hygiene and biomedical waste management as per BMW Rules 2016","critical":true},
+      {"id":"hic3","text":"Surveillance of hospital-associated infections (HAI) with monthly rates","critical":false}]},
+    {"name":"6. Patient Safety & Quality Improvement (PSQ)","items":[
+      {"id":"psq1","text":"Structured quality improvement programme with defined indicators","critical":false},
+      {"id":"psq2","text":"Incident reporting, sentinel-event and root-cause-analysis (RCA) system","critical":true},
+      {"id":"psq3","text":"International Patient Safety Goals (IPSG) implemented","critical":true}]},
+    {"name":"7. Responsibilities of Management (ROM)","items":[
+      {"id":"rom1","text":"Defined organogram, governance and roles/responsibilities","critical":false},
+      {"id":"rom2","text":"Valid statutory licences and registrations maintained","critical":true}]},
+    {"name":"8. Facility Management & Safety (FMS)","items":[
+      {"id":"fms1","text":"Fire and emergency preparedness plan with mock drills","critical":true},
+      {"id":"fms2","text":"Preventive maintenance programme for equipment and utilities","critical":false},
+      {"id":"fms3","text":"Medical gas, electrical and water safety systems verified","critical":false}]},
+    {"name":"9. Human Resource Management (HRM)","items":[
+      {"id":"hrm1","text":"Documented recruitment, credentialing and privileging process","critical":true},
+      {"id":"hrm2","text":"Ongoing training, BLS/ACLS and induction records maintained","critical":false},
+      {"id":"hrm3","text":"Health checks and personnel files for all staff","critical":false}]},
+    {"name":"10. Information Management System (IMS)","items":[
+      {"id":"ims1","text":"Complete, accurate and standardised medical records with retention policy","critical":true},
+      {"id":"ims2","text":"Confidentiality, integrity and security of patient data ensured","critical":false}]}
+  ],
+  "results":{
+    "columns":["NABH Chapter","Items","Compliance"],
+    "rowFmt":"raw",
+    "kpis":[
+      {"key":"score","label":"Overall readiness","format":"percent"},
+      {"key":"band","label":"Status","format":"text"},
+      {"key":"criticalGaps","label":"Critical gaps open","format":"int"}]
+  },
+  "assumptions":"This is a simplified self-assessment covering representative requirements from the 10 NABH 5th-edition hospital chapters — not the full standard's objective elements. Each item scores Yes=1, Partial=0.5, No=0; the overall score is the average across all items. 'Critical gaps' counts critical items not fully compliant. Use it to prioritise, not to certify.",
+  "disclaimer":"This checklist is an informal readiness indicator only and does NOT constitute NABH accreditation, a gap audit, or professional quality/regulatory advice. It is not affiliated with or endorsed by NABH/QCI. Formal accreditation requires assessment against the complete official NABH standard by NABH. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq":[
+    {"q":"What is NABH accreditation?","a":"NABH (National Accreditation Board for Hospitals & Healthcare Providers), a constituent board of QCI, accredits hospitals in India against defined quality and patient-safety standards. The current hospital standard is the 5th edition."},
+    {"q":"How many chapters are there in NABH?","a":"The NABH 5th edition hospital standard is organised into 10 chapters covering patient-centred and organisation-centred standards, from Access & Assessment to Information Management."},
+    {"q":"What score means we are ready for a NABH assessment?","a":"As a rough guide, 85%+ with no open critical gaps suggests you are close to assessment-ready; 70–84% means near ready; below 70% indicates significant preparation is still needed. A formal gap audit is recommended before applying."},
+    {"q":"Does this replace a formal NABH gap audit?","a":"No. This is a quick self-assessment for prioritisation. A formal, standard-by-standard gap audit by qualified consultants is needed before applying for accreditation."}
+  ],
+  "relatedServices":[
+    {"label":"Hospital Consultancy","url":"/services/hospital-consultancy/"},
+    {"label":"Hospital Construction","url":"/services/hospital-construction/"}
+  ]
+}

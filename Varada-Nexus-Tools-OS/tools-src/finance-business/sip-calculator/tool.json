@@ -1,0 +1,90 @@
+{
+  "id": "sip-calculator",
+  "category": "finance-business",
+  "kind": "calculator",
+  "name": "SIP Calculator",
+  "shortBenefit": "Project the maturity value of a monthly SIP investment.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the future value of a monthly Systematic Investment Plan (SIP) from the monthly amount, expected annual return and duration, with total invested and estimated gains.",
+  "seo": {
+    "title": "SIP Calculator (2026) — Mutual Fund SIP Returns & Maturity | Varada Nexus",
+    "description": "Free SIP calculator. Project the maturity value, total invested and estimated gains of a monthly mutual-fund SIP in seconds.",
+    "keywords": [
+      "sip calculator",
+      "mutual fund sip calculator",
+      "sip returns calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "monthly",
+      "label": "Monthly investment (₹)",
+      "type": "number",
+      "default": 10000,
+      "min": 0
+    },
+    {
+      "id": "annualReturn",
+      "label": "Expected return (% p.a.)",
+      "type": "number",
+      "default": 12,
+      "min": 0
+    },
+    {
+      "id": "years",
+      "label": "Duration (years)",
+      "type": "number",
+      "default": 10,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Future value",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total invested",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Estimated gains",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Assumes a fixed monthly investment at the start of each month and a constant annual return compounded monthly. Actual market returns vary.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is SIP maturity calculated?",
+      "a": "FV = P × (((1+i)^n − 1) ÷ i) × (1+i), where P is the monthly amount, i the monthly return (annual ÷ 12 ÷ 100) and n the number of months."
+    },
+    {
+      "q": "Are SIP returns guaranteed?",
+      "a": "No. SIPs invest in market-linked instruments, so returns fluctuate. The figure here uses a constant assumed return for illustration only."
+    },
+    {
+      "q": "Does a higher duration help?",
+      "a": "Yes, longer durations benefit more from compounding, so gains grow faster in later years."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

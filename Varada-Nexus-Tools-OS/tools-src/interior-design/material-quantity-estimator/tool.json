@@ -1,0 +1,128 @@
+{
+  "id": "material-quantity-estimator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Interior Material Quantity Estimator",
+  "shortBenefit": "Paint, tile, cement and sand quantities for a room.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the quantities of key interior materials — paint, tiles, cement, sand and putty — needed for a room renovation or new fit-out.",
+  "seo": {
+    "title": "Interior Material Quantity Estimator — Paint, Tile & Cement | Varada Nexus",
+    "description": "Free interior material quantity estimator. Calculate paint litres, tiles, cement bags and sand needed for room renovation or interior fit-out.",
+    "keywords": [
+      "interior material calculator",
+      "paint quantity calculator",
+      "tile cement sand estimator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "length",
+      "label": "Room length (ft)",
+      "type": "number",
+      "default": 14,
+      "min": 1
+    },
+    {
+      "id": "width",
+      "label": "Room width (ft)",
+      "type": "number",
+      "default": 12,
+      "min": 1
+    },
+    {
+      "id": "height",
+      "label": "Height (ft)",
+      "type": "number",
+      "default": 10,
+      "min": 6
+    },
+    {
+      "id": "doors",
+      "label": "Door openings",
+      "type": "number",
+      "default": 1,
+      "min": 0
+    },
+    {
+      "id": "windows",
+      "label": "Window openings",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "tile_size",
+      "label": "Floor tile size",
+      "type": "select",
+      "default": "2x2",
+      "options": [
+        {
+          "v": "1x1",
+          "t": "1×1 ft (small mosaic)"
+        },
+        {
+          "v": "2x2",
+          "t": "2×2 ft (standard)"
+        },
+        {
+          "v": "2x4",
+          "t": "2×4 ft (large format)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Material",
+      "Quantity",
+      "Coverage basis"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Wall paint (litres)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Floor tiles",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cement bags",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Paint: 120 sq ft/litre (2 coats). Tiles: floor area +10% waste. Cement for tile laying: 1 bag per 10 sq ft floor, 1 bag per 8 sq ft wall. Sand: 0.5 cft per sq ft.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many paint litres are needed for a 12×14 room?",
+      "a": "A 12×14 ft room at 10 ft height has ~460 sq ft of net wall area. At 120 sq ft per litre (2 coats), you need ~4 litres of wall paint plus ceiling paint."
+    },
+    {
+      "q": "How do I calculate tile quantity for a room?",
+      "a": "Tiles needed = floor area ÷ tile area × 1.10 (10% waste). For a 12×14 ft room with 2×2 ft tiles: (168 sq ft ÷ 4 sq ft) × 1.10 = 47 tiles."
+    },
+    {
+      "q": "How many cement bags are needed for tile flooring?",
+      "a": "For tile laying, roughly 1 bag of cement (50 kg) per 10 sq ft of floor and 1 bag per 8 sq ft of wall tiles is a standard estimate."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

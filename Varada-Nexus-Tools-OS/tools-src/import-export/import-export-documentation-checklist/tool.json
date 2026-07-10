@@ -1,0 +1,186 @@
+{
+  "id": "import-export-documentation-checklist",
+  "category": "import-export",
+  "kind": "checklist",
+  "name": "Import / Export Documentation Checklist",
+  "shortBenefit": "Verify all trade documents before shipment to avoid customs delays",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Use this comprehensive checklist to ensure every import or export shipment is backed by the correct documents — preventing costly delays at customs.",
+  "seo": {
+    "title": "Import Export Documentation Checklist India – Trade Docs Guide",
+    "description": "Complete checklist of import and export documents required in India. Commercial invoice, packing list, BL, LC, COO, and regulatory certificates.",
+    "keywords": [
+      "import export documentation checklist",
+      "trade documents India",
+      "customs clearance documents",
+      "export documents list",
+      "import documents required India"
+    ]
+  },
+  "buttonLabel": "Check Documentation Readiness",
+  "checklist": [
+    {
+      "name": "Core Shipping Documents",
+      "items": [
+        {
+          "id": "d1",
+          "text": "Commercial Invoice (with HS code, unit price, total value, INCOTERM)",
+          "critical": true
+        },
+        {
+          "id": "d2",
+          "text": "Packing List (carton-wise weight, dimensions, content)",
+          "critical": true
+        },
+        {
+          "id": "d3",
+          "text": "Bill of Lading / Airway Bill (original or telex release)",
+          "critical": true
+        },
+        {
+          "id": "d4",
+          "text": "Purchase Order / Sales Contract",
+          "critical": true
+        },
+        {
+          "id": "d5",
+          "text": "Letter of Credit — confirmed and operative (if LC terms)"
+        }
+      ]
+    },
+    {
+      "name": "Customs & Regulatory Documents",
+      "items": [
+        {
+          "id": "d6",
+          "text": "Certificate of Origin — notarised and legalised if required",
+          "critical": true
+        },
+        {
+          "id": "d7",
+          "text": "Shipping Bill (export) / Bill of Entry (import)",
+          "critical": true
+        },
+        {
+          "id": "d8",
+          "text": "IEC (Import Export Code) — active and valid",
+          "critical": true
+        },
+        {
+          "id": "d9",
+          "text": "GST Registration for imports under IGST credit scheme"
+        },
+        {
+          "id": "d10",
+          "text": "AD Code registered at port for export realization"
+        }
+      ]
+    },
+    {
+      "name": "Quality & Compliance Certificates",
+      "items": [
+        {
+          "id": "d11",
+          "text": "Phytosanitary Certificate (for agricultural / food products)",
+          "critical": true
+        },
+        {
+          "id": "d12",
+          "text": "Fumigation Certificate if required by importing country"
+        },
+        {
+          "id": "d13",
+          "text": "Quality Inspection Certificate / Pre-shipment Inspection Report"
+        },
+        {
+          "id": "d14",
+          "text": "BIS / FSSAI / Drug licence for regulated products"
+        },
+        {
+          "id": "d15",
+          "text": "MSDS for chemicals / hazardous goods"
+        }
+      ]
+    },
+    {
+      "name": "Financial & Insurance Documents",
+      "items": [
+        {
+          "id": "d16",
+          "text": "Marine Insurance Certificate / Open Cover Policy",
+          "critical": true
+        },
+        {
+          "id": "d17",
+          "text": "Bank Realisation Certificate (BRC) for DGFT benefits"
+        },
+        {
+          "id": "d18",
+          "text": "FIRC (Foreign Inward Remittance Certificate) for advance payment"
+        },
+        {
+          "id": "d19",
+          "text": "SWIFT copy of payment for TT advance cases"
+        },
+        {
+          "id": "d20",
+          "text": "GR Form (Export Declaration Form) — RBI requirement"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Requirements vary by product and importing country. Always verify with your CHA.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is an IEC code and who needs it?",
+      "a": "Importer Exporter Code is a 10-digit number from DGFT, mandatory for any business importing or exporting goods from India. One-time registration."
+    },
+    {
+      "q": "What is a Certificate of Origin?",
+      "a": "A COO certifies the country where goods were produced. Required for customs clearance, FTA preferential duty claims, and importing country compliance."
+    },
+    {
+      "q": "What happens if documents are missing at customs?",
+      "a": "Missing documents lead to demurrage, customs hold and potential auction of goods. Having all documents ready prevents costly delays."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

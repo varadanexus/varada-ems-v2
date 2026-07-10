@@ -1,0 +1,177 @@
+{
+  "id": "infection-control-checklist",
+  "category": "healthcare",
+  "kind": "checklist",
+  "name": "Hospital Infection Control Checklist",
+  "shortBenefit": "Self-assess hospital infection prevention & control readiness.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Assess your hospital’s infection prevention and control (IPC) readiness across hand hygiene, PPE, sterilisation, isolation, surveillance, biomedical waste and antibiotic stewardship.",
+  "seo": {
+    "title": "Hospital Infection Control Checklist — IPC Readiness Self-Assessment | Varada Nexus",
+    "description": "Free hospital infection control checklist. Self-assess IPC readiness across hand hygiene, sterilisation, isolation, BMW and stewardship.",
+    "keywords": [
+      "infection control checklist",
+      "ipc checklist hospital",
+      "hospital infection prevention"
+    ]
+  },
+  "buttonLabel": "Calculate Infection Control Score",
+  "checklist": [
+    {
+      "name": "1. Hand Hygiene",
+      "items": [
+        {
+          "id": "h1",
+          "text": "Hand-hygiene policy and WHO 5-moments displayed at point of care",
+          "critical": true
+        },
+        {
+          "id": "h2",
+          "text": "Alcohol hand-rub available at every bed/entry",
+          "critical": true
+        },
+        {
+          "id": "h3",
+          "text": "Periodic hand-hygiene compliance audits conducted"
+        }
+      ]
+    },
+    {
+      "name": "2. PPE & Standard Precautions",
+      "items": [
+        {
+          "id": "p1",
+          "text": "Adequate PPE stock and donning/doffing SOPs",
+          "critical": true
+        },
+        {
+          "id": "p2",
+          "text": "Staff trained on standard and transmission-based precautions"
+        }
+      ]
+    },
+    {
+      "name": "3. Sterilisation & CSSD",
+      "items": [
+        {
+          "id": "s1",
+          "text": "Central sterile supply with validated sterilisation cycles",
+          "critical": true
+        },
+        {
+          "id": "s2",
+          "text": "Biological/chemical indicators logged for each load"
+        }
+      ]
+    },
+    {
+      "name": "4. Isolation & Cohorting",
+      "items": [
+        {
+          "id": "i1",
+          "text": "Isolation rooms/protocols for infectious cases",
+          "critical": false
+        },
+        {
+          "id": "i2",
+          "text": "Defined process for MDRO cohorting"
+        }
+      ]
+    },
+    {
+      "name": "5. Surveillance",
+      "items": [
+        {
+          "id": "v1",
+          "text": "HAI surveillance with monthly infection rates",
+          "critical": true
+        },
+        {
+          "id": "v2",
+          "text": "Outbreak detection and reporting mechanism"
+        }
+      ]
+    },
+    {
+      "name": "6. Biomedical Waste",
+      "items": [
+        {
+          "id": "b1",
+          "text": "Colour-coded segregation as per BMW Rules 2016",
+          "critical": true
+        },
+        {
+          "id": "b2",
+          "text": "Authorised BMW disposal vendor with manifests"
+        }
+      ]
+    },
+    {
+      "name": "7. Antibiotic Stewardship",
+      "items": [
+        {
+          "id": "a1",
+          "text": "Antibiotic policy and stewardship programme in place"
+        },
+        {
+          "id": "a2",
+          "text": "Culture-based prescribing and antibiogram reviewed"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "A simplified IPC self-assessment covering representative requirements — not a substitute for a full NABH/ICMR infection-control audit. Yes=1, Partial=0.5, No=0; critical items not fully met are flagged as gaps.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is hospital infection control?",
+      "a": "Infection Prevention and Control (IPC) is the set of practices — hand hygiene, PPE, sterilisation, isolation, surveillance and waste management — that reduce healthcare-associated infections."
+    },
+    {
+      "q": "Why is hand hygiene critical?",
+      "a": "Hand hygiene is the single most effective measure to prevent cross-transmission of infections in hospitals."
+    },
+    {
+      "q": "Does this replace a formal IPC audit?",
+      "a": "No. It is a quick readiness indicator; formal accreditation requires assessment against the full NABH/ICMR standards."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

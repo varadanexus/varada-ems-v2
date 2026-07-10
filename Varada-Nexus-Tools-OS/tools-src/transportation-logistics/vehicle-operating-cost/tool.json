@@ -1,0 +1,129 @@
+{
+  "id": "vehicle-operating-cost",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Vehicle Operating Cost Calculator",
+  "shortBenefit": "Per-km and monthly vehicle cost including depreciation.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the total operating cost per kilometre for commercial vehicles including fuel, tyres, maintenance, driver wages, insurance and depreciation.",
+  "seo": {
+    "title": "Vehicle Operating Cost Calculator — Per Km Cost India | Varada Nexus",
+    "description": "Free vehicle operating cost calculator India. Calculate per-km cost for trucks and commercial vehicles including fuel, maintenance and depreciation.",
+    "keywords": [
+      "vehicle operating cost calculator",
+      "truck per km cost india",
+      "commercial vehicle cost per km"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "vehicle_cost",
+      "label": "Vehicle purchase cost (₹)",
+      "type": "number",
+      "default": 2500000,
+      "min": 100000
+    },
+    {
+      "id": "monthly_km",
+      "label": "Monthly km driven",
+      "type": "number",
+      "default": 8000,
+      "min": 100
+    },
+    {
+      "id": "fuel_eff",
+      "label": "Fuel efficiency (km/litre)",
+      "type": "number",
+      "default": 5,
+      "min": 1
+    },
+    {
+      "id": "fuel_price",
+      "label": "Diesel price (₹/litre)",
+      "type": "number",
+      "default": 90,
+      "min": 50
+    },
+    {
+      "id": "driver_salary",
+      "label": "Driver salary (₹/month)",
+      "type": "number",
+      "default": 25000,
+      "min": 0
+    },
+    {
+      "id": "tyre_cost",
+      "label": "Monthly tyre cost (₹)",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    },
+    {
+      "id": "maintenance",
+      "label": "Monthly maintenance (₹)",
+      "type": "number",
+      "default": 10000,
+      "min": 0
+    },
+    {
+      "id": "insurance",
+      "label": "Annual insurance (₹)",
+      "type": "number",
+      "default": 80000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Cost Component",
+      "Monthly (₹)",
+      "Per km (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total cost per km",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly operating cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Fuel cost per km",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Depreciation = 15% of vehicle cost per year (WDV method). Insurance monthly = annual ÷ 12. Per-km cost = monthly total ÷ monthly km.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the average truck operating cost per km in India?",
+      "a": "For a 10-tonne truck, operating cost ranges from ₹25–45/km depending on route, load factor and fuel price. Heavy trucks (25t+) cost ₹35–55/km."
+    },
+    {
+      "q": "What is the biggest cost in truck operations?",
+      "a": "Fuel is typically 40–50% of total operating cost for a truck in India. Driver wages, tyres and maintenance together make up another 30–40%."
+    },
+    {
+      "q": "How is vehicle depreciation calculated?",
+      "a": "Trucking companies typically use 15% WDV (Written Down Value) depreciation for taxation. For per-km costing, straight-line over 8–10 years is more useful."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

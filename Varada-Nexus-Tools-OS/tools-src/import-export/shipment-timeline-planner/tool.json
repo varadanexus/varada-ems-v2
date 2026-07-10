@@ -1,0 +1,131 @@
+{
+  "id": "shipment-timeline-planner",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Shipment Timeline Planner",
+  "shortBenefit": "Plan end-to-end shipment timeline from order to delivery",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Map out every phase of your shipment — from production through port clearance to delivery — to commit to realistic delivery dates and plan working capital.",
+  "seo": {
+    "title": "Shipment Timeline Planner – Export Import Schedule Calculator",
+    "description": "Plan your import/export shipment timeline: production, export clearance, transit, customs and delivery. Calculate total lead time and key milestone dates.",
+    "keywords": [
+      "shipment timeline planner",
+      "export delivery schedule",
+      "import lead time calculator",
+      "shipment schedule India",
+      "trade timeline planning tool"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "production_days",
+      "label": "Production / Procurement Lead Time (days)",
+      "type": "number",
+      "default": 20,
+      "min": 0
+    },
+    {
+      "id": "packing_days",
+      "label": "Packing & QC (days)",
+      "type": "number",
+      "default": 3,
+      "min": 0
+    },
+    {
+      "id": "inland_transport_days",
+      "label": "Inland Transport to Port (days)",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "export_clearance_days",
+      "label": "Export Customs Clearance (days)",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "vessel_booking_days",
+      "label": "Vessel Booking / CFS Buffer (days)",
+      "type": "number",
+      "default": 3,
+      "min": 0
+    },
+    {
+      "id": "transit_days",
+      "label": "Ocean / Air Transit (days)",
+      "type": "number",
+      "default": 18,
+      "min": 1
+    },
+    {
+      "id": "import_clearance_days",
+      "label": "Import Customs at Destination (days)",
+      "type": "number",
+      "default": 5,
+      "min": 0
+    },
+    {
+      "id": "local_delivery_days",
+      "label": "Local Delivery at Destination (days)",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Phase",
+      "Duration (days)",
+      "Cumulative (days)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Lead Time",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Port-to-Door Time",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Pre-Shipment Time",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Phases run sequentially. No port strikes or vessel delays. Add 10–15% buffer for actual planning.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the typical sea transit time from India to Europe?",
+      "a": "India (JNPT) to Europe (Hamburg/Rotterdam) takes approximately 20–25 days by sea. Via Cape of Good Hope (if Suez congested) can be 30–35 days."
+    },
+    {
+      "q": "What is CFS cut-off and why does it matter?",
+      "a": "CFS cut-off is the deadline for delivering LCL cargo before container sealing. Missing cut-off means waiting for the next vessel, delaying shipment by 7–14 days."
+    },
+    {
+      "q": "How can I reduce total shipment lead time?",
+      "a": "Pre-book vessels for recurring shipments, maintain buffer stock at origin, use AEO status for faster customs, and choose direct routes over transshipment options."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

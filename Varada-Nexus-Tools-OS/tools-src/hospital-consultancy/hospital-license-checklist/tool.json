@@ -1,0 +1,187 @@
+{
+  "id": "hospital-license-checklist",
+  "category": "hospital-consultancy",
+  "kind": "checklist",
+  "name": "Hospital License Checklist",
+  "shortBenefit": "Track all licences required to open a hospital in India.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Ensure your hospital has obtained all statutory licences and registrations required by central and state authorities before commencing operations.",
+  "seo": {
+    "title": "Hospital License Checklist — Regulatory Approvals India | Varada Nexus",
+    "description": "Free hospital licence checklist. Track all regulatory approvals needed to open a hospital in India including PCPNDT, Clinical Establishment, fire NOC and more.",
+    "keywords": [
+      "hospital licence checklist",
+      "hospital registration india",
+      "clinical establishment act checklist"
+    ]
+  },
+  "buttonLabel": "Check Licence Status",
+  "checklist": [
+    {
+      "name": "1. Core Registrations",
+      "items": [
+        {
+          "id": "l1i1",
+          "text": "Clinical Establishment Registration (CEA / State Act)",
+          "critical": true
+        },
+        {
+          "id": "l1i2",
+          "text": "Society / Trust / Company registration as applicable",
+          "critical": true
+        },
+        {
+          "id": "l1i3",
+          "text": "GST registration obtained"
+        }
+      ]
+    },
+    {
+      "name": "2. Building & Safety",
+      "items": [
+        {
+          "id": "l2i1",
+          "text": "Building plan approval from local authority",
+          "critical": true
+        },
+        {
+          "id": "l2i2",
+          "text": "Occupancy / completion certificate obtained",
+          "critical": true
+        },
+        {
+          "id": "l2i3",
+          "text": "Fire NOC from Fire Department",
+          "critical": true
+        },
+        {
+          "id": "l2i4",
+          "text": "Lift / elevator certificate (if applicable)"
+        },
+        {
+          "id": "l2i5",
+          "text": "Electrical safety certificate from licensed inspector"
+        }
+      ]
+    },
+    {
+      "name": "3. Environment & Waste",
+      "items": [
+        {
+          "id": "l3i1",
+          "text": "Consent to Operate from State Pollution Control Board",
+          "critical": true
+        },
+        {
+          "id": "l3i2",
+          "text": "Biomedical Waste Treatment & Disposal authorisation (BMWM)",
+          "critical": true
+        },
+        {
+          "id": "l3i3",
+          "text": "Sewage/effluent treatment consent obtained"
+        }
+      ]
+    },
+    {
+      "name": "4. Speciality Licences",
+      "items": [
+        {
+          "id": "l4i1",
+          "text": "PCPNDT registration (if ultrasound / IVF services)",
+          "critical": true
+        },
+        {
+          "id": "l4i2",
+          "text": "Blood bank licence from CDSCO (if blood bank)",
+          "critical": true
+        },
+        {
+          "id": "l4i3",
+          "text": "Pharmacy licence from State Drug Authority (if in-house pharmacy)",
+          "critical": true
+        },
+        {
+          "id": "l4i4",
+          "text": "Radiation safety licence from AERB (if CT / X-ray)"
+        },
+        {
+          "id": "l4i5",
+          "text": "Narcotic Drugs licence (if applicable)"
+        }
+      ]
+    },
+    {
+      "name": "5. Human Resources",
+      "items": [
+        {
+          "id": "l5i1",
+          "text": "Medical Director with valid MCI/NMC registration",
+          "critical": true
+        },
+        {
+          "id": "l5i2",
+          "text": "Nursing Home registration / Medical Superintendent appointment"
+        },
+        {
+          "id": "l5i3",
+          "text": "ESI & PF registration for employees"
+        }
+      ]
+    }
+  ],
+  "inputs": [],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Section",
+      "Items",
+      "Compliance"
+    ],
+    "kpis": [
+      {
+        "key": "score",
+        "label": "Readiness score",
+        "format": "percent"
+      },
+      {
+        "key": "band",
+        "label": "Status",
+        "format": "text"
+      },
+      {
+        "key": "criticalGaps",
+        "label": "Critical gaps",
+        "format": "int"
+      }
+    ]
+  },
+  "assumptions": "Requirements vary by state; central licences (CDSCO, AERB) apply nationally. Verify current norms with local authorities.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Which licence is needed first to open a hospital?",
+      "a": "The Clinical Establishment registration and building/fire approvals are foundational; without these, no other state licences will be issued."
+    },
+    {
+      "q": "Is PCPNDT registration mandatory for all hospitals?",
+      "a": "Yes, for any facility that performs ultrasound on pregnant women — including OPD ultrasound — PCPNDT registration is mandatory under law."
+    },
+    {
+      "q": "How long do hospital licences take in India?",
+      "a": "Timelines vary by state: CEA registration can take 30–90 days; pollution consent 60–120 days; AERB and blood bank licences 3–6 months each."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

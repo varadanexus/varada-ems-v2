@@ -1,0 +1,123 @@
+{
+  "id": "shift-planner",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Shift & Roster Cost Planner",
+  "shortBenefit": "Weekly shift roster labour cost for shift-based teams.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate weekly and monthly labour cost for shift-based operations — factory, retail, hospital or hospitality — with different shift types and headcount.",
+  "seo": {
+    "title": "Shift Planner — Roster Labour Cost Calculator | Varada Nexus",
+    "description": "Free shift planner calculator. Calculate weekly and monthly roster labour cost for factory, hospital, retail or hospitality shift operations.",
+    "keywords": [
+      "shift planner calculator",
+      "roster labour cost calculator",
+      "shift roster cost india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "day_shifts",
+      "label": "Day shift workers",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "day_rate",
+      "label": "Day shift daily wage (₹)",
+      "type": "number",
+      "default": 800,
+      "min": 0
+    },
+    {
+      "id": "eve_shifts",
+      "label": "Evening / afternoon shift workers",
+      "type": "number",
+      "default": 8,
+      "min": 0
+    },
+    {
+      "id": "eve_rate",
+      "label": "Evening shift daily wage (₹)",
+      "type": "number",
+      "default": 900,
+      "min": 0
+    },
+    {
+      "id": "night_shifts",
+      "label": "Night shift workers",
+      "type": "number",
+      "default": 6,
+      "min": 0
+    },
+    {
+      "id": "night_rate",
+      "label": "Night shift daily wage (₹)",
+      "type": "number",
+      "default": 1050,
+      "min": 0
+    },
+    {
+      "id": "days_per_week",
+      "label": "Operating days per week",
+      "type": "number",
+      "default": 6,
+      "min": 1,
+      "max": 7
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Shift",
+      "Workers",
+      "Weekly Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Weekly labour cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly labour cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Total shift workers",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Weekly cost = workers × daily wage × days/week. Monthly = weekly × 4.33. Night shift allowance (higher rate) assumed included in night shift daily wage.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "Is there a mandatory night shift allowance in India?",
+      "a": "There is no universal statutory night shift allowance in India. However, many state-specific Shops & Establishments Acts and some sectoral regulations (like certain factory settlements) prescribe extra pay for night work."
+    },
+    {
+      "q": "How many hours is a shift in India?",
+      "a": "Standard shift is 8 hours. Factories Act limits to 10.5 hours/day including overtime. Double shifts (16 hours) are prohibited. Shifts typically start at 6am, 2pm and 10pm."
+    },
+    {
+      "q": "What is the minimum wage for factory workers in India?",
+      "a": "Minimum wages vary by state and skill category. As of 2024, unskilled daily wages range from ₹400–700/day (state-wise). Always check the latest state government notification."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

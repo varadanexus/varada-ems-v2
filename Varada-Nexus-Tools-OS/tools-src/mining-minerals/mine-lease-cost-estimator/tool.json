@@ -1,0 +1,135 @@
+{
+  "id": "mine-lease-cost-estimator",
+  "category": "mining-minerals",
+  "kind": "calculator",
+  "name": "Mine Lease Cost Estimator",
+  "shortBenefit": "Estimate upfront and recurring costs of obtaining a mine lease",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the total cost of acquiring and maintaining a mining lease in India — covering application fees, surface rent, dead rent, royalty and IBM/DGMS fees.",
+  "seo": {
+    "title": "Mine Lease Cost Estimator – Mining Lease Fees India MMDR",
+    "description": "Estimate total mining lease costs in India: application fees, surface rent, dead rent, royalty, IBM fees and DGMS inspection charges per MMDR Act.",
+    "keywords": [
+      "mining lease cost India",
+      "mine lease fees MMDR",
+      "surface rent mining",
+      "dead rent mining India",
+      "mining licence cost India"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "lease_area_ha",
+      "label": "Lease Area (hectares)",
+      "type": "number",
+      "default": 50,
+      "min": 0.1
+    },
+    {
+      "id": "mineral_type",
+      "label": "Mineral Category",
+      "type": "select",
+      "default": "major",
+      "options": [
+        {
+          "v": "major",
+          "t": "Major Mineral (IBM regulated)"
+        },
+        {
+          "v": "minor",
+          "t": "Minor Mineral (State regulated)"
+        }
+      ]
+    },
+    {
+      "id": "application_fee",
+      "label": "Application Fee (₹)",
+      "type": "number",
+      "default": 50000,
+      "min": 0,
+      "hint": "Varies by state and mineral"
+    },
+    {
+      "id": "surface_rent_per_ha",
+      "label": "Annual Surface Rent (₹/ha)",
+      "type": "number",
+      "default": 10000,
+      "min": 0
+    },
+    {
+      "id": "dead_rent_per_ha",
+      "label": "Annual Dead Rent (₹/ha)",
+      "type": "number",
+      "default": 5000,
+      "min": 0,
+      "hint": "Minimum rent payable even if no production"
+    },
+    {
+      "id": "annual_production_mt",
+      "label": "Expected Annual Production (MT)",
+      "type": "number",
+      "default": 100000,
+      "min": 0
+    },
+    {
+      "id": "royalty_per_mt",
+      "label": "Royalty per MT (₹)",
+      "type": "number",
+      "default": 525,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Lease Cost Component",
+      "Frequency",
+      "Annual Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Annual Lease Costs",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total Cost per MT",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "One-Time Costs",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Dead rent credited against royalty in years of production. IBM fees ₹25,000/year (indicative). One-time includes application + legal costs.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the difference between royalty and dead rent?",
+      "a": "Royalty is payable per tonne of mineral extracted. Dead rent is the minimum annual rent payable even in years of no or low production. Royalty paid in a year is adjusted against dead rent."
+    },
+    {
+      "q": "How long is a mining lease granted for?",
+      "a": "Under MMDR Act, mining leases through auction are granted for 50 years (non-renewable as of 2021 amendment). Older leases could be renewed; new regime is strictly 50-year competitive auction."
+    },
+    {
+      "q": "What is a Preferred Bidder's Upfront Payment?",
+      "a": "In auctioned mine leases, the highest bidder (by Premium%) must pay an upfront fee (state-specified, typically 1–5% of NPV) within 30 days of being declared Preferred Bidder. This is in addition to ongoing royalty and premium."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Mining & Minerals Services",
+      "url": "/mining.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

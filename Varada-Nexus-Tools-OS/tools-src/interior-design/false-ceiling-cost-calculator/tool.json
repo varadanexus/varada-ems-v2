@@ -1,0 +1,131 @@
+{
+  "id": "false-ceiling-cost-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "False Ceiling Cost Calculator",
+  "shortBenefit": "False ceiling area, material cost and installation estimate.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the cost of a false ceiling for any room based on area, ceiling type and finish, including material and labour.",
+  "seo": {
+    "title": "False Ceiling Cost Calculator — Gypsum & POP Ceiling Estimator | Varada Nexus",
+    "description": "Free false ceiling cost calculator. Estimate gypsum board, POP or metal false ceiling costs including material and installation for any room size.",
+    "keywords": [
+      "false ceiling cost calculator",
+      "gypsum ceiling cost",
+      "pop false ceiling estimate india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "length",
+      "label": "Room length (ft)",
+      "type": "number",
+      "default": 18,
+      "min": 1
+    },
+    {
+      "id": "width",
+      "label": "Room width (ft)",
+      "type": "number",
+      "default": 14,
+      "min": 1
+    },
+    {
+      "id": "type",
+      "label": "Ceiling type",
+      "type": "select",
+      "default": "gypsum",
+      "options": [
+        {
+          "v": "pop",
+          "t": "POP (₹60–80/sq ft)"
+        },
+        {
+          "v": "gypsum",
+          "t": "Gypsum board (₹80–110/sq ft)"
+        },
+        {
+          "v": "grid",
+          "t": "Grid/Mineral fibre (₹70–90/sq ft)"
+        },
+        {
+          "v": "wood",
+          "t": "Wooden / PVC (₹120–180/sq ft)"
+        }
+      ]
+    },
+    {
+      "id": "design",
+      "label": "Design complexity",
+      "type": "select",
+      "default": "simple",
+      "options": [
+        {
+          "v": "plain",
+          "t": "Plain flat"
+        },
+        {
+          "v": "simple",
+          "t": "Simple (1 level + coving)"
+        },
+        {
+          "v": "complex",
+          "t": "Complex (multi-level / coves)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "Rate",
+      "Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total ceiling cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per sq ft",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Ceiling area",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Rates include material and labour. Complexity multiplier: plain 1.0×, simple 1.2×, complex 1.5×. Lighting cutouts not included.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the cost of a gypsum false ceiling per sq ft?",
+      "a": "Gypsum board false ceiling costs ₹80–120 per sq ft including material and installation for a simple single-level design in India (2024)."
+    },
+    {
+      "q": "Which false ceiling type is best for homes?",
+      "a": "Gypsum board is most popular for homes (easy to paint, good finish), while grid/mineral fibre is preferred for offices (easy access to electrical above)."
+    },
+    {
+      "q": "Does false ceiling cost include lights?",
+      "a": "No — false ceiling estimates cover structure and boarding only; lights, fixtures and wiring are billed separately."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

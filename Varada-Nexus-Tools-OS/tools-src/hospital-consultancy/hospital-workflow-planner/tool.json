@@ -1,0 +1,115 @@
+{
+  "id": "hospital-workflow-planner",
+  "category": "hospital-consultancy",
+  "kind": "calculator",
+  "name": "Hospital Workflow Planner",
+  "shortBenefit": "Estimate process turnaround times across key hospital workflows.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan and benchmark turnaround times for key hospital workflows — from patient registration to discharge — to identify bottlenecks and set operational targets.",
+  "seo": {
+    "title": "Hospital Workflow Planner — Process TAT & Bottleneck Planner | Varada Nexus",
+    "description": "Free hospital workflow planner. Estimate turnaround times for registration, OPD, lab, OT and discharge workflows to identify bottlenecks.",
+    "keywords": [
+      "hospital workflow planning",
+      "hospital turnaround time",
+      "patient flow hospital"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "reg_time",
+      "label": "Registration time (minutes)",
+      "type": "number",
+      "default": 5,
+      "min": 1
+    },
+    {
+      "id": "wait_opd",
+      "label": "OPD waiting time (minutes)",
+      "type": "number",
+      "default": 20,
+      "min": 1
+    },
+    {
+      "id": "consult_time",
+      "label": "Consultation time (minutes)",
+      "type": "number",
+      "default": 12,
+      "min": 1
+    },
+    {
+      "id": "lab_tat",
+      "label": "Lab result TAT (minutes)",
+      "type": "number",
+      "default": 60,
+      "min": 5
+    },
+    {
+      "id": "pharmacy_time",
+      "label": "Pharmacy dispensing time (minutes)",
+      "type": "number",
+      "default": 10,
+      "min": 1
+    },
+    {
+      "id": "discharge_time",
+      "label": "Discharge process time (minutes)",
+      "type": "number",
+      "default": 45,
+      "min": 5
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Process Step",
+      "Target (min)",
+      "Benchmark"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total OPD cycle time",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Bottleneck step",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Discharge TAT",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Benchmarks: registration ≤5m, OPD wait ≤15m, consult 10–15m, lab 45–60m, pharmacy ≤10m, discharge ≤45m. Total OPD cycle = registration + wait + consult + pharmacy.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good OPD waiting time?",
+      "a": "A patient waiting >30 minutes for a consultation is considered a quality gap; the benchmark target is ≤15 minutes median wait."
+    },
+    {
+      "q": "What is the standard discharge TAT in hospitals?",
+      "a": "Best practice is ≤2 hours from discharge order to patient exit; >4 hours indicates process gaps in billing, pharmacy or transport."
+    },
+    {
+      "q": "How do I reduce lab TAT?",
+      "a": "Automated analysers, pneumatic tube systems, dedicated phlebotomists and shift-based lab staffing aligned to peak demand hours are the key levers."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

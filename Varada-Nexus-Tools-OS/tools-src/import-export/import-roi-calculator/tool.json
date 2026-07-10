@@ -1,0 +1,119 @@
+{
+  "id": "import-roi-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Import ROI Calculator",
+  "shortBenefit": "Evaluate return on investment for import trading ventures",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Assess the profitability of an import deal by comparing total landed cost against the selling price in the Indian market to calculate ROI and profit margin.",
+  "seo": {
+    "title": "Import ROI Calculator – Return on Import Investment India",
+    "description": "Calculate ROI on import business deals. Compare total landed cost with selling price in India. Factor in duty, freight, overheads and working capital cost.",
+    "keywords": [
+      "import ROI calculator",
+      "import business profitability",
+      "import profit margin India",
+      "landed cost vs selling price",
+      "import return on investment"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "landed_cost",
+      "label": "Landed Cost per Unit (₹)",
+      "type": "number",
+      "default": 1200,
+      "min": 1,
+      "hint": "CIF + all duties + port clearing + local transport"
+    },
+    {
+      "id": "selling_price",
+      "label": "Selling Price per Unit (₹)",
+      "type": "number",
+      "default": 1800,
+      "min": 1
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity (units)",
+      "type": "number",
+      "default": 500,
+      "min": 1
+    },
+    {
+      "id": "overheads",
+      "label": "Overheads per Unit (₹)",
+      "type": "number",
+      "default": 100,
+      "min": 0,
+      "hint": "Storage, distribution, commission"
+    },
+    {
+      "id": "working_capital_cost",
+      "label": "Working Capital Finance Cost (₹)",
+      "type": "number",
+      "default": 30000,
+      "min": 0
+    },
+    {
+      "id": "finance_days",
+      "label": "Import Finance Cycle (days)",
+      "type": "number",
+      "default": 90,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "Calculation",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Net Profit",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "ROI %",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Profit Margin %",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "ROI = Net Profit / Total Investment × 100. Annualised ROI = ROI × (365 / finance cycle days).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What should be included in landed cost for ROI?",
+      "a": "Landed cost = CIF value + BCD + SWS + IGST (non-recoverable) + port handling + CHA + inland freight to warehouse. Recoverable IGST should be excluded."
+    },
+    {
+      "q": "What is a good ROI for an import deal?",
+      "a": "A minimum 25–30% ROI is considered viable for most import deals accounting for the 90–120 day cycle. Higher-value goods with lower duties can achieve 40–60% ROI."
+    },
+    {
+      "q": "How does the finance period affect ROI?",
+      "a": "A longer import cycle ties up working capital longer, increasing interest cost and reducing effective ROI. Faster-moving goods with shorter credit terms improve annualised returns."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

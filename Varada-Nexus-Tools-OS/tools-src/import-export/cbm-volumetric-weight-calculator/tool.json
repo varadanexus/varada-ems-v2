@@ -1,0 +1,120 @@
+{
+  "id": "cbm-volumetric-weight-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "CBM & Volumetric Weight Calculator",
+  "shortBenefit": "Shipment volume (CBM), volumetric weight and chargeable weight.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate cubic metres (CBM), volumetric (dimensional) weight and chargeable weight for a shipment from carton dimensions and quantity.",
+  "seo": {
+    "title": "CBM & Volumetric Weight Calculator — Chargeable Weight for Shipping | Varada Nexus",
+    "description": "Free CBM and volumetric weight calculator. Get shipment CBM, dimensional weight and chargeable weight for air and sea freight.",
+    "keywords": [
+      "cbm calculator",
+      "volumetric weight calculator",
+      "chargeable weight calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "l",
+      "label": "Length per carton (cm)",
+      "type": "number",
+      "default": 60,
+      "min": 0
+    },
+    {
+      "id": "w",
+      "label": "Width per carton (cm)",
+      "type": "number",
+      "default": 40,
+      "min": 0
+    },
+    {
+      "id": "h",
+      "label": "Height per carton (cm)",
+      "type": "number",
+      "default": 40,
+      "min": 0
+    },
+    {
+      "id": "qty",
+      "label": "Number of cartons",
+      "type": "number",
+      "default": 10,
+      "min": 1
+    },
+    {
+      "id": "actual",
+      "label": "Actual weight per carton (kg)",
+      "type": "number",
+      "default": 12,
+      "min": 0
+    },
+    {
+      "id": "divisor",
+      "label": "Volumetric divisor",
+      "type": "select",
+      "default": "5000",
+      "options": [
+        {
+          "v": "5000",
+          "t": "Air freight (5000)"
+        },
+        {
+          "v": "6000",
+          "t": "Courier (6000)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total CBM",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Volumetric weight",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Chargeable weight",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "CBM = L×W×H (cm) ÷ 1,000,000 × cartons. Volumetric weight (kg) = L×W×H ÷ divisor × cartons. Chargeable weight = the greater of actual and volumetric weight.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is CBM calculated?",
+      "a": "CBM per carton = length × width × height in cm ÷ 1,000,000. Multiply by the number of cartons for total CBM."
+    },
+    {
+      "q": "What is volumetric weight?",
+      "a": "It converts a shipment’s volume into a weight using a divisor (5000 for air, 6000 for courier), so bulky-but-light cargo is priced fairly."
+    },
+    {
+      "q": "What is chargeable weight?",
+      "a": "Carriers charge on the higher of actual and volumetric weight — that higher figure is the chargeable weight."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export",
+      "url": "/import-export.html"
+    }
+  ]
+}

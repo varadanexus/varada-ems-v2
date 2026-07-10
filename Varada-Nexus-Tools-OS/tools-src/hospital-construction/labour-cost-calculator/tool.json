@@ -1,0 +1,108 @@
+{
+  "id": "labour-cost-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Construction Labour Cost Calculator",
+  "shortBenefit": "Labour cost from crew size, wages and days.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate construction labour cost from the number of skilled and unskilled workers, their daily wages and the number of working days.",
+  "seo": {
+    "title": "Construction Labour Cost Calculator — Crew Wage Cost | Varada Nexus",
+    "description": "Free construction labour cost calculator. Estimate labour cost from skilled/unskilled crew size, daily wages and days.",
+    "keywords": [
+      "labour cost calculator",
+      "construction labour calculator",
+      "crew wage calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "skilled",
+      "label": "Skilled workers",
+      "type": "number",
+      "default": 20,
+      "min": 0
+    },
+    {
+      "id": "skWage",
+      "label": "Skilled daily wage (₹)",
+      "type": "number",
+      "default": 900,
+      "min": 0
+    },
+    {
+      "id": "unskilled",
+      "label": "Unskilled workers",
+      "type": "number",
+      "default": 30,
+      "min": 0
+    },
+    {
+      "id": "unWage",
+      "label": "Unskilled daily wage (₹)",
+      "type": "number",
+      "default": 600,
+      "min": 0
+    },
+    {
+      "id": "days",
+      "label": "Working days",
+      "type": "number",
+      "default": 120,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Crew",
+      "",
+      "Cost"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total labour cost",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Skilled",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Per day",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Skilled cost = skilled × wage × days; unskilled likewise. Total = sum. Excludes PF/ESI, overtime and contractor margin unless built into the wage.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is construction labour cost calculated?",
+      "a": "Multiply each crew’s headcount by its daily wage and the number of working days, then add the crews."
+    },
+    {
+      "q": "Are statutory costs included?",
+      "a": "No — add PF, ESI, insurance and any overtime separately, or use a fully-loaded wage."
+    },
+    {
+      "q": "How do I control labour cost?",
+      "a": "Improve productivity, sequence trades to avoid idle time and track daily output against plan."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

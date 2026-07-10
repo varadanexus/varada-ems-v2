@@ -1,0 +1,116 @@
+{
+  "id": "sales-commission-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Sales Commission Calculator",
+  "shortBenefit": "Calculate agent and team commissions on trade transactions",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Compute sales commissions for agents, distributors or sales teams — supporting tiered structures, flat rates and volume bonuses to incentivise performance accurately.",
+  "seo": {
+    "title": "Sales Commission Calculator – Agent Distributor Commission India",
+    "description": "Calculate sales agent and distributor commissions for trading businesses. Supports tiered commission, flat rates and volume bonuses. Get net revenue after commission.",
+    "keywords": [
+      "sales commission calculator",
+      "agent commission calculator India",
+      "distributor commission trading",
+      "tiered commission calculator",
+      "sales incentive calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "sales_value",
+      "label": "Total Sales Value (₹)",
+      "type": "number",
+      "default": 1000000,
+      "min": 1000
+    },
+    {
+      "id": "base_commission",
+      "label": "Base Commission Rate (%)",
+      "type": "number",
+      "default": 3,
+      "min": 0,
+      "max": 30
+    },
+    {
+      "id": "target_value",
+      "label": "Target for Bonus Commission (₹)",
+      "type": "number",
+      "default": 1000000,
+      "min": 0,
+      "hint": "Sales target above which bonus applies"
+    },
+    {
+      "id": "bonus_rate",
+      "label": "Bonus Commission Rate (%)",
+      "type": "number",
+      "default": 1,
+      "min": 0,
+      "max": 20,
+      "hint": "Extra % on sales above target"
+    },
+    {
+      "id": "gst_on_commission",
+      "label": "GST on Commission (%)",
+      "type": "number",
+      "default": 18,
+      "min": 0,
+      "max": 18,
+      "hint": "18% GST on commission (TDS may also apply)"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Calculation",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total Commission",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Effective Rate",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Net Revenue",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Bonus commission applies on sales above target. GST on total commission payable.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What TDS applies on commissions?",
+      "a": "TDS under Section 194H is deducted at 5% on commission to agents (excluding employees) where annual payments exceed ₹15,000."
+    },
+    {
+      "q": "What is a typical agent commission in India?",
+      "a": "Varies widely: consumer goods 2–5%, industrial products 3–8%, specialty products 5–15%, pharmaceutical/MedTech 5–10%. Higher margins allow higher commissions."
+    },
+    {
+      "q": "Should I structure a tiered commission plan?",
+      "a": "Yes — tiered commissions drive growth by rewarding over-achievement. A base rate for standard volumes and a higher rate above target creates strong sales motivation."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,110 @@
+{
+  "id": "lead-cost-calculator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Lead Cost (CPL) Calculator",
+  "shortBenefit": "Cost per lead from ad spend and conversion funnel.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate your Cost Per Lead (CPL) and analyse your marketing funnel from ad impressions to converted leads across any digital channel.",
+  "seo": {
+    "title": "Lead Cost Calculator — CPL & Marketing Funnel | Varada Nexus",
+    "description": "Free CPL calculator. Calculate cost per lead and analyse your digital marketing funnel from impressions to leads across Google, Meta and email.",
+    "keywords": [
+      "cost per lead calculator",
+      "cpl calculator",
+      "lead generation cost digital marketing"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "spend",
+      "label": "Ad spend (₹)",
+      "type": "number",
+      "default": 50000,
+      "min": 1
+    },
+    {
+      "id": "impressions",
+      "label": "Impressions",
+      "type": "number",
+      "default": 100000,
+      "min": 1
+    },
+    {
+      "id": "clicks",
+      "label": "Clicks",
+      "type": "number",
+      "default": 2000,
+      "min": 1
+    },
+    {
+      "id": "landing_conv",
+      "label": "Landing page conversion (%)",
+      "type": "number",
+      "default": 5,
+      "min": 0.1,
+      "max": 100
+    },
+    {
+      "id": "lead_qual",
+      "label": "Lead qualification rate (%)",
+      "type": "number",
+      "default": 60,
+      "min": 1,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Funnel Stage",
+      "Metric",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Cost per lead (CPL)",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total leads",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Qualified leads",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Leads = clicks × landing conversion %. Qualified leads = leads × qualification rate. CPL = spend ÷ total leads. Cost per qualified lead shown separately.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is a good cost per lead in India?",
+      "a": "CPL varies widely by industry: B2B SaaS ₹500–2,000; real estate ₹800–3,000; healthcare ₹300–1,200; education ₹200–800. Compare against customer lifetime value."
+    },
+    {
+      "q": "How do I reduce my cost per lead?",
+      "a": "Improve landing page conversion rate (better headline, CTA, form), tighten audience targeting, use negative keywords for paid search, and A/B test ad creative."
+    },
+    {
+      "q": "What is the difference between a lead and a qualified lead?",
+      "a": "A lead has shown interest (form fill, call); a qualified lead meets criteria like budget, authority and need (BANT) and is worth sales follow-up."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "id": "ctc-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "CTC Structure Calculator",
+  "shortBenefit": "Build annual CTC from salary components.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Structure an employee's CTC by defining all components — basic, HRA, allowances, PF, bonus and benefits — and get total cost to company.",
+  "seo": {
+    "title": "CTC Calculator — Cost to Company Structure Builder | Varada Nexus",
+    "description": "Free CTC calculator. Build and structure employee CTC from basic salary, HRA, allowances, PF, bonus and other benefits for payroll planning.",
+    "keywords": [
+      "ctc calculator",
+      "cost to company calculator",
+      "salary structure builder india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "basic",
+      "label": "Basic salary (₹/month)",
+      "type": "number",
+      "default": 25000,
+      "min": 1
+    },
+    {
+      "id": "hra",
+      "label": "HRA (₹/month)",
+      "type": "number",
+      "default": 12500,
+      "min": 0
+    },
+    {
+      "id": "transport",
+      "label": "Transport allowance (₹/month)",
+      "type": "number",
+      "default": 1600,
+      "min": 0
+    },
+    {
+      "id": "medical",
+      "label": "Medical allowance (₹/month)",
+      "type": "number",
+      "default": 1250,
+      "min": 0
+    },
+    {
+      "id": "special",
+      "label": "Special allowance (₹/month)",
+      "type": "number",
+      "default": 5000,
+      "min": 0
+    },
+    {
+      "id": "bonus_pct",
+      "label": "Annual bonus (% of basic)",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "gratuity_flag",
+      "label": "Include gratuity",
+      "type": "select",
+      "default": "yes",
+      "options": [
+        {
+          "v": "yes",
+          "t": "Yes (4.81% of basic)"
+        },
+        {
+          "v": "no",
+          "t": "No"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Monthly (₹)",
+      "Annual (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Annual CTC",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Monthly gross",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Employee PF",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Employer PF = 12% of basic. Gratuity = 4.81% of basic (15/26 days × 1 year). ESIC not included (applicable if gross ≤ ₹21,000/month).",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What components make up CTC?",
+      "a": "CTC = Fixed pay (basic+allowances) + Variable pay (bonus) + Employer contributions (PF, gratuity, ESIC) + Benefits (insurance, food). Only fixed and variable components go in the payslip."
+    },
+    {
+      "q": "Is gratuity part of CTC?",
+      "a": "Yes — gratuity is typically included in CTC at 4.81% of basic salary. It is paid after 5 years of continuous service at 15 days pay per year."
+    },
+    {
+      "q": "What is the minimum basic salary as % of CTC?",
+      "a": "There is no statutory minimum percentage, but it should be at least 50% of gross or meet minimum wage. PF is calculated on basic, so many employers keep basic low — but this can create compliance risk."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

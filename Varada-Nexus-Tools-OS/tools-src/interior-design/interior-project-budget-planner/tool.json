@@ -1,0 +1,104 @@
+{
+  "id": "interior-project-budget-planner",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Interior Project Budget Planner",
+  "shortBenefit": "Comprehensive interior project budget with all cost heads.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Create a complete interior project budget covering design fees, civil work, material, labour, furniture, MEP and contingency for a home or commercial project.",
+  "seo": {
+    "title": "Interior Project Budget Planner — Complete Cost Breakdown | Varada Nexus",
+    "description": "Free interior project budget planner. Create a comprehensive budget covering design fees, civil, material, furniture, MEP and contingency.",
+    "keywords": [
+      "interior project budget",
+      "interior design budget planner",
+      "home interior cost breakdown"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Project area (sq ft)",
+      "type": "number",
+      "default": 1500,
+      "min": 100
+    },
+    {
+      "id": "rate",
+      "label": "Base fit-out rate (₹/sq ft)",
+      "type": "number",
+      "default": 1800,
+      "min": 300,
+      "hint": "Use the Interior Design Cost Estimator to get this figure"
+    },
+    {
+      "id": "design_fee_pct",
+      "label": "Design fee (%)",
+      "type": "number",
+      "default": 10,
+      "min": 5,
+      "max": 20
+    },
+    {
+      "id": "contingency_pct",
+      "label": "Contingency (%)",
+      "type": "number",
+      "default": 12,
+      "min": 5,
+      "max": 25
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Budget Head",
+      "%",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total project budget",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Execution cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Contingency reserved",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Execution split: civil & flooring 28%, carpentry & joinery 25%, furniture 20%, MEP 15%, false ceiling 7%, décor & accessories 5%. Design fee and contingency calculated on execution cost.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much contingency should I keep for an interior project?",
+      "a": "A 10–15% contingency is standard for interior projects; renovation projects on old buildings should keep 15–20% due to higher hidden-work risk."
+    },
+    {
+      "q": "What is included in an interior design fee?",
+      "a": "Design fees cover concept drawings, 3D visualisation, working drawings for contractors, material specifications and supervision. Turnkey execution may be charged as a percentage of project cost."
+    },
+    {
+      "q": "How do I control costs in an interior project?",
+      "a": "Lock in designs before execution begins, specify materials precisely in the BOQ, get 3 quotes from contractors, agree on a variation-order process and track spending weekly against budget."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

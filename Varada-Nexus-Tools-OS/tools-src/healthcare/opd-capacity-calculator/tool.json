@@ -1,0 +1,102 @@
+{
+  "id": "opd-capacity-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "OPD Capacity Calculator",
+  "shortBenefit": "Daily OPD patient capacity from rooms and consult time.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate how many outpatients your OPD can see per day from the number of consulting rooms, average consultation time and OPD working hours.",
+  "seo": {
+    "title": "OPD Capacity Calculator — Daily Outpatient Capacity | Varada Nexus",
+    "description": "Free OPD capacity calculator. Estimate daily outpatient capacity from consulting rooms, consultation time and OPD hours.",
+    "keywords": [
+      "opd capacity calculator",
+      "outpatient capacity",
+      "consulting room capacity"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "rooms",
+      "label": "Consulting rooms",
+      "type": "number",
+      "default": 10,
+      "min": 1
+    },
+    {
+      "id": "consult",
+      "label": "Average consultation (minutes)",
+      "type": "number",
+      "default": 12,
+      "min": 1
+    },
+    {
+      "id": "hours",
+      "label": "OPD hours per day",
+      "type": "number",
+      "default": 8,
+      "min": 1
+    },
+    {
+      "id": "util",
+      "label": "Utilisation (%)",
+      "type": "number",
+      "default": 80,
+      "min": 1,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Patients/day",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Patients/room/day",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Patients/month",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Patients per room/day = OPD hours × 60 ÷ consult minutes × utilisation%. Total = rooms × per-room. Monthly assumes 26 working days.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is OPD capacity calculated?",
+      "a": "Per room = (OPD hours × 60 ÷ average consultation minutes) × utilisation. Multiply by the number of rooms for total daily capacity."
+    },
+    {
+      "q": "Why apply a utilisation factor?",
+      "a": "Real clinics lose time to gaps, documentation and no-shows, so 75–85% utilisation is more realistic than 100%."
+    },
+    {
+      "q": "How do I increase OPD capacity?",
+      "a": "Add rooms or sessions, reduce average consultation time where clinically appropriate, or improve scheduling to cut idle time."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "id": "wallpaper-cost-calculator",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Wallpaper Cost Calculator",
+  "shortBenefit": "Wallpaper rolls and total cost for any room.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the number of wallpaper rolls required and total cost for a room, accounting for pattern repeat and waste.",
+  "seo": {
+    "title": "Wallpaper Cost Calculator — Rolls & Budget Estimator | Varada Nexus",
+    "description": "Free wallpaper calculator. Estimate number of rolls and total wallpaper cost for any room size with pattern repeat and waste factor.",
+    "keywords": [
+      "wallpaper cost calculator",
+      "wallpaper rolls calculator",
+      "wallpaper estimator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "length",
+      "label": "Room length (ft)",
+      "type": "number",
+      "default": 15,
+      "min": 1
+    },
+    {
+      "id": "width",
+      "label": "Room width (ft)",
+      "type": "number",
+      "default": 12,
+      "min": 1
+    },
+    {
+      "id": "height",
+      "label": "Room height (ft)",
+      "type": "number",
+      "default": 10,
+      "min": 1
+    },
+    {
+      "id": "doors",
+      "label": "Doors & windows (count)",
+      "type": "number",
+      "default": 2,
+      "min": 0
+    },
+    {
+      "id": "roll_width",
+      "label": "Roll width (inches)",
+      "type": "number",
+      "default": 21,
+      "min": 12
+    },
+    {
+      "id": "roll_length",
+      "label": "Roll length (ft)",
+      "type": "number",
+      "default": 33,
+      "min": 10
+    },
+    {
+      "id": "pattern",
+      "label": "Pattern repeat (inches)",
+      "type": "number",
+      "default": 0,
+      "min": 0,
+      "hint": "0 = no repeat / plain"
+    },
+    {
+      "id": "price",
+      "label": "Price per roll (₹)",
+      "type": "number",
+      "default": 1800,
+      "min": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Item",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Rolls required",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Wall area covered",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Wall area = perimeter × height − (doors × windows × 20 sq ft each). Usable strips per roll = roll length ÷ (height + pattern repeat). Waste factor 10% added.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many wallpaper rolls do I need for a 12×15 room?",
+      "a": "For a 12×15 ft room at 10 ft height with a 21-inch roll (33 ft long), you typically need 10–12 rolls depending on pattern repeat and number of openings."
+    },
+    {
+      "q": "What is a pattern repeat in wallpaper?",
+      "a": "Pattern repeat is the vertical distance after which the design repeats. Higher repeat means more waste when matching patterns — add the repeat length to room height per strip."
+    },
+    {
+      "q": "Should I order extra wallpaper rolls?",
+      "a": "Always order 10–15% extra for waste, pattern matching and future repairs — wallpaper dye lots vary and exact matches may not be available later."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

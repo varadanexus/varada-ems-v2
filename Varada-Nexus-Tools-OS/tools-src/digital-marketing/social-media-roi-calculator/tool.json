@@ -1,0 +1,116 @@
+{
+  "id": "social-media-roi-calculator",
+  "category": "digital-marketing",
+  "kind": "calculator",
+  "name": "Social Media ROI Calculator",
+  "shortBenefit": "Revenue, cost and ROI from social media marketing.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the return on investment from your social media marketing efforts across organic and paid channels.",
+  "seo": {
+    "title": "Social Media ROI Calculator — Revenue & Cost from Social | Varada Nexus",
+    "description": "Free social media ROI calculator. Measure revenue, cost per lead and overall ROI from organic and paid social media marketing campaigns.",
+    "keywords": [
+      "social media roi calculator",
+      "social media marketing roi",
+      "facebook instagram roi calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "monthly_spend",
+      "label": "Monthly ad spend (₹)",
+      "type": "number",
+      "default": 30000,
+      "min": 0
+    },
+    {
+      "id": "team_cost",
+      "label": "Monthly team / agency cost (₹)",
+      "type": "number",
+      "default": 20000,
+      "min": 0
+    },
+    {
+      "id": "reach",
+      "label": "Monthly reach (people)",
+      "type": "number",
+      "default": 50000,
+      "min": 1
+    },
+    {
+      "id": "leads",
+      "label": "Leads generated/month",
+      "type": "number",
+      "default": 80,
+      "min": 0
+    },
+    {
+      "id": "close_rate",
+      "label": "Lead-to-sale close rate (%)",
+      "type": "number",
+      "default": 10,
+      "min": 0.1,
+      "max": 100
+    },
+    {
+      "id": "deal_value",
+      "label": "Average deal / order value (₹)",
+      "type": "number",
+      "default": 5000,
+      "min": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Monthly revenue",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Social media ROI",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Cost per lead",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Total cost = ad spend + team cost. Revenue = leads × close rate × deal value. ROI = (revenue − total cost) ÷ total cost × 100.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I measure social media ROI?",
+      "a": "ROI = (Revenue from social − total social spend) ÷ total social spend × 100. Use UTM tracking to attribute revenue to specific social campaigns."
+    },
+    {
+      "q": "Which social platform gives the best ROI in India?",
+      "a": "For B2C, Instagram and Facebook typically deliver the best ROI; for B2B, LinkedIn generates higher-quality leads though at higher CPL; WhatsApp Business works well for re-engagement."
+    },
+    {
+      "q": "How long before social media shows ROI?",
+      "a": "Paid social can show results within 2–4 weeks; organic social media ROI typically takes 6–12 months to compound as audience and authority build."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Digital Marketing Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

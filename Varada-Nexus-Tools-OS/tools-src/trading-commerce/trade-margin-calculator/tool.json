@@ -1,0 +1,113 @@
+{
+  "id": "trade-margin-calculator",
+  "category": "trading-commerce",
+  "kind": "calculator",
+  "name": "Trade Margin Calculator",
+  "shortBenefit": "Calculate gross and net margin on any trading transaction",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Analyse the profitability of any trading deal by computing gross margin, net margin and return on cost — covering purchase price, overheads and all direct expenses.",
+  "seo": {
+    "title": "Trade Margin Calculator – Gross Net Profit Margin Trading India",
+    "description": "Calculate gross and net profit margin for trading businesses. Enter purchase cost, selling price and overheads to get margin %, markup % and return on cost.",
+    "keywords": [
+      "trade margin calculator",
+      "trading profit margin India",
+      "gross margin calculator",
+      "net margin trading",
+      "markup vs margin calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "purchase_price",
+      "label": "Purchase Price per Unit (₹)",
+      "type": "number",
+      "default": 800,
+      "min": 1
+    },
+    {
+      "id": "selling_price",
+      "label": "Selling Price per Unit (₹)",
+      "type": "number",
+      "default": 1200,
+      "min": 1
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity (units)",
+      "type": "number",
+      "default": 500,
+      "min": 1
+    },
+    {
+      "id": "overhead_per_unit",
+      "label": "Overhead per Unit (₹)",
+      "type": "number",
+      "default": 60,
+      "min": 0,
+      "hint": "Storage, distribution, commission"
+    },
+    {
+      "id": "tax_rate",
+      "label": "Tax / GST Rate (%)",
+      "type": "number",
+      "default": 18,
+      "min": 0,
+      "max": 28,
+      "hint": "Enter 0 if prices are GST-exclusive"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "Calculation",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Gross Margin %",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Net Margin %",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Net Profit (Total)",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Gross margin = (SP − PP) / SP × 100. Net margin after overheads. Tax on revenue for P&L clarity.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the difference between margin and markup?",
+      "a": "Margin is profit as a % of selling price. Markup is profit as a % of cost. A 25% margin equals a 33.3% markup. Always clarify which metric buyers or accountants are referring to."
+    },
+    {
+      "q": "What is a healthy gross margin for traders?",
+      "a": "Depends on industry: commodity trading 2–8%, branded goods 20–40%, specialty/niche products 40–60%. Net margin after all costs is typically 5–15% for healthy trading businesses."
+    },
+    {
+      "q": "How does GST affect trading margins?",
+      "a": "GST is a pass-through for GST-registered traders (input credit available). For unregistered businesses or B2C with no ITC, GST directly reduces effective margin."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Trading & Commerce Services",
+      "url": "/trading.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

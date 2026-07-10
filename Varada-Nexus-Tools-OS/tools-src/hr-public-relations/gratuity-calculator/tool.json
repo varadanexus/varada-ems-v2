@@ -1,0 +1,83 @@
+{
+  "id": "gratuity-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Gratuity Calculator",
+  "shortBenefit": "Estimate gratuity payable under the Payment of Gratuity Act.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate gratuity payable to an employee from last drawn salary (basic + DA) and years of service, as per the Payment of Gratuity Act, 1972.",
+  "seo": {
+    "title": "Gratuity Calculator India (2026) — Payment of Gratuity Act | Varada Nexus",
+    "description": "Free gratuity calculator for India. Estimate gratuity from last salary and years of service under the Payment of Gratuity Act, with the ₹20 lakh cap.",
+    "keywords": [
+      "gratuity calculator",
+      "gratuity calculator india",
+      "payment of gratuity act calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "salary",
+      "label": "Last drawn monthly salary — Basic + DA (₹)",
+      "type": "number",
+      "default": 50000,
+      "min": 0
+    },
+    {
+      "id": "years",
+      "label": "Years of service",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Gratuity payable",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Years counted",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Formula basis",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Uses the covered-establishment formula: gratuity = 15 ÷ 26 × last salary (basic + DA) × years of service, capped at ₹20,00,000. Service beyond six months in the final year is commonly rounded up.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How is gratuity calculated in India?",
+      "a": "For establishments covered by the Act: gratuity = (15 ÷ 26) × last drawn salary (basic + DA) × completed years of service."
+    },
+    {
+      "q": "Is there a maximum gratuity limit?",
+      "a": "Yes, tax-exempt gratuity is capped at ₹20,00,000 under current rules."
+    },
+    {
+      "q": "Who is eligible for gratuity?",
+      "a": "Generally employees who complete five years of continuous service, with exceptions for death or disablement."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR",
+      "url": "/hr.html"
+    }
+  ]
+}

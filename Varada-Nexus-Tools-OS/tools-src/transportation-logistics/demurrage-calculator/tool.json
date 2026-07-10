@@ -1,0 +1,122 @@
+{
+  "id": "demurrage-calculator",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Port Demurrage & Detention Calculator",
+  "shortBenefit": "Demurrage and detention costs for containers.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate port demurrage and container detention charges based on free days, actual days held and daily rates per container.",
+  "seo": {
+    "title": "Port Demurrage Calculator — Container Detention Charges | Varada Nexus",
+    "description": "Free demurrage calculator. Calculate port demurrage and container detention charges based on free days and daily demurrage rates.",
+    "keywords": [
+      "demurrage calculator",
+      "container detention charges",
+      "port demurrage cost india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "containers",
+      "label": "Number of containers",
+      "type": "number",
+      "default": 2,
+      "min": 1
+    },
+    {
+      "id": "free_days_demurrage",
+      "label": "Free days (demurrage at port)",
+      "type": "number",
+      "default": 3,
+      "min": 0
+    },
+    {
+      "id": "actual_days_port",
+      "label": "Actual days at port",
+      "type": "number",
+      "default": 7,
+      "min": 0
+    },
+    {
+      "id": "demurrage_rate",
+      "label": "Demurrage rate (₹/container/day)",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    },
+    {
+      "id": "free_days_detention",
+      "label": "Free days (detention — container out of port)",
+      "type": "number",
+      "default": 7,
+      "min": 0
+    },
+    {
+      "id": "actual_days_detention",
+      "label": "Actual detention days",
+      "type": "number",
+      "default": 12,
+      "min": 0
+    },
+    {
+      "id": "detention_rate",
+      "label": "Detention rate (₹/container/day)",
+      "type": "number",
+      "default": 4000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Charge Type",
+      "Days Charged",
+      "Amount (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total demurrage + detention",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Demurrage charge",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Detention charge",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Chargeable days = max(0, actual days − free days). Demurrage applies while container is at port. Detention applies after container is taken out until returned to depot.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the difference between demurrage and detention?",
+      "a": "Demurrage is charged when a container stays at the port beyond free time (port-side). Detention is charged when a container is taken outside the port and not returned within free time."
+    },
+    {
+      "q": "How can I avoid demurrage and detention?",
+      "a": "Pre-arrange customs clearance, transportation and warehousing before cargo arrival. File Bills of Entry early, arrange containers immediately after clearance and return empty containers promptly."
+    },
+    {
+      "q": "What are typical free days at Indian ports?",
+      "a": "Most shipping lines offer 3–7 days free demurrage at major Indian ports. Free detention is typically 7–14 days. Free days vary by line, port, container type and volume agreement."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

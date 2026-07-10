@@ -1,0 +1,82 @@
+{
+  "id": "percentage-calculator",
+  "category": "general-business-productivity",
+  "kind": "calculator",
+  "name": "Percentage Calculator",
+  "shortBenefit": "Work out percentages, increases and decreases in one step.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "A quick percentage calculator: find what a percentage of a value is, and the value after a percentage increase or decrease.",
+  "seo": {
+    "title": "Percentage Calculator — % of a Number, Increase & Decrease | Varada Nexus",
+    "description": "Free percentage calculator. Find X% of any number and the result after a percentage increase or decrease, instantly.",
+    "keywords": [
+      "percentage calculator",
+      "percent of a number",
+      "percentage increase calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "value",
+      "label": "Value",
+      "type": "number",
+      "default": 2500,
+      "min": 0
+    },
+    {
+      "id": "percent",
+      "label": "Percentage (%)",
+      "type": "number",
+      "default": 18
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Calculation",
+      "",
+      " Result"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "% of value",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "After increase",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "After decrease",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Simple arithmetic percentages. Percentage-of = value × percent ÷ 100.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Rates and reference values are editable defaults and may vary by location, vendor and date. Verify critical figures independently. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How do I calculate a percentage of a number?",
+      "a": "Multiply the number by the percentage and divide by 100. For example, 18% of 2500 = 2500 × 18 ÷ 100 = 450."
+    },
+    {
+      "q": "How do I add a percentage to a number?",
+      "a": "Add the percentage amount to the original value: value + (value × percent ÷ 100)."
+    },
+    {
+      "q": "How do I calculate a percentage decrease?",
+      "a": "Subtract the percentage amount from the value: value − (value × percent ÷ 100)."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Our Services",
+      "url": "/services.html"
+    }
+  ]
+}

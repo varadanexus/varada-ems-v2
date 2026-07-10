@@ -1,0 +1,95 @@
+{
+  "id": "ambulance-requirement-calculator",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Ambulance Requirement Calculator",
+  "shortBenefit": "Number of BLS/ALS ambulances a hospital fleet needs.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the ambulance fleet a hospital needs from bed strength and service norms, split into Basic (BLS) and Advanced (ALS) life-support vehicles.",
+  "seo": {
+    "title": "Ambulance Requirement Calculator — Hospital Fleet Sizing | Varada Nexus",
+    "description": "Free ambulance requirement calculator. Estimate BLS and ALS ambulances a hospital needs from bed count and service norms.",
+    "keywords": [
+      "ambulance requirement calculator",
+      "hospital ambulance fleet",
+      "bls als ambulance planning"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 200,
+      "min": 1
+    },
+    {
+      "id": "perBeds",
+      "label": "Beds per ambulance",
+      "type": "number",
+      "default": 100,
+      "min": 1
+    },
+    {
+      "id": "alsShare",
+      "label": "ALS share (%)",
+      "type": "number",
+      "default": 40,
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Type",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total ambulances",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "ALS",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "BLS",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Total = ceil(beds ÷ beds-per-ambulance), minimum 1. ALS = round(total × ALS share%); the remainder are BLS. Adjust for trauma load, catchment and 24×7 shifts.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many ambulances does a hospital need?",
+      "a": "A common planning norm is roughly one ambulance per 100–150 beds, with a minimum of one, scaled up for trauma and emergency load."
+    },
+    {
+      "q": "What is the difference between BLS and ALS ambulances?",
+      "a": "BLS (Basic Life Support) handles stable transport; ALS (Advanced Life Support) carries a ventilator, monitor and critical-care equipment."
+    },
+    {
+      "q": "Should shifts be considered?",
+      "a": "Yes, 24×7 cover needs multiple crews per vehicle and a buffer for maintenance and simultaneous calls."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

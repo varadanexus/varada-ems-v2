@@ -1,0 +1,134 @@
+{
+  "id": "interior-lighting-planner",
+  "category": "interior-design",
+  "kind": "calculator",
+  "name": "Interior Lighting Planner",
+  "shortBenefit": "Lux, wattage and fixture count for any room.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate the number of light fixtures, total wattage and electricity cost for any room based on area, ceiling height and usage type.",
+  "seo": {
+    "title": "Interior Lighting Planner — Lux, Fixtures & Wattage Calculator | Varada Nexus",
+    "description": "Free interior lighting planner. Calculate number of fixtures, total wattage and light budget for rooms based on lux requirements and area.",
+    "keywords": [
+      "interior lighting calculator",
+      "lux calculator room",
+      "light fixture planner india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "length",
+      "label": "Room length (ft)",
+      "type": "number",
+      "default": 15,
+      "min": 1
+    },
+    {
+      "id": "width",
+      "label": "Room width (ft)",
+      "type": "number",
+      "default": 12,
+      "min": 1
+    },
+    {
+      "id": "height",
+      "label": "Ceiling height (ft)",
+      "type": "number",
+      "default": 10,
+      "min": 7
+    },
+    {
+      "id": "usage",
+      "label": "Room usage",
+      "type": "select",
+      "default": "living",
+      "options": [
+        {
+          "v": "bedroom",
+          "t": "Bedroom (150 lux)"
+        },
+        {
+          "v": "living",
+          "t": "Living room (200 lux)"
+        },
+        {
+          "v": "kitchen",
+          "t": "Kitchen (300 lux)"
+        },
+        {
+          "v": "office",
+          "t": "Office / Study (500 lux)"
+        },
+        {
+          "v": "hospital",
+          "t": "Hospital corridor (200 lux)"
+        },
+        {
+          "v": "ot",
+          "t": "OT / Exam room (1000 lux)"
+        }
+      ]
+    },
+    {
+      "id": "fixture_w",
+      "label": "Fixture wattage (W)",
+      "type": "number",
+      "default": 12,
+      "min": 1,
+      "hint": "LED downlight: 9–15W typical"
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Parameter",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Fixtures required",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total wattage",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Annual electricity cost",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Lumens per watt for LED: 90 lm/W. Room index used for utilisation coefficient (0.6–0.8). Lumens required = lux × area ÷ coefficient. Annual cost at ₹8/unit, 8 hrs/day, 300 days.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How many lights does a 12×15 room need?",
+      "a": "For a living room (200 lux), a 12×15 ft room needs roughly 8–12 LED downlights of 9–12W each, depending on ceiling height and lumen output."
+    },
+    {
+      "q": "What is the right lux level for different rooms?",
+      "a": "Bedrooms: 100–150 lux; living rooms: 200–300 lux; kitchens: 300–500 lux; offices: 300–500 lux; OTs and exam rooms: 500–1,000 lux."
+    },
+    {
+      "q": "Should I use warm white or cool white LEDs?",
+      "a": "Warm white (2700–3000K) suits bedrooms and living rooms; cool white (4000–5000K) is better for kitchens, offices and healthcare spaces."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Interior Design Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

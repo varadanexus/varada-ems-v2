@@ -1,0 +1,123 @@
+{
+  "id": "overtime-calculator",
+  "category": "hr-public-relations",
+  "kind": "calculator",
+  "name": "Overtime Pay Calculator",
+  "shortBenefit": "Overtime pay under Factories Act and company policy.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate overtime pay for employees under the Factories Act 1948 (double rate) or company overtime policy, with total earnings including regular pay.",
+  "seo": {
+    "title": "Overtime Pay Calculator India — Factories Act OT Calculation | Varada Nexus",
+    "description": "Free overtime calculator India. Calculate overtime pay under the Factories Act 1948 (double rate) or company policy from hourly rate and hours worked.",
+    "keywords": [
+      "overtime calculator india",
+      "factories act overtime",
+      "ot pay calculator india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "monthly_basic",
+      "label": "Monthly basic + DA (₹)",
+      "type": "number",
+      "default": 20000,
+      "min": 1
+    },
+    {
+      "id": "working_days",
+      "label": "Working days per month",
+      "type": "number",
+      "default": 26,
+      "min": 20,
+      "max": 31
+    },
+    {
+      "id": "working_hours",
+      "label": "Working hours per day",
+      "type": "number",
+      "default": 8,
+      "min": 4,
+      "max": 12
+    },
+    {
+      "id": "ot_hours",
+      "label": "Overtime hours this month",
+      "type": "number",
+      "default": 10,
+      "min": 0
+    },
+    {
+      "id": "ot_rate",
+      "label": "OT rate multiplier",
+      "type": "select",
+      "default": "2",
+      "options": [
+        {
+          "v": "1.5",
+          "t": "1.5× (common company policy)"
+        },
+        {
+          "v": "2",
+          "t": "2× (Factories Act)"
+        },
+        {
+          "v": "1",
+          "t": "1× (basic time rate)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "",
+      "Amount"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Overtime pay",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total monthly pay",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Hourly rate",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Hourly rate = monthly basic ÷ (working days × hours/day). OT pay = OT hours × hourly rate × multiplier. Factories Act mandates 2× for workers.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the overtime rate under the Factories Act?",
+      "a": "The Factories Act 1948 (Section 59) mandates double the ordinary rate of wages for overtime. Workers cannot be asked to work more than 10.5 hours/day or 60 hours/week."
+    },
+    {
+      "q": "Is overtime applicable to all employees?",
+      "a": "Factories Act overtime applies to workers in factories. Office employees (under Shops & Establishments Act) have separate state-specific rules. Senior management may not be eligible for OT."
+    },
+    {
+      "q": "How is the overtime hourly rate calculated?",
+      "a": "Hourly rate = (basic + DA) ÷ (working days × hours per day). Overtime is calculated on basic + DA, not on HRA or other allowances."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "HR & PR Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

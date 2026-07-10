@@ -1,0 +1,118 @@
+{
+  "id": "export-pricing-calculator",
+  "category": "import-export",
+  "kind": "calculator",
+  "name": "Export Pricing Calculator",
+  "shortBenefit": "Build FOB, CFR and CIF export prices from factory cost",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Arrive at a competitive export price by stacking all costs — factory gate, inland freight, export clearance, sea freight and insurance — to arrive at FOB, CFR and CIF quotation values.",
+  "seo": {
+    "title": "Export Pricing Calculator – FOB CFR CIF Price Builder India",
+    "description": "Calculate FOB, CFR and CIF export prices from your factory cost. Add inland freight, customs clearance, sea freight and insurance for the right quotation.",
+    "keywords": [
+      "export pricing calculator",
+      "FOB price calculator",
+      "CIF price India",
+      "CFR export calculator",
+      "export quotation tool"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "exw",
+      "label": "Ex-Works Price per Unit (₹)",
+      "type": "number",
+      "default": 1000,
+      "min": 1
+    },
+    {
+      "id": "quantity",
+      "label": "Quantity (units)",
+      "type": "number",
+      "default": 1000,
+      "min": 1
+    },
+    {
+      "id": "inland_freight",
+      "label": "Inland Freight to Port (₹ total)",
+      "type": "number",
+      "default": 15000,
+      "min": 0
+    },
+    {
+      "id": "export_clearance",
+      "label": "Export Clearance & CHA (₹)",
+      "type": "number",
+      "default": 8000,
+      "min": 0
+    },
+    {
+      "id": "sea_freight",
+      "label": "Sea / Air Freight (₹ total)",
+      "type": "number",
+      "default": 35000,
+      "min": 0
+    },
+    {
+      "id": "insurance_pct",
+      "label": "Insurance (% of CIF)",
+      "type": "number",
+      "default": 0.5,
+      "min": 0,
+      "max": 5
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Total (₹)",
+      "Per Unit (₹)"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "FOB / Unit",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "CFR / Unit",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "CIF / Unit",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Insurance calculated on CIF value (single-pass approx). All amounts in INR.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the difference between FOB, CFR and CIF?",
+      "a": "FOB — seller pays until goods are on vessel. CFR — seller also pays sea freight. CIF — seller additionally covers marine insurance to destination port."
+    },
+    {
+      "q": "How do I convert the CIF price to USD?",
+      "a": "Divide CIF (₹) by the prevailing USD/INR TT exchange rate. Add 1–2% buffer for bank charges."
+    },
+    {
+      "q": "What costs go into export customs clearance?",
+      "a": "CHA fees, Shipping Bill filing, port handling, and any regulatory certificate costs (FSSAI, BIS, phytosanitary)."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Import & Export Services",
+      "url": "/import-export.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}

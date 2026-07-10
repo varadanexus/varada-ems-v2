@@ -1,0 +1,100 @@
+{
+  "id": "medical-equipment-budget-planner",
+  "category": "healthcare",
+  "kind": "calculator",
+  "name": "Medical Equipment Budget Planner",
+  "shortBenefit": "Equipment capex by bed count with category split.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Plan a hospital medical equipment budget from bed strength and hospital tier, with an indicative split across imaging, OT, ICU, laboratory and general equipment.",
+  "seo": {
+    "title": "Medical Equipment Budget Planner — Hospital Equipment Capex | Varada Nexus",
+    "description": "Free medical equipment budget planner. Estimate hospital equipment capex per bed with category split for imaging, OT, ICU and lab.",
+    "keywords": [
+      "medical equipment budget",
+      "hospital equipment cost",
+      "equipment planning hospital"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "beds",
+      "label": "Number of beds",
+      "type": "number",
+      "default": 150,
+      "min": 1
+    },
+    {
+      "id": "tier",
+      "label": "Hospital tier",
+      "type": "select",
+      "default": "800000",
+      "options": [
+        {
+          "v": "500000",
+          "t": "Basic (₹5.0L/bed)"
+        },
+        {
+          "v": "800000",
+          "t": "Multispecialty (₹8.0L/bed)"
+        },
+        {
+          "v": "1500000",
+          "t": "Super-specialty (₹15.0L/bed)"
+        }
+      ]
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Category",
+      "share",
+      "Budget"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total equipment budget",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Per bed",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Imaging share",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Budget = beds × per-bed equipment cost for the chosen tier. Indicative split: imaging 25%, OT & CSSD 20%, ICU & emergency 20%, laboratory 10%, general & ward 25%.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "How much should I budget for hospital equipment?",
+      "a": "As a planning guide, roughly ₹5–15 lakh per bed depending on the specialty tier, on top of civil construction cost."
+    },
+    {
+      "q": "How is the equipment budget split?",
+      "a": "Imaging (~25%) and OT/ICU (~40% combined) usually dominate, with lab and ward equipment making up the rest."
+    },
+    {
+      "q": "Should I include AMC and consumables?",
+      "a": "This is capex only. Annual maintenance contracts and consumables are recurring costs to be budgeted separately."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    },
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    }
+  ]
+}

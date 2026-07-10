@@ -1,0 +1,120 @@
+{
+  "id": "electrical-load-calculator",
+  "category": "hospital-construction",
+  "kind": "calculator",
+  "name": "Electrical Load Calculator",
+  "shortBenefit": "Connected load, demand and transformer sizing by area.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Estimate the connected electrical load, maximum demand and recommended transformer/DG size for a building from area and load density.",
+  "seo": {
+    "title": "Electrical Load Calculator — Connected Load & Transformer Sizing | Varada Nexus",
+    "description": "Free electrical load calculator. Estimate connected load, demand (kVA) and transformer size from building area and load density.",
+    "keywords": [
+      "electrical load calculator",
+      "connected load calculator",
+      "transformer sizing calculator"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "area",
+      "label": "Built-up area (sq ft)",
+      "type": "number",
+      "default": 50000,
+      "min": 0
+    },
+    {
+      "id": "va",
+      "label": "Load density (VA/sq ft)",
+      "type": "select",
+      "default": "5",
+      "options": [
+        {
+          "v": "2",
+          "t": "Residential (2 VA)"
+        },
+        {
+          "v": "3",
+          "t": "Office (3 VA)"
+        },
+        {
+          "v": "5",
+          "t": "Hospital (5 VA)"
+        },
+        {
+          "v": "6",
+          "t": "Lab/ICU heavy (6 VA)"
+        }
+      ]
+    },
+    {
+      "id": "div",
+      "label": "Diversity factor (%)",
+      "type": "number",
+      "default": 70,
+      "min": 1,
+      "max": 100
+    },
+    {
+      "id": "pf",
+      "label": "Power factor",
+      "type": "number",
+      "default": 0.9,
+      "min": 0.1,
+      "max": 1
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Metric",
+      "",
+      "Value"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Maximum demand",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Connected load",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Suggested transformer",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Connected load (kVA) = area × VA/sq ft ÷ 1000. Maximum demand = connected × diversity%. Transformer is the next standard size above demand ÷ 0.8 loading. Detailed load schedules override these thumb rules.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is load density for a hospital?",
+      "a": "Hospitals typically design around 4–6 VA per sq ft, higher than offices (~3) due to HVAC, imaging and 24×7 loads."
+    },
+    {
+      "q": "What is diversity factor?",
+      "a": "Not all loads run at once; the diversity factor (often 60–80%) reduces connected load to a realistic maximum demand."
+    },
+    {
+      "q": "How do I size the transformer?",
+      "a": "Size for maximum demand at ~80% loading, then pick the next standard rating; add DG backup for essential loads."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Hospital Infrastructure",
+      "url": "/hospital.html"
+    },
+    {
+      "label": "Hospital Consultancy",
+      "url": "/consultancy.html"
+    }
+  ]
+}

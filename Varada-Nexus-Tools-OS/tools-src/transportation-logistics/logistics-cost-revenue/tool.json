@@ -1,0 +1,108 @@
+{
+  "id": "logistics-cost-revenue",
+  "category": "transportation-logistics",
+  "kind": "calculator",
+  "name": "Logistics Cost as % of Revenue",
+  "shortBenefit": "Logistics spend as percentage of revenue benchmark.",
+  "status": "published",
+  "phase": 1,
+  "updated": "2026-07-09",
+  "intro": "Calculate your total logistics cost as a percentage of revenue and benchmark against industry standards to identify savings opportunities.",
+  "seo": {
+    "title": "Logistics Cost as % of Revenue — Supply Chain Benchmarking | Varada Nexus",
+    "description": "Free logistics cost calculator. Measure total logistics spend as % of revenue and benchmark against industry to find cost reduction opportunities.",
+    "keywords": [
+      "logistics cost percentage revenue",
+      "supply chain cost benchmarking",
+      "logistics spend analysis india"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "revenue",
+      "label": "Annual revenue (₹)",
+      "type": "number",
+      "default": 50000000,
+      "min": 100000
+    },
+    {
+      "id": "freight_cost",
+      "label": "Annual freight cost (₹)",
+      "type": "number",
+      "default": 3000000,
+      "min": 0
+    },
+    {
+      "id": "warehouse_cost",
+      "label": "Annual warehousing cost (₹)",
+      "type": "number",
+      "default": 1500000,
+      "min": 0
+    },
+    {
+      "id": "inventory_cost",
+      "label": "Annual inventory carrying cost (₹)",
+      "type": "number",
+      "default": 1000000,
+      "min": 0
+    },
+    {
+      "id": "admin_cost",
+      "label": "Logistics admin / technology cost (₹)",
+      "type": "number",
+      "default": 500000,
+      "min": 0
+    }
+  ],
+  "results": {
+    "rowFmt": "raw",
+    "columns": [
+      "Component",
+      "Annual Cost",
+      "% of Revenue"
+    ],
+    "kpis": [
+      {
+        "key": "k1",
+        "label": "Total logistics cost %",
+        "format": "text"
+      },
+      {
+        "key": "k2",
+        "label": "Total logistics cost",
+        "format": "text"
+      },
+      {
+        "key": "k3",
+        "label": "Savings at benchmark",
+        "format": "text"
+      }
+    ]
+  },
+  "assumptions": "Industry benchmark total logistics cost: FMCG 8–12%, Auto parts 6–10%, E-commerce 15–20%, Manufacturing 5–8%. Benchmark used = 8% for savings calculation.",
+  "disclaimer": "This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.",
+  "faq": [
+    {
+      "q": "What is the average logistics cost as % of revenue?",
+      "a": "India logistics cost averages 13–14% of GDP (higher than the global average of 8–10%). For individual companies: FMCG 8–12%, auto 6–10%, pharma 5–8%, e-commerce 15–22%."
+    },
+    {
+      "q": "How can companies reduce logistics costs?",
+      "a": "Key levers: consolidate shipments, improve load factors, switch modes for long-haul (road to rail), implement WMS for warehouse efficiency, reduce inventory through better forecasting."
+    },
+    {
+      "q": "What is the ideal logistics cost ratio?",
+      "a": "World-class companies achieve total logistics cost of 4–7% of revenue. Most Indian SMEs are at 12–18%. Each 1% reduction directly adds to operating profit."
+    }
+  ],
+  "relatedServices": [
+    {
+      "label": "Logistics & Transport Services",
+      "url": "/services.html"
+    },
+    {
+      "label": "Contact Us",
+      "url": "/contact.html"
+    }
+  ]
+}
