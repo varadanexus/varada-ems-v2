@@ -636,7 +636,7 @@ function docTypeLabel(type) {
   return { WEIGHT_BILL: "Weigh Bill", TRIP_SHEET: "Trip Sheet", EXPENSE_RECEIPT: "Expense Receipt" }[String(type || "").toUpperCase()] || type || "Document";
 }
 
-function statusBadge(status) {
+function docStatusBadge(status) {
   const s = String(status || "pending").toLowerCase();
   const map = {
     pending: ["#a97b12", "rgba(217,185,110,.16)", "Pending"],
@@ -657,7 +657,7 @@ function renderDocuments() {
     <tr>
       <td>${escapeHtml(d.trip_no || "-")}</td>
       <td>${escapeHtml(docTypeLabel(d.document_type))}</td>
-      <td>${statusBadge(d.approval_status)}${d.approval_status === "rejected" && d.rejection_reason ? `<div class="muted" style="font-size:.74rem;margin-top:3px">${escapeHtml(d.rejection_reason)}</div>` : ""}</td>
+      <td>${docStatusBadge(d.approval_status)}${d.approval_status === "rejected" && d.rejection_reason ? `<div class="muted" style="font-size:.74rem;margin-top:3px">${escapeHtml(d.rejection_reason)}</div>` : ""}</td>
       <td>${escapeHtml(formatDate(d.created_at))}</td>
       <td>${d.web_view_link ? `<a class="btn btn-sm" href="${escapeHtml(d.web_view_link)}" target="_blank" rel="noopener">View</a>` : "-"}</td>
     </tr>`).join("");
