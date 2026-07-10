@@ -187,6 +187,89 @@ async function refreshEvidence() {
   updateWizardNav();
 }
 
+// ---------------------------------------------------------------------------
+// Access gate: the agreement is not shown until the signer grants camera and
+// location access. Both are mandatory; if either is withheld the agreement is
+// hard-blocked and a popup asks the signer to grant access. The grant timestamp
+// and network/IP details are recorded as part of the signing evidence.
+// ---------------------------------------------------------------------------
+function renderGateConsent() {
+  renderShell(`
+    <section class="public-card" style="max-width:640px;margin:1.2rem auto;">
+      <div class="public-card-head"><h2>Access verification required</h2><span>Secure legal signing</span></div>
+      <p class="muted" style="margin:.65rem 0;">To protect both parties, this agreement can only be opened after you grant access to your <strong>camera</strong> and <strong>location</strong>. These are used for signing-identity evidence, and the time and network/IP details of your access are recorded.</p>
+      <p class="muted" style="font-size:.8rem;margin:.4rem 0 .85rem;">Camera and location access are mandatory to view and sign this agreement.</p>
+      <div class="public-actions"><button class="btn public-primary" id="gateGrantBtn" type="button" style="width:auto;">Grant camera &amp; location access</button></div>
+    </section>
+  `);
+  document.querySelector("#gateGrantBtn")?.addEventListener("click", runAccessGate);
+}
+
+function showGateBlocked(message) {
+  document.querySelector("#gateBlockModal")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "gateBlockModal";
+  overlay.innerHTML = `
+    <style>
+      #gateBlockModal{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(7,18,36,.6);padding:1rem}
+      #gateBlockModal .g-modal{width:min(500px,100%);background:#fff;border:1px solid #e0b4b4;border-radius:8px;box-shadow:0 24px 60px rgba(7,18,36,.35);overflow:hidden}
+      #gateBlockModal .g-head{display:flex;align-items:center;gap:.6rem;padding:1rem 1.1rem;background:#fbeaea;border-bottom:1px solid #f0cfcf}
+      #gateBlockModal .g-head strong{font-size:1rem;color:#a51f2b}
+      #gateBlockModal .g-mark{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#a51f2b;color:#fff;font-weight:800}
+      #gateBlockModal .g-body{padding:1rem 1.1rem;color:#33425a;font-size:.86rem;line-height:1.6}
+      #gateBlockModal .g-body p{margin:.5rem 0}
+      #gateBlockModal .g-actions{display:flex;justify-content:flex-end;padding:.85rem 1.1rem;border-top:1px solid #e2e7ed;background:#faf7f0}
+      #gateBlockModal .g-btn{min-height:38px;border-radius:5px;padding:.5rem .95rem;font-weight:700;cursor:pointer;border:1px solid #b8923e;background:#b8923e;color:#101827}
+    </style>
+    <div class="g-modal" role="dialog" aria-modal="true" aria-labelledby="gateBlockTitle">
+      <div class="g-head"><span class="g-mark">!</span><strong id="gateBlockTitle">Access required</strong></div>
+      <div class="g-body"><p>${escapeHtml(message)}</p><p>Please give access to location and camera for accessing the agreement. Enable both in your browser, then retry.</p></div>
+      <div class="g-actions"><button class="g-btn" id="gateRetryBtn" type="button">Grant access &amp; retry</button></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.querySelector("#gateRetryBtn")?.addEventListener("click", () => { overlay.remove(); runAccessGate(); });
+}
+
+async function runAccessGate() {
+  const btn = document.querySelector("#gateGrantBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Requesting access..."; }
+  // 1. Camera permission (permission check only — the stream is released
+  // immediately; the disclosed live photo is captured later in the wizard).
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+  } catch (error) {
+    if (btn) { btn.disabled = false; btn.textContent = "Grant camera & location access"; }
+    showGateBlocked("Camera access was not granted.");
+    return;
+  }
+  try { stream.getTracks().forEach((track) => track.stop()); } catch { /* noop */ }
+  // 2. Location permission (must be granted).
+  const location = await getLocation();
+  if (!location || location.status !== "granted") {
+    if (btn) { btn.disabled = false; btn.textContent = "Grant camera & location access"; }
+    showGateBlocked("Location (GPS) access was not granted.");
+    return;
+  }
+  // 3. Network / IP details, timestamped at access.
+  const ipRisk = await getIpRisk().catch(() => null);
+  state.location = location;
+  state.ipRisk = ipRisk || state.ipRisk;
+  state.accessGate = {
+    grantedAt: new Date().toISOString(),
+    cameraGranted: true,
+    locationStatus: location.status,
+    latitude: location.latitude ?? null,
+    longitude: location.longitude ?? null,
+    ip: ipRisk?.ip || null,
+    ipProvider: ipRisk?.provider || null,
+    ipRiskScore: ipRisk?.riskScore ?? null
+  };
+  // 4. Access granted — reveal the agreement.
+  state.step = 1;
+  renderSigning();
+}
+
 async function submitAcceptance() {
   const button = document.querySelector("#submitSignBtn");
   button.disabled = true;
@@ -209,7 +292,8 @@ async function submitAcceptance() {
           status: state.request?.diditStatus || null
         },
         kycPendingAtSignature: Boolean(state.request?.diditVerificationUrl) && !kycApproved(),
-        kycPendingAcknowledgedAt: state.kycPendingAcknowledgedAt || null
+        kycPendingAcknowledgedAt: state.kycPendingAcknowledgedAt || null,
+        accessGate: state.accessGate || null
       }
     });
     state.stream?.getTracks?.().forEach((track) => track.stop());
@@ -491,7 +575,7 @@ async function init() {
   renderShell(`<section class="public-card"><h1>Loading secure agreement...</h1><p class="muted">Please wait.</p></section>`);
   try {
     state.request = await getPublicSigningRequest(token);
-    renderSigning();
+    renderGateConsent();
   } catch (error) {
     renderShell(`<section class="public-card"><h1>Signing link unavailable</h1><p class="muted">${escapeHtml(error?.message || "This link cannot be opened.")}</p></section>`);
   }
