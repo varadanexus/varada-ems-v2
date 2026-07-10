@@ -259,36 +259,92 @@ const TRIP_SUBFOLDER: Record<string, string> = {
   POD: "POD & Other"
 };
 
-function folderSegmentsFor(payload: any) {
-  const category = String(payload.category || "OTHER").toUpperCase();
-  const date = payload.date ? new Date(payload.date) : new Date();
-  const safeDate = isNaN(date.getTime()) ? new Date() : date;
-  const fy = financialYear(safeDate);
-  const mm = monthFolder(safeDate);
+function legalSubfolder(documentType: string) {
+  const t = String(documentType || "").toUpperCase();
+  if (t.includes("ARCHIVE") || t.includes("BUNDLE")) return "Archive Bundles";
+  if (t.includes("SIGN") || t.includes("EXECUT")) return "Signed & Executed";
+  if (t.includes("DRAFT")) return "Drafts";
+  return "Agreements";
+}
 
+// Folder layout for a category, RELATIVE to its module folder (the base folder
+// resolved from GDRIVE_FOLDER_MAP / GDRIVE_ROOT_FOLDER_ID). Keeps everything
+// neatly grouped and date-sorted. `withDate` appends FY + Month folders.
+function categoryLayout(category: string, payload: any, fy: string, mm: string, withDate: boolean) {
+  const dateSegs = withDate ? [fy, mm] : [];
   switch (category) {
-    case "CLIENT_BILL":
-      return ["02 Client Billing", "Client Bills", fy, mm];
-    case "GST_INVOICE":
-      return ["02 Client Billing", "GST Invoices", fy, mm];
-    case "CLIENT_RECEIPT":
-      return ["02 Client Billing", "Client Receipts", fy, mm];
-    case "CREDIT_NOTE":
-      return ["02 Client Billing", "Credit Notes", fy, mm];
-    case "TRANSPORTER_STATEMENT":
-      return ["03 Transporter Settlements", "Transporter Statements", fy, mm];
-    case "TRANSPORTER_PAYMENT":
-      return ["03 Transporter Settlements", "Transporter Payments", fy, mm];
+    // --- Transportation module ---
     case "TRIP_DOCUMENT": {
       const tripNo = String(payload.tripNo || payload.documentNo || "UNKNOWN").trim();
       const sub = TRIP_SUBFOLDER[String(payload.documentType || "").toUpperCase()] || "POD & Other";
-      return ["01 Trips", fy, `TRIP-${tripNo}`, sub];
+      return withDate ? ["01 Trips", fy, `TRIP-${tripNo}`, sub] : ["01 Trips", `TRIP-${tripNo}`, sub];
     }
+    case "CLIENT_BILL":
+      return ["02 Client Billing", "Client Bills", ...dateSegs];
+    case "GST_INVOICE":
+      return ["02 Client Billing", "GST Invoices", ...dateSegs];
+    case "CLIENT_RECEIPT":
+      return ["02 Client Billing", "Client Receipts", ...dateSegs];
+    case "CREDIT_NOTE":
+      return ["02 Client Billing", "Credit Notes", ...dateSegs];
+    case "TRANSPORTER_STATEMENT":
+      return ["03 Transporter Settlements", "Transporter Statements", ...dateSegs];
+    case "TRANSPORTER_PAYMENT":
+      return ["03 Transporter Settlements", "Transporter Payments", ...dateSegs];
     case "CONSOLIDATED":
-      return ["04 Consolidated & Other", fy, mm];
+      return ["04 Consolidated & Other", ...dateSegs];
+    // --- Email module (relative to the Email folder) ---
+    case "EMAIL_OUTBOUND":
+      return ["Outbound", ...dateSegs];
+    // --- Legal module (relative to the Legal folder) ---
+    case "LEGAL_DOCUMENT":
+      return [legalSubfolder(payload.documentType), ...dateSegs];
     default:
-      return ["04 Consolidated & Other", fy, mm];
+      return ["04 Consolidated & Other", ...dateSegs];
   }
+}
+
+// Per-purpose (module) folder mapping. Each category resolves to a base folder
+// via GDRIVE_FOLDER_MAP (JSON: { "CLIENT_BILL": "<id>", "DEFAULT": "<id>", ... });
+// unmapped categories fall back to map.DEFAULT then GDRIVE_ROOT_FOLDER_ID.
+function folderMap(): Record<string, string> {
+  const raw = env("GDRIVE_FOLDER_MAP");
+  if (!raw) return {};
+  try {
+    const m = JSON.parse(raw);
+    return m && typeof m === "object" ? m : {};
+  } catch {
+    throw new Error("GDRIVE_FOLDER_MAP is not valid JSON");
+  }
+}
+
+// GDRIVE_SUBFOLDERS = "none" drops files straight into the module folder with no
+// FY/Month sub-structure. Defaults to date-sorted.
+function useDateSubfolders() {
+  return String(env("GDRIVE_SUBFOLDERS", "date")).toLowerCase() !== "none";
+}
+
+function parsedDate(payload: any) {
+  const d = payload.date ? new Date(payload.date) : new Date();
+  return isNaN(d.getTime()) ? new Date() : d;
+}
+
+// Resolve { baseId, segments } for a payload: the module folder + the category's
+// internal layout.
+function resolveTargetFolder(payload: any) {
+  const category = String(payload.category || "OTHER").toUpperCase();
+  const map = folderMap();
+  const d = parsedDate(payload);
+  const fy = financialYear(d);
+  const mm = monthFolder(d);
+  const withDate = useDateSubfolders();
+
+  const base = map[category] || map.DEFAULT || env("GDRIVE_ROOT_FOLDER_ID");
+  if (!base) {
+    throw new Error(`No Drive folder configured for category ${category}. Set GDRIVE_FOLDER_MAP and/or GDRIVE_ROOT_FOLDER_ID.`);
+  }
+  const segments = categoryLayout(category, payload, fy, mm, withDate);
+  return { baseId: base, segments, label: segments.join(" / ") || "(folder root)" };
 }
 
 // ---------------------------------------------------------------------------
@@ -296,18 +352,29 @@ function folderSegmentsFor(payload: any) {
 // ---------------------------------------------------------------------------
 async function handleHealth() {
   const token = await getAccessToken();
+  const map = folderMap();
   const rootId = env("GDRIVE_ROOT_FOLDER_ID");
-  if (!rootId) throw new Error("GDRIVE_ROOT_FOLDER_ID secret is not set");
-  const info = await driveFetch(
-    `https://www.googleapis.com/drive/v3/files/${rootId}?${DRIVE_QS}&fields=id,name,driveId`,
-    token
-  );
-  return { ok: true, rootFolder: info };
+  const targets: Record<string, string> = { ...map };
+  if (rootId) targets.ROOT = rootId;
+  if (!Object.keys(targets).length) {
+    throw new Error("No folders configured: set GDRIVE_FOLDER_MAP and/or GDRIVE_ROOT_FOLDER_ID");
+  }
+  const folders: Record<string, any> = {};
+  for (const [key, id] of Object.entries(targets)) {
+    try {
+      const info = await driveFetch(
+        `https://www.googleapis.com/drive/v3/files/${id}?${DRIVE_QS}&fields=id,name,driveId`,
+        token
+      );
+      folders[key] = { id: info.id, name: info.name, driveId: info.driveId || null, ok: true };
+    } catch (e) {
+      folders[key] = { id, ok: false, error: String(e?.message || e) };
+    }
+  }
+  return { ok: true, subfolders: useDateSubfolders() ? "date" : "none", folders };
 }
 
 async function handleUpload(payload: any) {
-  const rootId = env("GDRIVE_ROOT_FOLDER_ID");
-  if (!rootId) throw new Error("GDRIVE_ROOT_FOLDER_ID secret is not set");
   if (!payload.base64) throw new Error("base64 file content is required");
 
   const fileName = String(payload.fileName || `${payload.documentNo || "document"}.pdf`).trim();
@@ -316,8 +383,8 @@ async function handleUpload(payload: any) {
 
   try {
     const token = await getAccessToken();
-    const segments = folderSegmentsFor(payload);
-    const folderId = await ensureFolderPath(token, rootId, segments);
+    const target = resolveTargetFolder(payload);
+    const folderId = await ensureFolderPath(token, target.baseId, target.segments);
     const bytes = base64ToBytes(payload.base64);
     const uploaded = await uploadFile(token, folderId, fileName, mimeType, bytes);
 
@@ -349,7 +416,7 @@ async function handleUpload(payload: any) {
       folderId,
       fileName: uploaded.name || fileName,
       webViewLink: uploaded.webViewLink || null,
-      folderPath: segments.join(" / ")
+      folderPath: target.label
     };
   } catch (e) {
     // Record the failure so the app can surface / retry it, then rethrow.

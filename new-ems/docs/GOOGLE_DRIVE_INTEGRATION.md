@@ -24,17 +24,65 @@ Local PDF download always happens first; if Drive is unconfigured or the upload
 fails, the download is unaffected and the failure is logged (and recorded with
 `upload_status='failed'`).
 
-## Folder layout (auto-created)
+## Folder model
+
+The Shared Drive is organised by module:
+`Varada Nexus Docs / EMS Documents / { Transportation, Email, legal, ... }`.
+
+You provide one folder per purpose/module; the function auto-creates the
+sub-structure inside it. Configuration is via two secrets:
+
+- `GDRIVE_FOLDER_MAP` — JSON mapping a document category to its folder id.
+  A `DEFAULT` key catches anything unmapped.
+- `GDRIVE_ROOT_FOLDER_ID` — fallback folder used for any category not in the map.
+
+All currently-wired documents are transport, so the simplest setup is to point
+the transport categories at your **Transportation** folder (either map every
+transport category to it, or just set it as `GDRIVE_ROOT_FOLDER_ID`).
+
+### Sub-structure auto-created inside each module folder
 
 ```
-<Shared root folder>/
+Transportation/
 ├── 01 Trips/FY 2026-27/TRIP-<no>/{Weigh Bill | Trip Sheet | Loading & Unloading Slips | E-Way Bill & Invoice Copies | POD & Other}/
 ├── 02 Client Billing/{Client Bills | GST Invoices | Client Receipts | Credit Notes}/FY 2026-27/<MM Month>/
 ├── 03 Transporter Settlements/{Transporter Statements | Transporter Payments}/FY 2026-27/<MM Month>/
 └── 04 Consolidated & Other/FY 2026-27/<MM Month>/
+
+Email/
+└── Outbound/FY 2026-27/<MM Month>/
+
+Legal/
+└── {Agreements | Signed & Executed | Drafts | Archive Bundles}/FY 2026-27/<MM Month>/
 ```
 
+> Transport auto-save is live now. The Email and Legal folders are configured in
+> the map but nothing writes to them until those flows are wired (their PDFs are
+> produced server-side in the email/legal edge functions, not via `savePdf`).
+> Categories: `EMAIL_OUTBOUND`, `LEGAL_DOCUMENT`.
+
 Financial year = Apr–Mar. Files are named by document number (e.g. `CB-000123.pdf`).
+Set `GDRIVE_SUBFOLDERS=none` to drop files directly into the mapped folder with
+no date sub-structure.
+
+### Category keys (for GDRIVE_FOLDER_MAP)
+
+`CLIENT_BILL`, `GST_INVOICE`, `CLIENT_RECEIPT`, `CREDIT_NOTE`,
+`TRANSPORTER_STATEMENT`, `TRANSPORTER_PAYMENT`, `TRIP_DOCUMENT`, `CONSOLIDATED`,
+`DEFAULT`.
+
+Example (all transport docs → the Transportation folder):
+```json
+{ "DEFAULT": "<TRANSPORTATION_FOLDER_ID>" }
+```
+Example (a couple pointed at their own folders):
+```json
+{
+  "CLIENT_BILL": "<Client Bills folder id>",
+  "TRANSPORTER_STATEMENT": "<Statements folder id>",
+  "DEFAULT": "<Transportation folder id>"
+}
+```
 
 ## One-time setup
 
@@ -54,11 +102,20 @@ Financial year = Apr–Mar. Files are named by document number (e.g. `CB-000123.
    files are owned by the drive.
 
 ### 3. Supabase secrets (you run these — Claude never handles the key)
-From `new-ems/`:
+Module folders (from the shared drive `EMS Documents`):
+
+| Module | Folder id |
+| --- | --- |
+| Transportation | `15u7i_uY_QjnBJKJhj8h-3gWELnesFFHD` |
+| Email (outbound) | `1-4-fICzzq_ODL8k8VsBHwyjsp0EwsFF2` |
+| Legal | `1ypHArLbMuXshNtOW3VljyWQSjYN_f2lH` |
+
+Set the folder map (Transportation as `DEFAULT` catches all transport docs):
 ```bash
-supabase secrets set GDRIVE_ROOT_FOLDER_ID=15u7i_uY_QjnBJKJhj8h-3gWELnesFFHD
-supabase secrets set GOOGLE_SERVICE_ACCOUNT_JSON="$(cat /path/to/service-account.json)"
+supabase secrets set GDRIVE_FOLDER_MAP='{"DEFAULT":"15u7i_uY_QjnBJKJhj8h-3gWELnesFFHD","EMAIL_OUTBOUND":"1-4-fICzzq_ODL8k8VsBHwyjsp0EwsFF2","LEGAL_DOCUMENT":"1ypHArLbMuXshNtOW3VljyWQSjYN_f2lH"}'
 ```
+On Windows PowerShell, set `GDRIVE_FOLDER_MAP` (and `GOOGLE_SERVICE_ACCOUNT_JSON`)
+via the **Supabase Dashboard** (Edge Functions → Secrets) to avoid quoting issues.
 `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically.
 
 ### 4. Deploy the edge function
