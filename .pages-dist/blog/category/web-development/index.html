@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Development Insights — Varada Nexus</title>
+<meta name="description" content="Modern web platforms, performance engineering and the technologies behind effective business websites.">
+<link rel="canonical" href="https://www.varadanexus.com/blog/category/web-development/">
+<link rel="icon" type="image/png" href="/images/logo.png">
+<meta property="og:title" content="Web Development Insights — Varada Nexus">
+<meta property="og:description" content="Modern web platforms, performance engineering and the technologies behind effective business websites.">
+<meta property="og:url" content="https://www.varadanexus.com/blog/category/web-development/">
+<meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Web Development Insights — Varada Nexus">
+<meta name="twitter:description" content="Modern web platforms, performance engineering and the technologies behind effective business websites.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.varadanexus.com/"},{"@type":"ListItem","position":2,"name":"Insights","item":"https://www.varadanexus.com/blog/"},{"@type":"ListItem","position":3,"name":"Web Development","item":"https://www.varadanexus.com/blog/category/web-development/"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Web Development — Varada Nexus Insights","description":"Modern web platforms, performance engineering and the technologies behind effective business websites.","url":"https://www.varadanexus.com/blog/category/web-development/"}</script>
+<style>
+  .cat-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:18px 0 0}
+  .chip{font-size:12.5px;padding:6px 14px;border-radius:99px;border:1px solid var(--border,#333);background:var(--surface,#161616);color:var(--text-2,#bbb);text-decoration:none}
+  .chip:hover{border-color:var(--border-gold,#a8873a);color:var(--gold,#c8a456)}
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <a href="/services.html">Services</a>
+      <a href="/team.html">Team</a>
+      <a href="/blog/" class="active">Blog</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="page-hero">
+    <span class="eyebrow reveal"><a href="/blog/" style="color:inherit;text-decoration:none">Insights</a> / Web Development</span>
+    <h1 class="display reveal reveal-d1" style="font-size:clamp(34px,5vw,60px)">Web Development</h1>
+    <p class="sub reveal reveal-d2">Modern web platforms, performance engineering and the technologies behind effective business websites.</p>
+    <div class="cat-chips">
+      <a class="chip" href="/blog/">All insights</a>
+        <a class="chip" href="/blog/category/healthcare/">Healthcare</a>
+        <a class="chip" href="/blog/category/ems/">EMS</a>
+        <a class="chip" href="/blog/category/artificial-intelligence/">Artificial Intelligence</a>
+        <a class="chip" href="/blog/category/business/">Business</a>
+        <a class="chip" href="/blog/category/startups/">Startups</a>
+        <a class="chip" href="/blog/category/cybersecurity/">Cybersecurity</a>
+        <a class="chip" href="/blog/category/saas/">SaaS</a>
+        <a class="chip" href="/blog/category/software-development/">Software Development</a>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <section class="section">
+    <div class="wrap">
+      <div id="posts" class="grid grid-3" aria-live="polite">
+        <p class="blog-status">Loading Web Development posts&hellip;</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span>Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+<script src="/new-ems/config/runtime.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function () {
+  var CAT = "web-development";
+  var cfg = window.EMS_RUNTIME_CONFIG || {};
+  var wrap = document.getElementById("posts");
+  if (!window.supabase || !cfg.supabaseUrl || !cfg.supabaseAnonKey) { wrap.innerHTML = '<p class="blog-status">Loading&hellip; please refresh in a moment.</p>'; return; }
+  var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  function esc(s){ return (s||"").replace(/[&<>"']/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]; }); }
+  function fmtDate(d){ if(!d) return ""; try { return new Date(d).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}); } catch(e){ return ""; } }
+  function card(p){
+    var tags=(p.tags||[]).slice(0,3).map(function(t){return '<span>'+esc(t)+'</span>';}).join("");
+    return '<a class="card blog-card reveal in" href="/blog/post.html?slug='+encodeURIComponent(p.slug)+'">'
+      + '<div class="blog-meta">'+esc(fmtDate(p.published_at))+(p.author?' &middot; '+esc(p.author):'')+'</div>'
+      + '<h3>'+esc(p.title)+'</h3>'+(p.excerpt?'<p>'+esc(p.excerpt)+'</p>':'')
+      + (tags?'<div class="blog-tags">'+tags+'</div>':'')+'<span class="card-more">Read more &rarr;</span></a>';
+  }
+  sb.rpc("search_blog_posts", { cat: CAT, lim: 60 }).then(function(res){
+    var rows = (res.data)||[];
+    if (res.error || !rows.length) { wrap.innerHTML = '<div class="blog-empty"><h3>No posts in this category yet</h3><p>New insights are published daily. Meanwhile, browse <a href="/blog/">all insights</a>.</p></div>'; return; }
+    wrap.innerHTML = rows.map(card).join("");
+  });
+})();
+</script>
+</body>
+</html>
