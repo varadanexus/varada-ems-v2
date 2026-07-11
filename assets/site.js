@@ -77,6 +77,22 @@
   if (toggle) {
     toggle.addEventListener("click", function () {
       document.body.classList.toggle("menu-open");
+      if (!document.body.classList.contains("menu-open")) {
+        document.querySelectorAll(".nav-item.services-open").forEach(function (item) {
+          item.classList.remove("services-open");
+        });
+      }
+    });
+    document.querySelectorAll(".nav-drop-toggle").forEach(function (servicesLink) {
+      servicesLink.addEventListener("click", function (event) {
+        if (window.innerWidth > 860 || !document.body.classList.contains("menu-open")) return;
+        var item = servicesLink.closest(".nav-item");
+        if (!item || item.classList.contains("services-open")) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        item.classList.add("services-open");
+        servicesLink.setAttribute("aria-expanded", "true");
+      });
     });
     document.querySelectorAll(".nav-links a").forEach(function (a) {
       a.addEventListener("click", function () {

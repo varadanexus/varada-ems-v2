@@ -4,6 +4,21 @@
 
   /* nav scroll state */
   var nav = document.querySelector(".site-nav");
+
+  /* The primary access action is Login. Meeting access remains available
+     from the login screen, so do not repeat it in the global navigation. */
+  document.querySelectorAll(".nav-links").forEach(function (links) {
+    var cta = links.querySelector(".nav-cta");
+    if (!cta) return;
+    var standardLogin = Array.prototype.find.call(links.querySelectorAll("a"), function (link) {
+      return link !== cta && link.textContent.trim().toLowerCase() === "login";
+    });
+    if (standardLogin) standardLogin.remove();
+    cta.href = "/login.html";
+    cta.textContent = "Login";
+    cta.setAttribute("aria-label", "Login");
+    if (location.pathname === "/login.html") cta.classList.add("active");
+  });
   function onScroll() {
     if (!nav) return;
     if (window.scrollY > 12) nav.classList.add("scrolled");
@@ -62,6 +77,22 @@
   if (toggle) {
     toggle.addEventListener("click", function () {
       document.body.classList.toggle("menu-open");
+      if (!document.body.classList.contains("menu-open")) {
+        document.querySelectorAll(".nav-item.services-open").forEach(function (item) {
+          item.classList.remove("services-open");
+        });
+      }
+    });
+    document.querySelectorAll(".nav-drop-toggle").forEach(function (servicesLink) {
+      servicesLink.addEventListener("click", function (event) {
+        if (window.innerWidth > 860 || !document.body.classList.contains("menu-open")) return;
+        var item = servicesLink.closest(".nav-item");
+        if (!item || item.classList.contains("services-open")) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        item.classList.add("services-open");
+        servicesLink.setAttribute("aria-expanded", "true");
+      });
     });
     document.querySelectorAll(".nav-links a").forEach(function (a) {
       a.addEventListener("click", function () {
@@ -385,7 +416,13 @@
     }
   }
 
+  var isProfessionalTools = location.pathname.indexOf("/professional-tools/") === 0;
   document.querySelectorAll(".card").forEach(function (card, index) {
+    if (isProfessionalTools) {
+      card.removeAttribute("data-index");
+      card.setAttribute("data-rv", "");
+      return;
+    }
     var group = card.parentElement;
     var peers = group ? Array.prototype.filter.call(group.children, function (child) {
       return child.classList && child.classList.contains("card");
@@ -395,6 +432,40 @@
     card.setAttribute("data-rv", "");
     if (!card.classList.contains("reveal")) card.classList.add("in");
   });
+
+  /* Professional Tools: fast client-side lookup against the published tools index. */
+  var toolSearch = document.getElementById("tool-search");
+  if (toolSearch) {
+    var toolSearchInput = toolSearch.querySelector("input");
+    var toolSearchResults = toolSearch.querySelector(".vt-tool-search-results");
+    var toolIndex = [];
+    fetch("/professional-tools/tools-index.json").then(function (res) { return res.ok ? res.json() : []; }).then(function (items) {
+      toolIndex = Array.isArray(items) ? items : [];
+    }).catch(function () { toolIndex = []; });
+    function clearToolResults() { toolSearchResults.innerHTML = ""; toolSearchResults.hidden = true; }
+    function showToolResults(term) {
+      var query = term.trim().toLowerCase();
+      if (!query || !toolIndex.length) { clearToolResults(); return []; }
+      var matches = toolIndex.filter(function (tool) {
+        return (tool.name + " " + tool.kw + " " + tool.cat).toLowerCase().indexOf(query) > -1;
+      }).slice(0, 6);
+      toolSearchResults.innerHTML = "";
+      matches.forEach(function (tool) {
+        var link = document.createElement("a");
+        link.href = tool.url; link.textContent = tool.name;
+        toolSearchResults.appendChild(link);
+      });
+      toolSearchResults.hidden = !matches.length;
+      return matches;
+    }
+    toolSearchInput.addEventListener("input", function () { showToolResults(toolSearchInput.value); });
+    toolSearch.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var matches = showToolResults(toolSearchInput.value);
+      if (matches.length) location.href = matches[0].url;
+    });
+    toolSearchInput.addEventListener("keydown", function (event) { if (event.key === "Escape") clearToolResults(); });
+  }
 
   /* Full-viewport home image, decorative ring, and scroll cue */
   var homeHero = isHome && document.querySelector(".hero");
@@ -534,6 +605,10 @@
 
     /* magnetic buttons */
     document.querySelectorAll(".btn-primary, .btn-accent").forEach(function (b) {
+      /* Authentication actions must stay stationary while their label changes
+         (for example, "Signing in…"). A magnetic offset can otherwise remain
+         visible after the click and make the submit control look misaligned. */
+      if (b.closest(".auth-card")) return;
       b.classList.add("magnetic");
       b.addEventListener("pointermove", function (e) {
         var r = b.getBoundingClientRect();
