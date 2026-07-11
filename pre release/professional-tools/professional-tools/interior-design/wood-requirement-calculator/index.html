@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wood &amp; Timber Requirement Calculator — CFT &amp; Cost Estimator | Varada Nexus</title>
+<meta name="description" content="Free wood requirement calculator. Estimate timber volume in cubic feet and cost for furniture, doors or structural wood work.">
+<meta name="author" content="Varada Nexus Private Limited">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.varadanexus.com/professional-tools/interior-design/wood-requirement-calculator/">
+<meta property="og:title" content="Wood &amp; Timber Requirement Calculator — CFT &amp; Cost Estimator | Varada Nexus"><meta property="og:description" content="Free wood requirement calculator. Estimate timber volume in cubic feet and cost for furniture, doors or structural wood work.">
+<meta property="og:type" content="website"><meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/professional-tools/assets/tools.css">
+<link rel="icon" type="image/png" href="/images/logo.png">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.varadanexus.com/"},{"@type":"ListItem","position":2,"name":"Professional Tools","item":"https://www.varadanexus.com/professional-tools/"},{"@type":"ListItem","position":3,"name":"Interior Design","item":"https://www.varadanexus.com/professional-tools/interior-design/"},{"@type":"ListItem","position":4,"name":"Wood & Timber Requirement Calculator","item":"https://www.varadanexus.com/professional-tools/interior-design/wood-requirement-calculator/"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How is timber volume calculated in CFT?","acceptedAnswer":{"@type":"Answer","text":"Volume (CFT) = length (ft) × width (ft) × thickness (ft). For a 7 ft × 4 inch × 2 inch piece: 7 × (4/12) × (2/12) = 0.389 CFT."}},{"@type":"Question","name":"What is the price of teak wood in India?","acceptedAnswer":{"@type":"Answer","text":"Teak (Sagwan) typically costs ₹3,000–6,000 per CFT depending on grade and region; premium Burma teak can go up to ₹8,000–12,000 per CFT."}},{"@type":"Question","name":"Why add 15% wastage for timber?","acceptedAnswer":{"@type":"Answer","text":"Sawing, planning, defect removal and joint cutting typically waste 10–20% of rough timber volume; 15% is a standard allowance for carpentry work."}}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Wood & Timber Requirement Calculator","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
+</head>
+<body>
+<div class="ambient"></div>
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap vt-main">
+<div class="vt-crumb"><a href="/">Home</a> / <a href="/professional-tools/">Professional Tools</a> / <a href="/professional-tools/interior-design/">Interior Design</a> / Wood &amp; Timber Requirement Calculator</div>
+<span class="eyebrow reveal">Interior Design</span><h1 class="display reveal reveal-d1" style="font-size:clamp(28px,4.5vw,44px)">Wood &amp; Timber Requirement Calculator</h1><p class="sub reveal reveal-d2">Calculate the volume of wood or timber required for a carpentry project and estimate material cost based on wood type and grade.</p>
+  <div class="vt-card no-print"><div class="vt-grid" id="vt-inputs"></div><button class="vt-btn" id="vt-calcBtn">Calculate</button></div>
+  <div class="vt-card vt-results" id="vt-results"><h3 style="margin-top:0;font-family:var(--font-serif)">Result</h3><div class="vt-kpis" id="vt-kpis"></div>
+    <table class="vt-table" id="vt-breakdown"><thead><tr><th>Item</th><th class="num"></th><th class="num">Value</th></tr></thead><tbody></tbody></table>
+    <div id="vt-notes"></div>
+    <div class="vt-btn-row no-print"><button class="vt-btn sec" id="vt-printBtn">Save / Print as PDF</button><button class="vt-btn wa" id="vt-waBtn">Send on WhatsApp</button></div>
+    <div class="vt-note"><b>Notes &amp; assumptions:</b> 1 CFT = 1 ft × 1 ft × 1 ft. Volume per piece = length × (width/12) × (thickness/12). Wastage 15% added for cutting. Sheet materials billed per sq ft.</div>
+    <p class="vt-disc"><b>Disclaimer:</b> This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.</p>
+    <div class="no-print" style="border-top:1px solid var(--border-soft);margin-top:18px;padding-top:16px"><h3 style="margin:0 0 4px;font-family:var(--font-serif)">Get expert help</h3>
+      <form id="vt-leadForm"><div class="vt-grid">
+        <div><label class="vt-label" for="vt-lName">Name*</label><input id="vt-lName" required></div><div><label class="vt-label" for="vt-lPhone">Phone*</label><input id="vt-lPhone" type="tel" required></div>
+        <div><label class="vt-label" for="vt-lEmail">Email</label><input id="vt-lEmail" type="email"></div><div><label class="vt-label" for="vt-lLoc">Project location</label><input id="vt-lLoc"></div></div>
+        <div style="margin-top:12px"><label class="vt-label" for="vt-lMsg">Message</label><textarea id="vt-lMsg"></textarea></div>
+        <button class="vt-btn" type="submit">Request Consultation</button><div class="vt-ok" id="vt-leadOk">Thanks! Your enquiry app will open.</div></form></div>
+  </div>
+  <div class="vt-card"><b>Related tools:</b> <a href="/professional-tools/interior-design/curtain-fabric-calculator/">Curtain Fabric Calculator</a> · <a href="/professional-tools/interior-design/false-ceiling-cost-calculator/">False Ceiling Cost Calculator</a> · <a href="/professional-tools/interior-design/flooring-cost-estimator/">Flooring Cost Estimator</a> · <a href="/professional-tools/interior-design/furniture-budget-planner/">Furniture Budget Planner</a><br><b>Related services:</b> <a href="/services.html">Interior Design Services</a> · <a href="/contact.html">Contact Us</a><br><b>Browse:</b> <a href="/professional-tools/interior-design/">Interior Design tools</a> · <a href="/professional-tools/">All tools</a> · <a href="/contact.html">Contact</a></div>
+  <div class="vt-cta"><h3>Planning a project?</h3><p>Share your numbers and we will help you plan the next step.</p><a href="/contact.html?tool=wood-requirement-calculator">Contact Varada Nexus for detailed consultation</a></div>
+  <div class="vt-card"><h3 style="margin-top:0;font-family:var(--font-serif)">FAQ</h3><details><summary>How is timber volume calculated in CFT?</summary><p>Volume (CFT) = length (ft) × width (ft) × thickness (ft). For a 7 ft × 4 inch × 2 inch piece: 7 × (4/12) × (2/12) = 0.389 CFT.</p></details><details><summary>What is the price of teak wood in India?</summary><p>Teak (Sagwan) typically costs ₹3,000–6,000 per CFT depending on grade and region; premium Burma teak can go up to ₹8,000–12,000 per CFT.</p></details><details><summary>Why add 15% wastage for timber?</summary><p>Sawing, planning, defect removal and joint cutting typically waste 10–20% of rough timber volume; 15% is a standard allowance for carpentry work.</p></details></div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">
+          <img src="/images/logo.png" alt="Varada Nexus">
+          <div>
+            <div class="fb-name">Varada Nexus Private Limited</div>
+            <p>Building and operating systems across healthcare, mining, logistics, global trade, and digital commerce.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="/">Home</a>
+        <a href="/founder.html">Founder</a>
+        <a href="/team.html">Team</a>
+        <a href="/contact.html">Contact</a>
+      </div>
+      <div class="footer-col">
+        <h4>Services</h4>
+        <a href="/hospital.html">Hospital Infrastructure</a>
+        <a href="/consultancy.html">Hospital Consultancy</a>
+        <a href="/logistics.html">Mining &amp; Logistics</a>
+        <a href="/import-export.html">Import &amp; Export</a>
+        <a href="/ecommerce.html">E-Commerce</a>
+        <a href="/hr.html">HR &amp; PR</a>
+        <a href="/arbitrage.html">Strategic Arbitrage</a>
+      </div>
+      <div class="footer-col">
+        <h4>Access</h4>
+        <a href="/login.html">EMS Login</a>
+        <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
+        <a href="/services.html">All Services</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span>Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+
+<script>window.__TOOL__={"name":"Wood & Timber Requirement Calculator","kind":"calculator","inputs":[{"id":"pieces","label":"Number of pieces","type":"number","default":10,"min":1},{"id":"length","label":"Piece length (ft)","type":"number","default":7,"min":0.5},{"id":"width","label":"Piece width (inches)","type":"number","default":4,"min":1},{"id":"thickness","label":"Thickness (inches)","type":"number","default":2,"min":0.5},{"id":"wood","label":"Wood type","type":"select","default":"teak","options":[{"v":"teak","t":"Teak (₹3,500–5,000/CFT)"},{"v":"sal","t":"Sal / Shisham (₹1,800–2,800/CFT)"},{"v":"pine","t":"Pine / Deodar (₹800–1,200/CFT)"},{"v":"plywood","t":"Plywood sheet (₹90–180/sq ft)"},{"v":"mdf","t":"MDF sheet (₹60–100/sq ft)"}]},{"id":"price","label":"Price per CFT (₹)","type":"number","default":4000,"min":100,"hint":"1 CFT = 1 ft × 1 ft × 1 ft"}],"results":{"rowFmt":"raw","columns":["Item","","Value"],"kpis":[{"key":"k1","label":"Total volume (CFT)","format":"text"},{"key":"k2","label":"Total wood cost","format":"text"},{"key":"k3","label":"Per piece","format":"text"}]},"checklist":null};window.__LOGIC__="/professional-tools/interior-design/wood-requirement-calculator/logic.js";</script><script type="module" src="/professional-tools/assets/tools.js"></script>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Varada Nexus EMS</title>
+<meta name="description" content="Secure access to the Varada Nexus ERP.">
+<meta name="author" content="Varada Nexus Private Limited">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.varadanexus.com/login">
+<link rel="icon" type="image/png" href="/images/logo.png">
+<meta property="og:title" content="Login — Varada Nexus EMS">
+<meta property="og:description" content="Secure access to the Varada Nexus ERP.">
+<meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<meta property="og:url" content="https://www.varadanexus.com/login">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Login — Varada Nexus EMS">
+<meta name="twitter:description" content="Secure access to the Varada Nexus ERP.">
+<meta name="twitter:image" content="https://www.varadanexus.com/images/logo.png">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-67FXEH77BB"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-67FXEH77BB');
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+
+</head>
+<body>
+<div class="ambient"></div>
+
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html" class="active">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="auth-wrap">
+    <div class="auth-card reveal in">
+      <img class="logo" src="/images/logo.png" alt="Varada Nexus">
+      <h1>Welcome Back</h1>
+      <p class="sub">Secure access to Varada Nexus ERP</p>
+      <div id="loginForm">
+        <div class="field">
+          <input type="text" id="email" placeholder="Email" autocomplete="username">
+        </div>
+        <div class="field pw-wrap">
+          <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+          <button type="button" class="pw-toggle" onclick="togglePassword()">Show</button>
+        </div>
+        <button class="btn btn-primary" id="loginBtn" onclick="login()" style="width:100%;justify-content:center;margin-top:6px">Login</button>
+      </div>
+      <div id="portalPicker" hidden></div>
+      <div class="error-text" id="error"></div>
+      <div class="auth-links">
+        <a href="/portals/meeting/meeting-login.html">Join a Meeting →</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+
+
+<script src="/assets/site.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/new-ems/config/runtime.js?v=beta-site-1"></script>
+<script type="module">
+// Unified login: keep this page's look, but auto-detect the account type
+// (EMS staff, transport/interiors/external portal) and route to the right auth
+// system. If one identifier maps to multiple portals, show a portal picker.
+import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js";
+
+function el(id) { return document.getElementById(id); }
+function setError(message = "") { const node = el("error"); if (node) node.innerText = message; }
+function setBtn(disabled, text) { const b = el("loginBtn"); if (b) { b.disabled = disabled; b.innerText = text || "Login"; } }
+function escapeHtml(v) { return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+window.togglePassword = function togglePassword() {
+  const pass = el("password");
+  if (!pass) return;
+  const btn = document.querySelector(".pw-toggle");
+  const showing = pass.type === "password";
+  pass.type = showing ? "text" : "password";
+  if (btn) btn.innerText = showing ? "Hide" : "Show";
+};
+
+let PENDING = null;
+
+function showLoginForm() {
+  const picker = el("portalPicker");
+  picker.hidden = true;
+  picker.innerHTML = "";
+  el("loginForm").hidden = false;
+  setBtn(false, "Login");
+}
+
+function handleAuthResult(result) {
+  // ems / transport / interiors redirect away; only the external no-dashboard
+  // case returns here with a message to show.
+  if (result?.status === "external_no_dashboard") {
+    el("loginForm").hidden = true;
+    el("portalPicker").hidden = true;
+    setError("");
+    const note = document.createElement("div");
+    note.style.cssText = "margin-top:12px;color:var(--text-2);font-size:14px;line-height:1.6";
+    note.innerHTML = `Welcome, <strong>${escapeHtml(result.displayName || "Portal User")}</strong>. Your ${escapeHtml(result.userType || "external")} access is active, but its portal isn't available yet. Please contact your administrator.`;
+    document.querySelector(".auth-card").appendChild(note);
+  }
+}
+
+function renderPicker(accounts) {
+  const picker = el("portalPicker");
+  el("loginForm").hidden = true;
+  setError("");
+  picker.hidden = false;
+  picker.innerHTML =
+    `<p class="sub" style="margin-top:0">This login has access to multiple portals. Choose one:</p>` +
+    accounts.map((a, i) => {
+      const hint = a.masked_email || a.masked_phone || "";
+      return `<button class="btn btn-primary portal-opt" data-i="${i}" style="width:100%;justify-content:center;margin-top:8px">${escapeHtml(a.label || a.login_type)}${hint ? ` <small style="opacity:.7;margin-left:6px">${escapeHtml(hint)}</small>` : ""}</button>`;
+    }).join("") +
+    `<button class="pw-toggle" id="pickerBack" type="button" style="margin-top:12px;background:none;border:none;cursor:pointer">← Back to login</button>`;
+
+  picker.querySelectorAll(".portal-opt").forEach((btn) => btn.addEventListener("click", async () => {
+    const acc = accounts[Number(btn.dataset.i)];
+    picker.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    setError("");
+    try {
+      const result = await authenticate(acc.login_type, PENDING.identifier, PENDING.password, acc.auth_provider);
+      handleAuthResult(result);
+    } catch (error) {
+      setError(error?.message || "Login failed");
+      showLoginForm();
+    }
+  }));
+  el("pickerBack")?.addEventListener("click", showLoginForm);
+}
+
+window.login = async function login() {
+  const identifier = el("email")?.value?.trim() || "";
+  const password = el("password")?.value || "";
+  if (el("loginBtn")?.disabled) return;
+  setError("");
+  if (!identifier || !password) { setError("Enter email and password"); return; }
+
+  setBtn(true, "Looking up account…");
+  try {
+    const accounts = usableAccounts(await lookupIdentifier(identifier));
+    if (!accounts.length) throw new Error("Invalid login credentials");
+    PENDING = { identifier, password };
+    if (accounts.length === 1) {
+      setBtn(true, "Signing in…");
+      const result = await authenticate(accounts[0].login_type, identifier, password, accounts[0].auth_provider);
+      handleAuthResult(result);
+      return;
+    }
+    renderPicker(accounts);
+  } catch (error) {
+    setError(error?.message || "Login failed");
+    setBtn(false, "Login");
+  }
+};
+
+el("password")?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); window.login(); }
+});
+
+// If already signed in (any system), redirect straight to the right portal.
+checkExistingSession().catch(() => {});
+</script>
+
+</body>
+</html>

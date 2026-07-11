@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leave Balance Calculator — Earned Leave &amp; Encashment India | Varada Nexus</title>
+<meta name="description" content="Free leave calculator India. Calculate earned leave balance, carry-forward, leave encashment value and leave liability for employees.">
+<meta name="author" content="Varada Nexus Private Limited">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.varadanexus.com/professional-tools/hr-public-relations/leave-calculator/">
+<meta property="og:title" content="Leave Balance Calculator — Earned Leave &amp; Encashment India | Varada Nexus"><meta property="og:description" content="Free leave calculator India. Calculate earned leave balance, carry-forward, leave encashment value and leave liability for employees.">
+<meta property="og:type" content="website"><meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/professional-tools/assets/tools.css">
+<link rel="icon" type="image/png" href="/images/logo.png">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.varadanexus.com/"},{"@type":"ListItem","position":2,"name":"Professional Tools","item":"https://www.varadanexus.com/professional-tools/"},{"@type":"ListItem","position":3,"name":"HR & Public Relations","item":"https://www.varadanexus.com/professional-tools/hr-public-relations/"},{"@type":"ListItem","position":4,"name":"Leave Balance Calculator","item":"https://www.varadanexus.com/professional-tools/hr-public-relations/leave-calculator/"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How is earned leave encashment calculated?","acceptedAnswer":{"@type":"Answer","text":"Leave encashment = number of leave days × (basic salary ÷ 26 working days). Government employees get more favourable terms under Section 10(10AA) with tax exemption up to ₹25 lakh."}},{"@type":"Question","name":"What is the maximum earned leave that can be accumulated?","acceptedAnswer":{"@type":"Answer","text":"Most companies allow 30–60 days carry-forward. The Factories Act and Shops & Establishments Act prescribe minimums but employers can be more generous."}},{"@type":"Question","name":"Is leave encashment taxable?","acceptedAnswer":{"@type":"Answer","text":"For private sector employees: fully taxable. For government employees: exempt up to ₹25 lakh under Section 10(10AA). Encashment at retirement is more favourably treated."}}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Leave Balance Calculator","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
+</head>
+<body>
+<div class="ambient"></div>
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap vt-main">
+<div class="vt-crumb"><a href="/">Home</a> / <a href="/professional-tools/">Professional Tools</a> / <a href="/professional-tools/hr-public-relations/">HR &amp; Public Relations</a> / Leave Balance Calculator</div>
+<span class="eyebrow reveal">HR &amp; Public Relations</span><h1 class="display reveal reveal-d1" style="font-size:clamp(28px,4.5vw,44px)">Leave Balance Calculator</h1><p class="sub reveal reveal-d2">Calculate your leave balance including earned leave accrual, carry-forward, leave encashment value and leave liability for payroll.</p>
+  <div class="vt-card no-print"><div class="vt-grid" id="vt-inputs"></div><button class="vt-btn" id="vt-calcBtn">Calculate</button></div>
+  <div class="vt-card vt-results" id="vt-results"><h3 style="margin-top:0;font-family:var(--font-serif)">Result</h3><div class="vt-kpis" id="vt-kpis"></div>
+    <table class="vt-table" id="vt-breakdown"><thead><tr><th>Leave Type</th><th class="num">Entitlement</th><th class="num">Balance</th></tr></thead><tbody></tbody></table>
+    <div id="vt-notes"></div>
+    <div class="vt-btn-row no-print"><button class="vt-btn sec" id="vt-printBtn">Save / Print as PDF</button><button class="vt-btn wa" id="vt-waBtn">Send on WhatsApp</button></div>
+    <div class="vt-note"><b>Notes &amp; assumptions:</b> EL accrual = annual entitlement. Balance = BF + accrued − availed. Carry-forward = min(balance, max CF limit). Encashment = days × (basic/26). Casual and sick leave cannot be encashed per most Indian company policies.</div>
+    <p class="vt-disc"><b>Disclaimer:</b> This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.</p>
+    <div class="no-print" style="border-top:1px solid var(--border-soft);margin-top:18px;padding-top:16px"><h3 style="margin:0 0 4px;font-family:var(--font-serif)">Get expert help</h3>
+      <form id="vt-leadForm"><div class="vt-grid">
+        <div><label class="vt-label" for="vt-lName">Name*</label><input id="vt-lName" required></div><div><label class="vt-label" for="vt-lPhone">Phone*</label><input id="vt-lPhone" type="tel" required></div>
+        <div><label class="vt-label" for="vt-lEmail">Email</label><input id="vt-lEmail" type="email"></div><div><label class="vt-label" for="vt-lLoc">Project location</label><input id="vt-lLoc"></div></div>
+        <div style="margin-top:12px"><label class="vt-label" for="vt-lMsg">Message</label><textarea id="vt-lMsg"></textarea></div>
+        <button class="vt-btn" type="submit">Request Consultation</button><div class="vt-ok" id="vt-leadOk">Thanks! Your enquiry app will open.</div></form></div>
+  </div>
+  <div class="vt-card"><b>Related tools:</b> <a href="/professional-tools/hr-public-relations/attendance-calculator/">Attendance &amp; Salary Deduction Calculator</a> · <a href="/professional-tools/hr-public-relations/ctc-calculator/">CTC Structure Calculator</a> · <a href="/professional-tools/hr-public-relations/employee-attrition-calculator/">Employee Attrition Cost Calculator</a> · <a href="/professional-tools/hr-public-relations/employee-cost-calculator/">Employee Total Cost Calculator</a><br><b>Related services:</b> <a href="/services.html">HR &amp; PR Services</a> · <a href="/contact.html">Contact Us</a><br><b>Browse:</b> <a href="/professional-tools/hr-public-relations/">HR &amp; Public Relations tools</a> · <a href="/professional-tools/">All tools</a> · <a href="/contact.html">Contact</a></div>
+  <div class="vt-cta"><h3>Planning a project?</h3><p>Share your numbers and we will help you plan the next step.</p><a href="/contact.html?tool=leave-calculator">Contact Varada Nexus for detailed consultation</a></div>
+  <div class="vt-card"><h3 style="margin-top:0;font-family:var(--font-serif)">FAQ</h3><details><summary>How is earned leave encashment calculated?</summary><p>Leave encashment = number of leave days × (basic salary ÷ 26 working days). Government employees get more favourable terms under Section 10(10AA) with tax exemption up to ₹25 lakh.</p></details><details><summary>What is the maximum earned leave that can be accumulated?</summary><p>Most companies allow 30–60 days carry-forward. The Factories Act and Shops &amp; Establishments Act prescribe minimums but employers can be more generous.</p></details><details><summary>Is leave encashment taxable?</summary><p>For private sector employees: fully taxable. For government employees: exempt up to ₹25 lakh under Section 10(10AA). Encashment at retirement is more favourably treated.</p></details></div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">
+          <img src="/images/logo.png" alt="Varada Nexus">
+          <div>
+            <div class="fb-name">Varada Nexus Private Limited</div>
+            <p>Building and operating systems across healthcare, mining, logistics, global trade, and digital commerce.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="/">Home</a>
+        <a href="/founder.html">Founder</a>
+        <a href="/team.html">Team</a>
+        <a href="/contact.html">Contact</a>
+      </div>
+      <div class="footer-col">
+        <h4>Services</h4>
+        <a href="/hospital.html">Hospital Infrastructure</a>
+        <a href="/consultancy.html">Hospital Consultancy</a>
+        <a href="/logistics.html">Mining &amp; Logistics</a>
+        <a href="/import-export.html">Import &amp; Export</a>
+        <a href="/ecommerce.html">E-Commerce</a>
+        <a href="/hr.html">HR &amp; PR</a>
+        <a href="/arbitrage.html">Strategic Arbitrage</a>
+      </div>
+      <div class="footer-col">
+        <h4>Access</h4>
+        <a href="/login.html">EMS Login</a>
+        <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
+        <a href="/services.html">All Services</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span>Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+
+<script>window.__TOOL__={"name":"Leave Balance Calculator","kind":"calculator","inputs":[{"id":"annual_el","label":"Annual earned leave entitlement (days)","type":"number","default":21,"min":0},{"id":"cl","label":"Casual leave entitlement (days)","type":"number","default":12,"min":0},{"id":"sl","label":"Sick leave entitlement (days)","type":"number","default":6,"min":0},{"id":"el_availed","label":"Earned leave availed this year (days)","type":"number","default":5,"min":0},{"id":"el_bf","label":"EL brought forward from last year (days)","type":"number","default":10,"min":0},{"id":"basic_monthly","label":"Basic salary (₹/month) for encashment","type":"number","default":25000,"min":1},{"id":"max_cf","label":"Max carry-forward limit (days)","type":"number","default":30,"min":0}],"results":{"rowFmt":"raw","columns":["Leave Type","Entitlement","Balance"],"kpis":[{"key":"k1","label":"EL balance","format":"text"},{"key":"k2","label":"Encashable value","format":"text"},{"key":"k3","label":"Total leave balance","format":"text"}]},"checklist":null};window.__LOGIC__="/professional-tools/hr-public-relations/leave-calculator/logic.js";</script><script type="module" src="/professional-tools/assets/tools.js"></script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Office Interior Cost Calculator — Commercial Fit-out Budget | Varada Nexus</title>
+<meta name="description" content="Free office interior cost calculator. Estimate commercial office fit-out cost per sq ft and per seat for turnkey office interiors in India.">
+<meta name="author" content="Varada Nexus Private Limited">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.varadanexus.com/professional-tools/interior-design/office-interior-cost-calculator/">
+<meta property="og:title" content="Office Interior Cost Calculator — Commercial Fit-out Budget | Varada Nexus"><meta property="og:description" content="Free office interior cost calculator. Estimate commercial office fit-out cost per sq ft and per seat for turnkey office interiors in India.">
+<meta property="og:type" content="website"><meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/professional-tools/assets/tools.css">
+<link rel="icon" type="image/png" href="/images/logo.png">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.varadanexus.com/"},{"@type":"ListItem","position":2,"name":"Professional Tools","item":"https://www.varadanexus.com/professional-tools/"},{"@type":"ListItem","position":3,"name":"Interior Design","item":"https://www.varadanexus.com/professional-tools/interior-design/"},{"@type":"ListItem","position":4,"name":"Office Interior Cost Calculator","item":"https://www.varadanexus.com/professional-tools/interior-design/office-interior-cost-calculator/"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the cost to fit out an office in India per sq ft?","acceptedAnswer":{"@type":"Answer","text":"Standard commercial office fit-out costs ₹1,200–1,800 per sq ft; premium Grade-A finish runs ₹2,000–3,500; basic fit-out ₹700–1,000."}},{"@type":"Question","name":"How much does one workstation cost in an office fit-out?","acceptedAnswer":{"@type":"Answer","text":"A fully fitted workstation (desk, chair, partition, lighting, flooring share) costs ₹40,000–1,20,000 depending on finish level."}},{"@type":"Question","name":"What is included in an office fit-out?","acceptedAnswer":{"@type":"Answer","text":"Typically: civil modifications, flooring, false ceiling, MEP (mechanical/electrical/plumbing), partition walls, furniture, IT cabling and lighting. Loose appliances and AV systems are usually separate."}}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Office Interior Cost Calculator","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
+</head>
+<body>
+<div class="ambient"></div>
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap vt-main">
+<div class="vt-crumb"><a href="/">Home</a> / <a href="/professional-tools/">Professional Tools</a> / <a href="/professional-tools/interior-design/">Interior Design</a> / Office Interior Cost Calculator</div>
+<span class="eyebrow reveal">Interior Design</span><h1 class="display reveal reveal-d1" style="font-size:clamp(28px,4.5vw,44px)">Office Interior Cost Calculator</h1><p class="sub reveal reveal-d2">Estimate the total interior fit-out cost for a commercial office space based on carpet area, number of seats and finish level.</p>
+  <div class="vt-card no-print"><div class="vt-grid" id="vt-inputs"></div><button class="vt-btn" id="vt-calcBtn">Calculate</button></div>
+  <div class="vt-card vt-results" id="vt-results"><h3 style="margin-top:0;font-family:var(--font-serif)">Result</h3><div class="vt-kpis" id="vt-kpis"></div>
+    <table class="vt-table" id="vt-breakdown"><thead><tr><th>Category</th><th class="num">Share</th><th class="num">Cost</th></tr></thead><tbody></tbody></table>
+    <div id="vt-notes"></div>
+    <div class="vt-btn-row no-print"><button class="vt-btn sec" id="vt-printBtn">Save / Print as PDF</button><button class="vt-btn wa" id="vt-waBtn">Send on WhatsApp</button></div>
+    <div class="vt-note"><b>Notes &amp; assumptions:</b> Rates: basic ₹800, standard ₹1,500, premium ₹2,500/sq ft. Cabin layout adds 20% over open plan. Category split: civil &amp; flooring 25%, MEP &amp; lighting 20%, furniture 30%, false ceiling 10%, IT infra 10%, misc 5%.</div>
+    <p class="vt-disc"><b>Disclaimer:</b> This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.</p>
+    <div class="no-print" style="border-top:1px solid var(--border-soft);margin-top:18px;padding-top:16px"><h3 style="margin:0 0 4px;font-family:var(--font-serif)">Get expert help</h3>
+      <form id="vt-leadForm"><div class="vt-grid">
+        <div><label class="vt-label" for="vt-lName">Name*</label><input id="vt-lName" required></div><div><label class="vt-label" for="vt-lPhone">Phone*</label><input id="vt-lPhone" type="tel" required></div>
+        <div><label class="vt-label" for="vt-lEmail">Email</label><input id="vt-lEmail" type="email"></div><div><label class="vt-label" for="vt-lLoc">Project location</label><input id="vt-lLoc"></div></div>
+        <div style="margin-top:12px"><label class="vt-label" for="vt-lMsg">Message</label><textarea id="vt-lMsg"></textarea></div>
+        <button class="vt-btn" type="submit">Request Consultation</button><div class="vt-ok" id="vt-leadOk">Thanks! Your enquiry app will open.</div></form></div>
+  </div>
+  <div class="vt-card"><b>Related tools:</b> <a href="/professional-tools/interior-design/curtain-fabric-calculator/">Curtain Fabric Calculator</a> · <a href="/professional-tools/interior-design/false-ceiling-cost-calculator/">False Ceiling Cost Calculator</a> · <a href="/professional-tools/interior-design/flooring-cost-estimator/">Flooring Cost Estimator</a> · <a href="/professional-tools/interior-design/furniture-budget-planner/">Furniture Budget Planner</a><br><b>Related services:</b> <a href="/services.html">Interior Design Services</a> · <a href="/contact.html">Contact Us</a><br><b>Browse:</b> <a href="/professional-tools/interior-design/">Interior Design tools</a> · <a href="/professional-tools/">All tools</a> · <a href="/contact.html">Contact</a></div>
+  <div class="vt-cta"><h3>Planning a project?</h3><p>Share your numbers and we will help you plan the next step.</p><a href="/contact.html?tool=office-interior-cost-calculator">Contact Varada Nexus for detailed consultation</a></div>
+  <div class="vt-card"><h3 style="margin-top:0;font-family:var(--font-serif)">FAQ</h3><details><summary>What is the cost to fit out an office in India per sq ft?</summary><p>Standard commercial office fit-out costs ₹1,200–1,800 per sq ft; premium Grade-A finish runs ₹2,000–3,500; basic fit-out ₹700–1,000.</p></details><details><summary>How much does one workstation cost in an office fit-out?</summary><p>A fully fitted workstation (desk, chair, partition, lighting, flooring share) costs ₹40,000–1,20,000 depending on finish level.</p></details><details><summary>What is included in an office fit-out?</summary><p>Typically: civil modifications, flooring, false ceiling, MEP (mechanical/electrical/plumbing), partition walls, furniture, IT cabling and lighting. Loose appliances and AV systems are usually separate.</p></details></div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">
+          <img src="/images/logo.png" alt="Varada Nexus">
+          <div>
+            <div class="fb-name">Varada Nexus Private Limited</div>
+            <p>Building and operating systems across healthcare, mining, logistics, global trade, and digital commerce.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="/">Home</a>
+        <a href="/founder.html">Founder</a>
+        <a href="/team.html">Team</a>
+        <a href="/contact.html">Contact</a>
+      </div>
+      <div class="footer-col">
+        <h4>Services</h4>
+        <a href="/hospital.html">Hospital Infrastructure</a>
+        <a href="/consultancy.html">Hospital Consultancy</a>
+        <a href="/logistics.html">Mining &amp; Logistics</a>
+        <a href="/import-export.html">Import &amp; Export</a>
+        <a href="/ecommerce.html">E-Commerce</a>
+        <a href="/hr.html">HR &amp; PR</a>
+        <a href="/arbitrage.html">Strategic Arbitrage</a>
+      </div>
+      <div class="footer-col">
+        <h4>Access</h4>
+        <a href="/login.html">EMS Login</a>
+        <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
+        <a href="/services.html">All Services</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span>Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+
+<script>window.__TOOL__={"name":"Office Interior Cost Calculator","kind":"calculator","inputs":[{"id":"area","label":"Office area (sq ft)","type":"number","default":2000,"min":200},{"id":"seats","label":"Number of workstations","type":"number","default":30,"min":1},{"id":"finish","label":"Finish level","type":"select","default":"standard","options":[{"v":"basic","t":"Basic (₹700–900/sq ft)"},{"v":"standard","t":"Standard (₹1,200–1,800/sq ft)"},{"v":"premium","t":"Premium (₹2,000–3,000/sq ft)"}]},{"id":"type","label":"Office type","type":"select","default":"mixed","options":[{"v":"open","t":"Open plan"},{"v":"mixed","t":"Mixed (open + cabins)"},{"v":"cabin","t":"Full cabin layout"}]}],"results":{"rowFmt":"raw","columns":["Category","Share","Cost"],"kpis":[{"key":"k1","label":"Total fit-out cost","format":"text"},{"key":"k2","label":"Per seat cost","format":"text"},{"key":"k3","label":"Per sq ft","format":"text"}]},"checklist":null};window.__LOGIC__="/professional-tools/interior-design/office-interior-cost-calculator/logic.js";</script><script type="module" src="/professional-tools/assets/tools.js"></script>
+</body>
+</html>
