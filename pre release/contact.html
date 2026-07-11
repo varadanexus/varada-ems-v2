@@ -32,7 +32,7 @@
 <link rel="stylesheet" href="/assets/site.css">
 
 </head>
-<body>
+<body class="contact-page">
 <div class="ambient"></div>
 
 <header class="site-nav">
@@ -68,17 +68,26 @@
 
 <main>
   <!-- HERO -->
-  <section class="page-hero" style="padding-bottom:50px">
-    <span class="eyebrow reveal">Contact Us</span>
-    <h1 class="display reveal reveal-d1" style="font-size:clamp(38px,6vw,72px)">Let&rsquo;s build something<br><span class="gold-text">scalable together.</span></h1>
-    <p class="sub reveal reveal-d2">Get expert solutions across healthcare, logistics &amp; global trade.</p>
+  <section class="page-hero contact-hero">
+    <div class="contact-hero-bg" aria-hidden="true"><img src="/images/founder-boardroom.png" alt="" data-plx="-.08"></div>
+    <div class="contact-hero-copy">
+      <span class="eyebrow reveal">Contact Us</span>
+      <h1 class="display reveal reveal-d1">Let&rsquo;s build something<br><span class="gold-text">scalable together.</span></h1>
+      <p class="sub reveal reveal-d2">Get expert solutions across healthcare, logistics &amp; global trade.</p>
+    </div>
   </section>
 
   <!-- FORM -->
-  <section class="section" style="padding-top:30px">
-    <div class="wrap-narrow" style="max-width:640px">
-      <div class="form-panel reveal">
-        <form action="https://formspree.io/f/mvgrnzgd" method="POST">
+  <section class="section contact-form-section">
+    <div class="wrap contact-form-layout">
+      <div class="contact-form-intro" data-rv data-plx="-.05">
+        <span class="eyebrow">Contact Us</span>
+        <h2 class="headline">Let&rsquo;s build something<br><span class="gold-text">scalable together.</span></h2>
+        <p class="sub">Get expert solutions across healthcare, logistics &amp; global trade.</p>
+      </div>
+      <div class="form-panel reveal contact-form-panel">
+        <form class="contact-inquiry-form" action="https://formspree.io/f/mvgrnzgd" method="POST">
+          <div class="contact-form-fields">
           <div class="field">
             <label for="c-name">Name</label>
             <input id="c-name" type="text" name="name" placeholder="Your Name" required>
@@ -87,13 +96,14 @@
             <label for="c-email">Email</label>
             <input id="c-email" type="email" name="email" placeholder="Your Email" required>
           </div>
-          <div class="field">
+          <div class="field contact-field-wide">
             <label for="c-subject">Subject</label>
             <input id="c-subject" type="text" name="subject" placeholder="Business Requirement">
           </div>
-          <div class="field">
+          <div class="field contact-field-wide">
             <label for="c-message">Message</label>
             <textarea id="c-message" name="message" rows="5" placeholder="Tell us what you need" required></textarea>
+          </div>
           </div>
           <input type="text" name="_gotcha" style="display:none" tabindex="-1" autocomplete="off">
           <button class="btn btn-primary" type="submit">Send Message</button>
@@ -104,12 +114,12 @@
   </section>
 
   <!-- ALT CHANNELS -->
-  <section class="section" style="padding-top:20px">
+  <section class="section contact-channels">
     <div class="wrap">
-      <div class="grid grid-3">
-        <a class="card reveal" href="/services.html"><h3>Explore Services</h3><p>See everything we build and operate across industries.</p><span class="card-more">View services →</span></a>
-        <a class="card reveal reveal-d1" href="/portals/meeting/meeting-login.html"><h3>Join a Meeting</h3><p>Invited to a Varada Nexus meeting? Enter through the secure meeting portal.</p><span class="card-more">Join meeting →</span></a>
-        <a class="card reveal reveal-d2" href="/login.html"><h3>EMS Login</h3><p>Team members and partners can sign in to the Varada Nexus EMS.</p><span class="card-more">Sign in →</span></a>
+      <div class="grid grid-3 contact-channel-grid">
+        <a class="card reveal" href="/services.html"><span class="contact-channel-mark">01</span><h3>Explore Services</h3><p>See everything we build and operate across industries.</p><span class="card-more">View services →</span></a>
+        <a class="card reveal reveal-d1" href="/portals/meeting/meeting-login.html"><span class="contact-channel-mark">02</span><h3>Join a Meeting</h3><p>Invited to a Varada Nexus meeting? Enter through the secure meeting portal.</p><span class="card-more">Join meeting →</span></a>
+        <a class="card reveal reveal-d2" href="/login.html"><span class="contact-channel-mark">03</span><h3>EMS Login</h3><p>Team members and partners can sign in to the Varada Nexus EMS.</p><span class="card-more">Sign in →</span></a>
       </div>
     </div>
   </section>

@@ -925,11 +925,14 @@ body.home .hero-media{display:none}
   .nav-caret{float:right;margin-top:8px}
   .nav-item:hover .nav-caret,.nav-item:focus-within .nav-caret{transform:rotate(45deg) translateY(-2px)}
   .nav-drop{
-    position:static;opacity:1;visibility:visible;pointer-events:auto;
-    transform:none;min-width:0;margin:0;padding:2px 0 8px 12px;
+    position:static;opacity:0;visibility:hidden;pointer-events:none;
+    transform:none;min-width:0;max-height:0;overflow:hidden;margin:0;padding:0 0 0 12px;
     background:none;border:0;box-shadow:none;border-radius:0;
     -webkit-backdrop-filter:none;backdrop-filter:none;
+    transition:max-height .42s var(--ease),opacity .28s var(--ease),visibility .28s,padding .42s var(--ease);
   }
+  .nav-item.services-open .nav-drop{opacity:1;visibility:visible;pointer-events:auto;max-height:650px;padding:2px 0 8px 12px}
+  .nav-item.services-open .nav-caret{transform:rotate(-135deg) translateY(1px)}
   .nav-drop::before{display:none}
   .nav-item:hover .nav-drop,.nav-item:focus-within .nav-drop{transform:none}
   .nav-drop a{
@@ -938,6 +941,42 @@ body.home .hero-media{display:none}
   }
   .nav-drop a:hover{background:none;color:var(--text)}
   .nav-drop .nav-drop-all{border-top:0;margin-top:0}
+}
+
+/* Mobile menu safety: hidden navigation must not retain an interactive hitbox.
+   The nested Services dropdown enables pointer events for its open state, so
+   explicitly lock the complete menu tree whenever the hamburger is closed. */
+@media (max-width:860px){
+  body:not(.menu-open) .nav-links{
+    visibility:hidden!important;
+    pointer-events:none!important;
+    clip-path:inset(0 0 100% 0);
+  }
+  body:not(.menu-open) .nav-links *{
+    pointer-events:none!important;
+  }
+  body.menu-open .nav-links{
+    visibility:visible!important;
+    pointer-events:auto!important;
+    clip-path:inset(0);
+    max-height:calc(100dvh - var(--nav-h));
+    overflow-y:auto;
+    overflow-x:hidden;
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:max(28px,env(safe-area-inset-bottom));
+  }
+  body.menu-open .nav-links .nav-drop,
+  body.menu-open .nav-links .nav-drop *{
+    pointer-events:none;
+  }
+  body.menu-open .nav-links .nav-item.services-open .nav-drop,
+  body.menu-open .nav-links .nav-item.services-open .nav-drop *{pointer-events:auto}
+  body.menu-open .nav-links a.nav-cta{
+    width:100%;margin:18px 0 6px;padding:14px 22px;border:1px solid rgba(230,200,126,.5);
+    border-radius:99px;background:var(--grad-gold);color:#0a0805;text-align:center;
+    box-shadow:0 12px 34px rgba(195,154,68,.28);font-weight:800;
+  }
 }
 
 /* ============================================================
@@ -1530,6 +1569,55 @@ body.service-detail-page .page-hero::after{right:-150px;top:18%;width:440px;heig
 @media(max-width:760px){body.service-detail-page .page-hero{min-height:86svh;padding:130px 24px 72px}body.service-detail-page .detail-hero-bg img{object-position:center}body.service-detail-page .page-hero .display{font-size:clamp(45px,13vw,68px)!important}}
 @media(prefers-reduced-motion:reduce){body.service-detail-page .detail-hero-bg img{animation:none}}
 
+/* ============================================================
+   CONTACT — EDITORIAL INQUIRY PAGE
+   ============================================================ */
+body.contact-page .contact-hero{min-height:min(83svh,850px);isolation:isolate;display:flex;align-items:flex-end;text-align:left;padding:calc(var(--nav-h) + 100px) max(24px,calc((100vw - 1280px)/2)) 112px;overflow:hidden}
+body.contact-page .contact-hero-bg{position:absolute;inset:0;z-index:-2;overflow:hidden;background:#050609}
+body.contact-page .contact-hero-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,6,9,.97) 0%,rgba(5,6,9,.82) 39%,rgba(5,6,9,.42) 72%,rgba(5,6,9,.46) 100%),linear-gradient(0deg,#050609,transparent 58%)}
+body.contact-page .contact-hero-bg img{width:100%;height:100%;object-fit:cover;object-position:center;opacity:.75;filter:sepia(.22) saturate(.72) brightness(.68);animation:contactHeroDrift 25s ease-in-out infinite alternate}
+@keyframes contactHeroDrift{from{transform:scale(1.02)}to{transform:scale(1.1) translate3d(-1.2%,.6%,0)}}
+body.contact-page .contact-hero-copy{max-width:760px;position:relative;z-index:1}
+body.contact-page .contact-hero .display{font-size:clamp(56px,7vw,102px);line-height:.96}
+body.contact-page .contact-hero .sub{margin:26px 0 0;max-width:555px;font-size:clamp(17px,1.55vw,21px);line-height:1.7}
+body.contact-page .contact-form-section{padding:clamp(110px,13vw,180px) 0 clamp(80px,10vw,130px)}
+body.contact-page .contact-form-layout{display:grid;grid-template-columns:minmax(0,.8fr) minmax(480px,1.2fr);gap:clamp(58px,9vw,150px);align-items:center}
+body.contact-page .contact-form-intro{padding:36px 0;position:relative}
+body.contact-page .contact-form-intro::before{content:"";position:absolute;left:-34px;top:0;width:1px;height:100%;background:linear-gradient(transparent,rgba(230,200,126,.62),transparent)}
+body.contact-page .contact-form-intro .headline{margin:0;line-height:1.05}
+body.contact-page .contact-form-intro .sub{max-width:395px;margin:24px 0 0;line-height:1.8}
+body.contact-page .contact-form-panel{padding:clamp(34px,4.6vw,58px);border-radius:3px;background:radial-gradient(500px 320px at 100% 0,rgba(230,200,126,.12),transparent 67%),linear-gradient(145deg,rgba(230,200,126,.07),rgba(7,8,13,.92));border-color:rgba(230,200,126,.23);box-shadow:0 34px 100px rgba(0,0,0,.52),inset 0 1px rgba(255,255,255,.025)}
+body.contact-page .contact-form-panel .field{margin-bottom:23px}
+body.contact-page .contact-inquiry-form{position:relative}
+body.contact-page .contact-inquiry-form::before{content:"";display:block;height:1px;margin-bottom:31px;background:linear-gradient(90deg,rgba(230,200,126,.52),rgba(230,200,126,.08) 58%,transparent)}
+body.contact-page .contact-form-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
+body.contact-page .contact-field-wide{grid-column:1/-1}
+body.contact-page .contact-form-panel .field{position:relative}
+body.contact-page .contact-form-panel .field label{display:flex;align-items:center;gap:9px;color:#b9b5a8;font-size:10px;font-weight:800;letter-spacing:.19em}
+body.contact-page .contact-form-panel .field label::before{content:"";width:5px;height:5px;border-radius:50%;background:#e6c87e;box-shadow:0 0 12px rgba(230,200,126,.75);transition:transform .3s,box-shadow .3s}
+body.contact-page .contact-form-panel .field:focus-within label{color:#f1d789}
+body.contact-page .contact-form-panel .field:focus-within label::before{transform:scale(1.55);box-shadow:0 0 20px rgba(230,200,126,.9)}
+body.contact-page .contact-form-panel .field input,body.contact-page .contact-form-panel .field textarea{border-radius:2px;background:rgba(5,6,9,.66);border-color:rgba(230,200,126,.18);padding:15px 16px;transition:border-color .3s,box-shadow .3s,background .3s,transform .3s}
+body.contact-page .contact-form-panel .field textarea{min-height:146px;resize:vertical}
+body.contact-page .contact-form-panel .field input:focus,body.contact-page .contact-form-panel .field textarea:focus{border-color:rgba(230,200,126,.6);background:rgba(5,6,9,.88);box-shadow:0 0 0 4px rgba(230,200,126,.07)}
+body.contact-page .contact-form-panel .field:focus-within input,body.contact-page .contact-form-panel .field:focus-within textarea{transform:translateY(-1px)}
+body.contact-page .contact-form-panel .btn{width:100%;justify-content:center;margin-top:4px;min-height:54px;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}
+body.contact-page .contact-form-panel .btn::after{content:"→";font-size:17px;line-height:1;margin-left:7px;transition:transform .3s}
+body.contact-page .contact-form-panel .btn:hover::after{transform:translateX(5px)}
+body.contact-page .contact-form-panel .form-note{margin:16px 0 0;text-align:center;font-size:12px;color:#8d8a7e}
+body.contact-page .contact-channels{padding:0 0 clamp(110px,14vw,190px)}
+body.contact-page .contact-channel-grid{gap:22px}
+body.contact-page .contact-channel-grid .card{min-height:250px;padding:34px 30px 70px;background:linear-gradient(145deg,rgba(230,200,126,.075),rgba(7,8,13,.9) 62%);border-color:rgba(230,200,126,.16)}
+body.contact-page .contact-channel-grid .card::before{opacity:1;background:radial-gradient(360px 220px at 100% 0,rgba(230,200,126,.11),transparent 72%)}
+body.contact-page .contact-channel-grid .card::after{display:none!important}
+body.contact-page .contact-channel-grid .card:hover{box-shadow:0 30px 68px rgba(0,0,0,.46),0 0 36px rgba(230,200,126,.08)}
+body.contact-page .contact-channel-mark{display:block;font-family:"Playfair Display",Georgia,serif;font-style:italic;font-size:30px;color:#e6c87e;margin-bottom:48px}
+body.contact-page .contact-channel-grid h3{font-size:27px}
+body.contact-page .contact-channel-grid .card-more{position:absolute;left:30px;bottom:28px;color:#e6c87e;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:10px}
+@media(max-width:860px){body.contact-page .contact-hero{min-height:78svh;padding:130px 24px 78px}body.contact-page .contact-form-layout{grid-template-columns:1fr;gap:38px}body.contact-page .contact-form-intro::before{left:0;width:100%;height:1px;background:linear-gradient(90deg,rgba(230,200,126,.65),transparent)}body.contact-page .contact-form-intro{padding-top:32px}.contact-page .contact-hero-bg img{object-position:65% center}}
+@media(max-width:620px){body.contact-page .contact-hero .display{font-size:clamp(50px,14vw,68px)}body.contact-page .contact-form-section{padding-top:82px}.contact-page .contact-form-fields{grid-template-columns:1fr;gap:0}.contact-page .contact-field-wide{grid-column:auto}.contact-page .contact-channel-grid .card{min-height:225px}}
+@media(prefers-reduced-motion:reduce){body.contact-page .contact-hero-bg img{animation:none}}
+
 /* Team: remove redundant org intro and bring the profile dialog into Obsidian Aurum. */
 body.team-page .team-org-intro-hidden{display:none}
 body.team-page .org .card::after{display:none!important}
@@ -1555,4 +1643,60 @@ body.services-page .service-catalogue-card h3{font-size:30px;line-height:1.05;ma
 body.services-page .service-catalogue-card p{font-size:14px;line-height:1.5;margin-bottom:12px}
 body.services-page .service-catalogue-card ul{font-size:13px;gap:9px 14px;margin:12px 0 20px}
 body.services-page .service-catalogue-card .card-more{font-size:11px}
+
+/* ============================================================
+   LOGIN — SECURE COMMAND CENTRE
+   ============================================================ */
+body.login-page{background:#050609;overflow-x:hidden}
+body.login-page::before{content:"";position:fixed;inset:var(--nav-h) 0 0;z-index:-3;background-image:linear-gradient(90deg,rgba(5,6,9,.88),rgba(5,6,9,.54) 45%,rgba(5,6,9,.34)),linear-gradient(0deg,rgba(5,6,9,.9),transparent 58%),url("/images/login-command-centre.png");background-size:cover;background-position:center;filter:saturate(.82) sepia(.12);animation:loginBackdropDrift 26s ease-in-out infinite alternate;transform:scale(1.025);will-change:transform}
+body.login-page::after{content:"";position:fixed;inset:var(--nav-h) 0 0;z-index:-2;pointer-events:none;background:radial-gradient(650px 520px at 50% 48%,rgba(230,200,126,.09),transparent 68%),linear-gradient(90deg,rgba(5,6,9,.2),transparent 34%,rgba(5,6,9,.34))}
+@keyframes loginBackdropDrift{from{transform:scale(1.025) translate3d(0,0,0)}to{transform:scale(1.09) translate3d(-1.2%,.4%,0)}}
+body.login-page .ambient{display:none}
+body.login-page .auth-wrap{position:relative;min-height:100svh;padding-top:calc(var(--nav-h) + 80px);padding-bottom:80px}
+body.login-page .auth-card{position:relative;max-width:440px;padding:54px 46px 48px;border-radius:3px;border-color:rgba(230,200,126,.32);background:radial-gradient(360px 210px at 50% 0,rgba(230,200,126,.18),transparent 68%),linear-gradient(145deg,rgba(9,10,14,.93),rgba(5,6,9,.86));box-shadow:0 36px 120px rgba(0,0,0,.72),0 0 64px rgba(230,200,126,.1),inset 0 1px rgba(255,255,255,.045)}
+body.login-page .auth-card::before{content:"";position:absolute;left:46px;right:46px;top:27px;height:1px;background:linear-gradient(90deg,transparent,rgba(230,200,126,.68),transparent)}
+body.login-page .auth-card .logo{width:60px;height:60px;margin-bottom:18px;border-radius:0;object-fit:contain;filter:drop-shadow(0 0 16px rgba(230,200,126,.28))}
+body.login-page .auth-kicker{display:block;margin:0 0 12px;color:#e6c87e;font-size:10px;font-weight:800;letter-spacing:.3em;text-transform:uppercase}
+body.login-page .auth-card h1{font-family:"Playfair Display",Georgia,serif;font-size:clamp(29px,3vw,38px);line-height:1.05;color:#f7f4ec}
+body.login-page .auth-card .sub{margin:12px auto 32px;color:#c9c5b8}
+body.login-page .auth-card .field{margin-bottom:14px}
+body.login-page .auth-card .field input{border-radius:2px;border-color:rgba(230,200,126,.2);background:rgba(5,6,9,.74);color:#f7f4ec;padding:16px 17px;transition:border-color .25s,box-shadow .25s,background .25s}
+body.login-page .auth-card .field input:focus{border-color:rgba(230,200,126,.68);background:rgba(5,6,9,.93);box-shadow:0 0 0 4px rgba(230,200,126,.08)}
+body.login-page .auth-card .field input::placeholder{color:#9b9788}
+body.login-page .pw-wrap .pw-toggle{color:#aaa8a1;font-weight:700;letter-spacing:.06em;z-index:2}
+body.login-page .pw-wrap .pw-toggle:hover,body.login-page .pw-wrap .pw-toggle:focus-visible{color:#f1efe8;outline:0}
+body.login-page .auth-card #loginBtn{min-height:54px;margin-top:10px!important;letter-spacing:.17em;box-shadow:0 16px 38px rgba(195,154,68,.32)}
+body.login-page .auth-links{margin-top:28px;padding-top:22px;border-top:1px solid rgba(230,200,126,.15)}
+body.login-page .auth-links a{font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+@media(max-width:620px){body.login-page::before{background-position:58% center}body.login-page .auth-wrap{padding:calc(var(--nav-h) + 54px) 20px 52px}body.login-page .auth-card{padding:46px 28px 38px}body.login-page .auth-card::before{left:28px;right:28px}}
+@media(prefers-reduced-motion:reduce){body.login-page::before{animation:none}}
+
+body.login-page .ems-welcome{position:fixed;inset:0;z-index:2500;display:grid;place-content:center;gap:15px;padding:28px;text-align:center;pointer-events:none;opacity:0;visibility:hidden;background:radial-gradient(560px 380px at 50% 48%,rgba(230,200,126,.12),transparent 70%),#050609;transition:opacity .42s ease,visibility 0s linear .42s}
+body.login-page .ems-welcome::before{content:"";position:absolute;width:min(44vw,580px);aspect-ratio:1;border:1px solid rgba(230,200,126,.24);border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%) scale(.65);opacity:0}
+body.login-page .ems-welcome-mark{position:relative;z-index:1;width:66px;height:66px;display:grid;place-items:center;margin:0 auto 5px;border:1px solid rgba(230,200,126,.5);border-radius:50%;font-family:"Playfair Display",Georgia,serif;font-style:italic;font-size:25px;color:#e6c87e;box-shadow:0 0 0 12px rgba(230,200,126,.05),0 0 32px rgba(230,200,126,.2)}
+body.login-page .ems-welcome-eyebrow,body.login-page .ems-welcome-note,body.login-page .ems-welcome strong{position:relative;z-index:1}
+body.login-page .ems-welcome-eyebrow{color:#e6c87e;font-size:10px;font-weight:800;letter-spacing:.32em;text-transform:uppercase}
+body.login-page .ems-welcome strong{font-family:"Playfair Display",Georgia,serif;font-size:clamp(29px,4vw,54px);font-weight:600;color:#f7f4ec}
+body.login-page .ems-welcome-note{color:#c9c5b8;font-size:14px}
+body.login-page.ems-entering .ems-welcome{opacity:1;visibility:visible;transition:opacity .42s ease}
+body.login-page.ems-entering .ems-welcome::before{animation:emsWelcomeRing .9s cubic-bezier(.22,.61,.14,1) both}
+body.login-page.ems-entering .ems-welcome-mark,body.login-page.ems-entering .ems-welcome-eyebrow,body.login-page.ems-entering .ems-welcome strong,body.login-page.ems-entering .ems-welcome-note{animation:emsWelcomeContent 2.4s cubic-bezier(.22,.61,.14,1) both}
+body.login-page.ems-entering .ems-welcome-eyebrow{animation-delay:.06s}body.login-page.ems-entering .ems-welcome strong{animation-delay:.12s}body.login-page.ems-entering .ems-welcome-note{animation-delay:.18s}
+@keyframes emsWelcomeRing{from{transform:translate(-50%,-50%) scale(.65);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes emsWelcomeContent{0%{opacity:0;transform:translateY(14px);filter:blur(4px)}18%,68%{opacity:1;transform:translateY(0);filter:blur(0)}100%{opacity:0;transform:translateY(-10px);filter:blur(3px)}}
+@media(prefers-reduced-motion:reduce){body.login-page .ems-welcome,body.login-page.ems-entering .ems-welcome{transition:none}body.login-page.ems-entering .ems-welcome::before{animation:none;transform:translate(-50%,-50%) scale(1);opacity:1}}
+
+/* Keep the imagery on the document canvas itself. This avoids a negative
+   stacking layer being painted behind the browser's page background. */
+body.login-page{background-color:#050609;background-image:linear-gradient(90deg,rgba(5,6,9,.82),rgba(5,6,9,.48) 48%,rgba(5,6,9,.34)),linear-gradient(0deg,rgba(5,6,9,.9),transparent 60%),url("/images/login-command-centre.png");background-size:cover;background-position:center;background-attachment:fixed}
+body.login-page::before,body.login-page::after{display:none}
+body.login-page main{position:relative;z-index:1}
+@media(max-width:620px){body.login-page{background-position:58% center;background-attachment:scroll}}
+
+/* Home hero: retain the world-network artwork, without the upper-right orbit. */
+body.home-page .hero::after,
+body.home-page .hero-orbit,
+body.home-page .hero-ring,
+body.home-page .hero-ornament,
+body.home-page .orbit{display:none!important}
 

@@ -925,11 +925,14 @@ body.home .hero-media{display:none}
   .nav-caret{float:right;margin-top:8px}
   .nav-item:hover .nav-caret,.nav-item:focus-within .nav-caret{transform:rotate(45deg) translateY(-2px)}
   .nav-drop{
-    position:static;opacity:1;visibility:visible;pointer-events:auto;
-    transform:none;min-width:0;margin:0;padding:2px 0 8px 12px;
+    position:static;opacity:0;visibility:hidden;pointer-events:none;
+    transform:none;min-width:0;max-height:0;overflow:hidden;margin:0;padding:0 0 0 12px;
     background:none;border:0;box-shadow:none;border-radius:0;
     -webkit-backdrop-filter:none;backdrop-filter:none;
+    transition:max-height .42s var(--ease),opacity .28s var(--ease),visibility .28s,padding .42s var(--ease);
   }
+  .nav-item.services-open .nav-drop{opacity:1;visibility:visible;pointer-events:auto;max-height:650px;padding:2px 0 8px 12px}
+  .nav-item.services-open .nav-caret{transform:rotate(-135deg) translateY(1px)}
   .nav-drop::before{display:none}
   .nav-item:hover .nav-drop,.nav-item:focus-within .nav-drop{transform:none}
   .nav-drop a{
@@ -938,6 +941,42 @@ body.home .hero-media{display:none}
   }
   .nav-drop a:hover{background:none;color:var(--text)}
   .nav-drop .nav-drop-all{border-top:0;margin-top:0}
+}
+
+/* Mobile menu safety: hidden navigation must not retain an interactive hitbox.
+   The nested Services dropdown enables pointer events for its open state, so
+   explicitly lock the complete menu tree whenever the hamburger is closed. */
+@media (max-width:860px){
+  body:not(.menu-open) .nav-links{
+    visibility:hidden!important;
+    pointer-events:none!important;
+    clip-path:inset(0 0 100% 0);
+  }
+  body:not(.menu-open) .nav-links *{
+    pointer-events:none!important;
+  }
+  body.menu-open .nav-links{
+    visibility:visible!important;
+    pointer-events:auto!important;
+    clip-path:inset(0);
+    max-height:calc(100dvh - var(--nav-h));
+    overflow-y:auto;
+    overflow-x:hidden;
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:max(28px,env(safe-area-inset-bottom));
+  }
+  body.menu-open .nav-links .nav-drop,
+  body.menu-open .nav-links .nav-drop *{
+    pointer-events:none;
+  }
+  body.menu-open .nav-links .nav-item.services-open .nav-drop,
+  body.menu-open .nav-links .nav-item.services-open .nav-drop *{pointer-events:auto}
+  body.menu-open .nav-links a.nav-cta{
+    width:100%;margin:18px 0 6px;padding:14px 22px;border:1px solid rgba(230,200,126,.5);
+    border-radius:99px;background:var(--grad-gold);color:#0a0805;text-align:center;
+    box-shadow:0 12px 34px rgba(195,154,68,.28);font-weight:800;
+  }
 }
 
 /* ============================================================
