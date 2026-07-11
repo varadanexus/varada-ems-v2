@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>New post — Blog Console — Varada Nexus</title>
+<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/blog/console/console.css">
+<style>
+/* Custom dark dropdown */
+.vn-sel{position:relative;width:100%}
+.vn-sel-trigger{
+  display:block;width:100%;font-family:inherit;font-size:15.5px;color:var(--text);
+  background:rgba(120,165,255,.06);border:1px solid var(--border);border-radius:14px;
+  padding:14px 40px 14px 16px;cursor:pointer;user-select:none;text-align:left;
+  position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:border-color .25s,background .25s;
+}
+.vn-sel-trigger::after{content:"▾";position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text-3);pointer-events:none}
+.vn-sel.open .vn-sel-trigger{border-color:var(--accent);background:rgba(120,165,255,.10)}
+.vn-sel-drop{
+  display:none;position:absolute;top:calc(100% + 4px);left:0;width:100%;
+  background:var(--bg-elev,#0c1830);border:1px solid var(--border);border-radius:12px;
+  z-index:300;overflow:hidden;box-shadow:0 12px 40px rgba(2,8,23,.7);
+}
+.vn-sel.open .vn-sel-drop{display:block}
+.vn-sel-opt{padding:10px 16px;color:var(--text-2);cursor:pointer;font-size:14.5px}
+.vn-sel-opt:hover{background:rgba(120,165,255,.10);color:var(--text)}
+.vn-sel-opt.selected{color:var(--gold,#e0c274)}
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+
+<main class="console-wrap">
+  <div class="form-panel" style="max-width:860px">
+    <input type="hidden" id="postId">
+    <div class="field"><label>Title</label><input type="text" id="f_title" placeholder="Post title"></div>
+    <div class="field"><label>Slug (URL)</label><input type="text" id="f_slug" placeholder="auto-generated-from-title"></div>
+    <div class="field"><label>Excerpt</label><textarea id="f_excerpt" rows="2" placeholder="One-line summary shown on the blog list"></textarea></div>
+    <div class="two-col">
+      <div class="field"><label>Primary category</label>
+        <div class="vn-sel" id="f_category_wrap">
+          <div class="vn-sel-trigger" id="f_category_trigger">(none)</div>
+          <div class="vn-sel-drop" id="f_category_drop">
+            <div class="vn-sel-opt selected" data-val="">(none)</div>
+          </div>
+        </div>
+      </div>
+      <div class="field"><label>Content type</label>
+        <div class="vn-sel" id="f_ctype_wrap">
+          <div class="vn-sel-trigger" id="f_ctype_trigger">Evergreen</div>
+          <div class="vn-sel-drop" id="f_ctype_drop">
+            <div class="vn-sel-opt selected" data-val="evergreen">Evergreen</div>
+            <div class="vn-sel-opt" data-val="trending_news">Trending news</div>
+            <div class="vn-sel-opt" data-val="how_to">How-to</div>
+            <div class="vn-sel-opt" data-val="comparison">Comparison</div>
+            <div class="vn-sel-opt" data-val="case_study">Case study</div>
+            <div class="vn-sel-opt" data-val="opinion">Opinion</div>
+            <div class="vn-sel-opt" data-val="product_service">Product / Service</div>
+            <div class="vn-sel-opt" data-val="global_news_explainer">Global news explainer</div>
+            <div class="vn-sel-opt" data-val="faq">FAQ</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="two-col">
+      <div class="field"><label>Sector</label><input type="text" id="f_sector" placeholder="e.g. logistics"></div>
+      <div class="field"><label>Region</label><input type="text" id="f_region" value="India"></div>
+    </div>
+    <div class="field"><label>Tags (comma-separated)</label><input type="text" id="f_tags" placeholder="Healthcare, Logistics"></div>
+    <div class="field"><label>Cover image URL (optional)</label><input type="text" id="f_cover" placeholder="/images/... or https://..."></div>
+    <div class="two-col">
+      <div class="field"><label>Meta title (SEO)</label><input type="text" id="f_mtitle" maxlength="70"></div>
+      <div class="field"><label>Alt text (cover image)</label><input type="text" id="f_alt" maxlength="120"></div>
+    </div>
+    <div class="field"><label>Meta description (SEO)</label><textarea id="f_mdesc" rows="2" maxlength="160"></textarea></div>
+    <div class="field"><label>LinkedIn post text</label><textarea id="f_linkedin" rows="2"></textarea></div>
+    <div class="field"><label>Content (HTML)</label><textarea id="f_content" class="code" placeholder="&lt;p&gt;Your article...&lt;/p&gt;"></textarea></div>
+    <div class="two-col">
+      <div class="field"><label>Status</label>
+        <div class="vn-sel" id="f_status_wrap">
+          <div class="vn-sel-trigger" id="f_status_trigger">Draft</div>
+          <div class="vn-sel-drop" id="f_status_drop">
+            <div class="vn-sel-opt selected" data-val="draft">Draft</div>
+            <div class="vn-sel-opt" data-val="scheduled">Scheduled</div>
+            <div class="vn-sel-opt" data-val="published">Published</div>
+            <div class="vn-sel-opt" data-val="auto_published">Auto-published</div>
+            <div class="vn-sel-opt" data-val="backdated">Backdated</div>
+            <div class="vn-sel-opt" data-val="needs_review">Needs review</div>
+            <div class="vn-sel-opt" data-val="failed_review">Failed review</div>
+            <div class="vn-sel-opt" data-val="archived">Archived</div>
+            <div class="vn-sel-opt" data-val="deleted">Deleted</div>
+          </div>
+        </div>
+      </div>
+      <div class="field"><label>Publish date</label><input type="datetime-local" id="f_pubdate"></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" id="saveBtn" style="flex:1">Save post</button>
+      <button class="btn btn-ghost" id="newBtn" type="button">Clear</button>
+    </div>
+    <p class="adm-msg" id="editMsg"></p>
+  </div>
+</main>
+
+<script src="/new-ems/config/runtime.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/blog/console/shared.js?v=live-supabase-1"></script>
+<script>
+(async function () {
+  var editId = VN.qs("id");
+  VN.shell("new", editId ? "Edit post" : "New post");
+  if (!(await VN.requireAuth())) return;
+  var sb = VN.sb, $ = function (id) { return document.getElementById(id); };
+  var V2 = true;
+
+  // ── Custom dropdown helper ─────────────────────────────────
+  function makeDropdown(wrapId) {
+    var wrap    = $(wrapId + "_wrap");
+    var trigger = $(wrapId + "_trigger");
+    var drop    = $(wrapId + "_drop");
+    if (!wrap) return;
+    trigger.addEventListener("click", function (e) {
+      e.stopPropagation();
+      document.querySelectorAll(".vn-sel.open").forEach(function (el) { if (el !== wrap) el.classList.remove("open"); });
+      wrap.classList.toggle("open");
+    });
+    drop.addEventListener("click", function (e) {
+      var opt = e.target.closest(".vn-sel-opt"); if (!opt) return;
+      drop.querySelectorAll(".vn-sel-opt").forEach(function (o) { o.classList.remove("selected"); });
+      opt.classList.add("selected");
+      trigger.textContent = opt.textContent;
+      wrap.dataset.val = opt.dataset.val;
+      wrap.classList.remove("open");
+    });
+    // getter / setter
+    wrap.getValue = function () { return wrap.dataset.val || ""; };
+    wrap.setValue = function (val) {
+      var opt = drop.querySelector('[data-val="' + val + '"]');
+      drop.querySelectorAll(".vn-sel-opt").forEach(function (o) { o.classList.remove("selected"); });
+      if (opt) { opt.classList.add("selected"); trigger.textContent = opt.textContent; }
+      wrap.dataset.val = val || "";
+    };
+    return wrap;
+  }
+
+  document.addEventListener("click", function () {
+    document.querySelectorAll(".vn-sel.open").forEach(function (el) { el.classList.remove("open"); });
+  });
+
+  var ddCat    = makeDropdown("f_category");
+  var ddCtype  = makeDropdown("f_ctype");
+  var ddStatus = makeDropdown("f_status");
+
+  // ── Populate categories ────────────────────────────────────
+  var CATS = await VN.loadCats();
+  if (!CATS.length) V2 = false;
+  var catDrop = $("f_category_drop");
+  CATS.forEach(function (c) {
+    var d = document.createElement("div");
+    d.className = "vn-sel-opt"; d.dataset.val = c.slug; d.textContent = c.name;
+    catDrop.appendChild(d);
+  });
+  // re-wire click after adding options
+  catDrop.addEventListener("click", function (e) {
+    var opt = e.target.closest(".vn-sel-opt"); if (!opt) return;
+    catDrop.querySelectorAll(".vn-sel-opt").forEach(function (o) { o.classList.remove("selected"); });
+    opt.classList.add("selected");
+    $("f_category_trigger").textContent = opt.textContent;
+    $("f_category_wrap").dataset.val = opt.dataset.val;
+    $("f_category_wrap").classList.remove("open");
+  });
+
+  // ── Fill / clear form ──────────────────────────────────────
+  function fillForm(p) {
+    $("postId").value      = p.id;
+    $("f_title").value     = p.title || "";
+    $("f_slug").value      = p.slug || "";
+    $("f_excerpt").value   = p.excerpt || "";
+    $("f_cover").value     = p.cover_image || "";
+    $("f_tags").value      = (p.tags || []).join(", ");
+    $("f_content").value   = p.content || "";
+    $("f_sector").value    = p.sector || "";
+    $("f_region").value    = p.region || "India";
+    $("f_mtitle").value    = p.meta_title || "";
+    $("f_mdesc").value     = p.meta_description || "";
+    $("f_linkedin").value  = p.linkedin_post_text || "";
+    $("f_alt").value       = p.alt_text || "";
+    $("f_pubdate").value   = p.published_at ? new Date(p.published_at).toISOString().slice(0, 16) : "";
+    ddCat.setValue(p.primary_category || "");
+    ddCtype.setValue(p.content_type || "evergreen");
+    ddStatus.setValue(p.status || "draft");
+  }
+  function clearForm() {
+    $("postId").value = "";
+    ["f_title","f_slug","f_excerpt","f_cover","f_tags","f_content","f_mtitle","f_mdesc","f_linkedin","f_sector","f_pubdate","f_alt"].forEach(function (i) { $(i).value = ""; });
+    $("f_region").value = "India";
+    ddCat.setValue(""); ddCtype.setValue("evergreen"); ddStatus.setValue("draft");
+    $("editMsg").textContent = "";
+    history.replaceState(null, "", "/blog/console/new-post.html");
+  }
+  $("newBtn").addEventListener("click", clearForm);
+  $("f_title").addEventListener("blur", function () { if (!$("f_slug").value) $("f_slug").value = VN.slugify($("f_title").value); });
+
+  if (editId) {
+    var r = await sb.from("blog_posts").select("*").eq("id", editId).maybeSingle();
+    if (r.data) fillForm(r.data);
+    else VN.msg($("editMsg"), "Post not found.", false);
+  }
+
+  $("saveBtn").addEventListener("click", async function () {
+    var id = $("postId").value, status = ddStatus.getValue();
+    var rec = {
+      title:      $("f_title").value.trim(),
+      slug:       ($("f_slug").value.trim() || VN.slugify($("f_title").value)),
+      excerpt:    $("f_excerpt").value.trim() || null,
+      cover_image: $("f_cover").value.trim() || null,
+      tags:       $("f_tags").value.split(",").map(function (t) { return t.trim(); }).filter(Boolean),
+      content:    $("f_content").value,
+      status:     status,
+    };
+    if (V2) Object.assign(rec, {
+      primary_category:   ddCat.getValue() || null,
+      content_type:       ddCtype.getValue(),
+      sector:             $("f_sector").value.trim() || null,
+      region:             $("f_region").value.trim() || null,
+      meta_title:         $("f_mtitle").value.trim() || null,
+      meta_description:   $("f_mdesc").value.trim() || null,
+      linkedin_post_text: $("f_linkedin").value.trim() || null,
+      alt_text:           $("f_alt").value.trim() || null,
+    });
+    if (!rec.title || !rec.slug) { VN.msg($("editMsg"), "Title and slug are required.", false); return; }
+    if ($("f_pubdate").value) rec.published_at = new Date($("f_pubdate").value).toISOString();
+    else if (VN.LIVE.indexOf(status) > -1) rec.published_at = new Date().toISOString();
+    var res;
+    if (id) res = await sb.from("blog_posts").update(rec).eq("id", id);
+    else res = await sb.from("blog_posts").insert(rec);
+    if (res.error) { VN.msg($("editMsg"), res.error.message, false); return; }
+    VN.msg($("editMsg"), id ? "Post updated." : "Post created.", true);
+    if (!id) clearForm();
+  });
+})();
+</script>
+</body>
+</html>

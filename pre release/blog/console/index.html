@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Administration — Varada Nexus</title>
+<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/blog/console/console.css">
+</head>
+<body>
+<div class="ambient"></div>
+
+<main class="console-wrap">
+  <div class="form-panel login-card">
+    <div class="login-brand">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span class="b-name">Varada <span class="gold-text">Nexus</span></span>
+      <span class="b-sub">Blog Console</span>
+    </div>
+    <div class="field"><label>Email</label><input type="email" id="email" autocomplete="username" placeholder="name@varadanexus.com"></div>
+    <div class="field"><label>Password</label><input type="password" id="password" autocomplete="current-password" placeholder="••••••••"></div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%">Sign in</button>
+    <p class="adm-msg err" id="gateMsg"></p>
+    <p class="form-note" style="text-align:center">Signed in to the EMS in this browser? <a href="#" id="useSession" style="color:var(--accent,#c8a456)">Use that session</a>.</p>
+  </div>
+</main>
+
+<script src="/new-ems/config/runtime.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/blog/console/shared.js?v=live-supabase-1"></script>
+<script>
+(function () {
+  var sb = VN.sb;
+  var gateMsg = document.getElementById("gateMsg");
+  if (!sb) { gateMsg.textContent = "Console unavailable — configuration missing."; return; }
+  var next = VN.qs("next") || "/blog/console/posts.html";
+  if (next.indexOf("/blog/console/") !== 0) next = "/blog/console/posts.html";
+  if (VN.qs("err") === "notadmin") gateMsg.textContent = "This account is not an administrator.";
+
+  async function go() {
+    try {
+      var r = await sb.rpc("is_super_admin");
+      if (!r.error && r.data !== true) { gateMsg.textContent = "This account is not an administrator."; await sb.auth.signOut(); return; }
+    } catch (e) {}
+    location.href = next;
+  }
+  sb.auth.getSession().then(function (s) { if (s.data.session) go(); });
+
+  document.getElementById("loginBtn").addEventListener("click", async function () {
+    gateMsg.textContent = "";
+    var r = await sb.auth.signInWithPassword({
+      email: document.getElementById("email").value.trim(),
+      password: document.getElementById("password").value,
+    });
+    if (r.error) { gateMsg.textContent = r.error.message; return; }
+    go();
+  });
+  document.getElementById("password").addEventListener("keydown", function (e) { if (e.key === "Enter") document.getElementById("loginBtn").click(); });
+  document.getElementById("useSession").addEventListener("click", function (e) {
+    e.preventDefault();
+    sb.auth.getSession().then(function (s) {
+      if (s.data.session) go(); else gateMsg.textContent = "No active session found — please sign in.";
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Auto-publish — Blog Console — Varada Nexus</title>
+<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/blog/console/console.css">
+</head>
+<body>
+<div class="ambient"></div>
+
+<main class="console-wrap">
+  <div class="form-panel" style="max-width:960px">
+    <p class="stat-note">The daily generator reads these settings on every run. Articles that fail any minimum score are saved as <b>Needs review</b> instead of publishing. Turning auto-publish off holds every generated article for your review.</p>
+    <div class="settings-grid" style="margin-top:18px">
+      <div class="field"><label><input type="checkbox" id="set_enabled"> Auto-publishing enabled</label></div>
+      <div class="field"><label>Posts per day (0 = pause)</label><input type="number" id="set_ppd" min="0" max="10"></div>
+      <div class="field"><label>Minimum SEO score</label><input type="number" id="set_seo" min="0" max="100"></div>
+      <div class="field"><label>Minimum quality score</label><input type="number" id="set_quality" min="0" max="100"></div>
+      <div class="field"><label>Minimum confidence score</label><input type="number" id="set_conf" min="0" max="100"></div>
+      <div class="field"><label>Financial year start month</label><input type="number" id="set_fym" min="1" max="12"></div>
+    </div>
+    <div class="field" style="margin-top:14px">
+      <label>Approved categories for auto-publish (none checked = all approved)</label>
+      <div class="cat-checks" id="set_cats"></div>
+    </div>
+    <button class="btn btn-primary" id="saveSettings" style="margin-top:16px">Save settings</button>
+    <p class="adm-msg" id="setMsg"></p>
+  </div>
+</main>
+
+<script src="/new-ems/config/runtime.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/blog/console/shared.js?v=live-supabase-1"></script>
+<script>
+(async function () {
+  VN.shell("settings", "Auto-publish control");
+  if (!(await VN.requireAuth())) return;
+  var sb = VN.sb, $ = function (id) { return document.getElementById(id); };
+
+  var CATS = await VN.loadCats();
+  $("set_cats").innerHTML = CATS.map(function (c) { return '<label><input type="checkbox" value="' + c.slug + '"> ' + VN.esc(c.name) + "</label>"; }).join("");
+
+  var r = await sb.from("blog_settings").select("*").eq("id", 1).maybeSingle();
+  if (r.error || !r.data) { VN.msg($("setMsg"), "Settings unavailable — apply the Sprint 18B migration first.", false); return; }
+  var s = r.data;
+  $("set_enabled").checked = !!s.auto_publish_enabled;
+  $("set_ppd").value = s.posts_per_day; $("set_seo").value = s.min_seo_score;
+  $("set_quality").value = s.min_quality_score; $("set_conf").value = s.min_confidence_score;
+  $("set_fym").value = s.fy_start_month;
+  document.querySelectorAll("#set_cats input").forEach(function (cb) {
+    cb.checked = (s.approved_categories || []).indexOf(cb.value) > -1;
+  });
+
+  $("saveSettings").addEventListener("click", async function () {
+    var cats = Array.prototype.map.call(document.querySelectorAll("#set_cats input:checked"), function (cb) { return cb.value; });
+    var r = await sb.from("blog_settings").update({
+      auto_publish_enabled: $("set_enabled").checked,
+      posts_per_day: Number($("set_ppd").value) || 0,
+      min_seo_score: Number($("set_seo").value) || 0,
+      min_quality_score: Number($("set_quality").value) || 0,
+      min_confidence_score: Number($("set_conf").value) || 0,
+      fy_start_month: Number($("set_fym").value) || 4,
+      approved_categories: cats,
+      updated_at: new Date().toISOString(),
+    }).eq("id", 1);
+    VN.msg($("setMsg"), r.error ? r.error.message : "Settings saved. The next generator run will use them.", !r.error);
+  });
+})();
+</script>
+</body>
+</html>

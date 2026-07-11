@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wardrobe Cost Calculator — Custom Built-in Wardrobe Estimate | Varada Nexus</title>
+<meta name="description" content="Free wardrobe cost calculator. Estimate built-in wardrobe cost by size, material, shutter type and internal accessories for homes in India.">
+<meta name="author" content="Varada Nexus Private Limited">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.varadanexus.com/professional-tools/interior-design/wardrobe-cost-calculator/">
+<meta property="og:title" content="Wardrobe Cost Calculator — Custom Built-in Wardrobe Estimate | Varada Nexus"><meta property="og:description" content="Free wardrobe cost calculator. Estimate built-in wardrobe cost by size, material, shutter type and internal accessories for homes in India.">
+<meta property="og:type" content="website"><meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/professional-tools/assets/tools.css">
+<link rel="icon" type="image/png" href="/images/logo.png">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.varadanexus.com/"},{"@type":"ListItem","position":2,"name":"Professional Tools","item":"https://www.varadanexus.com/professional-tools/"},{"@type":"ListItem","position":3,"name":"Interior Design","item":"https://www.varadanexus.com/professional-tools/interior-design/"},{"@type":"ListItem","position":4,"name":"Wardrobe Cost Calculator","item":"https://www.varadanexus.com/professional-tools/interior-design/wardrobe-cost-calculator/"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"What is the cost of a 6 ft wardrobe in India?","acceptedAnswer":{"@type":"Answer","text":"A 6×8 ft plywood wardrobe with sliding doors costs ₹55,000–90,000; MDF with swing doors ₹35,000–55,000; solid wood ₹1,20,000–2,00,000 depending on internal fittings."}},{"@type":"Question","name":"Sliding vs swing wardrobe — which is better for small rooms?","acceptedAnswer":{"@type":"Answer","text":"Sliding wardrobes are better for rooms with limited floor space in front of the wardrobe; swing doors need 2–2.5 ft of clearance."}},{"@type":"Question","name":"Should I choose plywood or MDF for a wardrobe?","acceptedAnswer":{"@type":"Answer","text":"Plywood is more durable and moisture-resistant, recommended in humid climates. MDF gives a smoother finish but is heavier and less moisture-tolerant."}}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Wardrobe Cost Calculator","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
+</head>
+<body>
+<div class="ambient"></div>
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap vt-main">
+<div class="vt-crumb"><a href="/">Home</a> / <a href="/professional-tools/">Professional Tools</a> / <a href="/professional-tools/interior-design/">Interior Design</a> / Wardrobe Cost Calculator</div>
+<span class="eyebrow reveal">Interior Design</span><h1 class="display reveal reveal-d1" style="font-size:clamp(28px,4.5vw,44px)">Wardrobe Cost Calculator</h1><p class="sub reveal reveal-d2">Estimate the cost of a custom wardrobe based on size, material and internal fittings.</p>
+  <div class="vt-card no-print"><div class="vt-grid" id="vt-inputs"></div><button class="vt-btn" id="vt-calcBtn">Calculate</button></div>
+  <div class="vt-card vt-results" id="vt-results"><h3 style="margin-top:0;font-family:var(--font-serif)">Result</h3><div class="vt-kpis" id="vt-kpis"></div>
+    <table class="vt-table" id="vt-breakdown"><thead><tr><th>Item</th><th class="num"></th><th class="num">Cost</th></tr></thead><tbody></tbody></table>
+    <div id="vt-notes"></div>
+    <div class="vt-btn-row no-print"><button class="vt-btn sec" id="vt-printBtn">Save / Print as PDF</button><button class="vt-btn wa" id="vt-waBtn">Send on WhatsApp</button></div>
+    <div class="vt-note"><b>Notes &amp; assumptions:</b> Cost = face area × rate/sq ft. HDF swing ~₹1,000/sq ft, plywood sliding ~₹1,600, solid glass ~₹2,800. Internal fittings (loft, drawers, trouser rack) add 20%.</div>
+    <p class="vt-disc"><b>Disclaimer:</b> This tool provides an indicative estimate for general planning only and is not professional, legal, financial, medical or engineering advice. Reference values are editable defaults that vary by location, vendor, regulation and date. Verify critical figures with a qualified professional. Varada Nexus accepts no liability for decisions made using this tool.</p>
+    <div class="no-print" style="border-top:1px solid var(--border-soft);margin-top:18px;padding-top:16px"><h3 style="margin:0 0 4px;font-family:var(--font-serif)">Get expert help</h3>
+      <form id="vt-leadForm"><div class="vt-grid">
+        <div><label class="vt-label" for="vt-lName">Name*</label><input id="vt-lName" required></div><div><label class="vt-label" for="vt-lPhone">Phone*</label><input id="vt-lPhone" type="tel" required></div>
+        <div><label class="vt-label" for="vt-lEmail">Email</label><input id="vt-lEmail" type="email"></div><div><label class="vt-label" for="vt-lLoc">Project location</label><input id="vt-lLoc"></div></div>
+        <div style="margin-top:12px"><label class="vt-label" for="vt-lMsg">Message</label><textarea id="vt-lMsg"></textarea></div>
+        <button class="vt-btn" type="submit">Request Consultation</button><div class="vt-ok" id="vt-leadOk">Thanks! Your enquiry app will open.</div></form></div>
+  </div>
+  <div class="vt-card"><b>Related tools:</b> <a href="/professional-tools/interior-design/curtain-fabric-calculator/">Curtain Fabric Calculator</a> · <a href="/professional-tools/interior-design/false-ceiling-cost-calculator/">False Ceiling Cost Calculator</a> · <a href="/professional-tools/interior-design/flooring-cost-estimator/">Flooring Cost Estimator</a> · <a href="/professional-tools/interior-design/furniture-budget-planner/">Furniture Budget Planner</a><br><b>Related services:</b> <a href="/services.html">Interior Design Services</a> · <a href="/contact.html">Contact Us</a><br><b>Browse:</b> <a href="/professional-tools/interior-design/">Interior Design tools</a> · <a href="/professional-tools/">All tools</a> · <a href="/contact.html">Contact</a></div>
+  <div class="vt-cta"><h3>Planning a project?</h3><p>Share your numbers and we will help you plan the next step.</p><a href="/contact.html?tool=wardrobe-cost-calculator">Contact Varada Nexus for detailed consultation</a></div>
+  <div class="vt-card"><h3 style="margin-top:0;font-family:var(--font-serif)">FAQ</h3><details><summary>What is the cost of a 6 ft wardrobe in India?</summary><p>A 6×8 ft plywood wardrobe with sliding doors costs ₹55,000–90,000; MDF with swing doors ₹35,000–55,000; solid wood ₹1,20,000–2,00,000 depending on internal fittings.</p></details><details><summary>Sliding vs swing wardrobe — which is better for small rooms?</summary><p>Sliding wardrobes are better for rooms with limited floor space in front of the wardrobe; swing doors need 2–2.5 ft of clearance.</p></details><details><summary>Should I choose plywood or MDF for a wardrobe?</summary><p>Plywood is more durable and moisture-resistant, recommended in humid climates. MDF gives a smoother finish but is heavier and less moisture-tolerant.</p></details></div>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">
+          <img src="/images/logo.png" alt="Varada Nexus">
+          <div>
+            <div class="fb-name">Varada Nexus Private Limited</div>
+            <p>Building and operating systems across healthcare, mining, logistics, global trade, and digital commerce.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="/">Home</a>
+        <a href="/founder.html">Founder</a>
+        <a href="/team.html">Team</a>
+        <a href="/contact.html">Contact</a>
+      </div>
+      <div class="footer-col">
+        <h4>Services</h4>
+        <a href="/hospital.html">Hospital Infrastructure</a>
+        <a href="/consultancy.html">Hospital Consultancy</a>
+        <a href="/logistics.html">Mining &amp; Logistics</a>
+        <a href="/import-export.html">Import &amp; Export</a>
+        <a href="/ecommerce.html">E-Commerce</a>
+        <a href="/hr.html">HR &amp; PR</a>
+        <a href="/arbitrage.html">Strategic Arbitrage</a>
+      </div>
+      <div class="footer-col">
+        <h4>Access</h4>
+        <a href="/login.html">EMS Login</a>
+        <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
+        <a href="/services.html">All Services</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span>Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+
+<script>window.__TOOL__={"name":"Wardrobe Cost Calculator","kind":"calculator","inputs":[{"id":"width","label":"Wardrobe width (ft)","type":"number","default":6,"min":1},{"id":"height","label":"Height (ft)","type":"number","default":8,"min":4},{"id":"depth","label":"Depth (ft)","type":"number","default":2,"min":1},{"id":"material","label":"Material","type":"select","default":"plywood","options":[{"v":"hdf","t":"HDF/MDF"},{"v":"plywood","t":"Marine plywood"},{"v":"solid","t":"Solid wood"}]},{"id":"shutter","label":"Shutter type","type":"select","default":"sliding","options":[{"v":"swing","t":"Swing door"},{"v":"sliding","t":"Sliding door"},{"v":"glass","t":"Glass / mirror sliding"}]}],"results":{"rowFmt":"raw","columns":["Item","","Cost"],"kpis":[{"key":"k1","label":"Total wardrobe cost","format":"text"},{"key":"k2","label":"Per sq ft (face)","format":"text"},{"key":"k3","label":"Face area","format":"text"}]},"checklist":null};window.__LOGIC__="/professional-tools/interior-design/wardrobe-cost-calculator/logic.js";</script><script type="module" src="/professional-tools/assets/tools.js"></script>
+</body>
+</html>

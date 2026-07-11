@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>AI Costs — Blog Console — Varada Nexus</title>
+<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/blog/console/console.css">
+<style>
+.ai-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px}
+.ai-card{background:var(--surface,#161616);border:1px solid var(--border-soft,#2a2a2a);border-radius:14px;padding:16px 18px}
+.ai-card .label{font-size:11px;color:var(--text-3,#888);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+.ai-card .value{font-size:22px;font-weight:700;font-family:var(--font-serif)}
+.ai-card .sub{font-size:11.5px;color:var(--text-3,#888);margin-top:3px}
+.budget-bar{height:8px;border-radius:99px;background:var(--surface-2,#222);margin:10px 0 4px;overflow:hidden}
+.budget-bar-fill{height:100%;border-radius:99px;background:var(--gold,#c8a456);transition:width .4s}
+.budget-bar-fill.warn{background:#ffd75e}
+.budget-bar-fill.danger{background:#ff7a7a}
+.section-head{font-size:13.5px;font-weight:600;margin:24px 0 10px;letter-spacing:.03em}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{text-align:left;padding:7px 10px;color:var(--text-3,#888);font-weight:500;font-size:11px;letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid var(--border-soft,#2a2a2a)}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--border-soft,#2a2a2a);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl .mono{font-family:var(--font-mono,monospace);font-size:11.5px}
+.health-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.health-dot.ok{background:#57e39b}.health-dot.warn{background:#ffd75e}.health-dot.err{background:#ff7a7a}.health-dot.off{background:#555}
+.two-panel{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:860px){.two-panel{grid-template-columns:1fr}}
+.panel-box{background:var(--surface,#161616);border:1px solid var(--border-soft,#2a2a2a);border-radius:14px;padding:16px}
+.sparkbar{display:flex;align-items:flex-end;gap:3px;height:40px;margin-top:10px}
+.sparkbar-col{flex:1;background:var(--gold-soft,rgba(200,164,86,.25));border-radius:3px 3px 0 0;min-height:2px}
+.settings-section{background:var(--surface,rgba(120,165,255,.04));border:1px solid var(--border-soft,rgba(150,185,255,.10));border-radius:20px;padding:28px 30px;margin-top:28px}
+.settings-section h3{font-size:16px;font-weight:700;margin-bottom:6px;font-family:var(--font-serif)}
+.settings-sub{font-size:12px;color:var(--text-3);margin-bottom:24px}
+.settings-divider{height:1px;background:var(--border-soft,rgba(150,185,255,.10));margin:24px 0}
+.settings-group-label{font-size:10.5px;font-weight:600;letter-spacing:.10em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px}
+.settings-grid-ai{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
+.settings-grid-ai .field{margin-bottom:0}
+.settings-grid-ai .field label{font-size:11px;letter-spacing:.07em;color:var(--text-3);margin-bottom:7px}
+.settings-grid-ai .field input{font-size:14px;padding:11px 14px;border-radius:12px}
+.settings-grid-ai .field .stat-note{font-size:11px;margin-top:5px;line-height:1.5}
+.pause-row{display:flex;align-items:center;gap:14px;padding:14px 18px;border:1px solid var(--border-soft,rgba(150,185,255,.10));border-radius:14px;background:rgba(255,122,122,.04);margin-top:4px}
+.pause-row label{font-size:13.5px;font-weight:500;color:var(--text);cursor:pointer;flex:1}
+.pause-row .stat-note{font-size:11.5px;color:var(--text-3);margin:0}
+.toggle-wrap{position:relative;width:42px;height:24px;flex-shrink:0}
+/* .pause-row label{flex:1} also matches this toggle (it's a <label>) — pin its size back */
+.pause-row .toggle-wrap{flex:0 0 42px;width:42px}
+.toggle-wrap input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{position:absolute;inset:0;border-radius:99px;background:var(--border,rgba(150,185,255,.2));transition:background .2s;cursor:pointer}
+.toggle-track::after{content:"";position:absolute;width:18px;height:18px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s}
+.toggle-wrap input:checked + .toggle-track{background:#ff7a7a}
+.toggle-wrap input:checked + .toggle-track::after{transform:translateX(18px)}
+.priority-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.priority-list li{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border-soft,rgba(150,185,255,.10));border-radius:14px;background:rgba(120,165,255,.04)}
+.priority-list li .rank{width:24px;height:24px;border-radius:50%;background:var(--gold-soft,rgba(224,194,116,.14));color:var(--gold,#e0c274);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.priority-list li .pname{font-size:13.5px;font-weight:500;flex:1}
+.priority-list li .pmove{display:flex;gap:4px;margin-left:auto}
+.pmove-btn{width:28px;height:28px;border-radius:8px;border:1px solid var(--border-soft,rgba(150,185,255,.10));background:rgba(120,165,255,.06);color:var(--text-2);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,background .2s}
+.pmove-btn:hover{border-color:var(--border-gold,rgba(217,185,110,.28));background:var(--gold-soft,rgba(224,194,116,.10));color:var(--gold)}
+.log-wrap{max-height:340px;overflow:auto}
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+<main class="console-wrap">
+
+<!-- ── Stat cards ────────────────────────────────────────────── -->
+<div class="ai-grid" id="statCards">
+  <div class="ai-card"><div class="label">Monthly budget</div><div class="value" id="statBudget">—</div></div>
+  <div class="ai-card">
+    <div class="label">Spent this month</div>
+    <div class="value" id="statSpent">—</div>
+    <div class="budget-bar"><div class="budget-bar-fill" id="budgetFill" style="width:0%"></div></div>
+    <div class="sub" id="statRemaining">Loading…</div>
+  </div>
+  <div class="ai-card"><div class="label">Spent today</div><div class="value" id="statToday">—</div></div>
+  <div class="ai-card"><div class="label">Avg cost / article</div><div class="value" id="statAvg">—</div></div>
+  <div class="ai-card"><div class="label">Daily average</div><div class="value" id="statDailyAvg">—</div></div>
+  <div class="ai-card"><div class="label">Est. articles left</div><div class="value" id="statRemArticles">—</div><div class="sub">at current avg cost</div></div>
+</div>
+
+<!-- ── Two-column: provider breakdown + daily sparkline ──────── -->
+<div class="two-panel">
+  <div class="panel-box">
+    <div class="section-head">Cost by provider (this month)</div>
+    <table class="tbl" id="providerTable"><thead><tr>
+      <th>Provider</th><th class="num">Calls</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">Fail%</th>
+    </tr></thead><tbody id="providerBody"><tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text-3)">Loading…</td></tr></tbody></table>
+  </div>
+  <div class="panel-box">
+    <div class="section-head">Cost by model (this month)</div>
+    <table class="tbl" id="modelTable"><thead><tr>
+      <th>Model</th><th>Tier</th><th class="num">Cost</th><th class="num">Avg ✦</th>
+    </tr></thead><tbody id="modelBody"><tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-3)">Loading…</td></tr></tbody></table>
+  </div>
+</div>
+
+<!-- ── Daily spend sparkline ─────────────────────────────────── -->
+<div class="panel-box" style="margin-top:18px">
+  <div class="section-head">Daily spend — last 30 days</div>
+  <div class="sparkbar" id="sparkbar"></div>
+  <div style="font-size:11px;color:var(--text-3,#888);margin-top:4px" id="sparkLabels"></div>
+</div>
+
+<!-- ── Recent AI calls log ───────────────────────────────────── -->
+<div class="section-head" style="margin-top:24px">Recent AI calls</div>
+<div class="log-wrap">
+  <table class="tbl" id="logTable"><thead><tr>
+    <th>Time</th><th>Provider / Model</th><th>Task</th><th>Tier</th>
+    <th class="num">In</th><th class="num">Out</th><th class="num">Cost</th>
+    <th class="num">ms</th><th class="num">✦</th><th>Status</th>
+  </tr></thead><tbody id="logBody"><tr><td colspan="10" style="padding:20px;text-align:center;color:var(--text-3)">Loading…</td></tr></tbody></table>
+</div>
+
+<!-- ── Admin controls ────────────────────────────────────────── -->
+<div class="settings-section">
+  <h3>AI Router Settings</h3>
+  <p class="settings-sub">Changes take effect on the next generation run.</p>
+
+  <!-- Budget -->
+  <div class="settings-group-label">Budget</div>
+  <div class="settings-grid-ai">
+    <div class="field">
+      <label>Monthly budget (USD)</label>
+      <input type="number" id="set_monthly" min="1" max="500" step="1">
+    </div>
+    <div class="field">
+      <label>Daily budget (USD)</label>
+      <input type="number" id="set_daily" min="0" max="50" step="0.5" placeholder="No cap">
+      <span class="stat-note">Leave blank for no daily cap.</span>
+    </div>
+    <div class="field">
+      <label>Max cost per article (USD)</label>
+      <input type="number" id="set_maxart" min="0.001" max="5" step="0.01">
+    </div>
+    <div class="field">
+      <label>Quality escalation threshold</label>
+      <input type="number" id="set_quality" min="0" max="100">
+      <span class="stat-note">Score 0–100. Below this, router retries with the next tier.</span>
+    </div>
+  </div>
+
+  <div class="settings-divider"></div>
+
+  <!-- Model overrides -->
+  <div class="settings-group-label">Model overrides <span style="font-weight:400;text-transform:none;letter-spacing:0">&nbsp;—&nbsp; leave blank to use provider defaults</span></div>
+  <div class="settings-grid-ai">
+    <div class="field">
+      <label>Cheap tier</label>
+      <input type="text" id="set_cheap" placeholder="e.g. google/gemini-2.0-flash-lite:free">
+    </div>
+    <div class="field">
+      <label>Medium tier</label>
+      <input type="text" id="set_medium" placeholder="e.g. google/gemini-2.5-flash">
+    </div>
+    <div class="field">
+      <label>Premium tier</label>
+      <input type="text" id="set_premium" placeholder="e.g. anthropic/claude-sonnet-4-6">
+    </div>
+  </div>
+
+  <div class="settings-divider"></div>
+
+  <!-- Provider priority -->
+  <div class="settings-group-label">Provider priority</div>
+  <ul class="priority-list" id="priorityList"></ul>
+  <p style="font-size:11.5px;color:var(--text-3);margin-top:10px">Providers without a configured API key are automatically skipped at runtime.</p>
+
+  <div class="settings-divider"></div>
+
+  <!-- Pause toggle -->
+  <div class="pause-row">
+    <div>
+      <label for="set_paused" style="font-size:13.5px;font-weight:500;color:var(--text);cursor:pointer;display:block;margin-bottom:3px">Pause all AI generation</label>
+      <span class="stat-note">Queued jobs will re-queue automatically until AI is resumed.</span>
+    </div>
+    <label class="toggle-wrap">
+      <input type="checkbox" id="set_paused">
+      <span class="toggle-track"></span>
+    </label>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:16px;margin-top:22px">
+    <button class="btn btn-primary" id="saveSettings">Save settings</button>
+    <p class="adm-msg" id="setMsg" style="margin:0"></p>
+  </div>
+</div>
+
+</main>
+
+<script src="/new-ems/config/runtime.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/blog/console/shared.js?v=live-supabase-1"></script>
+<script>
+(async function () {
+  VN.shell("ai-costs", "AI Costs & Router");
+  if (!(await VN.requireAuth())) return;
+  var sb = VN.sb;
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ── Formatters ──────────────────────────────────────────────
+  function fmt$(v)  { return v == null ? "—" : "$" + Number(v).toFixed(v < 0.01 ? 6 : 4); }
+  function fmtK(v)  { return v == null ? "—" : v >= 1000 ? (v/1000).toFixed(1) + "k" : String(v); }
+  function fmtMs(v) { return v == null ? "—" : v >= 1000 ? (v/1000).toFixed(1) + "s" : v + "ms"; }
+  function fmtPct(ok, fail) {
+    var total = (ok||0) + (fail||0);
+    return total === 0 ? "—" : Math.round((fail||0) / total * 100) + "%";
+  }
+  function timeAgo(iso) {
+    var diff = Math.round((Date.now() - new Date(iso)) / 1000);
+    if (diff < 60) return diff + "s ago";
+    if (diff < 3600) return Math.round(diff/60) + "m ago";
+    if (diff < 86400) return Math.round(diff/3600) + "h ago";
+    return Math.round(diff/86400) + "d ago";
+  }
+
+  // ── Load everything ─────────────────────────────────────────
+  async function loadAll() {
+    var now = new Date();
+    var monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    var dayStart   = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    var day30Start = new Date(Date.now() - 30*24*3600*1000).toISOString();
+
+    var [settings, byProvider, byModel, daily, recentLogs, monthRows, dayRows] = await Promise.all([
+      sb.from("ai_router_settings").select("*").eq("id", 1).maybeSingle(),
+      sb.from("v_ai_cost_by_provider").select("*"),
+      sb.from("v_ai_cost_by_model").select("*"),
+      sb.from("v_ai_cost_daily").select("*"),
+      sb.from("ai_cost_logs").select("*").order("created_at", { ascending: false }).limit(50),
+      sb.from("ai_cost_logs").select("cost_usd").gte("created_at", monthStart),
+      sb.from("ai_cost_logs").select("cost_usd").gte("created_at", dayStart),
+    ]);
+
+    if (settings.error) {
+      VN.msg($("setMsg"), "ai_router_settings table missing — apply the Sprint 18D migration first.", false);
+    }
+
+    var cfg = settings.data || {};
+    var monthBudget = Number(cfg.monthly_budget_usd) || 15;
+    var monthSpent  = (monthRows.data||[]).reduce(function(s,r){ return s + Number(r.cost_usd||0); }, 0);
+    var daySpent    = (dayRows.data||[]).reduce(function(s,r){ return s + Number(r.cost_usd||0); }, 0);
+    var monthRem    = Math.max(0, monthBudget - monthSpent);
+    var pct         = Math.min(100, monthBudget > 0 ? (monthSpent / monthBudget * 100) : 0);
+
+    // Get unique days in last 30 for daily avg
+    var daySet = new Set((monthRows.data||[]).map(function(r){ return r.created_at && r.created_at.slice(0,10); }).filter(Boolean));
+    var daysElapsed = Math.max(daySet.size, 1);
+    var dailyAvg = monthSpent / daysElapsed;
+
+    // Avg cost per article (where cost > 0)
+    var paidCalls = (monthRows.data||[]).filter(function(r){ return Number(r.cost_usd) > 0; });
+    var avgCost   = paidCalls.length ? paidCalls.reduce(function(s,r){ return s+Number(r.cost_usd); },0) / paidCalls.length : 0;
+    var estLeft   = avgCost > 0 ? Math.floor(monthRem / avgCost) : "∞";
+
+    // ── Stat cards ──
+    $("statBudget").textContent       = "$" + monthBudget.toFixed(2);
+    $("statSpent").textContent        = "$" + monthSpent.toFixed(4);
+    $("statRemaining").textContent    = "$" + monthRem.toFixed(4) + " remaining";
+    $("statToday").textContent        = "$" + daySpent.toFixed(4);
+    $("statAvg").textContent          = avgCost > 0 ? fmt$(avgCost) : "Free";
+    $("statDailyAvg").textContent     = "$" + dailyAvg.toFixed(4);
+    $("statRemArticles").textContent  = String(estLeft);
+
+    var fill = $("budgetFill");
+    fill.style.width = pct.toFixed(1) + "%";
+    fill.className   = "budget-bar-fill" + (pct >= 90 ? " danger" : pct >= 70 ? " warn" : "");
+
+    // ── Provider table ──
+    var providers = byProvider.data || [];
+    $("providerBody").innerHTML = providers.length
+      ? providers.map(function(p) {
+          var tok = (Number(p.tokens_in)||0) + (Number(p.tokens_out)||0);
+          return "<tr><td>" + VN.esc(p.provider) + "</td>"
+            + "<td class='num'>" + fmtK(p.calls) + "</td>"
+            + "<td class='num'>" + fmtK(tok) + "</td>"
+            + "<td class='num'>" + fmt$(p.cost_usd) + "</td>"
+            + "<td class='num'>" + fmtPct(p.successes, p.failures) + "</td></tr>";
+        }).join("")
+      : "<tr><td colspan='5' style='padding:16px;text-align:center;color:var(--text-3)'>No data yet this month.</td></tr>";
+
+    // ── Model table ──
+    var models = byModel.data || [];
+    $("modelBody").innerHTML = models.length
+      ? models.map(function(m) {
+          return "<tr><td class='mono'>" + VN.esc(m.model) + "</td>"
+            + "<td><span class='pill " + (m.tier||"") + "' style='font-size:10px'>" + VN.esc(m.tier||"—") + "</span></td>"
+            + "<td class='num'>" + fmt$(m.cost_usd) + "</td>"
+            + "<td class='num'>" + (m.avg_quality ? Number(m.avg_quality).toFixed(0) : "—") + "</td></tr>";
+        }).join("")
+      : "<tr><td colspan='4' style='padding:16px;text-align:center;color:var(--text-3)'>No data yet this month.</td></tr>";
+
+    // ── Sparkline ──
+    var days = (daily.data || []).slice().reverse();
+    var maxCost = Math.max.apply(null, days.map(function(d){ return Number(d.cost_usd)||0; })) || 1;
+    $("sparkbar").innerHTML = days.map(function(d) {
+      var h = Math.max(4, Math.round((Number(d.cost_usd)||0) / maxCost * 40));
+      return "<div class='sparkbar-col' style='height:" + h + "px' title='" + d.day + ": $" + Number(d.cost_usd).toFixed(6) + "'></div>";
+    }).join("");
+
+    // ── Recent logs ──
+    var logs = recentLogs.data || [];
+    $("logBody").innerHTML = logs.length
+      ? logs.map(function(l) {
+          var status = l.error ? "<span class='pill failed'>error</span>" : "<span class='pill completed'>ok</span>";
+          if (l.escalated) status += " <span class='pill needs_review' style='font-size:9px'>escalated</span>";
+          if (l.fallback_from_provider) status += " <span class='pill archived' style='font-size:9px'>fallback</span>";
+          return "<tr>"
+            + "<td style='white-space:nowrap;font-size:11px'>" + timeAgo(l.created_at) + "</td>"
+            + "<td class='mono'>" + VN.esc((l.provider||"") + " / " + (l.model||"").split("/").pop()) + "</td>"
+            + "<td>" + VN.esc(l.task_type||"") + "</td>"
+            + "<td><span class='pill " + (l.tier||"") + "' style='font-size:9px'>" + VN.esc(l.tier||"—") + "</span></td>"
+            + "<td class='num'>" + fmtK(l.tokens_in) + "</td>"
+            + "<td class='num'>" + fmtK(l.tokens_out) + "</td>"
+            + "<td class='num'>" + fmt$(l.cost_usd) + "</td>"
+            + "<td class='num'>" + fmtMs(l.duration_ms) + "</td>"
+            + "<td class='num'>" + (l.quality_score ? Number(l.quality_score).toFixed(0) : "—") + "</td>"
+            + "<td>" + status + "</td>"
+            + "</tr>";
+        }).join("")
+      : "<tr><td colspan='10' style='padding:20px;text-align:center;color:var(--text-3)'>No AI calls logged yet. Apply the Sprint 18D migration and run a generation.</td></tr>";
+
+    // ── Settings form ──
+    $("set_monthly").value  = cfg.monthly_budget_usd || 15;
+    $("set_daily").value    = cfg.daily_budget_usd || "";
+    $("set_maxart").value   = cfg.max_cost_per_article_usd || 0.50;
+    $("set_quality").value  = cfg.quality_escalation_threshold || 90;
+    $("set_cheap").value    = cfg.cheap_model || "";
+    $("set_medium").value   = cfg.medium_model || "";
+    $("set_premium").value  = cfg.premium_model || "";
+    $("set_paused").checked = !!cfg.ai_paused;
+
+    // ── Provider priority list ──
+    var KNOWN = ["openrouter","gemini_direct","openai","anthropic"];
+    var priority = (cfg.provider_priority && cfg.provider_priority.length)
+      ? cfg.provider_priority : KNOWN;
+    // Ensure all known providers are listed
+    KNOWN.forEach(function(p){ if (!priority.includes(p)) priority.push(p); });
+
+    $("priorityList").innerHTML = priority.map(function(p, i) {
+      return "<li>"
+        + "<span class='rank'>" + (i+1) + "</span>"
+        + "<span>" + VN.esc(p) + "</span>"
+        + (i > 0 ? "<button class='btn-sm' style='padding:3px 8px;font-size:10px' data-move='up' data-id='" + p + "'>↑</button>" : "")
+        + (i < priority.length-1 ? "<button class='btn-sm' style='padding:3px 8px;font-size:10px' data-move='down' data-id='" + p + "'>↓</button>" : "")
+        + "</li>";
+    }).join("");
+
+    // Move up/down handlers
+    document.querySelectorAll("[data-move]").forEach(function(btn) {
+      btn.onclick = function() {
+        var id  = btn.dataset.id;
+        var dir = btn.dataset.move;
+        var idx = priority.indexOf(id);
+        if (dir === "up" && idx > 0) { priority.splice(idx-1, 0, priority.splice(idx, 1)[0]); }
+        else if (dir === "down" && idx < priority.length-1) { priority.splice(idx+1, 0, priority.splice(idx, 1)[0]); }
+        // Re-render list
+        $("priorityList").innerHTML = priority.map(function(p, i) {
+          return "<li><span class='rank'>" + (i+1) + "</span><span>" + VN.esc(p) + "</span>"
+            + (i > 0 ? "<button class='btn-sm' style='padding:3px 8px;font-size:10px' data-move='up' data-id='" + p + "'>↑</button>" : "")
+            + (i < priority.length-1 ? "<button class='btn-sm' style='padding:3px 8px;font-size:10px' data-move='down' data-id='" + p + "'>↓</button>" : "")
+            + "</li>";
+        }).join("");
+        document.querySelectorAll("[data-move]").forEach(function(b){ b.onclick = arguments.callee; });
+      };
+    });
+  }
+
+  // ── Save settings ────────────────────────────────────────────
+  $("saveSettings").addEventListener("click", async function () {
+    var priority = Array.from(document.querySelectorAll("#priorityList li")).map(function(li){
+      return li.querySelector("span:nth-child(2)").textContent.trim();
+    });
+    var daily = $("set_daily").value.trim();
+    var patch = {
+      monthly_budget_usd:           Number($("set_monthly").value) || 15,
+      daily_budget_usd:             daily ? Number(daily) : null,
+      max_cost_per_article_usd:     Number($("set_maxart").value) || 0.50,
+      quality_escalation_threshold: Number($("set_quality").value) || 90,
+      cheap_model:                  $("set_cheap").value.trim() || null,
+      medium_model:                 $("set_medium").value.trim() || null,
+      premium_model:                $("set_premium").value.trim() || null,
+      ai_paused:                    $("set_paused").checked,
+      provider_priority:            priority,
+      updated_at:                   new Date().toISOString(),
+    };
+    var r = await sb.from("ai_router_settings").upsert({ id: 1, ...patch });
+    VN.msg($("setMsg"), r.error ? r.error.message : "Settings saved. Active on the next generation run.", !r.error);
+  });
+
+  await loadAll();
+
+  // Auto-refresh every 30s
+  setInterval(loadAll, 30000);
+})();
+</script>
+</body>
+</html>

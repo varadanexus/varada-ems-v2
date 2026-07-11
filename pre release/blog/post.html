@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insights — Varada Nexus</title>
+<meta name="description" content="An article from Varada Nexus.">
+<link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<div class="ambient"></div>
+
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/blog/" class="active">Blog</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <article class="post-wrap">
+    <a class="post-back" href="/blog/">&larr; All insights</a>
+    <div id="post"><p class="blog-status" style="text-align:center">Loading&hellip;</p></div>
+  </article>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span>Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+<script src="/new-ems/config/runtime.js"></script>
+<script>
+/* Staged preview uses the active public Supabase client without altering new-ems. */
+window.EMS_RUNTIME_CONFIG = {
+  supabaseUrl: "https://ftejxcycoiagbslnzaab.supabase.co",
+  supabaseAnonKey: "sb_publishable_KzR4SweqMLhpjeKSRUwYAA_AT25jK84"
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function () {
+  var cfg = window.EMS_RUNTIME_CONFIG || {};
+  var mount = document.getElementById("post");
+  var slug = new URLSearchParams(location.search).get("slug");
+  if (!slug) { mount.innerHTML = notFound(); return; }
+  if (!window.supabase || !cfg.supabaseUrl || !cfg.supabaseAnonKey) { mount.innerHTML = '<p class="blog-status" style="text-align:center">Blog is warming up. Please refresh in a moment.</p>'; return; }
+  var sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+
+  function esc(s){ return (s||"").replace(/[&<>"']/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c]; }); }
+  function fmtDate(d){ if(!d) return ""; try { return new Date(d).toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"}); } catch(e){ return ""; } }
+  function notFound(){ return '<div class="blog-empty"><h3>Post not found</h3><p>This article may have been moved or unpublished.</p><a class="btn btn-ghost" href="/blog/" style="margin-top:18px">Back to Insights</a></div>'; }
+
+  var SITE = "https://www.varadanexus.com";
+  var VISIBLE = ["published","auto_published","backdated"];
+
+  function setMeta(sel, attrs){
+    var el = document.querySelector(sel);
+    if (!el) {
+      el = document.createElement(sel.indexOf("link") === 0 ? "link" : "meta");
+      var m = sel.match(/\[(\w+(?::\w+)?)="([^"]+)"\]/);
+      if (m) el.setAttribute(sel.indexOf('property') > -1 ? "property" : (sel.indexOf("rel=") > -1 ? "rel" : "name"), m[2]);
+      document.head.appendChild(el);
+    }
+    Object.keys(attrs).forEach(function(k){ el.setAttribute(k, attrs[k]); });
+  }
+  function addLd(obj){
+    var ld = document.createElement("script");
+    ld.type = "application/ld+json"; ld.textContent = JSON.stringify(obj);
+    document.head.appendChild(ld);
+  }
+  function catSlug(c){ return String(c||"").toLowerCase().trim().replace(/[^a-z0-9\s-]/g,"").replace(/[\s_-]+/g,"-"); }
+
+  sb.from("blog_posts").select("*").eq("slug", slug).in("status", VISIBLE).maybeSingle()
+    .then(function(res){
+      if (res.error || !res.data) { legacyLoad(); return; }
+      render(res.data);
+    });
+
+  // Fallback for pre-migration schema (status values / .in not matching)
+  function legacyLoad(){
+    sb.from("blog_posts").select("*").eq("slug", slug).eq("status","published").maybeSingle()
+      .then(function(res){
+        if (res.error || !res.data) { mount.innerHTML = notFound(); return; }
+        render(res.data);
+      });
+  }
+
+  function render(p){
+      var canonical = p.canonical_url || (SITE + "/blog/post.html?slug=" + encodeURIComponent(p.slug));
+      document.title = (p.meta_title || p.title) + " — Varada Nexus";
+      var desc = p.meta_description || p.excerpt || "";
+      var img = p.cover_image || (SITE + "/images/logo.png");
+
+      var md = document.querySelector('meta[name="description"]'); if (md && desc) md.setAttribute("content", desc);
+      setMeta('link[rel="canonical"]', { rel: "canonical", href: canonical });
+      setMeta('meta[property="og:title"]', { content: p.meta_title || p.title });
+      setMeta('meta[property="og:description"]', { content: desc });
+      setMeta('meta[property="og:url"]', { content: canonical });
+      setMeta('meta[property="og:image"]', { content: img });
+      setMeta('meta[property="og:type"]', { content: "article" });
+      setMeta('meta[name="twitter:card"]', { content: "summary_large_image" });
+      setMeta('meta[name="twitter:title"]', { content: p.meta_title || p.title });
+      setMeta('meta[name="twitter:description"]', { content: desc });
+      setMeta('meta[name="twitter:image"]', { content: img });
+
+      var catLink = p.primary_category
+        ? '<a href="/blog/category/' + catSlug(p.primary_category) + '/" style="color:var(--gold,#c8a456);text-decoration:none">' + esc(p.primary_category) + '</a> &middot; '
+        : "";
+      var tags = (p.tags||[]).map(function(t){
+        return '<a href="/blog/?q=' + encodeURIComponent(t) + '" style="text-decoration:none;color:inherit"><span>' + esc(t) + '</span></a>';
+      }).join("");
+
+      mount.innerHTML =
+        '<div class="post-head">'
+        + '<div class="blog-meta">' + catLink + esc(fmtDate(p.published_at)) + (p.author?' &middot; '+esc(p.author):'') + '</div>'
+        + '<h1 class="post-title">'+esc(p.title)+'</h1>'
+        + (p.excerpt ? '<p class="post-lede">'+esc(p.excerpt)+'</p>' : '')
+        + (tags ? '<div class="blog-tags">'+tags+'</div>' : '')
+        + '</div>'
+        + (p.cover_image ? '<div class="post-cover"><img src="'+esc(p.cover_image)+'" alt="'+esc(p.alt_text || p.title)+'"></div>' : '')
+        + '<div class="post-body">'+(p.content||"")+'</div>'
+        + '<div id="related"></div>';
+
+      addLd({
+        "@context":"https://schema.org","@type":"BlogPosting",
+        "headline": p.title, "description": desc,
+        "image": img, "mainEntityOfPage": canonical,
+        "datePublished": p.published_at, "dateModified": p.updated_at || p.published_at,
+        "author": {"@type":"Organization","name": p.author || "Varada Nexus"},
+        "publisher": {"@type":"Organization","name":"Varada Nexus Private Limited","logo":{"@type":"ImageObject","url": SITE + "/images/logo.png"}}
+      });
+      addLd({
+        "@context":"https://schema.org","@type":"BreadcrumbList",
+        "itemListElement":[
+          {"@type":"ListItem","position":1,"name":"Home","item":SITE+"/"},
+          {"@type":"ListItem","position":2,"name":"Insights","item":SITE+"/blog/"}
+        ].concat(p.primary_category ? [{"@type":"ListItem","position":3,"name":p.primary_category,"item":SITE+"/blog/category/"+catSlug(p.primary_category)+"/"}] : [])
+      });
+      // Extra structured data prepared by the generator (e.g. FAQ schema)
+      if (p.schema_json) { try { addLd(typeof p.schema_json === "string" ? JSON.parse(p.schema_json) : p.schema_json); } catch(e){} }
+
+      // Related posts (same category first, then latest)
+      var rq = p.primary_category
+        ? sb.rpc("search_blog_posts", { cat: catSlug(p.primary_category), lim: 4 })
+        : sb.rpc("search_blog_posts", { lim: 4 });
+      rq.then(function(r){
+        var rows = (r.data||[]).filter(function(x){ return x.slug !== p.slug; }).slice(0,3);
+        if (r.error || !rows.length) return;
+        document.getElementById("related").innerHTML =
+          '<div style="margin-top:48px"><h2 style="font-family:var(--font-serif);font-size:22px;margin-bottom:16px">Related insights</h2>'
+          + '<div class="grid grid-3">' + rows.map(function(x){
+              return '<a class="card blog-card in" href="/blog/post.html?slug='+encodeURIComponent(x.slug)+'">'
+                + '<div class="blog-meta">'+esc(fmtDate(x.published_at))+'</div>'
+                + '<h3>'+esc(x.title)+'</h3>'
+                + (x.excerpt?'<p>'+esc(x.excerpt)+'</p>':'')
+                + '<span class="card-more">Read more &rarr;</span></a>';
+            }).join("") + '</div></div>';
+      });
+  }
+})();
+</script>
+</body>
+</html>
