@@ -29,11 +29,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/assets/site.css?v=login-aurum-5">
 
 </head>
-<body>
+<body class="login-page">
 <div class="ambient"></div>
+<div class="ems-welcome" aria-live="polite" aria-atomic="true">
+  <span class="ems-welcome-mark">VN</span>
+  <span class="ems-welcome-eyebrow">Access confirmed</span>
+  <strong>Welcome to Varada Nexus EMS</strong>
+  <span class="ems-welcome-note">Preparing your private workspace</span>
+</div>
 
 <header class="site-nav">
   <div class="nav-inner">
@@ -70,6 +76,7 @@
   <section class="auth-wrap">
     <div class="auth-card reveal in">
       <img class="logo" src="/images/logo.png" alt="Varada Nexus">
+      <span class="auth-kicker">Secure access</span>
       <h1>Welcome Back</h1>
       <p class="sub">Secure access to Varada Nexus ERP</p>
       <div id="loginForm">
@@ -93,7 +100,7 @@
 
 
 
-<script src="/assets/site.js"></script>
+<script src="/assets/site.js?v=login-nav-access"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="/new-ems/config/runtime.js?v=beta-site-1"></script>
 <script type="module">
@@ -106,6 +113,11 @@ function el(id) { return document.getElementById(id); }
 function setError(message = "") { const node = el("error"); if (node) node.innerText = message; }
 function setBtn(disabled, text) { const b = el("loginBtn"); if (b) { b.disabled = disabled; b.innerText = text || "Login"; } }
 function escapeHtml(v) { return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function showWelcomeTransition() {
+  document.body.classList.add("ems-entering");
+  setBtn(true, "Preparing workspace…");
+  return new Promise((resolve) => window.setTimeout(resolve, 2400));
+}
 
 window.togglePassword = function togglePassword() {
   const pass = el("password");
@@ -123,6 +135,7 @@ function showLoginForm() {
   picker.hidden = true;
   picker.innerHTML = "";
   el("loginForm").hidden = false;
+  document.body.classList.remove("ems-entering");
   setBtn(false, "Login");
 }
 
@@ -158,6 +171,7 @@ function renderPicker(accounts) {
     picker.querySelectorAll("button").forEach((b) => (b.disabled = true));
     setError("");
     try {
+      await showWelcomeTransition();
       const result = await authenticate(acc.login_type, PENDING.identifier, PENDING.password, acc.auth_provider);
       handleAuthResult(result);
     } catch (error) {
@@ -181,13 +195,14 @@ window.login = async function login() {
     if (!accounts.length) throw new Error("Invalid login credentials");
     PENDING = { identifier, password };
     if (accounts.length === 1) {
-      setBtn(true, "Signing in…");
+      await showWelcomeTransition();
       const result = await authenticate(accounts[0].login_type, identifier, password, accounts[0].auth_provider);
       handleAuthResult(result);
       return;
     }
     renderPicker(accounts);
   } catch (error) {
+    document.body.classList.remove("ems-entering");
     setError(error?.message || "Login failed");
     setBtn(false, "Login");
   }

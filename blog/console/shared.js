@@ -1,6 +1,9 @@
 // Varada Nexus — Blog Console shared runtime (auth guard, branded shell, helpers)
 window.VN = (function () {
-  var cfg = window.EMS_RUNTIME_CONFIG || {};
+  var cfg = window.EMS_RUNTIME_CONFIG || {
+    supabaseUrl: "https://ftejxcycoiagbslnzaab.supabase.co",
+    supabaseAnonKey: "sb_publishable_KzR4SweqMLhpjeKSRUwYAA_AT25jK84"
+  };
   var sb = (window.supabase && cfg.supabaseUrl && cfg.supabaseAnonKey)
     ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
 

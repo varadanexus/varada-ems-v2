@@ -64,6 +64,13 @@
 
 <script src="/assets/site.js"></script>
 <script src="/new-ems/config/runtime.js"></script>
+<script>
+/* Staged preview uses the active public Supabase client without altering new-ems. */
+window.EMS_RUNTIME_CONFIG = {
+  supabaseUrl: "https://ftejxcycoiagbslnzaab.supabase.co",
+  supabaseAnonKey: "sb_publishable_KzR4SweqMLhpjeKSRUwYAA_AT25jK84"
+};
+</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function () {
