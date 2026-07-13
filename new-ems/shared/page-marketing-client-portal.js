@@ -6,6 +6,7 @@ import {
   listMarketingQueries, marketingSetupMessage, signOutMarketingPortal,
   subscribeToMarketingQueries, updateMarketingQuery
 } from "./marketing-api.js?v=marketing-whatsapp-1";
+import { enforceMarketingPortalDisclaimer } from "./marketing-disclaimer-gate.js?v=marketing-disclaimer-1";
 
 const state = {
   identity: null, projects: [], deliverables: [], queries: [], invoices: [], payments: [],
@@ -143,6 +144,7 @@ async function load() {
 async function init() {
   state.identity = await getMarketingIdentity();
   if (!state.identity || state.identity.kind !== "client") { location.replace(ROUTES.LOGIN); return; }
+  await enforceMarketingPortalDisclaimer("client");
   await load();
   state.channel = subscribeToMarketingQueries(() => load().catch(() => {}));
 }
