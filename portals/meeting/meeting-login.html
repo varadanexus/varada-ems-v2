@@ -11,6 +11,32 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
 <link rel="stylesheet" href="/assets/site.css">
+<style>
+  .meeting-auth-card{max-width:520px;padding:52px 46px;border:1px solid rgba(230,200,126,.22);background:linear-gradient(160deg,rgba(230,200,126,.07),rgba(5,6,9,.94) 38%);box-shadow:0 28px 90px rgba(0,0,0,.58),0 0 50px rgba(195,154,68,.07)}
+  .meeting-auth-card .field{position:relative;margin-top:18px}
+  .meeting-auth-card input{width:100%;height:58px;padding:0 126px 0 20px;border:1px solid rgba(230,200,126,.3)!important;border-radius:14px;background:#0c0c0f!important;color:#f7f4ec!important;-webkit-text-fill-color:#f7f4ec!important;caret-color:#e6c87e;font:600 15px Manrope,Arial,sans-serif;letter-spacing:.05em;opacity:1!important}
+  .meeting-auth-card .phone-input{padding-left:100px!important}
+  .country-picker{position:absolute;z-index:4;left:9px;top:9px;width:78px;height:40px}
+  .country-code{display:flex;align-items:center;justify-content:center;gap:5px;width:100%;height:40px;padding:0 8px;border:0;border-right:1px solid rgba(230,200,126,.22);border-radius:8px 0 0 8px;background:#0c0c0f;color:#e6c87e;font:700 13px Manrope,Arial,sans-serif;cursor:pointer;outline:none}
+  .country-code::after{content:"";width:5px;height:5px;border-right:1px solid currentColor;border-bottom:1px solid currentColor;transform:rotate(45deg) translateY(-2px);transition:transform .2s}
+  .country-picker.open .country-code::after{transform:rotate(225deg) translate(-1px,-1px)}
+  .country-menu{position:absolute;left:0;top:46px;width:92px;padding:7px;border:1px solid rgba(230,200,126,.28);border-radius:12px;background:#09090c;box-shadow:0 18px 45px rgba(0,0,0,.65);opacity:0;visibility:hidden;transform:translateY(-6px);transition:opacity .2s,transform .2s,visibility .2s}
+  .country-picker.open .country-menu{opacity:1;visibility:visible;transform:translateY(0)}
+  .country-option{display:block;width:100%;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:#c9c5b8;text-align:left;font:700 12px Manrope,Arial,sans-serif;cursor:pointer}
+  .country-option:hover,.country-option:focus,.country-option[aria-selected="true"]{outline:none;background:rgba(230,200,126,.12);color:#f7e7b0}
+  .meeting-auth-card input::placeholder{color:#9b9788!important;-webkit-text-fill-color:#9b9788!important;opacity:1}
+  .meeting-auth-card input:-webkit-autofill,.meeting-auth-card input:-webkit-autofill:hover,.meeting-auth-card input:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 1000px #0c0c0f inset!important;box-shadow:0 0 0 1000px #0c0c0f inset!important;-webkit-text-fill-color:#f7f4ec!important;caret-color:#e6c87e}
+  .meeting-auth-card input:focus{outline:none;border-color:#e6c87e!important;box-shadow:0 0 0 3px rgba(230,200,126,.12)!important;background:#111116!important}
+  .meeting-auth-card input:disabled{opacity:.62}
+  .field-action{position:absolute;right:9px;top:9px;height:40px;padding:0 17px;border:1px solid rgba(195,154,68,.42);border-radius:99px;background:#11100d;color:#e6c87e;font:700 10px Manrope,Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
+  .field-action:disabled{cursor:not-allowed;opacity:.5}
+  .otp-field[hidden]{display:none}
+  .meeting-status{min-height:24px;margin:16px 0 2px;color:#9b9788;font-size:13px;line-height:1.6;text-align:center}
+  .meeting-status.success{color:#e6c87e}.meeting-status.error{color:#e68f83}
+  .meeting-auth-card .btn{height:54px;margin-top:10px}
+  .meeting-note{font-size:12px!important;color:#8d8a7e;line-height:1.7!important}
+  @media(max-width:600px){.meeting-auth-card{padding:38px 22px}.meeting-auth-card input{padding-right:108px}.meeting-auth-card .phone-input{padding-left:88px!important}.country-picker{width:68px}.country-code{padding:0 5px}.country-menu{width:84px}.field-action{padding:0 11px}}
+</style>
 <script>
   // Backwards compatibility: invite links that point here with ?t=<token>
   // (or #t=...) forward straight to the secure guest portal.
@@ -57,19 +83,33 @@
 
 <main>
   <section class="auth-wrap">
-    <div class="auth-card reveal in">
+    <div class="auth-card meeting-auth-card reveal in">
       <img class="logo" src="/images/logo.png" alt="Varada Nexus">
       <h1>Join a Meeting</h1>
       <p class="sub">Secure Communications Meeting Portal</p>
       <div class="field">
-        <input type="text" id="invite" placeholder="Paste your invite link or code" autocomplete="off" spellcheck="false">
+        <div class="country-picker" id="countryPicker">
+          <button class="country-code" id="countryCode" type="button" value="91" aria-label="Select country code" aria-haspopup="listbox" aria-expanded="false">+91</button>
+          <div class="country-menu" id="countryMenu" role="listbox" aria-label="Country codes">
+            <button class="country-option" type="button" role="option" data-code="91" aria-selected="true">+91</button>
+            <button class="country-option" type="button" role="option" data-code="1">+1</button>
+            <button class="country-option" type="button" role="option" data-code="44">+44</button>
+            <button class="country-option" type="button" role="option" data-code="61">+61</button>
+            <button class="country-option" type="button" role="option" data-code="65">+65</button>
+            <button class="country-option" type="button" role="option" data-code="971">+971</button>
+          </div>
+        </div>
+        <input class="phone-input" type="tel" id="phone" placeholder="Mobile number" autocomplete="tel-national" inputmode="numeric" maxlength="10">
+        <button class="field-action" type="button" id="sendOtpBtn">Send OTP</button>
       </div>
-      <button class="btn btn-primary" id="joinBtn" style="width:100%;justify-content:center;margin-top:6px">Continue</button>
-      <div class="error-text" id="error"></div>
-      <p class="sub" style="font-size:13px;margin-top:16px;line-height:1.6">
-        Your personal invite link is sent to you on WhatsApp by the meeting host.
-        Paste the full link or just the code from it. You will verify a one-time
-        password before entering the waiting room.
+      <div class="field otp-field" id="otpField" hidden>
+        <input type="text" id="otp" placeholder="Enter 6-digit OTP" autocomplete="one-time-code" inputmode="numeric" maxlength="6" disabled>
+        <button class="field-action" type="button" id="verifyOtpBtn" disabled>Verify</button>
+      </div>
+      <div class="meeting-status" id="status" aria-live="polite"></div>
+      <button class="btn btn-primary" id="joinBtn" disabled style="width:100%;justify-content:center">Verify &amp; Join Room</button>
+      <p class="sub meeting-note">
+        Use the mobile number registered by the meeting host. Your one-time password will be sent securely on WhatsApp and expires shortly.
       </p>
       <div class="auth-links">
         <a href="/login.html">Staff login &rarr;</a>
@@ -79,43 +119,144 @@
 </main>
 
 <script src="/assets/site.js"></script>
-<script>
-(function () {
-  var input = document.getElementById("invite");
-  var btn = document.getElementById("joinBtn");
-  var err = document.getElementById("error");
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/new-ems/config/runtime.js?v=meeting-phone-otp-1"></script>
+<script type="module">
+import { getSupabaseClient } from "/new-ems/config/supabase.js";
 
-  function extractToken(raw) {
-    var v = String(raw || "").trim();
-    if (!v) return "";
-    // Full invite URL → pull the t parameter
-    try {
-      var u = new URL(v);
-      var t = u.searchParams.get("t");
-      if (t) return t.trim();
-    } catch (e) { /* not a URL — treat as a bare code */ }
-    // Bare code (strip accidental spaces)
-    if (/^[A-Za-z0-9_-]{6,}$/.test(v)) return v;
-    return "";
+const phone = document.getElementById("phone");
+const countryCode = document.getElementById("countryCode");
+const countryPicker = document.getElementById("countryPicker");
+const countryOptions = [...document.querySelectorAll(".country-option")];
+const otp = document.getElementById("otp");
+const otpField = document.getElementById("otpField");
+const sendButton = document.getElementById("sendOtpBtn");
+const verifyButton = document.getElementById("verifyOtpBtn");
+const joinButton = document.getElementById("joinBtn");
+const status = document.getElementById("status");
+let challengeToken = "";
+let inviteToken = "";
+
+function setStatus(message, type = "") {
+  status.textContent = message;
+  status.className = `meeting-status ${type}`.trim();
+}
+
+async function functionMessage(error) {
+  const context = error?.context;
+  if (context && typeof context.json === "function") {
+    const payload = await context.json().catch(() => null);
+    if (payload?.error) return payload.error;
   }
+  return error?.message || "The meeting service is temporarily unavailable.";
+}
 
-  function go() {
-    err.innerText = "";
-    var token = extractToken(input.value);
-    if (!token) {
-      err.innerText = "That doesn't look like a valid invite link or code. Paste the full link from your WhatsApp invite.";
-      input.focus();
-      return;
-    }
-    btn.disabled = true;
-    btn.innerText = "Opening your invite…";
-    window.location.href = "/new-ems/modules/meetings-guest/index.html?t=" + encodeURIComponent(token);
+async function invoke(action, payload) {
+  const { data, error } = await getSupabaseClient().functions.invoke("meetings-integrations", {
+    body: { action, ...payload }
+  });
+  if (error) throw new Error(await functionMessage(error));
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+async function sendOtp() {
+  const digits = phone.value.replace(/\D/g, "");
+  const validLength = countryCode.value === "91" ? digits.length === 10 : digits.length >= 7;
+  if (!validLength) {
+    setStatus(countryCode.value === "91" ? "Enter the 10-digit mobile number registered by the meeting host." : "Enter the mobile number registered by the meeting host.", "error");
+    phone.focus();
+    return;
   }
+  sendButton.disabled = true;
+  sendButton.textContent = "Sending…";
+  setStatus("Securely generating your one-time password…");
+  try {
+    const result = await invoke("request_phone_join_otp", { phone: `+${countryCode.value}${digits}` });
+    challengeToken = result.challengeToken;
+    inviteToken = "";
+    otpField.hidden = false;
+    otp.disabled = false;
+    verifyButton.disabled = false;
+    joinButton.disabled = true;
+    setStatus(`OTP sent to ${result.maskedPhone || "your registered WhatsApp number"}.`, "success");
+    otp.focus();
+    sendButton.textContent = "Resend";
+    window.setTimeout(() => { sendButton.disabled = false; }, 30000);
+  } catch (error) {
+    setStatus(error.message, "error");
+    sendButton.disabled = false;
+    sendButton.textContent = "Send OTP";
+  }
+}
 
-  btn.addEventListener("click", go);
-  input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); go(); } });
-  input.focus();
-})();
+async function verifyOtp() {
+  const code = otp.value.replace(/\D/g, "").slice(0, 6);
+  otp.value = code;
+  if (!challengeToken || code.length !== 6) {
+    setStatus("Enter the complete six-digit OTP.", "error");
+    otp.focus();
+    return;
+  }
+  verifyButton.disabled = true;
+  verifyButton.textContent = "Checking…";
+  try {
+    const result = await invoke("verify_phone_join_otp", { challengeToken, otp: code });
+    inviteToken = result.inviteToken;
+    otp.disabled = true;
+    sendButton.disabled = true;
+    joinButton.disabled = false;
+    joinButton.textContent = result.access?.nextStep === "room" ? "Enter Meeting Room" : "Enter Waiting Room";
+    setStatus("Mobile number verified. Your secure room is ready.", "success");
+    joinButton.focus();
+  } catch (error) {
+    setStatus(error.message, "error");
+    verifyButton.disabled = false;
+    verifyButton.textContent = "Verify";
+    otp.select();
+  }
+}
+
+function joinRoom() {
+  if (!inviteToken) return;
+  joinButton.disabled = true;
+  joinButton.textContent = "Opening secure room…";
+  window.location.href = "/new-ems/modules/meetings-guest/index.html?t=" + encodeURIComponent(inviteToken);
+}
+
+sendButton.addEventListener("click", sendOtp);
+verifyButton.addEventListener("click", verifyOtp);
+joinButton.addEventListener("click", joinRoom);
+phone.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); sendOtp(); } });
+phone.addEventListener("input", () => { phone.value = phone.value.replace(/\D/g, "").slice(0, countryCode.value === "91" ? 10 : 15); });
+function closeCountryMenu() {
+  countryPicker.classList.remove("open");
+  countryCode.setAttribute("aria-expanded", "false");
+}
+
+function selectCountryCode(code) {
+  countryCode.value = code;
+  countryCode.textContent = `+${code}`;
+  countryOptions.forEach((option) => option.setAttribute("aria-selected", String(option.dataset.code === code)));
+  phone.maxLength = countryCode.value === "91" ? 10 : 15;
+  phone.value = phone.value.replace(/\D/g, "").slice(0, Number(phone.maxLength));
+  challengeToken = "";
+  inviteToken = "";
+  closeCountryMenu();
+  phone.focus();
+}
+
+countryCode.addEventListener("click", () => {
+  const opening = !countryPicker.classList.contains("open");
+  countryPicker.classList.toggle("open", opening);
+  countryCode.setAttribute("aria-expanded", String(opening));
+});
+countryOptions.forEach((option) => option.addEventListener("click", () => selectCountryCode(option.dataset.code)));
+document.addEventListener("click", (event) => { if (!countryPicker.contains(event.target)) closeCountryMenu(); });
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeCountryMenu(); });
+otp.addEventListener("input", () => { otp.value = otp.value.replace(/\D/g, "").slice(0, 6); });
+otp.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); verifyOtp(); } });
+phone.focus();
 </script>
 </body>
 </html>
