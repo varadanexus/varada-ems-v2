@@ -1,0 +1,221 @@
+import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
+import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { completeProject, deleteProjectCost, listClients, listDeliverables, listInvoices, listProjectCosts, listProjects, listServiceTypes, postCostToPayables, saveDeliverable, saveProject, saveProjectCost } from "./digital-services-api.js";
+import { assignMarketingVendor, listMarketingAssignments, listMarketingProjects, listMarketingVendors, removeMarketingAssignment } from "./marketing-api.js";
+import { showToast } from "./utils.js";
+
+const state = { projects: [], clients: [], services: [], selected: null, deliverables: [], invoices: [], costs: [], vendors: [], marketingProjects: [], assignments: [] };
+function projRevenue(id) { return state.invoices.filter((i) => i.project_id === id && i.status !== "void").reduce((s, i) => s + Number(i.subtotal || 0), 0); }
+function projCost(id) { return state.costs.filter((c) => c.project_id === id).reduce((s, c) => s + Number(c.amount || 0), 0); }
+function projItc(id) { return state.costs.filter((c) => c.project_id === id && c.itc_eligible).reduce((s, c) => s + Number(c.gst_amount || 0), 0); }
+const ENGAGEMENTS = [["one_off", "One-off"], ["milestone", "Milestone"], ["retainer", "Retainer"], ["subscription", "Subscription"]];
+const STATUSES = ["planning", "active", "on_hold", "completed", "cancelled"];
+const DSTATUS = ["todo", "in_progress", "review", "done"];
+function esc(v) { return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function money(v) { return "₹" + Number(v || 0).toLocaleString("en-IN"); }
+function deliveryProject(dsProjectId) { return state.marketingProjects.find((project) => project.ds_project_id === dsProjectId) || null; }
+function projectAssignments(dsProjectId) {
+  const project = deliveryProject(dsProjectId);
+  return project ? state.assignments.filter((assignment) => assignment.project_id === project.id) : [];
+}
+function vendorName(vendor) { return vendor?.legal_name || vendor?.contact_name || vendor?.vendor_code || "Vendor"; }
+
+function render() {
+  const svcOpt = state.services.map((s) => `<option value="${esc(s.code)}">${esc(s.label)}</option>`).join("");
+  const cliOpt = state.clients.map((c) => `<option value="${esc(c.id)}">${esc(c.company_name || c.name)}</option>`).join("");
+  const sel = state.selected;
+  const selDeliveryProject = sel ? deliveryProject(sel.id) : null;
+  const selAssignments = sel ? projectAssignments(sel.id) : [];
+  const assignedVendorIds = new Set(selAssignments.map((assignment) => assignment.vendor_id));
+  const availableVendors = state.vendors.filter((vendor) => !assignedVendorIds.has(vendor.id));
+  renderModuleContent(`
+    <style>
+      .ds-field{display:grid;gap:.28rem;margin-bottom:.65rem}.ds-field label{font-weight:700;font-size:.76rem}
+      .ds-field input,.ds-field select,.ds-field textarea{width:100%;box-sizing:border-box;padding:.56rem .68rem}
+    </style>
+    <section class="card"><h3>Projects</h3><p class="muted">Engagements across web, SEO, social, and PR. Click a project to manage deliverables.</p></section>
+    <section class="card ds-form-card" style="margin-top:1rem">
+      <h3>New Project</h3>
+      <form id="dsProjForm" class="ds-compact-form">
+        <div class="ds-field"><label>Client *</label><select name="client_id" required><option value="">Select client…</option>${cliOpt}</select></div>
+        <div class="ds-field"><label>Title *</label><input name="title" required /></div>
+        <div class="ds-field"><label>Service Line</label><select name="service_type"><option value="">—</option>${svcOpt}</select></div>
+        <div class="ds-field"><label>Engagement</label><select name="engagement_type">${ENGAGEMENTS.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select></div>
+        <div class="ds-field"><label>Budget (₹)</label><input name="budget_amount" type="number" value="0" /></div>
+        <div class="ds-field"><label>Status</label><select name="status">${STATUSES.map((s) => `<option value="${s}">${s}</option>`).join("")}</select></div>
+        <div class="ds-field"><label>Start</label><input name="start_date" type="date" /></div>
+        <div class="ds-field"><label>End</label><input name="end_date" type="date" /></div>
+        <div class="ds-field" style="grid-column:1/-1"><label>Description</label><textarea name="description" rows="2"></textarea></div>
+        <div style="grid-column:1/-1"><button class="btn" type="submit">Create Project</button></div>
+      </form>
+    </section>
+    <section class="card" style="margin-top:1rem">
+      <h3>All Projects (${state.projects.length})</h3>
+      <div class="table-shell"><table>
+        <thead><tr><th>Project</th><th>Client</th><th>Service</th><th>Vendors</th><th>Engagement</th><th>Revenue</th><th>Cost</th><th>Margin</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>${state.projects.map((p) => `<tr class="ds-proj-row" data-id="${esc(p.id)}" style="cursor:pointer;${sel && sel.id === p.id ? "background:rgba(212,178,106,.12)" : ""}">
+          <td><strong>${esc(p.title)}</strong><br><span class="muted">${esc(p.code || "")}</span></td>
+          <td>${esc(p.ds_clients?.company_name || p.ds_clients?.name || "-")}</td>
+          <td>${esc((state.services.find((s) => s.code === p.service_type) || {}).label || "-")}</td>
+          <td>${projectAssignments(p.id).length ? projectAssignments(p.id).map((assignment) => `<span class="meta-pill">${esc(vendorName(assignment.marketing_vendors))}</span>`).join(" ") : '<span class="muted">Unassigned</span>'}</td>
+          <td>${esc(p.engagement_type)}</td>
+          <td>${money(projRevenue(p.id))}</td><td>${money(projCost(p.id))}</td><td><strong>${money(projRevenue(p.id) - projCost(p.id))}</strong></td>
+          <td><span class="meta-pill">${esc(p.status)}</span></td>
+          <td>${p.status === "completed" ? '<span class="meta-pill">Completed</span>' : p.status === "cancelled" ? "—" : `<button class="btn btn-ghost ds-project-complete" data-id="${esc(p.id)}" type="button">Mark Completed</button>`}</td>
+        </tr>`).join("") || '<tr><td colspan="10">No projects yet.</td></tr>'}</tbody>
+      </table></div>
+    </section>
+    ${sel ? `
+    <section class="card" style="margin-top:1rem">
+      <h3>Project Vendors — ${esc(sel.title)}</h3>
+      <p class="muted">Link every firm or freelancer contributing to this project. Multiple vendors can be assigned.</p>
+      ${selDeliveryProject ? `
+        <form id="dsVendorAssignForm" style="display:flex;gap:.5rem;align-items:end;flex-wrap:wrap;margin-bottom:.8rem">
+          <div class="ds-field" style="flex:1;min-width:240px;margin:0"><label>Add vendor</label><select name="vendor_id" ${availableVendors.length ? "" : "disabled"}><option value="">${availableVendors.length ? "Select vendor…" : "All vendors are already linked"}</option>${availableVendors.map((vendor) => `<option value="${esc(vendor.id)}">${esc(vendorName(vendor))} · ${esc(vendor.vendor_type || "firm")}${vendor.vendor_code ? ` · ${esc(vendor.vendor_code)}` : ""}</option>`).join("")}</select></div>
+          <button class="btn" type="submit" ${availableVendors.length ? "" : "disabled"}>Link Vendor</button>
+        </form>
+        <div class="table-shell"><table><thead><tr><th>Vendor</th><th>Type</th><th>GSTIN</th><th>Assignment</th><th></th></tr></thead><tbody>
+          ${selAssignments.map((assignment) => `<tr><td><strong>${esc(vendorName(assignment.marketing_vendors))}</strong><br><span class="muted">${esc(assignment.marketing_vendors?.vendor_code || "")}</span></td><td>${esc(assignment.marketing_vendors?.vendor_type || "firm")}</td><td>${esc(assignment.marketing_vendors?.gstin || "—")}</td><td><span class="meta-pill">${esc(assignment.assignment_status)}</span></td><td><button class="btn btn-ghost ds-vendor-unlink" data-id="${esc(assignment.id)}" data-name="${esc(vendorName(assignment.marketing_vendors))}" type="button">Unlink</button></td></tr>`).join("") || '<tr><td colspan="5">No vendors linked to this project.</td></tr>'}
+        </tbody></table></div>` : '<p class="muted">The delivery project link is being prepared. Refresh this page and try again.</p>'}
+    </section>
+    <section class="card" style="margin-top:1rem">
+      <h3>Deliverables — ${esc(sel.title)}</h3>
+      <form id="dsDelivForm" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:end;margin-bottom:.8rem">
+        <div class="ds-field" style="flex:1;min-width:200px;margin:0"><label>New deliverable</label><input name="title" placeholder="e.g. Homepage design" required /></div>
+        <div class="ds-field" style="margin:0"><label>Due</label><input name="due_date" type="date" /></div>
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <div class="table-shell"><table>
+        <thead><tr><th>Deliverable</th><th>Due</th><th>Status</th></tr></thead>
+        <tbody>${state.deliverables.map((d) => `<tr>
+          <td>${esc(d.title)}</td><td>${esc(d.due_date || "-")}</td>
+          <td><select class="ds-deliv-status" data-id="${esc(d.id)}">${DSTATUS.map((s) => `<option value="${s}" ${d.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></td>
+        </tr>`).join("") || '<tr><td colspan="3">No deliverables yet.</td></tr>'}</tbody>
+      </table></div>
+    </section>
+    <section class="card" style="margin-top:1rem">
+      <h3>Vendor Costs &amp; Margin — ${esc(sel.title)}</h3>
+      <div class="hero-kpis" style="margin-bottom:.6rem">
+        <span class="meta-pill">Revenue (taxable): ${money(projRevenue(sel.id))}</span>
+        <span class="meta-pill">Vendor cost: ${money(projCost(sel.id))}</span>
+        <span class="meta-pill">Margin: ${money(projRevenue(sel.id) - projCost(sel.id))}</span>
+        <span class="meta-pill">ITC available: ${money(projItc(sel.id))}</span>
+      </div>
+      <form id="dsCostForm" style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;align-items:end;margin-bottom:.8rem">
+        <div class="ds-field" style="margin:0"><label>Linked Vendor *</label><select name="vendor_id" required><option value="">Select vendor…</option>${selAssignments.map((assignment) => `<option value="${esc(assignment.vendor_id)}">${esc(vendorName(assignment.marketing_vendors))}</option>`).join("")}</select></div>
+        <div class="ds-field" style="margin:0"><label>Description</label><input name="description" placeholder="Work done" /></div>
+        <div class="ds-field" style="margin:0"><label>Amount (₹)</label><input name="amount" type="number" value="0" /></div>
+        <div class="ds-field" style="margin:0"><label>GST %</label><input name="gst_rate" type="number" value="18" /></div>
+        <div class="ds-field" style="margin:0"><label>Vendor Ref</label><input name="vendor_ref" placeholder="Their bill no" /></div>
+        <div class="ds-field" style="margin:0"><label>Vendor GSTIN</label><input name="vendor_gstin" /></div>
+        <label class="notification-checkbox" style="align-self:center"><input type="checkbox" name="itc_eligible" checked /> <span>ITC eligible</span></label>
+        <div><button class="btn" type="submit">Add Cost</button></div>
+      </form>
+      <div class="table-shell"><table>
+        <thead><tr><th>Vendor</th><th>Description</th><th>Amount</th><th>GST (ITC)</th><th>Total</th><th>Status</th><th></th></tr></thead>
+        <tbody>${state.costs.filter((c) => c.project_id === sel.id).map((c) => `<tr>
+          <td>${esc(c.vendor_name)}<br><span class="muted">${esc(c.vendor_ref || "")}</span></td>
+          <td>${esc(c.description || "-")}</td>
+          <td>${money(c.amount)}</td>
+          <td>${money(c.gst_amount)} ${c.itc_eligible ? '<span class="meta-pill">ITC</span>' : '<span class="muted">no ITC</span>'}</td>
+          <td>${money(c.total_amount)}</td>
+          <td><span class="meta-pill">${esc(c.status)}</span></td>
+          <td style="white-space:nowrap">${c.posted_to_payables ? '<span class="meta-pill">In Payables</span>' : `<button class="btn btn-ghost ds-cost-payable" data-id="${esc(c.id)}" type="button">→ Payables</button>`}<button class="btn btn-ghost ds-cost-del" data-id="${esc(c.id)}" type="button">✕</button></td>
+        </tr>`).join("") || '<tr><td colspan="7">No vendor costs yet.</td></tr>'}</tbody>
+      </table></div>
+    </section>` : ""}
+  `);
+  bind();
+}
+
+function bind() {
+  document.querySelector("#dsProjForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    if (!f.client_id.value) return showToast("Select a client.", TOAST_TYPES.ERROR);
+    if (!f.title.value.trim()) return showToast("Title is required.", TOAST_TYPES.ERROR);
+    try {
+      await saveProject({ clientId: f.client_id.value, title: f.title.value.trim(), serviceType: f.service_type.value || null, engagementType: f.engagement_type.value, budgetAmount: f.budget_amount.value, status: f.status.value, startDate: f.start_date.value || null, endDate: f.end_date.value || null, description: f.description.value.trim() });
+      showToast("Project created.", TOAST_TYPES.SUCCESS); await reload();
+    } catch (err) { showToast(err?.message || "Save failed.", TOAST_TYPES.ERROR); }
+  });
+  document.querySelectorAll(".ds-proj-row").forEach((r) => r.addEventListener("click", async () => {
+    state.selected = state.projects.find((p) => p.id === r.getAttribute("data-id")) || null;
+    state.deliverables = state.selected ? await listDeliverables(state.selected.id).catch(() => []) : [];
+    render();
+  }));
+  document.querySelectorAll(".ds-project-complete").forEach((button) => button.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const project = state.projects.find((p) => p.id === button.dataset.id);
+    if (!project || !confirm(`Mark “${project.title}” as completed?`)) return;
+    button.disabled = true;
+    try { await completeProject(project.id); showToast("Project marked completed.", TOAST_TYPES.SUCCESS); await reload(); }
+    catch (err) { showToast(err?.message || "Project could not be completed.", TOAST_TYPES.ERROR); button.disabled = false; }
+  }));
+  document.querySelector("#dsVendorAssignForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!selDeliveryProject || !form.vendor_id.value) return showToast("Select a vendor.", TOAST_TYPES.ERROR);
+    try {
+      await assignMarketingVendor(selDeliveryProject.id, form.vendor_id.value);
+      showToast("Vendor linked to project.", TOAST_TYPES.SUCCESS);
+      await reload();
+    } catch (err) { showToast(err?.message || "Vendor could not be linked.", TOAST_TYPES.ERROR); }
+  });
+  document.querySelectorAll(".ds-vendor-unlink").forEach((button) => button.addEventListener("click", async () => {
+    if (!confirm(`Unlink ${button.dataset.name || "this vendor"} from the project?`)) return;
+    button.disabled = true;
+    try {
+      await removeMarketingAssignment(button.dataset.id);
+      showToast("Vendor unlinked from project.", TOAST_TYPES.SUCCESS);
+      await reload();
+    } catch (err) { showToast(err?.message || "Vendor could not be unlinked.", TOAST_TYPES.ERROR); button.disabled = false; }
+  }));
+  document.querySelector("#dsDelivForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    if (!f.title.value.trim()) return;
+    try {
+      await saveDeliverable({ projectId: state.selected.id, title: f.title.value.trim(), dueDate: f.due_date.value || null, sortOrder: state.deliverables.length });
+      state.deliverables = await listDeliverables(state.selected.id).catch(() => []); render();
+    } catch (err) { showToast(err?.message || "Add failed.", TOAST_TYPES.ERROR); }
+  });
+  document.querySelectorAll(".ds-deliv-status").forEach((sel) => sel.addEventListener("change", async () => {
+    try { await saveDeliverable({ status: sel.value }, sel.getAttribute("data-id")); showToast("Deliverable updated.", TOAST_TYPES.SUCCESS); }
+    catch (err) { showToast(err?.message || "Update failed.", TOAST_TYPES.ERROR); }
+  }));
+  document.querySelector("#dsCostForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    const assignment = selAssignments.find((row) => row.vendor_id === f.vendor_id.value);
+    const vendor = assignment?.marketing_vendors;
+    if (!vendor) return showToast("Select a linked vendor.", TOAST_TYPES.ERROR);
+    try {
+      await saveProjectCost({ projectId: state.selected.id, vendorName: vendorName(vendor), description: f.description.value.trim(), amount: f.amount.value, gstRate: f.gst_rate.value, vendorRef: f.vendor_ref.value.trim(), vendorGstin: f.vendor_gstin.value.trim() || vendor.gstin || "", itcEligible: f.itc_eligible.checked });
+      showToast("Vendor cost added.", TOAST_TYPES.SUCCESS); await reload();
+    } catch (err) { showToast(err?.message || "Add failed.", TOAST_TYPES.ERROR); }
+  });
+  document.querySelectorAll(".ds-cost-del").forEach((b) => b.addEventListener("click", async () => {
+    try { await deleteProjectCost(b.getAttribute("data-id")); showToast("Cost removed.", TOAST_TYPES.SUCCESS); await reload(); }
+    catch (err) { showToast(err?.message || "Delete failed.", TOAST_TYPES.ERROR); }
+  }));
+  document.querySelectorAll(".ds-cost-payable").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try { await postCostToPayables(b.getAttribute("data-id")); showToast("Sent to Payables — review & post it in Central Accounts → Payables.", TOAST_TYPES.SUCCESS); await reload(); }
+    catch (err) { showToast(err?.message || "Failed to send to Payables.", TOAST_TYPES.ERROR); b.disabled = false; }
+  }));
+}
+
+async function reload() {
+  [state.projects, state.invoices, state.costs, state.marketingProjects, state.assignments] = await Promise.all([listProjects().catch(() => []), listInvoices().catch(() => []), listProjectCosts().catch(() => []), listMarketingProjects().catch(() => []), listMarketingAssignments().catch(() => [])]);
+  if (state.selected) state.selected = state.projects.find((p) => p.id === state.selected.id) || null;
+  render();
+}
+
+async function init() {
+  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.DIGITAL_SERVICES_PROJECTS, pageTitle: "Projects", pageDescription: "Digital Marketing & Services engagements", workspace: WORKSPACES.DIGITAL_SERVICES });
+  if (!boot) return;
+  [state.clients, state.services, state.vendors] = await Promise.all([listClients().catch(() => []), listServiceTypes().catch(() => []), listMarketingVendors().catch(() => [])]);
+  await reload();
+}
+init();
