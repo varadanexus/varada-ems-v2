@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { jsPDF } from "npm:jspdf@4.2.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +29,24 @@ function trimText(value = "") {
 
 function normalizeEmail(value = "") {
   return trimText(value).toLowerCase();
+}
+
+function normalizeMobilePassword(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : "";
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function safeFilePart(value = "") {
+  return trimText(value).replace(/[^a-z0-9._-]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "portal-user";
 }
 
 // Domains allowed as a "from" address. Defaults to the verified domain behind
@@ -227,6 +246,45 @@ const DEFAULT_BRANDING = {
   footerText: "Sent by Varada Nexus Private Limited via the EMS transactional email provider."
 };
 
+const SOURCE_SENDER_RULES: Array<{ pattern: RegExp; senderKey: string }> = [
+  { pattern: /legal|agreement|contract|compliance/, senderKey: "legal" },
+  { pattern: /transport|trip|fleet|logistics/, senderKey: "transport" },
+  { pattern: /digital[-_ ]?services|digital[-_ ]?marketing|marketing|vendor/, senderKey: "digitalmarketing" },
+  { pattern: /\bhr\b|human[-_ ]?resources|employee|payroll|leave|attendance/, senderKey: "hr" },
+  { pattern: /support|customer[-_ ]?care|portal|helpdesk/, senderKey: "support" },
+  { pattern: /admin|settings|email[-_ ]?compose/, senderKey: "admin" }
+];
+
+function senderKeyForSource(sourceModule = "", fallback = "noreply") {
+  const source = trimText(sourceModule).toLowerCase();
+  return SOURCE_SENDER_RULES.find((rule) => rule.pattern.test(source))?.senderKey || fallback;
+}
+
+async function resolveSenderIdentity(admin: any, requestedKey: string | null, sourceModule = "", fallback = "noreply") {
+  const senderKey = trimText(requestedKey) || senderKeyForSource(sourceModule, fallback);
+  const { data: sender } = await admin
+    .from("email_senders")
+    .select("*")
+    .eq("sender_key", senderKey)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!sender?.id) {
+    if (requestedKey) throw new Error("Selected sender identity was not found or is inactive");
+    return { senderKey, from: null, replyTo: undefined, fromEmail: null, fromName: null };
+  }
+  const address = normalizeEmail(sender.from_email);
+  if (!isAllowedFromAddress(address)) throw new Error(`Sender ${address} is not on an allowed verified domain`);
+  const name = trimText(sender.from_name) || address;
+  const replyAddress = normalizeEmail(sender.reply_to_email);
+  return {
+    senderKey,
+    from: { address, name },
+    replyTo: replyAddress ? [{ address: replyAddress, name: trimText(sender.reply_to_name) || name }] : undefined,
+    fromEmail: address,
+    fromName: name
+  };
+}
+
 async function loadBranding(admin: any) {
   try {
     const { data } = await admin.from("email_branding").select("*").eq("id", 1).maybeSingle();
@@ -271,22 +329,13 @@ function brandFooterHtml(branding: any) {
 
 function buildTestHtml(payload: Record<string, any>, branding: any) {
   const note = trimText(payload.message) || "This is a live ZeptoMail API connectivity test from EMS.";
-  return `
-    <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;padding:24px;color:#0f172a;">
-      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:18px;overflow:hidden;">
-        ${brandHeaderHtml(branding, "ZeptoMail API test")}
-        <div style="padding:28px;">
-          <p style="font-size:15px;line-height:1.7;margin:0 0 14px;">Hello ${escapeHtml(payload.toName || "Team")},</p>
-          <p style="font-size:15px;line-height:1.7;margin:0 0 14px;">${escapeHtml(note)}</p>
-          <div style="border:1px solid #dbe4f0;border-radius:14px;padding:18px;background:#f8fafc;margin:18px 0;">
-            <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">What this proves</div>
-            <div style="font-size:14px;line-height:1.7;margin-top:8px;">The EMS backend can now call Zoho ZeptoMail over API using your verified domain and agent credentials.</div>
-          </div>
-          ${brandFooterHtml(branding)}
-        </div>
-      </div>
-    </div>
-  `;
+  return wrapBrandedBody("ZeptoMail API test", `
+    <p style="margin:0 0 14px;">Hello ${escapeHtml(payload.toName || "Team")},</p>
+    <p style="margin:0 0 14px;">${escapeHtml(note)}</p>
+    <div style="border:1px solid #dbe4f0;border-radius:14px;padding:18px;background:#f8fafc;margin:18px 0;">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">What this proves</div>
+      <div style="font-size:14px;line-height:1.7;margin-top:8px;">The EMS backend can call Zoho ZeptoMail using the verified Varada Nexus domain.</div>
+    </div>`, branding);
 }
 
 function buildTestText(payload: Record<string, any>) {
@@ -308,11 +357,14 @@ async function sendTestEmail(req: Request, admin: any, body: Record<string, any>
   if (!toEmail || !toEmail.includes("@")) throw new Error("A valid recipient email is required");
   const subject = trimText(body.subject) || "Varada Nexus email API test";
   const branding = await loadBranding(admin);
+  const sender = await resolveSenderIdentity(admin, "admin", "email-compose", "admin");
   const payload = {
     to: [{ address: toEmail, name: trimText(body.toName) || toEmail }],
     subject,
     htmlBody: buildTestHtml(body, branding),
     textBody: buildTestText(body),
+    from: sender.from,
+    replyTo: sender.replyTo,
     clientReference: `ems-email-test-${Date.now()}`
   };
   const result = await sendViaZepto(payload);
@@ -336,13 +388,23 @@ async function sendEmail(req: Request, admin: any, body: Record<string, any>) {
   const caller = await requireAdminCaller(req, admin);
   const to = Array.isArray(body.to) ? body.to : [];
   if (!to.length) throw new Error("Recipients are required");
+  const subject = trimText(body.subject) || "Varada Nexus EMS update";
+  if (!trimText(body.htmlBody) && !trimText(body.textBody)) throw new Error("Email body is required");
+  const branding = await loadBranding(admin);
+  const innerHtml = trimText(body.htmlBody)
+    ? sanitizeEmailHtml(body.htmlBody)
+    : escapeHtml(trimText(body.textBody)).replace(/\n/g, "<br />");
+  const sourceModule = trimText(body.moduleCode) || "admin";
+  const sender = await resolveSenderIdentity(admin, trimText(body.senderKey) || null, sourceModule, "admin");
   const payload = {
     to,
     cc: Array.isArray(body.cc) ? body.cc : [],
     bcc: Array.isArray(body.bcc) ? body.bcc : [],
-    subject: body.subject,
-    htmlBody: body.htmlBody,
+    subject,
+    htmlBody: wrapBrandedBody(subject, innerHtml, branding),
     textBody: body.textBody,
+    from: sender.from,
+    replyTo: sender.replyTo,
     trackClicks: body.trackClicks !== false,
     trackOpens: body.trackOpens !== false,
     clientReference: body.clientReference || `ems-mail-${Date.now()}`
@@ -377,6 +439,12 @@ async function callerIsAdmin(admin: any, callerId: string) {
   return roleCodes.some((code: string) => ["super_admin", "admin"].includes(code));
 }
 
+async function callerCanChooseSender(admin: any, callerId: string) {
+  const { data: roles } = await admin.from("user_roles").select("roles(code)").eq("user_id", callerId);
+  const roleCodes = (roles || []).map((row: any) => row.roles?.code).filter(Boolean);
+  return roleCodes.some((code: string) => ["super_admin", "admin", "coo"].includes(code));
+}
+
 async function requireActiveCaller(req: Request, admin: any) {
   const caller = await getCaller(req, admin);
   if (!caller?.id) throw new Error("Unauthorized");
@@ -395,26 +463,11 @@ function buildNotificationHtml(event: Record<string, any>, recipientName = "", b
   const actionBlock = actionLabel && actionUrl
     ? `<div style="margin:22px 0 6px;"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 22px;border-radius:10px;">${escapeHtml(actionLabel)}</a></div>`
     : "";
-  const moduleLabel = escapeHtml(trimText(event.module_code) || "EMS");
-  const categoryLabel = escapeHtml(trimText(event.category) || "general");
-  // Severity accent drives the top border; branding drives logo + eyebrow.
-  const header = brandHeaderHtml({ ...branding, accent }, title, `${moduleLabel} &middot; ${categoryLabel}`);
-  const footer = trimText(branding.footerText)
-    ? brandFooterHtml(branding)
-    : `<p style="font-size:13px;color:#64748b;line-height:1.6;margin:22px 0 0;">You are receiving this because email delivery is enabled in your notification preferences.</p>`;
-  return `
-    <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;padding:24px;color:#0f172a;">
-      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:18px;overflow:hidden;">
-        ${header}
-        <div style="padding:28px;">
-          <p style="font-size:15px;line-height:1.7;margin:0 0 14px;">Hello ${escapeHtml(recipientName || "Team")},</p>
-          <div style="font-size:15px;line-height:1.7;margin:0 0 8px;">${message}</div>
-          ${actionBlock}
-          ${footer}
-        </div>
-      </div>
-    </div>
-  `;
+  return wrapBrandedBody(trimText(event.title) || `${branding.companyName} notification`, `
+    <p style="margin:0 0 14px;">Hello ${escapeHtml(recipientName || "Team")},</p>
+    <div style="margin:0 0 8px;">${message}</div>
+    ${actionBlock}
+    <p style="font-size:13px;color:#64748b;line-height:1.6;margin:22px 0 0;">You are receiving this because email delivery is enabled in your notification preferences.</p>`, branding);
 }
 
 function buildNotificationText(event: Record<string, any>, recipientName = "") {
@@ -481,6 +534,7 @@ async function fanoutNotification(req: Request, admin: any, body: Record<string,
 
   const list = Array.isArray(recipients) ? recipients.slice(0, 500) : [];
   const branding = await loadBranding(admin);
+  const sender = await resolveSenderIdentity(admin, null, event.module_code, "noreply");
   let sent = 0;
   let failed = 0;
   const failures: string[] = [];
@@ -496,6 +550,8 @@ async function fanoutNotification(req: Request, admin: any, body: Record<string,
         subject: trimText(event.title) || `${branding.companyName} notification`,
         htmlBody: buildNotificationHtml(event, recipient.display_name, branding),
         textBody: buildNotificationText(event, recipient.display_name),
+        from: sender.from,
+        replyTo: sender.replyTo,
         clientReference: `ems-notify-${notificationId}-${recipient.app_user_id}`
       });
       sent += 1;
@@ -696,7 +752,7 @@ function sanitizeEmailHtml(html = "") {
 
 function wrapBrandedBody(subject: string, innerHtml: string, branding: any = DEFAULT_BRANDING) {
   return `
-    <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;padding:24px;color:#0f172a;">
+    <div data-ems-email-theme="unified-v1" style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;padding:24px;color:#0f172a;">
       <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:18px;overflow:hidden;">
         ${brandHeaderHtml(branding, escapeHtml(subject))}
         <div style="padding:26px;font-size:15px;line-height:1.7;color:#0f172a;">${innerHtml}</div>
@@ -708,6 +764,200 @@ function wrapBrandedBody(subject: string, innerHtml: string, branding: any = DEF
 
 function wrapPlainHtml(subject: string, bodyText: string, branding: any = DEFAULT_BRANDING) {
   return wrapBrandedBody(subject, escapeHtml(bodyText).replace(/\n/g, "<br />"), branding);
+}
+
+function portalDisclaimerSummary(portalType = "") {
+  const type = trimText(portalType).toLowerCase();
+  if (type.includes("vendor") || type.includes("delivery") || type.includes("transporter") || type.includes("agent")) {
+    return "The portal is a controlled delivery workspace. You must protect client information, communicate only through authorised channels, submit accurate work and billing records, and never represent your access as authority beyond the assigned engagement.";
+  }
+  return "The portal is a controlled client workspace. Information, estimates, progress, invoices and communications shown there remain subject to the applicable engagement terms, approvals and verification by Varada Nexus.";
+}
+
+function buildPortalCredentialPdf(input: Record<string, any>, branding: any) {
+  const mobilePassword = normalizeMobilePassword(input.registeredMobile);
+  if (!mobilePassword) throw new Error("A valid registered mobile number is required for PDF protection");
+
+  const doc = new jsPDF({
+    unit: "mm",
+    format: "a4",
+    encryption: {
+      userPassword: mobilePassword,
+      ownerPassword: `${crypto.randomUUID()}-${Date.now()}`,
+      userPermissions: ["print"]
+    }
+  });
+  const navy = branding.headerBg || "#0f213b";
+  const gold = branding.accent || "#e7c976";
+  const company = trimText(branding.companyName) || "Varada Nexus Private Limited";
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 18;
+
+  doc.setFillColor(navy);
+  doc.rect(0, 0, pageWidth, 48, "F");
+  doc.setFillColor(gold);
+  doc.rect(0, 0, pageWidth, 3, "F");
+  doc.setTextColor(gold);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(17);
+  doc.text("VN", margin, 21);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.text(company, margin + 18, 21);
+  doc.setFontSize(9);
+  doc.setTextColor(190, 205, 225);
+  doc.text("SECURE PORTAL ACCESS DOCUMENT", margin + 18, 29);
+
+  doc.setTextColor(15, 33, 59);
+  doc.setFontSize(23);
+  doc.text("Your portal credentials", margin, 67);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Prepared for ${trimText(input.recipientName) || normalizeEmail(input.recipientEmail)}`, margin, 76);
+
+  doc.setFillColor(247, 249, 252);
+  doc.setDrawColor(219, 228, 240);
+  doc.roundedRect(margin, 86, pageWidth - (margin * 2), 58, 3, 3, "FD");
+  const labels = ["Portal", "Username", "Initial password", "Login address"];
+  const values = [trimText(input.portalType), normalizeEmail(input.username), trimText(input.initialPassword), trimText(input.portalLoginUrl)];
+  let y = 98;
+  labels.forEach((label, index) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(label.toUpperCase(), margin + 7, y);
+    doc.setFont("helvetica", index === 2 ? "bold" : "normal");
+    doc.setFontSize(index === 2 ? 11 : 10);
+    doc.setTextColor(15, 23, 42);
+    const wrapped = doc.splitTextToSize(values[index] || "-", pageWidth - 76);
+    doc.text(wrapped, margin + 51, y);
+    y += index === 3 ? 0 : 13;
+  });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(15, 33, 59);
+  doc.text("First login", margin, 160);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(51, 65, 85);
+  const steps = [
+    "1. Open the login address shown above.",
+    "2. Enter your email address as the username and use the initial password.",
+    "3. Review and accept the portal disclaimer when prompted.",
+    "4. Keep these credentials confidential and sign out after using a shared device."
+  ];
+  doc.text(steps, margin, 171, { lineHeightFactor: 1.55 });
+
+  doc.setFillColor(255, 251, 235);
+  doc.setDrawColor(gold);
+  doc.roundedRect(margin, 207, pageWidth - (margin * 2), 46, 3, 3, "FD");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(120, 80, 10);
+  doc.text("Important disclaimer and identity evidence", margin + 7, 218);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.3);
+  doc.setTextColor(71, 65, 45);
+  const disclaimer = `${portalDisclaimerSummary(input.portalType)} Where required, acceptance records may include a live identity photo, authorised-person name, server-captured IP address, timestamp and browser details. Declining the terms prevents portal access.`;
+  doc.text(doc.splitTextToSize(disclaimer, pageWidth - (margin * 2) - 14), margin + 7, 227, { lineHeightFactor: 1.35 });
+
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("For assistance, contact support@varadanexus.com. Varada Nexus will never ask you to share this PDF password by email.", margin, 272);
+  doc.text(`Issued ${new Date().toISOString().slice(0, 10)} | ${trimText(input.portalUserCode) || "Secure portal user"}`, margin, 280);
+
+  return new Uint8Array(doc.output("arraybuffer"));
+}
+
+function buildPortalCredentialEmailHtml(input: Record<string, any>) {
+  const recipient = escapeHtml(trimText(input.recipientName) || "Portal User");
+  const portal = escapeHtml(trimText(input.portalType) || "Varada Nexus portal");
+  const loginUrl = escapeHtml(trimText(input.portalLoginUrl));
+  const disclaimer = escapeHtml(portalDisclaimerSummary(input.portalType));
+  return `
+    <p style="margin:0 0 14px;">Hello ${recipient},</p>
+    <p style="margin:0 0 14px;">Your access to the <strong>${portal}</strong> has been created. Your username and initial password are provided only in the attached protected PDF.</p>
+    <div style="border:1px solid #dbe4f0;border-radius:14px;padding:18px;background:#f8fafc;margin:18px 0;">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Opening the credential PDF</div>
+      <p style="margin:8px 0 0;">Use the <strong>last 10 digits of your registered mobile number</strong> as the PDF password.</p>
+    </div>
+    <p style="margin:0 0 10px;"><strong>How to sign in</strong></p>
+    <ol style="padding-left:20px;margin:0 0 18px;">
+      <li>Open the attached PDF and note the credentials.</li>
+      <li>Visit <a href="${loginUrl}" style="color:#0f4c81;font-weight:700;">the Varada Nexus login page</a>.</li>
+      <li>Use your email address as the username and enter the initial password from the PDF.</li>
+      <li>Review and accept the portal disclaimer shown on first login.</li>
+    </ol>
+    <div style="border-left:4px solid #e7c976;padding:12px 16px;background:#fffbeb;margin:18px 0;">
+      <strong>About the disclaimer</strong><br />${disclaimer} Where required, acceptance may capture a live identity photo, authorised-person name, server-captured IP address, timestamp and browser details as evidence.
+    </div>
+    <p style="margin:18px 0 0;">Do not forward the PDF or share its password. If you did not expect this access, contact <a href="mailto:support@varadanexus.com">support@varadanexus.com</a> immediately.</p>`;
+}
+
+function buildPortalCredentialEmailText(input: Record<string, any>) {
+  return [
+    `Hello ${trimText(input.recipientName) || "Portal User"},`,
+    "",
+    `Your access to the ${trimText(input.portalType) || "Varada Nexus portal"} has been created.`,
+    "Your username and initial password are in the attached protected PDF.",
+    "PDF password: the last 10 digits of your registered mobile number.",
+    "",
+    `Login: ${trimText(input.portalLoginUrl)}`,
+    "Use your email address as the username, then enter the initial password from the PDF.",
+    "Review and accept the portal disclaimer on first login.",
+    "",
+    `Disclaimer summary: ${portalDisclaimerSummary(input.portalType)}`,
+    "Where required, acceptance may record a live identity photo, authorised-person name, server-captured IP address, timestamp and browser details.",
+    "",
+    "Do not forward the PDF or share its password. For help, contact support@varadanexus.com.",
+    "",
+    "Varada Nexus Private Limited"
+  ].join("\n");
+}
+
+async function sendPortalCredentials(req: Request, admin: any, body: Record<string, any>) {
+  const recipientEmail = normalizeEmail(body.recipientEmail);
+  const username = normalizeEmail(body.username);
+  const initialPassword = trimText(body.initialPassword);
+  const registeredMobile = trimText(body.registeredMobile);
+  const portalLoginUrl = trimText(body.portalLoginUrl);
+  if (!recipientEmail || !recipientEmail.includes("@")) throw new Error("A valid recipient email is required");
+  if (username !== recipientEmail) throw new Error("Portal username must be the recipient email address");
+  if (initialPassword.length < 8) throw new Error("Initial password must be at least 8 characters");
+  if (!normalizeMobilePassword(registeredMobile)) throw new Error("A valid registered mobile number is required");
+  if (!/^https?:\/\//i.test(portalLoginUrl)) throw new Error("A valid portal login URL is required");
+
+  const input = {
+    recipientEmail,
+    recipientName: trimText(body.recipientName) || trimText(body.linkedEntityName) || recipientEmail,
+    username,
+    initialPassword,
+    registeredMobile,
+    portalType: trimText(body.portalType) || "Varada Nexus Portal",
+    portalLoginUrl,
+    portalUserCode: trimText(body.portalUserCode)
+  };
+  const branding = await loadBranding(admin);
+  const pdfBytes = buildPortalCredentialPdf(input, branding);
+  const result = await sendModuleEmail(req, admin, {
+    to: [{ address: recipientEmail, name: input.recipientName }],
+    subject: `Your ${input.portalType} access | Varada Nexus`,
+    bodyHtml: buildPortalCredentialEmailHtml(input),
+    textBody: buildPortalCredentialEmailText(input),
+    attachments: [{
+      name: `Varada-Nexus-Portal-Credentials-${safeFilePart(input.portalUserCode || recipientEmail)}.pdf`,
+      mimeType: "application/pdf",
+      size: pdfBytes.byteLength,
+      base64: bytesToBase64(pdfBytes)
+    }],
+    archiveAttachments: false,
+    senderKey: "noreply",
+    sourceModule: "portal-access",
+    sourceEvent: "portal_credentials_created"
+  });
+  return { ...result, senderKey: "noreply", recipientEmail };
 }
 
 async function listEmailDirectory(req: Request, admin: any) {
@@ -815,6 +1065,11 @@ async function listEmailWorkspaceData(req: Request, admin: any) {
 
 async function sendModuleEmail(req: Request, admin: any, body: Record<string, any>) {
   const caller = await requireActiveCaller(req, admin);
+  const sourceModuleRequested = trimText(body.sourceModule) || "email-compose";
+  const isManualCompose = sourceModuleRequested === "email-compose";
+  if ((isManualCompose || trimText(body.senderKey)) && !(await callerCanChooseSender(admin, caller.id))) {
+    throw new Error("Only Admin and COO users can compose using departmental sender identities");
+  }
 
   // Assemble recipients: explicit addresses + selected EMS user ids.
   const recipients: Array<{ address: string; name: string }> = [];
@@ -854,30 +1109,16 @@ async function sendModuleEmail(req: Request, admin: any, body: Record<string, an
   const htmlBody = wrapBrandedBody(subject, innerHtml, branding);
   if (!textBody) textBody = trimText(String(richHtml).replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
 
-  // Resolve sender identity (Send as). Only active identities are allowed, and
-  // the from-address must be on an allowed (verified) domain.
-  let fromOverride: any = null;
-  let replyToOverride: any = undefined;
-  let fromEmail: string | null = null;
-  let fromName: string | null = null;
-  const senderKey = trimText(body.senderKey) || null;
-  if (senderKey) {
-    const { data: sender } = await admin.from("email_senders").select("*").eq("sender_key", senderKey).eq("is_active", true).maybeSingle();
-    if (!sender?.id) throw new Error("Selected sender identity was not found or is inactive");
-    const addr = normalizeEmail(sender.from_email);
-    if (!isAllowedFromAddress(addr)) throw new Error(`Sender ${addr} is not on an allowed verified domain`);
-    fromEmail = addr;
-    fromName = trimText(sender.from_name) || addr;
-    fromOverride = { address: addr, name: fromName };
-    if (trimText(sender.reply_to_email)) {
-      replyToOverride = [{ address: normalizeEmail(sender.reply_to_email), name: trimText(sender.reply_to_name) || fromName }];
-    }
-  }
-
   const cc = Array.isArray(body.cc) ? body.cc : [];
   const bcc = Array.isArray(body.bcc) ? body.bcc : [];
-  const sourceModule = trimText(body.sourceModule) || "email-compose";
+  const sourceModule = sourceModuleRequested;
   const sourceEvent = trimText(body.sourceEvent) || "manual_send";
+  const sender = await resolveSenderIdentity(admin, trimText(body.senderKey) || null, sourceModule, sourceModule === "email-compose" ? "admin" : "noreply");
+  const senderKey = sender.senderKey;
+  const fromOverride = sender.from;
+  const replyToOverride = sender.replyTo;
+  const fromEmail = sender.fromEmail;
+  const fromName = sender.fromName;
   const bodyPreview = trimText(textBody || htmlBody.replace(/<[^>]+>/g, " ")).slice(0, 280);
 
   // Attachments: validate + cap total size (~10 MB raw), attach to the email and
@@ -894,7 +1135,22 @@ async function sendModuleEmail(req: Request, admin: any, body: Record<string, an
   if (totalRaw > 10 * 1024 * 1024) throw new Error("Attachments exceed the 10 MB total limit");
 
   let archive: any = { archived: false, results: [], folderLink: null };
-  if (rawAttachments.length) archive = await archiveEmailAttachments(rawAttachments, subject);
+  if (rawAttachments.length && body.archiveAttachments !== false) {
+    archive = await archiveEmailAttachments(rawAttachments, subject);
+  } else if (rawAttachments.length) {
+    archive = {
+      archived: false,
+      reason: "sensitive_attachment_not_archived",
+      folderLink: null,
+      results: rawAttachments.map((a: any) => ({
+        name: a.name,
+        mimeType: a.mimeType,
+        size: a.size || Math.floor(a.base64.length * 0.75),
+        driveFileId: null,
+        webViewLink: null
+      }))
+    };
+  }
   const zeptoAttachments = rawAttachments.map((a: any) => ({ content: a.base64, mime_type: a.mimeType, name: a.name }));
   const attachmentMeta = archive.results || [];
 
@@ -1001,13 +1257,14 @@ async function inboundEmail(admin: any, body: Record<string, any>) {
 }
 
 async function listEmailSenders(req: Request, admin: any) {
-  await requireActiveCaller(req, admin);
+  const caller = await requireActiveCaller(req, admin);
+  if (!(await callerCanChooseSender(admin, caller.id))) throw new Error("Admin or COO permission required");
   const { data } = await admin.from("email_senders").select("*").order("sort_order", { ascending: true }).order("label", { ascending: true });
   return { senders: data || [] };
 }
 
 async function saveEmailSender(req: Request, admin: any, body: Record<string, any>) {
-  const caller = await requireActiveCaller(req, admin);
+  const caller = await requireAdminCaller(req, admin);
   const senderKey = trimText(body.senderKey).toLowerCase().replace(/\s+/g, "_");
   const label = trimText(body.label);
   const fromEmail = normalizeEmail(body.fromEmail);
@@ -1034,7 +1291,7 @@ async function saveEmailSender(req: Request, admin: any, body: Record<string, an
 }
 
 async function deleteEmailSender(req: Request, admin: any, body: Record<string, any>) {
-  const caller = await requireActiveCaller(req, admin);
+  const caller = await requireAdminCaller(req, admin);
   const id = trimText(body.id);
   if (!id) throw new Error("Sender id is required");
   const { error } = await admin.from("email_senders").delete().eq("id", id);
@@ -1080,6 +1337,7 @@ Deno.serve(async (req) => {
     if (action === "fanout_notification") return json(await fanoutNotification(req, admin, body));
     if (action === "list_email_workspace_data") return json(await listEmailWorkspaceData(req, admin));
     if (action === "send_module_email") return json(await sendModuleEmail(req, admin, body));
+    if (action === "send_portal_credentials") return json(await sendPortalCredentials(req, admin, body));
     if (action === "list_email_history") return json(await listEmailHistory(req, admin));
     if (action === "list_email_inbound") return json(await listEmailInbound(req, admin));
     if (action === "mark_inbound_read") return json(await markInboundRead(req, admin, body));

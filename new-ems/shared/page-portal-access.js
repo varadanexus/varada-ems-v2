@@ -5,6 +5,7 @@ import { hasAnyRolePermission } from "./permissions.js";
 import { PERMISSIONS } from "../config/roles.js";
 import { notifyPortalAccessCreated } from "./transport-integrations-api.js";
 import { notifyMarketingWhatsApp } from "./marketing-whatsapp-api.js";
+import { sendPortalCredentialEmail } from "./email-api.js";
 import { showToast } from "./utils.js";
 
 const client = getSupabaseClient();
@@ -89,37 +90,34 @@ function canReveal() {
 }
 
 async function loadDashboard() {
-  const [tp, ep, icp] = await Promise.all([
+  const [tp, ep] = await Promise.all([
     client.rpc("portal_access_list_transport_users"),
-    client.rpc("portal_access_list_external_users"),
-    client.from("interior_client_portal_users").select("id,access_status,activated_at")
+    client.rpc("portal_access_list_external_users")
   ]);
   if (tp.error) throw tp.error;
   if (ep.error) throw ep.error;
-  const tpRows = tp.data || [];
-  const epRows = ep.data || [];
-  const icpRows = icp.data || [];
+  const tpRows = (tp.data || []).filter((u) => (u.access_rows || []).some((a) => a.is_active));
+  const epRows = (ep.data || []).filter((u) => (u.access_rows || []).some((a) => a.is_active));
 
-  const byDivision = { transportation: 0, interiors: 0 };
+  const byDivision = { transportation: 0 };
   tpRows.forEach(() => { byDivision.transportation += 1; });
   epRows.forEach((u) => { (u.access_rows || []).forEach((a) => { byDivision[a.source_module] = (byDivision[a.source_module] || 0) + 1; }); });
-  icpRows.forEach(() => { byDivision.interiors += 1; });
 
   const byType = {};
   tpRows.forEach((u) => {
     if ((u.access_rows || []).some((a) => a.linked_entity_type === "client")) byType["Transportation Client"] = (byType["Transportation Client"] || 0) + 1;
     if ((u.access_rows || []).some((a) => a.linked_entity_type === "transporter")) byType["Transportation Transporter"] = (byType["Transportation Transporter"] || 0) + 1;
+    if ((u.access_rows || []).some((a) => a.linked_entity_type === "agent")) byType["Transportation Agent"] = (byType["Transportation Agent"] || 0) + 1;
   });
   epRows.forEach((u) => { const label = capitalize(u.user_type); byType[label] = (byType[label] || 0) + 1; });
-  byType["Interiors Client"] = icpRows.length;
 
   const all = [...tpRows, ...epRows];
   PAGE_STATE.dashboard = {
-    total: all.length + icpRows.length,
-    active: all.filter((u) => u.status === "active").length + icpRows.filter((u) => u.access_status === "active").length,
-    disabled: all.filter((u) => u.status === "disabled").length + icpRows.filter((u) => u.access_status === "disabled").length,
+    total: all.length,
+    active: all.filter((u) => u.status === "active").length,
+    disabled: all.filter((u) => u.status === "disabled").length,
     locked: all.filter((u) => u.is_locked).length,
-    pendingInvites: icpRows.filter((u) => u.access_status === "invited").length,
+    pendingInvites: 0,
     recentLogins: all.filter((u) => u.last_login_at && (Date.now() - new Date(u.last_login_at).getTime()) < 7 * 24 * 60 * 60 * 1000).length,
     byDivision, byType
   };
@@ -137,6 +135,7 @@ async function loadAllRows() {
   (tp.data || []).forEach((u) => {
     (u.access_rows || []).filter((a) => a.is_active && a.linked_entity_type === "client").forEach((a) => rows.push(baseRow(u, "transport", "Transportation", "Client", a.linked_entity_name, "Transportation Client Portal", a.access_level, [{ id: a.id, kind: "client" }])));
     (u.access_rows || []).filter((a) => a.is_active && a.linked_entity_type === "transporter").forEach((a) => rows.push(baseRow(u, "transport", "Transportation", "Transporter", a.linked_entity_name, "Transportation Transporter Portal", a.access_level, [{ id: a.id, kind: "transporter" }])));
+    (u.access_rows || []).filter((a) => a.is_active && a.linked_entity_type === "agent").forEach((a) => rows.push(baseRow(u, "transport", "Transportation", "Agent", a.linked_entity_name, "Transportation Agent Portal", a.access_level, [{ id: a.id, kind: "agent" }])));
   });
   (ep.data || []).forEach((u) => {
     (u.access_rows || []).filter((a) => a.is_active).forEach((a) => rows.push(baseRow(u, "external", moduleLabel(a.source_module), capitalize(u.user_type), externalLinkedEntityLabel(u, a), portalTypeLabel(u.user_type, a.source_module), a.access_level, [{ id: a.id, kind: "external" }])));
@@ -354,9 +353,9 @@ function renderSelectedEntityPanel(entityDef) {
       ${s.gstin ? `<p class="muted">GST: ${escapeHtml(s.gstin)}${s.pan ? ` &nbsp;|&nbsp; PAN: ${escapeHtml(s.pan)}` : ""}</p>` : ""}
       <div class="int-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem 1rem;margin-top:.75rem;">
         <div><label>Display Name</label><input id="paDisplayName" type="text" value="${escapeHtml(s.label)}" /></div>
-        <div><label>Username *</label><input id="paUsername" type="text" /></div>
-        <div><label>Email</label><input id="paEmail" type="email" value="${escapeHtml(s.email || "")}" /></div>
-        <div><label>Phone</label><input id="paPhone" type="text" value="${escapeHtml(s.phone || "")}" /></div>
+        <div><label>Username (same as email) *</label><input id="paUsername" type="email" readonly value="${escapeHtml(String(s.email || "").toLowerCase())}" /></div>
+        <div><label>Credential Email *</label><input id="paEmail" type="email" value="${escapeHtml(s.email || "")}" /></div>
+        <div><label>Registered Mobile *</label><input id="paPhone" type="tel" value="${escapeHtml(s.phone || "")}" /><small class="muted">The last 10 digits protect the credential PDF.</small></div>
         <div><label>Access Level</label>
           <select id="paAccessLevel">
             <option value="standard">Standard</option>
@@ -409,7 +408,7 @@ function rowActions(r) {
       <button class="btn btn-sm" data-pa-action="force-logout" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Force Logout</button>
       <button class="btn btn-sm" data-pa-action="login-history" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">View Audit</button>
       ${canReveal() ? `<button class="btn btn-sm" data-pa-action="reveal-password" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button" style="border-color:#b45309;color:#b45309;">Reveal Password</button>` : ""}
-      ${r.accessGrants.map((a) => `<button class="btn btn-sm btn-danger" data-pa-action="revoke-access" data-system="${r.system}" data-access-kind="${a.kind}" data-access-id="${a.id}" type="button">Revoke Access</button>`).join("")}
+      <button class="btn btn-sm btn-danger" data-pa-action="delete-account" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Delete Account</button>
     </div>
   `;
 }
@@ -596,6 +595,10 @@ function bindEvents() {
     if (p) p.value = pw;
     if (pc) pc.value = pw;
   });
+  document.getElementById("paEmail")?.addEventListener("input", (event) => {
+    const username = document.getElementById("paUsername");
+    if (username) username.value = String(event.target?.value || "").trim().toLowerCase();
+  });
   document.getElementById("paSubmitCreate")?.addEventListener("click", handleWizardSubmit);
 
   document.querySelectorAll("[data-pa-entity-id]").forEach((btn) => btn.addEventListener("click", () => handleSelectEntity(btn.dataset.paEntityId)));
@@ -748,16 +751,18 @@ async function handleWizardSubmit() {
   const w = PAGE_STATE.wizard;
   const s = w.selectedEntity;
   const displayName = String(document.getElementById("paDisplayName")?.value || "").trim() || s.label;
-  const username = String(document.getElementById("paUsername")?.value || "").trim();
-  const email = String(document.getElementById("paEmail")?.value || "").trim() || null;
-  const phone = String(document.getElementById("paPhone")?.value || "").trim() || null;
+  const email = String(document.getElementById("paEmail")?.value || "").trim().toLowerCase();
+  const username = email;
+  const phone = String(document.getElementById("paPhone")?.value || "").trim();
   const accessLevel = document.getElementById("paAccessLevel")?.value || "standard";
   const password = String(document.getElementById("paPassword")?.value || "");
   const passwordConfirm = String(document.getElementById("paPasswordConfirm")?.value || "");
   const expiry = document.getElementById("paExpiry")?.value || null;
   const notes = String(document.getElementById("paNotes")?.value || "").trim() || null;
 
-  if (!username || !password) return showToast("Username and initial password are required.", TOAST_TYPES.ERROR);
+  if (!/^\S+@\S+\.\S+$/.test(email)) return showToast("A valid credential email is required. It will also be the username.", TOAST_TYPES.ERROR);
+  if (phone.replace(/\D/g, "").length < 10) return showToast("A valid registered mobile number is required to protect the credential PDF.", TOAST_TYPES.ERROR);
+  if (!password) return showToast("An initial password is required.", TOAST_TYPES.ERROR);
   if (password !== passwordConfirm) return showToast("Password and confirmation do not match.", TOAST_TYPES.ERROR);
   if (password.length < 8) return showToast("Password must be at least 8 characters.", TOAST_TYPES.ERROR);
 
@@ -793,6 +798,24 @@ async function handleWizardSubmit() {
     };
     render();
     showToast("Portal login created.", TOAST_TYPES.SUCCESS);
+    const absoluteLoginUrl = new URL(s.portalLoginUrl || ROUTES.LOGIN || "/login.html", window.location.origin).href;
+    try {
+      const emailResult = await sendPortalCredentialEmail({
+        recipientEmail: email,
+        recipientName: displayName || s.label,
+        username,
+        initialPassword: password,
+        registeredMobile: phone,
+        portalType: s.portalType,
+        portalLoginUrl: absoluteLoginUrl,
+        portalUserCode: newRow?.portalUserCode || "",
+        linkedEntityName: s.label
+      });
+      if (emailResult?.sent > 0) showToast("Protected portal credential PDF sent from noreply@varadanexus.com.", TOAST_TYPES.INFO);
+      else showToast("Portal login created, but the credential email was not delivered.", TOAST_TYPES.WARNING);
+    } catch (emailError) {
+      showToast(`Portal login created, but credential email failed: ${emailError?.message || "Unknown error"}`, TOAST_TYPES.WARNING);
+    }
     try {
       const marketingEvent = s.table === "marketing_clients"
         ? "client_welcome"
@@ -804,7 +827,7 @@ async function handleWizardSubmit() {
         entityType: PAGE_STATE.wizard.entityType,
         portalSystem: s.system,
         portalType: s.portalType,
-        portalLoginUrl: s.portalLoginUrl || "",
+        portalLoginUrl: absoluteLoginUrl,
         portalUserCode: newRow?.portalUserCode || "",
         username,
         password,
@@ -851,14 +874,11 @@ async function handleRowAction(btn) {
       const fn = system === "external" ? "external_portal_admin_force_logout" : "transport_portal_admin_force_logout";
       const { error } = await client.rpc(fn, { p_portal_user_id: id });
       if (error) throw error;
-    } else if (action === "revoke-access") {
-      const accessId = btn.dataset.accessId;
-      const kind = btn.dataset.accessKind;
-      let fn = "external_portal_admin_revoke_access";
-      if (kind === "client") fn = "transport_portal_admin_revoke_client_access";
-      else if (kind === "transporter") fn = "transport_portal_admin_revoke_transporter_access";
-      else if (kind === "agent") fn = "transport_portal_admin_revoke_agent_access";
-      const { error } = await client.rpc(fn, { p_access_id: accessId });
+    } else if (action === "delete-account") {
+      const confirmed = window.confirm(`Permanently delete portal account ${btn.dataset.username || ""}? The linked business record will remain.`);
+      if (!confirmed) return;
+      const fn = system === "external" ? "external_portal_admin_delete_account" : "transport_portal_admin_delete_account";
+      const { error } = await client.rpc(fn, { p_portal_user_id: id });
       if (error) throw error;
     } else if (action === "reveal-password") {
       PAGE_STATE.revealModal = { system, portalUserId: id, username: btn.dataset.username, password: null };

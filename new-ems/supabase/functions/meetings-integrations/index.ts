@@ -353,15 +353,44 @@ function buildIcsContent({ invite, meeting, inviteUrl }: any) {
   ].join("\r\n");
 }
 
-function buildEmailHtml({ invite, meeting, inviteUrl, calendarUrl }: any) {
+async function loadUnifiedEmailBranding(admin: any) {
+  const fallback = {
+    companyName: "Varada Nexus Private Limited",
+    logoUrl: "",
+    accent: "#e7c976",
+    headerBg: "#0f213b",
+    footerText: "Sent by Varada Nexus Private Limited via the EMS transactional email provider."
+  };
+  const { data } = await admin.from("email_branding").select("*").eq("id", 1).maybeSingle();
+  return {
+    companyName: trimText(data?.company_name) || fallback.companyName,
+    logoUrl: trimText(data?.logo_url) || fallback.logoUrl,
+    accent: trimText(data?.accent_color) || fallback.accent,
+    headerBg: trimText(data?.header_bg) || fallback.headerBg,
+    footerText: trimText(data?.footer_text) || fallback.footerText
+  };
+}
+
+async function loadNoReplySender(admin: any) {
+  const { data } = await admin.from("email_senders").select("*").eq("sender_key", "noreply").eq("is_active", true).maybeSingle();
+  return {
+    address: trimText(data?.from_email).toLowerCase() || "noreply@varadanexus.com",
+    name: trimText(data?.from_name) || "Varada Nexus"
+  };
+}
+
+function buildEmailHtml({ invite, meeting, inviteUrl, calendarUrl, branding }: any) {
+  const logo = branding.logoUrl
+    ? `<td style="padding-right:12px;vertical-align:middle;"><img src="${escapeHtml(branding.logoUrl)}" alt="${escapeHtml(branding.companyName)}" height="34" style="height:34px;max-width:130px;display:block;border:0;outline:none;text-decoration:none;" /></td>`
+    : "";
   return `
-    <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;padding:24px;color:#0f172a;">
-      <div style="max-width:700px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:18px;overflow:hidden;">
-        <div style="background:#0f213b;padding:24px 28px;border-top:5px solid #e7c976;color:#fff;">
-          <div style="font-size:22px;font-weight:800;">${escapeHtml(meeting.title || "Varada Nexus Meeting")}</div>
-          <div style="font-size:12px;color:#c9d5e8;margin-top:6px;text-transform:uppercase;letter-spacing:.08em;">Secure Communications Invitation</div>
+    <div data-ems-email-theme="unified-v1" style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;padding:24px;color:#0f172a;">
+      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:18px;overflow:hidden;">
+        <div style="background:${branding.headerBg};padding:20px 28px;color:#fff;border-top:5px solid ${branding.accent};">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>${logo}<td style="vertical-align:middle;"><span style="font-size:21px;font-weight:800;color:#ffffff;letter-spacing:.01em;line-height:1.1;">${escapeHtml(branding.companyName)}</span></td></tr></table>
+          <div style="font-size:22px;font-weight:800;margin-top:14px;color:#ffffff;">${escapeHtml(meeting.title || "Varada Nexus Meeting")}</div>
         </div>
-        <div style="padding:28px;">
+        <div style="padding:26px;font-size:15px;line-height:1.7;color:#0f172a;">
           <p style="font-size:15px;line-height:1.7;margin:0 0 16px;">Hello ${escapeHtml(invite.name || "Guest")},</p>
           <p style="font-size:15px;line-height:1.7;margin:0 0 16px;">You are invited to a Varada Nexus meeting. Open the meeting page first, then request your OTP there to continue into the waiting room or live meeting.</p>
           <div style="border:1px solid #dbe4f0;border-radius:14px;padding:18px;background:#f8fafc;margin:18px 0;">
@@ -379,6 +408,7 @@ function buildEmailHtml({ invite, meeting, inviteUrl, calendarUrl }: any) {
           </div>
           <p style="font-size:13px;color:#64748b;line-height:1.7;margin:18px 0 0;">An <code>.ics</code> calendar file is attached for Outlook/Apple Calendar. When you open the meeting link, use the Send OTP option on that page to receive your secure code.</p>
         </div>
+        <div style="padding:0 26px 24px;"><p style="font-size:13px;color:#64748b;line-height:1.6;margin:22px 0 0;">${escapeHtml(branding.footerText)}</p></div>
       </div>
     </div>
   `;
@@ -494,17 +524,19 @@ function zeptoAuthHeader() {
   return raw.toLowerCase().startsWith("zoho-enczapikey") ? raw : `Zoho-enczapikey ${raw}`;
 }
 
-async function sendMeetingEmailInvite({ invite, meeting, inviteUrl }: any) {
+async function sendMeetingEmailInvite({ admin, invite, meeting, inviteUrl }: any) {
   const config = getMeetingInviteConfig();
-  if (!config.zeptoToken || !config.emailFrom) throw new Error("Email invite delivery is not configured");
+  if (!config.zeptoToken) throw new Error("Email invite delivery is not configured");
   if (!trimText(invite.email)) throw new Error("Participant email is missing");
 
   const calendarUrl = buildGoogleCalendarUrl({ meeting, inviteUrl });
   const icsContent = buildIcsContent({ invite, meeting, inviteUrl });
+  const branding = await loadUnifiedEmailBranding(admin);
+  const sender = await loadNoReplySender(admin);
   const requestBody: Record<string, any> = {
     from: {
-      address: config.emailFrom,
-      name: config.emailFromName
+      address: sender.address,
+      name: sender.name
     },
     to: [{
       email_address: {
@@ -513,7 +545,7 @@ async function sendMeetingEmailInvite({ invite, meeting, inviteUrl }: any) {
       }
     }],
     subject: `${meeting.title || "Varada Nexus Meeting"} | Invitation`,
-    htmlbody: buildEmailHtml({ invite, meeting, inviteUrl, calendarUrl }),
+    htmlbody: buildEmailHtml({ invite, meeting, inviteUrl, calendarUrl, branding }),
     textbody: buildEmailText({ invite, meeting, inviteUrl, calendarUrl }),
     track_clicks: true,
     track_opens: true,
@@ -626,7 +658,7 @@ async function sendInviteBundle(req: Request, admin: any, body: any) {
 
   if (trimText(invite.email)) {
     try {
-      const email = await sendMeetingEmailInvite({ invite, meeting, inviteUrl });
+      const email = await sendMeetingEmailInvite({ admin, invite, meeting, inviteUrl });
       result.email = {
         sent: true,
         requestId: email?.request_id || email?.data?.[0]?.request_id || null,

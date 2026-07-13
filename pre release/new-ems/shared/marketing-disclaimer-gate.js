@@ -2,6 +2,27 @@ import { ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { getMarketingPortalSessionToken, signOutMarketingPortal } from "./marketing-api.js?v=marketing-whatsapp-1";
 
+let faceDetectorPromise = null;
+
+function loadFaceDetector() {
+  if (faceDetectorPromise) return faceDetectorPromise;
+  faceDetectorPromise = (async () => {
+    const visionTasks = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/vision_bundle.mjs");
+    const vision = await visionTasks.FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
+    );
+    return visionTasks.FaceDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite"
+      },
+      runningMode: "IMAGE",
+      minDetectionConfidence: 0.7,
+      minSuppressionThreshold: 0.3
+    });
+  })();
+  return faceDetectorPromise;
+}
+
 const DISCLAIMERS = {
   client: {
     eyebrow: "CLIENT PORTAL ACCESS NOTICE",
@@ -54,8 +75,8 @@ function injectStyles() {
     .mkt-disclaimer-head{padding:22px 26px 18px;background:linear-gradient(135deg,#17150f,#0b111b);border-bottom:1px solid rgba(202,161,64,.24)}
     .mkt-disclaimer-eyebrow{display:block;margin-bottom:8px;color:#d7ae4b;font-size:11px;font-weight:800;letter-spacing:.16em}.mkt-disclaimer-head h2{margin:0;color:#fff;font:700 clamp(22px,3vw,32px)/1.15 Georgia,serif}.mkt-disclaimer-head p{max-width:820px;margin:9px 0 0;color:#aeb8c6;font-size:13px;line-height:1.55}
     .mkt-disclaimer-scroll{flex:1;min-height:0;overflow:auto;padding:8px 26px 22px;overscroll-behavior:contain}.mkt-disclaimer-scroll section{padding:17px 0;border-bottom:1px solid rgba(148,163,184,.13)}.mkt-disclaimer-scroll h3{margin:0 0 7px;color:#e5bd5c;font:700 17px/1.3 Georgia,serif}.mkt-disclaimer-scroll p{margin:0;color:#c4ccd7;font-size:13px;line-height:1.68}
-    .mkt-disclaimer-foot{padding:16px 26px 20px;background:#0c1119;border-top:1px solid rgba(148,163,184,.16)}.mkt-disclaimer-read{margin:0 0 10px;color:#8f9bad;font-size:11px}.mkt-disclaimer-check{display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:start;color:#d8dee8;font-size:12px;line-height:1.5}.mkt-disclaimer-check input{width:18px;height:18px;margin:1px 0 0;accent-color:#d7ae4b}.mkt-disclaimer-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:15px}.mkt-disclaimer-btn{padding:10px 15px;border:1px solid #293342;border-radius:10px;background:#101722;color:#dce4ee;font-weight:800;cursor:pointer}.mkt-disclaimer-btn.primary{border-color:#d7ae4b;background:linear-gradient(135deg,#e4bd60,#b98c2e);color:#080b10}.mkt-disclaimer-btn:disabled{opacity:.42;cursor:not-allowed}.mkt-disclaimer-status{min-height:18px;margin:8px 0 0;color:#f1a6a6;font-size:12px}
-    @media(max-width:640px){.mkt-disclaimer-backdrop{padding:0}.mkt-disclaimer-modal{height:100vh;border-radius:0}.mkt-disclaimer-head,.mkt-disclaimer-scroll,.mkt-disclaimer-foot{padding-left:18px;padding-right:18px}.mkt-disclaimer-actions{display:grid;grid-template-columns:1fr 1fr}.mkt-disclaimer-btn{padding:11px 8px}}
+    .mkt-disclaimer-evidence{margin:18px 0 2px;padding:18px;border:1px solid rgba(215,174,75,.3);border-radius:16px;background:#0c121c}.mkt-disclaimer-evidence h3{margin:0 0 6px}.mkt-disclaimer-evidence>p{margin:0 0 14px}.mkt-disclaimer-person{display:grid;gap:6px;margin-bottom:14px;color:#d7ae4b;font-size:12px;font-weight:800}.mkt-disclaimer-person input{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #303a49;border-radius:10px;background:#070b11;color:#fff;font:600 14px Manrope,sans-serif}.mkt-disclaimer-person small{color:#8f9bad;font-weight:500}.mkt-disclaimer-camera-grid{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:16px;align-items:start}.mkt-disclaimer-camera{width:100%;aspect-ratio:4/3;object-fit:cover;border:1px solid #303a49;border-radius:13px;background:#020407}.mkt-disclaimer-camera-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.mkt-disclaimer-photo-consent{display:grid;grid-template-columns:20px 1fr;gap:9px;color:#bfc8d5;font-size:11px;line-height:1.5}.mkt-disclaimer-photo-consent input{width:17px;height:17px;accent-color:#d7ae4b}.mkt-disclaimer-proof-note{margin-top:10px!important;color:#8290a3!important;font-size:11px!important}.mkt-disclaimer-foot{padding:16px 26px 20px;background:#0c1119;border-top:1px solid rgba(148,163,184,.16)}.mkt-disclaimer-read{margin:0 0 10px;color:#8f9bad;font-size:11px}.mkt-disclaimer-check{display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:start;color:#d8dee8;font-size:12px;line-height:1.5}.mkt-disclaimer-check input{width:18px;height:18px;margin:1px 0 0;accent-color:#d7ae4b}.mkt-disclaimer-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:15px}.mkt-disclaimer-btn{padding:10px 15px;border:1px solid #293342;border-radius:10px;background:#101722;color:#dce4ee;font-weight:800;cursor:pointer}.mkt-disclaimer-btn.primary{border-color:#d7ae4b;background:linear-gradient(135deg,#e4bd60,#b98c2e);color:#080b10}.mkt-disclaimer-btn:disabled{opacity:.42;cursor:not-allowed}.mkt-disclaimer-status{min-height:18px;margin:8px 0 0;color:#f1a6a6;font-size:12px}
+    @media(max-width:700px){.mkt-disclaimer-backdrop{padding:0}.mkt-disclaimer-modal{height:100vh;border-radius:0}.mkt-disclaimer-head,.mkt-disclaimer-scroll,.mkt-disclaimer-foot{padding-left:18px;padding-right:18px}.mkt-disclaimer-camera-grid{grid-template-columns:1fr}.mkt-disclaimer-actions{display:grid;grid-template-columns:1fr 1fr}.mkt-disclaimer-btn{padding:11px 8px}}
   `;
   document.head.append(style);
 }
@@ -71,13 +92,21 @@ async function statusFor(portalType) {
   return data;
 }
 
-async function recordAcceptance(portalType, version) {
+async function recordAcceptance(portalType, status, evidenceDataUrl, authorizedPersonName, faceConfidence) {
   const token = getMarketingPortalSessionToken();
   if (!token) throw new Error("Your secure portal session has expired. Sign in again.");
+  const image = String(evidenceDataUrl || "").match(/^data:(image\/jpeg);base64,(.+)$/);
+  if (!image) throw new Error("Capture a valid live identity image before continuing.");
   const { data, error } = await getSupabaseClient().rpc("accept_marketing_portal_disclaimer", {
     p_session_token: token,
     p_portal_type: portalType,
-    p_disclaimer_version: version,
+    p_disclaimer_version: status.disclaimer_version,
+    p_authorized_person_name: authorizedPersonName || null,
+    p_evidence_mime_type: image[1],
+    p_evidence_base64: image[2],
+    p_photo_consent: true,
+    p_face_detected: true,
+    p_face_confidence: Number(faceConfidence || 0),
     p_user_agent: navigator.userAgent || null
   });
   if (error) throw error;
@@ -86,7 +115,7 @@ async function recordAcceptance(portalType, version) {
 
 function showGate(portalType, status) {
   const copy = DISCLAIMERS[portalType];
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     injectStyles();
     document.body.classList.add("mkt-disclaimer-lock");
     const gate = document.createElement("div");
@@ -96,7 +125,12 @@ function showGate(portalType, status) {
     gate.setAttribute("aria-labelledby", "marketingDisclaimerTitle");
     gate.innerHTML = `<article class="mkt-disclaimer-modal">
       <header class="mkt-disclaimer-head"><span class="mkt-disclaimer-eyebrow">${copy.eyebrow}</span><h2 id="marketingDisclaimerTitle">${copy.title}</h2><p>${copy.intro}</p></header>
-      <div class="mkt-disclaimer-scroll" id="marketingDisclaimerScroll">${copy.sections.map(([title, body], index) => `<section><h3>${index + 1}. ${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p></section>`).join("")}</div>
+      <div class="mkt-disclaimer-scroll" id="marketingDisclaimerScroll">${copy.sections.map(([title, body], index) => `<section><h3>${index + 1}. ${escapeHtml(title)}</h3><p>${escapeHtml(body)}</p></section>`).join("")}
+        <section class="mkt-disclaimer-evidence"><h3>Identity and acceptance evidence</h3><p>A live image of the accepting person and the network IP address supplied with this acceptance will be securely recorded as evidence. Face detection runs on this device; only one person may be visible.</p>
+          ${status.requires_authorized_person ? `<label class="mkt-disclaimer-person">Authorised person’s full name<input id="marketingAuthorizedPerson" maxlength="160" autocomplete="name" value="${escapeHtml(status.suggested_authorized_person || "")}" placeholder="Full legal name" required><small>Accepting on behalf of ${escapeHtml(status.entity_name || "this organisation")}</small></label>` : ""}
+          <div class="mkt-disclaimer-camera-grid"><video class="mkt-disclaimer-camera" id="marketingDisclaimerCamera" playsinline muted></video><div><div class="mkt-disclaimer-camera-actions"><button class="mkt-disclaimer-btn" id="marketingStartCamera" type="button">Enable live camera</button><button class="mkt-disclaimer-btn" id="marketingCapturePhoto" type="button" disabled>Capture identity photo</button></div><label class="mkt-disclaimer-photo-consent"><input id="marketingPhotoConsent" type="checkbox"><span>I expressly consent to Varada Nexus securely retaining this live identity image, its cryptographic fingerprint, the acceptance IP address, browser information and timestamp as evidence of this acknowledgement, security review and dispute management.</span></label><p class="mkt-disclaimer-proof-note">The IP address is captured by the server from the acceptance request and cannot be manually entered or changed here.</p><p class="mkt-disclaimer-status" id="marketingCameraStatus">Enable the camera, keep only the accepting person in frame, and capture a clear photo.</p></div></div>
+        </section>
+      </div>
       <footer class="mkt-disclaimer-foot"><p class="mkt-disclaimer-read" id="marketingDisclaimerRead">Scroll to the end to enable acknowledgement.</p><label class="mkt-disclaimer-check"><input id="marketingDisclaimerCheck" type="checkbox" disabled><span>${copy.acceptance}</span></label><p class="mkt-disclaimer-status" id="marketingDisclaimerStatus" aria-live="polite"></p><div class="mkt-disclaimer-actions"><button class="mkt-disclaimer-btn" id="marketingDisclaimerDecline">Decline &amp; sign out</button><button class="mkt-disclaimer-btn primary" id="marketingDisclaimerAccept" disabled>Accept &amp; continue</button></div></footer>
     </article>`;
     document.body.append(gate);
@@ -106,31 +140,111 @@ function showGate(portalType, status) {
     const accept = gate.querySelector("#marketingDisclaimerAccept");
     const read = gate.querySelector("#marketingDisclaimerRead");
     const message = gate.querySelector("#marketingDisclaimerStatus");
+    const video = gate.querySelector("#marketingDisclaimerCamera");
+    const startCamera = gate.querySelector("#marketingStartCamera");
+    const capturePhoto = gate.querySelector("#marketingCapturePhoto");
+    const photoConsent = gate.querySelector("#marketingPhotoConsent");
+    const cameraStatus = gate.querySelector("#marketingCameraStatus");
+    const authorizedPerson = gate.querySelector("#marketingAuthorizedPerson");
+    let evidenceDataUrl = "";
+    let faceConfidence = 0;
+    let faceDetector = null;
+    let cameraStream = null;
+    let termsRead = false;
+    const updateAcceptState = () => {
+      const personReady = !status.requires_authorized_person || String(authorizedPerson?.value || "").trim().length >= 2;
+      accept.disabled = !(termsRead && checkbox.checked && photoConsent.checked && evidenceDataUrl && personReady);
+    };
     const unlockRead = () => {
       if (scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= 18) {
         checkbox.disabled = false;
+        termsRead = true;
         read.textContent = "You have reached the end. Confirm the acknowledgement to continue.";
+        updateAcceptState();
       }
     };
     scroll.addEventListener("scroll", unlockRead, { passive: true });
     requestAnimationFrame(unlockRead);
-    checkbox.addEventListener("change", () => { accept.disabled = !checkbox.checked; });
+    checkbox.addEventListener("change", updateAcceptState);
+    photoConsent.addEventListener("change", updateAcceptState);
+    authorizedPerson?.addEventListener("input", updateAcceptState);
+
+    startCamera.addEventListener("click", async () => {
+      startCamera.disabled = true;
+      evidenceDataUrl = "";
+      faceConfidence = 0;
+      updateAcceptState();
+      cameraStatus.textContent = "Loading face detection and requesting camera access…";
+      try {
+        cameraStream?.getTracks().forEach((track) => track.stop());
+        [cameraStream, faceDetector] = await Promise.all([
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false }),
+          loadFaceDetector()
+        ]);
+        video.removeAttribute("poster");
+        video.srcObject = cameraStream;
+        await video.play();
+        capturePhoto.disabled = false;
+        cameraStatus.textContent = "Camera ready. Keep exactly one person’s face clearly visible, then capture.";
+      } catch (error) {
+        cameraStream?.getTracks().forEach((track) => track.stop());
+        cameraStream = null;
+        startCamera.disabled = false;
+        cameraStatus.textContent = "The camera or local face detector could not start. Allow camera access and try again.";
+      }
+    });
+
+    capturePhoto.addEventListener("click", () => {
+      if (!video.videoWidth || !video.videoHeight) return;
+      const width = Math.min(640, video.videoWidth);
+      const height = Math.round(width * video.videoHeight / video.videoWidth);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(video, 0, 0, width, height);
+      const detections = faceDetector?.detect(canvas)?.detections || [];
+      if (detections.length !== 1) {
+        cameraStatus.textContent = detections.length ? "More than one face was detected. Only the accepting person may be in frame." : "No face was detected. Face the camera clearly and try again.";
+        return;
+      }
+      const detection = detections[0];
+      const box = detection.boundingBox || {};
+      const faceArea = Number(box.width || 0) * Number(box.height || 0);
+      const frameArea = width * height;
+      faceConfidence = Number(detection.categories?.[0]?.score || 0);
+      if (faceConfidence < .7 || !frameArea || faceArea / frameArea < .06) {
+        cameraStatus.textContent = "The face is not clear or close enough. Move closer and capture again.";
+        return;
+      }
+      evidenceDataUrl = canvas.toDataURL("image/jpeg", .82);
+      cameraStream?.getTracks().forEach((track) => track.stop());
+      cameraStream = null;
+      video.srcObject = null;
+      video.poster = evidenceDataUrl;
+      capturePhoto.disabled = true;
+      startCamera.disabled = false;
+      startCamera.textContent = "Retake photo";
+      cameraStatus.textContent = `One person detected (${Math.round(faceConfidence * 100)}% confidence). Identity photo ready.`;
+      updateAcceptState();
+    });
 
     gate.querySelector("#marketingDisclaimerDecline").addEventListener("click", async () => {
       gate.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+      cameraStream?.getTracks().forEach((track) => track.stop());
       try { await signOutMarketingPortal(); } finally { location.replace(ROUTES.LOGIN); }
     });
     accept.addEventListener("click", async () => {
       accept.disabled = true;
       message.textContent = "Recording your acknowledgement securely…";
       try {
-        await recordAcceptance(portalType, status.disclaimer_version);
+        await recordAcceptance(portalType, status, evidenceDataUrl, authorizedPerson?.value?.trim() || "", faceConfidence);
+        cameraStream?.getTracks().forEach((track) => track.stop());
         gate.remove();
         document.body.classList.remove("mkt-disclaimer-lock");
         resolve(true);
       } catch (error) {
         message.textContent = error?.message || "The acknowledgement could not be recorded. Please try again.";
-        accept.disabled = !checkbox.checked;
+        updateAcceptState();
       }
     });
   });
