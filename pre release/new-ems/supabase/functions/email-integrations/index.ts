@@ -1,0 +1,1100 @@
+// @ts-nocheck
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS"
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" }
+  });
+}
+
+function env(name: string, fallback = "") {
+  return Deno.env.get(name) || fallback;
+}
+
+function adminClient() {
+  return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"));
+}
+
+function trimText(value = "") {
+  return String(value || "").trim();
+}
+
+function normalizeEmail(value = "") {
+  return trimText(value).toLowerCase();
+}
+
+// Domains allowed as a "from" address. Defaults to the verified domain behind
+// ZEPTO_FROM_EMAIL, plus any extra domains in ZEPTO_ALLOWED_FROM_DOMAINS.
+function allowedFromDomains() {
+  const set = new Set<string>();
+  const primary = normalizeEmail(env("ZEPTO_FROM_EMAIL")).split("@")[1];
+  if (primary) set.add(primary);
+  trimText(env("ZEPTO_ALLOWED_FROM_DOMAINS"))
+    .split(/[,\s]+/)
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean)
+    .forEach((d) => set.add(d));
+  return set;
+}
+
+function isAllowedFromAddress(address = "") {
+  const domain = normalizeEmail(address).split("@")[1];
+  if (!domain) return false;
+  const allowed = allowedFromDomains();
+  return allowed.size === 0 ? true : allowed.has(domain);
+}
+
+function escapeHtml(value = "") {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function authHeaderValue() {
+  const raw = trimText(env("ZEPTO_SEND_MAIL_TOKEN"));
+  if (!raw) return "";
+  return raw.toLowerCase().startsWith("zoho-enczapikey")
+    ? raw
+    : `Zoho-enczapikey ${raw}`;
+}
+
+function zeptoConfigStatus() {
+  return {
+    zepto: {
+      apiBaseUrl: Boolean(trimText(env("ZEPTO_API_BASE_URL", "https://api.zeptomail.in"))),
+      sendMailToken: Boolean(trimText(env("ZEPTO_SEND_MAIL_TOKEN"))),
+      fromEmail: Boolean(trimText(env("ZEPTO_FROM_EMAIL"))),
+      fromName: Boolean(trimText(env("ZEPTO_FROM_NAME"))),
+      replyToEmail: Boolean(trimText(env("ZEPTO_REPLY_TO_EMAIL"))),
+      replyToName: Boolean(trimText(env("ZEPTO_REPLY_TO_NAME")))
+    }
+  };
+}
+
+function healthMessage(ok: boolean, message: string) {
+  return { ok, message };
+}
+
+function providerHealth() {
+  const baseUrl = trimText(env("ZEPTO_API_BASE_URL", "https://api.zeptomail.in"));
+  const token = trimText(env("ZEPTO_SEND_MAIL_TOKEN"));
+  const fromEmail = normalizeEmail(env("ZEPTO_FROM_EMAIL"));
+  const fromName = trimText(env("ZEPTO_FROM_NAME"));
+  const replyToEmail = normalizeEmail(env("ZEPTO_REPLY_TO_EMAIL"));
+  const errors = [];
+  if (!/^https?:\/\//i.test(baseUrl)) errors.push("API base URL must start with http:// or https://");
+  if (!token) errors.push("Send Mail token is missing");
+  if (!fromEmail || !fromEmail.includes("@")) errors.push("From email is missing or invalid");
+  if (!fromName) errors.push("From name is missing");
+  if (replyToEmail && !replyToEmail.includes("@")) errors.push("Reply-to email is invalid");
+  return {
+    zeptoApi: errors.length
+      ? healthMessage(false, errors.join(". "))
+      : healthMessage(true, `Ready to send through ${baseUrl.replace(/\/+$/, "")}/v1.1/email`)
+  };
+}
+
+async function getCaller(req: Request, admin: any) {
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) return null;
+  const jwt = authHeader.replace("Bearer ", "");
+  const caller = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+    global: { headers: { Authorization: `Bearer ${jwt}` } }
+  });
+  const { data: userData } = await caller.auth.getUser(jwt);
+  const authUserId = userData?.user?.id;
+  if (!authUserId) return null;
+  const { data: appUser } = await admin
+    .from("app_users")
+    .select("id,email,display_name,status,deleted_at")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+  if (!appUser?.id || appUser.deleted_at) return null;
+  return { ...appUser, authUserId };
+}
+
+async function requireAdminCaller(req: Request, admin: any) {
+  const caller = await getCaller(req, admin);
+  if (!caller?.id) throw new Error("Unauthorized");
+  if (String(caller.status || "inactive").toLowerCase() !== "active") {
+    throw new Error("Inactive user");
+  }
+  const { data: roles } = await admin.from("user_roles").select("roles(code)").eq("user_id", caller.id);
+  const roleCodes = (roles || []).map((row: any) => row.roles?.code).filter(Boolean);
+  if (!roleCodes.some((code: string) => ["super_admin", "admin"].includes(code))) {
+    throw new Error("Admin permission required");
+  }
+  return caller;
+}
+
+function buildRecipient(address: string, name = "") {
+  return {
+    email_address: {
+      address: normalizeEmail(address),
+      name: trimText(name) || normalizeEmail(address)
+    }
+  };
+}
+
+function buildReplyTo() {
+  const replyToEmail = normalizeEmail(env("ZEPTO_REPLY_TO_EMAIL"));
+  if (!replyToEmail) return undefined;
+  return [{
+    address: replyToEmail,
+    name: trimText(env("ZEPTO_REPLY_TO_NAME")) || trimText(env("ZEPTO_FROM_NAME")) || "Varada Nexus"
+  }];
+}
+
+function buildEmailPayload(payload: Record<string, any>) {
+  const to = Array.isArray(payload.to) ? payload.to : [];
+  const cc = Array.isArray(payload.cc) ? payload.cc : [];
+  const bcc = Array.isArray(payload.bcc) ? payload.bcc : [];
+  const htmlBody = trimText(payload.htmlBody);
+  const textBody = trimText(payload.textBody);
+  if (!to.length) throw new Error("At least one recipient is required");
+  if (!htmlBody && !textBody) throw new Error("Email body is required");
+  const fromOverride = payload.from && payload.from.address
+    ? { address: normalizeEmail(payload.from.address), name: trimText(payload.from.name) || normalizeEmail(payload.from.address) }
+    : { address: normalizeEmail(env("ZEPTO_FROM_EMAIL")), name: trimText(env("ZEPTO_FROM_NAME")) || "Varada Nexus" };
+  const body: Record<string, any> = {
+    from: fromOverride,
+    to: to.map((item) => buildRecipient(item.address, item.name)),
+    subject: trimText(payload.subject) || "Varada Nexus EMS update",
+    track_clicks: payload.trackClicks !== false,
+    track_opens: payload.trackOpens !== false,
+    client_reference: trimText(payload.clientReference) || undefined,
+    reply_to: Array.isArray(payload.replyTo) ? payload.replyTo : buildReplyTo()
+  };
+  if (cc.length) body.cc = cc.map((item) => buildRecipient(item.address, item.name));
+  if (bcc.length) body.bcc = bcc.map((item) => buildRecipient(item.address, item.name));
+  if (htmlBody) body.htmlbody = htmlBody;
+  if (textBody) body.textbody = textBody;
+  if (Array.isArray(payload.attachments) && payload.attachments.length) body.attachments = payload.attachments;
+  return body;
+}
+
+async function sendViaZepto(payload: Record<string, any>) {
+  const baseUrl = trimText(env("ZEPTO_API_BASE_URL", "https://api.zeptomail.in")).replace(/\/+$/, "");
+  const authorization = authHeaderValue();
+  if (!authorization) throw new Error("ZEPTO_SEND_MAIL_TOKEN is missing");
+  const requestBody = buildEmailPayload(payload);
+  const response = await fetch(`${baseUrl}/v1.1/email`, {
+    method: "POST",
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "Authorization": authorization
+    },
+    body: JSON.stringify(requestBody)
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = result?.error?.message || result?.message || "ZeptoMail API request failed";
+    throw new Error(message);
+  }
+  return result;
+}
+
+async function recordAudit(admin: any, caller: any, action: string, details: Record<string, any>) {
+  await admin.from("audit_logs").insert({
+    event_type: action,
+    module_code: "settings",
+    entity_type: "email_integrations",
+    entity_id: details?.requestId || details?.subject || "zeptomail",
+    action: "execute",
+    details,
+    created_by: caller?.id || null,
+    created_at: new Date().toISOString()
+  });
+}
+
+const DEFAULT_BRANDING = {
+  companyName: "Varada Nexus Private Limited",
+  eyebrow: "Varada Nexus Private Limited",
+  logoUrl: "",
+  accent: "#e7c976",
+  headerBg: "#0f213b",
+  footerText: "Sent by Varada Nexus Private Limited via the EMS transactional email provider."
+};
+
+async function loadBranding(admin: any) {
+  try {
+    const { data } = await admin.from("email_branding").select("*").eq("id", 1).maybeSingle();
+    if (data) {
+      const companyName = trimText(data.company_name) || DEFAULT_BRANDING.companyName;
+      return {
+        companyName,
+        eyebrow: trimText(data.eyebrow) || companyName,
+        logoUrl: trimText(data.logo_url) || "",
+        accent: trimText(data.accent_color) || DEFAULT_BRANDING.accent,
+        headerBg: trimText(data.header_bg) || DEFAULT_BRANDING.headerBg,
+        footerText: trimText(data.footer_text) || ""
+      };
+    }
+  } catch (_) { /* fall through to defaults */ }
+  return { ...DEFAULT_BRANDING };
+}
+
+function brandHeaderHtml(branding: any, titleHtml = "", subLine = "") {
+  // Logo and company name sit side by side, vertically centered, at matching
+  // size. Uses a table for email-client (Outlook) compatibility.
+  const logoCell = branding.logoUrl
+    ? `<td style="padding-right:12px;vertical-align:middle;"><img src="${branding.logoUrl}" alt="${escapeHtml(branding.companyName)}" height="34" style="height:34px;max-width:130px;display:block;border:0;outline:none;text-decoration:none;" /></td>`
+    : "";
+  return `
+    <div style="background:${branding.headerBg};padding:20px 28px;color:#fff;border-top:5px solid ${branding.accent};">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+        ${logoCell}
+        <td style="vertical-align:middle;"><span style="font-size:21px;font-weight:800;color:#ffffff;letter-spacing:.01em;line-height:1.1;">${escapeHtml(branding.companyName)}</span></td>
+      </tr></table>
+      ${titleHtml ? `<div style="font-size:22px;font-weight:800;margin-top:14px;color:#ffffff;">${titleHtml}</div>` : ""}
+      ${subLine ? `<div style="font-size:12px;color:#9fb3d1;margin-top:6px;text-transform:uppercase;letter-spacing:.08em;">${subLine}</div>` : ""}
+    </div>
+  `;
+}
+
+function brandFooterHtml(branding: any) {
+  const text = trimText(branding.footerText);
+  if (!text) return "";
+  return `<p style="font-size:13px;color:#64748b;line-height:1.6;margin:22px 0 0;">${escapeHtml(text)}</p>`;
+}
+
+function buildTestHtml(payload: Record<string, any>, branding: any) {
+  const note = trimText(payload.message) || "This is a live ZeptoMail API connectivity test from EMS.";
+  return `
+    <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;padding:24px;color:#0f172a;">
+      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:18px;overflow:hidden;">
+        ${brandHeaderHtml(branding, "ZeptoMail API test")}
+        <div style="padding:28px;">
+          <p style="font-size:15px;line-height:1.7;margin:0 0 14px;">Hello ${escapeHtml(payload.toName || "Team")},</p>
+          <p style="font-size:15px;line-height:1.7;margin:0 0 14px;">${escapeHtml(note)}</p>
+          <div style="border:1px solid #dbe4f0;border-radius:14px;padding:18px;background:#f8fafc;margin:18px 0;">
+            <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">What this proves</div>
+            <div style="font-size:14px;line-height:1.7;margin-top:8px;">The EMS backend can now call Zoho ZeptoMail over API using your verified domain and agent credentials.</div>
+          </div>
+          ${brandFooterHtml(branding)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildTestText(payload: Record<string, any>) {
+  const note = trimText(payload.message) || "This is a live ZeptoMail API connectivity test from EMS.";
+  return [
+    `Hello ${trimText(payload.toName) || "Team"},`,
+    "",
+    note,
+    "",
+    "The EMS backend can now call Zoho ZeptoMail using your configured API credentials.",
+    "",
+    "Varada Nexus EMS"
+  ].join("\n");
+}
+
+async function sendTestEmail(req: Request, admin: any, body: Record<string, any>) {
+  const caller = await requireAdminCaller(req, admin);
+  const toEmail = normalizeEmail(body.toEmail);
+  if (!toEmail || !toEmail.includes("@")) throw new Error("A valid recipient email is required");
+  const subject = trimText(body.subject) || "Varada Nexus email API test";
+  const branding = await loadBranding(admin);
+  const payload = {
+    to: [{ address: toEmail, name: trimText(body.toName) || toEmail }],
+    subject,
+    htmlBody: buildTestHtml(body, branding),
+    textBody: buildTestText(body),
+    clientReference: `ems-email-test-${Date.now()}`
+  };
+  const result = await sendViaZepto(payload);
+  const requestId = result?.request_id || result?.data?.[0]?.request_id || null;
+  await recordAudit(admin, caller, "email_test_sent", {
+    provider: "zeptomail",
+    toEmail,
+    subject,
+    requestId
+  });
+  return {
+    ok: true,
+    provider: "zeptomail",
+    requestId,
+    subject,
+    toEmail
+  };
+}
+
+async function sendEmail(req: Request, admin: any, body: Record<string, any>) {
+  const caller = await requireAdminCaller(req, admin);
+  const to = Array.isArray(body.to) ? body.to : [];
+  if (!to.length) throw new Error("Recipients are required");
+  const payload = {
+    to,
+    cc: Array.isArray(body.cc) ? body.cc : [],
+    bcc: Array.isArray(body.bcc) ? body.bcc : [],
+    subject: body.subject,
+    htmlBody: body.htmlBody,
+    textBody: body.textBody,
+    trackClicks: body.trackClicks !== false,
+    trackOpens: body.trackOpens !== false,
+    clientReference: body.clientReference || `ems-mail-${Date.now()}`
+  };
+  const result = await sendViaZepto(payload);
+  const requestId = result?.request_id || result?.data?.[0]?.request_id || null;
+  await recordAudit(admin, caller, "email_sent", {
+    provider: "zeptomail",
+    subject: trimText(body.subject),
+    recipients: to.map((item) => normalizeEmail(item.address)),
+    moduleCode: trimText(body.moduleCode) || null,
+    eventCode: trimText(body.eventCode) || null,
+    requestId
+  });
+  return {
+    ok: true,
+    provider: "zeptomail",
+    requestId
+  };
+}
+
+const SEVERITY_ACCENT: Record<string, string> = {
+  info: "#2563eb",
+  success: "#16a34a",
+  warning: "#d97706",
+  error: "#dc2626"
+};
+
+async function callerIsAdmin(admin: any, callerId: string) {
+  const { data: roles } = await admin.from("user_roles").select("roles(code)").eq("user_id", callerId);
+  const roleCodes = (roles || []).map((row: any) => row.roles?.code).filter(Boolean);
+  return roleCodes.some((code: string) => ["super_admin", "admin"].includes(code));
+}
+
+async function requireActiveCaller(req: Request, admin: any) {
+  const caller = await getCaller(req, admin);
+  if (!caller?.id) throw new Error("Unauthorized");
+  if (String(caller.status || "inactive").toLowerCase() !== "active") {
+    throw new Error("Inactive user");
+  }
+  return caller;
+}
+
+function buildNotificationHtml(event: Record<string, any>, recipientName = "", branding: any = DEFAULT_BRANDING) {
+  const accent = SEVERITY_ACCENT[String(event.severity || "info")] || SEVERITY_ACCENT.info;
+  const title = escapeHtml(trimText(event.title) || `${branding.companyName} notification`);
+  const message = escapeHtml(trimText(event.message)).replace(/\n/g, "<br />");
+  const actionLabel = trimText(event.action_label);
+  const actionUrl = trimText(event.action_url);
+  const actionBlock = actionLabel && actionUrl
+    ? `<div style="margin:22px 0 6px;"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:${accent};color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:12px 22px;border-radius:10px;">${escapeHtml(actionLabel)}</a></div>`
+    : "";
+  const moduleLabel = escapeHtml(trimText(event.module_code) || "EMS");
+  const categoryLabel = escapeHtml(trimText(event.category) || "general");
+  // Severity accent drives the top border; branding drives logo + eyebrow.
+  const header = brandHeaderHtml({ ...branding, accent }, title, `${moduleLabel} &middot; ${categoryLabel}`);
+  const footer = trimText(branding.footerText)
+    ? brandFooterHtml(branding)
+    : `<p style="font-size:13px;color:#64748b;line-height:1.6;margin:22px 0 0;">You are receiving this because email delivery is enabled in your notification preferences.</p>`;
+  return `
+    <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;padding:24px;color:#0f172a;">
+      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:18px;overflow:hidden;">
+        ${header}
+        <div style="padding:28px;">
+          <p style="font-size:15px;line-height:1.7;margin:0 0 14px;">Hello ${escapeHtml(recipientName || "Team")},</p>
+          <div style="font-size:15px;line-height:1.7;margin:0 0 8px;">${message}</div>
+          ${actionBlock}
+          ${footer}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildNotificationText(event: Record<string, any>, recipientName = "") {
+  const lines = [
+    `Hello ${trimText(recipientName) || "Team"},`,
+    "",
+    trimText(event.title),
+    "",
+    trimText(event.message)
+  ];
+  const actionLabel = trimText(event.action_label);
+  const actionUrl = trimText(event.action_url);
+  if (actionLabel && actionUrl) {
+    lines.push("", `${actionLabel}: ${actionUrl}`);
+  }
+  lines.push("", "Varada Nexus EMS");
+  return lines.filter((line) => line !== undefined).join("\n");
+}
+
+// Reusable notification email delivery. Called after a notification is
+// dispatched (in-app rows already created) when its channel_plan includes email.
+// Sends one branded email per opted-in recipient, respecting user preferences.
+async function fanoutNotification(req: Request, admin: any, body: Record<string, any>) {
+  const caller = await requireActiveCaller(req, admin);
+  const notificationId = trimText(body.notificationId);
+  if (!notificationId) throw new Error("notificationId is required");
+
+  const { data: event, error: eventError } = await admin
+    .from("notification_events")
+    .select("id,module_code,event_code,category,title,message,severity,action_label,action_url,channel_plan,email_dispatched_at,created_by")
+    .eq("id", notificationId)
+    .maybeSingle();
+  if (eventError) throw new Error(eventError.message || "Could not load notification");
+  if (!event?.id) throw new Error("Notification not found");
+
+  const channelPlan = event.channel_plan || {};
+  if (!channelPlan.email) {
+    return { ok: true, skipped: "email_channel_disabled", sent: 0, failed: 0, total: 0 };
+  }
+
+  // Only the dispatcher of this notification or an admin may trigger email fanout.
+  const isOwner = event.created_by && event.created_by === caller.id;
+  if (!isOwner && !(await callerIsAdmin(admin, caller.id))) {
+    throw new Error("Not permitted to send email for this notification");
+  }
+
+  if (event.email_dispatched_at) {
+    return { ok: true, skipped: "already_dispatched", sent: 0, failed: 0, total: 0 };
+  }
+
+  // Atomically claim the notification so concurrent invocations do not double-send.
+  const { data: claimed, error: claimError } = await admin.rpc("mark_notification_email_dispatched", {
+    p_notification_id: notificationId
+  });
+  if (claimError) throw new Error(claimError.message || "Could not claim notification for email");
+  if (claimed === false) {
+    return { ok: true, skipped: "already_dispatched", sent: 0, failed: 0, total: 0 };
+  }
+
+  const { data: recipients, error: recipientsError } = await admin.rpc("notification_email_recipients", {
+    p_notification_id: notificationId
+  });
+  if (recipientsError) throw new Error(recipientsError.message || "Could not resolve email recipients");
+
+  const list = Array.isArray(recipients) ? recipients.slice(0, 500) : [];
+  const branding = await loadBranding(admin);
+  let sent = 0;
+  let failed = 0;
+  const failures: string[] = [];
+  for (const recipient of list) {
+    const address = normalizeEmail(recipient.email);
+    if (!address || !address.includes("@")) {
+      failed += 1;
+      continue;
+    }
+    try {
+      await sendViaZepto({
+        to: [{ address, name: trimText(recipient.display_name) || address }],
+        subject: trimText(event.title) || `${branding.companyName} notification`,
+        htmlBody: buildNotificationHtml(event, recipient.display_name, branding),
+        textBody: buildNotificationText(event, recipient.display_name),
+        clientReference: `ems-notify-${notificationId}-${recipient.app_user_id}`
+      });
+      sent += 1;
+    } catch (error) {
+      failed += 1;
+      if (failures.length < 5) failures.push(`${address}: ${error?.message || "send failed"}`);
+    }
+  }
+
+  await recordAudit(admin, caller, "notification_email_fanout", {
+    provider: "zeptomail",
+    notificationId,
+    moduleCode: trimText(event.module_code) || null,
+    eventCode: trimText(event.event_code) || null,
+    total: list.length,
+    sent,
+    failed,
+    failures
+  });
+
+  return { ok: true, notificationId, total: list.length, sent, failed };
+}
+
+// ---------------------------------------------------------------------------
+// Google Drive attachment archive (service account, reused from Legal pattern)
+// ---------------------------------------------------------------------------
+
+const DRIVE_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function base64Url(bytes: ArrayBuffer) {
+  let binary = "";
+  new Uint8Array(bytes).forEach((b) => (binary += String.fromCharCode(b)));
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64ToBytes(base64: string) {
+  const binary = atob(String(base64 || "").replace(/^data:[^;]+;base64,/, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function pemToArrayBuffer(pem: string) {
+  const normalized = String(pem || "").trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
+  const base64 = normalized
+    .replace(/-----BEGIN (?:RSA )?PRIVATE KEY-----/g, "")
+    .replace(/-----END (?:RSA )?PRIVATE KEY-----/g, "")
+    .replace(/\s/g, "");
+  if (!base64) throw new Error("Google service-account private key is empty");
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+async function googleAccessToken() {
+  let clientEmail = env("GOOGLE_SERVICE_ACCOUNT_EMAIL");
+  let rawPrivateKey = trimText(env("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"));
+  const rawServiceAccountJson = trimText(env("GOOGLE_SERVICE_ACCOUNT_JSON"));
+  if (rawServiceAccountJson) {
+    try {
+      const decoded = rawServiceAccountJson.startsWith("base64:")
+        ? new TextDecoder().decode(base64ToBytes(rawServiceAccountJson.slice(7)))
+        : rawServiceAccountJson;
+      const serviceAccount = JSON.parse(decoded);
+      clientEmail = serviceAccount.client_email || clientEmail;
+      rawPrivateKey = serviceAccount.private_key || rawPrivateKey;
+    } catch {
+      throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is invalid");
+    }
+  }
+  const privateKey = rawPrivateKey.replace(/\\n/g, "\n");
+  if (!clientEmail || !privateKey) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const claim = {
+    iss: clientEmail,
+    scope: "https://www.googleapis.com/auth/drive.file",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now
+  };
+  const unsigned = `${base64Url(new TextEncoder().encode(JSON.stringify(header)))}.${base64Url(new TextEncoder().encode(JSON.stringify(claim)))}`;
+  const key = await crypto.subtle.importKey("pkcs8", pemToArrayBuffer(privateKey), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
+  const assertion = `${unsigned}.${base64Url(signature)}`;
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload?.error_description || "Google Drive auth failed");
+  return payload.access_token;
+}
+
+function driveFolderName(value: string, fallback: string) {
+  const cleaned = String(value || "").replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+  return (cleaned || fallback).slice(0, 120);
+}
+
+async function ensureDriveFolder(name: string, parentId: string, token: string) {
+  if (!parentId) throw new Error("Google Drive Email root folder is not configured");
+  const escapedName = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const query = [`name = '${escapedName}'`, "mimeType = 'application/vnd.google-apps.folder'", `'${parentId}' in parents`, "trashed = false"].join(" and ");
+  const searchUrl = new URL("https://www.googleapis.com/drive/v3/files");
+  searchUrl.searchParams.set("q", query);
+  searchUrl.searchParams.set("fields", "files(id,name,webViewLink)");
+  searchUrl.searchParams.set("pageSize", "10");
+  searchUrl.searchParams.set("supportsAllDrives", "true");
+  searchUrl.searchParams.set("includeItemsFromAllDrives", "true");
+  const search = await fetch(searchUrl, { headers: { "Authorization": `Bearer ${token}` } });
+  const searchPayload = await search.json().catch(() => ({}));
+  if (!search.ok) throw new Error(searchPayload?.error?.message || "Google Drive folder lookup failed");
+  if (searchPayload?.files?.[0]?.id) return searchPayload.files[0];
+  const create = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink&supportsAllDrives=true", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] })
+  });
+  const createPayload = await create.json().catch(() => ({}));
+  if (!create.ok) throw new Error(createPayload?.error?.message || "Google Drive folder creation failed");
+  return createPayload;
+}
+
+async function uploadDriveFile(name: string, mimeType: string, content: Uint8Array, folderId: string) {
+  const token = await googleAccessToken();
+  if (!token) return { configured: false, id: null, webViewLink: null };
+  const boundary = `ems_${crypto.randomUUID()}`;
+  const metadata: any = { name, mimeType };
+  if (folderId) metadata.parents = [folderId];
+  const encoder = new TextEncoder();
+  const prefix = encoder.encode([`--${boundary}`, "Content-Type: application/json; charset=UTF-8", "", JSON.stringify(metadata), `--${boundary}`, `Content-Type: ${mimeType}`, "", ""].join("\r\n"));
+  const suffix = encoder.encode(`\r\n--${boundary}--`);
+  const bodyBytes = new Uint8Array(prefix.length + content.length + suffix.length);
+  bodyBytes.set(prefix, 0);
+  bodyBytes.set(content, prefix.length);
+  bodyBytes.set(suffix, prefix.length + content.length);
+  const response = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,webViewLink", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body: bodyBytes
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error?.message || "Google Drive upload failed");
+  return { configured: true, id: payload.id, webViewLink: payload.webViewLink || null };
+}
+
+// Archives attachments to Email/Outbound/<YYYY>/<MM - Month>/<stamp subject>.
+// Never throws: returns metadata (with drive links when archiving succeeds).
+async function archiveEmailAttachments(attachments: any[], subject: string) {
+  const results = attachments.map((a) => ({ name: a.name, mimeType: a.mimeType, size: a.size || 0, driveFileId: null as any, webViewLink: null as any }));
+  const rootFolderId = trimText(env("GOOGLE_DRIVE_EMAIL_FOLDER_ID"));
+  if (!rootFolderId) return { archived: false, reason: "drive_folder_not_configured", folderLink: null, results };
+  try {
+    const token = await googleAccessToken();
+    if (!token) return { archived: false, reason: "service_account_not_configured", folderLink: null, results };
+    const now = new Date();
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const outbound = await ensureDriveFolder("Outbound", rootFolderId, token);
+    const yearFolder = await ensureDriveFolder(yyyy, outbound.id, token);
+    const monthFolder = await ensureDriveFolder(`${mm} - ${DRIVE_MONTHS[now.getMonth()]}`, yearFolder.id, token);
+    const stamp = `${yyyy}-${mm}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+    const leaf = await ensureDriveFolder(`${stamp} ${driveFolderName(subject, "No Subject")}`, monthFolder.id, token);
+    for (let i = 0; i < attachments.length; i++) {
+      const a = attachments[i];
+      const up = await uploadDriveFile(a.name || `attachment-${i + 1}`, a.mimeType || "application/octet-stream", base64ToBytes(a.base64), leaf.id);
+      results[i].driveFileId = up.id;
+      results[i].webViewLink = up.webViewLink;
+    }
+    return { archived: true, reason: null, folderLink: leaf.webViewLink || null, folderId: leaf.id, results };
+  } catch (error) {
+    return { archived: false, reason: error?.message || "drive_archive_failed", folderLink: null, results };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Email module (send + manage) actions
+// ---------------------------------------------------------------------------
+
+function renderTemplateString(input = "", vars: Record<string, any> = {}) {
+  return String(input || "").replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, key) => {
+    const value = vars[key];
+    return value === undefined || value === null ? "" : String(value);
+  });
+}
+
+// Strips dangerous markup from composer HTML while keeping formatting tags.
+function sanitizeEmailHtml(html = "") {
+  return String(html || "")
+    .replace(/<\/?(?:script|style|iframe|object|embed|link|meta|form|input|button)[^>]*>/gi, "")
+    .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+    .replace(/\son\w+\s*=\s*'[^']*'/gi, "")
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, "")
+    .replace(/(href|src)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '$1="#"');
+}
+
+function wrapBrandedBody(subject: string, innerHtml: string, branding: any = DEFAULT_BRANDING) {
+  return `
+    <div style="font-family:Inter,Segoe UI,Arial,sans-serif;background:#f5f7fb;padding:24px;color:#0f172a;">
+      <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #dbe4f0;border-radius:18px;overflow:hidden;">
+        ${brandHeaderHtml(branding, escapeHtml(subject))}
+        <div style="padding:26px;font-size:15px;line-height:1.7;color:#0f172a;">${innerHtml}</div>
+        ${brandFooterHtml(branding) ? `<div style="padding:0 26px 24px;">${brandFooterHtml(branding)}</div>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function wrapPlainHtml(subject: string, bodyText: string, branding: any = DEFAULT_BRANDING) {
+  return wrapBrandedBody(subject, escapeHtml(bodyText).replace(/\n/g, "<br />"), branding);
+}
+
+async function listEmailDirectory(req: Request, admin: any) {
+  await requireActiveCaller(req, admin);
+  const { data } = await admin
+    .from("app_users")
+    .select("id,display_name,email,status")
+    .not("email", "is", null)
+    .eq("status", "active")
+    .order("display_name", { ascending: true })
+    .limit(1000);
+  const users = (data || [])
+    .filter((row: any) => trimText(row.email))
+    .map((row: any) => ({ id: row.id, name: trimText(row.display_name) || row.email, email: normalizeEmail(row.email) }));
+  return { users };
+}
+
+async function listEmailTemplates(req: Request, admin: any) {
+  await requireActiveCaller(req, admin);
+  const { data } = await admin.from("email_templates").select("*").order("updated_at", { ascending: false });
+  return { templates: data || [] };
+}
+
+async function saveEmailTemplate(req: Request, admin: any, body: Record<string, any>) {
+  const caller = await requireActiveCaller(req, admin);
+  const alias = trimText(body.alias).toLowerCase().replace(/\s+/g, "_");
+  const title = trimText(body.title);
+  if (!alias) throw new Error("Template alias is required");
+  if (!title) throw new Error("Template title is required");
+  const row = {
+    alias,
+    title,
+    module_name: trimText(body.moduleName) || "general",
+    category: trimText(body.category) || "transactional",
+    subject: trimText(body.subject) || "",
+    html_body: body.htmlBody || null,
+    text_body: body.textBody || null,
+    variables: Array.isArray(body.variables) ? body.variables : [],
+    is_active: body.isActive !== false,
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await admin
+    .from("email_templates")
+    .upsert(row, { onConflict: "alias" })
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(error.message || "Could not save template");
+  await recordAudit(admin, caller, "email_template_saved", { alias, title });
+  return { ok: true, template: data };
+}
+
+async function deleteEmailTemplate(req: Request, admin: any, body: Record<string, any>) {
+  const caller = await requireActiveCaller(req, admin);
+  const id = trimText(body.id);
+  if (!id) throw new Error("Template id is required");
+  const { error } = await admin.from("email_templates").delete().eq("id", id);
+  if (error) throw new Error(error.message || "Could not delete template");
+  await recordAudit(admin, caller, "email_template_deleted", { id });
+  return { ok: true };
+}
+
+async function listEmailHistory(req: Request, admin: any) {
+  await requireActiveCaller(req, admin);
+  const { data } = await admin.from("email_outbox").select("*").order("created_at", { ascending: false }).limit(300);
+  return { outbox: data || [] };
+}
+
+async function listEmailInbound(req: Request, admin: any) {
+  await requireActiveCaller(req, admin);
+  const { data } = await admin.from("email_inbound").select("*").order("received_at", { ascending: false }).limit(300);
+  return { inbound: data || [] };
+}
+
+async function markInboundRead(req: Request, admin: any, body: Record<string, any>) {
+  await requireActiveCaller(req, admin);
+  const id = trimText(body.id);
+  if (!id) throw new Error("Inbound id is required");
+  const { error } = await admin
+    .from("email_inbound")
+    .update({ is_read: true, read_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message || "Could not update inbound email");
+  return { ok: true };
+}
+
+async function listEmailWorkspaceData(req: Request, admin: any) {
+  await requireActiveCaller(req, admin);
+  const [outboxRes, inboundRes, templatesRes] = await Promise.all([
+    admin.from("email_outbox").select("*").order("created_at", { ascending: false }).limit(50),
+    admin.from("email_inbound").select("*").order("received_at", { ascending: false }).limit(50),
+    admin.from("email_templates").select("*").order("updated_at", { ascending: false }).limit(100)
+  ]);
+  const outbox = outboxRes.data || [];
+  const inbound = inboundRes.data || [];
+  const templates = templatesRes.data || [];
+  const stats = {
+    sent: outbox.filter((r: any) => String(r.status).toLowerCase() === "sent").length,
+    failed: outbox.filter((r: any) => String(r.status).toLowerCase() === "failed").length,
+    inbound: inbound.length,
+    unread: inbound.filter((r: any) => !r.is_read).length,
+    templates: templates.length
+  };
+  return { outbox, inbound, templates, stats };
+}
+
+async function sendModuleEmail(req: Request, admin: any, body: Record<string, any>) {
+  const caller = await requireActiveCaller(req, admin);
+
+  // Assemble recipients: explicit addresses + selected EMS user ids.
+  const recipients: Array<{ address: string; name: string }> = [];
+  const seen = new Set<string>();
+  const pushRecipient = (address: string, name = "") => {
+    const addr = normalizeEmail(address);
+    if (!addr || !addr.includes("@") || seen.has(addr)) return;
+    seen.add(addr);
+    recipients.push({ address: addr, name: trimText(name) || addr });
+  };
+  if (Array.isArray(body.to)) body.to.forEach((item: any) => pushRecipient(item.address || item.email, item.name));
+  const userIds = Array.isArray(body.userIds) ? body.userIds.filter(Boolean) : [];
+  if (userIds.length) {
+    const { data: users } = await admin.from("app_users").select("id,display_name,email").in("id", userIds);
+    (users || []).forEach((u: any) => pushRecipient(u.email, u.display_name));
+  }
+  if (!recipients.length) throw new Error("At least one valid recipient is required");
+
+  // Resolve content: optional template + variable substitution.
+  const vars = (body.variables && typeof body.variables === "object") ? body.variables : {};
+  let subject = trimText(body.subject);
+  // Rich HTML from the composer editor (or a template); textBody is the plain fallback.
+  let richHtml = trimText(body.bodyHtml) || trimText(body.htmlBody);
+  let textBody = trimText(body.textBody);
+  let templateAlias: string | null = trimText(body.templateAlias) || null;
+  if (templateAlias) {
+    const { data: tpl } = await admin.from("email_templates").select("*").eq("alias", templateAlias).maybeSingle();
+    if (!tpl?.id) throw new Error(`Template "${templateAlias}" not found`);
+    subject = subject || renderTemplateString(tpl.subject, vars);
+    richHtml = richHtml || renderTemplateString(tpl.html_body || "", vars);
+    textBody = textBody || renderTemplateString(tpl.text_body || "", vars);
+  }
+  if (!subject) throw new Error("Subject is required");
+  if (!richHtml && !textBody) throw new Error("Email body is required");
+  const branding = await loadBranding(admin);
+  const innerHtml = richHtml ? sanitizeEmailHtml(richHtml) : escapeHtml(textBody).replace(/\n/g, "<br />");
+  const htmlBody = wrapBrandedBody(subject, innerHtml, branding);
+  if (!textBody) textBody = trimText(String(richHtml).replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
+
+  // Resolve sender identity (Send as). Only active identities are allowed, and
+  // the from-address must be on an allowed (verified) domain.
+  let fromOverride: any = null;
+  let replyToOverride: any = undefined;
+  let fromEmail: string | null = null;
+  let fromName: string | null = null;
+  const senderKey = trimText(body.senderKey) || null;
+  if (senderKey) {
+    const { data: sender } = await admin.from("email_senders").select("*").eq("sender_key", senderKey).eq("is_active", true).maybeSingle();
+    if (!sender?.id) throw new Error("Selected sender identity was not found or is inactive");
+    const addr = normalizeEmail(sender.from_email);
+    if (!isAllowedFromAddress(addr)) throw new Error(`Sender ${addr} is not on an allowed verified domain`);
+    fromEmail = addr;
+    fromName = trimText(sender.from_name) || addr;
+    fromOverride = { address: addr, name: fromName };
+    if (trimText(sender.reply_to_email)) {
+      replyToOverride = [{ address: normalizeEmail(sender.reply_to_email), name: trimText(sender.reply_to_name) || fromName }];
+    }
+  }
+
+  const cc = Array.isArray(body.cc) ? body.cc : [];
+  const bcc = Array.isArray(body.bcc) ? body.bcc : [];
+  const sourceModule = trimText(body.sourceModule) || "email-compose";
+  const sourceEvent = trimText(body.sourceEvent) || "manual_send";
+  const bodyPreview = trimText(textBody || htmlBody.replace(/<[^>]+>/g, " ")).slice(0, 280);
+
+  // Attachments: validate + cap total size (~10 MB raw), attach to the email and
+  // archive to Google Drive once (same files for every recipient).
+  const rawAttachments = (Array.isArray(body.attachments) ? body.attachments : [])
+    .map((a: any) => ({
+      name: trimText(a.name) || "attachment",
+      mimeType: trimText(a.mimeType) || "application/octet-stream",
+      base64: String(a.base64 || "").replace(/^data:[^;]+;base64,/, ""),
+      size: Number(a.size) || 0
+    }))
+    .filter((a: any) => a.base64.length > 0);
+  const totalRaw = rawAttachments.reduce((sum: number, a: any) => sum + Math.floor(a.base64.length * 0.75), 0);
+  if (totalRaw > 10 * 1024 * 1024) throw new Error("Attachments exceed the 10 MB total limit");
+
+  let archive: any = { archived: false, results: [], folderLink: null };
+  if (rawAttachments.length) archive = await archiveEmailAttachments(rawAttachments, subject);
+  const zeptoAttachments = rawAttachments.map((a: any) => ({ content: a.base64, mime_type: a.mimeType, name: a.name }));
+  const attachmentMeta = archive.results || [];
+
+  let sent = 0;
+  let failed = 0;
+  let firstRequestId: string | null = null;
+  const logRows: any[] = [];
+  for (const recipient of recipients) {
+    let status = "sent";
+    let requestId: string | null = null;
+    let errorMessage: string | null = null;
+    try {
+      const result = await sendViaZepto({
+        to: [recipient],
+        cc,
+        bcc,
+        subject,
+        htmlBody,
+        textBody,
+        from: fromOverride,
+        replyTo: replyToOverride,
+        attachments: zeptoAttachments,
+        clientReference: `ems-email-${sourceModule}-${Date.now()}`
+      });
+      requestId = result?.request_id || result?.data?.[0]?.request_id || null;
+      if (!firstRequestId) firstRequestId = requestId;
+      sent += 1;
+    } catch (error) {
+      status = "failed";
+      errorMessage = error?.message || "send failed";
+      failed += 1;
+    }
+    logRows.push({
+      direction: "outbound",
+      to_email: recipient.address,
+      to_name: recipient.name,
+      from_email: fromEmail,
+      from_name: fromName,
+      cc,
+      bcc,
+      subject,
+      body_preview: bodyPreview,
+      html_body: htmlBody,
+      text_body: textBody || null,
+      template_alias: templateAlias,
+      source_module: sourceModule,
+      source_event: sourceEvent,
+      status,
+      provider_request_id: requestId,
+      error_message: errorMessage,
+      attachments: attachmentMeta,
+      sent_by: caller.id
+    });
+  }
+  if (logRows.length) await admin.from("email_outbox").insert(logRows);
+
+  await recordAudit(admin, caller, "email_module_sent", {
+    provider: "zeptomail",
+    subject,
+    total: recipients.length,
+    sent,
+    failed,
+    templateAlias,
+    sourceModule
+  });
+
+  return {
+    ok: true,
+    total: recipients.length,
+    sent,
+    failed,
+    requestId: firstRequestId,
+    attachments: attachmentMeta.length,
+    driveArchived: archive.archived === true,
+    driveReason: archive.reason || null,
+    driveFolderLink: archive.folderLink || null
+  };
+}
+
+// Webhook ingestion for inbound email. Called by an external inbound source
+// (Zoho inbound webhook / mail-parse / IMAP bridge). Gated by EMAIL_INBOUND_SECRET
+// when that secret is set; open otherwise so it can be tested before wiring auth.
+async function inboundEmail(admin: any, body: Record<string, any>) {
+  const configuredSecret = trimText(env("EMAIL_INBOUND_SECRET"));
+  if (configuredSecret && trimText(body.secret) !== configuredSecret) {
+    throw new Error("Invalid inbound secret");
+  }
+  const fromEmail = normalizeEmail(body.fromEmail || body.from);
+  if (!fromEmail || !fromEmail.includes("@")) throw new Error("A valid fromEmail is required");
+  const row = {
+    from_email: fromEmail,
+    from_name: trimText(body.fromName) || null,
+    to_email: normalizeEmail(body.toEmail || body.to) || null,
+    subject: trimText(body.subject) || null,
+    body_text: body.bodyText || body.text || null,
+    body_html: body.bodyHtml || body.html || null,
+    message_id: trimText(body.messageId) || null,
+    raw: body.raw && typeof body.raw === "object" ? body.raw : {},
+    received_at: body.receivedAt || new Date().toISOString()
+  };
+  const { data, error } = await admin.from("email_inbound").insert(row).select("id").maybeSingle();
+  if (error) throw new Error(error.message || "Could not store inbound email");
+  return { ok: true, id: data?.id || null };
+}
+
+async function listEmailSenders(req: Request, admin: any) {
+  await requireActiveCaller(req, admin);
+  const { data } = await admin.from("email_senders").select("*").order("sort_order", { ascending: true }).order("label", { ascending: true });
+  return { senders: data || [] };
+}
+
+async function saveEmailSender(req: Request, admin: any, body: Record<string, any>) {
+  const caller = await requireActiveCaller(req, admin);
+  const senderKey = trimText(body.senderKey).toLowerCase().replace(/\s+/g, "_");
+  const label = trimText(body.label);
+  const fromEmail = normalizeEmail(body.fromEmail);
+  if (!senderKey) throw new Error("Sender key is required");
+  if (!label) throw new Error("Label is required");
+  if (!fromEmail || !fromEmail.includes("@")) throw new Error("A valid from-email is required");
+  if (!isAllowedFromAddress(fromEmail)) throw new Error(`${fromEmail} is not on an allowed verified domain`);
+  const replyToEmail = normalizeEmail(body.replyToEmail);
+  const row = {
+    sender_key: senderKey,
+    label,
+    from_name: trimText(body.fromName) || label,
+    from_email: fromEmail,
+    reply_to_email: replyToEmail || null,
+    reply_to_name: trimText(body.replyToName) || null,
+    is_active: body.isActive !== false,
+    sort_order: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : 100,
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await admin.from("email_senders").upsert(row, { onConflict: "sender_key" }).select().maybeSingle();
+  if (error) throw new Error(error.message || "Could not save sender identity");
+  await recordAudit(admin, caller, "email_sender_saved", { senderKey, fromEmail });
+  return { ok: true, sender: data };
+}
+
+async function deleteEmailSender(req: Request, admin: any, body: Record<string, any>) {
+  const caller = await requireActiveCaller(req, admin);
+  const id = trimText(body.id);
+  if (!id) throw new Error("Sender id is required");
+  const { error } = await admin.from("email_senders").delete().eq("id", id);
+  if (error) throw new Error(error.message || "Could not delete sender identity");
+  await recordAudit(admin, caller, "email_sender_deleted", { id });
+  return { ok: true };
+}
+
+async function getEmailBranding(req: Request, admin: any) {
+  await requireActiveCaller(req, admin);
+  return { branding: await loadBranding(admin) };
+}
+
+async function saveEmailBranding(req: Request, admin: any, body: Record<string, any>) {
+  const caller = await requireActiveCaller(req, admin);
+  const companyName = trimText(body.companyName) || DEFAULT_BRANDING.companyName;
+  const row = {
+    id: 1,
+    company_name: companyName,
+    eyebrow: trimText(body.eyebrow) || companyName,
+    logo_url: trimText(body.logoUrl) || null,
+    accent_color: trimText(body.accent) || DEFAULT_BRANDING.accent,
+    header_bg: trimText(body.headerBg) || DEFAULT_BRANDING.headerBg,
+    footer_text: trimText(body.footerText) || null,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await admin.from("email_branding").upsert(row, { onConflict: "id" });
+  if (error) throw new Error(error.message || "Could not save branding");
+  await recordAudit(admin, caller, "email_branding_saved", { companyName });
+  return { ok: true, branding: await loadBranding(admin) };
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const admin = adminClient();
+  try {
+    const body = await req.json().catch(() => ({}));
+    const action = trimText(body?.action);
+    if (action === "config_status") return json(zeptoConfigStatus());
+    if (action === "provider_health") return json(providerHealth());
+    if (action === "send_test_email") return json(await sendTestEmail(req, admin, body));
+    if (action === "send_email") return json(await sendEmail(req, admin, body));
+    if (action === "fanout_notification") return json(await fanoutNotification(req, admin, body));
+    if (action === "list_email_workspace_data") return json(await listEmailWorkspaceData(req, admin));
+    if (action === "send_module_email") return json(await sendModuleEmail(req, admin, body));
+    if (action === "list_email_history") return json(await listEmailHistory(req, admin));
+    if (action === "list_email_inbound") return json(await listEmailInbound(req, admin));
+    if (action === "mark_inbound_read") return json(await markInboundRead(req, admin, body));
+    if (action === "list_email_templates") return json(await listEmailTemplates(req, admin));
+    if (action === "save_email_template") return json(await saveEmailTemplate(req, admin, body));
+    if (action === "delete_email_template") return json(await deleteEmailTemplate(req, admin, body));
+    if (action === "list_email_directory") return json(await listEmailDirectory(req, admin));
+    if (action === "list_email_senders") return json(await listEmailSenders(req, admin));
+    if (action === "save_email_sender") return json(await saveEmailSender(req, admin, body));
+    if (action === "delete_email_sender") return json(await deleteEmailSender(req, admin, body));
+    if (action === "get_email_branding") return json(await getEmailBranding(req, admin));
+    if (action === "save_email_branding") return json(await saveEmailBranding(req, admin, body));
+    if (action === "inbound_email") return json(await inboundEmail(admin, body));
+    return json({ error: "Unsupported action" }, 400);
+  } catch (error) {
+    return json({ error: error?.message || "Email integration request failed" }, 400);
+  }
+});
