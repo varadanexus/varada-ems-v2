@@ -8,6 +8,7 @@ import {
   updateMarketingDeliverable, updateMarketingQuery
 } from "./marketing-api.js?v=marketing-whatsapp-1";
 import { uploadMarketingVendorInvoiceToDrive } from "./drive-api.js?v=vendor-workspace-1";
+import { enforceMarketingPortalDisclaimer } from "./marketing-disclaimer-gate.js?v=marketing-disclaimer-1";
 
 const state = {
   identity: null, projects: [], assignments: [], deliverables: [], queries: [], invoices: [], payments: [],
@@ -293,6 +294,7 @@ async function load() {
 async function init() {
   state.identity = await getMarketingIdentity();
   if (!state.identity || state.identity.kind !== "vendor") { location.replace(ROUTES.LOGIN); return; }
+  await enforceMarketingPortalDisclaimer("vendor");
   await load();
   state.channel = subscribeToMarketingQueries(() => load().catch(() => {}));
 }
