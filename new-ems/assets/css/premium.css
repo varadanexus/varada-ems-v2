@@ -1678,3 +1678,137 @@ input:focus, select:focus, textarea:focus {
 @media (prefers-reduced-motion: reduce) {
   #app, .module-card, .pm-card--interactive, .btn, .icon-btn { transition: none !important; }
 }
+
+/* ---------- Legacy blue cleanup: shared dialogs, portals and data tables ---------- */
+/* Several modules inject their own CSS after this stylesheet. Important declarations
+   keep the visual theme consistent without changing their markup or behaviour. */
+.pa-modal,
+.trip-modal-panel,
+.dspdf-modal,
+.ems-terms-modal,
+.legal-preview-dialog,
+.pay-modal-panel,
+.modal,
+.modal-card,
+[role="dialog"] {
+  background: linear-gradient(155deg, rgba(230, 200, 126, .055), #07080d 48%, #050609) !important;
+  color: #f7f4ec !important;
+  border-color: rgba(230, 200, 126, .3) !important;
+  box-shadow: 0 32px 100px rgba(0, 0, 0, .72), 0 0 44px rgba(195, 154, 68, .06) !important;
+}
+.pa-head,
+.dspdf-head,
+.ems-terms-head,
+.ems-terms-foot,
+.legal-preview-head,
+.modal-header,
+.modal-footer {
+  background: rgba(230, 200, 126, .025) !important;
+  border-color: rgba(230, 200, 126, .15) !important;
+}
+.pa-head strong,
+.trip-modal-panel h1, .trip-modal-panel h2, .trip-modal-panel h3,
+.pay-modal-panel h1, .pay-modal-panel h2, .pay-modal-panel h3,
+[role="dialog"] h1, [role="dialog"] h2, [role="dialog"] h3 {
+  color: #f7f4ec !important;
+  font-family: "Playfair Display", Georgia, serif !important;
+}
+.pa-head span, .pa-empty, .pa-row-desc,
+.trip-modal-panel label, .trip-modal-panel .muted,
+[role="dialog"] p, [role="dialog"] .muted {
+  color: #9b9788 !important;
+}
+.pa-close, .dspdf-close, .legal-preview-close {
+  color: #c9c5b8 !important;
+  border-color: rgba(230, 200, 126, .16) !important;
+  background: rgba(230, 200, 126, .035) !important;
+}
+.pa-close:hover, .dspdf-close:hover, .legal-preview-close:hover {
+  color: #f7e7b0 !important;
+  background: rgba(230, 200, 126, .1) !important;
+}
+.pa-row,
+.trip-modal-panel .stmt-detail-box,
+.pay-detail-box,
+.ems-terms-evidence {
+  color: #c9c5b8 !important;
+  background: rgba(230, 200, 126, .035) !important;
+  border-color: rgba(230, 200, 126, .14) !important;
+}
+.pa-row:hover { background: rgba(230, 200, 126, .075) !important; border-color: rgba(230, 200, 126, .38) !important; }
+.pa-badge { background: linear-gradient(120deg, #f7e7b0, #c39a44) !important; color: #0a0805 !important; }
+.ems-terms-content section { border-color: rgba(230, 200, 126, .1) !important; }
+.ems-terms-btn { background: rgba(230, 200, 126, .05) !important; border-color: rgba(230, 200, 126, .25) !important; color: #f7f4ec !important; }
+.ems-terms-btn.primary { background: linear-gradient(120deg, #f7e7b0, #e0c274 45%, #c39a44) !important; color: #0a0805 !important; }
+
+/* Transport portal cards and its late-injected table palette. */
+.trip-kpi-card,
+.trip-filter-card,
+.trip-table-card,
+.portal-account-card {
+  background: linear-gradient(155deg, rgba(230, 200, 126, .055), #07080d 58%) !important;
+  border-color: rgba(230, 200, 126, .16) !important;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .34) !important;
+}
+.trip-kpi-card h2 { color: #f7f4ec !important; font-family: "Playfair Display", Georgia, serif !important; }
+.trip-toolbar-grid label, .portal-account-eyebrow { color: #8d8a7e !important; }
+.trip-rich-table,
+.trip-rich-table thead,
+.trip-rich-table tbody,
+.trip-rich-table tr,
+.trip-rich-table th,
+.trip-rich-table td {
+  border-color: rgba(230, 200, 126, .11) !important;
+}
+.trip-rich-table thead th,
+.pay-modal-panel thead th,
+.pay-modal-panel th {
+  background: #0b0c10 !important;
+  color: #e6c87e !important;
+}
+.trip-rich-table tbody td,
+.trip-rich-table tbody tr:nth-child(odd) td,
+.trip-rich-table tbody tr:nth-child(even) td,
+.trip-data-row.is-striped td,
+.pay-modal-panel table,
+.pay-modal-panel th,
+.pay-modal-panel td,
+.pay-modal-panel tbody tr:nth-child(odd) td,
+.pay-modal-panel tbody tr:nth-child(even) td {
+  background: #07080d !important;
+  color: #c9c5b8 !important;
+}
+.trip-rich-table tbody tr:nth-child(even) td,
+.pay-modal-panel tbody tr:nth-child(even) td { background: #0a0b0f !important; }
+.trip-data-row:hover td,
+.trip-rich-table tbody tr:hover td,
+.pay-modal-panel tbody tr:hover td { background: rgba(230, 200, 126, .07) !important; }
+.trip-cell-stack strong, .trip-modal-panel strong { color: #f7f4ec !important; }
+.trip-cell-stack .muted, .trip-rich-table .muted { color: #9b9788 !important; }
+.trip-sort-button:focus-visible,
+.trip-row-actions .btn:focus-visible,
+#tripApplyFiltersBtn:focus-visible,
+#tripResetFiltersBtn:focus-visible,
+#tripPrevPageBtn:focus-visible,
+#tripNextPageBtn:focus-visible {
+  outline-color: rgba(230, 200, 126, .72) !important;
+}
+
+/* Broad data surfaces: neutral ink rows with champagne-gold headers. */
+.table-container, .table-shell { background: #07080d !important; border-color: rgba(230, 200, 126, .14) !important; }
+.table-container table thead th,
+.table-shell table thead th {
+  background: #0b0c10 !important;
+  color: #e6c87e !important;
+  border-color: rgba(230, 200, 126, .14) !important;
+}
+.table-container table tbody td,
+.table-shell table tbody td {
+  background: #07080d !important;
+  color: #c9c5b8 !important;
+  border-color: rgba(230, 200, 126, .09) !important;
+}
+.table-container table tbody tr:nth-child(even) td,
+.table-shell table tbody tr:nth-child(even) td { background: #0a0b0f !important; }
+.table-container table tbody tr:hover td,
+.table-shell table tbody tr:hover td { background: rgba(230, 200, 126, .065) !important; }

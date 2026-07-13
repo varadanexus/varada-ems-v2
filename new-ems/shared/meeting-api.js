@@ -2,9 +2,10 @@ import { ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 
 const SETTINGS_KEY = "ems_meeting_workspace_settings_v1";
+const PUBLIC_WEBSITE_ORIGIN = "https://www.varadanexus.com";
 
 const DEFAULT_SETTINGS = {
-  publicOrigin: "",
+  publicOrigin: PUBLIC_WEBSITE_ORIGIN,
   jitsiDomain: "meet.jit.si",
   roomPrefix: "varadanexus",
   defaultDuration: 45,
@@ -72,10 +73,8 @@ export function buildMeetingRoomName(title = "") {
   return `${settings.roomPrefix}-${roomSlug(title)}-${Date.now().toString(36)}`;
 }
 
-export function buildMeetingInviteLink(inviteToken, origin = "") {
-  const settings = getMeetingSettings();
-  const baseOrigin = String(origin || settings.publicOrigin || window.location.origin || "").replace(/\/$/, "");
-  return `${baseOrigin}${ROUTES.MEETINGS_LOGIN}?t=${encodeURIComponent(inviteToken)}`;
+export function buildMeetingInviteLink(_inviteToken, _origin = "") {
+  return `${PUBLIC_WEBSITE_ORIGIN}${ROUTES.MEETINGS_LOGIN}`;
 }
 
 export function buildHostRoomLink(meetingId) {

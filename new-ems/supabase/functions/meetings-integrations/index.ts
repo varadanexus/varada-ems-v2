@@ -8,6 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
+const PUBLIC_WEBSITE_ORIGIN = "https://www.varadanexus.com";
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -243,10 +245,8 @@ function formatDisplayDate(value: string | null) {
   }
 }
 
-function buildPublicInviteUrl(inviteToken: string, origin = "") {
-  const baseOrigin = trimText(origin || getMeetingInviteConfig().publicOrigin || "").replace(/\/$/, "");
-  if (!baseOrigin) throw new Error("Public invite origin is not configured. Save a Public Origin in Meetings Settings or EMS_PUBLIC_ORIGIN secret.");
-  return `${baseOrigin}/portals/meeting/meeting-login.html?t=${encodeURIComponent(inviteToken)}`;
+function buildPublicInviteUrl(_inviteToken: string, _origin = "") {
+  return `${PUBLIC_WEBSITE_ORIGIN}/portals/meeting/meeting-login.html`;
 }
 
 function randomOtp() {
@@ -261,9 +261,9 @@ function buildWhatsAppInviteBody({ invite, meeting, inviteUrl, otp }: any) {
     `Schedule: ${meeting.scheduled_local || formatDisplayDate(meeting.scheduled_at)}`,
     `Host: ${meeting.host_name || "Varada Nexus Host"}`,
     "",
-    `Meeting link: ${inviteUrl}`,
+    `Meeting login page: ${inviteUrl}`,
     "",
-    "Open the meeting page and use Send OTP there to receive your secure login code on WhatsApp."
+    "Open the meeting login page, enter your registered mobile number, and use Send OTP to receive your secure access code on WhatsApp."
   ];
   return lines.join("\n");
 }
@@ -729,6 +729,83 @@ async function verifyJoinOtp(admin: any, body: any) {
   });
 }
 
+async function requestPhoneJoinOtp(admin: any, body: any) {
+  const phone = normalizePhone(body?.phone);
+  if (phone.length < 10) return json({ error: "Enter the mobile number registered for this meeting." }, 400);
+
+  const config = getMeetingInviteConfig();
+  const { data, error } = await admin.rpc("issue_meeting_phone_otp", {
+    p_phone: phone,
+    p_ttl_minutes: config.otpTtlMinutes,
+    p_resend_seconds: config.otpMinResendSeconds
+  });
+
+  if (error) {
+    const message = String(error?.message || "");
+    if (message.includes("wait before")) return json({ error: "Please wait before requesting another OTP." }, 429);
+    return json({ error: "No active meeting invitation was found for this mobile number." }, 404);
+  }
+
+  const issued = Array.isArray(data) ? data[0] : data;
+  if (!issued?.challenge_token || !issued?.otp || !issued?.credential_id) {
+    return json({ error: "Unable to issue an OTP right now." }, 500);
+  }
+
+  const invite = await loadInviteByParticipant(admin, issued.credential_id);
+  try {
+    const wa = await sendTwilioWhatsAppOtp({ invite, otp: issued.otp });
+    await persistInviteMeta(admin, invite.id, {
+      phone_otp_sid: wa.sid || null,
+      phone_otp_sent_at: new Date().toISOString()
+    });
+  } catch (deliveryError: any) {
+    await admin
+      .from("meeting_join_otp_challenges")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("challenge_token", issued.challenge_token);
+    return json({ error: deliveryError?.message || "Unable to send the OTP right now." }, 502);
+  }
+
+  return json({
+    ok: true,
+    challengeToken: issued.challenge_token,
+    otpExpiresAt: issued.expires_at,
+    maskedPhone: issued.masked_phone,
+    participantName: issued.participant_name
+  });
+}
+
+async function verifyPhoneJoinOtp(admin: any, body: any) {
+  const challengeToken = trimText(body?.challengeToken);
+  const otp = trimText(body?.otp);
+  if (!challengeToken || !/^\d{6}$/.test(otp)) {
+    return json({ error: "Enter the six-digit OTP sent to your registered mobile number." }, 400);
+  }
+
+  const { data, error } = await admin.rpc("verify_meeting_phone_otp", {
+    p_challenge_token: challengeToken,
+    p_otp: otp
+  });
+  if (error) {
+    const message = String(error?.message || "");
+    if (message.includes("expired")) return json({ error: "OTP has expired. Request a new OTP." }, 410);
+    if (message.includes("Too many")) return json({ error: "Too many attempts. Request a new OTP." }, 429);
+    if (message.includes("Incorrect")) return json({ error: "Incorrect OTP." }, 401);
+    return json({ error: "OTP challenge is invalid. Request a new OTP." }, 400);
+  }
+
+  const verified = Array.isArray(data) ? data[0] : data;
+  if (!verified?.invite_token) return json({ error: "Unable to verify this meeting invitation." }, 500);
+  const invite = await loadInviteByToken(admin, verified.invite_token);
+
+  return json({
+    ok: true,
+    inviteToken: verified.invite_token,
+    verifiedAt: verified.verified_at,
+    access: inviteAccessState(invite)
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -798,6 +875,8 @@ Deno.serve(async (req) => {
     if (action === "send_invite_bundle") return await sendInviteBundle(req, admin, body);
     if (action === "request_join_otp") return await requestJoinOtp(admin, body);
     if (action === "verify_join_otp") return await verifyJoinOtp(admin, body);
+    if (action === "request_phone_join_otp") return await requestPhoneJoinOtp(admin, body);
+    if (action === "verify_phone_join_otp") return await verifyPhoneJoinOtp(admin, body);
 
     return json({ error: "Unknown action" }, 400);
   } catch (error) {
