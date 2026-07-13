@@ -59,6 +59,9 @@ export async function saveClient(payload, id = null) {
     ? run(db().from("ds_clients").update(row).eq("id", id))
     : run(db().from("ds_clients").insert(row));
 }
+export async function deleteClient(id) {
+  return run(db().rpc("ds_delete_client", { p_client_id: id }));
+}
 
 // --- Leads ---
 export async function listLeads() {
@@ -76,11 +79,7 @@ export async function saveLead(payload, id = null) {
     : run(db().from("ds_leads").insert(row));
 }
 export async function convertLeadToClient(lead) {
-  const client = await run(db().from("ds_clients").insert({
-    name: lead.name, company_name: lead.company_name, email: lead.email, phone: lead.phone,
-    whatsapp: lead.phone, status: "active", notes: `Converted from lead${lead.source ? ` (${lead.source})` : ""}`
-  }).select().single());
-  await run(db().from("ds_leads").update({ stage: "won", converted_client_id: client.id, updated_at: new Date().toISOString() }).eq("id", lead.id));
+  const client = await run(db().rpc("ds_convert_lead_to_client", { p_lead_id: lead.id }));
   notifyEvent({ title: "Lead won", message: `${lead.name}${lead.company_name ? ` (${lead.company_name})` : ""} converted to a client.`, severity: "success" });
   return client;
 }
@@ -100,6 +99,11 @@ export async function saveProject(payload, id = null) {
   if (id) return run(db().from("ds_projects").update(row).eq("id", id));
   row.code = await run(db().rpc("ds_next_project_code"));
   return run(db().from("ds_projects").insert(row));
+}
+export async function completeProject(id) {
+  return run(db().from("ds_projects").update({
+    status: "completed", updated_at: new Date().toISOString()
+  }).eq("id", id).select().single());
 }
 
 // --- Deliverables ---

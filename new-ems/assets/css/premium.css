@@ -312,6 +312,68 @@ table tbody tr:hover { background: rgba(212, 178, 106, .05); }
   .card .form-row { grid-template-columns: 1fr; }
 }
 
+/* ---------- Digital Services compact premium forms ---------- */
+.ds-workspace-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, .95fr) minmax(520px, 1.55fr);
+  gap: 1rem;
+  align-items: start;
+}
+.ds-workspace-grid > .card { grid-column: auto; }
+.ds-form-card {
+  padding: 1rem 1.1rem;
+  background:
+    linear-gradient(145deg, rgba(230, 200, 126, .055), transparent 42%),
+    var(--pm-surface);
+}
+.ds-form-card > h3 { margin: 0 0 .85rem; }
+.ds-compact-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem .75rem;
+}
+.ds-compact-form .ds-field {
+  display: grid;
+  gap: .28rem;
+  margin: 0;
+  min-width: 0;
+}
+.ds-compact-form .ds-field--wide,
+.ds-compact-form .ds-form-actions { grid-column: 1 / -1; }
+.ds-compact-form .ds-field label {
+  margin: 0;
+  color: #bcb7a9;
+  font-size: .73rem;
+  font-weight: 750;
+  letter-spacing: .025em;
+}
+.ds-compact-form input,
+.ds-compact-form select,
+.ds-compact-form textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: .56rem .68rem;
+  border-radius: 9px;
+}
+.ds-compact-form input,
+.ds-compact-form select { min-height: 40px; }
+.ds-compact-form textarea { min-height: 66px; resize: vertical; }
+.ds-form-actions {
+  display: flex;
+  gap: .55rem;
+  align-items: center;
+  padding-top: .15rem;
+}
+@media (max-width: 1120px) {
+  .ds-workspace-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .ds-compact-form { grid-template-columns: 1fr; }
+  .ds-compact-form .ds-field--wide,
+  .ds-compact-form .ds-form-actions { grid-column: auto; }
+}
+
 /* ---------- Collapsible cards ---------- */
 details.pm-collapse > summary {
   cursor: pointer;
@@ -1812,3 +1874,21 @@ input:focus, select:focus, textarea:focus {
 .table-shell table tbody tr:nth-child(even) td { background: #0a0b0f !important; }
 .table-container table tbody tr:hover td,
 .table-shell table tbody tr:hover td { background: rgba(230, 200, 126, .065) !important; }
+
+/* Keep browser autofill inside the Obsidian Aurum input system. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #07080d inset !important;
+  box-shadow: 0 0 0 1000px #07080d inset !important;
+  -webkit-text-fill-color: #f7f4ec !important;
+  caret-color: #e6c87e !important;
+  border-color: rgba(230, 200, 126, .22) !important;
+  transition: background-color 9999s ease-out 0s;
+}

@@ -1,10 +1,10 @@
-import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
+import { MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { getSession } from "./auth.js";
 import {
   createCreditNote, createInvoice, deleteCreditNote, deleteInvoice, deleteSubscription, emailInvoiceToClient,
   generateDueSubscriptionInvoices, getCompanyGstProfile, getCreditNoteItems, getInvoiceItems, listClients,
-  listCreditNotes, listInvoices, listProjects, listServiceTypes, listSubscriptions, postCreditNoteToAccounts,
+  listCreditNotes, listInvoices, listProjectCosts, listProjects, listServiceTypes, listSubscriptions, postCostToPayables, postCreditNoteToAccounts,
   postInvoiceToAccounts, recordPayment, saveSubscription, updateInvoice, updateInvoiceStatus
 } from "./digital-services-api.js";
 import { generateInvoicePdf, openPdfModal } from "./ds-invoice-pdf.js";
@@ -12,8 +12,12 @@ import { sendWhatsAppWorkspaceMessage } from "./whatsapp-api.js";
 import { showToast } from "./utils.js";
 
 const TYPES = [["one_off", "One-off"], ["milestone", "Milestone"], ["retainer", "Retainer"], ["subscription", "Subscription"]];
+const BILLING_VIEWS = new Set(["invoices", "subscriptions", "credit-notes", "client-payments", "vendor-payments"]);
+const requestedView = new URLSearchParams(location.search).get("view") || "invoices";
+const activeView = BILLING_VIEWS.has(requestedView) ? requestedView : "invoices";
+const viewTitle = { invoices: "Invoices", subscriptions: "Retainers & Subscriptions", "credit-notes": "Credit Notes", "client-payments": "Client Payments", "vendor-payments": "Vendor Payments" }[activeView];
 const state = {
-  invoices: [], clients: [], projects: [], services: [], subscriptions: [], creditNotes: [], canDelete: false,
+  invoices: [], clients: [], projects: [], services: [], subscriptions: [], creditNotes: [], costs: [], canDelete: false,
   lines: [{ description: "", quantity: 1, unitPrice: 0, taxRate: 18 }],
   form: { clientId: "", projectId: "", invoiceType: "one_off", dueDate: "" },
   editingInvoiceId: null, editingSub: null,
@@ -33,6 +37,7 @@ function totals() {
   return { sub, tax, total: sub + tax };
 }
 function sel(a, b) { return String(a) === String(b) ? "selected" : ""; }
+function visible(...views) { return views.includes(activeView) ? "" : "display:none"; }
 
 function render() {
   const cliOpt = state.clients.map((c) => `<option value="${esc(c.id)}" ${sel(c.id, state.form.clientId)}>${esc(c.company_name || c.name)}</option>`).join("");
@@ -44,17 +49,17 @@ function render() {
   const es = state.editingSub || {};
   renderModuleContent(`
     <style>
-      .ds-field{display:grid;gap:.3rem;margin-bottom:.6rem}.ds-field label{font-weight:700;font-size:.8rem}
-      .ds-field input,.ds-field select{width:100%}
-      .ds-head4{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem}
+      .ds-field{display:grid;gap:.28rem;margin-bottom:.5rem}.ds-field label{font-weight:700;font-size:.76rem}
+      .ds-field input,.ds-field select{width:100%;box-sizing:border-box;padding:.56rem .68rem}
+      .ds-head4{display:grid;grid-template-columns:repeat(4,1fr);gap:.55rem .7rem}
       .ds-line{display:grid;grid-template-columns:2.5fr .7fr 1fr .7fr auto;gap:.4rem;align-items:center;margin-bottom:.35rem}
       .ds-line input{width:100%}
       .ds-tot{display:flex;gap:1.2rem;justify-content:flex-end;margin:.6rem 0;font-size:.9rem}.ds-tot b{color:#e8eef7}
       @media(max-width:980px){.ds-head4{grid-template-columns:1fr 1fr}.ds-line{grid-template-columns:1fr 1fr}}
     </style>
-    <section class="card"><h3>Billing</h3><p class="muted">Create invoices (one-off, milestone, or retainer), record payments, and post to Central Accounts. 0% GST = non-GST bill of supply.</p></section>
+    <section class="card"><h3>${viewTitle}</h3><p class="muted">Digital Marketing & Services billing is separated by workflow. Use the Billing sidebar to move between invoices, recurring plans, credit notes, receipts, and vendor payables.</p></section>
 
-    <section class="card" style="margin-top:1rem">
+    <section class="card" id="billingInvoiceForm" style="margin-top:1rem;${visible("invoices")}">
       <h3>${state.editingInvoiceId ? "Edit Invoice (draft)" : "New Invoice"}</h3>
       <form id="dsInvForm">
         <div class="ds-head4">
@@ -74,7 +79,7 @@ function render() {
       </form>
     </section>
 
-    <section class="card" style="margin-top:1rem">
+    <section class="card" id="billingSubscriptions" style="margin-top:1rem;${visible("subscriptions")}">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.6rem">
         <h3 style="margin:0">Retainers &amp; Subscriptions</h3>
         <button class="btn btn-ghost" id="dsGenDue" type="button">Generate due invoices</button>
@@ -101,8 +106,8 @@ function render() {
       </table></div>
     </section>
 
-    <section class="card" style="margin-top:1rem">
-      <h3>Invoices (${state.invoices.length})</h3>
+    <section class="card" id="billingInvoices" style="margin-top:1rem;${visible("invoices", "client-payments")}">
+      <h3>${activeView === "client-payments" ? "Outstanding Client Payments" : "Invoices"} (${state.invoices.length})</h3>
       <div class="table-shell"><table>
         <thead><tr><th>Invoice</th><th>Client</th><th>Total</th><th>Paid</th><th>Status</th><th>Accounts</th><th>Actions</th></tr></thead>
         <tbody>${state.invoices.map((i) => `<tr>
@@ -124,7 +129,7 @@ function render() {
       </table></div>
     </section>
 
-    <section class="card" style="margin-top:1rem">
+    <section class="card" id="billingCreditNotes" style="margin-top:1rem;${visible("credit-notes")}">
       <h3>Credit Notes (${state.creditNotes.length})</h3>
       <p class="muted">Issue a credit note against an invoice or standalone. Numbered on the shared central register (CR/${new Date().getFullYear() % 100}-${(new Date().getFullYear() % 100) + 1}/NNN).</p>
       <form id="dsCnForm">
@@ -155,6 +160,11 @@ function render() {
           </td>
         </tr>`).join("") || '<tr><td colspan="7">No credit notes yet.</td></tr>'}</tbody>
       </table></div>
+    </section>
+
+    <section class="card" id="billingVendorPayments" style="margin-top:1rem;${visible("vendor-payments")}">
+      <div style="display:flex;justify-content:space-between;gap:1rem;align-items:start;flex-wrap:wrap"><div><h3>Vendor Payments</h3><p class="muted">Vendor bills originate from project costs. Send an approved cost to Central Accounts Payables, where payment approval and settlement are completed.</p></div><a class="btn" href="${ROUTES.CENTRAL_ACCOUNTS_PAYABLES}">Open Accounts Payables</a></div>
+      <div class="table-shell"><table><thead><tr><th>Vendor</th><th>Project</th><th>Reference</th><th>Total</th><th>Status</th><th>Action</th></tr></thead><tbody>${state.costs.map((cost) => `<tr><td><strong>${esc(cost.vendor_name)}</strong><br><small>${esc(cost.vendor_gstin || "")}</small></td><td>${esc(cost.ds_projects?.title || cost.ds_projects?.code || "—")}</td><td>${esc(cost.vendor_ref || "—")}</td><td>${money(cost.total_amount)}</td><td><span class="meta-pill">${cost.posted_to_payables ? "in payables" : esc(cost.status || "recorded")}</span></td><td>${cost.posted_to_payables ? `<a class="btn btn-ghost" href="${ROUTES.CENTRAL_ACCOUNTS_PAYABLES}">Review payment</a>` : `<button class="btn btn-ghost ds-vendor-payable" data-id="${esc(cost.id)}" type="button">Send to Payables</button>`}</td></tr>`).join("") || '<tr><td colspan="6">No vendor costs have been recorded yet.</td></tr>'}</tbody></table></div>
     </section>
   `);
   bind();
@@ -312,6 +322,11 @@ function bind() {
     try { await deleteSubscription(b.getAttribute("data-id")); showToast("Retainer deleted.", TOAST_TYPES.SUCCESS); if (state.editingSub?.id === b.getAttribute("data-id")) state.editingSub = null; await reload(); }
     catch (err) { showToast(err?.message || "Delete failed.", TOAST_TYPES.ERROR); }
   }));
+  document.querySelectorAll(".ds-vendor-payable").forEach((button) => button.addEventListener("click", async () => {
+    button.disabled = true;
+    try { await postCostToPayables(button.dataset.id); showToast("Vendor bill sent to Central Accounts Payables.", TOAST_TYPES.SUCCESS); await reload(); }
+    catch (error) { showToast(error?.message || "Could not send vendor bill to Payables.", TOAST_TYPES.ERROR); button.disabled = false; }
+  }));
   document.querySelector("#dsGenDue").addEventListener("click", async (e) => {
     e.target.disabled = true;
     try { const n = await generateDueSubscriptionInvoices(); showToast(n > 0 ? `${n} retainer invoice(s) generated.` : "No retainers are due.", n > 0 ? TOAST_TYPES.SUCCESS : TOAST_TYPES.INFO); await reload(); }
@@ -362,14 +377,14 @@ function bind() {
 }
 
 async function reload() {
-  [state.invoices, state.subscriptions, state.creditNotes] = await Promise.all([
-    listInvoices().catch(() => []), listSubscriptions().catch(() => []), listCreditNotes().catch(() => [])
+  [state.invoices, state.subscriptions, state.creditNotes, state.costs] = await Promise.all([
+    listInvoices().catch(() => []), listSubscriptions().catch(() => []), listCreditNotes().catch(() => []), listProjectCosts().catch(() => [])
   ]);
   render();
 }
 
 async function init() {
-  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.DIGITAL_SERVICES_BILLING, pageTitle: "Billing", pageDescription: "Digital Services invoices and payments", workspace: WORKSPACES.DIGITAL_SERVICES });
+  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.DIGITAL_SERVICES_BILLING, pageTitle: viewTitle, pageDescription: "Digital Marketing & Services billing and settlements", workspace: WORKSPACES.DIGITAL_SERVICES });
   if (!boot) return;
   const session = await getSession().catch(() => null);
   state.canDelete = String(session?.user?.email || "").toLowerCase() === "admin@varadanexus.com";

@@ -1,6 +1,6 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
-import { deleteProjectCost, listClients, listDeliverables, listInvoices, listProjectCosts, listProjects, listServiceTypes, postCostToPayables, saveDeliverable, saveProject, saveProjectCost } from "./digital-services-api.js";
+import { completeProject, deleteProjectCost, listClients, listDeliverables, listInvoices, listProjectCosts, listProjects, listServiceTypes, postCostToPayables, saveDeliverable, saveProject, saveProjectCost } from "./digital-services-api.js";
 import { showToast } from "./utils.js";
 
 const state = { projects: [], clients: [], services: [], selected: null, deliverables: [], invoices: [], costs: [] };
@@ -19,15 +19,13 @@ function render() {
   const sel = state.selected;
   renderModuleContent(`
     <style>
-      .ds-field{display:grid;gap:.3rem;margin-bottom:.7rem}.ds-field label{font-weight:700;font-size:.8rem}
-      .ds-field input,.ds-field select,.ds-field textarea{width:100%}
-      .ds-newproj{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
-      @media(max-width:980px){.ds-newproj{grid-template-columns:1fr}}
+      .ds-field{display:grid;gap:.28rem;margin-bottom:.65rem}.ds-field label{font-weight:700;font-size:.76rem}
+      .ds-field input,.ds-field select,.ds-field textarea{width:100%;box-sizing:border-box;padding:.56rem .68rem}
     </style>
     <section class="card"><h3>Projects</h3><p class="muted">Engagements across web, SEO, social, and PR. Click a project to manage deliverables.</p></section>
-    <section class="card" style="margin-top:1rem">
+    <section class="card ds-form-card" style="margin-top:1rem">
       <h3>New Project</h3>
-      <form id="dsProjForm" class="ds-newproj">
+      <form id="dsProjForm" class="ds-compact-form">
         <div class="ds-field"><label>Client *</label><select name="client_id" required><option value="">Select client…</option>${cliOpt}</select></div>
         <div class="ds-field"><label>Title *</label><input name="title" required /></div>
         <div class="ds-field"><label>Service Line</label><select name="service_type"><option value="">—</option>${svcOpt}</select></div>
@@ -43,7 +41,7 @@ function render() {
     <section class="card" style="margin-top:1rem">
       <h3>All Projects (${state.projects.length})</h3>
       <div class="table-shell"><table>
-        <thead><tr><th>Project</th><th>Client</th><th>Service</th><th>Engagement</th><th>Revenue</th><th>Cost</th><th>Margin</th><th>Status</th></tr></thead>
+        <thead><tr><th>Project</th><th>Client</th><th>Service</th><th>Engagement</th><th>Revenue</th><th>Cost</th><th>Margin</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>${state.projects.map((p) => `<tr class="ds-proj-row" data-id="${esc(p.id)}" style="cursor:pointer;${sel && sel.id === p.id ? "background:rgba(212,178,106,.12)" : ""}">
           <td><strong>${esc(p.title)}</strong><br><span class="muted">${esc(p.code || "")}</span></td>
           <td>${esc(p.ds_clients?.company_name || p.ds_clients?.name || "-")}</td>
@@ -51,7 +49,8 @@ function render() {
           <td>${esc(p.engagement_type)}</td>
           <td>${money(projRevenue(p.id))}</td><td>${money(projCost(p.id))}</td><td><strong>${money(projRevenue(p.id) - projCost(p.id))}</strong></td>
           <td><span class="meta-pill">${esc(p.status)}</span></td>
-        </tr>`).join("") || '<tr><td colspan="8">No projects yet.</td></tr>'}</tbody>
+          <td>${p.status === "completed" ? '<span class="meta-pill">Completed</span>' : p.status === "cancelled" ? "—" : `<button class="btn btn-ghost ds-project-complete" data-id="${esc(p.id)}" type="button">Mark Completed</button>`}</td>
+        </tr>`).join("") || '<tr><td colspan="9">No projects yet.</td></tr>'}</tbody>
       </table></div>
     </section>
     ${sel ? `
@@ -121,6 +120,14 @@ function bind() {
     state.deliverables = state.selected ? await listDeliverables(state.selected.id).catch(() => []) : [];
     render();
   }));
+  document.querySelectorAll(".ds-project-complete").forEach((button) => button.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    const project = state.projects.find((p) => p.id === button.dataset.id);
+    if (!project || !confirm(`Mark “${project.title}” as completed?`)) return;
+    button.disabled = true;
+    try { await completeProject(project.id); showToast("Project marked completed.", TOAST_TYPES.SUCCESS); await reload(); }
+    catch (err) { showToast(err?.message || "Project could not be completed.", TOAST_TYPES.ERROR); button.disabled = false; }
+  }));
   document.querySelector("#dsDelivForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.currentTarget;
@@ -161,7 +168,7 @@ async function reload() {
 }
 
 async function init() {
-  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.DIGITAL_SERVICES_PROJECTS, pageTitle: "Projects", pageDescription: "Digital Services engagements", workspace: WORKSPACES.DIGITAL_SERVICES });
+  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.DIGITAL_SERVICES_PROJECTS, pageTitle: "Projects", pageDescription: "Digital Marketing & Services engagements", workspace: WORKSPACES.DIGITAL_SERVICES });
   if (!boot) return;
   [state.clients, state.services] = await Promise.all([listClients().catch(() => []), listServiceTypes().catch(() => [])]);
   await reload();

@@ -26,6 +26,13 @@ const DIVISION_ENTITY_MAP = {
       { key: "client", label: "Client", table: "interior_clients", nameCol: "client_name", system: "interiors_client_deeplink", portalType: "Interiors Client Portal", portalLoginUrl: ROUTES.INTERIORS_PORTAL_LOGIN },
       { key: "vendor", label: "Vendor", table: "interior_vendors", nameCol: "vendor_name", system: "external", userType: "vendor", portalType: "Interiors Vendor Portal", portalLoginUrl: ROUTES.TRANSPORT_PORTAL_LOGIN }
     ]
+  },
+  "digital-services": {
+    label: "Digital Marketing & Services",
+    entities: [
+      { key: "client", label: "Client", table: "marketing_clients", nameCol: "company_name", system: "external", userType: "partner", sourceModule: "digital-services", accessScope: "marketing_client_portal", portalType: "Marketing Client Portal", portalLoginUrl: `${ROUTES.MARKETING_PORTAL_LOGIN}?portal=client` },
+      { key: "vendor", label: "Vendor", table: "marketing_vendors", nameCol: "legal_name", system: "external", userType: "vendor", sourceModule: "digital-services", accessScope: "marketing_vendor_portal", portalType: "Marketing Delivery Team Portal", portalLoginUrl: `${ROUTES.MARKETING_PORTAL_LOGIN}?portal=vendor` }
+    ]
   }
 };
 
@@ -51,11 +58,17 @@ async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.PORTAL_ACCESS,
     pageTitle: "Portal Access",
-    pageDescription: "Create and manage portal login access for existing Transportation and Interiors business records. Business records are never created or duplicated here.",
+    pageDescription: "Create and manage portal login access for existing Transportation, Interiors, and Digital Marketing & Services business records. Business records are never created or duplicated here.",
     workspace: WORKSPACES.ADMIN
   });
   if (!boot) return;
   PAGE_STATE.boot = boot;
+  const params = new URLSearchParams(location.search);
+  if (params.get("tab") === "create") {
+    PAGE_STATE.activeTab = "create";
+    const division = params.get("division") || "";
+    if (DIVISION_ENTITY_MAP[division]) PAGE_STATE.wizard = { ...PAGE_STATE.wizard, division, step: 2 };
+  }
   await loadDashboard();
   await loadAllRows();
   render();
@@ -125,7 +138,7 @@ async function loadAllRows() {
     (u.access_rows || []).filter((a) => a.is_active && a.linked_entity_type === "transporter").forEach((a) => rows.push(baseRow(u, "transport", "Transportation", "Transporter", a.linked_entity_name, "Transportation Transporter Portal", a.access_level, [{ id: a.id, kind: "transporter" }])));
   });
   (ep.data || []).forEach((u) => {
-    (u.access_rows || []).filter((a) => a.is_active).forEach((a) => rows.push(baseRow(u, "external", a.source_module === "interiors" ? "Interiors" : "Transportation", capitalize(u.user_type), externalLinkedEntityLabel(u, a), portalTypeLabel(u.user_type, a.source_module), a.access_level, [{ id: a.id, kind: "external" }])));
+    (u.access_rows || []).filter((a) => a.is_active).forEach((a) => rows.push(baseRow(u, "external", moduleLabel(a.source_module), capitalize(u.user_type), externalLinkedEntityLabel(u, a), portalTypeLabel(u.user_type, a.source_module), a.access_level, [{ id: a.id, kind: "external" }])));
   });
   PAGE_STATE.allRows = rows;
 }
@@ -153,6 +166,8 @@ async function loadAudit() {
 
 function externalLinkedEntityLabel(user, access) {
   const recordType = String(access?.record_type || "").toLowerCase();
+  if (recordType.includes("marketing_clients")) return "Marketing Client";
+  if (recordType.includes("marketing_vendors")) return "Marketing Vendor";
   if (recordType.includes("interior_vendors")) return "Vendor";
   if (recordType.includes("transport_agents")) return "Agent";
   if (recordType.includes("contractor")) return "Contractor";
@@ -164,10 +179,18 @@ function baseRow(u, system, division, entityType, linkedName, portalType, access
 }
 
 function portalTypeLabel(userType, sourceModule) {
+  if (sourceModule === "digital-services" && userType === "vendor") return "Marketing Delivery Team Portal";
+  if (sourceModule === "digital-services" && userType === "partner") return "Marketing Client Portal";
   if (userType === "agent") return "Transportation Agent Portal";
   if (userType === "vendor") return sourceModule === "interiors" ? "Interiors Vendor Portal" : "External Vendor Portal";
   if (userType === "contractor") return "External Contractor Portal";
   return "Future Portal";
+}
+
+function moduleLabel(sourceModule) {
+  if (sourceModule === "digital-services") return "Digital Marketing & Services";
+  if (sourceModule === "interiors") return "Interiors";
+  return "Transportation";
 }
 
 function render() {
@@ -691,7 +714,7 @@ async function handleSelectEntity(entityId) {
   const raw = found.raw;
 
   w.selectedEntity = {
-    id: found.id, label: found.label, table: entityDef.table, system: entityDef.system, userType: entityDef.userType, portalType: entityDef.portalType, portalLoginUrl: entityDef.portalLoginUrl,
+    id: found.id, label: found.label, table: entityDef.table, system: entityDef.system, userType: entityDef.userType, sourceModule: entityDef.sourceModule, accessScope: entityDef.accessScope, portalType: entityDef.portalType, portalLoginUrl: entityDef.portalLoginUrl,
     email: found.email, phone: found.phone,
     gstin: raw.gstin || raw.gst_number || null, pan: raw.pan_number || null
   };
@@ -749,7 +772,7 @@ async function handleWizardSubmit() {
     } else if (s.system === "external") {
       const { error } = await client.rpc("external_portal_provision_user", {
         p_user_type: s.userType, p_username: username, p_initial_password: password, p_display_name: displayName, p_email: email, p_phone: phone,
-        p_source_module: PAGE_STATE.wizard.division === "interiors" ? "interiors" : "transportation", p_access_scope: `${s.userType}_portal`,
+        p_source_module: s.sourceModule || (PAGE_STATE.wizard.division === "interiors" ? "interiors" : "transportation"), p_access_scope: s.accessScope || `${s.userType}_portal`,
         p_record_type: s.table, p_record_id: s.id, p_expires_at: expiry ? new Date(expiry).toISOString() : null, p_notes: notes, p_access_level: accessLevel
       });
       if (error) throw error;

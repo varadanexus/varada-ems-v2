@@ -13,16 +13,13 @@ function render() {
   const svcOptions = state.services.map((s) => `<option value="${esc(s.code)}" ${l.service_type === s.code ? "selected" : ""}>${esc(s.label)}</option>`).join("");
   renderModuleContent(`
     <style>
-      .ds-grid{display:grid;grid-template-columns:minmax(300px,1fr) minmax(340px,1.5fr);gap:1rem;align-items:start}
-      .ds-field{display:grid;gap:.3rem;margin-bottom:.7rem}.ds-field label{font-weight:700;font-size:.8rem}
       .ds-field input,.ds-field select,.ds-field textarea{width:100%}
-      @media(max-width:980px){.ds-grid{grid-template-columns:1fr}}
     </style>
     <section class="card"><h3>Leads</h3><p class="muted">CRM pipeline: new → contacted → proposal → won/lost. Convert a won lead into a client.</p></section>
-    <div class="ds-grid" style="margin-top:1rem">
-      <section class="card">
+    <div class="ds-workspace-grid" style="margin-top:1rem">
+      <section class="card ds-form-card">
         <h3>${state.editing ? "Edit Lead" : "New Lead"}</h3>
-        <form id="dsLeadForm">
+        <form id="dsLeadForm" class="ds-compact-form">
           <input type="hidden" name="id" value="${esc(l.id || "")}" />
           <div class="ds-field"><label>Name *</label><input name="name" value="${esc(l.name || "")}" required /></div>
           <div class="ds-field"><label>Company</label><input name="company_name" value="${esc(l.company_name || "")}" /></div>
@@ -32,8 +29,8 @@ function render() {
           <div class="ds-field"><label>Source</label><input name="source" value="${esc(l.source || "")}" placeholder="Referral, website, ads..." /></div>
           <div class="ds-field"><label>Estimated Value (₹)</label><input name="estimated_value" type="number" value="${esc(l.estimated_value || 0)}" /></div>
           <div class="ds-field"><label>Stage</label><select name="stage">${STAGES.map((s) => `<option value="${s}" ${l.stage === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
-          <div class="ds-field"><label>Notes</label><textarea name="notes" rows="2">${esc(l.notes || "")}</textarea></div>
-          <div style="display:flex;gap:.6rem"><button class="btn" type="submit">${state.editing ? "Update" : "Add Lead"}</button>${state.editing ? '<button class="btn btn-ghost" type="button" id="dsCancel">Cancel</button>' : ""}</div>
+          <div class="ds-field ds-field--wide"><label>Notes</label><textarea name="notes" rows="2">${esc(l.notes || "")}</textarea></div>
+          <div class="ds-form-actions"><button class="btn" type="submit">${state.editing ? "Update" : "Add Lead"}</button>${state.editing ? '<button class="btn btn-ghost" type="button" id="dsCancel">Cancel</button>' : ""}</div>
         </form>
       </section>
       <section class="card">
@@ -76,7 +73,7 @@ function bind() {
 async function reload() { state.leads = await listLeads().catch(() => []); render(); }
 
 async function init() {
-  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.DIGITAL_SERVICES_LEADS, pageTitle: "Leads", pageDescription: "Digital Services pipeline", workspace: WORKSPACES.DIGITAL_SERVICES });
+  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.DIGITAL_SERVICES_LEADS, pageTitle: "Leads", pageDescription: "Digital Marketing & Services pipeline", workspace: WORKSPACES.DIGITAL_SERVICES });
   if (!boot) return;
   state.services = await listServiceTypes().catch(() => []);
   await reload();

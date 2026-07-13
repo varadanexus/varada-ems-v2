@@ -196,20 +196,36 @@ const MENU_BY_WORKSPACE = {
   ],
   [WORKSPACES.DIGITAL_SERVICES]: [
     {
-      title: "Digital Services",
+      title: "Dashboard",
       items: [
         { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
         { module: MODULES.DIGITAL_SERVICES_DASHBOARD, label: "Dashboard", href: ROUTES.DIGITAL_SERVICES_DASHBOARD }
       ]
     },
     {
-      title: "Delivery",
+      title: "Sales",
       items: [
         { module: MODULES.DIGITAL_SERVICES_LEADS, label: "Leads", href: ROUTES.DIGITAL_SERVICES_LEADS },
         { module: MODULES.DIGITAL_SERVICES_CLIENTS, label: "Clients", href: ROUTES.DIGITAL_SERVICES_CLIENTS },
         { module: MODULES.DIGITAL_SERVICES_PROJECTS, label: "Projects", href: ROUTES.DIGITAL_SERVICES_PROJECTS },
-        { module: MODULES.DIGITAL_SERVICES_BILLING, label: "Billing", href: ROUTES.DIGITAL_SERVICES_BILLING },
-        { module: MODULES.DIGITAL_SERVICES_SETTINGS, label: "Settings", href: ROUTES.DIGITAL_SERVICES_SETTINGS }
+        { module: MODULES.DIGITAL_SERVICES_CLIENTS, label: "Vendors", href: ROUTES.DIGITAL_SERVICES_VENDORS }
+      ]
+    },
+    {
+      title: "Billing",
+      items: [
+        { module: MODULES.DIGITAL_SERVICES_BILLING, label: "Invoices", href: `${ROUTES.DIGITAL_SERVICES_BILLING}?view=invoices` },
+        { module: MODULES.DIGITAL_SERVICES_BILLING, label: "Retainers & Subscriptions", href: `${ROUTES.DIGITAL_SERVICES_BILLING}?view=subscriptions` },
+        { module: MODULES.DIGITAL_SERVICES_BILLING, label: "Credit Notes", href: `${ROUTES.DIGITAL_SERVICES_BILLING}?view=credit-notes` },
+        { module: MODULES.DIGITAL_SERVICES_BILLING, label: "Client Payments", href: `${ROUTES.DIGITAL_SERVICES_BILLING}?view=client-payments` },
+        { module: MODULES.DIGITAL_SERVICES_BILLING, label: "Vendor Payments", href: `${ROUTES.DIGITAL_SERVICES_BILLING}?view=vendor-payments` }
+      ]
+    },
+    {
+      title: "White-label Marketing Delivery",
+      items: [
+        { module: MODULES.MARKETING_COMMAND_CENTER, label: "Marketing Operations", href: ROUTES.MARKETING_COMMAND_CENTER },
+        { module: MODULES.PORTAL_ACCESS, label: "Portal Users", href: `${ROUTES.PORTAL_ACCESS}?tab=create&division=digital-services` }
       ]
     }
   ],
@@ -282,17 +298,30 @@ export function getSearchIndex() {
 }
 
 export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACES.ADMIN) {
+  const sectionStateKey = `ems_nav_sections_${workspace}`;
+  let expandedSections = [];
+  try {
+    expandedSections = JSON.parse(localStorage.getItem(sectionStateKey) || "[]");
+  } catch {
+    expandedSections = [];
+  }
+  const currentUrl = new URL(currentPath, window.location.origin);
+  const isCurrentItem = (href) => {
+    const itemUrl = new URL(href, window.location.origin);
+    if (itemUrl.pathname !== currentUrl.pathname) return false;
+    return itemUrl.search ? itemUrl.search === currentUrl.search : true;
+  };
   const sectionsForWorkspace = MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN];
   const sections = sectionsForWorkspace.map((section) => {
     const visibleItems = section.items.filter((item) => item.disabled || (allowedModules || []).includes(item.module));
-    const sectionHasActive = visibleItems.some((item) => !item.disabled && item.href && currentPath.includes(item.href));
+    const sectionHasActive = visibleItems.some((item) => !item.disabled && item.href && isCurrentItem(item.href));
     const items = visibleItems
       .map((item) => {
         if (item.disabled) {
           const icon = item.label.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase();
           return `<span class="nav-link disabled" aria-disabled="true" title="${item.label} (Coming soon)"><span class="nav-icon">${icon}</span><span class="nav-text">${item.label}</span></span>`;
         }
-        const active = currentPath.includes(item.href) ? "active" : "";
+        const active = isCurrentItem(item.href) ? "active" : "";
         const icon = item.label.split(" ").map((x) => x[0]).join("").slice(0, 2).toUpperCase();
         return `<a class="nav-link ${active}" href="${item.href}" title="${item.label}"><span class="nav-icon">${icon}</span><span class="nav-text">${item.label}</span></a>`;
       })
@@ -300,12 +329,12 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
     if (!items) return "";
     // Collapsible section. Open the group that contains the current page (and
     // always the "Home" group) so the active item is visible on load.
-    const open = sectionHasActive || section.title === "Home" ? "open" : "";
-    return `<details class="nav-section" ${open}><summary class="nav-section-title"><span class="nav-section-label">${section.title}</span><span class="nav-caret" aria-hidden="true">›</span></summary><div class="nav-list">${items}</div></details>`;
+    const open = sectionHasActive || section.title === "Home" || expandedSections.includes(section.title) ? "open" : "";
+    return `<details class="nav-section" data-nav-section="${section.title}" ${open}><summary class="nav-section-title"><span class="nav-section-label">${section.title}</span><span class="nav-caret" aria-hidden="true">›</span></summary><div class="nav-list">${items}</div></details>`;
   }).join("");
 
   return `
-    <aside class="app-sidebar" id="appSidebar">
+    <aside class="app-sidebar" id="appSidebar" data-workspace="${workspace}">
       
       <nav class="nav-root">${sections}</nav>
     </aside>

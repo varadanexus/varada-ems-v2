@@ -68,8 +68,13 @@ export const ROUTES = {
   DIGITAL_SERVICES_LEADS: "/new-ems/modules/digital-services-leads/index.html",
   DIGITAL_SERVICES_CLIENTS: "/new-ems/modules/digital-services-clients/index.html",
   DIGITAL_SERVICES_PROJECTS: "/new-ems/modules/digital-services-projects/index.html",
+  DIGITAL_SERVICES_VENDORS: "/new-ems/modules/digital-services-vendors/index.html",
   DIGITAL_SERVICES_BILLING: "/new-ems/modules/digital-services-billing/index.html",
   DIGITAL_SERVICES_SETTINGS: "/new-ems/modules/digital-services-settings/index.html",
+  MARKETING_COMMAND_CENTER: "/new-ems/modules/marketing-command-center/index.html",
+  MARKETING_CLIENT_PORTAL: "/new-ems/modules/marketing-client-portal/index.html",
+  MARKETING_VENDOR_PORTAL: "/new-ems/modules/marketing-vendor-portal/index.html",
+  MARKETING_PORTAL_LOGIN: "/new-ems/modules/marketing-portal-login/index.html",
   NOTIFICATIONS_CENTER: "/new-ems/modules/notifications-center/index.html",
   USERS: "/new-ems/modules/users/index.html",
   ROLES: "/new-ems/modules/roles/index.html",
@@ -217,8 +222,11 @@ export const MODULES = {
   DIGITAL_SERVICES_LEADS: "digital-services-leads",
   DIGITAL_SERVICES_CLIENTS: "digital-services-clients",
   DIGITAL_SERVICES_PROJECTS: "digital-services-projects",
+  DIGITAL_SERVICES_VENDORS: "digital-services-vendors",
   DIGITAL_SERVICES_BILLING: "digital-services-billing",
   DIGITAL_SERVICES_SETTINGS: "digital-services-settings",
+  MARKETING: "marketing",
+  MARKETING_COMMAND_CENTER: "marketing-command-center",
   NOTIFICATIONS_CENTER: "notifications-center",
   USERS: "users",
   ROLES: "roles",
@@ -311,7 +319,7 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.ARBITRAGE, title: "Arbitrage", subtitle: "Opportunity and risk desk", href: null },
   { module: MODULES.ECOMMERCE, title: "E-Commerce", subtitle: "Storefront operations", href: null },
   { module: MODULES.ACCOUNTS, title: "Accounts", subtitle: "Finance operations cockpit", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
-  { module: MODULES.DIGITAL_SERVICES, title: "Digital Services", subtitle: "Web, SEO, social & PR delivery with billing", href: ROUTES.DIGITAL_SERVICES_DASHBOARD },
+  { module: MODULES.DIGITAL_SERVICES, title: "Digital Marketing & Services", subtitle: "Lead-to-billing delivery, white-label partners, client portals, and queries", href: ROUTES.DIGITAL_SERVICES_DASHBOARD },
   { module: MODULES.LEGAL, title: "Legal", subtitle: "Drafting, KYC, signing evidence and secure archive", href: ROUTES.LEGAL_COMMAND_CENTER },
   { module: MODULES.WHATSAPP, title: "WhatsApp", subtitle: "Inbox, templates, Twilio health and outbound delivery", href: ROUTES.WHATSAPP_COMMAND_CENTER },
   { module: MODULES.EMAIL, title: "Email", subtitle: "Compose, templates, inbox, history and ZeptoMail delivery", href: ROUTES.EMAIL_COMMAND_CENTER },
@@ -337,7 +345,9 @@ export const WORKSPACES = {
   WHATSAPP: "whatsapp",
   EMAIL: "email",
   MEETINGS: "meetings",
-  DIGITAL_SERVICES: "digital-services"
+  DIGITAL_SERVICES: "digital-services",
+  // Compatibility alias: marketing operations live in this single workspace.
+  MARKETING: "digital-services"
 };
 
 export const PORTAL_TYPES = {
@@ -346,5 +356,7 @@ export const PORTAL_TYPES = {
   TRANSPORT_CLIENT: "transport-client",
   VENDOR: "vendor",
   EMPLOYEE: "employee",
+  MARKETING_CLIENT: "marketing-client",
+  MARKETING_VENDOR: "marketing-vendor",
   ACCOUNTS: "accounts"
 };

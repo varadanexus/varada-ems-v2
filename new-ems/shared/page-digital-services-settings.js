@@ -10,8 +10,8 @@ function acctOpt(sel) { return `<option value="">— none —</option>` + state.
 function render() {
   const d = state.defaults || {};
   renderModuleContent(`
-    <style>.ds-field{display:grid;gap:.3rem;margin-bottom:.7rem}.ds-field label{font-weight:700;font-size:.8rem}.ds-field select{width:100%}</style>
-    <section class="card"><h3>Digital Services Settings</h3><p class="muted">Service lines and Central Accounts payables mapping.</p></section>
+    <style>.ds-field{display:grid;gap:.28rem;margin-bottom:.55rem}.ds-field label{font-weight:700;font-size:.76rem}.ds-field select{width:100%;padding:.56rem .68rem}</style>
+    <section class="card"><h3>Digital Marketing & Services Settings</h3><p class="muted">Service lines and Central Accounts payables mapping.</p></section>
     <section class="card" style="margin-top:1rem">
       <h3>Service Lines</h3>
       <div class="table-shell"><table>
@@ -50,7 +50,7 @@ function render() {
 }
 
 async function init() {
-  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.DIGITAL_SERVICES_SETTINGS, pageTitle: "Settings", pageDescription: "Digital Services configuration", workspace: WORKSPACES.DIGITAL_SERVICES });
+  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.DIGITAL_SERVICES_SETTINGS, pageTitle: "Settings", pageDescription: "Digital Marketing & Services configuration", workspace: WORKSPACES.DIGITAL_SERVICES });
   if (!boot) return;
   [state.services, state.accounts, state.defaults] = await Promise.all([
     listServiceTypes().catch(() => []), listCoaAccounts().catch(() => []), getPayablesDefaults().catch(() => null)

@@ -4,7 +4,7 @@
 
 const COMPANY = {
   name: "Varada Nexus Private Limited",
-  tagline: "Digital Services — Web · SEO · Social · PR",
+  tagline: "Digital Marketing & Services — Web · SEO · Social · PR",
   address: "80-17-28, K B Nagar, A V A Road, Rajahmundry, Andhra Pradesh - 533101",
   email: "accounts@varadanexus.com",
   website: "www.varadanexus.com",

@@ -100,7 +100,7 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
           : (workspace === WORKSPACES.WHATSAPP || workspace === WORKSPACES.EMAIL || workspace === WORKSPACES.MEETINGS)
             ? "Communications"
             : workspace === WORKSPACES.DIGITAL_SERVICES
-              ? "Digital Services"
+              ? "Digital Marketing & Services"
         : null;
     if (workspaceLabel) {
       return {
@@ -237,7 +237,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
 
   app.innerHTML = `
     <div class="app-shell ${sidebarless ? "sidebarless" : ""}">
-      ${sidebarless ? "" : renderSidebar(accessibleModules, window.location.pathname, workspace)}
+      ${sidebarless ? "" : renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace)}
       <div class="app-main">
         ${renderNavbar(session?.user?.email || "", primaryRole, { sidebarless })}
         <section class="page-head">
@@ -279,6 +279,17 @@ function bindGlobalActions() {
 
   const saved = localStorage.getItem(KEY) || "expanded";
   applyState(saved);
+
+  const navStateKey = `ems_nav_sections_${sidebar?.dataset.workspace || "admin"}`;
+  const saveExpandedSections = () => {
+    const expanded = Array.from(sidebar?.querySelectorAll("details.nav-section[open]") || [])
+      .map((section) => section.getAttribute("data-nav-section"))
+      .filter(Boolean);
+    localStorage.setItem(navStateKey, JSON.stringify(expanded));
+  };
+  sidebar?.querySelectorAll("details.nav-section").forEach((section) => {
+    section.addEventListener("toggle", saveExpandedSections);
+  });
 
   menuToggle?.addEventListener("click", () => {
     if (isMobile()) {
