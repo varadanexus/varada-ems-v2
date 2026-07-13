@@ -80,8 +80,8 @@ function render(s, m) {
       ${card("Billing", "Invoices, retainers, payments, and posting to accounts.", ROUTES.DIGITAL_SERVICES_BILLING, "BL")}
       ${card("Settings", "Service lines and defaults.", ROUTES.DIGITAL_SERVICES_SETTINGS, "ST")}
       ${card("Marketing Operations", "Client briefs, partner assignment, deliverables, and the query desk.", ROUTES.MARKETING_COMMAND_CENTER, "MK")}
-      ${card("Client Portal", "Client-facing work tracking, approvals, and conversations.", `${ROUTES.MARKETING_PORTAL_LOGIN}?portal=client`, "CP")}
-      ${card("Delivery Team Portal", "White-label vendor workspace presented as Varada Nexus.", `${ROUTES.MARKETING_PORTAL_LOGIN}?portal=vendor`, "DP")}
+      ${card("Client Portal", "Client-facing work tracking, approvals, and conversations. Sign in through the main login.", ROUTES.LOGIN, "CP")}
+      ${card("Delivery Team Portal", "White-label vendor workspace presented as Varada Nexus. Sign in through the main login.", ROUTES.LOGIN, "DP")}
     </section>
 
     <div class="ds-two">

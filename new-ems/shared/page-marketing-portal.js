@@ -4,14 +4,14 @@ import {
   listMarketingDeliverables, listMarketingMessages, listMarketingProjects, listMarketingQueries,
   marketingSetupMessage, signOutMarketingPortal, subscribeToMarketingQueries, updateMarketingAssignment,
   updateMarketingDeliverable, updateMarketingQuery
-} from "./marketing-api.js?v=marketing-2";
+} from "./marketing-api.js?v=main-login-1";
 
 const expectedKind = document.body.dataset.marketingPortal;
 const state = { identity: null, projects: [], assignments: [], deliverables: [], queries: [], activeProjectId: "", activeQueryId: "", messages: [], section: "projects", channel: null };
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 const date = (value) => value ? new Date(value).toLocaleDateString("en-IN") : "—";
 const badge = (value) => `<span class="mkt-badge">${esc(String(value || "").replaceAll("_", " "))}</span>`;
-const loginUrl = `${ROUTES.MARKETING_PORTAL_LOGIN}?portal=${expectedKind}`;
+const loginUrl = ROUTES.LOGIN;
 
 document.querySelector("#app").innerHTML = `<main class="mkt-portal-shell"><section class="mkt-panel" style="max-width:760px;margin:8vh auto">
   <div class="mkt-brand">VARADA NEXUS</div><h1>${expectedKind === "client" ? "Client Workspace" : "Delivery Team Workspace"}</h1>

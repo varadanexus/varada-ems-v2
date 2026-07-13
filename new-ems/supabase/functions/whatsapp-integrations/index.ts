@@ -181,6 +181,60 @@ function defaultTemplateRegistry() {
       contentSid: env("TRANSPORT_TWILIO_DOCUMENT_CONTENT_SID"),
       variables: ["recipientName", "docType", "docNo", "amount"],
       defaultBody: "Hello {{1}}, your {{2}} {{3}} for {{4}} from Varada Nexus is ready. It has also been emailed to you."
+    },
+    {
+      alias: "marketing_query_raised_v1", title: "Marketing Query Raised", module: "digital-marketing",
+      contentSid: env("MARKETING_QUERY_RAISED_CONTENT_SID", "HX59c2830d625ce65da5c33cc318ff0332"),
+      variables: ["recipientName", "senderName", "queryNumber", "projectName", "subject"],
+      defaultBody: "Hello {{1}}, {{2}} raised query {{3}} for {{4}}: {{5}}. Sign in to reply."
+    },
+    {
+      alias: "marketing_query_reply_v1", title: "Marketing Query Reply", module: "digital-marketing",
+      contentSid: env("MARKETING_QUERY_REPLY_CONTENT_SID", "HX34b24b6d3f1b85513626fc97b3c6513e"),
+      variables: ["recipientName", "senderName", "queryNumber", "projectName"],
+      defaultBody: "Hello {{1}}, {{2}} replied to query {{3}} for {{4}}. Sign in to view and reply."
+    },
+    {
+      alias: "marketing_client_invoice_v1", title: "Client Invoice", module: "digital-marketing",
+      contentSid: env("MARKETING_CLIENT_INVOICE_CONTENT_SID", "HX9db384b98b966246695d0e594883a735"),
+      variables: ["clientName", "invoiceNumber", "projectName", "amount", "dueDate"],
+      defaultBody: "Hello {{1}}, invoice {{2}} for project {{3}} is available for {{4}}. Due: {{5}}."
+    },
+    {
+      alias: "marketing_vendor_invoice_status_v1", title: "Vendor Invoice Status", module: "digital-marketing",
+      contentSid: env("MARKETING_VENDOR_INVOICE_STATUS_CONTENT_SID", "HX86bd500a856e4db0725b6a6c43b762bd"),
+      variables: ["vendorName", "invoiceNumber", "projectName", "amount", "status"],
+      defaultBody: "Hello {{1}}, invoice {{2}} for {{3}}, amounting to {{4}}, is now {{5}}."
+    },
+    {
+      alias: "marketing_client_payment_received_v1", title: "Client Payment Received", module: "digital-marketing",
+      contentSid: env("MARKETING_CLIENT_PAYMENT_RECEIVED_CONTENT_SID", "HX954c6d5aeb162f088fbb5ae6ed80c3ca"),
+      variables: ["clientName", "amount", "invoiceNumber", "paymentDate", "reference"],
+      defaultBody: "Hello {{1}}, we received {{2}} against invoice {{3}} on {{4}}. Reference: {{5}}."
+    },
+    {
+      alias: "marketing_vendor_payment_sent_v1", title: "Vendor Payment Sent", module: "digital-marketing",
+      contentSid: env("MARKETING_VENDOR_PAYMENT_SENT_CONTENT_SID", "HXe71616460324c57a886a3c87256a1fbb"),
+      variables: ["vendorName", "amount", "invoiceNumber", "paymentDate", "reference"],
+      defaultBody: "Hello {{1}}, payment of {{2}} for invoice {{3}} was sent on {{4}}. Reference: {{5}}."
+    },
+    {
+      alias: "marketing_client_welcome_v1", title: "Client Welcome", module: "digital-marketing",
+      contentSid: env("MARKETING_CLIENT_WELCOME_CONTENT_SID", "HX7b36404bcbaf69fe96f1aa73b24c4226"),
+      variables: ["clientName", "companyName"],
+      defaultBody: "Welcome {{1}} from {{2}}. Your Varada Nexus client portal is ready."
+    },
+    {
+      alias: "marketing_vendor_onboarding_v1", title: "Vendor Onboarding", module: "digital-marketing",
+      contentSid: env("MARKETING_VENDOR_ONBOARDING_CONTENT_SID", "HX17a43b16b38927c402ffff1cb191b7ee"),
+      variables: ["vendorName", "vendorCode"],
+      defaultBody: "Welcome {{1}}. Your vendor code is {{2}} and your Varada Nexus vendor portal is ready."
+    },
+    {
+      alias: "marketing_vendor_project_assigned_v1", title: "Vendor Project Assigned", module: "digital-marketing",
+      contentSid: env("MARKETING_VENDOR_PROJECT_ASSIGNED_CONTENT_SID", "HX156f933dafd2b68d8dea04296ce0cdfb"),
+      variables: ["vendorName", "projectCode", "projectName", "service", "targetDate"],
+      defaultBody: "Hello {{1}}, project {{2}} — {{3}} has been assigned to you. Service: {{4}}. Target: {{5}}."
     }
   ].filter((item) => item.contentSid || item.defaultBody);
 }
@@ -674,6 +728,186 @@ async function sendTwilioMessage({ toPhone, message = "", templateAlias = "", va
   return payload;
 }
 
+function marketingMoney(value: any) {
+  return `INR ${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function marketingDate(value: any) {
+  if (!value) return "Not specified";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
+}
+
+async function marketingActor(req: Request, admin: any, body: any) {
+  const portalSessionToken = String(body?.portalSessionToken || "").trim();
+  if (portalSessionToken) {
+    const { data, error } = await admin.rpc("marketing_portal_resolve", { p_session_token: portalSessionToken });
+    if (error) throw error;
+    const actor = Array.isArray(data) ? data[0] : data;
+    if (!actor?.profile_id || !["client", "vendor"].includes(actor.actor_kind)) throw new Error("Valid marketing portal session required");
+    return { kind: actor.actor_kind, profileId: actor.profile_id, portalUserId: actor.portal_user_id, caller: null };
+  }
+  const caller = await requireWhatsAppCaller(req, admin);
+  return { kind: "staff", profileId: null, portalUserId: null, caller };
+}
+
+async function one(admin: any, table: string, id: string, columns = "*") {
+  const { data, error } = await admin.from(table).select(columns).eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`${table} record was not found`);
+  return data;
+}
+
+async function recordAutomatedWhatsApp(admin: any, details: any, twilioPayload: any) {
+  const template = await templateByAlias(admin, details.templateAlias);
+  const storedMessage = renderTemplateBody(template, details.variables || {}) || `[Template] ${details.templateAlias}`;
+  const chat = await ensureChat(admin, { phone: details.phone, name: details.name });
+  const nowIso = new Date().toISOString();
+  const { error: messageError } = await admin.from("whatsapp_messages").insert({
+    chat_id: chat.id, phone: chat.phone, name: details.name || chat.name, direction: "outbound",
+    message: storedMessage, message_sid: twilioPayload.sid || null, status: twilioPayload.status || "queued",
+    media_url: null, template_alias: details.templateAlias, source_module: "digital-marketing",
+    source_event: details.eventType, rendered_payload: details.variables || {}
+  });
+  if (messageError) throw messageError;
+  await admin.from("whatsapp_chats").update({
+    name: details.name || chat.name, last_message: storedMessage, last_message_at: nowIso
+  }).eq("id", chat.id);
+  await admin.from("whatsapp_logs").insert({
+    phone: chat.phone, template: details.templateAlias, template_alias: details.templateAlias,
+    status: twilioPayload.status || "queued", message_sid: twilioPayload.sid || null,
+    message_text: storedMessage, source_module: "digital-marketing", source_event: details.eventType,
+    rendered_payload: details.variables || {}
+  });
+  return chat;
+}
+
+async function resolveMarketingQueryNotification(admin: any, actor: any, eventType: string, queryId: string) {
+  const query = await one(admin, "marketing_queries", queryId);
+  const project = await one(admin, "marketing_projects", query.project_id);
+  const client = await one(admin, "marketing_clients", project.client_id);
+  const vendor = query.vendor_id ? await one(admin, "marketing_vendors", query.vendor_id) : null;
+
+  if (actor.kind === "client" && actor.profileId !== project.client_id) throw new Error("Not authorized for this query");
+  if (actor.kind === "vendor") {
+    const { data: assignment } = await admin.from("marketing_project_assignments").select("id")
+      .eq("project_id", project.id).eq("vendor_id", actor.profileId).maybeSingle();
+    if (!assignment?.id || (query.vendor_id && query.vendor_id !== actor.profileId)) throw new Error("Not authorized for this query");
+  }
+
+  let target: any = null;
+  let senderName = "Varada Nexus Support Team";
+  if (actor.kind === "vendor") {
+    senderName = query.audience === "client" ? "Varada Nexus Delivery Team" : (vendor?.legal_name || "Delivery Partner");
+    target = query.audience === "client"
+      ? { phone: client.phone, name: client.contact_name || client.company_name }
+      : { phone: env("MARKETING_WHATSAPP_COMPANY_QUERY_TO"), name: "Varada Nexus Team" };
+  } else if (actor.kind === "client") {
+    senderName = "Varada Nexus Client Desk";
+    target = vendor
+      ? { phone: vendor.phone, name: vendor.contact_name || vendor.legal_name }
+      : { phone: env("MARKETING_WHATSAPP_COMPANY_QUERY_TO"), name: "Varada Nexus Team" };
+  } else {
+    target = vendor
+      ? { phone: vendor.phone, name: vendor.contact_name || vendor.legal_name }
+      : { phone: client.phone, name: client.contact_name || client.company_name };
+  }
+
+  if (!target?.phone) return { skipped: true, reason: target?.name === "Varada Nexus Team"
+    ? "Company query WhatsApp recipient is not configured."
+    : "The recipient has no phone number." };
+  const common = {
+    phone: target.phone, name: target.name, eventType,
+    templateAlias: eventType === "query_raised" ? "marketing_query_raised_v1" : "marketing_query_reply_v1"
+  };
+  return eventType === "query_raised"
+    ? { ...common, variables: { "1": target.name, "2": senderName, "3": query.query_number, "4": project.title, "5": query.subject } }
+    : { ...common, variables: { "1": target.name, "2": senderName, "3": query.query_number, "4": project.title } };
+}
+
+async function resolveMarketingBusinessNotification(admin: any, eventType: string, entityId: string) {
+  if (eventType === "client_welcome") {
+    const client = await one(admin, "marketing_clients", entityId);
+    return { phone: client.phone, name: client.contact_name || client.company_name, eventType,
+      templateAlias: "marketing_client_welcome_v1", variables: { "1": client.contact_name || client.company_name, "2": client.company_name } };
+  }
+  if (eventType === "vendor_onboarding") {
+    const vendor = await one(admin, "marketing_vendors", entityId);
+    return { phone: vendor.phone, name: vendor.contact_name || vendor.legal_name, eventType,
+      templateAlias: "marketing_vendor_onboarding_v1", variables: { "1": vendor.contact_name || vendor.legal_name, "2": vendor.vendor_code } };
+  }
+  if (eventType === "vendor_project_assigned") {
+    const assignment = await one(admin, "marketing_project_assignments", entityId);
+    const vendor = await one(admin, "marketing_vendors", assignment.vendor_id);
+    const project = await one(admin, "marketing_projects", assignment.project_id);
+    return { phone: vendor.phone, name: vendor.contact_name || vendor.legal_name, eventType,
+      templateAlias: "marketing_vendor_project_assigned_v1", variables: { "1": vendor.contact_name || vendor.legal_name,
+        "2": project.project_code, "3": project.title, "4": project.service_type, "5": marketingDate(project.target_date) } };
+  }
+  if (eventType === "vendor_invoice_status") {
+    const invoice = await one(admin, "marketing_vendor_invoices", entityId);
+    const vendor = await one(admin, "marketing_vendors", invoice.vendor_id);
+    const project = await one(admin, "marketing_projects", invoice.project_id);
+    return { phone: vendor.phone, name: vendor.contact_name || vendor.legal_name, eventType,
+      templateAlias: "marketing_vendor_invoice_status_v1", variables: { "1": vendor.contact_name || vendor.legal_name,
+        "2": invoice.invoice_number, "3": project.title, "4": marketingMoney(invoice.total_amount), "5": String(invoice.status || "updated").replaceAll("_", " ") } };
+  }
+  if (eventType === "client_invoice") {
+    const invoice = await one(admin, "ds_invoices", entityId);
+    const client = await one(admin, "ds_clients", invoice.client_id);
+    const project = invoice.project_id ? await one(admin, "ds_projects", invoice.project_id) : null;
+    return { phone: client.whatsapp || client.phone, name: client.name || client.company_name, eventType,
+      templateAlias: "marketing_client_invoice_v1", variables: { "1": client.name || client.company_name, "2": invoice.invoice_number,
+        "3": project?.title || "Digital Marketing & Services", "4": marketingMoney(invoice.total_amount), "5": marketingDate(invoice.due_date) } };
+  }
+  if (eventType === "client_payment_received") {
+    const payment = await one(admin, "ds_payments", entityId);
+    const invoice = await one(admin, "ds_invoices", payment.invoice_id);
+    const client = await one(admin, "ds_clients", payment.client_id || invoice.client_id);
+    return { phone: client.whatsapp || client.phone, name: client.name || client.company_name, eventType,
+      templateAlias: "marketing_client_payment_received_v1", variables: { "1": client.name || client.company_name,
+        "2": marketingMoney(payment.amount), "3": invoice.invoice_number, "4": marketingDate(payment.paid_at || payment.created_at), "5": payment.reference || "Not provided" } };
+  }
+  if (eventType === "vendor_payment_sent") {
+    const settlement = await one(admin, "vendor_settlements", entityId);
+    const bill = await one(admin, "purchase_bills", settlement.purchase_bill_id);
+    const accountingVendor = await one(admin, "accounting_vendors", bill.vendor_id);
+    const { data: cost } = await admin.from("ds_project_costs").select("marketing_vendor_id,marketing_vendor_invoice_id")
+      .eq("payable_bill_id", bill.id).limit(1).maybeSingle();
+    const vendor = cost?.marketing_vendor_id ? await one(admin, "marketing_vendors", cost.marketing_vendor_id) : null;
+    const vendorInvoice = cost?.marketing_vendor_invoice_id ? await one(admin, "marketing_vendor_invoices", cost.marketing_vendor_invoice_id) : null;
+    const voucher = settlement.payment_voucher_id ? await one(admin, "accounting_vouchers", settlement.payment_voucher_id) : null;
+    return { phone: vendor?.phone || accountingVendor.phone, name: vendor?.contact_name || vendor?.legal_name || accountingVendor.legal_name, eventType,
+      templateAlias: "marketing_vendor_payment_sent_v1", variables: { "1": vendor?.contact_name || vendor?.legal_name || accountingVendor.legal_name,
+        "2": marketingMoney(settlement.amount), "3": vendorInvoice?.invoice_number || bill.bill_no, "4": marketingDate(settlement.settlement_date),
+        "5": voucher?.reference_no || voucher?.voucher_no || "Not provided" } };
+  }
+  throw new Error("Unsupported marketing WhatsApp event");
+}
+
+async function notifyMarketingEvent(req: Request, body: any) {
+  const admin = adminClient();
+  const eventType = String(body?.eventType || "").trim();
+  const entityId = String(body?.entityId || "").trim();
+  if (!entityId) throw new Error("Marketing notification entity is required");
+  const actor = await marketingActor(req, admin, body);
+  const queryEvents = ["query_raised", "query_reply"];
+  if (actor.kind !== "staff" && !queryEvents.includes(eventType)) throw new Error("Staff authorization required for this notification");
+  const details = queryEvents.includes(eventType)
+    ? await resolveMarketingQueryNotification(admin, actor, eventType, entityId)
+    : await resolveMarketingBusinessNotification(admin, eventType, entityId);
+  if (details.skipped) return json({ ok: true, sent: false, skipped: true, reason: details.reason });
+  if (!details.phone) return json({ ok: true, sent: false, skipped: true, reason: "The recipient has no phone number." });
+  const twilioPayload = await sendTwilioMessage({ toPhone: details.phone, templateAlias: details.templateAlias, variables: details.variables });
+  const chat = await recordAutomatedWhatsApp(admin, details, twilioPayload);
+  await admin.from("audit_logs").insert({
+    event_type: "marketing_whatsapp_notification_sent", module_code: "digital-services",
+    actor_app_user_id: actor.caller?.id || null, entity_type: eventType, entity_id: null,
+    details: { source_entity_id: entityId, chat_id: chat.id, message_sid: twilioPayload.sid || null, template_alias: details.templateAlias }
+  });
+  return json({ ok: true, sent: true, eventType, messageSid: twilioPayload.sid || null });
+}
+
 async function sendMessage(req: Request, body: any) {
   const admin = adminClient();
   const caller = await requireWhatsAppCaller(req, admin);
@@ -957,6 +1191,7 @@ Deno.serve(async (req) => {
    if (action === "delete_template") return await deleteTemplate(req, body);
    if (action === "list_history") return await listHistory(req);
    if (action === "send_message") return await sendMessage(req, body);
+   if (action === "notify_marketing_event") return await notifyMarketingEvent(req, body);
    if (action === "simulate_inbound_message") {
      const admin = adminClient();
      const caller = await requireWhatsAppCaller(req, admin);

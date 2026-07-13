@@ -2,6 +2,7 @@ import { MODULES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { sendModuleEmail } from "./email-api.js";
 import { dispatchNotification } from "./notification-api.js";
+import { notifyMarketingWhatsAppSafely } from "./marketing-whatsapp-api.js";
 
 function db() { return getSupabaseClient(); }
 function arr(v) { return Array.isArray(v) ? v : []; }
@@ -239,6 +240,7 @@ export async function emailInvoiceToClient(invoice) {
   const textBody = `Dear ${client.company_name || client.name},\n\nPlease find attached invoice ${invoice.invoice_number} for ${money(invoice.total_amount)}${invoice.due_date ? `, due ${invoice.due_date}` : ""}.\n\nThank you for your business.\nVarada Nexus Private Limited`;
   await sendModuleEmail({ to: [{ address: to, name: client.company_name || client.name }], subject: `Invoice ${invoice.invoice_number} — Varada Nexus Private Limited`, htmlBody: html, bodyHtml: html, textBody, attachments, sourceModule: "digital-services", sourceEvent: "invoice_email" });
   if (invoice.status === "draft") await updateInvoiceStatus(invoice.id, "sent");
+  await notifyMarketingWhatsAppSafely("client_invoice", invoice.id);
   notifyEvent({ title: `Invoice ${invoice.invoice_number} emailed`, message: `Invoice sent to ${to} (${money(invoice.total_amount)}).` });
   return true;
 }
@@ -275,12 +277,13 @@ export async function deleteSubscription(id) {
   return run(db().rpc("ds_delete_subscription", { p_subscription_id: id }));
 }
 export async function recordPayment({ invoiceId, clientId, amount, method, reference, notes }) {
-  await run(db().from("ds_payments").insert({ invoice_id: invoiceId, client_id: clientId || null, amount: Number(amount) || 0, method: method || null, reference: reference || null, notes: notes || null }));
+  const payment = await run(db().from("ds_payments").insert({ invoice_id: invoiceId, client_id: clientId || null, amount: Number(amount) || 0, method: method || null, reference: reference || null, notes: notes || null }).select().single());
   const inv = await run(db().from("ds_invoices").select("total_amount, amount_paid, amount_credited").eq("id", invoiceId).single());
   const paid = Number(inv.amount_paid || 0) + (Number(amount) || 0);
   const settled = paid + Number(inv.amount_credited || 0);
   const status = settled >= Number(inv.total_amount || 0) && Number(inv.total_amount) > 0 ? "paid" : (settled > 0 ? "partially_paid" : "sent");
   const res = await run(db().from("ds_invoices").update({ amount_paid: paid, status, updated_at: new Date().toISOString() }).eq("id", invoiceId));
+  await notifyMarketingWhatsAppSafely("client_payment_received", payment.id);
   notifyEvent({ title: "Payment received", message: `${money(amount)} recorded — invoice is now ${status}.`, severity: "success" });
   return res;
 }

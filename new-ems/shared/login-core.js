@@ -39,6 +39,12 @@ const EXTERNAL_SESSION_KEY = "ems_external_portal_session";
 function storeExternalSession(s) {
   try { localStorage.setItem(EXTERNAL_SESSION_KEY, JSON.stringify(s)); } catch {}
 }
+function getStoredExternalSession() {
+  try { return JSON.parse(localStorage.getItem(EXTERNAL_SESSION_KEY) || "null"); } catch { return null; }
+}
+function clearStoredExternalSession() {
+  try { localStorage.removeItem(EXTERNAL_SESSION_KEY); } catch {}
+}
 
 // Look up which auth systems recognise this identifier. Returns rows with
 // { login_type, auth_provider, status, is_locked, label, masked_email, masked_phone }.
@@ -154,12 +160,27 @@ async function handleExternalLogin(username, password) {
     displayName: row.display_name,
     userType: row.user_type
   });
-  const dashboardRoute = ROUTES.EXTERNAL_PORTAL_DASHBOARD ?? null;
+  const dashboardRoute = await resolveExternalDashboard(row.session_token);
   if (dashboardRoute) {
     window.location.assign(dashboardRoute);
     return { status: "redirecting" };
   }
   return { status: "external_no_dashboard", displayName: row.display_name, userType: row.user_type };
+}
+
+async function resolveExternalDashboard(sessionToken) {
+  const { data, error } = await getSupabaseClient().rpc("external_portal_list_my_access", {
+    p_session_token: sessionToken
+  });
+  if (error) throw error;
+  const access = Array.isArray(data) ? data : [];
+  if (access.some((item) => item.source_module === "digital-services" && item.access_scope === "marketing_client_portal")) {
+    return ROUTES.MARKETING_CLIENT_PORTAL;
+  }
+  if (access.some((item) => item.source_module === "digital-services" && item.access_scope === "marketing_vendor_portal")) {
+    return ROUTES.MARKETING_VENDOR_PORTAL;
+  }
+  return ROUTES.EXTERNAL_PORTAL_DASHBOARD ?? null;
 }
 
 // Silent pre-check for an existing session; redirects if one is valid.
@@ -181,6 +202,14 @@ export async function checkExistingSession() {
       if (redirectToTransportAccess(access)) return true;
     } catch {}
     clearTransportSession();
+  }
+  const externalStored = getStoredExternalSession();
+  if (externalStored?.sessionToken) {
+    try {
+      const route = await resolveExternalDashboard(externalStored.sessionToken);
+      if (route) { window.location.assign(route); return true; }
+    } catch {}
+    clearStoredExternalSession();
   }
   const localStaff = getLocalSession();
   if (localStaff?.authUserId) {

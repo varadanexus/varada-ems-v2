@@ -9,6 +9,7 @@ import {
 } from "./digital-services-api.js";
 import { generateInvoicePdf, openPdfModal } from "./ds-invoice-pdf.js";
 import { sendWhatsAppWorkspaceMessage } from "./whatsapp-api.js";
+import { listMarketingVendorInvoiceSubmissions, reviewMarketingVendorInvoice } from "./marketing-api.js?v=marketing-whatsapp-1";
 import { showToast } from "./utils.js";
 
 const TYPES = [["one_off", "One-off"], ["milestone", "Milestone"], ["retainer", "Retainer"], ["subscription", "Subscription"]];
@@ -17,7 +18,7 @@ const requestedView = new URLSearchParams(location.search).get("view") || "invoi
 const activeView = BILLING_VIEWS.has(requestedView) ? requestedView : "invoices";
 const viewTitle = { invoices: "Invoices", subscriptions: "Retainers & Subscriptions", "credit-notes": "Credit Notes", "client-payments": "Client Payments", "vendor-payments": "Vendor Payments" }[activeView];
 const state = {
-  invoices: [], clients: [], projects: [], services: [], subscriptions: [], creditNotes: [], costs: [], canDelete: false,
+  invoices: [], clients: [], projects: [], services: [], subscriptions: [], creditNotes: [], costs: [], vendorInvoices: [], canDelete: false,
   lines: [{ description: "", quantity: 1, unitPrice: 0, taxRate: 18 }],
   form: { clientId: "", projectId: "", invoiceType: "one_off", dueDate: "" },
   editingInvoiceId: null, editingSub: null,
@@ -160,6 +161,11 @@ function render() {
           </td>
         </tr>`).join("") || '<tr><td colspan="7">No credit notes yet.</td></tr>'}</tbody>
       </table></div>
+    </section>
+
+    <section class="card" id="billingVendorSubmissions" style="margin-top:1rem;${visible("vendor-payments")}">
+      <div style="display:flex;justify-content:space-between;gap:1rem;align-items:start;flex-wrap:wrap"><div><h3>Vendor Portal Invoice Submissions</h3><p class="muted">Review uploaded vendor bills before they enter project costs and Central Accounts Payables.</p></div><span class="meta-pill">${state.vendorInvoices.length} submitted</span></div>
+      <div class="table-shell"><table><thead><tr><th>Invoice</th><th>Vendor</th><th>Project</th><th>Date</th><th>Total</th><th>Status</th><th>Bill</th><th>Review</th></tr></thead><tbody>${state.vendorInvoices.map((invoice) => `<tr><td><strong>${esc(invoice.invoice_number)}</strong><br><small>${esc(invoice.description || "Vendor services")}</small></td><td>${esc(invoice.marketing_vendors?.legal_name || "—")}<br><small>${esc(invoice.marketing_vendors?.gstin || "")}</small></td><td>${esc(invoice.marketing_projects?.title || "—")}</td><td>${esc(invoice.invoice_date)}</td><td>${money(invoice.total_amount)}</td><td><span class="meta-pill">${esc(invoice.status)}</span>${invoice.review_note ? `<br><small>${esc(invoice.review_note)}</small>` : ""}</td><td>${invoice.web_view_link ? `<a class="btn btn-ghost" href="${esc(invoice.web_view_link)}" target="_blank" rel="noreferrer">Open bill</a>` : "—"}</td><td style="white-space:nowrap">${invoice.status === "submitted" ? `<button class="btn btn-ghost ds-vendor-invoice-review" data-id="${esc(invoice.id)}" data-status="under_review" type="button">Review</button>` : ""}${["submitted","under_review"].includes(invoice.status) ? `<button class="btn ds-vendor-invoice-review" data-id="${esc(invoice.id)}" data-status="approved" type="button">Approve</button><button class="btn btn-ghost ds-vendor-invoice-review" data-id="${esc(invoice.id)}" data-status="rejected" type="button">Reject</button>` : ""}</td></tr>`).join("") || '<tr><td colspan="8">No vendor invoices have been submitted through the portal.</td></tr>'}</tbody></table></div>
     </section>
 
     <section class="card" id="billingVendorPayments" style="margin-top:1rem;${visible("vendor-payments")}">
@@ -327,6 +333,20 @@ function bind() {
     try { await postCostToPayables(button.dataset.id); showToast("Vendor bill sent to Central Accounts Payables.", TOAST_TYPES.SUCCESS); await reload(); }
     catch (error) { showToast(error?.message || "Could not send vendor bill to Payables.", TOAST_TYPES.ERROR); button.disabled = false; }
   }));
+  document.querySelectorAll(".ds-vendor-invoice-review").forEach((button) => button.addEventListener("click", async () => {
+    const status = button.dataset.status;
+    const note = status === "rejected" ? window.prompt("Reason for rejecting this vendor invoice:", "") : "";
+    if (status === "rejected" && note === null) return;
+    button.disabled = true;
+    try {
+      await reviewMarketingVendorInvoice(button.dataset.id, status, note || "");
+      showToast(status === "approved" ? "Vendor invoice approved and added to project costs." : `Vendor invoice marked ${status.replaceAll("_", " ")}.`, TOAST_TYPES.SUCCESS);
+      await reload();
+    } catch (error) {
+      showToast(error?.message || "Vendor invoice review failed.", TOAST_TYPES.ERROR);
+      button.disabled = false;
+    }
+  }));
   document.querySelector("#dsGenDue").addEventListener("click", async (e) => {
     e.target.disabled = true;
     try { const n = await generateDueSubscriptionInvoices(); showToast(n > 0 ? `${n} retainer invoice(s) generated.` : "No retainers are due.", n > 0 ? TOAST_TYPES.SUCCESS : TOAST_TYPES.INFO); await reload(); }
@@ -377,8 +397,9 @@ function bind() {
 }
 
 async function reload() {
-  [state.invoices, state.subscriptions, state.creditNotes, state.costs] = await Promise.all([
-    listInvoices().catch(() => []), listSubscriptions().catch(() => []), listCreditNotes().catch(() => []), listProjectCosts().catch(() => [])
+  [state.invoices, state.subscriptions, state.creditNotes, state.costs, state.vendorInvoices] = await Promise.all([
+    listInvoices().catch(() => []), listSubscriptions().catch(() => []), listCreditNotes().catch(() => []), listProjectCosts().catch(() => []),
+    listMarketingVendorInvoiceSubmissions().catch(() => [])
   ]);
   render();
 }

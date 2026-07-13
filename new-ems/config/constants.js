@@ -74,7 +74,8 @@ export const ROUTES = {
   MARKETING_COMMAND_CENTER: "/new-ems/modules/marketing-command-center/index.html",
   MARKETING_CLIENT_PORTAL: "/new-ems/modules/marketing-client-portal/index.html",
   MARKETING_VENDOR_PORTAL: "/new-ems/modules/marketing-vendor-portal/index.html",
-  MARKETING_PORTAL_LOGIN: "/new-ems/modules/marketing-portal-login/index.html",
+  // Compatibility alias: Digital Marketing & Services portals use the main login only.
+  MARKETING_PORTAL_LOGIN: "/login.html",
   NOTIFICATIONS_CENTER: "/new-ems/modules/notifications-center/index.html",
   USERS: "/new-ems/modules/users/index.html",
   ROLES: "/new-ems/modules/roles/index.html",

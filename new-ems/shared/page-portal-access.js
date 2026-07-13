@@ -4,6 +4,7 @@ import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { hasAnyRolePermission } from "./permissions.js";
 import { PERMISSIONS } from "../config/roles.js";
 import { notifyPortalAccessCreated } from "./transport-integrations-api.js";
+import { notifyMarketingWhatsApp } from "./marketing-whatsapp-api.js";
 import { showToast } from "./utils.js";
 
 const client = getSupabaseClient();
@@ -30,8 +31,8 @@ const DIVISION_ENTITY_MAP = {
   "digital-services": {
     label: "Digital Marketing & Services",
     entities: [
-      { key: "client", label: "Client", table: "marketing_clients", nameCol: "company_name", system: "external", userType: "partner", sourceModule: "digital-services", accessScope: "marketing_client_portal", portalType: "Marketing Client Portal", portalLoginUrl: `${ROUTES.MARKETING_PORTAL_LOGIN}?portal=client` },
-      { key: "vendor", label: "Vendor", table: "marketing_vendors", nameCol: "legal_name", system: "external", userType: "vendor", sourceModule: "digital-services", accessScope: "marketing_vendor_portal", portalType: "Marketing Delivery Team Portal", portalLoginUrl: `${ROUTES.MARKETING_PORTAL_LOGIN}?portal=vendor` }
+      { key: "client", label: "Client", table: "marketing_clients", nameCol: "company_name", system: "external", userType: "partner", sourceModule: "digital-services", accessScope: "marketing_client_portal", portalType: "Marketing Client Portal", portalLoginUrl: ROUTES.LOGIN },
+      { key: "vendor", label: "Vendor", table: "marketing_vendors", nameCol: "legal_name", system: "external", userType: "vendor", sourceModule: "digital-services", accessScope: "marketing_vendor_portal", portalType: "Marketing Delivery Team Portal", portalLoginUrl: ROUTES.LOGIN }
     ]
   }
 };
@@ -793,7 +794,12 @@ async function handleWizardSubmit() {
     render();
     showToast("Portal login created.", TOAST_TYPES.SUCCESS);
     try {
-      const notification = await notifyPortalAccessCreated({
+      const marketingEvent = s.table === "marketing_clients"
+        ? "client_welcome"
+        : (s.table === "marketing_vendors" ? "vendor_onboarding" : "");
+      const notification = marketingEvent
+        ? await notifyMarketingWhatsApp(marketingEvent, s.id)
+        : await notifyPortalAccessCreated({
         division: PAGE_STATE.wizard.division,
         entityType: PAGE_STATE.wizard.entityType,
         portalSystem: s.system,
@@ -809,10 +815,11 @@ async function handleWizardSubmit() {
         linkedEntityId: s.id,
         linkedEntityName: s.label
       });
-      if (notification?.whatsapp?.sent) {
+      const whatsapp = marketingEvent ? notification : notification?.whatsapp;
+      if (whatsapp?.sent) {
         showToast("Portal access WhatsApp sent.", TOAST_TYPES.INFO);
-      } else if (notification?.whatsapp?.reason) {
-        showToast(`Portal access WhatsApp skipped: ${notification.whatsapp.reason}`, TOAST_TYPES.WARNING);
+      } else if (whatsapp?.reason) {
+        showToast(`Portal access WhatsApp skipped: ${whatsapp.reason}`, TOAST_TYPES.WARNING);
       }
     } catch (notifyError) {
       showToast(`Portal login created, but WhatsApp failed: ${notifyError?.message || "Unknown error"}`, TOAST_TYPES.WARNING);

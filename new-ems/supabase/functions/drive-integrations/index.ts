@@ -9,6 +9,7 @@
 // Required secrets (supabase secrets set ...):
 //   GOOGLE_SERVICE_ACCOUNT_JSON  full service-account key JSON (one line)
 //   GDRIVE_ROOT_FOLDER_ID        id of the shared-drive folder to store under
+//   GDRIVE_MARKETING_VENDOR_FOLDER_ID  optional Digital Marketing root folder
 // Provided automatically by the platform:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 //
@@ -355,8 +356,10 @@ async function handleHealth() {
   const token = await getAccessToken();
   const map = folderMap();
   const rootId = env("GDRIVE_ROOT_FOLDER_ID");
+  const marketingVendorRoot = env("GDRIVE_MARKETING_VENDOR_FOLDER_ID", "1FaMwA7oEKpBQEBEoFjnZTAXgZnGn5Yb5");
   const targets: Record<string, string> = { ...map };
   if (rootId) targets.ROOT = rootId;
+  if (marketingVendorRoot) targets.MARKETING_VENDOR_ROOT = marketingVendorRoot;
   if (!Object.keys(targets).length) {
     throw new Error("No folders configured: set GDRIVE_FOLDER_MAP and/or GDRIVE_ROOT_FOLDER_ID");
   }
@@ -371,6 +374,15 @@ async function handleHealth() {
     } catch (e) {
       folders[key] = { id, ok: false, error: String(e?.message || e) };
     }
+  }
+  if (folders.MARKETING_VENDOR_ROOT?.ok) {
+    const invoiceFolderId = await ensureFolderPath(token, marketingVendorRoot, ["Vendor", "Invoices"]);
+    folders.MARKETING_VENDOR_INVOICES = {
+      id: invoiceFolderId,
+      name: "Invoices",
+      ok: true,
+      path: "Vendor / Invoices"
+    };
   }
   return { ok: true, subfolders: useDateSubfolders() ? "date" : "none", folders };
 }
@@ -547,6 +559,123 @@ async function handleUploadTripDocument(payload: any) {
   };
 }
 
+// Digital Marketing vendor invoice upload. The external portal does not use a
+// Supabase Auth user JWT, so authorization is performed with its short-lived,
+// revocable portal session token and a database-owned project assignment check.
+async function handleUploadMarketingVendorInvoice(payload: any) {
+  const sessionToken = String(payload.sessionToken || "").trim();
+  const projectId = String(payload.projectId || "").trim();
+  const invoiceNumber = String(payload.invoiceNumber || "").trim();
+  const invoiceDate = String(payload.invoiceDate || "").trim();
+  const dueDate = String(payload.dueDate || "").trim() || null;
+  const description = String(payload.description || "").trim() || null;
+  const mimeType = String(payload.mimeType || "application/pdf").toLowerCase();
+  const originalName = String(payload.fileName || "vendor-invoice.pdf").trim();
+  const taxableAmount = Number(payload.taxableAmount || 0);
+  const gstRate = Number(payload.gstRate || 0);
+
+  if (!sessionToken) throw new Error("Missing vendor portal session");
+  if (!projectId) throw new Error("Select an assigned project");
+  if (!invoiceNumber) throw new Error("Invoice number is required");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate) || Number.isNaN(Date.parse(`${invoiceDate}T00:00:00Z`))) {
+    throw new Error("A valid invoice date is required");
+  }
+  if (dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || Number.isNaN(Date.parse(`${dueDate}T00:00:00Z`)))) {
+    throw new Error("Due date is invalid");
+  }
+  if (!Number.isFinite(taxableAmount) || taxableAmount <= 0) throw new Error("Taxable amount must be greater than zero");
+  if (!Number.isFinite(gstRate) || gstRate < 0 || gstRate > 100) throw new Error("GST rate must be between 0 and 100");
+  if (!payload.base64) throw new Error("Bill file content is required");
+  if (!["application/pdf", "image/jpeg", "image/png"].includes(mimeType)) {
+    throw new Error("Upload a PDF, JPG, or PNG bill");
+  }
+
+  const bytes = base64ToBytes(payload.base64);
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw new Error("Bill file must be 10 MB or smaller");
+
+  const db = adminClient();
+  const { data: context, error: contextError } = await db.rpc("marketing_vendor_upload_context", {
+    p_session_token: sessionToken,
+    p_project_id: projectId
+  });
+  if (contextError) throw new Error(contextError.message);
+  if (!context?.vendorId || !context?.projectId) throw new Error("Vendor project access could not be verified");
+
+  const { data: duplicate, error: duplicateError } = await db
+    .from("marketing_vendor_invoices")
+    .select("id")
+    .eq("vendor_id", context.vendorId)
+    .eq("invoice_number", invoiceNumber)
+    .limit(1);
+  if (duplicateError) throw new Error(duplicateError.message);
+  if (duplicate?.length) throw new Error("This invoice number has already been submitted");
+
+  const configuredRoot = env("GDRIVE_MARKETING_VENDOR_FOLDER_ID", "1FaMwA7oEKpBQEBEoFjnZTAXgZnGn5Yb5");
+  const token = await getAccessToken();
+  const segments = ["Vendor", "Invoices", context.vendorName, invoiceDate];
+  const folderId = await ensureFolderPath(token, configuredRoot, segments);
+  const cleanInvoice = invoiceNumber.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "invoice";
+  const extension = mimeType === "application/pdf" ? ".pdf" : mimeType === "image/png" ? ".png" : ".jpg";
+  const suppliedExtension = /\.(pdf|png|jpe?g)$/i.test(originalName) ? originalName.match(/\.[^.]+$/)?.[0] : extension;
+  const fileName = `${cleanInvoice}-${invoiceDate}${suppliedExtension || extension}`;
+  const uploaded = await uploadFile(token, folderId, fileName, mimeType, bytes);
+
+  const gstAmount = Math.round((taxableAmount * gstRate / 100) * 100) / 100;
+  const totalAmount = Math.round((taxableAmount + gstAmount) * 100) / 100;
+  const { data: invoice, error: invoiceError } = await db.from("marketing_vendor_invoices").insert({
+    vendor_id: context.vendorId,
+    project_id: context.projectId,
+    invoice_number: invoiceNumber,
+    invoice_date: invoiceDate,
+    due_date: dueDate,
+    description,
+    taxable_amount: taxableAmount,
+    gst_rate: gstRate,
+    gst_amount: gstAmount,
+    total_amount: totalAmount,
+    status: "submitted",
+    drive_file_id: uploaded.id,
+    drive_folder_id: folderId,
+    web_view_link: uploaded.webViewLink || null,
+    original_file_name: originalName,
+    mime_type: mimeType,
+    file_size: uploaded.size ? Number(uploaded.size) : bytes.length,
+    submitted_by_portal_user_id: context.portalUserId
+  }).select("*").single();
+  if (invoiceError) throw new Error(`Invoice save failed: ${invoiceError.message}`);
+
+  let driveDocumentId: string | null = null;
+  const { data: registry } = await db.from("drive_documents").insert({
+    category: "MARKETING_VENDOR_INVOICE",
+    document_type: "VENDOR_BILL",
+    entity_type: "marketing_vendor_invoices",
+    entity_id: invoice.id,
+    document_no: invoiceNumber,
+    file_name: uploaded.name || fileName,
+    mime_type: mimeType,
+    file_size: uploaded.size ? Number(uploaded.size) : bytes.length,
+    drive_file_id: uploaded.id,
+    drive_folder_id: folderId,
+    web_view_link: uploaded.webViewLink || null,
+    web_content_link: uploaded.webContentLink || null,
+    upload_status: "stored",
+    uploaded_by: context.portalUserId
+  }).select("id").single();
+  if (registry?.id) {
+    driveDocumentId = registry.id;
+    await db.from("marketing_vendor_invoices").update({ drive_document_id: driveDocumentId }).eq("id", invoice.id);
+  }
+
+  return {
+    ok: true,
+    invoice: { ...invoice, drive_document_id: driveDocumentId },
+    fileId: uploaded.id,
+    folderId,
+    webViewLink: uploaded.webViewLink || null,
+    folderPath: ["Vendor", "Invoices", context.vendorName, invoiceDate].join(" / ")
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -569,6 +698,8 @@ Deno.serve(async (req) => {
         return json(await handleList(payload));
       case "upload_trip_document":
         return json(await handleUploadTripDocument(payload));
+      case "upload_marketing_vendor_invoice":
+        return json(await handleUploadMarketingVendorInvoice(payload));
       default:
         return json({ error: `Unknown action: ${action || "(none)"}` }, 400);
     }

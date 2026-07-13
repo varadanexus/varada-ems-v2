@@ -74,3 +74,27 @@ export function uploadTripDocumentToDrive(meta = {}, base64) {
   if (!base64) return Promise.reject(new Error("Missing file content for upload"));
   return driveIntegration("upload_trip_document", { ...meta, base64 });
 }
+async function marketingVendorIntegration(action, payload = {}) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.functions.invoke("marketing-vendor-integrations", {
+    body: { action, ...payload }
+  });
+  if (error) {
+    let message = error.message || "Vendor invoice upload failed.";
+    const context = error.context;
+    if (context && typeof context.json === "function") {
+      const details = await context.json().catch(() => null);
+      if (details?.error) message = details.error;
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+// Vendor-portal bill upload. The Edge Function validates the external portal
+// session and project assignment before creating the invoice and Drive record.
+export function uploadMarketingVendorInvoiceToDrive(meta = {}, base64) {
+  if (!base64) return Promise.reject(new Error("Missing bill file content"));
+  return marketingVendorIntegration("upload_invoice", { ...meta, base64 });
+}
