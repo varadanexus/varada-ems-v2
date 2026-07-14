@@ -73,6 +73,9 @@ function getModuleCandidates(moduleCode) {
 }
 
 export function hasModulePermission(userRole, moduleCode, action) {
+  // The Chairman & Managing Director is the permanent ultimate authority.
+  // Server-side enforcement is provided by the matching IAM migration.
+  if (userRole === ROLES.CHAIRMAN_MANAGING_DIRECTOR) return true;
   // Super admin keeps the full hardcoded map (cannot be locked out via the matrix).
   if (userRole === ROLES.SUPER_ADMIN) {
     const roleMap = ROLE_MODULE_PERMISSIONS[ROLES.SUPER_ADMIN] || {};
@@ -94,7 +97,7 @@ export function hasAnyRolePermission(userRoleOrRoles, moduleCode, action, option
 
 export function getAccessibleModules(userRoleOrRoles, allowedModules = []) {
   const result = new Set(Array.isArray(allowedModules) ? allowedModules : []);
-  if (normalizeRoleCodes(userRoleOrRoles).includes(ROLES.SUPER_ADMIN)) {
+  if (normalizeRoleCodes(userRoleOrRoles).some((role) => [ROLES.CHAIRMAN_MANAGING_DIRECTOR, ROLES.SUPER_ADMIN].includes(role))) {
     const roleMap = ROLE_MODULE_PERMISSIONS[ROLES.SUPER_ADMIN] || {};
     Object.entries(roleMap).forEach(([moduleCode, actions]) => {
       if (Array.isArray(actions) && actions.includes(PERMISSIONS.VIEW)) result.add(moduleCode);
@@ -112,8 +115,8 @@ export function getUserDivisionAccessContext(user, divisionId, options = {}) {
   if (!divisionId) {
     return { allowed: true, reason: "no_division_required", assignedDivisionIds: [], roleCodes, isGlobalAccess: false };
   }
-  if (hasRole(roleCodes, ROLES.SUPER_ADMIN)) {
-    return { allowed: true, reason: "super_admin_global_access", assignedDivisionIds: [], roleCodes, isGlobalAccess: true };
+  if (hasRole(roleCodes, ROLES.CHAIRMAN_MANAGING_DIRECTOR) || hasRole(roleCodes, ROLES.SUPER_ADMIN)) {
+    return { allowed: true, reason: hasRole(roleCodes, ROLES.CHAIRMAN_MANAGING_DIRECTOR) ? "ultimate_authority_global_access" : "super_admin_global_access", assignedDivisionIds: [], roleCodes, isGlobalAccess: true };
   }
   const rawAssignments = Array.isArray(user?.user_divisions)
     ? user.user_divisions

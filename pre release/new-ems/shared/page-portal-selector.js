@@ -1,6 +1,6 @@
 import { APP_NAME, PORTAL_TYPES, ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getCurrentAppUser, logout, redirectIfAuthenticated, requireAuth, resolveAvailablePortals, validateActiveUnlockedUser } from "./auth.js";
-import { initTheme, toggleTheme } from "./theme.js";
+import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 
 function escapeHtml(value) {
@@ -27,7 +27,6 @@ function render(appUser, portals) {
             </div>
             <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
               <span class="meta-pill">${escapeHtml(appUser?.display_name || appUser?.email || APP_NAME)}</span>
-              <button class="btn btn-sm" id="themeToggle" type="button">Theme</button>
               <button class="btn btn-sm" id="logoutBtn" type="button">Logout</button>
             </div>
           </div>
@@ -55,7 +54,6 @@ function render(appUser, portals) {
     <div id="toastHost" class="toast-host" aria-live="polite"></div>
   `;
 
-  qs("#themeToggle")?.addEventListener("click", () => toggleTheme());
   qs("#logoutBtn")?.addEventListener("click", async () => logout());
 }
 

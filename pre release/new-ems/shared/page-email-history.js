@@ -29,7 +29,7 @@ function render() {
   const failed = state.outbox.filter((r) => String(r.status).toLowerCase() === "failed").length;
   renderModuleContent(`
     <style>
-      .em-preview{white-space:pre-wrap;word-break:break-word;background:#0a1221;border:1px solid rgba(148,163,184,.18);border-radius:10px;padding:.6rem;color:#dbeafe;max-width:420px}
+      .em-preview{white-space:pre-wrap;word-break:break-word;background:#0b0c0d;border:1px solid rgba(225,189,104,.18);border-radius:10px;padding:.6rem;color:#e9e4d9;max-width:420px}
     </style>
     <section class="card">
       <h3>Outbox</h3>

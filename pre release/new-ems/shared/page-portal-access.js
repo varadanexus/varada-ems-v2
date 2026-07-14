@@ -47,7 +47,8 @@ const PAGE_STATE = {
   sessionsLoaded: false,
   auditRows: [],
   auditLoaded: false,
-  wizard: { step: 1, division: "", entityType: "", searchTerm: "", searchResults: [], selectedEntity: null, existingAccess: null, createdCredentials: null },
+  wizard: { step: 1, division: "", entityType: "", searchTerm: "", searchResults: [], resultsLoading: false, selectedEntity: null, existingAccess: null, createdCredentials: null },
+  userDetailsModal: null,
   historyModal: null,
   revealModal: null,
   resetPasswordModal: null
@@ -55,6 +56,7 @@ const PAGE_STATE = {
 
 const REVEAL_ALLOWED_EMAILS = ["admin@varadanexus.com", "prudhvi@varadanexus.com"];
 const REVEAL_SECONDS = 20;
+const PUBLIC_PORTAL_LOGIN_URL = "https://www.varadanexus.com/login";
 
 async function init() {
   const boot = await bootstrapProtectedPage({
@@ -209,6 +211,52 @@ function render() {
       .pa-badge-revoked{color:#6b7280;}
       .pa-badge-expired{color:#dc2626;}
       .pa-pw-panel{background:var(--surface,#f9fafb);border:1px solid var(--border,#d1d5db);border-radius:8px;padding:1.25rem;margin-top:1rem;}
+      .pa-entity-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:.55rem;max-height:360px;overflow:auto;margin-top:.65rem;padding:.2rem .2rem .2rem 0;}
+      .pa-entity-option{display:flex;align-items:center;justify-content:space-between;gap:.75rem;width:100%;padding:.8rem .9rem;text-align:left;border:1px solid rgba(230,200,126,.16);border-radius:12px;background:rgba(255,255,255,.022);color:#e8e5dc;cursor:pointer;transition:border-color .16s ease,background .16s ease,transform .16s ease;}
+      .pa-entity-option:hover,.pa-entity-option:focus-visible{border-color:rgba(230,200,126,.56);background:rgba(230,200,126,.07);transform:translateY(-1px);outline:none;}
+      .pa-entity-option strong{display:block;color:#f7f4ec;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .pa-entity-option small{display:block;margin-top:.18rem;color:#8e98a8;font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .pa-entity-option b{flex:0 0 auto;color:#e6c87e;font-size:.75rem;}
+      .pa-results-note{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-top:.55rem;color:#8e98a8;font-size:.73rem;}
+      .pa-directory-head{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;margin-bottom:1rem;}
+      .pa-directory-head h4{margin:0;font-size:1.15rem;}
+      .pa-directory-head p{margin:.3rem 0 0;}
+      .pa-user-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.85rem;}
+      .pa-user-card{appearance:none;width:100%;min-height:180px;padding:1rem;text-align:left;color:inherit;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012));border:1px solid rgba(230,200,126,.18);border-radius:16px;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
+      .pa-user-card:hover,.pa-user-card:focus-visible{transform:translateY(-2px);border-color:rgba(230,200,126,.62);box-shadow:0 16px 34px rgba(0,0,0,.24);outline:none;}
+      .pa-user-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;}
+      .pa-user-identity{display:flex;align-items:center;gap:.75rem;min-width:0;}
+      .pa-user-avatar{width:42px;height:42px;display:grid;place-items:center;flex:0 0 42px;border-radius:13px;background:linear-gradient(145deg,#e7c76f,#8e6924);color:#080807;font-weight:900;font-size:.9rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.45);}
+      .pa-user-name{font-weight:800;color:#f7f4ec;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .pa-user-code{margin-top:.15rem;color:#9aa4b5;font-size:.73rem;letter-spacing:.06em;}
+      .pa-user-portal{margin:.9rem 0 .8rem;padding-bottom:.8rem;border-bottom:1px solid rgba(148,163,184,.12);color:#e6c87e;font-size:.78rem;font-weight:800;letter-spacing:.055em;text-transform:uppercase;}
+      .pa-user-meta{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;}
+      .pa-user-meta span{display:block;color:#7f8a9c;font-size:.65rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;}
+      .pa-user-meta strong{display:block;margin-top:.2rem;color:#d7dbe3;font-size:.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .pa-user-open{display:flex;align-items:center;justify-content:space-between;margin-top:.9rem;color:#9da8b9;font-size:.75rem;}
+      .pa-user-open b{color:#e6c87e;font-size:.78rem;}
+      .modal{position:fixed;inset:0;z-index:3500;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(2,4,8,.82)!important;border:0!important;box-shadow:none!important;backdrop-filter:blur(8px);}
+      .modal-panel{width:min(680px,calc(100vw - 2rem));max-height:calc(100vh - 2rem);overflow:auto;padding:1.25rem;border:1px solid rgba(230,200,126,.28);border-radius:18px;background:linear-gradient(150deg,#111216,#06070a 58%,#050609);box-shadow:0 30px 90px rgba(0,0,0,.72);}
+      .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;}
+      .modal-head h3{margin:0;}
+      .modal-head p{margin:.3rem 0 0;}
+      .pa-user-modal .modal-panel{width:min(760px,calc(100vw - 2rem));max-height:calc(100vh - 2rem);overflow:auto;padding:0;border-radius:20px;}
+      .pa-user-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.25rem 1.35rem;border-bottom:1px solid rgba(230,200,126,.16);background:linear-gradient(130deg,rgba(230,200,126,.10),rgba(10,12,17,.2));}
+      .pa-user-modal-title{display:flex;align-items:center;gap:.85rem;min-width:0;}
+      .pa-user-modal-title h3{margin:0;}
+      .pa-user-modal-title p{margin:.25rem 0 0;}
+      .pa-user-modal-body{padding:1.25rem 1.35rem;}
+      .pa-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;}
+      .pa-detail{min-height:68px;padding:.75rem .85rem;border:1px solid rgba(148,163,184,.13);border-radius:12px;background:rgba(4,6,10,.46);}
+      .pa-detail span{display:block;color:#788499;font-size:.64rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;}
+      .pa-detail strong{display:block;margin-top:.3rem;color:#edf0f5;font-size:.84rem;overflow-wrap:anywhere;}
+      .pa-detail .badge{display:inline-flex!important;width:auto!important;padding:.22rem .55rem!important;border-radius:999px!important;}
+      .pa-action-section{margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(148,163,184,.13);}
+      .pa-action-section h4{margin:0 0 .7rem;font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:#e6c87e;}
+      .pa-action-grid{display:flex;flex-wrap:wrap;gap:.5rem;}
+      .pa-action-grid .btn-danger{border-color:rgba(239,68,68,.58)!important;color:#fca5a5!important;}
+      .pa-empty-directory{padding:3rem 1rem;text-align:center;border:1px dashed rgba(230,200,126,.22);border-radius:16px;}
+      @media(max-width:640px){.pa-user-grid{grid-template-columns:1fr}.pa-detail-grid{grid-template-columns:1fr}.pa-directory-head{align-items:flex-start;flex-direction:column}.pa-user-modal-head{padding:1rem}.pa-user-modal-body{padding:1rem}}
     </style>
     <section class="card">
       <h3 style="margin:0;">Portal Access</h3>
@@ -233,6 +281,7 @@ function render() {
     ${PAGE_STATE.revealModal ? renderRevealModal() : ""}
     ${PAGE_STATE.historyModal ? renderHistoryModal() : ""}
     ${PAGE_STATE.resetPasswordModal ? renderResetPasswordModal() : ""}
+    ${PAGE_STATE.userDetailsModal ? renderUserDetailsModal() : ""}
   `);
   bindEvents();
   if (PAGE_STATE.revealModal?.password) startRevealCountdown();
@@ -283,10 +332,9 @@ function renderWizard() {
       <div class="hero-kpis" style="gap:.75rem;flex-wrap:wrap;">
         <span class="pa-step ${w.step >= 1 ? "active" : ""}">1. Select Division</span>
         <span class="pa-step ${w.step >= 2 ? "active" : ""}">2. Select Entity Type</span>
-        <span class="pa-step ${w.step >= 3 ? "active" : ""}">3. Search Record</span>
-        <span class="pa-step ${w.selectedEntity ? "active" : ""}">4. Select Record</span>
-        <span class="pa-step ${w.selectedEntity ? "active" : ""}">5. Create Login</span>
-        <span class="pa-step ${w.selectedEntity ? "active" : ""}">6. Save</span>
+        <span class="pa-step ${w.step >= 3 ? "active" : ""}">3. Select Available User</span>
+        <span class="pa-step ${w.selectedEntity ? "active" : ""}">4. Create Login</span>
+        <span class="pa-step ${w.selectedEntity ? "active" : ""}">5. Save</span>
       </div>
       <div class="int-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem 1rem;margin-top:1rem;">
         <div>
@@ -317,13 +365,15 @@ function renderWizard() {
 
       ${entityDef && entityDef.system !== "interiors_client_deeplink" ? `
         <div style="margin-top:1rem;">
-          <label>Search ${escapeHtml(entityDef.label)}</label>
-          <input id="paSearch" type="text" placeholder="Type to search by name..." value="${escapeHtml(w.searchTerm)}" />
+          <label>Available ${escapeHtml(entityDef.label)} users</label>
+          <input id="paSearch" type="search" placeholder="Optional: filter the available list by name..." value="${escapeHtml(w.searchTerm)}" autocomplete="off" />
           <div id="paSearchResults" style="margin-top:.5rem;">
-            ${w.searchResults.length ? w.searchResults.map((r) => `
-              <button class="btn btn-sm" data-pa-entity-id="${r.id}" type="button" style="margin:.2rem .2rem 0 0;">
-                ${escapeHtml(r.label)}${r.email ? ` — ${escapeHtml(r.email)}` : ""}
-              </button>`).join("") : `<p class="muted" style="margin:.25rem 0;">Type to search.</p>`}
+            ${w.resultsLoading ? `<div class="pa-empty-directory" style="padding:1.35rem;"><p class="muted" style="margin:0;">Loading available users...</p></div>` : w.searchResults.length ? `
+              <div class="pa-results-note"><span>${w.searchResults.length} user${w.searchResults.length === 1 ? "" : "s"} available${w.searchTerm ? " for this filter" : ""}</span><span>Select one to continue</span></div>
+              <div class="pa-entity-list">${w.searchResults.map((r) => `
+                <button class="pa-entity-option" data-pa-entity-id="${escapeHtml(r.id)}" type="button">
+                  <span style="min-width:0;"><strong>${escapeHtml(r.label)}</strong><small>${escapeHtml(r.email || r.phone || "No contact details")}</small></span><b>Select →</b>
+                </button>`).join("")}</div>` : `<div class="pa-empty-directory" style="padding:1.35rem;"><p class="muted" style="margin:0;">${w.searchTerm ? "No users match this filter." : "No available users were found for this entity type."}</p></div>`}
           </div>
         </div>
       ` : ""}
@@ -349,13 +399,13 @@ function renderSelectedEntityPanel(entityDef) {
 
   return `
     <section class="card" style="margin-top:1rem;">
-      <h4>Step 5 &amp; 6: Create Login — ${escapeHtml(s.label)}</h4>
+      <h4>Step 4 &amp; 5: Create Login — ${escapeHtml(s.label)}</h4>
       ${s.gstin ? `<p class="muted">GST: ${escapeHtml(s.gstin)}${s.pan ? ` &nbsp;|&nbsp; PAN: ${escapeHtml(s.pan)}` : ""}</p>` : ""}
       <div class="int-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem 1rem;margin-top:.75rem;">
         <div><label>Display Name</label><input id="paDisplayName" type="text" value="${escapeHtml(s.label)}" /></div>
         <div><label>Username (same as email) *</label><input id="paUsername" type="email" readonly value="${escapeHtml(String(s.email || "").toLowerCase())}" /></div>
         <div><label>Credential Email *</label><input id="paEmail" type="email" value="${escapeHtml(s.email || "")}" /></div>
-        <div><label>Registered Mobile *</label><input id="paPhone" type="tel" value="${escapeHtml(s.phone || "")}" /><small class="muted">The last 10 digits protect the credential PDF.</small></div>
+        <div><label>Registered Mobile *</label><input id="paPhone" type="tel" value="${escapeHtml(s.phone || "")}" /><small class="muted">The 10-digit registered mobile number protects the credential PDF.</small></div>
         <div><label>Access Level</label>
           <select id="paAccessLevel">
             <option value="standard">Standard</option>
@@ -377,24 +427,72 @@ function renderSelectedEntityPanel(entityDef) {
 }
 
 function renderAllTable() {
-  const e = canEdit();
-  const rows = PAGE_STATE.allRows.map((r) => [
-    escapeHtml(r.portalUserCode), escapeHtml(r.division), escapeHtml(r.entityType), escapeHtml(r.linkedName),
-    escapeHtml(r.username), escapeHtml(r.email || "-"), escapeHtml(r.phone || "-"), escapeHtml(r.portalType), escapeHtml(capitalize(r.accessLevel || "standard")),
-    statusBadge(r.status, r.isLocked), escapeHtml(formatDateTime(r.lastLogin)), e ? rowActions(r) : "-"
-  ]);
+  const rows = PAGE_STATE.allRows;
   return `
     <section class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;">
-        <h4 style="margin:0;">Portal Users (${rows.length})</h4>
+      <div class="pa-directory-head">
+        <div><h4>Portal Users (${rows.length})</h4><p class="muted">Select a user to view complete access details and account actions.</p></div>
+        <span class="meta-pill">${rows.filter((row) => row.status === "active" && !row.isLocked).length} active</span>
       </div>
-      <div class="table-container"><table><thead><tr>
-        <th>Portal Code</th><th>Division</th><th>Entity Type</th><th>Linked Entity</th><th>Username</th><th>Email</th><th>Phone</th><th>Portal Type</th><th>Access Level</th><th>Status</th><th>Last Login</th><th>Actions</th>
-      </tr></thead><tbody>
-        ${rows.length ? rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="12" style="text-align:center;padding:2rem;" class="muted">No portal access records found.</td></tr>`}
-      </tbody></table></div>
+      ${rows.length ? `<div class="pa-user-grid">${rows.map(renderUserCard).join("")}</div>` : `<div class="pa-empty-directory"><h4>No portal users yet</h4><p class="muted">Create portal access to see users here.</p></div>`}
     </section>
   `;
+}
+
+function userInitials(row) {
+  const source = String(row.displayName || row.linkedName || row.username || "User").trim();
+  return source.split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase() || "U";
+}
+
+function renderUserCard(row) {
+  return `
+    <button class="pa-user-card" data-pa-user-id="${escapeHtml(row.portalUserId)}" data-pa-user-system="${escapeHtml(row.system)}" type="button" aria-label="View details for ${escapeHtml(row.displayName || row.username)}">
+      <div class="pa-user-top">
+        <div class="pa-user-identity"><span class="pa-user-avatar">${escapeHtml(userInitials(row))}</span><div style="min-width:0"><div class="pa-user-name">${escapeHtml(row.displayName || row.linkedName || row.username)}</div><div class="pa-user-code">${escapeHtml(row.portalUserCode)}</div></div></div>
+        ${statusBadge(row.status, row.isLocked)}
+      </div>
+      <div class="pa-user-portal">${escapeHtml(row.portalType)}</div>
+      <div class="pa-user-meta">
+        <div><span>Division</span><strong>${escapeHtml(row.division)}</strong></div>
+        <div><span>Entity</span><strong>${escapeHtml(row.entityType)} · ${escapeHtml(row.linkedName)}</strong></div>
+        <div><span>Username</span><strong>${escapeHtml(row.username)}</strong></div>
+        <div><span>Access</span><strong>${escapeHtml(capitalize(row.accessLevel || "standard"))}</strong></div>
+      </div>
+      <div class="pa-user-open"><span>Last login: ${escapeHtml(formatDateTime(row.lastLogin))}</span><b>View details →</b></div>
+    </button>`;
+}
+
+function renderUserDetailsModal() {
+  const r = PAGE_STATE.userDetailsModal;
+  if (!r) return "";
+  return `
+    <div id="paUserDetailsModal" class="modal pa-user-modal" role="dialog" aria-modal="true" aria-labelledby="paUserDetailsTitle">
+      <div class="modal-panel">
+        <div class="pa-user-modal-head">
+          <div class="pa-user-modal-title"><span class="pa-user-avatar">${escapeHtml(userInitials(r))}</span><div><h3 id="paUserDetailsTitle">${escapeHtml(r.displayName || r.linkedName || r.username)}</h3><p class="muted">${escapeHtml(r.portalUserCode)} · ${escapeHtml(r.portalType)}</p></div></div>
+          <button class="btn btn-sm" id="paCloseUserDetails" type="button" aria-label="Close user details">Close</button>
+        </div>
+        <div class="pa-user-modal-body">
+          <div class="pa-detail-grid">
+            ${detailItem("Status", statusBadge(r.status, r.isLocked), true)}
+            ${detailItem("Access level", capitalize(r.accessLevel || "standard"))}
+            ${detailItem("Division", r.division)}
+            ${detailItem("Entity type", r.entityType)}
+            ${detailItem("Linked entity", r.linkedName)}
+            ${detailItem("Username", r.username)}
+            ${detailItem("Email", r.email || "Not provided")}
+            ${detailItem("Phone", r.phone || "Not provided")}
+            ${detailItem("Last login", formatDateTime(r.lastLogin))}
+            ${detailItem("Failed attempts", String(r.failedAttempts || 0))}
+          </div>
+          ${canEdit() ? `<div class="pa-action-section"><h4>Account actions</h4><div class="pa-action-grid">${rowActions(r)}</div></div>` : `<div class="pa-action-section"><p class="muted">You have view-only access to this account.</p></div>`}
+        </div>
+      </div>
+    </div>`;
+}
+
+function detailItem(label, value, trustedHtml = false) {
+  return `<div class="pa-detail"><span>${escapeHtml(label)}</span><strong>${trustedHtml ? value : escapeHtml(value)}</strong></div>`;
 }
 
 function rowActions(r) {
@@ -575,16 +673,17 @@ function bindEvents() {
 
   // Wizard
   document.getElementById("paDivision")?.addEventListener("change", (e) => {
-    PAGE_STATE.wizard = { ...PAGE_STATE.wizard, division: e.target.value, entityType: "", searchTerm: "", searchResults: [], selectedEntity: null, existingAccess: null, step: 2 };
+    PAGE_STATE.wizard = { ...PAGE_STATE.wizard, division: e.target.value, entityType: "", searchTerm: "", searchResults: [], resultsLoading: false, selectedEntity: null, existingAccess: null, step: 2 };
     render();
   });
-  document.getElementById("paEntityType")?.addEventListener("change", (e) => {
-    PAGE_STATE.wizard = { ...PAGE_STATE.wizard, entityType: e.target.value, searchTerm: "", searchResults: [], selectedEntity: null, existingAccess: null, step: 3 };
+  document.getElementById("paEntityType")?.addEventListener("change", async (e) => {
+    PAGE_STATE.wizard = { ...PAGE_STATE.wizard, entityType: e.target.value, searchTerm: "", searchResults: [], resultsLoading: Boolean(e.target.value), selectedEntity: null, existingAccess: null, step: 3 };
     render();
+    if (e.target.value) await loadAvailableEntities("");
   });
   document.getElementById("paSearch")?.addEventListener("input", debounce(handleWizardSearch, 300));
   document.getElementById("paCreateAnother")?.addEventListener("click", () => {
-    PAGE_STATE.wizard = { step: 1, division: "", entityType: "", searchTerm: "", searchResults: [], selectedEntity: null, existingAccess: null, createdCredentials: null };
+    PAGE_STATE.wizard = { step: 1, division: "", entityType: "", searchTerm: "", searchResults: [], resultsLoading: false, selectedEntity: null, existingAccess: null, createdCredentials: null };
     render();
   });
   document.getElementById("paGoToAll")?.addEventListener("click", async () => { PAGE_STATE.activeTab = "all"; await loadAllRows(); render(); });
@@ -603,6 +702,12 @@ function bindEvents() {
 
   document.querySelectorAll("[data-pa-entity-id]").forEach((btn) => btn.addEventListener("click", () => handleSelectEntity(btn.dataset.paEntityId)));
   document.querySelectorAll("[data-pa-action]").forEach((btn) => btn.addEventListener("click", () => handleRowAction(btn)));
+  document.querySelectorAll("[data-pa-user-id]").forEach((card) => card.addEventListener("click", () => {
+    PAGE_STATE.userDetailsModal = PAGE_STATE.allRows.find((row) => row.portalUserId === card.dataset.paUserId && row.system === card.dataset.paUserSystem) || null;
+    render();
+  }));
+  document.getElementById("paCloseUserDetails")?.addEventListener("click", closeUserDetailsModal);
+  document.getElementById("paUserDetailsModal")?.addEventListener("click", (event) => { if (event.target?.id === "paUserDetailsModal") closeUserDetailsModal(); });
 
   // Copy buttons (credentials display)
   document.querySelectorAll("[data-pa-copy]").forEach((btn) => btn.addEventListener("click", () => {
@@ -690,16 +795,38 @@ function handlePasswordToolsSearch() {
 }
 
 let debounceTimer = null;
+let wizardLoadSequence = 0;
 function debounce(fn, ms) { return (...args) => { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => fn(...args), ms); }; }
 
 async function handleWizardSearch(event) {
   const term = String(event.target.value || "").trim();
   PAGE_STATE.wizard.searchTerm = term;
-  const entityDef = DIVISION_ENTITY_MAP[PAGE_STATE.wizard.division]?.entities.find((e) => e.key === PAGE_STATE.wizard.entityType);
-  if (!term || !entityDef) { PAGE_STATE.wizard.searchResults = []; render(); return; }
+  await loadAvailableEntities(term);
+}
 
-  const { data, error } = await client.from(entityDef.table).select("*").ilike(entityDef.nameCol, `%${term}%`).limit(10);
-  if (error) { showToast(error.message, TOAST_TYPES.ERROR); return; }
+async function loadAvailableEntities(term = "") {
+  const entityDef = DIVISION_ENTITY_MAP[PAGE_STATE.wizard.division]?.entities.find((e) => e.key === PAGE_STATE.wizard.entityType);
+  if (!entityDef || entityDef.system === "interiors_client_deeplink") {
+    PAGE_STATE.wizard.searchResults = [];
+    PAGE_STATE.wizard.resultsLoading = false;
+    render();
+    return;
+  }
+
+  const requestSequence = ++wizardLoadSequence;
+  PAGE_STATE.wizard.resultsLoading = true;
+  render();
+  let query = client.from(entityDef.table).select("*").order(entityDef.nameCol, { ascending: true }).limit(100);
+  if (term) query = query.ilike(entityDef.nameCol, `%${term}%`);
+  const { data, error } = await query;
+  if (requestSequence !== wizardLoadSequence) return;
+  PAGE_STATE.wizard.resultsLoading = false;
+  if (error) {
+    PAGE_STATE.wizard.searchResults = [];
+    render();
+    showToast(error.message, TOAST_TYPES.ERROR);
+    return;
+  }
   PAGE_STATE.wizard.searchResults = (data || []).map((row) => ({
     id: row.id,
     label: row[entityDef.nameCol],
@@ -794,11 +921,11 @@ async function handleWizardSubmit() {
       username,
       password,
       portalType: s.portalType,
-      portalLoginUrl: s.portalLoginUrl || ""
+      portalLoginUrl: PUBLIC_PORTAL_LOGIN_URL
     };
     render();
     showToast("Portal login created.", TOAST_TYPES.SUCCESS);
-    const absoluteLoginUrl = new URL(s.portalLoginUrl || ROUTES.LOGIN || "/login.html", window.location.origin).href;
+    const absoluteLoginUrl = PUBLIC_PORTAL_LOGIN_URL;
     try {
       const emailResult = await sendPortalCredentialEmail({
         recipientEmail: email,
@@ -867,6 +994,7 @@ async function handleRowAction(btn) {
       if (error) throw error;
     } else if (action === "reset-password") {
       // Open modal instead of window.prompt
+      PAGE_STATE.userDetailsModal = null;
       PAGE_STATE.resetPasswordModal = { system, portalUserId: id, username: btn.dataset.username };
       render();
       return;
@@ -881,22 +1009,30 @@ async function handleRowAction(btn) {
       const { error } = await client.rpc(fn, { p_portal_user_id: id });
       if (error) throw error;
     } else if (action === "reveal-password") {
+      PAGE_STATE.userDetailsModal = null;
       PAGE_STATE.revealModal = { system, portalUserId: id, username: btn.dataset.username, password: null };
       render();
       return;
     } else if (action === "login-history") {
+      PAGE_STATE.userDetailsModal = null;
       PAGE_STATE.historyModal = { portalUserId: id, username: btn.dataset.username, loading: true, rows: [] };
       render();
       await loadHistory(id);
       return;
     }
     showToast("Action completed.", TOAST_TYPES.SUCCESS);
+    PAGE_STATE.userDetailsModal = null;
     await loadAllRows();
     await loadDashboard();
     render();
   } catch (error) {
     showToast(error?.message || "Action failed.", TOAST_TYPES.ERROR);
   }
+}
+
+function closeUserDetailsModal() {
+  PAGE_STATE.userDetailsModal = null;
+  render();
 }
 
 async function handleConfirmReset() {

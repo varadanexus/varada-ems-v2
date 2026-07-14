@@ -1,6 +1,7 @@
 import { MODULES } from "./constants.js";
 
 export const ROLES = {
+  CHAIRMAN_MANAGING_DIRECTOR: "chairman_managing_director",
   SUPER_ADMIN: "super_admin",
   ADMIN: "admin",
   MANAGER: "manager",
@@ -17,6 +18,15 @@ export const ROLES = {
   CONTRACTOR: "contractor",
   CLIENT: "client"
 };
+
+// Reserved corporate authority. The matching database migration binds this
+// identity to both the dedicated CMD role and super_admin, and protects the
+// assignment from accidental revocation.
+export const ULTIMATE_AUTHORITY_EMAIL = "prudhvi@varadanexus.com";
+
+export function isUltimateAuthorityEmail(value) {
+  return String(value || "").trim().toLowerCase() === ULTIMATE_AUTHORITY_EMAIL;
+}
 
 export const PERMISSIONS = {
   VIEW: "view",

@@ -34,14 +34,14 @@ function renderPage(data = {}) {
   renderModuleContent(`
     <style>
       .em-overview{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.75rem}
-      .em-overview .cardlet{border:1px solid rgba(148,163,184,.22);border-radius:8px;padding:.85rem;background:#0b1324;color:#e5edf8}
+      .em-overview .cardlet{border:1px solid rgba(225,189,104,.2);border-radius:10px;padding:.85rem;background:linear-gradient(145deg,#12110e,#0a0b0c);color:#f2eee5}
       .em-overview strong{display:block;font-size:1.55rem}
       .em-two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}
       .legal-action-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem;margin-top:1rem}
-      .legal-action-card{display:grid;gap:.45rem;min-height:132px;border:1px solid rgba(148,163,184,.22);border-radius:8px;padding:1rem;background:#111d31;text-decoration:none;color:#f8fafc}
+      .legal-action-card{display:grid;gap:.45rem;min-height:132px;border:1px solid rgba(225,189,104,.2);border-radius:12px;padding:1rem;background:linear-gradient(145deg,#14130f,#0b0c0d);text-decoration:none;color:#f4f0e7}
       .legal-action-card:hover{border-color:#d4b26a;box-shadow:0 12px 30px rgba(0,0,0,.22)}
-      .legal-action-mark{width:42px;height:42px;border-radius:8px;display:grid;place-items:center;background:#07101f;color:#f7d774;font-weight:900}
-      .legal-action-card small{color:#a9bad0;line-height:1.45}
+      .legal-action-mark{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;background:#0b0c0d;border:1px solid rgba(225,189,104,.28);color:#f7d774;font-weight:900}
+      .legal-action-card small{color:#9f9a8e;line-height:1.45}
       @media (max-width: 980px){.em-overview,.legal-action-grid,.em-two-col{grid-template-columns:1fr}}
     </style>
     <section class="card">

@@ -2,6 +2,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { jsPDF } from "npm:jspdf@4.2.1";
 
+const PUBLIC_PORTAL_LOGIN_URL = "https://www.varadanexus.com/login";
+const PUBLIC_PORTAL_LOGIN_LABEL = "www.varadanexus.com/login";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -820,7 +823,7 @@ function buildPortalCredentialPdf(input: Record<string, any>, branding: any) {
   doc.setDrawColor(219, 228, 240);
   doc.roundedRect(margin, 86, pageWidth - (margin * 2), 58, 3, 3, "FD");
   const labels = ["Portal", "Username", "Initial password", "Login address"];
-  const values = [trimText(input.portalType), normalizeEmail(input.username), trimText(input.initialPassword), trimText(input.portalLoginUrl)];
+  const values = [trimText(input.portalType), normalizeEmail(input.username), trimText(input.initialPassword), PUBLIC_PORTAL_LOGIN_LABEL];
   let y = 98;
   labels.forEach((label, index) => {
     doc.setFont("helvetica", "bold");
@@ -874,19 +877,19 @@ function buildPortalCredentialPdf(input: Record<string, any>, branding: any) {
 function buildPortalCredentialEmailHtml(input: Record<string, any>) {
   const recipient = escapeHtml(trimText(input.recipientName) || "Portal User");
   const portal = escapeHtml(trimText(input.portalType) || "Varada Nexus portal");
-  const loginUrl = escapeHtml(trimText(input.portalLoginUrl));
+  const loginUrl = escapeHtml(PUBLIC_PORTAL_LOGIN_URL);
   const disclaimer = escapeHtml(portalDisclaimerSummary(input.portalType));
   return `
     <p style="margin:0 0 14px;">Hello ${recipient},</p>
     <p style="margin:0 0 14px;">Your access to the <strong>${portal}</strong> has been created. Your username and initial password are provided only in the attached protected PDF.</p>
     <div style="border:1px solid #dbe4f0;border-radius:14px;padding:18px;background:#f8fafc;margin:18px 0;">
       <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Opening the credential PDF</div>
-      <p style="margin:8px 0 0;">Use the <strong>last 10 digits of your registered mobile number</strong> as the PDF password.</p>
+      <p style="margin:8px 0 0;">Use your <strong>10-digit registered mobile number</strong> as the PDF password.</p>
     </div>
     <p style="margin:0 0 10px;"><strong>How to sign in</strong></p>
     <ol style="padding-left:20px;margin:0 0 18px;">
       <li>Open the attached PDF and note the credentials.</li>
-      <li>Visit <a href="${loginUrl}" style="color:#0f4c81;font-weight:700;">the Varada Nexus login page</a>.</li>
+      <li>Visit <a href="${loginUrl}" style="color:#0f4c81;font-weight:700;">${PUBLIC_PORTAL_LOGIN_LABEL}</a>.</li>
       <li>Use your email address as the username and enter the initial password from the PDF.</li>
       <li>Review and accept the portal disclaimer shown on first login.</li>
     </ol>
@@ -902,9 +905,9 @@ function buildPortalCredentialEmailText(input: Record<string, any>) {
     "",
     `Your access to the ${trimText(input.portalType) || "Varada Nexus portal"} has been created.`,
     "Your username and initial password are in the attached protected PDF.",
-    "PDF password: the last 10 digits of your registered mobile number.",
+    "PDF password: your 10-digit registered mobile number.",
     "",
-    `Login: ${trimText(input.portalLoginUrl)}`,
+    `Login: ${PUBLIC_PORTAL_LOGIN_LABEL}`,
     "Use your email address as the username, then enter the initial password from the PDF.",
     "Review and accept the portal disclaimer on first login.",
     "",
@@ -922,12 +925,11 @@ async function sendPortalCredentials(req: Request, admin: any, body: Record<stri
   const username = normalizeEmail(body.username);
   const initialPassword = trimText(body.initialPassword);
   const registeredMobile = trimText(body.registeredMobile);
-  const portalLoginUrl = trimText(body.portalLoginUrl);
+  const portalLoginUrl = PUBLIC_PORTAL_LOGIN_URL;
   if (!recipientEmail || !recipientEmail.includes("@")) throw new Error("A valid recipient email is required");
   if (username !== recipientEmail) throw new Error("Portal username must be the recipient email address");
   if (initialPassword.length < 8) throw new Error("Initial password must be at least 8 characters");
   if (!normalizeMobilePassword(registeredMobile)) throw new Error("A valid registered mobile number is required");
-  if (!/^https?:\/\//i.test(portalLoginUrl)) throw new Error("A valid portal login URL is required");
 
   const input = {
     recipientEmail,

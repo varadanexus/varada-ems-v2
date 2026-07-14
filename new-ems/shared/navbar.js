@@ -4,11 +4,11 @@ export function renderNavbar(email = "", role = "", options = {}) {
     <header class="app-navbar">
       <div class="navbar-left">
         <button class="icon-btn ${sidebarless ? "hidden" : ""}" id="menuToggle" aria-label="Toggle menu">☰</button>
-        <div class="navbar-title" style="display:flex;align-items:center;gap:.6rem;">
-          <img src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus" style="width:30px;height:30px;object-fit:contain;" />
-          <span style="line-height:1.15;display:inline-grid;">
-            <span style="font-weight:700;letter-spacing:.02em;">Varada Nexus</span>
-            <small style="font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#d4b26a;">Private Limited</small>
+        <div class="navbar-title ems-nav-brand">
+          <img class="ems-nav-logo" src="/images/logo.png" alt="Varada Nexus logo" />
+          <span class="ems-nav-wordmark">
+            <span class="ems-nav-name">Varada <span class="ems-nav-nexus">Nexus</span></span>
+            <small class="ems-nav-sub">Private Limited</small>
           </span>
         </div>
       </div>
@@ -19,6 +19,13 @@ export function renderNavbar(email = "", role = "", options = {}) {
       </div>
       <style>
         .app-navbar{position:relative;z-index:1000;}
+        .ems-nav-brand{display:flex;align-items:center;gap:12px;min-width:0;}
+        .ems-nav-logo{height:34px;width:auto;max-width:54px;border-radius:7px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(230,200,126,.14));}
+        .ems-nav-wordmark{display:inline-grid;line-height:1.05;min-width:0;}
+        .navbar-title.ems-nav-brand .ems-nav-name{font-family:"Manrope",sans-serif;color:#f7f4ec!important;font-size:13px;font-weight:700;letter-spacing:.34em!important;text-transform:uppercase;white-space:nowrap;}
+        .navbar-title.ems-nav-brand .ems-nav-nexus{margin-left:2px;font-family:inherit;font-size:inherit;font-style:normal;font-weight:inherit;letter-spacing:inherit!important;text-transform:inherit;background:linear-gradient(120deg,#f7e7b0,#e0c274 45%,#c39a44);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:#e6c87e!important;}
+        .navbar-title.ems-nav-brand .ems-nav-sub{display:block;margin-top:1px;font-family:"Manrope",sans-serif;font-size:9.5px;font-weight:500;letter-spacing:.28em;text-transform:uppercase;color:#8d8a7e!important;white-space:nowrap;}
+        @media(max-width:768px){.navbar-title.ems-nav-brand .ems-nav-sub{display:none}.navbar-title.ems-nav-brand .ems-nav-name{font-size:11px;letter-spacing:.23em!important}.ems-nav-brand{gap:8px}.ems-nav-logo{height:30px;max-width:46px}}
         .global-search{position:relative;display:flex;align-items:center;gap:.45rem;}
         .global-search-icon{opacity:.55;font-size:1rem;flex:0 0 auto;}
         #globalSearchInput{flex:1;min-width:0;background:transparent;border:none;outline:none;color:#e8eef7;font:inherit;}
@@ -37,7 +44,6 @@ export function renderNavbar(email = "", role = "", options = {}) {
           <span aria-hidden="true">🔔</span>
           <span class="notification-badge hidden" id="notificationUnreadBadge">0</span>
         </button>
-        <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">◐</button>
         <div class="user-chip">
           <span>${email || "User"}</span>
           <small>${role || "role"}</small>

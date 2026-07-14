@@ -14,7 +14,7 @@ function render() {
     <style>
       .wa-contacts-layout{display:grid;grid-template-columns:minmax(320px,.9fr) minmax(0,1.1fr);gap:1rem}
       .wa-field-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
-      .wa-form input,.wa-form textarea{width:100%;border:1px solid rgba(148,163,184,.24);background:#07101f;color:#fff;border-radius:10px;padding:.7rem .8rem}
+      .wa-form input,.wa-form textarea{width:100%;border:1px solid rgba(225,189,104,.22);background:#080909;color:#f3efe6;border-radius:10px;padding:.7rem .8rem}
       .wa-form textarea{min-height:110px;resize:vertical}
       @media(max-width:1040px){.wa-contacts-layout,.wa-field-grid{grid-template-columns:1fr}}
     </style>
