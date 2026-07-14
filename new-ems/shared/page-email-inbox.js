@@ -19,10 +19,10 @@ function render() {
   renderModuleContent(`
     <style>
       .em-inbox-stack{display:grid;gap:1rem}
-      .em-msg{border:1px solid rgba(148,163,184,.2);border-radius:10px;padding:1rem;background:#0b1324;color:#e5edf8}
+      .em-msg{border:1px solid rgba(225,189,104,.2);border-radius:12px;padding:1rem;background:linear-gradient(145deg,#12110e,#0a0b0c);color:#f2eee5}
       .em-msg.unread{border-color:#d4b26a}
       .em-msg-head{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:center}
-      .em-body{white-space:pre-wrap;word-break:break-word;margin-top:.6rem;color:#c9d6ea;line-height:1.55}
+      .em-body{white-space:pre-wrap;word-break:break-word;margin-top:.6rem;color:#c9c3b7;line-height:1.55}
     </style>
     <section class="card">
       <h3>Email Inbox</h3>

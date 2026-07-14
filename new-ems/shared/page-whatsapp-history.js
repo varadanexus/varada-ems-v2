@@ -12,7 +12,7 @@ function render() {
   renderModuleContent(`
     <style>
       .wa-history-stack{display:grid;gap:1rem}
-      .wa-full-message{white-space:pre-wrap;word-break:break-word;background:#0a1221;border:1px solid rgba(148,163,184,.18);border-radius:10px;padding:.75rem;color:#dbeafe}
+      .wa-full-message{white-space:pre-wrap;word-break:break-word;background:#0b0c0d;border:1px solid rgba(225,189,104,.18);border-radius:10px;padding:.75rem;color:#e9e4d9}
     </style>
     <section class="card">
       <h3>WhatsApp Message History</h3>

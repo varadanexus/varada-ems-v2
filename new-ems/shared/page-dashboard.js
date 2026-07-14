@@ -115,7 +115,7 @@ function renderPanel(title, note, rowsHtml, emptyText) {
 async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.DASHBOARD,
-    pageTitle: "EMS Control Center",
+    pageTitle: "Varada Nexus Central Command Center",
     pageDescription: "Launch modules, review activity, and operate from a single workspace",
     sidebarless: true
   });
@@ -158,10 +158,12 @@ async function init() {
     const appUser = boot.appUser || {};
     const email = appUser.email || session?.user?.email || "";
     const displayName = appUser.display_name || (email ? email.split("@")[0] : "User");
-    const roleLabel = String(boot.primaryRole || "user").replace(/_/g, " ").toUpperCase();
+    const primaryRoleKey = String(boot.primaryRole || "user").trim().toLowerCase();
+    const roleLabel = primaryRoleKey === "chairman_managing_director" ? "CHAIRMAN & MANAGING DIRECTOR" : primaryRoleKey.replace(/_/g, " ").toUpperCase();
     const rawScope = boot.divisionContext?.scopeLabel || boot.divisionLabel || "";
     const looksLikeId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(rawScope) || /^\d+$/.test(rawScope);
-    const divisionScope = rawScope && !looksLikeId ? rawScope : "All Divisions";
+    const isAdministrationRole = ["chairman_managing_director", "super_admin", "admin", "coo"].includes(primaryRoleKey);
+    const divisionScope = isAdministrationRole ? "Administration" : (rawScope && !looksLikeId ? rawScope : "All Divisions");
     const lastSignIn = formatSignIn(session?.user?.last_sign_in_at);
 
     const activeModulesHtml = launchCards.map(renderModuleCard).join("");
@@ -291,7 +293,7 @@ async function init() {
               <img class="cc-logo" src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus" />
               <div class="cc-ident-copy">
                 <span class="pm-kicker">Varada Nexus</span>
-                <h2>EMS Control Center</h2>
+                <h2>Central Command Center</h2>
                 <p>Unified command surface for administration, operations, and finance.</p>
               </div>
             </div>

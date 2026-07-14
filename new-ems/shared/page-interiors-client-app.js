@@ -1,7 +1,7 @@
 import { APP_NAME, ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getStoredInteriorsPortalSession, interiorsPortalLogout, listMyInteriorsAccess, requireInteriorsPortalSession } from "./interiors-portal-auth.js";
 import { getSupabaseClient } from "../config/supabase.js";
-import { initTheme, toggleTheme } from "./theme.js";
+import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
@@ -74,7 +74,6 @@ function renderShell({ title = "Interiors Client Portal", message = "Loading you
         <section class="card">
           <div class="client-shell-card">${content || `<strong>${escapeHtml(message)}</strong>`}</div>
           <div class="client-shell-actions">
-            <button class="btn btn-sm" id="themeToggle" type="button">Theme</button>
             <button class="btn btn-sm" id="logoutBtn" type="button">Logout</button>
           </div>
         </section>
@@ -82,7 +81,6 @@ function renderShell({ title = "Interiors Client Portal", message = "Loading you
     </div>
     <div id="toastHost" class="toast-host" aria-live="polite"></div>
   `;
-  qs("#themeToggle")?.addEventListener("click", () => toggleTheme());
   qs("#logoutBtn")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN)));
   app.classList.add("page-enter-active");
 }
@@ -1331,7 +1329,6 @@ function render() {
           </div>
           <div class="navbar-actions">
             <button class="icon-btn" id="notificationBell" data-section-tab="notifications" type="button" aria-label="Notifications">🔔${renderNavBadge(unread)}</button>
-            <button class="icon-btn" id="themeToggle" aria-label="Toggle theme" type="button">◐</button>
             <button class="btn btn-ghost" id="logoutBtn" type="button">Logout</button>
           </div>
         </header>
@@ -1488,7 +1485,6 @@ function bindClientAppEvents(app) {
   app.querySelectorAll("[data-approval-action]").forEach((button) => button.addEventListener("click", () => updateApprovalDecision(button.dataset.approvalId, button.dataset.approvalAction)));
   app.querySelectorAll("[data-pdf-action]").forEach((button) => button.addEventListener("click", () => handlePdfAction(button.dataset.pdfAction, button.dataset.pdfId)));
 
-  qs("#themeToggle")?.addEventListener("click", () => toggleTheme());
   qs("#logoutBtn")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN)));
   qs("#logoutBtnSidebar")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN)));
   qs("#markNotificationsReadBtn")?.addEventListener("click", () => { markNotificationsSeenNow(); render(); });

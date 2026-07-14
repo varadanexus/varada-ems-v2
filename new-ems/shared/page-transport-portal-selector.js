@@ -1,6 +1,6 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { showToast, qs } from "./utils.js";
-import { initTheme, toggleTheme } from "./theme.js";
+import { initTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml } from "./transport-portal-auth.js";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
 
@@ -38,7 +38,7 @@ function render() {
     <div class="tps-shell">
       <div class="tps-head">
         <div><h1 style="margin:0;">Select Portal</h1><p style="color:#8ea3bd;margin:.25rem 0 0;">Welcome, ${escapeHtml(PAGE_STATE.session?.displayName || "")}.</p></div>
-        <div style="display:flex;gap:.5rem;"><button class="tps-btn" id="tpsTheme" type="button">Theme</button><button class="tps-btn" id="tpsLogout" type="button">Logout</button></div>
+        <div style="display:flex;gap:.5rem;"><button class="tps-btn" id="tpsLogout" type="button">Logout</button></div>
       </div>
       <div class="tps-grid">
         ${clients.length ? `<article class="tps-card" id="tpsClientCard"><h3>Client Portal</h3><p>${clients.length} client account${clients.length > 1 ? "s" : ""} linked.</p></article>` : ""}
@@ -47,7 +47,6 @@ function render() {
       </div>
     </div>
   `;
-  qs("#tpsTheme")?.addEventListener("click", () => toggleTheme());
   qs("#tpsLogout")?.addEventListener("click", async () => { await portalLogout(); window.location.assign(ROUTES.TRANSPORT_PORTAL_LOGIN); });
   qs("#tpsClientCard")?.addEventListener("click", () => window.location.assign(ROUTES.TRANSPORT_CLIENT_APP));
   qs("#tpsTransporterCard")?.addEventListener("click", () => window.location.assign(ROUTES.TRANSPORT_TRANSPORTER_APP));

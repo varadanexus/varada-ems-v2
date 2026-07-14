@@ -1,6 +1,7 @@
 import { MODULES } from "./constants.js";
 
 export const ROLES = {
+  CHAIRMAN_MANAGING_DIRECTOR: "chairman_managing_director",
   SUPER_ADMIN: "super_admin",
   ADMIN: "admin",
   MANAGER: "manager",
@@ -17,6 +18,15 @@ export const ROLES = {
   CONTRACTOR: "contractor",
   CLIENT: "client"
 };
+
+// Reserved corporate authority. The matching database migration binds this
+// identity to both the dedicated CMD role and super_admin, and protects the
+// assignment from accidental revocation.
+export const ULTIMATE_AUTHORITY_EMAIL = "prudhvi@varadanexus.com";
+
+export function isUltimateAuthorityEmail(value) {
+  return String(value || "").trim().toLowerCase() === ULTIMATE_AUTHORITY_EMAIL;
+}
 
 export const PERMISSIONS = {
   VIEW: "view",
@@ -378,6 +388,8 @@ export const ROLE_MODULE_PERMISSIONS = {
     [MODULES.NOTIFICATIONS_CENTER]: [PERMISSIONS.VIEW, PERMISSIONS.EDIT]
   },
   [ROLES.COO]: {
+    ...grant([MODULES.EMAIL, MODULES.EMAIL_COMMAND_CENTER], [PERMISSIONS.VIEW]),
+    ...grant([MODULES.EMAIL_COMPOSE], [PERMISSIONS.VIEW, PERMISSIONS.CREATE]),
     ...grant(ALL_INTERIORS_PROJECT_MODULES, [PERMISSIONS.VIEW]),
     ...grant([MODULES.DASHBOARD, MODULES.ACCOUNTS, MODULES.CENTRAL_ACCOUNTS_DASHBOARD, MODULES.CENTRAL_ACCOUNTS_FINANCIAL_DOCUMENTS, MODULES.CENTRAL_ACCOUNTS_POSTING_QUEUE, MODULES.CENTRAL_ACCOUNTS_JOURNALS, MODULES.CENTRAL_ACCOUNTS_AUDIT, MODULES.CENTRAL_ACCOUNTS_RECEIVABLES, MODULES.CENTRAL_ACCOUNTS_PAYABLES, MODULES.CENTRAL_ACCOUNTS_TREASURY, MODULES.CENTRAL_ACCOUNTS_REPORTING], [PERMISSIONS.VIEW]),
     ...grant(ALL_CENTRAL_ACCOUNTS_PHASE6_MODULES, [PERMISSIONS.VIEW]),

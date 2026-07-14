@@ -1,104 +1,93 @@
 import { MODULES, ROUTES, WORKSPACES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { dashboardStats } from "./digital-services-api.js";
-import { listMarketingClients, listMarketingFinances, listMarketingProjects, listMarketingQueries } from "./marketing-api.js";
+import { listMarketingClients, listMarketingFinances, listMarketingProjects, listMarketingQueries, listMarketingVendors } from "./marketing-api.js";
 
-function esc(v) { return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-function money(v) { return "₹" + Number(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }); }
-function card(title, detail, href, accent) {
-  return `<a class="legal-action-card" href="${href}"><span class="legal-action-mark">${accent}</span><strong>${esc(title)}</strong><small>${esc(detail)}</small></a>`;
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+const money = (value) => "₹" + Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const label = (value) => String(value || "").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase());
+const date = (value) => value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+
+function kpi(title, value, note, tone = "", href = "") {
+  const tag = href ? "a" : "article";
+  return `<${tag} class="od-kpi ${tone}"${href ? ` href="${href}"` : ""}><span>${esc(title)}</span><strong>${esc(value)}</strong><small>${esc(note)}</small></${tag}>`;
+}
+
+function signal(title, value, note, tone = "", href = "") {
+  const tag = href ? "a" : "div";
+  return `<${tag} class="od-signal"${href ? ` href="${href}"` : ""}><i class="${tone}"></i><div><strong>${esc(title)}</strong><small>${esc(note)}</small></div><b>${esc(value)}</b></${tag}>`;
 }
 
 async function marketingStats() {
   try {
-    const [clients, projects, queries, finances] = await Promise.all([
-      listMarketingClients(), listMarketingProjects(), listMarketingQueries(), listMarketingFinances()
+    const [clients, vendors, projects, queries, finances] = await Promise.all([
+      listMarketingClients(), listMarketingVendors(), listMarketingProjects(), listMarketingQueries(), listMarketingFinances()
     ]);
     const clientValue = finances.reduce((sum, row) => sum + Number(row.client_value || 0), 0);
     const vendorCost = finances.reduce((sum, row) => sum + Number(row.vendor_cost || 0), 0);
     return {
       available: true,
       clients: clients.filter((row) => row.status === "active").length,
+      vendors: vendors.filter((row) => row.status === "active").length,
       projects: projects.filter((row) => ["planned", "in_progress", "client_review"].includes(row.status)).length,
       queries: queries.filter((row) => !["resolved", "closed"].includes(row.status)).length,
       clientValue,
       margin: clientValue - vendorCost
     };
   } catch {
-    return { available: false, clients: 0, projects: 0, queries: 0, clientValue: 0, margin: 0 };
+    return { available: false, clients: 0, vendors: 0, projects: 0, queries: 0, clientValue: 0, margin: 0 };
   }
 }
 
-function render(s, m) {
+function render(stats, marketing, canView) {
+  const leadRoute = canView(MODULES.DIGITAL_SERVICES_LEADS) ? ROUTES.DIGITAL_SERVICES_LEADS : "";
+  const clientRoute = canView(MODULES.DIGITAL_SERVICES_CLIENTS) ? ROUTES.DIGITAL_SERVICES_CLIENTS : "";
+  const projectRoute = canView(MODULES.DIGITAL_SERVICES_PROJECTS) ? ROUTES.DIGITAL_SERVICES_PROJECTS : "";
+  const vendorRoute = canView(MODULES.DIGITAL_SERVICES_VENDORS) ? ROUTES.DIGITAL_SERVICES_VENDORS : "";
+  const billingRoute = canView(MODULES.DIGITAL_SERVICES_BILLING) ? ROUTES.DIGITAL_SERVICES_BILLING : "";
+  const operationsRoute = canView(MODULES.MARKETING_COMMAND_CENTER) ? ROUTES.MARKETING_COMMAND_CENTER : "";
+  const attention = Number(stats.openLeads || 0) + Number(marketing.queries || 0) + (Number(stats.outstanding || 0) > 0 ? 1 : 0);
+
   renderModuleContent(`
-    <style>
-      .ds-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.75rem}
-      .ds-kpis .cardlet{position:relative;overflow:hidden;border:1px solid rgba(230,200,126,.14);border-radius:14px;padding:.9rem 1rem;background:linear-gradient(145deg,rgba(230,200,126,.04),#07080d 68%);color:#f7f4ec;box-shadow:inset 0 1px rgba(255,255,255,.015)}
-      .ds-kpis .cardlet:after{content:"";position:absolute;inset:auto -30% -70% 35%;height:100%;background:radial-gradient(circle,rgba(230,200,126,.07),transparent 67%);pointer-events:none}
-      .ds-kpis .cardlet .muted{color:#9b9788}
-      .ds-kpis strong{display:block;font-family:"Playfair Display",Georgia,serif;font-size:1.4rem;margin-top:.25rem;color:#f7f4ec}
-      .legal-action-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem;margin-top:1rem}
-      .legal-action-card{display:grid;gap:.45rem;min-height:120px;border:1px solid rgba(230,200,126,.14);border-radius:16px;padding:1rem;background:linear-gradient(150deg,rgba(230,200,126,.045),#07080d 52%,#050609);text-decoration:none;color:#f7f4ec;box-shadow:0 14px 36px rgba(0,0,0,.14);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
-      .legal-action-card:hover{border-color:rgba(230,200,126,.5);transform:translateY(-2px);box-shadow:0 20px 44px rgba(0,0,0,.28)}
-      .legal-action-mark{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:rgba(230,200,126,.06);border:1px solid rgba(230,200,126,.18);color:#e6c87e;font-weight:900}
-      .legal-action-card small{color:#9b9788;line-height:1.4}
-      .ds-two{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}
-      @media(max-width:980px){.ds-kpis,.legal-action-grid,.ds-two{grid-template-columns:1fr}}
-    </style>
-    <section class="card">
-      <h3>Digital Marketing & Services</h3>
-      <p class="muted">One workspace for leads, digital delivery, billing, white-label partners, client portals, and query-based communication.</p>
-      <div class="ds-kpis" style="margin-top:.6rem">
-        <div class="cardlet"><span class="muted">Clients</span><strong>${s.clients}</strong></div>
-        <div class="cardlet"><span class="muted">Open Leads</span><strong>${s.openLeads}</strong></div>
-        <div class="cardlet"><span class="muted">Active Projects</span><strong>${s.activeProjects}</strong></div>
-        <div class="cardlet"><span class="muted">Outstanding</span><strong>${money(s.outstanding)}</strong></div>
-        <div class="cardlet"><span class="muted">Collected</span><strong>${money(s.revenue)}</strong></div>
-        <div class="cardlet"><span class="muted">Vendor Cost</span><strong>${money(s.vendorCost)}</strong></div>
-        <div class="cardlet"><span class="muted">Gross Margin</span><strong>${money(s.grossMargin)}</strong></div>
-        <div class="cardlet"><span class="muted">ITC (Input GST)</span><strong>${money(s.itc)}</strong></div>
-        <div class="cardlet"><span class="muted">Net GST Payable</span><strong>${money(s.netGst)}</strong></div>
+    <div class="od-dashboard digital">
+      <section class="od-hero"><div><span class="od-eyebrow">DIGITAL MARKETING &amp; SERVICES</span><h2>Turn pipeline into delivery.</h2><p>Sales, projects, white-label operations, client communication, and billing together.</p></div><div class="od-hero-date"><small>TODAY</small><strong>${date(new Date())}</strong><span>${attention ? `${attention} commercial signals need review` : "Pipeline and delivery are clear"}</span></div></section>
+
+      <section class="od-kpi-grid">
+        ${kpi("ACTIVE PROJECTS", stats.activeProjects, `${marketing.projects} white-label delivery projects`, "gold", projectRoute)}
+        ${kpi("OPEN LEADS", stats.openLeads, "Opportunities still in pipeline", Number(stats.openLeads) ? "warning" : "", leadRoute)}
+        ${kpi("OPEN QUERIES", marketing.queries, "Client and delivery conversations", Number(marketing.queries) ? "danger" : "success", operationsRoute)}
+        ${kpi("GROSS MARGIN", money(stats.grossMargin), `${money(stats.revenue)} collected`, Number(stats.grossMargin) >= 0 ? "success" : "danger", billingRoute)}
+      </section>
+
+      <div class="od-primary-grid">
+        <section class="od-panel"><header><div><span class="od-eyebrow">DELIVERY PULSE</span><h3>Recent projects</h3></div>${projectRoute ? `<a href="${projectRoute}">View all projects <b>→</b></a>` : ""}</header><div class="od-record-list">
+          ${stats.recentProjects.length ? stats.recentProjects.slice(0, 5).map((project) => `<a class="od-record-row" href="${projectRoute || ROUTES.DIGITAL_SERVICES_PROJECTS}"><span class="od-record-mark">${esc((project.title || "DM").slice(0, 2).toUpperCase())}</span><div><strong>${esc(project.title || "Untitled project")}</strong><small>${esc(project.code || "Pending code")} · ${esc(project.ds_clients?.company_name || project.ds_clients?.name || "Client pending")}</small></div><span class="od-record-meta"><em class="${esc(project.status || "planning")}">${esc(label(project.status || "planning"))}</em><small>${esc(label(project.service_type || project.service_line || "Digital service"))}</small></span></a>`).join("") : `<div class="od-empty"><span>DM</span><strong>No projects yet</strong><p>Convert a won lead or create a project to begin delivery tracking.</p>${projectRoute ? `<a href="${projectRoute}">Create a project</a>` : ""}</div>`}
+        </div></section>
+
+        <section class="od-panel"><header><div><span class="od-eyebrow">ACTION CENTER</span><h3>Needs attention</h3></div><span class="od-count">${attention}</span></header><div class="od-signal-list">
+          ${signal("Open sales leads", stats.openLeads, "Opportunities awaiting a decision", Number(stats.openLeads) ? "warning" : "success", leadRoute)}
+          ${signal("Open delivery queries", marketing.queries, "Client or vendor response required", Number(marketing.queries) ? "danger" : "success", operationsRoute)}
+          ${signal("Client outstanding", money(stats.outstanding), "Invoices not yet fully paid", Number(stats.outstanding) > 0 ? "danger" : "success", billingRoute)}
+          ${signal("Vendor cost", money(stats.vendorCost), "Recorded delivery partner cost", "", billingRoute)}
+          ${signal("Net GST payable", money(stats.netGst), `Input credit ${money(stats.itc)}`, Number(stats.netGst) > 0 ? "warning" : "success", billingRoute)}
+        </div></section>
       </div>
-    </section>
 
-    <section class="card" style="margin-top:1rem">
-      <h3>White-label Marketing Delivery</h3>
-      <p class="muted">Vendors work through the delivery portal as Varada Nexus staff. Their legal identities and costs remain internal.</p>
-      ${m.available ? `<div class="ds-kpis" style="margin-top:.6rem">
-        <div class="cardlet"><span class="muted">Portal Clients</span><strong>${m.clients}</strong></div>
-        <div class="cardlet"><span class="muted">Live Delivery Projects</span><strong>${m.projects}</strong></div>
-        <div class="cardlet"><span class="muted">Open Queries</span><strong>${m.queries}</strong></div>
-        <div class="cardlet"><span class="muted">Client Value</span><strong>${money(m.clientValue)}</strong></div>
-        <div class="cardlet"><span class="muted">Delivery Margin</span><strong>${money(m.margin)}</strong></div>
-      </div>` : '<p class="muted">Delivery figures are available to staff with Marketing Operations permission.</p>'}
-    </section>
+      <section class="od-panel od-operations"><header><div><span class="od-eyebrow">BUSINESS SNAPSHOT</span><h3>Commercial and delivery health</h3></div><small>Unified division figures</small></header><div class="od-operation-grid">
+        <div><span class="od-operation-icon">S</span><strong>Sales</strong>${signal("Clients", stats.clients, "Digital services accounts", "", clientRoute)}${signal("Open leads", stats.openLeads, "Active pipeline", "", leadRoute)}${signal("Portal clients", marketing.clients, "White-label client access", "", operationsRoute)}</div>
+        <div><span class="od-operation-icon">D</span><strong>Delivery</strong>${signal("Active projects", stats.activeProjects, "Direct engagements", "", projectRoute)}${signal("Delivery projects", marketing.projects, "White-label work", "", operationsRoute)}${signal("Active vendors", marketing.vendors, "Firms and freelancers", "", vendorRoute)}</div>
+        <div><span class="od-operation-icon">₹</span><strong>Finance</strong>${signal("Collected", money(stats.revenue), "Client payments received", "", billingRoute)}${signal("Outstanding", money(stats.outstanding), "Still receivable", "", billingRoute)}${signal("Delivery margin", money(marketing.margin), "Client value less vendor cost", "", operationsRoute)}</div>
+        <div><span class="od-operation-icon">T</span><strong>Tax & value</strong>${signal("Client value", money(marketing.clientValue), "White-label project value", "", operationsRoute)}${signal("Input GST credit", money(stats.itc), "Eligible vendor ITC", "", billingRoute)}${signal("Net GST", money(stats.netGst), "Output GST less ITC", "", billingRoute)}</div>
+      </div></section>
 
-    <section class="legal-action-grid">
-      ${card("Leads", "Pipeline from new to won/lost, with proposals.", ROUTES.DIGITAL_SERVICES_LEADS, "LD")}
-      ${card("Clients", "Won accounts, contacts, and details.", ROUTES.DIGITAL_SERVICES_CLIENTS, "CL")}
-      ${card("Projects", "Engagements, deliverables, and status.", ROUTES.DIGITAL_SERVICES_PROJECTS, "PR")}
-      ${card("Billing", "Invoices, retainers, payments, and posting to accounts.", ROUTES.DIGITAL_SERVICES_BILLING, "BL")}
-      ${card("Settings", "Service lines and defaults.", ROUTES.DIGITAL_SERVICES_SETTINGS, "ST")}
-      ${card("Marketing Operations", "Client briefs, partner assignment, deliverables, and the query desk.", ROUTES.MARKETING_COMMAND_CENTER, "MK")}
-      ${card("Client Portal", "Client-facing work tracking, approvals, and conversations. Sign in through the main login.", ROUTES.LOGIN, "CP")}
-      ${card("Delivery Team Portal", "White-label vendor workspace presented as Varada Nexus. Sign in through the main login.", ROUTES.LOGIN, "DP")}
-    </section>
-
-    <div class="ds-two">
-      <section class="card">
-        <h3>Recent Projects</h3>
-        <div class="table-shell"><table>
-          <thead><tr><th>Project</th><th>Client</th><th>Status</th></tr></thead>
-          <tbody>${(s.recentProjects.map((p) => `<tr><td><strong>${esc(p.title)}</strong><br><span class="muted">${esc(p.code || "")}</span></td><td>${esc(p.ds_clients?.company_name || p.ds_clients?.name || "-")}</td><td><span class="meta-pill">${esc(p.status)}</span></td></tr>`).join("")) || '<tr><td colspan="3">No projects yet.</td></tr>'}</tbody>
-        </table></div>
-      </section>
-      <section class="card">
-        <h3>Recent Invoices</h3>
-        <div class="table-shell"><table>
-          <thead><tr><th>Invoice</th><th>Client</th><th>Total</th><th>Status</th></tr></thead>
-          <tbody>${(s.recentInvoices.map((i) => `<tr><td>${esc(i.invoice_number)}</td><td>${esc(i.ds_clients?.company_name || i.ds_clients?.name || "-")}</td><td>${money(i.total_amount)}</td><td><span class="meta-pill">${esc(i.status)}</span></td></tr>`).join("")) || '<tr><td colspan="4">No invoices yet.</td></tr>'}</tbody>
-        </table></div>
-      </section>
+      <section class="od-quick-actions"><div><span class="od-eyebrow">QUICK ACTIONS</span><h3>Move work forward</h3></div><nav>
+        ${leadRoute ? `<a href="${leadRoute}"><span>L+</span><strong>New lead</strong><small>Grow the pipeline</small></a>` : ""}
+        ${clientRoute ? `<a href="${clientRoute}"><span>C</span><strong>Clients</strong><small>Manage accounts</small></a>` : ""}
+        ${projectRoute ? `<a href="${projectRoute}"><span>P+</span><strong>New project</strong><small>Start delivery</small></a>` : ""}
+        ${vendorRoute ? `<a href="${vendorRoute}"><span>V</span><strong>Vendors</strong><small>Firms and freelancers</small></a>` : ""}
+        ${operationsRoute ? `<a href="${operationsRoute}"><span>MO</span><strong>Operations</strong><small>Queries and delivery</small></a>` : ""}
+        ${billingRoute ? `<a href="${billingRoute}"><span>₹</span><strong>Billing</strong><small>Invoices and payments</small></a>` : ""}
+      </nav></section>
     </div>
   `);
 }
@@ -107,14 +96,15 @@ async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.DIGITAL_SERVICES_DASHBOARD,
     pageTitle: "Digital Marketing & Services",
-    pageDescription: "Digital delivery, billing, white-label partners, and client communication",
+    pageDescription: "Pipeline, projects, white-label delivery, communication, and billing",
     workspace: WORKSPACES.DIGITAL_SERVICES
   });
   if (!boot) return;
-  let s = { clients: 0, openLeads: 0, activeProjects: 0, outstanding: 0, revenue: 0, vendorCost: 0, grossMargin: 0, itc: 0, netGst: 0, recentProjects: [], recentInvoices: [] };
-  try { s = await dashboardStats(); } catch {}
-  const m = await marketingStats();
-  render(s, m);
+  const allowedModules = boot?.accessibleModules || boot?.allowedModules || [];
+  const canView = (moduleCode) => allowedModules.includes(moduleCode);
+  let stats = { clients: 0, openLeads: 0, activeProjects: 0, outstanding: 0, revenue: 0, vendorCost: 0, grossMargin: 0, itc: 0, netGst: 0, recentProjects: [], recentInvoices: [] };
+  try { stats = await dashboardStats(); } catch {}
+  render(stats, await marketingStats(), canView);
 }
 
 init();

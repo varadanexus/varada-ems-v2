@@ -1,11 +1,11 @@
 import { APP_NAME, MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getAllowedModulesForRoles, getDivisionById, getMyAllowedModules, getMyPermissions, getMyRoleCodes, getUserRoleCodes, resolveWorkspaceDivision } from "./admin-api.js";
 import { logout, requireAuth, getCurrentAppUser, validateActiveUnlockedUser } from "./auth.js";
-import { PERMISSIONS } from "../config/roles.js";
+import { isUltimateAuthorityEmail, PERMISSIONS, ROLES } from "../config/roles.js";
 import { renderNavbar } from "./navbar.js";
 import { getAccessibleModules, getUserDivisionAccessContext, hasAnyRolePermission, setDbPermissionSet } from "./permissions.js";
 import { getSearchIndex, renderSidebar } from "./sidebar.js";
-import { initTheme, toggleTheme } from "./theme.js";
+import { initTheme } from "./theme.js";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
 import { initNotificationShell } from "./notification-ui.js?v=notifications-1";
 import { qs, showToast } from "./utils.js";
@@ -201,6 +201,10 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   // RLS blocks reading the roles table); falls back to the direct lookup.
   let roleCodes = await getMyRoleCodes().catch(() => []);
   if (!roleCodes.length) roleCodes = await getUserRoleCodes(appUser.id).catch(() => []);
+  const isUltimateAuthority = isUltimateAuthorityEmail(appUser.email || session?.user?.email);
+  if (isUltimateAuthority) {
+    roleCodes = [ROLES.CHAIRMAN_MANAGING_DIRECTOR, ROLES.SUPER_ADMIN, ...roleCodes.filter((role) => ![ROLES.CHAIRMAN_MANAGING_DIRECTOR, ROLES.SUPER_ADMIN].includes(role))];
+  }
   // Sprint 13F.9: resolve the current user's modules via SECURITY DEFINER RPC so
   // non-admins (whose RLS blocks reading role_permissions) still get their grants.
   const allowedModules = await getMyAllowedModules();
@@ -211,6 +215,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   const accessibleModules = getAccessibleModules(roleCodes, allowedModules);
   debugLog("rbac resolution", { roleCodes, allowedModules, moduleCode });
   const primaryRole = roleCodes[0] || "user";
+  const navbarRole = primaryRole === ROLES.CHAIRMAN_MANAGING_DIRECTOR ? "Chairman & Managing Director" : primaryRole;
   const canView = hasAnyRolePermission(roleCodes, moduleCode, PERMISSIONS.VIEW, { allowedModules });
 
   if (!canView && moduleCode !== MODULES.DASHBOARD) {
@@ -239,7 +244,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
     <div class="app-shell ${sidebarless ? "sidebarless" : ""}">
       ${sidebarless ? "" : renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace)}
       <div class="app-main">
-        ${renderNavbar(session?.user?.email || "", primaryRole, { sidebarless })}
+        ${renderNavbar(session?.user?.email || "", navbarRole, { sidebarless })}
         <section class="page-head">
           <h1>${pageTitle}</h1>
           <p>${pageDescription}</p>
@@ -258,14 +263,13 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
     app.classList.add("page-enter-active");
     finishNavigationTransition();
   });
-  return { appUser, roleCodes, allowedModules, accessibleModules, permissions: myPermissions, primaryRole, divisionContext, divisionId: divisionContext?.divisionId || null, divisionLabel: divisionContext?.divisionLabel || null };
+  return { appUser, roleCodes, allowedModules, accessibleModules, permissions: myPermissions, primaryRole, isUltimateAuthority, divisionContext, divisionId: divisionContext?.divisionId || null, divisionLabel: divisionContext?.divisionLabel || null };
 }
 
 function bindGlobalActions() {
   const shell = qs(".app-shell");
   const menuToggle = qs("#menuToggle");
   const sidebar = qs("#appSidebar");
-  const themeButton = qs("#themeToggle");
   const logoutButton = qs("#logoutBtn");
   const adminMenuBtn = qs("#adminMenuBtn");
 
@@ -341,10 +345,6 @@ function bindGlobalActions() {
   window.addEventListener("resize", () => {
     const state = localStorage.getItem(KEY) || "expanded";
     applyState(state);
-  });
-
-  themeButton?.addEventListener("click", () => {
-    toggleTheme();
   });
 
   logoutButton?.addEventListener("click", async () => {

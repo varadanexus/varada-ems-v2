@@ -55,6 +55,10 @@ export function sendModuleEmail(payload = {}) {
   return emailIntegration("send_module_email", payload);
 }
 
+export function sendPortalCredentialEmail(payload = {}) {
+  return emailIntegration("send_portal_credentials", payload);
+}
+
 export function listEmailHistory() {
   return emailIntegration("list_email_history");
 }

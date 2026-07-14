@@ -2,7 +2,7 @@ import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { exportPortalTransporterStatementPdf, exportPortalTransporterTripPdf } from "./portal-pdf-exports.js";
 import { showToast, qs } from "./utils.js";
-import { initTheme, toggleTheme } from "./theme.js";
+import { initTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
 import { uploadTripDocumentToDrive } from "./drive-api.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
@@ -956,7 +956,6 @@ function render() {
             </div>
           </div>
           <div class="navbar-actions">
-            <button class="icon-btn" id="themeToggle" type="button">Theme</button>
             <button class="btn btn-ghost" id="logoutBtn" type="button">Logout</button>
           </div>
         </header>
@@ -975,7 +974,6 @@ function render() {
 }
 
 function bindEvents() {
-  qs("#themeToggle")?.addEventListener("click", () => toggleTheme());
   qs("#logoutBtn")?.addEventListener("click", async () => { await portalLogout(); window.location.assign(ROUTES.TRANSPORT_PORTAL_LOGIN); });
   qs("#transporterSelector")?.addEventListener("change", async (e) => {
     PAGE_STATE.activeTransporterId = e.target.value;

@@ -1,38 +1,186 @@
+/* ============================================================
+   EMS 2.0 — Responsive layer (loaded by every module page)
+   Breakpoints: 1200 (small desktop) / 1024 (tablet landscape)
+   / 920 (tablet portrait: sidebar drawer) / 768 / 640 / 480
+   NOTE: page modules inject their own <style> blocks after this
+   file, so narrow-viewport overrides intentionally use !important
+   where they must win against per-page base rules.
+   ============================================================ */
+
+html { -webkit-text-size-adjust: 100%; }
+img, svg, video, canvas, iframe { max-width: 100%; }
+.table-shell { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+
+/* ---------- ≤1200px: small desktop ---------- */
 @media (max-width: 1200px) {
   .card { grid-column: span 6; }
   .module-card { grid-column: span 6; }
+  .control-grid > .card { grid-column: span 6; }
 }
 
+/* ---------- ≤1024px: tablet landscape ---------- */
+@media (max-width: 1024px) {
+  .page-head { padding: 1rem 1rem 0.7rem; }
+  .page-content { padding: 0.9rem 1rem 1.1rem; }
+  .app-shell.sidebarless .page-content,
+  .app-shell.sidebarless .page-head { max-width: 100%; }
+  /* Common 3-4 column stat/KPI grids → 2 columns */
+  [class*="kpi-grid"],
+  [class*="stat-grid"],
+  [class*="stats-grid"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+
+/* ---------- ≤920px: tablet portrait — sidebar becomes a drawer ---------- */
 @media (max-width: 920px) {
-  .app-shell { grid-template-columns: 1fr; }
-  .app-shell.sidebar-collapsed { grid-template-columns: 1fr; }
+  body { overflow-x: clip; }
+  /* !important: premium.css loads after this file and re-declares
+     .app-shell columns without a media query — it must not win here. */
+  .app-shell,
+  .app-shell.sidebar-collapsed { grid-template-columns: 1fr !important; }
   .app-sidebar {
-    position: fixed;
-    left: -280px;
-    width: 260px;
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: -300px;
+    width: 272px !important;
+    max-width: calc(100vw - 40px);
+    height: 100vh;
+    height: 100dvh;
     z-index: 60;
-    transition: left 0.2s ease;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transition: left 0.22s ease;
+    box-shadow: 0 24px 50px rgba(0, 0, 0, 0.4);
   }
-  .app-sidebar.open { left: 0; }
-  .app-sidebar { max-width: calc(100vw - 24px); }
-  .app-sidebar { box-shadow: 0 24px 50px rgba(0,0,0,0.4); }
+  .app-sidebar:not(.open) { left: -300px !important; border-right: 0; box-shadow: none; }
+  .app-sidebar.open { left: 0 !important; }
+  /* Collapsed-rail styles must never apply while in drawer mode */
+  .app-shell.sidebar-collapsed .nav-section-title,
+  .app-shell.sidebar-collapsed .nav-text,
+  .app-shell.sidebar-collapsed .brand { display: revert; }
+  .app-shell.sidebar-collapsed summary.nav-section-title { display: flex; }
+  .app-shell.sidebar-collapsed .nav-link { justify-content: flex-start; padding: 0.62rem 0.78rem; }
+
+  .app-navbar {
+    position: sticky;
+    top: 0;
+    z-index: 55;
+    flex-wrap: nowrap;
+    min-width: 0;
+    max-width: 100vw;
+    padding: 0 0.7rem;
+  }
+  /* !important: the navbar injects an inline <style> that sets
+     .global-search { display:flex } after this file loads. */
+  .global-search { display: none !important; }
+  .user-chip { display: none !important; }
+  .navbar-left { min-width: 0; flex: 1 1 auto; overflow: hidden; }
+  .navbar-title { min-width: 0; }
+  .navbar-actions { gap: 0.35rem; flex: 0 0 auto; }
+
   .card { grid-column: span 12; }
   .control-grid > .card { grid-column: span 12; }
   .module-card { grid-column: span 12; }
-  .navbar-actions { gap: 0.35rem; }
-  .global-search { display: none; }
-  .user-chip { display: none; }
+
+  /* Tabs / action strips scroll horizontally instead of overflowing */
+  .workspace-tabs,
+  .workspace-actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 0.25rem;
+  }
+  .workspace-tabs > *,
+  .workspace-actions > * { flex: 0 0 auto; white-space: nowrap; }
+
+  /* Two-pane workspaces collapse to a single column */
+  .ds-workspace-grid,
+  [class*="two-col"],
+  [class*="split-grid"],
+  [class*="workspace-grid"] { grid-template-columns: 1fr !important; }
 }
 
+/* ---------- ≤768px: large phones / small tablets ---------- */
+@media (max-width: 768px) {
+  #adminMenuBtn { display: none !important; }
+  .navbar-title small { display: none; }
+
+  /* Comfortable touch targets */
+  .btn, .icon-btn { min-height: 42px; }
+  tbody td input, tbody td select { min-height: 40px; }
+
+  /* Prevent iOS auto-zoom on focus */
+  input, select, textarea { font-size: 16px; }
+
+  /* Forms collapse to one column */
+  .card .form-row,
+  .transport-form-card .form-row,
+  [class*="form-grid"] { grid-template-columns: 1fr !important; }
+  .card .form-row > button { justify-self: stretch; }
+
+  /* Detail/meta grids collapse */
+  [class*="detail-grid"],
+  [class*="meta-grid"] { grid-template-columns: 1fr !important; }
+
+  /* Modals: near full-screen, always scrollable */
+  .modal { padding: 0.6rem !important; align-items: flex-start !important; }
+  .modal-panel,
+  .modal-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: calc(100dvh - 1.2rem) !important;
+    margin: auto 0;
+    overflow-y: auto !important;
+    border-radius: 14px !important;
+  }
+  .modal-head { flex-wrap: wrap; gap: 0.6rem; }
+
+  /* Tables: compact cells, rely on horizontal scroll in .table-shell */
+  th, td { padding: 0.55rem 0.55rem; }
+  table { font-size: 0.86rem; }
+
+  /* Toasts span the viewport bottom */
+  .toast-host { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; }
+  .toast { width: 100%; }
+}
+
+/* ---------- ≤640px: phones ---------- */
 @media (max-width: 640px) {
-  .app-navbar { padding: 0 0.7rem; }
+  .app-navbar { padding: 0 0.7rem; height: 58px; }
   .page-head, .page-content { padding: 0.75rem; }
-  .page-head h1 { font-size: 1.28rem; }
-  .btn, .icon-btn { min-height: 40px; }
+  .page-head h1 { font-size: 1.28rem !important; }
+  .btn, .icon-btn { min-height: 42px; }
   .module-card { min-height: 120px; }
   table { min-width: 520px; }
+  .table-shell table { min-width: 560px; }
   .login-card { padding: 0.95rem; }
   .transport-form-card .form-row { grid-template-columns: 1fr; }
-  .action-group { width: 100%; }
-  .action-group .btn { flex: 1; }
+
+  .action-group { width: 100%; display: flex; flex-wrap: wrap; }
+  .action-group .btn { flex: 1 1 auto; }
+
+  .hero-kpis { gap: 0.4rem; }
+  .meta-pill { font-size: 0.72rem; }
+  .breadcrumbs { font-size: 0.82rem; }
+
+  /* Card padding tightens on phones */
+  .card { padding: 0.85rem 0.9rem; }
+
+  /* Full-width primary actions inside modals */
+  .modal-panel .btn,
+  .modal-card .btn { min-height: 44px; }
+  .modal-footer { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .modal-footer .btn { flex: 1 1 auto; }
+}
+
+/* ---------- ≤480px: small phones ---------- */
+@media (max-width: 480px) {
+  [class*="kpi-grid"],
+  [class*="stat-grid"],
+  [class*="stats-grid"] { grid-template-columns: 1fr !important; }
+  .navbar-actions .btn { padding: 0.5rem 0.6rem; font-size: 0.82rem; }
+  .page-head h1 { font-size: 1.16rem !important; }
+  th, td { padding: 0.5rem 0.45rem; }
+  .skeleton-grid { grid-template-columns: 1fr; }
 }
