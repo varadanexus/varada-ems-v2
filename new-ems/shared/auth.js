@@ -249,6 +249,7 @@ export async function loginWithPassword(email, password) {
 
 export async function logout() {
   const isLoginPage = window.location.pathname.endsWith("/new-ems/login.html") || window.location.pathname.endsWith("login.html");
+  sessionStorage.removeItem("ems_terms_owner_bypass_session");
 
   // Clear BOTH session types so no stale session can hijack the next login.
   const local = getLocalSession();
@@ -269,6 +270,7 @@ export async function logout() {
 }
 
 export async function signOutSessionOnly() {
+  sessionStorage.removeItem("ems_terms_owner_bypass_session");
   const local = getLocalSession();
   if (local?.authUserId) {
     await emsLocalLogout();

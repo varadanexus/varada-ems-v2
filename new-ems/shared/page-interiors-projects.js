@@ -4,6 +4,7 @@ import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { hasAnyRolePermission } from "./permissions.js";
 import { PERMISSIONS } from "../config/roles.js";
 import { showToast } from "./utils.js";
+import { notifyInteriorsWhatsAppSafely } from "./interiors-whatsapp-api.js";
 
 const client = getSupabaseClient();
 
@@ -16,13 +17,13 @@ const PAGE_STATE = {
   isSaving: false
 };
 
-const STATUS_COLORS = {
-  draft: "gray",
-  active: "blue",
-  on_hold: "orange",
-  completed: "green",
-  cancelled: "red",
-  archived: "gray"
+const STATUS_STYLES = {
+  draft: "background:rgba(148,163,184,.10);color:#cbd5e1;border-color:rgba(148,163,184,.24)",
+  active: "background:rgba(71,190,125,.11);color:#73dca2;border-color:rgba(71,190,125,.28)",
+  on_hold: "background:rgba(226,184,92,.11);color:#e7c56f;border-color:rgba(226,184,92,.28)",
+  completed: "background:rgba(71,190,125,.14);color:#8ae5b3;border-color:rgba(71,190,125,.32)",
+  cancelled: "background:rgba(231,100,100,.11);color:#f09a9a;border-color:rgba(231,100,100,.28)",
+  archived: "background:rgba(148,163,184,.10);color:#cbd5e1;border-color:rgba(148,163,184,.24)"
 };
 
 const PRIORITY_COLORS = {
@@ -78,6 +79,8 @@ function render() {
       <style>
         .ip-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem 1rem}.ip-grid .full{grid-column:1/-1}
         .ip-grid label{display:block;font-weight:600;margin-bottom:.35rem}.ip-grid input,.ip-grid select,.ip-grid textarea{width:100%}
+        .ip-status{display:inline-flex;align-items:center;padding:.3rem .65rem;border:1px solid;border-radius:999px;font-size:.75rem;font-weight:700;letter-spacing:.04em;text-transform:capitalize;user-select:none}
+        .ip-actions{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;min-width:190px}
         @media (max-width:980px){.ip-grid{grid-template-columns:1fr}}
       </style>
       <h3>Projects</h3>
@@ -107,8 +110,8 @@ function render() {
                 <td>${escapeHtml(project.site_address || "Pending site address")}</td>
                 <td>Interior Project</td>
                 <td>${escapeHtml(project.project_manager || "Pending assignment")}</td>
-                <td><span class="badge" style="background-color:${STATUS_COLORS[project.status] || "gray"}">${escapeHtml(project.status || "-")}</span><br/><span class="muted">${escapeHtml(project.priority || "-")}</span></td>
-                <td><a class="btn btn-sm" href="${ROUTES.INTERIORS_PROJECT_DETAIL}?id=${project.id}">Open Project</a>${project.shared_project_id ? ` <a class="btn btn-sm" href="${ROUTES.PROJECT_ENGINE_PROJECT_DETAILS}?id=${project.shared_project_id}">Advanced</a>` : ""}</td>
+                <td><span class="ip-status" style="${STATUS_STYLES[project.status] || STATUS_STYLES.draft}">${escapeHtml(project.status || "-")}</span><br/><span class="muted">${escapeHtml(project.priority || "-")}</span></td>
+                <td><div class="ip-actions"><a class="btn btn-sm" href="${ROUTES.INTERIORS_PROJECT_DETAIL}?id=${project.id}">Open Project</a>${project.shared_project_id ? `<a class="btn btn-sm" href="${ROUTES.PROJECT_ENGINE_PROJECT_DETAILS}?id=${project.shared_project_id}&workspace=interiors">Advanced</a>` : ""}</div></td>
               </tr>`).join("")}
           </tbody>
         </table>
@@ -159,6 +162,10 @@ async function handleCreateProject() {
       p_summary: payload.summary || null
     });
     if (rpcError) throw rpcError;
+
+    if (rpcResult?.interior_project_id) {
+      await notifyInteriorsWhatsAppSafely("project_created", rpcResult.interior_project_id);
+    }
 
     showToast("Interior project created successfully", TOAST_TYPES.SUCCESS);
     await loadData();

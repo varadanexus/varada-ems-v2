@@ -1,4 +1,4 @@
-import { MODULES, ROUTES, TOAST_TYPES } from "../config/constants.js";
+import { MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
@@ -6,27 +6,27 @@ import { showToast } from "./utils.js";
 const client = getSupabaseClient();
 
 const STATUS_COLORS = {
-  draft: "gray",
-  active: "blue",
-  on_hold: "orange",
-  completed: "green",
-  cancelled: "red",
-  archived: "gray",
-  planned: "gray",
-  in_progress: "blue",
-  blocked: "red",
-  approved: "green",
-  rejected: "red",
-  pending_review: "orange",
-  open: "gray",
-  waiting: "orange"
+  draft: "rgba(148,163,184,.18)",
+  active: "rgba(71,190,125,.18)",
+  on_hold: "rgba(226,184,92,.18)",
+  completed: "rgba(71,190,125,.22)",
+  cancelled: "rgba(231,100,100,.18)",
+  archived: "rgba(148,163,184,.18)",
+  planned: "rgba(148,163,184,.18)",
+  in_progress: "rgba(226,184,92,.18)",
+  blocked: "rgba(231,100,100,.18)",
+  approved: "rgba(71,190,125,.22)",
+  rejected: "rgba(231,100,100,.18)",
+  pending_review: "rgba(226,184,92,.18)",
+  open: "rgba(148,163,184,.18)",
+  waiting: "rgba(226,184,92,.18)"
 };
 
 const PRIORITY_COLORS = {
-  low: "gray",
-  medium: "blue",
-  high: "orange",
-  critical: "red"
+  low: "rgba(148,163,184,.18)",
+  medium: "rgba(226,184,92,.18)",
+  high: "rgba(232,151,72,.20)",
+  critical: "rgba(231,100,100,.18)"
 };
 
 const PAGE_STATE = {
@@ -39,18 +39,21 @@ const PAGE_STATE = {
 };
 
 async function init() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const isInteriorsContext = urlParams.get("workspace") === "interiors";
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.PROJECT_ENGINE_PROJECT_DETAILS,
     pageTitle: "Project Details",
-    pageDescription: "View and manage project details"
+    pageDescription: isInteriorsContext ? "Advanced lifecycle, stages, tasks, milestones, and team controls for this Interiors project." : "View and manage project details",
+    workspace: isInteriorsContext ? WORKSPACES.INTERIORS : WORKSPACES.ADMIN
   });
   if (!boot) return;
 
   PAGE_STATE.boot = boot;
-  const urlParams = new URLSearchParams(window.location.search);
   const projectId = urlParams.get("id");
+  PAGE_STATE.backRoute = isInteriorsContext ? ROUTES.INTERIORS_PROJECTS : ROUTES.PROJECT_ENGINE_PROJECTS;
   if (!projectId) {
-    renderModuleContent(`<section class="card"><h3>Project Details</h3><p class="muted">Project ID not provided. Please select a project from the Projects list.</p><a href="${ROUTES.PROJECT_ENGINE_PROJECTS}" class="btn">Back to Projects</a></section>`);
+    renderModuleContent(`<section class="card"><h3>Project Details</h3><p class="muted">Project ID not provided. Please select a project from the Projects list.</p><a href="${PAGE_STATE.backRoute}" class="btn">Back to Projects</a></section>`);
     return;
   }
 
@@ -104,7 +107,7 @@ async function loadProject(projectId) {
 function render() {
   const project = PAGE_STATE.project;
   if (!project) {
-    renderModuleContent(`<section class="card"><h3>Project Details</h3><p class="muted">Project not found or has been deleted.</p><a href="${ROUTES.PROJECT_ENGINE_PROJECTS}" class="btn">Back to Projects</a></section>`);
+    renderModuleContent(`<section class="card"><h3>Project Details</h3><p class="muted">Project not found or has been deleted.</p><a href="${PAGE_STATE.backRoute || ROUTES.PROJECT_ENGINE_PROJECTS}" class="btn">Back to Projects</a></section>`);
     return;
   }
 
@@ -112,7 +115,7 @@ function render() {
 
   renderModuleContent(`
     <section class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; flex-wrap:wrap;"><div><h3>${escapeHtml(project.project_code)} - ${escapeHtml(project.project_name)}</h3><p class="muted">${escapeHtml(project.project_title || "")}</p></div><div style="display:flex;gap:.5rem;flex-wrap:wrap;">${canRequestApproval ? `<button class="btn" id="requestApprovalBtn" type="button">Request Approval</button>` : ""}<a href="${ROUTES.PROJECT_ENGINE_PROJECTS}" class="btn">Back to Projects</a></div></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; flex-wrap:wrap;"><div><h3>${escapeHtml(project.project_code)} - ${escapeHtml(project.project_name)}</h3><p class="muted">${escapeHtml(project.project_title || "")}</p></div><div style="display:flex;gap:.5rem;flex-wrap:wrap;">${canRequestApproval ? `<button class="btn" id="requestApprovalBtn" type="button">Request Approval</button>` : ""}<a href="${PAGE_STATE.backRoute || ROUTES.PROJECT_ENGINE_PROJECTS}" class="btn">Back to Projects</a></div></div>
       <div class="hero-kpis" style="margin-bottom:1rem;"><span class="meta-pill">Status: <span class="badge" style="background-color:${STATUS_COLORS[project.status] || "gray"}">${escapeHtml(project.status)}</span></span><span class="meta-pill">Priority: <span class="badge" style="background-color:${PRIORITY_COLORS[project.priority] || "gray"}">${escapeHtml(project.priority)}</span></span><span class="meta-pill">Type: ${escapeHtml(project.project_type_name)}</span><span class="meta-pill">Client: ${escapeHtml(project.client_name)}</span><span class="meta-pill">Division: ${escapeHtml(project.division_name)}</span></div>
       <div style="margin-bottom:1rem;"><p><strong>Start Date:</strong> ${formatDate(project.start_date)}</p><p><strong>Target End Date:</strong> ${formatDate(project.target_end_date)}</p><p><strong>Actual End Date:</strong> ${formatDate(project.actual_end_date)}</p><p><strong>Summary:</strong> ${escapeHtml(project.summary || "-")}</p></div>
       <div class="tabs"><button class="tab-btn active" data-tab="overview" type="button">Overview</button><button class="tab-btn" data-tab="stages" type="button">Stages (${PAGE_STATE.stages.length})</button><button class="tab-btn" data-tab="tasks" type="button">Tasks (${PAGE_STATE.tasks.length})</button><button class="tab-btn" data-tab="milestones" type="button">Milestones (${PAGE_STATE.milestones.length})</button><button class="tab-btn" data-tab="team" type="button">Team (${PAGE_STATE.team.length})</button></div>

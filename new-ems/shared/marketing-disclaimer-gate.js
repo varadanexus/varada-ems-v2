@@ -1,6 +1,7 @@
 import { ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { getMarketingPortalSessionToken, signOutMarketingPortal } from "./marketing-api.js?v=marketing-whatsapp-1";
+import { hasValidTermsBypassSession, redeemTermsBypassCode } from "./terms-gate.js?v=terms-owner-bypass-1";
 
 let faceDetectorPromise = null;
 
@@ -76,7 +77,8 @@ function injectStyles() {
     .mkt-disclaimer-eyebrow{display:block;margin-bottom:8px;color:#d7ae4b;font-size:11px;font-weight:800;letter-spacing:.16em}.mkt-disclaimer-head h2{margin:0;color:#fff;font:700 clamp(22px,3vw,32px)/1.15 Georgia,serif}.mkt-disclaimer-head p{max-width:820px;margin:9px 0 0;color:#aeb8c6;font-size:13px;line-height:1.55}
     .mkt-disclaimer-scroll{flex:1;min-height:0;overflow:auto;padding:8px 26px 22px;overscroll-behavior:contain}.mkt-disclaimer-scroll section{padding:17px 0;border-bottom:1px solid rgba(148,163,184,.13)}.mkt-disclaimer-scroll h3{margin:0 0 7px;color:#e5bd5c;font:700 17px/1.3 Georgia,serif}.mkt-disclaimer-scroll p{margin:0;color:#c4ccd7;font-size:13px;line-height:1.68}
     .mkt-disclaimer-evidence{margin:18px 0 2px;padding:18px;border:1px solid rgba(215,174,75,.3);border-radius:16px;background:#0c121c}.mkt-disclaimer-evidence h3{margin:0 0 6px}.mkt-disclaimer-evidence>p{margin:0 0 14px}.mkt-disclaimer-person{display:grid;gap:6px;margin-bottom:14px;color:#d7ae4b;font-size:12px;font-weight:800}.mkt-disclaimer-person input{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #303a49;border-radius:10px;background:#070b11;color:#fff;font:600 14px Manrope,sans-serif}.mkt-disclaimer-person small{color:#8f9bad;font-weight:500}.mkt-disclaimer-camera-grid{display:grid;grid-template-columns:minmax(240px,360px) 1fr;gap:16px;align-items:start}.mkt-disclaimer-camera{width:100%;aspect-ratio:4/3;object-fit:cover;border:1px solid #303a49;border-radius:13px;background:#020407}.mkt-disclaimer-camera-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.mkt-disclaimer-photo-consent{display:grid;grid-template-columns:20px 1fr;gap:9px;color:#bfc8d5;font-size:11px;line-height:1.5}.mkt-disclaimer-photo-consent input{width:17px;height:17px;accent-color:#d7ae4b}.mkt-disclaimer-proof-note{margin-top:10px!important;color:#8290a3!important;font-size:11px!important}.mkt-disclaimer-foot{padding:16px 26px 20px;background:#0c1119;border-top:1px solid rgba(148,163,184,.16)}.mkt-disclaimer-read{margin:0 0 10px;color:#8f9bad;font-size:11px}.mkt-disclaimer-check{display:grid;grid-template-columns:20px 1fr;gap:10px;align-items:start;color:#d8dee8;font-size:12px;line-height:1.5}.mkt-disclaimer-check input{width:18px;height:18px;margin:1px 0 0;accent-color:#d7ae4b}.mkt-disclaimer-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:15px}.mkt-disclaimer-btn{padding:10px 15px;border:1px solid #293342;border-radius:10px;background:#101722;color:#dce4ee;font-weight:800;cursor:pointer}.mkt-disclaimer-btn.primary{border-color:#d7ae4b;background:linear-gradient(135deg,#e4bd60,#b98c2e);color:#080b10}.mkt-disclaimer-btn:disabled{opacity:.42;cursor:not-allowed}.mkt-disclaimer-status{min-height:18px;margin:8px 0 0;color:#f1a6a6;font-size:12px}
-    @media(max-width:700px){.mkt-disclaimer-backdrop{padding:0}.mkt-disclaimer-modal{height:100vh;border-radius:0}.mkt-disclaimer-head,.mkt-disclaimer-scroll,.mkt-disclaimer-foot{padding-left:18px;padding-right:18px}.mkt-disclaimer-camera-grid{grid-template-columns:1fr}.mkt-disclaimer-actions{display:grid;grid-template-columns:1fr 1fr}.mkt-disclaimer-btn{padding:11px 8px}}
+    .mkt-disclaimer-owner-bypass{padding:16px 26px 20px;border-top:1px solid rgba(215,174,75,.25);background:#090f18}.mkt-disclaimer-owner-bypass h3{margin:0;color:#e5bd5c;font:700 17px/1.3 Georgia,serif}.mkt-disclaimer-owner-bypass p{margin:6px 0 11px;color:#8f9bad;font-size:11px;line-height:1.5}.mkt-disclaimer-owner-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:8px}.mkt-disclaimer-owner-row input{min-width:0;padding:10px 12px;border:1px solid #303a49;border-radius:10px;background:#05090f;color:#fff;font:700 13px ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase}
+    @media(max-width:700px){.mkt-disclaimer-backdrop{padding:0}.mkt-disclaimer-modal{height:100vh;border-radius:0}.mkt-disclaimer-head,.mkt-disclaimer-scroll,.mkt-disclaimer-foot,.mkt-disclaimer-owner-bypass{padding-left:18px;padding-right:18px}.mkt-disclaimer-camera-grid{grid-template-columns:1fr}.mkt-disclaimer-actions{display:grid;grid-template-columns:1fr 1fr}.mkt-disclaimer-btn{padding:11px 8px}.mkt-disclaimer-owner-row{grid-template-columns:1fr 1fr}.mkt-disclaimer-owner-row input{grid-column:1/-1}}
   `;
   document.head.append(style);
 }
@@ -132,6 +134,7 @@ function showGate(portalType, status) {
         </section>
       </div>
       <footer class="mkt-disclaimer-foot"><p class="mkt-disclaimer-read" id="marketingDisclaimerRead">Scroll to the end to enable acknowledgement.</p><label class="mkt-disclaimer-check"><input id="marketingDisclaimerCheck" type="checkbox" disabled><span>${copy.acceptance}</span></label><p class="mkt-disclaimer-status" id="marketingDisclaimerStatus" aria-live="polite"></p><div class="mkt-disclaimer-actions"><button class="mkt-disclaimer-btn" id="marketingDisclaimerDecline">Decline &amp; sign out</button><button class="mkt-disclaimer-btn primary" id="marketingDisclaimerAccept" disabled>Accept &amp; continue</button></div></footer>
+      <section class="mkt-disclaimer-owner-bypass" id="marketingDisclaimerOwnerBypass" hidden><h3>Chairman temporary access</h3><p>This single-use override opens only the current browser session. It does not accept this disclaimer for the account holder, and the original acknowledgement remains pending.</p><div class="mkt-disclaimer-owner-row"><input id="marketingDisclaimerBypassCode" type="password" autocomplete="off" aria-label="One-time Chairman bypass code" placeholder="One-time code"><button class="mkt-disclaimer-btn primary" id="marketingDisclaimerBypassApply" type="button">Bypass Once</button><button class="mkt-disclaimer-btn" id="marketingDisclaimerBypassCancel" type="button">Cancel</button></div><p class="mkt-disclaimer-status" id="marketingDisclaimerBypassStatus" aria-live="polite"></p></section>
     </article>`;
     document.body.append(gate);
 
@@ -146,11 +149,28 @@ function showGate(portalType, status) {
     const photoConsent = gate.querySelector("#marketingPhotoConsent");
     const cameraStatus = gate.querySelector("#marketingCameraStatus");
     const authorizedPerson = gate.querySelector("#marketingAuthorizedPerson");
+    const bypassPanel = gate.querySelector("#marketingDisclaimerOwnerBypass");
+    const bypassInput = gate.querySelector("#marketingDisclaimerBypassCode");
+    const bypassApply = gate.querySelector("#marketingDisclaimerBypassApply");
+    const bypassStatus = gate.querySelector("#marketingDisclaimerBypassStatus");
     let evidenceDataUrl = "";
     let faceConfidence = 0;
     let faceDetector = null;
     let cameraStream = null;
     let termsRead = false;
+    const ownerShortcut = (event) => {
+      if (!(event.ctrlKey && event.altKey && event.key.toLowerCase() === "b")) return;
+      event.preventDefault();
+      bypassPanel.hidden = !bypassPanel.hidden;
+      bypassStatus.textContent = "";
+      if (!bypassPanel.hidden) requestAnimationFrame(() => bypassInput.focus());
+    };
+    document.addEventListener("keydown", ownerShortcut);
+    const removeGate = () => {
+      document.removeEventListener("keydown", ownerShortcut);
+      gate.remove();
+      document.body.classList.remove("mkt-disclaimer-lock");
+    };
     const updateAcceptState = () => {
       const personReady = !status.requires_authorized_person || String(authorizedPerson?.value || "").trim().length >= 2;
       accept.disabled = !(termsRead && checkbox.checked && photoConsent.checked && evidenceDataUrl && personReady);
@@ -233,14 +253,39 @@ function showGate(portalType, status) {
       cameraStream?.getTracks().forEach((track) => track.stop());
       try { await signOutMarketingPortal(); } finally { location.replace(ROUTES.LOGIN); }
     });
+    gate.querySelector("#marketingDisclaimerBypassCancel").addEventListener("click", () => {
+      bypassInput.value = "";
+      bypassStatus.textContent = "";
+      bypassPanel.hidden = true;
+    });
+    bypassApply.addEventListener("click", async () => {
+      if (!bypassInput.value.trim()) {
+        bypassStatus.textContent = "Enter the current one-time bypass code.";
+        return;
+      }
+      bypassApply.disabled = true;
+      bypassStatus.textContent = "Validating protected owner authority…";
+      try {
+        const result = await redeemTermsBypassCode(bypassInput.value);
+        if (!result?.bypass_session_token) throw new Error("The bypass session could not be created.");
+        sessionStorage.setItem("ems_terms_owner_bypass_session", result.bypass_session_token);
+        cameraStream?.getTracks().forEach((track) => track.stop());
+        removeGate();
+        resolve(true);
+      } catch (error) {
+        bypassInput.value = "";
+        bypassStatus.textContent = error?.message || "The one-time bypass code is invalid or expired.";
+        bypassApply.disabled = false;
+        bypassInput.focus();
+      }
+    });
     accept.addEventListener("click", async () => {
       accept.disabled = true;
       message.textContent = "Recording your acknowledgement securely…";
       try {
         await recordAcceptance(portalType, status, evidenceDataUrl, authorizedPerson?.value?.trim() || "", faceConfidence);
         cameraStream?.getTracks().forEach((track) => track.stop());
-        gate.remove();
-        document.body.classList.remove("mkt-disclaimer-lock");
+        removeGate();
         resolve(true);
       } catch (error) {
         message.textContent = error?.message || "The acknowledgement could not be recorded. Please try again.";
@@ -254,5 +299,6 @@ export async function enforceMarketingPortalDisclaimer(portalType) {
   if (!DISCLAIMERS[portalType]) throw new Error("Unsupported marketing portal disclaimer type.");
   const status = await statusFor(portalType);
   if (status?.accepted) return true;
+  if (await hasValidTermsBypassSession()) return true;
   return showGate(portalType, status);
 }

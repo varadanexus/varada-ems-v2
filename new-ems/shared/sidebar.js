@@ -3,9 +3,9 @@ import { MODULES, ROUTES, WORKSPACES } from "../config/constants.js";
 const MENU_BY_WORKSPACE = {
   [WORKSPACES.ADMIN]: [
     {
-      title: "Control Center / Administration",
+      title: "Command Center / Administration",
       items: [
-        { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.USERS, label: "Users", href: ROUTES.USERS },
         { module: MODULES.ROLES, label: "Roles", href: ROUTES.ROLES },
         { module: MODULES.DIVISIONS, label: "Divisions", href: ROUTES.DIVISIONS },
@@ -20,7 +20,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Master Data Workspace",
       items: [
-        { module: MODULES.DASHBOARD, label: "Home / Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.MASTER_CLIENTS, label: "Master Data Overview", href: ROUTES.MASTER_CLIENTS },
         { module: MODULES.MASTER_CLIENTS, label: "Clients", href: ROUTES.MASTER_CLIENTS },
         { module: MODULES.MASTER_CONTRACTORS, label: "Contractors", href: ROUTES.MASTER_CONTRACTORS },
@@ -38,7 +38,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Home",
       items: [
-        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.TRANSPORTATION, label: "Transportation Dashboard", href: ROUTES.TRANSPORT_DASHBOARD }
       ]
     },
@@ -96,7 +96,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Home",
       items: [
-        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.CENTRAL_ACCOUNTS_DASHBOARD, label: "Central Accounts Dashboard", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
         { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, label: "Audit Events", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT }
       ]
@@ -142,7 +142,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Legal Workspace",
       items: [
-        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.LEGAL_COMMAND_CENTER, label: "Legal Dashboard", href: ROUTES.LEGAL_COMMAND_CENTER },
         { module: MODULES.LEGAL_AGREEMENTS, label: "View Agreements", href: ROUTES.LEGAL_AGREEMENTS }
       ]
@@ -163,7 +163,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "WhatsApp Workspace",
       items: [
-        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.WHATSAPP_COMMAND_CENTER, label: "WhatsApp Dashboard", href: ROUTES.WHATSAPP_COMMAND_CENTER }
       ]
     },
@@ -182,7 +182,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Meetings Workspace",
       items: [
-        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.MEETINGS_COMMAND_CENTER, label: "Meetings Dashboard", href: ROUTES.MEETINGS_COMMAND_CENTER }
       ]
     },
@@ -198,7 +198,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Dashboard",
       items: [
-        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.DIGITAL_SERVICES_DASHBOARD, label: "Dashboard", href: ROUTES.DIGITAL_SERVICES_DASHBOARD }
       ]
     },
@@ -233,7 +233,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Email Workspace",
       items: [
-        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.EMAIL_COMMAND_CENTER, label: "Email Dashboard", href: ROUTES.EMAIL_COMMAND_CENTER }
       ]
     },
@@ -252,7 +252,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Home",
       items: [
-        { module: MODULES.DASHBOARD, label: "Control Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.INTERIORS_DASHBOARD, label: "Dashboard", href: ROUTES.INTERIORS_DASHBOARD },
         { module: MODULES.INTERIORS_LEADS, label: "Leads", href: ROUTES.INTERIORS_LEADS },
         { module: MODULES.INTERIORS_CLIENTS, label: "Clients", href: ROUTES.INTERIORS_CLIENTS },

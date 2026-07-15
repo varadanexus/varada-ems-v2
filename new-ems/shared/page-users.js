@@ -1,11 +1,13 @@
 import { MODULES, WORKSPACES } from "../config/constants.js";
 import { logUserRoleEvent } from "./audit.js";
-import { listDivisions, listRoles, listUsers, provisionUserViaEdge, provisionLocalUser, deleteAppUser, updateAppUserDetails, setLocalUserPassword, syncUserAccessMappings, updateUserStatus } from "./admin-api.js";
+import { listDivisions, listRoles, listUsers, provisionUserViaEdge, provisionLocalUser, deleteAppUser, updateAppUserDetails, setLocalUserPassword, setSupabaseUserPassword, syncUserAccessMappings, updateUserStatus } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
 import { updateUserSecurity } from "./admin-api.js";
 import { getCurrentAppUser } from "./auth.js";
 import { requestUserPasswordReset } from "./admin-api.js";
+import { sendUserCredentialEmail } from "./email-api.js";
+import { notifyEmsUserCreated } from "./transport-integrations-api.js";
 
 let allUsers = [];
 let allRoles = [];
@@ -31,8 +33,8 @@ async function init() {
       <form id="createUserForm" class="form-row">
         <input id="newUserEmail" type="email" placeholder="Email" required />
         <input id="newUserUsername" type="text" placeholder="Username (optional)" />
-        <input id="newUserPhone" type="text" placeholder="Phone (optional)" />
-        <input id="newUserPassword" type="password" placeholder="Password" required />
+        <input id="newUserPhone" type="tel" inputmode="numeric" placeholder="Registered mobile number" required />
+        <input id="newUserPassword" type="password" minlength="8" placeholder="Initial password (minimum 8 characters)" required />
         <input id="newUserName" type="text" placeholder="Display name" />
         <select id="newUserAuthMethod" required>
           <option value="" disabled selected>Auth method…</option>
@@ -84,6 +86,55 @@ function getFilteredUsers() {
   });
 }
 
+function userAccessLabels(user) {
+  const roleName = (user.user_roles || []).map((x) => x.roles?.name || x.roles?.code).filter(Boolean).join(", ") || "Assigned role";
+  const hasAllScope = (user.user_divisions || []).some((x) => String(x.scope || "").toLowerCase() === "all");
+  const divisionName = hasAllScope
+    ? "All Divisions"
+    : ((user.user_divisions || []).map((x) => x.divisions?.name || x.divisions?.code).filter(Boolean).join(", ") || "No Division");
+  return { roleName, divisionName };
+}
+
+async function deliverStaffCredentials(user, password, sourceEvent = "ems_user_credentials_created") {
+  const recipientEmail = String(user.email || "").trim().toLowerCase();
+  const recipientPhone = String(user.phone || "").trim();
+  const username = user.auth_provider === "supabase" ? recipientEmail : (String(user.username || "").trim() || recipientEmail);
+  if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) throw new Error("A valid user email is required before credentials can be sent");
+  if (recipientPhone.replace(/\D/g, "").length < 10) throw new Error("A valid registered mobile number is required before credentials can be sent");
+  const { roleName, divisionName } = userAccessLabels(user);
+  const warnings = [];
+  try {
+    const emailResult = await sendUserCredentialEmail({
+      recipientEmail,
+      recipientName: user.display_name || recipientEmail,
+      username,
+      initialPassword: password,
+      registeredMobile: recipientPhone,
+      roleName,
+      divisionName,
+      sourceEvent
+    });
+    if (!(emailResult?.sent > 0)) warnings.push("credential email was not delivered");
+  } catch (error) {
+    warnings.push(`email failed: ${error?.message || "Unknown error"}`);
+  }
+  try {
+    const notification = await notifyEmsUserCreated({
+      recipientName: user.display_name || recipientEmail,
+      recipientPhone,
+      username,
+      password,
+      roleName,
+      portalLoginUrl: "https://www.varadanexus.com/login",
+      sourceEvent
+    });
+    if (!notification?.whatsapp?.sent) warnings.push(`WhatsApp was not delivered${notification?.whatsapp?.reason ? `: ${notification.whatsapp.reason}` : ""}`);
+  } catch (error) {
+    warnings.push(`WhatsApp failed: ${error?.message || "Unknown error"}`);
+  }
+  return warnings;
+}
+
 function renderUsers() {
   const rows = getFilteredUsers();
   const body = qs("#usersBody");
@@ -126,6 +177,7 @@ function renderUsers() {
           <button class="btn" data-user-id="${u.id}" data-next-status="${nextStatus}">${nextStatus === "active" ? "Enable" : "Disable"}</button>
           <button class="btn" data-lock-user-id="${u.id}" data-next-lock="${u.is_locked ? "false" : "true"}">${u.is_locked ? "Unlock" : "Lock"}</button>
           <button class="btn" data-reset-user-id="${u.id}">${u.auth_provider === "supabase" ? "Reset Password*" : "Set Password"}</button>
+          <button class="btn" data-resend-user-id="${u.id}">Resend credentials</button>
           <button class="btn" data-edit-user-id="${u.id}">Edit</button>
           ${u.auth_provider === "supabase" ? "" : `<button class="btn" data-delete-user-id="${u.id}" style="color:#f87171;border-color:#f8717155;">Delete</button>`}
           <div data-edit-form="${u.id}" style="display:none;margin-top:.5rem;padding:.5rem;border:1px solid rgba(255,255,255,.12);border-radius:8px;">
@@ -295,6 +347,38 @@ function renderUsers() {
       }
     });
   });
+
+  body.querySelectorAll("button[data-resend-user-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.getAttribute("data-resend-user-id");
+      const user = allUsers.find((x) => String(x.id) === String(userId));
+      if (!user) return showToast("User record not found", "error");
+      if (!/^\S+@\S+\.\S+$/.test(String(user.email || "")) || String(user.phone || "").replace(/\D/g, "").length < 10) {
+        return showToast("Add a valid email and registered mobile number before resending credentials", "error");
+      }
+      const label = user.display_name || user.email || "this user";
+      const password = window.prompt(`Enter a new temporary password for ${label} (minimum 8 characters):`);
+      if (password === null) return;
+      if (password.length < 8) return showToast("Temporary password must be at least 8 characters", "error");
+      const confirmation = window.prompt("Re-enter the new temporary password to confirm:");
+      if (confirmation === null) return;
+      if (password !== confirmation) return showToast("Password confirmation does not match", "error");
+      if (!window.confirm(`Set this new temporary password and resend credentials to ${user.email} and the registered WhatsApp number?`)) return;
+      btn.disabled = true;
+      try {
+        if (user.auth_provider === "supabase") await setSupabaseUserPassword(user.id, password);
+        else await setLocalUserPassword(user.id, password);
+        const warnings = await deliverStaffCredentials(user, password, "ems_user_credentials_resent");
+        await logUserRoleEvent("user_credentials_resent", { entityType: "app_users", entityId: user.id, email: user.email, deliveryWarnings: warnings });
+        if (warnings.length) showToast(`Password updated. ${warnings.join("; ")}`, "warning");
+        else showToast("New credentials sent successfully by email and WhatsApp", "success");
+      } catch (error) {
+        showToast(error?.message || "Failed to resend credentials", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 }
 
 async function loadMasterLists() {
@@ -370,8 +454,12 @@ function bindCreateForm() {
         showToast("Email and role are required", "error");
         return;
       }
-      if (!password) {
-        showToast("Password is required", "error");
+      if (password.length < 8) {
+        showToast("Initial password must be at least 8 characters", "error");
+        return;
+      }
+      if (String(phone || "").replace(/\D/g, "").length < 10) {
+        showToast("A valid registered mobile number is required for WhatsApp and the protected credential PDF", "error");
         return;
       }
 
@@ -391,9 +479,26 @@ function bindCreateForm() {
       } else {
         // Supabase Auth account via the admin-provision-user edge function.
         // (Edge path assigns a single division; global scope is role-derived.)
-        await provisionUserViaEdge({ email, password, displayName, roleCode: role.code, divisionCode });
+        await provisionUserViaEdge({ email, username, phone, password, displayName, roleCode: role.code, divisionCode });
       }
       showToast("User provisioned", "success");
+      const divisionLabel = divisionValue === "__ALL__"
+        ? "All Divisions"
+        : (allDivisions.find((d) => String(d.id) === String(divisionValue))?.name || "No Division");
+      const loginUsername = authMethod === "supabase" ? email : (username || email);
+      const deliveryWarnings = await deliverStaffCredentials({
+        email,
+        username: loginUsername,
+        phone,
+        display_name: displayName || email,
+        auth_provider: authMethod,
+        user_roles: [{ roles: { name: role.name || role.code } }],
+        user_divisions: divisionValue === "__ALL__"
+          ? [{ scope: "all", divisions: null }]
+          : [{ scope: "assigned", divisions: { name: divisionLabel } }]
+      }, password);
+      if (deliveryWarnings.length) showToast(`User created. ${deliveryWarnings.join("; ")}`, "warning");
+      else showToast("Protected credentials sent by email and WhatsApp", "info");
       form.reset();
       await loadUsers();
     } catch (error) {

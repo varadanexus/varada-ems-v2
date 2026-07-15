@@ -77,7 +77,7 @@ async function loadProject(projectId) {
       ? client.from("interior_designs").select("id, version_no, design_title, description, file_url, status, uploaded_at").eq("project_id", sharedProjectId).order("version_no", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
     sharedProjectId
-      ? client.from("interior_project_team").select("*, app_users(id, display_name, email), interior_vendors(id, vendor_name, vendor_type)").eq("project_id", sharedProjectId).eq("status", "active").order("assigned_at", { ascending: false })
+      ? client.from("interior_project_team").select("*, app_users!interior_project_team_app_user_id_fkey(id, display_name, email), interior_vendors(id, vendor_name, vendor_type)").eq("project_id", sharedProjectId).eq("status", "active").order("assigned_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
     sharedProjectId
       ? client.from("interior_material_plans").select("*").eq("project_id", sharedProjectId).order("created_at", { ascending: false })
@@ -186,14 +186,16 @@ function render() {
   renderModuleContent(`
     <section class="card">
       <style>
-        .ipd-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem}
-        .ipd-tabs button{border:1px solid #d1d5db;background:#fff;border-radius:999px;padding:.5rem .9rem;cursor:pointer}
-        .ipd-tabs button.active{background:#111827;color:#fff;border-color:#111827}
+        .ipd-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem;padding:.35rem 0}
+        .ipd-tabs button{appearance:none;border:1px solid rgba(214,174,82,.24)!important;background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.015))!important;color:#d8d3c8!important;border-radius:999px;padding:.52rem .92rem;cursor:pointer;font:inherit;font-size:.78rem;font-weight:700;line-height:1.1;letter-spacing:.01em;box-shadow:inset 0 1px 0 rgba(255,255,255,.025);transition:border-color .18s ease,color .18s ease,background .18s ease,transform .18s ease;white-space:nowrap}
+        .ipd-tabs button:hover{border-color:rgba(226,190,102,.55)!important;color:#f2d47f!important;background:rgba(214,174,82,.08)!important;transform:translateY(-1px)}
+        .ipd-tabs button.active{background:linear-gradient(135deg,#efd17a,#c99b42)!important;color:#151108!important;border-color:#f1d98d!important;box-shadow:0 7px 20px rgba(201,155,66,.16),inset 0 1px 0 rgba(255,255,255,.4)}
+        .ipd-tabs button:focus-visible{outline:2px solid rgba(239,209,122,.72);outline-offset:2px}
         .ipd-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
         .ipd-grid .full{grid-column:1/-1}
         .ipd-panel{display:none;margin-top:1rem}
         .ipd-panel.active{display:block}
-        @media (max-width:980px){.ipd-grid{grid-template-columns:1fr}}
+        @media (max-width:980px){.ipd-grid{grid-template-columns:1fr}.ipd-tabs{flex-wrap:nowrap;overflow-x:auto;padding-bottom:.65rem}.ipd-tabs button{flex:0 0 auto}}
       </style>
       <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:flex-start;">
         <div>
@@ -202,7 +204,7 @@ function render() {
         </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
           <a class="btn" href="${ROUTES.INTERIORS_PROJECTS}">Back to Projects</a>
-          ${project.shared_project_id ? `<a class="btn" href="${ROUTES.PROJECT_ENGINE_PROJECT_DETAILS}?id=${project.shared_project_id}">Advanced Backbone</a>` : ""}
+          ${project.shared_project_id ? `<a class="btn" href="${ROUTES.PROJECT_ENGINE_PROJECT_DETAILS}?id=${project.shared_project_id}&workspace=interiors">Advanced Backbone</a>` : ""}
         </div>
       </div>
       <div class="hero-kpis" style="margin-top:1rem;">

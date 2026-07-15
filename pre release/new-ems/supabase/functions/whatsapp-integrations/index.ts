@@ -235,6 +235,72 @@ function defaultTemplateRegistry() {
       contentSid: env("MARKETING_VENDOR_PROJECT_ASSIGNED_CONTENT_SID", "HX156f933dafd2b68d8dea04296ce0cdfb"),
       variables: ["vendorName", "projectCode", "projectName", "service", "targetDate"],
       defaultBody: "Hello {{1}}, project {{2}} — {{3}} has been assigned to you. Service: {{4}}. Target: {{5}}."
+    },
+    {
+      alias: "interiors_design_uploaded_v1", title: "Interiors Design Uploaded", module: "interiors",
+      contentSid: env("INTERIORS_DESIGN_UPLOADED_CONTENT_SID", "HX2b988abdd43315b4e697ff78fe084d44"),
+      variables: ["clientName", "projectName", "projectCode", "designVersion", "uploadedDate"],
+      defaultBody: "Hello {{1}}, new design files have been uploaded for project {{2}}, reference {{3}}. Design version {{4}} was published on {{5}} and is now available in your Varada Nexus client portal for review."
+    },
+    {
+      alias: "interiors_design_approval_request_v1", title: "Interiors Design Approval Request", module: "interiors",
+      contentSid: env("INTERIORS_DESIGN_APPROVAL_CONTENT_SID", "HX8cbe37963c8892ebafae19e7efac5eef"),
+      variables: ["clientName", "designVersion", "projectName", "responseDate"],
+      defaultBody: "Hello {{1}}, design version {{2}} for project {{3}} is ready for your review. Please approve the design or submit your revision comments by {{4}} through the Varada Nexus client portal."
+    },
+    {
+      alias: "interiors_design_status_v1", title: "Interiors Design Status", module: "interiors",
+      contentSid: env("INTERIORS_DESIGN_STATUS_CONTENT_SID", "HXb60c6c0669e6be279a5737a76687d53f"),
+      variables: ["clientName", "designVersion", "projectName", "status", "updatedDate"],
+      defaultBody: "Hello {{1}}, the review status of design version {{2}} for project {{3}} has been updated to {{4}}. The update was recorded on {{5}}."
+    },
+    {
+      alias: "interiors_client_invoice_v1", title: "Interiors Client Invoice", module: "interiors",
+      contentSid: env("INTERIORS_CLIENT_INVOICE_CONTENT_SID", "HX0e740eca789ab958ff3df1ac61a0faab"),
+      variables: ["clientName", "invoiceNumber", "projectName", "amount", "dueDate"],
+      defaultBody: "Hello {{1}}, invoice {{2}} has been issued for project {{3}}. Invoice amount: {{4}}. Payment due date: {{5}}."
+    },
+    {
+      alias: "interiors_payment_reminder_v1", title: "Interiors Payment Reminder", module: "interiors",
+      contentSid: env("INTERIORS_PAYMENT_REMINDER_CONTENT_SID", "HXa7a721bb2c141eede7f7c9ec569ab423"),
+      variables: ["clientName", "invoiceNumber", "projectName", "amount", "dueDate"],
+      defaultBody: "Hello {{1}}, this is a payment reminder for invoice {{2}} relating to project {{3}}. Amount payable: {{4}}. Payment due date: {{5}}."
+    },
+    {
+      alias: "interiors_payment_overdue_v1", title: "Interiors Overdue Payment Reminder", module: "interiors",
+      contentSid: env("INTERIORS_PAYMENT_OVERDUE_CONTENT_SID", "HX1a9b3f1c3a57b002e339ec85fbb4ce0a"),
+      variables: ["clientName", "invoiceNumber", "projectName", "amount", "dueDate"],
+      defaultBody: "Hello {{1}}, our records indicate that invoice {{2}} for project {{3}} is overdue. Outstanding amount: {{4}}. Original due date: {{5}}."
+    },
+    {
+      alias: "interiors_payment_received_v1", title: "Interiors Payment Received", module: "interiors",
+      contentSid: env("INTERIORS_PAYMENT_RECEIVED_CONTENT_SID", "HX379201667ed0ddd99c4bb32c3fd16bae"),
+      variables: ["clientName", "amount", "invoiceNumber", "paymentDate", "receiptReference"],
+      defaultBody: "Hello {{1}}, we have received your payment of {{2}} against invoice {{3}}. Payment date: {{4}}. Receipt reference: {{5}}."
+    },
+    {
+      alias: "interiors_project_created_v1", title: "Interiors Project Created", module: "interiors",
+      contentSid: env("INTERIORS_PROJECT_CREATED_CONTENT_SID", "HX7f4cbf1a4b9d79d598cd0fbeceb8809b"),
+      variables: ["clientName", "projectName", "projectCode", "projectStage"],
+      defaultBody: "Hello {{1}}, your interior project {{2}}, reference {{3}}, has been created in the Varada Nexus client portal. The project is currently in the {{4}} stage."
+    },
+    {
+      alias: "interiors_site_progress_v1", title: "Interiors Site Progress", module: "interiors",
+      contentSid: env("INTERIORS_SITE_PROGRESS_CONTENT_SID", "HX7333dc94ad7653a8f821c54e521fd22f"),
+      variables: ["clientName", "projectName", "currentStage", "progress", "updateDate"],
+      defaultBody: "Hello {{1}}, a new site progress update has been published for project {{2}}. Current stage: {{3}}. Recorded progress: {{4}}. Update date: {{5}}."
+    },
+    {
+      alias: "interiors_client_approval_required_v1", title: "Interiors Client Approval Required", module: "interiors",
+      contentSid: env("INTERIORS_CLIENT_APPROVAL_CONTENT_SID", "HX9ae6f047ea6089f1468aa01129920c5f"),
+      variables: ["clientName", "approvalType", "projectName", "reference", "responseDate"],
+      defaultBody: "Hello {{1}}, your approval is required for {{2}} relating to project {{3}}. Reference: {{4}}. Response requested by: {{5}}."
+    },
+    {
+      alias: "interiors_project_completion_v1", title: "Interiors Project Completion", module: "interiors",
+      contentSid: env("INTERIORS_PROJECT_COMPLETION_CONTENT_SID", "HXf233e67cab6788f43d6f2f71a7c430b3"),
+      variables: ["clientName", "projectName", "projectCode", "completionDate"],
+      defaultBody: "Hello {{1}}, project {{2}}, reference {{3}}, has reached the completion and handover stage. The recorded completion date is {{4}}."
     }
   ].filter((item) => item.contentSid || item.defaultBody);
 }
@@ -766,7 +832,7 @@ async function recordAutomatedWhatsApp(admin: any, details: any, twilioPayload: 
   const { error: messageError } = await admin.from("whatsapp_messages").insert({
     chat_id: chat.id, phone: chat.phone, name: details.name || chat.name, direction: "outbound",
     message: storedMessage, message_sid: twilioPayload.sid || null, status: twilioPayload.status || "queued",
-    media_url: null, template_alias: details.templateAlias, source_module: "digital-marketing",
+    media_url: null, template_alias: details.templateAlias, source_module: details.sourceModule || "digital-marketing",
     source_event: details.eventType, rendered_payload: details.variables || {}
   });
   if (messageError) throw messageError;
@@ -776,7 +842,7 @@ async function recordAutomatedWhatsApp(admin: any, details: any, twilioPayload: 
   await admin.from("whatsapp_logs").insert({
     phone: chat.phone, template: details.templateAlias, template_alias: details.templateAlias,
     status: twilioPayload.status || "queued", message_sid: twilioPayload.sid || null,
-    message_text: storedMessage, source_module: "digital-marketing", source_event: details.eventType,
+    message_text: storedMessage, source_module: details.sourceModule || "digital-marketing", source_event: details.eventType,
     rendered_payload: details.variables || {}
   });
   return chat;
@@ -903,6 +969,189 @@ async function notifyMarketingEvent(req: Request, body: any) {
   await admin.from("audit_logs").insert({
     event_type: "marketing_whatsapp_notification_sent", module_code: "digital-services",
     actor_app_user_id: actor.caller?.id || null, entity_type: eventType, entity_id: null,
+    details: { source_entity_id: entityId, chat_id: chat.id, message_sid: twilioPayload.sid || null, template_alias: details.templateAlias }
+  });
+  return json({ ok: true, sent: true, eventType, messageSid: twilioPayload.sid || null });
+}
+
+function interiorsLabel(value: any) {
+  return String(value || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase()) || "Updated";
+}
+
+function interiorsResponseDate(value: any, days = 7) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return marketingDate(value);
+  date.setUTCDate(date.getUTCDate() + days);
+  return marketingDate(date.toISOString());
+}
+
+async function interiorsProjectContext(admin: any, ids: { sharedProjectId?: string; interiorProjectId?: string }) {
+  let project: any = null;
+  if (ids.interiorProjectId) project = await one(admin, "interior_projects", ids.interiorProjectId);
+  else {
+    const { data, error } = await admin.from("interior_projects").select("*").eq("shared_project_id", ids.sharedProjectId).maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("Interiors project record was not found");
+    project = data;
+  }
+  const client = await one(admin, "interior_clients", project.interior_client_id);
+  const { data: portalUser, error: portalError } = await admin.from("interior_client_portal_users")
+    .select("contact_name,phone,email,access_status")
+    .eq("interior_client_id", client.id)
+    .in("access_status", ["active", "invited"])
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (portalError) throw portalError;
+  return {
+    project,
+    client,
+    phone: client.phone || portalUser?.phone || "",
+    recipientName: client.contact_person || portalUser?.contact_name || client.client_name,
+    projectName: project.project_title || project.project_name || "Interior Project",
+    projectCode: project.project_code || "Not assigned",
+    sharedProjectId: project.shared_project_id
+  };
+}
+
+async function interiorsBillingContext(admin: any, billingHeaderId: string) {
+  const bill = await one(admin, "interior_billing_headers", billingHeaderId);
+  const context = await interiorsProjectContext(admin, { sharedProjectId: bill.project_id });
+  const { data: financialDocument, error: documentError } = await admin.from("financial_documents")
+    .select("id,source_document_no,document_date,status")
+    .eq("source_module", "interiors")
+    .eq("source_table", "interior_billing_headers")
+    .eq("source_document_id", bill.id)
+    .maybeSingle();
+  if (documentError) throw documentError;
+  let receivable: any = null;
+  if (financialDocument?.id) {
+    const { data, error } = await admin.from("receivable_open_items").select("*").eq("financial_document_id", financialDocument.id).maybeSingle();
+    if (error) throw error;
+    receivable = data;
+  }
+  return { ...context, bill, financialDocument, receivable };
+}
+
+async function resolveInteriorsNotification(admin: any, eventType: string, entityId: string) {
+  if (eventType === "project_created") {
+    const context = await interiorsProjectContext(admin, { interiorProjectId: entityId });
+    return { ...context, sourceModule: "interiors", eventType, templateAlias: "interiors_project_created_v1",
+      variables: { "1": context.recipientName, "2": context.projectName, "3": context.projectCode, "4": interiorsLabel(context.project.status || "draft") } };
+  }
+  if (["design_uploaded", "design_approval", "design_status"].includes(eventType)) {
+    const design = await one(admin, "interior_designs", entityId);
+    const context = await interiorsProjectContext(admin, { sharedProjectId: design.project_id });
+    const version = `Version ${design.version_no || 1}`;
+    if (eventType === "design_uploaded") return { ...context, sourceModule: "interiors", eventType, templateAlias: "interiors_design_uploaded_v1",
+      variables: { "1": context.recipientName, "2": context.projectName, "3": context.projectCode, "4": version, "5": marketingDate(design.uploaded_at || design.created_at) } };
+    if (eventType === "design_approval") return { ...context, sourceModule: "interiors", eventType, templateAlias: "interiors_design_approval_request_v1",
+      variables: { "1": context.recipientName, "2": version, "3": context.projectName, "4": interiorsResponseDate(design.updated_at || design.uploaded_at) } };
+    return { ...context, sourceModule: "interiors", eventType, templateAlias: "interiors_design_status_v1",
+      variables: { "1": context.recipientName, "2": version, "3": context.projectName, "4": interiorsLabel(design.status), "5": marketingDate(design.updated_at || new Date().toISOString()) } };
+  }
+  if (["client_invoice", "payment_reminder", "payment_overdue"].includes(eventType)) {
+    const context = await interiorsBillingContext(admin, entityId);
+    const amount = eventType === "client_invoice" ? context.bill.total_amount : (context.receivable?.open_amount ?? context.bill.total_amount);
+    const dueDate = context.receivable?.due_date || context.bill.bill_date;
+    if (eventType === "payment_overdue") {
+      const due = dueDate ? new Date(`${dueDate}T00:00:00Z`) : null;
+      if (!due || Number(context.receivable?.open_amount ?? context.bill.total_amount) <= 0 || due.getTime() >= Date.now()) {
+        return { skipped: true, reason: "This bill is not currently overdue with an outstanding balance." };
+      }
+    }
+    const alias = eventType === "client_invoice" ? "interiors_client_invoice_v1"
+      : eventType === "payment_overdue" ? "interiors_payment_overdue_v1" : "interiors_payment_reminder_v1";
+    return { ...context, sourceModule: "interiors", eventType, templateAlias: alias,
+      variables: { "1": context.recipientName, "2": context.bill.bill_number, "3": context.projectName, "4": marketingMoney(amount), "5": marketingDate(dueDate) } };
+  }
+  if (eventType === "payment_received") {
+    const context = await interiorsBillingContext(admin, entityId);
+    if (!context.receivable?.id) return { skipped: true, reason: "This bill has no posted Central Accounts receivable." };
+    const { data: allocation, error: allocationError } = await admin.from("receivable_allocations")
+      .select("*")
+      .eq("receivable_item_id", context.receivable.id)
+      .in("status", ["approved", "posted"])
+      .order("allocation_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (allocationError) throw allocationError;
+    if (!allocation?.id) return { skipped: true, reason: "No approved or posted payment allocation exists for this bill." };
+    const appliedDocument = allocation.applied_document_id ? await one(admin, "financial_documents", allocation.applied_document_id) : null;
+    return { ...context, sourceModule: "interiors", eventType, templateAlias: "interiors_payment_received_v1",
+      variables: { "1": context.recipientName, "2": marketingMoney(allocation.amount), "3": context.bill.bill_number,
+        "4": marketingDate(allocation.allocation_date), "5": appliedDocument?.source_document_no || allocation.id } };
+  }
+  if (eventType === "site_progress") {
+    const update = await one(admin, "interior_site_updates", entityId);
+    const context = await interiorsProjectContext(admin, { sharedProjectId: update.project_id });
+    return { ...context, sourceModule: "interiors", eventType, templateAlias: "interiors_site_progress_v1",
+      variables: { "1": context.recipientName, "2": context.projectName, "3": update.update_title || "Site Progress",
+        "4": `${Number(update.progress_percent || 0)}%`, "5": marketingDate(update.update_date || update.created_at) } };
+  }
+  if (eventType === "client_approval") {
+    const approval = await one(admin, "interior_client_approvals", entityId);
+    const context = await interiorsProjectContext(admin, { interiorProjectId: approval.interior_project_id });
+    return { ...context, sourceModule: "interiors", eventType, templateAlias: "interiors_client_approval_required_v1",
+      variables: { "1": context.recipientName, "2": interiorsLabel(approval.approval_type), "3": context.projectName,
+        "4": approval.reference_id || approval.id, "5": interiorsResponseDate(approval.created_at) } };
+  }
+  if (eventType === "project_completion") {
+    const closure = await one(admin, "interior_project_closures", entityId);
+    if (closure.status !== "completed") return { skipped: true, reason: "The project closure is not completed." };
+    const context = await interiorsProjectContext(admin, { sharedProjectId: closure.project_id });
+    return { ...context, sourceModule: "interiors", eventType, templateAlias: "interiors_project_completion_v1",
+      variables: { "1": context.recipientName, "2": context.projectName, "3": context.projectCode,
+        "4": marketingDate(closure.actual_handover_date || closure.updated_at || new Date().toISOString()) } };
+  }
+  throw new Error("Unsupported Interiors WhatsApp event");
+}
+
+function interiorsPermissionForEvent(eventType: string) {
+  const permissions: Record<string, [string, string]> = {
+    project_created: ["interiors-projects", "create"],
+    design_uploaded: ["interiors-designs", "create"], design_approval: ["interiors-designs", "edit"], design_status: ["interiors-designs", "edit"],
+    client_invoice: ["interiors-billing", "create"], payment_reminder: ["interiors-billing", "edit"], payment_overdue: ["interiors-billing", "edit"], payment_received: ["interiors-billing", "edit"],
+    site_progress: ["interiors-site-updates", "create"], client_approval: ["interiors-project-closure", "create"], project_completion: ["interiors-project-closure", "edit"]
+  };
+  return permissions[eventType] || ["interiors", "view"];
+}
+
+async function requireInteriorsNotifier(req: Request, details: any, eventType: string) {
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) throw new Error("Unauthorized");
+  const jwt = authHeader.replace("Bearer ", "");
+  const scoped = createClient(env("SUPABASE_URL"), env("SUPABASE_ANON_KEY"), { global: { headers: { Authorization: `Bearer ${jwt}` } } });
+  const [moduleCode, actionCode] = interiorsPermissionForEvent(eventType);
+  const [{ data: permitted, error: permissionError }, { data: canView, error: viewError }] = await Promise.all([
+    scoped.rpc("has_permission", { module_code: moduleCode, action_code: actionCode }),
+    details.sharedProjectId ? scoped.rpc("can_view_project_by_id", { p_project_id: details.sharedProjectId }) : Promise.resolve({ data: true, error: null })
+  ]);
+  if (permissionError) throw permissionError;
+  if (viewError) throw viewError;
+  if (!permitted || !canView) throw new Error("Interiors notification permission required");
+  return await getCaller(req, adminClient());
+}
+
+async function notifyInteriorsEvent(req: Request, body: any) {
+  const admin = adminClient();
+  const eventType = String(body?.eventType || "").trim();
+  const entityId = String(body?.entityId || "").trim();
+  if (!eventType || !entityId) throw new Error("Interiors notification event and entity are required");
+  const authenticatedCaller = await getCaller(req, admin);
+  if (!authenticatedCaller?.id || String(authenticatedCaller.status || "active").toLowerCase() !== "active") throw new Error("Unauthorized");
+  const details = await resolveInteriorsNotification(admin, eventType, entityId);
+  if (details.skipped) return json({ ok: true, sent: false, skipped: true, reason: details.reason });
+  const caller = await requireInteriorsNotifier(req, details, eventType);
+  if (!details.phone) return json({ ok: true, sent: false, skipped: true, reason: "The Interiors client has no registered phone number." });
+  const twilioPayload = await sendTwilioMessage({ toPhone: details.phone, templateAlias: details.templateAlias, variables: details.variables });
+  const chat = await recordAutomatedWhatsApp(admin, details, twilioPayload);
+  await admin.from("audit_logs").insert({
+    event_type: "interiors_whatsapp_notification_sent", module_code: "interiors",
+    actor_app_user_id: caller?.id || null, entity_type: eventType, entity_id: null,
     details: { source_entity_id: entityId, chat_id: chat.id, message_sid: twilioPayload.sid || null, template_alias: details.templateAlias }
   });
   return json({ ok: true, sent: true, eventType, messageSid: twilioPayload.sid || null });
@@ -1192,6 +1441,7 @@ Deno.serve(async (req) => {
    if (action === "list_history") return await listHistory(req);
    if (action === "send_message") return await sendMessage(req, body);
    if (action === "notify_marketing_event") return await notifyMarketingEvent(req, body);
+   if (action === "notify_interiors_event") return await notifyInteriorsEvent(req, body);
    if (action === "simulate_inbound_message") {
      const admin = adminClient();
      const caller = await requireWhatsAppCaller(req, admin);

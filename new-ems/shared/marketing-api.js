@@ -75,6 +75,7 @@ export async function signInMarketingPortal(email, password, expectedKind) {
 }
 
 export async function signOutMarketingPortal() {
+  sessionStorage.removeItem("ems_terms_owner_bypass_session");
   const token = externalPortalToken();
   if (token) {
     try { await run(db().rpc("external_portal_logout", { p_session_token: token })); } finally {

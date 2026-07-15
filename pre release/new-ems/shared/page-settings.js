@@ -1,10 +1,10 @@
 import { MODULES, WORKSPACES } from "../config/constants.js";
-import { listAuditLogs, listSystemSettings, publishTermsPolicy, upsertSystemSetting } from "./admin-api.js";
+import { issueTermsBypassCode, listAuditLogs, listSystemSettings, publishTermsPolicy, upsertSystemSetting } from "./admin-api.js";
 import { getCurrentAppUser } from "./auth.js";
 import { logAuditEvent } from "./audit.js";
 import { getEmailConfigStatus, getEmailProviderHealth, sendEmailTest } from "./email-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
-import { getDefaultTermsSections } from "./terms-gate.js?v=terms-20260704-v5";
+import { getDefaultTermsSections } from "./terms-gate.js?v=terms-owner-bypass-1";
 import { qs, showToast } from "./utils.js";
 
 const TERMS_POLICY_KEY = "terms.policy";
@@ -140,7 +140,7 @@ async function init() {
 
   renderModuleContent(`
     <div class="stack">
-      <article class="card">
+      <article class="card" id="email-provider">
         <div class="flex-between" style="gap:1rem;align-items:flex-start;">
           <div>
             <h3>Email Provider API</h3>
@@ -247,6 +247,21 @@ async function init() {
           <button class="btn" id="publishTermsPolicy" type="button">Publish New Version & Require Re-acceptance</button>
           <button class="btn ghost" id="resetTermsSections" type="button">Reset Default Sections</button>
         </div>
+        <section id="termsOwnerBypassTools" hidden style="margin-top:1rem;padding:1rem;border:1px solid rgba(212,175,55,.32);border-radius:14px;background:rgba(15,23,42,.52);">
+          <div class="flex-between" style="gap:1rem;align-items:flex-start;">
+            <div>
+              <strong>Chairman temporary Terms bypass</strong>
+              <p class="muted" style="margin:.35rem 0 0;">Generate a single-use code valid for 15 minutes. Redemption opens only that user’s current browser session for up to four hours and does not record acceptance.</p>
+            </div>
+            <span class="badge">Protected owner action</span>
+          </div>
+          <div class="form-row" style="margin-top:.85rem;align-items:end;">
+            <label style="flex:1;">One-time code<input id="termsOwnerBypassCode" type="text" readonly autocomplete="off" placeholder="Generate a code when required" /></label>
+            <button class="btn" id="generateTermsBypassCode" type="button">Generate One-time Code</button>
+            <button class="btn ghost" id="copyTermsBypassCode" type="button" disabled>Copy</button>
+          </div>
+          <p class="muted" id="termsOwnerBypassExpiry" style="margin:.65rem 0 0;">Only the protected Chairman &amp; Managing Director account can issue a code.</p>
+        </section>
       </article>
 
       <article class="card">
@@ -273,7 +288,7 @@ async function init() {
         <div id="settingsList" class="empty-state" style="margin-top:1rem;">Loading settings...</div>
       </article>
 
-      <article class="card">
+      <article class="card" id="audit-activity">
         <h3>Audit Activity</h3>
         <input id="auditSearch" type="text" placeholder="Filter by event/module/entity" style="margin-bottom:0.6rem;" />
         <div id="auditList" class="empty-state">Loading audit logs...</div>
@@ -282,10 +297,20 @@ async function init() {
   `);
 
   bindTermsControls();
+  bindTermsOwnerBypassTools();
   bindSettingsForm();
   bindEmailControls();
   qs("#auditSearch")?.addEventListener("input", () => loadAudit());
   await Promise.all([loadSettings(), loadAudit()]);
+  const deepLinkId = String(window.location.hash || "").replace(/^#/, "");
+  const deepLinkTarget = deepLinkId ? document.getElementById(deepLinkId) : null;
+  if (deepLinkTarget) {
+    deepLinkTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+    deepLinkTarget.animate(
+      [{ boxShadow: "0 0 0 1px rgba(230,200,126,.7), 0 0 0 rgba(230,200,126,0)" }, { boxShadow: "0 0 0 1px rgba(230,200,126,.18), 0 18px 48px rgba(0,0,0,.28)" }],
+      { duration: 900, easing: "ease-out" }
+    );
+  }
 }
 
 function readTermsPolicyFromForm() {
@@ -386,6 +411,58 @@ function bindTermsControls() {
 
   qs("#saveTermsPolicy")?.addEventListener("click", () => saveTermsPolicy(false));
   qs("#publishTermsPolicy")?.addEventListener("click", () => saveTermsPolicy(true));
+}
+
+function bindTermsOwnerBypassTools() {
+  const tools = qs("#termsOwnerBypassTools");
+  const codeInput = qs("#termsOwnerBypassCode");
+  const copyButton = qs("#copyTermsBypassCode");
+  const expiry = qs("#termsOwnerBypassExpiry");
+  if (!tools || !codeInput || !copyButton || !expiry) return;
+
+  // Deliberately undisclosed in the visible Settings navigation. The server
+  // still enforces the protected Chairman identity, so discovering this
+  // shortcut cannot grant another user bypass authority.
+  document.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey && event.altKey && event.key.toLowerCase() === "b")) return;
+    event.preventDefault();
+    tools.hidden = !tools.hidden;
+    if (!tools.hidden) tools.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  qs("#generateTermsBypassCode")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = "Generating…";
+    codeInput.value = "";
+    copyButton.disabled = true;
+    try {
+      const issued = await issueTermsBypassCode();
+      codeInput.value = issued?.bypass_code || "";
+      copyButton.disabled = !codeInput.value;
+      expiry.textContent = issued?.code_expires_at
+        ? `Single use · expires ${new Date(issued.code_expires_at).toLocaleString()}`
+        : "Single-use code generated.";
+      showToast("One-time Terms bypass code generated", "success");
+    } catch (error) {
+      expiry.textContent = error?.message || "The protected owner code could not be generated.";
+      showToast(expiry.textContent, "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = "Generate One-time Code";
+    }
+  });
+
+  copyButton.addEventListener("click", async () => {
+    if (!codeInput.value) return;
+    try {
+      await navigator.clipboard.writeText(codeInput.value);
+      showToast("One-time code copied", "success");
+    } catch {
+      codeInput.select();
+      showToast("Copy was blocked. The code is selected for manual copy.", "error");
+    }
+  });
 }
 
 async function saveTermsPolicy(publishNewVersion) {

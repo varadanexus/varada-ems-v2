@@ -2,6 +2,8 @@ import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
+import { uploadInteriorsDocumentToDrive } from "./drive-api.js";
+import { notifyInteriorsWhatsAppSafely } from "./interiors-whatsapp-api.js";
 
 const client = getSupabaseClient();
 
@@ -9,8 +11,10 @@ const PAGE_STATE = {
   boot: null,
   projects: [],
   designs: [],
+  documents: [],
   selectedProjectId: "",
-  isSaving: false
+  isSaving: false,
+  isUploadingLibrary: false
 };
 
 async function init() {
@@ -30,12 +34,14 @@ async function init() {
 }
 
 async function loadData() {
-  const [projectsRes, designsRes] = await Promise.all([
+  const [projectsRes, designsRes, documentsRes] = await Promise.all([
     client.from("interior_projects").select("id, shared_project_id, project_code, project_name, project_title, interior_clients(client_name)").order("project_name"),
-    client.from("interior_designs").select("*").order("uploaded_at", { ascending: false })
+    client.from("interior_designs").select("*").order("uploaded_at", { ascending: false }),
+    client.from("drive_documents").select("id,category,document_type,entity_type,entity_id,document_no,file_name,mime_type,file_size,web_view_link,upload_status,created_at").in("category", ["INTERIORS_DESIGN", "INTERIORS_DOCUMENT"]).is("deleted_at", null).order("created_at", { ascending: false })
   ]);
   if (projectsRes.error) throw projectsRes.error;
   if (designsRes.error) throw designsRes.error;
+  if (documentsRes.error) throw documentsRes.error;
 
   PAGE_STATE.projects = (projectsRes.data || []).filter((row) => row.shared_project_id).map((row) => ({
     interior_project_id: row.id,
@@ -46,6 +52,7 @@ async function loadData() {
     client_name: row.interior_clients?.client_name || null
   }));
   PAGE_STATE.designs = designsRes.data || [];
+  PAGE_STATE.documents = documentsRes.data || [];
 }
 
 function resolveNextVersionNo(projectId) {
@@ -72,6 +79,9 @@ function render() {
       <style>
         .ds-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.85rem 1rem}.ds-grid .full{grid-column:1/-1}
         .ds-grid label{display:block;font-weight:600;margin-bottom:.35rem}.ds-grid input,.ds-grid select,.ds-grid textarea{width:100%}
+        .interior-upload{border:1px dashed rgba(213,176,92,.48);border-radius:14px;padding:1rem;background:linear-gradient(135deg,rgba(213,176,92,.08),rgba(255,255,255,.015))}
+        .interior-upload input[type=file]{padding:.72rem;background:rgba(0,0,0,.22)}.interior-upload small{display:block;margin-top:.45rem;color:var(--muted)}
+        .file-links{display:flex;flex-wrap:wrap;gap:.35rem}.file-links a{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         @media (max-width:980px){.ds-grid{grid-template-columns:1fr}}
       </style>
       <h3>Designs</h3>
@@ -82,7 +92,8 @@ function render() {
         <div><label for="designTitle">Title *</label><input id="designTitle" type="text" maxlength="200" /></div>
         <div><label for="designStatus">Status *</label><select id="designStatus">${renderOptions(["draft", "submitted", "approved", "rejected", "revision_requested"], "draft")}</select></div>
         <div class="full"><label for="designDescription">Description</label><textarea id="designDescription" rows="3"></textarea></div>
-        <div class="full"><label for="designFileUrl">Design File URL</label><input id="designFileUrl" type="url" placeholder="https://..." /></div>
+        <div class="full interior-upload"><label for="designFiles">Design Files</label><input id="designFiles" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.dwg,.dxf,.skp,.rvt,.rfa,.ifc,.3ds,.obj,.stl,.step,.stp,.zip" /><small>Select multiple drawings, renders, CAD/BIM models, PDFs, images, or a ZIP package. Each file can be up to 10 MB.</small></div>
+        <div class="full"><label for="designFileUrl">External Reference URL <span class="muted">(optional)</span></label><input id="designFileUrl" type="url" placeholder="https://..." /></div>
       </div>
       <div style="margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap;">
         <button class="btn" id="uploadDesignBtn" type="button">Upload Design</button>
@@ -98,12 +109,23 @@ function render() {
         <td><span class="badge">${escapeHtml(row.status || "draft")}</span></td>
         <td>${formatDateTime(row.uploaded_at)}</td>
         <td>
-          ${row.file_url ? `<a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener">View Design</a>` : `<button class="btn btn-sm" type="button" disabled>View Design</button>`}
+          ${renderDesignFiles(row)}
           ${row.status === "draft" ? `<button class="btn btn-sm" data-design-submit="${row.id}" type="button">Submit For Approval</button>` : ""}
           ${row.status === "submitted" ? `<button class="btn btn-sm" data-design-approve="${row.id}" type="button">Approve</button> <button class="btn btn-sm" data-design-revision="${row.id}" type="button">Request Changes</button> <button class="btn btn-sm btn-danger" data-design-reject="${row.id}" type="button">Reject</button>` : ""}
         </td>
       </tr>`).join("") : `<tr><td colspan="6" style="text-align:center;padding:2rem;">No designs found.</td></tr>`}
       </tbody></table></div>
+    </section>
+    <section class="card" style="margin-top:1rem;">
+      <h4>Project Document Library</h4>
+      <p class="muted">Store client briefs, site measurements, specifications, reference drawings, and other project documents in the dedicated Interiors Drive archive.</p>
+      <div class="ds-grid" style="margin-top:1rem;">
+        <div><label for="libraryProjectId">Project *</label><select id="libraryProjectId"><option value="">Select Project</option>${PAGE_STATE.projects.map((row) => `<option value="${row.interior_project_id}" ${String(PAGE_STATE.selectedProjectId) === String(row.interior_project_id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
+        <div><label for="libraryDocumentType">Document Type *</label><select id="libraryDocumentType">${renderOptions(["Client Brief", "Site Measurement", "Working Drawing", "Material Specification", "Reference", "Contract", "Other"], "Client Brief")}</select></div>
+        <div class="full interior-upload"><label for="libraryFiles">Documents *</label><input id="libraryFiles" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.dwg,.dxf,.skp,.rvt,.rfa,.ifc,.3ds,.obj,.stl,.step,.stp,.zip,.doc,.docx,.xls,.xlsx,.csv,.txt" /><small>Choose one or several files. They will be sorted by client, upload date, project, and document type.</small></div>
+      </div>
+      <div style="margin-top:1rem;"><button class="btn" id="uploadLibraryBtn" type="button">Upload Project Documents</button></div>
+      <div class="table-container" style="margin-top:1rem;"><table><thead><tr><th>Project</th><th>Type</th><th>File</th><th>Uploaded</th></tr></thead><tbody>${renderLibraryRows()}</tbody></table></div>
     </section>
   `);
 }
@@ -116,6 +138,7 @@ function bindEvents() {
     syncSuggestedVersion();
   });
   document.getElementById("uploadDesignBtn")?.addEventListener("click", createDesign);
+  document.getElementById("uploadLibraryBtn")?.addEventListener("click", uploadProjectDocuments);
   document.querySelectorAll("[data-design-submit]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designSubmit, "submitted")));
   document.querySelectorAll("[data-design-approve]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designApprove, "approved")));
   document.querySelectorAll("[data-design-revision]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designRevision, "revision_requested")));
@@ -138,14 +161,21 @@ async function createDesign() {
   const status = document.getElementById("designStatus")?.value || "draft";
   const description = optionalValue("designDescription");
   const fileUrl = optionalValue("designFileUrl");
+  const files = Array.from(document.getElementById("designFiles")?.files || []);
   if (!projectId || !title || !versionNo) {
     showToast("Project, design version, and title are required.", TOAST_TYPES.ERROR);
     return;
   }
+  if (!files.length && !fileUrl) {
+    showToast("Choose at least one design file or provide an external reference URL.", TOAST_TYPES.ERROR);
+    return;
+  }
+  const fileError = validateSelectedFiles(files);
+  if (fileError) return showToast(fileError, TOAST_TYPES.ERROR);
 
   PAGE_STATE.isSaving = true;
   try {
-    const { error } = await client.from("interior_designs").insert({
+    const { data: design, error } = await client.from("interior_designs").insert({
       project_id: projectId,
       version_no: versionNo,
       design_title: title,
@@ -155,9 +185,38 @@ async function createDesign() {
       uploaded_by: PAGE_STATE.boot?.appUser?.id || null,
       created_by: PAGE_STATE.boot?.appUser?.id || null,
       updated_by: PAGE_STATE.boot?.appUser?.id || null
-    });
+    }).select("id").single();
     if (error) throw error;
-    showToast("Design uploaded.", TOAST_TYPES.SUCCESS);
+    const uploaded = [];
+    const failed = [];
+    for (const file of files) {
+      try {
+        const result = await uploadInteriorsDocumentToDrive({
+          category: "INTERIORS_DESIGN",
+          projectId,
+          entityId: design.id,
+          documentType: "Design",
+          documentNo: `${selectedProject?.project_code || "DESIGN"}-V${versionNo}`,
+          date: new Date().toISOString().slice(0, 10),
+          versionNo,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream"
+        }, await fileToBase64(file));
+        uploaded.push(result);
+      } catch (uploadError) {
+        failed.push(`${file.name}: ${uploadError?.message || "upload failed"}`);
+      }
+    }
+    const primaryUrl = uploaded.find((item) => item?.webViewLink)?.webViewLink || fileUrl;
+    if (primaryUrl && primaryUrl !== fileUrl) {
+      const { error: linkError } = await client.from("interior_designs").update({ file_url: primaryUrl }).eq("id", design.id);
+      if (linkError) throw linkError;
+    }
+    await notifyInteriorsWhatsAppSafely("design_uploaded", design.id);
+    if (status === "submitted") await notifyInteriorsWhatsAppSafely("design_approval", design.id);
+    showToast(failed.length
+      ? `Design saved. ${uploaded.length} file(s) uploaded; ${failed.length} failed.`
+      : `Design saved with ${uploaded.length || 1} file reference(s).`, failed.length ? TOAST_TYPES.WARNING : TOAST_TYPES.SUCCESS);
     await loadData();
     render();
     bindEvents();
@@ -175,11 +234,52 @@ async function createDesign() {
   }
 }
 
+async function uploadProjectDocuments() {
+  if (PAGE_STATE.isUploadingLibrary) return;
+  const selectedProject = resolveProjectByAnyId(document.getElementById("libraryProjectId")?.value || "");
+  const projectId = selectedProject?.shared_project_id || "";
+  const documentType = String(document.getElementById("libraryDocumentType")?.value || "General").trim();
+  const files = Array.from(document.getElementById("libraryFiles")?.files || []);
+  if (!projectId || !documentType || !files.length) return showToast("Project, document type, and at least one file are required.", TOAST_TYPES.ERROR);
+  const fileError = validateSelectedFiles(files);
+  if (fileError) return showToast(fileError, TOAST_TYPES.ERROR);
+
+  PAGE_STATE.isUploadingLibrary = true;
+  try {
+    let uploaded = 0;
+    const failures = [];
+    for (const file of files) {
+      try {
+        await uploadInteriorsDocumentToDrive({
+          category: "INTERIORS_DOCUMENT",
+          projectId,
+          entityId: projectId,
+          documentType,
+          documentNo: documentType,
+          date: new Date().toISOString().slice(0, 10),
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream"
+        }, await fileToBase64(file));
+        uploaded += 1;
+      } catch (error) {
+        failures.push(`${file.name}: ${error?.message || "upload failed"}`);
+      }
+    }
+    showToast(failures.length ? `${uploaded} document(s) uploaded; ${failures.length} failed.` : `${uploaded} document(s) uploaded to the Interiors archive.`, failures.length ? TOAST_TYPES.WARNING : TOAST_TYPES.SUCCESS);
+    await loadData();
+    render();
+    bindEvents();
+  } finally {
+    PAGE_STATE.isUploadingLibrary = false;
+  }
+}
+
 async function updateDesignStatus(id, status) {
   if (!id) return;
   try {
     const { error } = await client.from("interior_designs").update({ status, updated_by: PAGE_STATE.boot?.appUser?.id || null }).eq("id", id);
     if (error) throw error;
+    await notifyInteriorsWhatsAppSafely(status === "submitted" ? "design_approval" : "design_status", id);
     showToast(`Design marked ${status}.`, TOAST_TYPES.SUCCESS);
     await loadData();
     render();
@@ -187,6 +287,49 @@ async function updateDesignStatus(id, status) {
   } catch (error) {
     showToast(error?.message || `Failed to set design status to ${status}.`, TOAST_TYPES.ERROR);
   }
+}
+
+function renderDesignFiles(design) {
+  const stored = PAGE_STATE.documents.filter((row) => row.category === "INTERIORS_DESIGN" && String(row.entity_id) === String(design.id) && row.upload_status === "stored" && row.web_view_link);
+  const links = stored.map((row) => `<a class="btn btn-sm" href="${escapeHtml(row.web_view_link)}" target="_blank" rel="noopener" title="${escapeHtml(row.file_name || "Design file")}">${escapeHtml(row.file_name || "View file")}</a>`);
+  if (design.file_url && !stored.some((row) => row.web_view_link === design.file_url)) {
+    links.push(`<a class="btn btn-sm" href="${escapeHtml(design.file_url)}" target="_blank" rel="noopener">External reference</a>`);
+  }
+  return links.length ? `<div class="file-links">${links.join("")}</div>` : `<button class="btn btn-sm" type="button" disabled>No files</button>`;
+}
+
+function renderLibraryRows() {
+  const selectedProjectId = resolveSelectedSharedProjectId();
+  const documents = PAGE_STATE.documents.filter((row) => row.category === "INTERIORS_DOCUMENT" && (!selectedProjectId || String(row.entity_id) === String(selectedProjectId)));
+  if (!documents.length) return `<tr><td colspan="4" style="text-align:center;padding:1.5rem;">No project documents uploaded yet.</td></tr>`;
+  return documents.map((row) => `<tr>
+    <td>${escapeHtml(projectName(row.entity_id))}</td>
+    <td>${escapeHtml(row.document_type || "General")}</td>
+    <td>${row.web_view_link ? `<a href="${escapeHtml(row.web_view_link)}" target="_blank" rel="noopener">${escapeHtml(row.file_name || "View file")}</a>` : escapeHtml(row.file_name || "-")}<br/><span class="muted">${formatFileSize(row.file_size)}</span></td>
+    <td>${formatDateTime(row.created_at)}</td>
+  </tr>`).join("");
+}
+
+function validateSelectedFiles(files) {
+  if (files.length > 12) return "Upload a maximum of 12 files at a time.";
+  const oversized = files.find((file) => Number(file.size || 0) > 10 * 1024 * 1024);
+  return oversized ? `${oversized.name} exceeds the 10 MB per-file limit.` : "";
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").replace(/^data:[^;]+;base64,/, ""));
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatFileSize(value) {
+  const bytes = Number(value || 0);
+  if (!bytes) return "Size unavailable";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function projectName(projectId) {

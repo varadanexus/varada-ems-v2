@@ -1,17 +1,87 @@
 import { APP_NAME, MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getAllowedModulesForRoles, getDivisionById, getMyAllowedModules, getMyPermissions, getMyRoleCodes, getUserRoleCodes, resolveWorkspaceDivision } from "./admin-api.js";
 import { logout, requireAuth, getCurrentAppUser, validateActiveUnlockedUser } from "./auth.js";
-import { isUltimateAuthorityEmail, PERMISSIONS, ROLES } from "../config/roles.js";
+import { isCooRestrictedModuleCode, isFinanceRestrictedEmail, isUltimateAuthorityEmail, PERMISSIONS, ROLES } from "../config/roles.js";
 import { renderNavbar } from "./navbar.js";
 import { getAccessibleModules, getUserDivisionAccessContext, hasAnyRolePermission, setDbPermissionSet } from "./permissions.js";
 import { getSearchIndex, renderSidebar } from "./sidebar.js";
 import { initTheme } from "./theme.js";
-import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-owner-bypass-1";
 import { initNotificationShell } from "./notification-ui.js?v=notifications-1";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
 
 const NAV_TRANSITION_KEY = "ems_nav_pending";
+const FINANCIAL_TEXT_PATTERN = /\b(amount|rate|billing|bill(?:s|ing)?|invoice|payment|receipt|credit\s*note|receivable|payable|revenue|cost|margin|gst|tax|debit|credit|balance|outstanding|price|budget|expense|freight\s*charge|commission|penalty|settlement|quotation|quote|estimate|boq)\b/i;
+
+function containsFinancialText(value) {
+  return FINANCIAL_TEXT_PATTERN.test(String(value || "").replace(/[_-]+/g, " "));
+}
+
+function removeFinancialTableColumns(root) {
+  root.querySelectorAll("table").forEach((table) => {
+    const headerRow = table.tHead?.rows?.[0] || table.querySelector("thead tr");
+    if (!headerRow) return;
+    const restrictedIndexes = Array.from(headerRow.cells || [])
+      .map((cell, index) => containsFinancialText(cell.textContent) ? index : -1)
+      .filter((index) => index >= 0)
+      .sort((a, b) => b - a);
+    if (!restrictedIndexes.length) return;
+    Array.from(table.rows || []).forEach((row) => {
+      restrictedIndexes.forEach((index) => row.cells?.[index]?.remove());
+    });
+  });
+}
+
+function removeFinancialFormFields(root) {
+  root.querySelectorAll("label").forEach((label) => {
+    if (!containsFinancialText(label.textContent)) return;
+    const field = label.closest(".form-group,.form-field,.field,.input-group,[data-field]") || label.parentElement;
+    field?.remove();
+  });
+}
+
+function removeFinancialPanels(root) {
+  root.querySelectorAll("[data-financial],.meta-pill,.metric-card,.stat-card,.kpi-card,.summary-card,.hero-kpis > *,[class*='metric'],[class*='kpi'],[class*='stat-card']").forEach((node) => {
+    if (node.hasAttribute("data-financial") || containsFinancialText(node.textContent)) node.remove();
+  });
+
+  root.querySelectorAll("[data-project-tab]").forEach((button) => {
+    if (!containsFinancialText(button.textContent)) return;
+    const panelId = button.getAttribute("data-project-tab");
+    button.remove();
+    if (panelId) root.querySelector(`#project-tab-${CSS.escape(panelId)}`)?.remove();
+  });
+
+  root.querySelectorAll("dt").forEach((term) => {
+    if (!containsFinancialText(term.textContent)) return;
+    const value = term.nextElementSibling;
+    term.remove();
+    if (value?.tagName === "DD") value.remove();
+  });
+}
+
+function applyFinancialRedaction(root = document) {
+  if (!window.EMS_FINANCE_RESTRICTED || !root?.querySelectorAll) return;
+  removeFinancialTableColumns(root);
+  removeFinancialFormFields(root);
+  removeFinancialPanels(root);
+}
+
+function installFinancialRedaction(root) {
+  if (!window.EMS_FINANCE_RESTRICTED || !root) return;
+  applyFinancialRedaction(root);
+  let scheduled = false;
+  const observer = new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      applyFinancialRedaction(root);
+    });
+  });
+  observer.observe(root, { childList: true, subtree: true });
+}
 
 function ensureGlobalTransitionOverlay() {
   let overlay = document.getElementById("globalPageTransition");
@@ -80,6 +150,24 @@ async function resolveDivisionScopeDisplay(appUser) {
   const assignedDivision = assignedDivisionForScope(appUser, scopeValue);
   if (assignedDivision?.name) {
     return { divisionId: scopeValue, label: assignedDivision.name };
+  }
+
+  // Older sessions can retain a generic `assigned` scope (or a stale division
+  // id). When the user has exactly one real division, display that division
+  // instead of leaking the storage token as "Assigned Division".
+  const assignedDivisions = (Array.isArray(appUser?.user_divisions)
+    ? appUser.user_divisions
+    : Array.isArray(appUser?.divisions)
+      ? appUser.divisions
+      : [])
+    .map((assignment) => assignment?.divisions || assignment)
+    .filter((division) => division?.name);
+  if (assignedDivisions.length === 1) {
+    const division = assignedDivisions[0];
+    return {
+      divisionId: division.id || division.division_id || null,
+      label: division.name
+    };
   }
 
   const division = await getDivisionById(scopeValue).catch(() => null);
@@ -202,6 +290,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   let roleCodes = await getMyRoleCodes().catch(() => []);
   if (!roleCodes.length) roleCodes = await getUserRoleCodes(appUser.id).catch(() => []);
   const isUltimateAuthority = isUltimateAuthorityEmail(appUser.email || session?.user?.email);
+  const isFinanceRestricted = isFinanceRestrictedEmail(appUser.email || session?.user?.email);
   if (isUltimateAuthority) {
     roleCodes = [ROLES.CHAIRMAN_MANAGING_DIRECTOR, ROLES.SUPER_ADMIN, ...roleCodes.filter((role) => ![ROLES.CHAIRMAN_MANAGING_DIRECTOR, ROLES.SUPER_ADMIN].includes(role))];
   }
@@ -212,11 +301,12 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   // authoritative for edit/create/delete checks, not just view.
   const myPermissions = await getMyPermissions().catch(() => []);
   setDbPermissionSet(myPermissions);
-  const accessibleModules = getAccessibleModules(roleCodes, allowedModules);
+  const accessibleModules = getAccessibleModules(roleCodes, allowedModules).filter((candidate) => !isFinanceRestricted || !isCooRestrictedModuleCode(candidate));
   debugLog("rbac resolution", { roleCodes, allowedModules, moduleCode });
   const primaryRole = roleCodes[0] || "user";
   const navbarRole = primaryRole === ROLES.CHAIRMAN_MANAGING_DIRECTOR ? "Chairman & Managing Director" : primaryRole;
-  const canView = hasAnyRolePermission(roleCodes, moduleCode, PERMISSIONS.VIEW, { allowedModules });
+  const canView = (!isFinanceRestricted || !isCooRestrictedModuleCode(moduleCode))
+    && hasAnyRolePermission(roleCodes, moduleCode, PERMISSIONS.VIEW, { allowedModules });
 
   if (!canView && moduleCode !== MODULES.DASHBOARD) {
     debugLog("redirect reason", { reason: "missing_module_view_permission", to: ROUTES.DASHBOARD, moduleCode });
@@ -228,6 +318,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   // Shared data helpers use the protected page's own module permission. They
   // return lookup/summary data without granting access to the helper page.
   window.EMS_PAGE_MODULE_CODE = moduleCode;
+  window.EMS_FINANCE_RESTRICTED = isFinanceRestricted && moduleCode !== MODULES.TRANSPORT_TRIP_EXPENSES;
 
   const divisionContext = await resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace });
   if (!divisionContext.allowed) {
@@ -255,15 +346,20 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
     </div>
   `;
 
+  if (!accessibleModules.includes(MODULES.SETTINGS)) {
+    qs("#adminMenuBtn")?.remove();
+  }
+
   bindGlobalActions();
   bindGlobalSearch(accessibleModules);
+  installFinancialRedaction(qs("#pageContent"));
   initNotificationShell().catch(() => {});
   initLiveChat().catch(() => {});
   requestAnimationFrame(() => {
     app.classList.add("page-enter-active");
     finishNavigationTransition();
   });
-  return { appUser, roleCodes, allowedModules, accessibleModules, permissions: myPermissions, primaryRole, isUltimateAuthority, divisionContext, divisionId: divisionContext?.divisionId || null, divisionLabel: divisionContext?.divisionLabel || null };
+  return { appUser, roleCodes, allowedModules, accessibleModules, permissions: myPermissions, primaryRole, isUltimateAuthority, isFinanceRestricted, divisionContext, divisionId: divisionContext?.divisionId || null, divisionLabel: divisionContext?.divisionLabel || null };
 }
 
 function bindGlobalActions() {
@@ -418,6 +514,7 @@ export function renderModuleContent(html) {
   const content = qs("#pageContent");
   if (!content) return;
   content.innerHTML = html;
+  applyFinancialRedaction(content);
 }
 
 export function renderAppSkeleton(title = APP_NAME) {

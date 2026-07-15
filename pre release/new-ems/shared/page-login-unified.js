@@ -463,6 +463,11 @@ async function handleExternalLogin(username, password) {
   });
   showToast("Login successful.", TOAST_TYPES.SUCCESS);
 
+  if (row.user_type === "architect") {
+    window.location.assign(ROUTES.INTERIORS_ARCHITECT_PORTAL);
+    return;
+  }
+
   const dashboardRoute = ROUTES.EXTERNAL_PORTAL_DASHBOARD ?? null;
   if (dashboardRoute) {
     window.location.assign(dashboardRoute);
@@ -483,7 +488,7 @@ async function handleExternalLogin(username, password) {
 //   2. Transport portal — custom DB session token.
 //   3. EMS Staff — Supabase Auth (no interiors marker present by this point).
 //
-// External portal has no dashboard to redirect to; stale tokens just cleared.
+// External architect accounts have a dedicated Interiors workspace.
 
 async function checkExistingSession() {
   // 1. Interiors portal.
@@ -509,6 +514,21 @@ async function checkExistingSession() {
       if (redirectToTransportAccess(access)) return;
     } catch {}
     clearTransportSession();
+  }
+
+  const externalStored = getStoredExternalSession();
+  if (externalStored?.sessionToken) {
+    try {
+      const client = getSupabaseClient();
+      const { data, error } = await client.rpc("external_portal_validate_session", { p_session_token: externalStored.sessionToken });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row?.user_type === "architect") {
+        window.location.assign(ROUTES.INTERIORS_ARCHITECT_PORTAL);
+        return;
+      }
+    } catch {}
+    clearExternalSession();
   }
 
   // 3. EMS Staff — LOCAL accounts (own session token + minted JWT).

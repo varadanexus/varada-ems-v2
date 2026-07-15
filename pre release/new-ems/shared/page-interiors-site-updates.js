@@ -2,6 +2,7 @@ import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
+import { notifyInteriorsWhatsAppSafely } from "./interiors-whatsapp-api.js";
 
 const client = getSupabaseClient();
 
@@ -104,8 +105,9 @@ async function addSiteUpdate() {
   if (!payload.update_title || payload.progress_percent < 0 || payload.progress_percent > 100) return showToast("Project, progress %, and update title are required.", TOAST_TYPES.ERROR);
   PAGE_STATE.isSavingUpdate = true;
   try {
-    const { error } = await client.from("interior_site_updates").insert(payload);
+    const { data: update, error } = await client.from("interior_site_updates").insert(payload).select("id").single();
     if (error) throw error;
+    await notifyInteriorsWhatsAppSafely("site_progress", update.id);
     showToast("Site update added.", TOAST_TYPES.SUCCESS);
     await loadData(); render(); bindEvents();
   } catch (error) {

@@ -10,6 +10,7 @@
 //   GOOGLE_SERVICE_ACCOUNT_JSON  full service-account key JSON (one line)
 //   GDRIVE_ROOT_FOLDER_ID        id of the shared-drive folder to store under
 //   GDRIVE_MARKETING_VENDOR_FOLDER_ID  optional Digital Marketing root folder
+//   GDRIVE_INTERIORS_FOLDER_ID   optional Interiors root folder
 // Provided automatically by the platform:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 //
@@ -269,6 +270,18 @@ function legalSubfolder(documentType: string) {
   return "Agreements";
 }
 
+function safeFolderSegment(value: unknown, fallback: string) {
+  const cleaned = String(value || "")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (cleaned || fallback).slice(0, 120);
+}
+
+function isoDateFolder(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
 // Folder layout for a category, RELATIVE to its module folder (the base folder
 // resolved from GDRIVE_FOLDER_MAP / GDRIVE_ROOT_FOLDER_ID). Keeps everything
 // neatly grouped and date-sorted. `withDate` appends FY + Month folders.
@@ -301,6 +314,31 @@ function categoryLayout(category: string, payload: any, fy: string, mm: string, 
     // --- Legal module (relative to the Legal folder) ---
     case "LEGAL_DOCUMENT":
       return [legalSubfolder(payload.documentType), ...dateSegs];
+    // --- Interiors module (relative to the dedicated Interiors folder) ---
+    case "INTERIORS_DESIGN":
+      return [
+        "Designs",
+        safeFolderSegment(payload.clientName, "Unassigned Client"),
+        isoDateFolder(parsedDate(payload)),
+        safeFolderSegment(payload.projectCode || payload.projectName, "Unassigned Project"),
+        safeFolderSegment(`Version ${String(payload.versionNo || "01").padStart(2, "0")}`, "Version 01")
+      ];
+    case "INTERIORS_BILL":
+      return [
+        "Bills",
+        safeFolderSegment(payload.clientName, "Unassigned Client"),
+        isoDateFolder(parsedDate(payload)),
+        safeFolderSegment(payload.projectCode || payload.projectName, "Unassigned Project"),
+        safeFolderSegment(payload.documentNo, "Unnumbered Bill")
+      ];
+    case "INTERIORS_DOCUMENT":
+      return [
+        "Documents",
+        safeFolderSegment(payload.clientName, "Unassigned Client"),
+        isoDateFolder(parsedDate(payload)),
+        safeFolderSegment(payload.projectCode || payload.projectName, "Unassigned Project"),
+        safeFolderSegment(payload.documentType, "General")
+      ];
     default:
       return ["04 Consolidated & Other", ...dateSegs];
   }
@@ -341,7 +379,11 @@ function resolveTargetFolder(payload: any) {
   const mm = monthFolder(d);
   const withDate = useDateSubfolders();
 
-  const base = map[category] || map.DEFAULT || env("GDRIVE_ROOT_FOLDER_ID");
+  const interiorsRoot = env("GDRIVE_INTERIORS_FOLDER_ID", "1-8Pu3TFUdhOyM3FxieCKr6ePWzFl3bLy");
+  const base = map[category]
+    || (category.startsWith("INTERIORS_") ? interiorsRoot : "")
+    || map.DEFAULT
+    || env("GDRIVE_ROOT_FOLDER_ID");
   if (!base) {
     throw new Error(`No Drive folder configured for category ${category}. Set GDRIVE_FOLDER_MAP and/or GDRIVE_ROOT_FOLDER_ID.`);
   }
@@ -357,9 +399,11 @@ async function handleHealth() {
   const map = folderMap();
   const rootId = env("GDRIVE_ROOT_FOLDER_ID");
   const marketingVendorRoot = env("GDRIVE_MARKETING_VENDOR_FOLDER_ID", "1FaMwA7oEKpBQEBEoFjnZTAXgZnGn5Yb5");
+  const interiorsRoot = env("GDRIVE_INTERIORS_FOLDER_ID", "1-8Pu3TFUdhOyM3FxieCKr6ePWzFl3bLy");
   const targets: Record<string, string> = { ...map };
   if (rootId) targets.ROOT = rootId;
   if (marketingVendorRoot) targets.MARKETING_VENDOR_ROOT = marketingVendorRoot;
+  if (interiorsRoot) targets.INTERIORS_ROOT = interiorsRoot;
   if (!Object.keys(targets).length) {
     throw new Error("No folders configured: set GDRIVE_FOLDER_MAP and/or GDRIVE_ROOT_FOLDER_ID");
   }
@@ -384,7 +428,40 @@ async function handleHealth() {
       path: "Vendor / Invoices"
     };
   }
+  if (folders.INTERIORS_ROOT?.ok) {
+    for (const name of ["Designs", "Bills", "Documents"]) {
+      const id = await ensureFolderPath(token, interiorsRoot, [name]);
+      folders[`INTERIORS_${name.toUpperCase()}`] = {
+        id,
+        name,
+        ok: true,
+        path: name
+      };
+    }
+  }
   return { ok: true, subfolders: useDateSubfolders() ? "date" : "none", folders };
+}
+
+async function authenticatedCaller(req: Request) {
+  const authHeader = req.headers.get("Authorization") || "";
+  if (!authHeader.startsWith("Bearer ")) throw new Error("Authentication required");
+  const jwt = authHeader.slice(7).trim();
+  const caller = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${jwt}` } }
+  });
+  const { data: authData, error: authError } = await caller.auth.getUser(jwt);
+  if (authError || !authData?.user?.id) throw new Error("Authentication required");
+  const db = adminClient();
+  const { data: appUser, error: userError } = await db
+    .from("app_users")
+    .select("id,status,is_locked,deleted_at")
+    .eq("auth_user_id", authData.user.id)
+    .maybeSingle();
+  if (userError || !appUser?.id || appUser.deleted_at || appUser.status !== "active" || appUser.is_locked) {
+    throw new Error("Active EMS access is required");
+  }
+  return { caller, db, appUser };
 }
 
 async function handleUpload(payload: any) {
@@ -451,6 +528,215 @@ async function handleUpload(payload: any) {
     } catch { /* best-effort */ }
     throw e;
   }
+}
+
+const INTERIORS_UPLOAD_RULES: Record<string, { moduleCode: string; entityType: string; extensions: string[] }> = {
+  INTERIORS_DESIGN: {
+    moduleCode: "interiors-designs",
+    entityType: "interior_design",
+    extensions: ["pdf", "png", "jpg", "jpeg", "webp", "gif", "dwg", "dxf", "skp", "rvt", "rfa", "ifc", "3ds", "obj", "stl", "step", "stp", "zip"]
+  },
+  INTERIORS_BILL: {
+    moduleCode: "interiors-billing",
+    entityType: "interior_bill",
+    extensions: ["pdf", "png", "jpg", "jpeg", "webp", "doc", "docx", "xls", "xlsx", "csv", "zip"]
+  },
+  INTERIORS_DOCUMENT: {
+    moduleCode: "interiors-projects",
+    entityType: "interior_project",
+    extensions: ["pdf", "png", "jpg", "jpeg", "webp", "gif", "dwg", "dxf", "skp", "rvt", "rfa", "ifc", "3ds", "obj", "stl", "step", "stp", "zip", "doc", "docx", "xls", "xlsx", "csv", "txt"]
+  }
+};
+
+function cleanUploadFileName(value: unknown) {
+  return String(value || "document")
+    .replace(/[\\/\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180) || "document";
+}
+
+async function handleInteriorsUpload(req: Request, payload: any) {
+  const category = String(payload.category || "").toUpperCase();
+  const rule = INTERIORS_UPLOAD_RULES[category];
+  if (!rule) throw new Error("Unsupported Interiors document category");
+  if (!payload.base64) throw new Error("File content is required");
+
+  const projectId = String(payload.projectId || "").trim();
+  if (!projectId) throw new Error("Project is required");
+  const { caller, db, appUser } = await authenticatedCaller(req);
+
+  const [{ data: canView, error: viewError }, { data: canCreate, error: permissionError }] = await Promise.all([
+    caller.rpc("can_view_project_by_id", { p_project_id: projectId }),
+    caller.rpc("has_permission", { module_code: rule.moduleCode, action_code: "create" })
+  ]);
+  if (viewError || permissionError || canView !== true || canCreate !== true) {
+    throw new Error("You do not have permission to upload files for this Interiors project");
+  }
+
+  const { data: project, error: projectError } = await db
+    .from("interior_projects")
+    .select("id,shared_project_id,division_id,project_code,project_name,project_title,interior_clients(client_name)")
+    .eq("shared_project_id", projectId)
+    .maybeSingle();
+  if (projectError || !project?.id) throw new Error("Interiors project was not found");
+
+  let entityId = projectId;
+  if (category === "INTERIORS_DESIGN") {
+    entityId = String(payload.entityId || "").trim();
+    const { data: design } = await db.from("interior_designs").select("id").eq("id", entityId).eq("project_id", projectId).maybeSingle();
+    if (!design?.id) throw new Error("Design record does not belong to this project");
+  } else if (category === "INTERIORS_BILL") {
+    entityId = String(payload.entityId || "").trim();
+    const { data: bill } = await db.from("interior_billing_headers").select("id,bill_number,bill_date").eq("id", entityId).eq("project_id", projectId).maybeSingle();
+    if (!bill?.id) throw new Error("Bill record does not belong to this project");
+    payload.documentNo = bill.bill_number;
+    payload.date = bill.bill_date;
+  }
+
+  const fileName = cleanUploadFileName(payload.fileName);
+  const extension = fileName.includes(".") ? fileName.split(".").pop()!.toLowerCase() : "";
+  if (!rule.extensions.includes(extension)) {
+    throw new Error(`.${extension || "unknown"} files are not allowed for this document type`);
+  }
+  const bytes = base64ToBytes(String(payload.base64));
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw new Error("Each file must be 10 MB or smaller");
+
+  const clientRelation = Array.isArray(project.interior_clients) ? project.interior_clients[0] : project.interior_clients;
+  return await handleUpload({
+    base64: payload.base64,
+    category,
+    documentType: String(payload.documentType || "General").trim(),
+    entityType: rule.entityType,
+    entityId,
+    documentNo: payload.documentNo || null,
+    fileName,
+    mimeType: String(payload.mimeType || "application/octet-stream"),
+    date: payload.date || new Date().toISOString().slice(0, 10),
+    divisionId: project.division_id || null,
+    uploadedBy: appUser.id,
+    clientName: clientRelation?.client_name || "Unassigned Client",
+    projectCode: project.project_code || project.project_name || project.project_title || "Unassigned Project",
+    projectName: project.project_title || project.project_name || project.project_code || "Unassigned Project",
+    versionNo: payload.versionNo || null
+  });
+}
+
+async function resolveInteriorsArchitectUploadContext(payload: any, requireDesign = false) {
+  const sessionToken = String(payload.sessionToken || "").trim();
+  const projectId = String(payload.projectId || "").trim();
+  const designId = String(payload.designId || "").trim();
+  if (!sessionToken) throw new Error("Architect portal session is required");
+  if (!projectId) throw new Error("Assigned project is required");
+  if (requireDesign && !designId) throw new Error("Design revision is required");
+
+  const db = adminClient();
+  const { data: accessRows, error: accessError } = await db.rpc("interiors_architect_portal_resolve", {
+    p_session_token: sessionToken
+  });
+  const access = Array.isArray(accessRows) ? accessRows[0] : accessRows;
+  if (accessError || !access?.architect_id || !access?.portal_user_id) {
+    throw new Error("Architect portal session is invalid or expired");
+  }
+
+  const { data: project, error: projectError } = await db
+    .from("interior_projects")
+    .select("id,shared_project_id,division_id,project_code,project_name,project_title,interior_clients(client_name)")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (projectError || !project?.id || !project?.shared_project_id) throw new Error("Interiors project was not found");
+
+  const { data: assignment, error: assignmentError } = await db
+    .from("interior_project_team")
+    .select("id")
+    .eq("project_id", project.shared_project_id)
+    .eq("vendor_id", access.architect_id)
+    .in("team_role", ["architect", "designer"])
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  if (assignmentError || !assignment?.id) throw new Error("This project is not assigned to the architect");
+
+  let design = null;
+  if (requireDesign || designId) {
+    const { data, error } = await db
+      .from("interior_designs")
+      .select("id,project_id,version_no,file_url")
+      .eq("id", designId)
+      .eq("project_id", project.shared_project_id)
+      .maybeSingle();
+    if (error || !data?.id) throw new Error("Design revision does not belong to this assigned project");
+    design = data;
+  }
+
+  const clientRelation = Array.isArray(project.interior_clients) ? project.interior_clients[0] : project.interior_clients;
+  return { db, access, project, design, clientName: clientRelation?.client_name || "Unassigned Client" };
+}
+
+async function handleInteriorsArchitectDesignUpload(payload: any) {
+  if (!payload.base64) throw new Error("File content is required");
+  const context = await resolveInteriorsArchitectUploadContext(payload, true);
+  const fileName = cleanUploadFileName(payload.fileName);
+  const extension = fileName.includes(".") ? fileName.split(".").pop()!.toLowerCase() : "";
+  const allowed = INTERIORS_UPLOAD_RULES.INTERIORS_DESIGN.extensions;
+  if (!allowed.includes(extension)) throw new Error(`.${extension || "unknown"} files are not allowed for architect design submissions`);
+  const bytes = base64ToBytes(String(payload.base64));
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw new Error("Each file must be 10 MB or smaller");
+
+  const result = await handleUpload({
+    base64: payload.base64,
+    category: "INTERIORS_DESIGN",
+    documentType: "ARCHITECT_DESIGN",
+    entityType: "interior_design",
+    entityId: context.design.id,
+    documentNo: `${context.project.project_code || "DESIGN"}-V${context.design.version_no}`,
+    fileName,
+    mimeType: String(payload.mimeType || "application/octet-stream"),
+    date: payload.date || new Date().toISOString().slice(0, 10),
+    divisionId: context.project.division_id || null,
+    uploadedBy: context.access.portal_user_id,
+    clientName: context.clientName,
+    projectCode: context.project.project_code || context.project.project_name || context.project.project_title,
+    projectName: context.project.project_title || context.project.project_name || context.project.project_code,
+    versionNo: context.design.version_no
+  });
+
+  if (!context.design.file_url && result.webViewLink) {
+    await context.db.from("interior_designs").update({ file_url: result.webViewLink }).eq("id", context.design.id);
+  }
+  await context.db.rpc("log_external_portal_audit_event", {
+    p_portal_user_id: context.access.portal_user_id,
+    p_event_type: "interiors_architect_design_file_uploaded",
+    p_details: {
+      project_id: context.project.id,
+      design_id: context.design.id,
+      drive_file_id: result.fileId,
+      file_name: result.fileName,
+      folder_path: result.folderPath
+    }
+  });
+  return result;
+}
+
+async function handleListInteriorsArchitectDesignFiles(payload: any) {
+  const context = await resolveInteriorsArchitectUploadContext(payload, false);
+  const { data: designs, error: designsError } = await context.db
+    .from("interior_designs")
+    .select("id")
+    .eq("project_id", context.project.shared_project_id);
+  if (designsError) throw new Error(designsError.message);
+  const designIds = (designs || []).map((row: any) => row.id);
+  if (!designIds.length) return { ok: true, documents: [] };
+  const { data, error } = await context.db
+    .from("drive_documents")
+    .select("id,entity_id,file_name,mime_type,file_size,web_view_link,created_at,document_no")
+    .eq("category", "INTERIORS_DESIGN")
+    .in("entity_id", designIds)
+    .eq("upload_status", "stored")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return { ok: true, documents: data || [] };
 }
 
 async function handleList(payload: any) {
@@ -694,6 +980,12 @@ Deno.serve(async (req) => {
         return json(await handleHealth());
       case "upload":
         return json(await handleUpload(payload));
+      case "upload_interiors_document":
+        return json(await handleInteriorsUpload(req, payload));
+      case "upload_interiors_architect_design":
+        return json(await handleInteriorsArchitectDesignUpload(payload));
+      case "list_interiors_architect_design_files":
+        return json(await handleListInteriorsArchitectDesignFiles(payload));
       case "list":
         return json(await handleList(payload));
       case "upload_trip_document":

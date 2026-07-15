@@ -33,8 +33,8 @@ const QUICK_ACTIONS = [
 
 const DEVELOPER_ITEMS = [
   { module: MODULES.CENTRAL_ACCOUNTS_POSTING_QUEUE, title: "Jobs & Queues", href: ROUTES.CENTRAL_ACCOUNTS_POSTING_QUEUE, description: "Queue-driven processing health and backlogs", tone: "active" },
-  { module: MODULES.SETTINGS, title: "Integrations", href: ROUTES.SETTINGS, description: "System touchpoints and integration hooks", tone: "setup" },
-  { module: MODULES.CENTRAL_ACCOUNTS_AUDIT, title: "API / Logs", href: ROUTES.CENTRAL_ACCOUNTS_AUDIT, description: "System-level diagnostics surface", tone: "active" }
+  { module: MODULES.SETTINGS, title: "Integrations", href: `${ROUTES.SETTINGS}#email-provider`, description: "Provider configuration, health checks, and integration hooks", tone: "setup" },
+  { module: MODULES.SETTINGS, title: "API / Logs", href: `${ROUTES.SETTINGS}#audit-activity`, description: "EMS-wide API events, diagnostics, and system audit activity", tone: "active" }
 ];
 
 function initialsOf(title) {
@@ -127,18 +127,22 @@ async function init() {
 
   window.setTimeout(() => {
     const allowedModules = boot.accessibleModules || boot.allowedModules || [];
+    const primaryRoleKey = String(boot.primaryRole || "user").trim().toLowerCase();
+    const isAuditor = primaryRoleKey === "auditor";
     const visibleCards = CONTROL_CENTER_MODULES.filter((m) => allowedModules.includes(m.module));
     // Business entities and global Master Data stay out of the Control Center by design.
     const businessCards = visibleCards.filter((m) => ![MODULES.SETTINGS, MODULES.MASTER_CLIENTS, MODULES.ACCOUNTS].includes(m.module));
     const activeBusinessCards = businessCards.filter((m) => Boolean(m.href));
     const futureBusinessCards = businessCards.filter((m) => !m.href);
-    const adminCards = ADMIN_ITEMS.filter((x) => allowedModules.includes(x.module));
+    // Central Accounts Audit belongs inside the Accounts workspace for auditors;
+    // it must not reappear as an Administration launcher on the command center.
+    const adminCards = isAuditor ? [] : ADMIN_ITEMS.filter((x) => allowedModules.includes(x.module));
     const configCards = GLOBAL_CONFIG_ITEMS.filter((x) => allowedModules.includes(x.module));
     const financeCards = [
       { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD, description: "Journals, receivables, payables, treasury", tone: "active" },
-      { module: MODULES.CENTRAL_ACCOUNTS_REPORTING, title: "Reports", href: ROUTES.CENTRAL_ACCOUNTS_REPORTING, description: "Finance reporting and statements", tone: "active" }
+      ...(!isAuditor ? [{ module: MODULES.CENTRAL_ACCOUNTS_REPORTING, title: "Reports", href: ROUTES.CENTRAL_ACCOUNTS_REPORTING, description: "Finance reporting and statements", tone: "active" }] : [])
     ].filter((x) => allowedModules.includes(x.module));
-    const developerCards = DEVELOPER_ITEMS.filter((x) => allowedModules.includes(x.module));
+    const developerCards = isAuditor ? [] : DEVELOPER_ITEMS.filter((x) => allowedModules.includes(x.module));
     const quickActions = QUICK_ACTIONS.filter((x) => allowedModules.includes(x.module));
     const accountsLauncher = allowedModules.includes(MODULES.ACCOUNTS)
       ? [{ title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD, subtitle: "Journals, receivables, payables, treasury, and financial control" }]
@@ -151,14 +155,13 @@ async function init() {
     const groupedModules = [...COMMS_MODULES, MODULES.LEGAL];
     const nonGroupedBusinessCards = activeBusinessCards.filter((m) => !groupedModules.includes(m.module));
     const launchCards = [...nonGroupedBusinessCards];
-    const activeModuleCount = launchCards.length;
+    const activeModuleCount = launchCards.length + (financeCards.length ? 1 : 0);
     const pendingActions = configCards.length + developerCards.filter((d) => d.tone === "setup").length;
 
     // Signed-in identity
     const appUser = boot.appUser || {};
     const email = appUser.email || session?.user?.email || "";
     const displayName = appUser.display_name || (email ? email.split("@")[0] : "User");
-    const primaryRoleKey = String(boot.primaryRole || "user").trim().toLowerCase();
     const roleLabel = primaryRoleKey === "chairman_managing_director" ? "CHAIRMAN & MANAGING DIRECTOR" : primaryRoleKey.replace(/_/g, " ").toUpperCase();
     const rawScope = boot.divisionContext?.scopeLabel || boot.divisionLabel || "";
     const looksLikeId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(rawScope) || /^\d+$/.test(rawScope);
@@ -210,10 +213,12 @@ async function init() {
         .cc-kpi strong{display:flex;align-items:center;gap:.45rem;font-size:1.3rem;color:#f8fbff;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums;}
 
         /* Identity card */
-        .cc-user{display:flex;align-items:center;gap:.85rem;padding:.7rem .95rem;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(212,178,106,.22);min-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);justify-self:end;max-width:340px;}
+        .cc-user{display:flex;align-items:center;gap:.85rem;padding:.78rem .95rem;border-radius:15px;background:rgba(255,255,255,.05);border:1px solid rgba(212,178,106,.22);min-width:300px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);justify-self:end;max-width:390px;}
         .cc-user-copy{display:grid;gap:.14rem;min-width:0;}
-        .cc-user-name{display:flex;align-items:center;gap:.55rem;min-width:0;}
-        .cc-user-name strong{font-size:.94rem;color:#f8fbff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .cc-user-name{display:block;min-width:0;}
+        .cc-user-name strong{display:block;font-size:.94rem;color:#f8fbff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .cc-user-role{display:flex;min-width:0;margin:.08rem 0 .14rem;}
+        .cc-user-role .pm-chip{max-width:100%;white-space:normal;line-height:1.2;text-align:left;}
         .cc-user-email{font-size:.74rem;color:#93a7c4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .cc-user-meta{font-size:.7rem;color:#7f93b0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .cc-user-meta b{color:#b7c5d9;font-weight:600;}
@@ -307,8 +312,8 @@ async function init() {
               <div class="cc-user-copy">
                 <div class="cc-user-name">
                   <strong>${displayName}</strong>
-                  <span class="pm-chip pm-chip--gold">${roleLabel}</span>
                 </div>
+                <div class="cc-user-role"><span class="pm-chip pm-chip--gold">${roleLabel}</span></div>
                 <span class="cc-user-email">${email}</span>
                 <span class="cc-user-meta"><b>${divisionScope}</b>${lastSignIn ? ` &middot; Signed in ${lastSignIn}` : ""}</span>
               </div>

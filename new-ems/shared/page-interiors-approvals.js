@@ -2,6 +2,7 @@ import { MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js
 import { getSupabaseClient } from "../config/supabase.js";
 import { PERMISSIONS } from "../config/roles.js";
 import { logAuditEvent } from "./audit.js";
+import { notifyInteriorsWhatsAppSafely } from "./interiors-whatsapp-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { hasAnyRolePermission } from "./permissions.js";
 import { showToast } from "./utils.js";
@@ -240,13 +241,18 @@ async function actOnDesign(id, action, remarks) {
   if (!design) throw new Error("Design record not found.");
   if (design.status !== "submitted") throw new Error("Only submitted designs can be acted on.");
 
-  const targetStatus = action === "approve" ? "approved" : action === "reject" ? "rejected" : "revision_requested";
-  const now = new Date().toISOString();
+  const rpcAction = action === "approve" ? "approve" : action === "reject" ? "reject" : "revision_requested";
   const beforeDesign = { ...design };
-  const { error } = await client.from("interior_designs").update({ status: targetStatus, updated_by: PAGE_STATE.boot?.appUser?.id || null, updated_at: now, description: mergeDesignRemarks(design.description, action, remarks, now) }).eq("id", design.id);
+  const { data: reviewResult, error } = await client.rpc("interiors_staff_review_design", {
+    p_design_id: design.id,
+    p_action: rpcAction,
+    p_remarks: remarks?.trim() || null
+  });
   if (error) throw error;
 
-  await logAuditEvent("interiors_design_approval_action", { action, moduleCode: MODULES.INTERIORS_APPROVALS, actorAuthUserId: PAGE_STATE.boot?.appUser?.auth_user_id || null, actorAppUserId: PAGE_STATE.boot?.appUser?.id || null, entityType: "interior_designs", entityId: design.id, beforeData: beforeDesign, afterData: { ...beforeDesign, status: targetStatus, updated_by: PAGE_STATE.boot?.appUser?.id || null, updated_at: now }, details: { source: "design", action, remarks: remarks?.trim() || null, at: now } });
+  await notifyInteriorsWhatsAppSafely("design_status", design.id);
+
+  await logAuditEvent("interiors_design_approval_action", { action, moduleCode: MODULES.INTERIORS_APPROVALS, actorAuthUserId: PAGE_STATE.boot?.appUser?.auth_user_id || null, actorAppUserId: PAGE_STATE.boot?.appUser?.id || null, entityType: "interior_designs", entityId: design.id, beforeData: beforeDesign, afterData: reviewResult || { action: rpcAction }, details: { source: "design", action, remarks: remarks?.trim() || null, at: new Date().toISOString() } });
 }
 
 function getPendingItems() {
