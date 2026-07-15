@@ -1,4 +1,4 @@
-import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
+import { MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
@@ -8,7 +8,7 @@ const client = getSupabaseClient();
 const MANAGEMENT_ROLES = ["project_manager", "site_supervisor", "architect", "designer"];
 const EXECUTION_ROLES = ["carpenter_team", "electrician_team", "painter_team", "tile_team", "false_ceiling_team", "plumbing_team", "other_vendor"];
 const ALL_ROLES = [...MANAGEMENT_ROLES, ...EXECUTION_ROLES];
-const VENDOR_TYPES = ["carpenter", "electrician", "painter", "tile", "false_ceiling", "plumbing", "other"];
+const VENDOR_TYPES = ["architect", "designer", "carpenter", "electrician", "painter", "tile", "false_ceiling", "plumbing", "other"];
 
 const PAGE_STATE = {
   boot: null,
@@ -32,7 +32,13 @@ async function init() {
   if (!boot) return;
 
   PAGE_STATE.boot = boot;
-  PAGE_STATE.divisionId = boot?.divisionId || boot?.currentDivisionId || boot?.divisionContext?.divisionId || boot?.appUser?.user_divisions?.[0]?.division_id || null;
+  const { data: interiorsDivision } = await client
+    .from("divisions")
+    .select("id")
+    .ilike("name", "Interiors")
+    .limit(1)
+    .maybeSingle();
+  PAGE_STATE.divisionId = interiorsDivision?.id || boot?.divisionId || boot?.currentDivisionId || boot?.divisionContext?.divisionId || boot?.appUser?.user_divisions?.[0]?.division_id || null;
   PAGE_STATE.selectedProjectId = new URLSearchParams(window.location.search).get("project_id") || "";
   await loadData();
   render();
@@ -93,6 +99,10 @@ function render() {
       </style>
       <h3>Team & Workforce</h3>
       <p class="muted">Assign management, design, and execution teams after design approval and before execution.</p>
+      <div style="margin:.85rem 0 0;display:flex;gap:.5rem;flex-wrap:wrap;">
+        <a class="btn btn-sm" href="${ROUTES.PORTAL_ACCESS}?tab=create&amp;division=interiors">Create Architect Portal Access</a>
+        <span class="muted" style="align-self:center;">Add the architect below, assign them to a project, then create their login.</span>
+      </div>
       <div class="hero-kpis">
         <span class="meta-pill">Active Projects: ${PAGE_STATE.projects.length}</span>
         <span class="meta-pill">Assigned Teams: ${activeAssignments}</span>
@@ -118,7 +128,7 @@ function render() {
     </section>
 
     <section class="card" style="margin-top:1rem;">
-      <h4>Add Vendor</h4>
+      <h4>Add Architect, Designer, or Execution Vendor</h4>
       <div class="tw-grid" style="margin-top:1rem;">
         <div><label for="vendorName">Vendor Name *</label><input id="vendorName" type="text" /></div>
         <div><label for="vendorType">Vendor Type *</label><select id="vendorType">${VENDOR_TYPES.map((row) => `<option value="${row}">${escapeHtml(row)}</option>`).join("")}</select></div>

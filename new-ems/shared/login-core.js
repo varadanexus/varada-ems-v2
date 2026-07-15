@@ -174,6 +174,9 @@ async function resolveExternalDashboard(sessionToken) {
   });
   if (error) throw error;
   const access = Array.isArray(data) ? data : [];
+  if (access.some((item) => item.source_module === "interiors" && item.access_scope === "interiors_architect_portal")) {
+    return ROUTES.INTERIORS_ARCHITECT_PORTAL;
+  }
   if (access.some((item) => item.source_module === "digital-services" && item.access_scope === "marketing_client_portal")) {
     return ROUTES.MARKETING_CLIENT_PORTAL;
   }

@@ -4,6 +4,7 @@ import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { hasAnyRolePermission } from "./permissions.js";
 import { PERMISSIONS } from "../config/roles.js";
 import { showToast } from "./utils.js";
+import { notifyInteriorsWhatsAppSafely } from "./interiors-whatsapp-api.js";
 
 const client = getSupabaseClient();
 
@@ -433,14 +434,18 @@ async function withSaving(action, successMessage) {
 async function saveClosureChecklist() {
   await withSaving(async () => {
     const closure = await ensureClosureRecord();
+    const nextStatus = document.getElementById("closureStatus")?.value || closure.status;
     const { error } = await client.from("interior_project_closures").update({
-      status: document.getElementById("closureStatus")?.value || closure.status,
+      status: nextStatus,
       target_handover_date: document.getElementById("closureTargetDate")?.value || null,
       actual_handover_date: document.getElementById("closureActualDate")?.value || null,
       remarks: String(document.getElementById("closureRemarks")?.value || "").trim() || null,
       updated_by: PAGE_STATE.boot?.appUser?.id || null
     }).eq("id", closure.id);
     if (error) throw error;
+    if (nextStatus === "completed" && closure.status !== "completed") {
+      await notifyInteriorsWhatsAppSafely("project_completion", closure.id);
+    }
   }, "Closure checklist saved.");
 }
 
@@ -529,15 +534,16 @@ async function requestClientSignoff() {
   if (!project) return;
   await withSaving(async () => {
     const closure = await ensureClosureRecord();
-    const { error } = await client.from("interior_client_approvals").insert({
+    const { data: approval, error } = await client.from("interior_client_approvals").insert({
       interior_project_id: project.id,
       approval_type: "completion",
       reference_table: "interior_project_closures",
       reference_id: closure.id,
       decision: "pending",
       remarks: "Final completion signoff requested."
-    });
+    }).select("id").single();
     if (error) throw error;
+    await notifyInteriorsWhatsAppSafely("client_approval", approval.id);
   }, "Client signoff requested.");
 }
 

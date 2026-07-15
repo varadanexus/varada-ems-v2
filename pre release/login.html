@@ -107,7 +107,7 @@
 // Unified login: keep this page's look, but auto-detect the account type
 // (EMS staff, transport/interiors/external portal) and route to the right auth
 // system. If one identifier maps to multiple portals, show a portal picker.
-import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js";
+import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js?v=architect-main-login-2";
 
 function el(id) { return document.getElementById(id); }
 function setError(message = "") { const node = el("error"); if (node) node.innerText = message; }
@@ -143,6 +143,7 @@ function handleAuthResult(result) {
   // ems / transport / interiors redirect away; only the external no-dashboard
   // case returns here with a message to show.
   if (result?.status === "external_no_dashboard") {
+    document.body.classList.remove("ems-entering");
     el("loginForm").hidden = true;
     el("portalPicker").hidden = true;
     setError("");

@@ -473,7 +473,7 @@ async function notifyPortalAccessCreated(body: any) {
       name: body.recipientName || body.displayName || body.username || "User",
       templateAlias: "access_notification_v1",
       sourceModule: "portal",
-      sourceEvent: "portal_access_created",
+      sourceEvent: body.sourceEvent === "portal_credentials_resent" ? "portal_credentials_resent" : "portal_access_created",
       messageText: renderedTemplateMessage("access_notification_v1", variables),
       renderedPayload: variables,
       sid: result.sid,
@@ -481,12 +481,49 @@ async function notifyPortalAccessCreated(body: any) {
     });
   }
   return {
-    event: "portal_access_created",
+    event: body.sourceEvent === "portal_credentials_resent" ? "portal_credentials_resent" : "portal_access_created",
     portalType: body.portalType || null,
     recipientName: body.recipientName || body.displayName || body.username || null,
     recipientPhone: normalizePhone(phone),
     portalLoginUrl: body.portalLoginUrl || null,
     portalUserCode: body.portalUserCode || null,
+    username: body.username || null,
+    whatsapp: result
+  };
+}
+
+async function notifyEmsUserCreated(body: any) {
+  const phone = body.recipientPhone || "";
+  const variables = {
+    "1": body.recipientName || body.username || "Team Member",
+    portalLoginUrl: body.portalLoginUrl || "https://www.varadanexus.com/login",
+    portalUserCode: body.roleName || "EMS User",
+    username: body.username || "",
+    password: body.password || ""
+  };
+  const result = await sendTwilioTemplateMessage({
+    toPhone: phone,
+    templateAlias: "access_notification_v1",
+    variables
+  });
+  if (result?.sent) {
+    const admin = adminClient();
+    await recordWhatsAppDelivery(admin, {
+      phone,
+      name: body.recipientName || body.username || "Team Member",
+      templateAlias: "access_notification_v1",
+      sourceModule: "users",
+      sourceEvent: body.sourceEvent === "ems_user_credentials_resent" ? "ems_user_credentials_resent" : "ems_user_created",
+      messageText: renderedTemplateMessage("access_notification_v1", variables),
+      renderedPayload: variables,
+      sid: result.sid,
+      status: "sent"
+    });
+  }
+  return {
+    event: body.sourceEvent === "ems_user_credentials_resent" ? "ems_user_credentials_resent" : "ems_user_created",
+    recipientName: body.recipientName || body.username || null,
+    recipientPhone: normalizePhone(phone),
     username: body.username || null,
     whatsapp: result
   };
@@ -573,6 +610,9 @@ Deno.serve(async (req) => {
     }
     if (action === "notify_portal_access_created") {
       return json(await notifyPortalAccessCreated(body));
+    }
+    if (action === "notify_ems_user_created") {
+      return json(await notifyEmsUserCreated(body));
     }
     if (action === "notify_bill_created") {
       if (!body.clientBillId) return json({ error: "clientBillId is required." }, 400);

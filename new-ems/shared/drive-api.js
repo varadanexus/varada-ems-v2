@@ -74,6 +74,25 @@ export function uploadTripDocumentToDrive(meta = {}, base64) {
   if (!base64) return Promise.reject(new Error("Missing file content for upload"));
   return driveIntegration("upload_trip_document", { ...meta, base64 });
 }
+
+// Authenticated Interiors upload. The Edge Function resolves the client and
+// project folder names from trusted database records before writing to Drive.
+export function uploadInteriorsDocumentToDrive(meta = {}, base64) {
+  if (!base64) return Promise.reject(new Error("Missing Interiors file content"));
+  return driveIntegration("upload_interiors_document", { ...meta, base64 });
+}
+
+// Architect-portal design upload. The Edge Function validates the external
+// portal session, project assignment, and design ownership before touching
+// Drive. Files are stored below the dedicated Interiors root folder.
+export function uploadInteriorsArchitectDesignToDrive(meta = {}, base64) {
+  if (!base64) return Promise.reject(new Error("Missing architect design file content"));
+  return driveIntegration("upload_interiors_architect_design", { ...meta, base64 });
+}
+
+export function listInteriorsArchitectDesignFiles(meta = {}) {
+  return driveIntegration("list_interiors_architect_design_files", meta);
+}
 async function marketingVendorIntegration(action, payload = {}) {
   const client = getSupabaseClient();
   const { data, error } = await client.functions.invoke("marketing-vendor-integrations", {

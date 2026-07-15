@@ -264,7 +264,7 @@ export async function syncUserAccessMappings(userId, roleIds = [], divisionIds =
   if (error) throw error;
 }
 
-export async function provisionUserViaEdge({ email, password, displayName, roleCode, divisionCode }) {
+export async function provisionUserViaEdge({ email, username, phone, password, displayName, roleCode, divisionCode }) {
   const client = getSupabaseClient();
   const { data } = await client.auth.getSession();
   const token = data?.session?.access_token;
@@ -278,7 +278,7 @@ export async function provisionUserViaEdge({ email, password, displayName, roleC
       Authorization: `Bearer ${token}`,
       apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || ""
     },
-    body: JSON.stringify({ email, password, displayName, roleCode, divisionCode })
+    body: JSON.stringify({ email, username, phone, password, displayName, roleCode, divisionCode })
   });
 
   const json = await res.json();
@@ -305,6 +305,30 @@ export async function requestUserPasswordReset(targetEmail) {
 
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error || "Password reset request failed");
+  return json;
+}
+
+// Super-admin sets a known temporary password for a Supabase Auth-backed staff
+// account before the credential PDF and WhatsApp are resent.
+export async function setSupabaseUserPassword(appUserId, newPassword) {
+  const client = getSupabaseClient();
+  const { data } = await client.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("Missing session token");
+
+  const fnUrl = `${window.EMS_RUNTIME_CONFIG?.supabaseUrl}/functions/v1/admin-provision-user`;
+  const res = await fetch(fnUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || ""
+    },
+    body: JSON.stringify({ action: "set_password", appUserId, password: newPassword })
+  });
+
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error || "Password update failed");
   return json;
 }
 
@@ -444,6 +468,13 @@ export async function publishTermsPolicy(title = null) {
   const { data, error } = await client.rpc("publish_terms_policy", { p_title: title || null });
   if (error) throw error;
   return data;
+}
+
+export async function issueTermsBypassCode() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("issue_terms_bypass_code");
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
 }
 
 export async function listAuditLogs(limit = 50) {

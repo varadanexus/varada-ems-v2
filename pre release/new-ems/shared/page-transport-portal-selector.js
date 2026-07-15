@@ -2,7 +2,7 @@ import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { showToast, qs } from "./utils.js";
 import { initTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml } from "./transport-portal-auth.js";
-import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-owner-bypass-1";
 
 const PAGE_STATE = { session: null, access: { clients: [], transporters: [], agents: [] } };
 

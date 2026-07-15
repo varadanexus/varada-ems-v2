@@ -3,6 +3,7 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { getChatSessionTokens } from "./chat-api.js";
 
 export const CURRENT_TERMS_VERSION = "2026-07-04-v4";
+const TERMS_BYPASS_SESSION_KEY = "ems_terms_owner_bypass_session";
 
 let faceDetectorPromise = null;
 
@@ -191,6 +192,33 @@ async function acceptTerms(termsVersion, evidenceDataUrl = "", faceConfidence = 
   return data;
 }
 
+export async function redeemTermsBypassCode(code) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("redeem_terms_bypass_code", rpcArgs({
+    p_bypass_code: String(code || "").trim(),
+    p_user_agent: navigator.userAgent || null
+  }));
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+}
+
+export async function hasValidTermsBypassSession() {
+  const bypassToken = sessionStorage.getItem(TERMS_BYPASS_SESSION_KEY);
+  if (!bypassToken) return false;
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client.rpc("validate_terms_bypass_session", rpcArgs({
+      p_bypass_session_token: bypassToken
+    }));
+    if (error) throw error;
+    if (data === true) return true;
+  } catch (error) {
+    console.warn("Temporary Terms bypass session validation failed:", error?.message || error);
+  }
+  sessionStorage.removeItem(TERMS_BYPASS_SESSION_KEY);
+  return false;
+}
+
 function injectStyles() {
   if (document.getElementById("emsTermsGateStyles")) return;
   const style = document.createElement("style");
@@ -215,15 +243,20 @@ function injectStyles() {
     .ems-terms-btn{border:1px solid rgba(148,163,184,.35);border-radius:11px;padding:.65rem .95rem;background:#14223a;color:#eef4fb;font-weight:800;cursor:pointer}
     .ems-terms-btn.primary{background:#b9903e;border-color:#d4b26a;color:#08111f}.ems-terms-btn:disabled{opacity:.45;cursor:not-allowed}
     .ems-terms-status{min-height:1.2rem;margin-top:.55rem;color:#fca5a5;font-size:.82rem}
+    .ems-terms-owner-bypass{padding:1rem 1.35rem;border-top:1px solid rgba(212,178,106,.28);background:#0a1322}
+    .ems-terms-owner-bypass h3{margin:0;color:#f3cc75;font-size:1rem}.ems-terms-owner-bypass p{margin:.35rem 0 .75rem;color:#9fb0c5;font-size:.8rem;line-height:1.45}
+    .ems-terms-owner-bypass-row{display:grid;grid-template-columns:minmax(220px,1fr) auto auto;gap:.55rem}.ems-terms-owner-bypass input{min-width:0;border:1px solid rgba(148,163,184,.35);border-radius:10px;padding:.65rem .75rem;background:#060d19;color:#f8fafc;font:700 .88rem ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase}
     .ems-terms-modal [hidden]{display:none!important}
     .ems-identity-step{padding:1.15rem 1.35rem;overflow:auto;min-height:0;flex:1}
     .ems-identity-intro{margin:0 0 .8rem;color:#b8c7d9;line-height:1.5}
+    @media(max-width:700px){.ems-terms-owner-bypass-row{grid-template-columns:1fr 1fr}.ems-terms-owner-bypass input{grid-column:1/-1}}
   `;
   document.head.appendChild(style);
 }
 
 async function declineAndLogout() {
   try {
+    sessionStorage.removeItem(TERMS_BYPASS_SESSION_KEY);
     localStorage.removeItem("ems_transport_portal_session");
     localStorage.removeItem("ems_external_portal_session");
     localStorage.removeItem("ems_interiors_portal_session");
@@ -266,6 +299,16 @@ function showGate(status) {
             <button class="ems-terms-btn primary" id="emsTermsProceed" type="button" disabled>${identityRequired ? "I Accept the Terms" : "Accept and Continue"}</button>
           </div>
         </footer>
+        <section class="ems-terms-owner-bypass" id="emsTermsOwnerBypass" hidden>
+          <h3>Chairman temporary access</h3>
+          <p>This single-use override opens only the current browser session. It does not accept these Terms for the account holder, and the full acceptance will remain pending.</p>
+          <div class="ems-terms-owner-bypass-row">
+            <input id="emsTermsBypassCode" type="password" autocomplete="off" inputmode="text" aria-label="One-time Chairman bypass code" placeholder="One-time code" />
+            <button class="ems-terms-btn primary" id="emsTermsBypassApply" type="button">Bypass Once</button>
+            <button class="ems-terms-btn" id="emsTermsBypassCancel" type="button">Cancel</button>
+          </div>
+          <div class="ems-terms-status" id="emsTermsBypassStatus" aria-live="polite"></div>
+        </section>
         <div class="ems-identity-step" id="emsIdentityStep" hidden>
           <h2 style="margin:.1rem 0 .35rem;color:#fff;">Quick identity confirmation</h2>
           <p class="ems-identity-intro">One live camera image confirms that the account holder personally completed this acceptance. The image is stored privately as acceptance evidence and is not used for facial recognition.</p>
@@ -303,12 +346,30 @@ function showGate(status) {
     const photoConsent = overlay.querySelector("#emsTermsPhotoConsent");
     const video = overlay.querySelector("#emsTermsCamera");
     const capture = overlay.querySelector("#emsTermsCapture");
+    const bypassPanel = overlay.querySelector("#emsTermsOwnerBypass");
+    const bypassInput = overlay.querySelector("#emsTermsBypassCode");
+    const bypassApply = overlay.querySelector("#emsTermsBypassApply");
+    const bypassStatus = overlay.querySelector("#emsTermsBypassStatus");
     let evidenceDataUrl = "";
     let faceConfidence = 0;
     let faceDetector = null;
     let cameraStream = null;
     let termsRead = !requireFullScroll;
     const statusText = overlay.querySelector("#emsTermsStatus");
+    const ownerShortcut = (event) => {
+      if (!(event.ctrlKey && event.altKey && event.key.toLowerCase() === "b")) return;
+      event.preventDefault();
+      bypassPanel.hidden = !bypassPanel.hidden;
+      bypassStatus.textContent = "";
+      if (!bypassPanel.hidden) requestAnimationFrame(() => bypassInput.focus());
+    };
+    document.addEventListener("keydown", ownerShortcut);
+    const removeGate = () => {
+      document.removeEventListener("keydown", ownerShortcut);
+      overlay.remove();
+      document.documentElement.classList.remove("ems-terms-lock");
+      document.body.classList.remove("ems-terms-lock");
+    };
     const updateAcceptState = () => {
       accept.disabled = identityRequired
         ? !(agree.checked && photoConsent.checked && evidenceDataUrl)
@@ -345,9 +406,7 @@ function showGate(status) {
       try {
         await acceptTerms(termsVersion, evidenceDataUrl, faceConfidence, identityRequired);
         cameraStream?.getTracks().forEach((track) => track.stop());
-        overlay.remove();
-        document.documentElement.classList.remove("ems-terms-lock");
-        document.body.classList.remove("ems-terms-lock");
+        removeGate();
         resolve(true);
       } catch (error) {
         messageTarget.textContent = error?.message || "Acceptance could not be recorded. Please try again.";
@@ -442,6 +501,34 @@ function showGate(status) {
       updateAcceptState();
     });
     overlay.querySelector("#emsTermsDecline").addEventListener("click", declineAndLogout);
+    overlay.querySelector("#emsTermsBypassCancel").addEventListener("click", () => {
+      bypassInput.value = "";
+      bypassStatus.textContent = "";
+      bypassPanel.hidden = true;
+    });
+    bypassApply.addEventListener("click", async () => {
+      if (!bypassInput.value.trim()) {
+        bypassStatus.textContent = "Enter the current one-time bypass code.";
+        return;
+      }
+      bypassApply.disabled = true;
+      bypassStatus.textContent = "Validating protected owner authority…";
+      bypassStatus.style.color = "#dbeafe";
+      try {
+        const result = await redeemTermsBypassCode(bypassInput.value);
+        if (!result?.bypass_session_token) throw new Error("The bypass session could not be created.");
+        sessionStorage.setItem(TERMS_BYPASS_SESSION_KEY, result.bypass_session_token);
+        cameraStream?.getTracks().forEach((track) => track.stop());
+        removeGate();
+        resolve(true);
+      } catch (error) {
+        bypassInput.value = "";
+        bypassStatus.textContent = error?.message || "The one-time bypass code is invalid or expired.";
+        bypassStatus.style.color = "#fca5a5";
+        bypassApply.disabled = false;
+        bypassInput.focus();
+      }
+    });
     accept.addEventListener("click", async () => {
       await finishAcceptance();
     });
@@ -463,5 +550,6 @@ export async function enforceTermsAcceptance() {
   }
   if (status?.popup_enabled === false) return true;
   if (status?.accepted) return true;
+  if (await hasValidTermsBypassSession()) return true;
   return await showGate(status);
 }

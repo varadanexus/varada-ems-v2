@@ -26,6 +26,7 @@ const DIVISION_ENTITY_MAP = {
     label: "Interiors",
     entities: [
       { key: "client", label: "Client", table: "interior_clients", nameCol: "client_name", system: "interiors_client_deeplink", portalType: "Interiors Client Portal", portalLoginUrl: ROUTES.INTERIORS_PORTAL_LOGIN },
+      { key: "architect", label: "Architect", table: "interior_vendors", nameCol: "vendor_name", filterCol: "vendor_type", filterValue: "architect", system: "external", userType: "architect", sourceModule: "interiors", accessScope: "interiors_architect_portal", portalType: "Interiors Architect Portal", portalLoginUrl: ROUTES.LOGIN },
       { key: "vendor", label: "Vendor", table: "interior_vendors", nameCol: "vendor_name", system: "external", userType: "vendor", portalType: "Interiors Vendor Portal", portalLoginUrl: ROUTES.TRANSPORT_PORTAL_LOGIN }
     ]
   },
@@ -187,6 +188,54 @@ function portalTypeLabel(userType, sourceModule) {
   if (userType === "vendor") return sourceModule === "interiors" ? "Interiors Vendor Portal" : "External Vendor Portal";
   if (userType === "contractor") return "External Contractor Portal";
   return "Future Portal";
+}
+
+async function deliverPortalCredentials(row, password) {
+  const recipientEmail = String(row.email || "").trim().toLowerCase();
+  const recipientPhone = String(row.phone || "").trim();
+  if (!/^\S+@\S+\.\S+$/.test(recipientEmail)) throw new Error("A valid portal email is required before credentials can be sent");
+  if (String(row.username || "").trim().toLowerCase() !== recipientEmail) throw new Error("Portal username must match the registered email before credentials can be resent");
+  if (recipientPhone.replace(/\D/g, "").length < 10) throw new Error("A valid registered mobile number is required before credentials can be sent");
+  const warnings = [];
+  try {
+    const emailResult = await sendPortalCredentialEmail({
+      recipientEmail,
+      recipientName: row.displayName || row.linkedName || recipientEmail,
+      username: recipientEmail,
+      initialPassword: password,
+      registeredMobile: recipientPhone,
+      portalType: row.portalType,
+      portalLoginUrl: PUBLIC_PORTAL_LOGIN_URL,
+      portalUserCode: row.portalUserCode,
+      linkedEntityName: row.linkedName,
+      sourceEvent: "portal_credentials_resent"
+    });
+    if (!(emailResult?.sent > 0)) warnings.push("credential email was not delivered");
+  } catch (error) {
+    warnings.push(`email failed: ${error?.message || "Unknown error"}`);
+  }
+  try {
+    const notification = await notifyPortalAccessCreated({
+      division: row.division,
+      entityType: row.entityType,
+      portalSystem: row.system,
+      portalType: row.portalType,
+      portalLoginUrl: PUBLIC_PORTAL_LOGIN_URL,
+      portalUserCode: row.portalUserCode,
+      username: recipientEmail,
+      password,
+      displayName: row.displayName,
+      recipientName: row.displayName || row.linkedName || recipientEmail,
+      recipientPhone,
+      recipientEmail,
+      linkedEntityName: row.linkedName,
+      sourceEvent: "portal_credentials_resent"
+    });
+    if (!notification?.whatsapp?.sent) warnings.push(`WhatsApp was not delivered${notification?.whatsapp?.reason ? `: ${notification.whatsapp.reason}` : ""}`);
+  } catch (error) {
+    warnings.push(`WhatsApp failed: ${error?.message || "Unknown error"}`);
+  }
+  return warnings;
 }
 
 function moduleLabel(sourceModule) {
@@ -503,6 +552,7 @@ function rowActions(r) {
       <button class="btn btn-sm" data-pa-action="set-status" data-system="${r.system}" data-id="${r.portalUserId}" data-value="${toggleStatus}" type="button">${toggleLabel}</button>
       <button class="btn btn-sm" data-pa-action="unlock" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Unlock</button>
       <button class="btn btn-sm" data-pa-action="reset-password" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Reset Password</button>
+      <button class="btn btn-sm" data-pa-action="resend-credentials" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Resend credentials</button>
       <button class="btn btn-sm" data-pa-action="force-logout" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Force Logout</button>
       <button class="btn btn-sm" data-pa-action="login-history" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">View Audit</button>
       ${canReveal() ? `<button class="btn btn-sm" data-pa-action="reveal-password" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button" style="border-color:#b45309;color:#b45309;">Reveal Password</button>` : ""}
@@ -643,17 +693,18 @@ function renderHistoryModal() {
 
 function renderResetPasswordModal() {
   const m = PAGE_STATE.resetPasswordModal;
+  const isResend = m.mode === "resend";
   return `
     <div id="paResetModal" class="modal"><div class="modal-panel">
       <div class="modal-head">
-        <div><h3>Reset Password — ${escapeHtml(m.username || "")}</h3><p class="muted">Enter a new password (minimum 8 characters). All active sessions will be revoked.</p></div>
+        <div><h3>${isResend ? "Resend Credentials" : "Reset Password"} — ${escapeHtml(m.username || "")}</h3><p class="muted">Enter a new temporary password (minimum 8 characters). All active portal sessions will be revoked.${isResend ? " The protected PDF email and WhatsApp credential message will then be sent." : ""}</p></div>
         <button class="btn" type="button" id="paCloseReset">Cancel</button>
       </div>
       <div style="margin-top:1rem;display:flex;gap:.5rem;">
         <input id="paResetNewPw" type="text" style="flex:1;" placeholder="New password (min 8 chars)..." />
         <button class="btn btn-sm" id="paResetGenerateBtn" type="button">Generate</button>
       </div>
-      <div style="margin-top:1rem;"><button class="btn" id="paConfirmReset" type="button">Confirm Reset</button></div>
+      <div style="margin-top:1rem;"><button class="btn" id="paConfirmReset" type="button">${isResend ? "Set password & resend" : "Confirm Reset"}</button></div>
     </div></div>
   `;
 }
@@ -771,6 +822,7 @@ function handlePasswordToolsSearch() {
         <div style="display:flex;gap:.35rem;flex-wrap:wrap;">
           ${canEdit() ? `
             <button class="btn btn-sm" data-pa-action="reset-password" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Reset Password</button>
+            <button class="btn btn-sm" data-pa-action="resend-credentials" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Resend credentials</button>
             <button class="btn btn-sm" data-pa-action="set-status" data-system="${r.system}" data-id="${r.portalUserId}" data-value="${r.status === "active" ? "disabled" : "active"}" type="button">${r.status === "active" ? "Disable" : "Enable"}</button>
             <button class="btn btn-sm" data-pa-action="unlock" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Unlock</button>
             <button class="btn btn-sm" data-pa-action="force-logout" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Force Logout</button>
@@ -817,6 +869,7 @@ async function loadAvailableEntities(term = "") {
   PAGE_STATE.wizard.resultsLoading = true;
   render();
   let query = client.from(entityDef.table).select("*").order(entityDef.nameCol, { ascending: true }).limit(100);
+  if (entityDef.filterCol) query = query.eq(entityDef.filterCol, entityDef.filterValue);
   if (term) query = query.ilike(entityDef.nameCol, `%${term}%`);
   const { data, error } = await query;
   if (requestSequence !== wizardLoadSequence) return;
@@ -831,7 +884,7 @@ async function loadAvailableEntities(term = "") {
     id: row.id,
     label: row[entityDef.nameCol],
     email: row.email || null,
-    phone: row.phone_number || row.contact_no || null,
+    phone: row.phone || row.phone_number || row.contact_no || null,
     raw: row
   }));
   render();
@@ -995,7 +1048,17 @@ async function handleRowAction(btn) {
     } else if (action === "reset-password") {
       // Open modal instead of window.prompt
       PAGE_STATE.userDetailsModal = null;
-      PAGE_STATE.resetPasswordModal = { system, portalUserId: id, username: btn.dataset.username };
+      PAGE_STATE.resetPasswordModal = { mode: "reset", system, portalUserId: id, username: btn.dataset.username };
+      render();
+      return;
+    } else if (action === "resend-credentials") {
+      const row = PAGE_STATE.allRows.find((item) => item.portalUserId === id && item.system === system);
+      if (!row) throw new Error("Portal user record not found");
+      if (!/^\S+@\S+\.\S+$/.test(String(row.email || "")) || String(row.phone || "").replace(/\D/g, "").length < 10) {
+        throw new Error("Add a valid email and registered mobile number before resending credentials");
+      }
+      PAGE_STATE.userDetailsModal = null;
+      PAGE_STATE.resetPasswordModal = { mode: "resend", ...row };
       render();
       return;
     } else if (action === "force-logout") {
@@ -1044,8 +1107,10 @@ async function handleConfirmReset() {
     const fn = m.system === "external" ? "external_portal_admin_reset_password" : "transport_portal_admin_reset_password";
     const { error } = await client.rpc(fn, { p_portal_user_id: m.portalUserId, p_new_password: newPassword });
     if (error) throw error;
+    const warnings = m.mode === "resend" ? await deliverPortalCredentials(m, newPassword) : [];
     PAGE_STATE.resetPasswordModal = null;
-    showToast("Password reset. All active sessions revoked.", TOAST_TYPES.SUCCESS);
+    if (warnings.length) showToast(`Password updated. ${warnings.join("; ")}`, TOAST_TYPES.WARNING);
+    else showToast(m.mode === "resend" ? "New credentials sent successfully by email and WhatsApp." : "Password reset. All active sessions revoked.", TOAST_TYPES.SUCCESS);
     await loadAllRows();
     render();
   } catch (error) {

@@ -9,6 +9,7 @@ export const ROUTES = {
   DASHBOARD: "/new-ems/modules/dashboard/index.html",
   INTERIORS_PORTAL_LOGIN: "/new-ems/modules/interiors-portal-login/index.html",
   INTERIORS_CLIENT_APP: "/new-ems/modules/interiors-client-app/index.html",
+  INTERIORS_ARCHITECT_PORTAL: "/new-ems/modules/interiors-architect-portal/index.html",
   PORTAL_MANAGEMENT: "/new-ems/modules/portal-management/index.html"
   ,PORTAL_ACCESS: "/new-ems/modules/portal-access/index.html"
   ,TRANSPORT_PORTAL_LOGIN: "/new-ems/modules/transport-portal-login/index.html",

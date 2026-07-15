@@ -793,6 +793,7 @@ function buildPortalCredentialPdf(input: Record<string, any>, branding: any) {
   const navy = branding.headerBg || "#0f213b";
   const gold = branding.accent || "#e7c976";
   const company = trimText(branding.companyName) || "Varada Nexus Private Limited";
+  const isStaff = input.accessKind === "staff";
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 18;
 
@@ -809,11 +810,11 @@ function buildPortalCredentialPdf(input: Record<string, any>, branding: any) {
   doc.text(company, margin + 18, 21);
   doc.setFontSize(9);
   doc.setTextColor(190, 205, 225);
-  doc.text("SECURE PORTAL ACCESS DOCUMENT", margin + 18, 29);
+  doc.text(isStaff ? "SECURE EMS ACCESS DOCUMENT" : "SECURE PORTAL ACCESS DOCUMENT", margin + 18, 29);
 
   doc.setTextColor(15, 33, 59);
   doc.setFontSize(23);
-  doc.text("Your portal credentials", margin, 67);
+  doc.text(isStaff ? "Your EMS credentials" : "Your portal credentials", margin, 67);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   doc.setTextColor(71, 85, 105);
@@ -822,7 +823,7 @@ function buildPortalCredentialPdf(input: Record<string, any>, branding: any) {
   doc.setFillColor(247, 249, 252);
   doc.setDrawColor(219, 228, 240);
   doc.roundedRect(margin, 86, pageWidth - (margin * 2), 58, 3, 3, "FD");
-  const labels = ["Portal", "Username", "Initial password", "Login address"];
+  const labels = [isStaff ? "Workspace" : "Portal", "Username", "Initial password", "Login address"];
   const values = [trimText(input.portalType), normalizeEmail(input.username), trimText(input.initialPassword), PUBLIC_PORTAL_LOGIN_LABEL];
   let y = 98;
   labels.forEach((label, index) => {
@@ -845,7 +846,12 @@ function buildPortalCredentialPdf(input: Record<string, any>, branding: any) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   doc.setTextColor(51, 65, 85);
-  const steps = [
+  const steps = isStaff ? [
+    "1. Open the login address shown above.",
+    "2. Enter the username and initial password exactly as shown.",
+    "3. Review and accept the EMS terms when prompted.",
+    "4. Keep these credentials confidential and sign out after using a shared device."
+  ] : [
     "1. Open the login address shown above.",
     "2. Enter your email address as the username and use the initial password.",
     "3. Review and accept the portal disclaimer when prompted.",
@@ -859,17 +865,19 @@ function buildPortalCredentialPdf(input: Record<string, any>, branding: any) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(120, 80, 10);
-  doc.text("Important disclaimer and identity evidence", margin + 7, 218);
+  doc.text(isStaff ? "Important access conditions" : "Important disclaimer and identity evidence", margin + 7, 218);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9.3);
   doc.setTextColor(71, 65, 45);
-  const disclaimer = `${portalDisclaimerSummary(input.portalType)} Where required, acceptance records may include a live identity photo, authorised-person name, server-captured IP address, timestamp and browser details. Declining the terms prevents portal access.`;
+  const disclaimer = isStaff
+    ? "This is individual, role-based company access. Use it only for authorised work. Activity may be logged and audited. Never share credentials, confidential information, client data, or internal records. Access remains subject to Company policies and may be changed or revoked."
+    : `${portalDisclaimerSummary(input.portalType)} Where required, acceptance records may include a live identity photo, authorised-person name, server-captured IP address, timestamp and browser details. Declining the terms prevents portal access.`;
   doc.text(doc.splitTextToSize(disclaimer, pageWidth - (margin * 2) - 14), margin + 7, 227, { lineHeightFactor: 1.35 });
 
   doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139);
   doc.text("For assistance, contact support@varadanexus.com. Varada Nexus will never ask you to share this PDF password by email.", margin, 272);
-  doc.text(`Issued ${new Date().toISOString().slice(0, 10)} | ${trimText(input.portalUserCode) || "Secure portal user"}`, margin, 280);
+  doc.text(`Issued ${new Date().toISOString().slice(0, 10)} | ${trimText(input.portalUserCode) || (isStaff ? "Secure EMS user" : "Secure portal user")}`, margin, 280);
 
   return new Uint8Array(doc.output("arraybuffer"));
 }
@@ -926,6 +934,7 @@ async function sendPortalCredentials(req: Request, admin: any, body: Record<stri
   const initialPassword = trimText(body.initialPassword);
   const registeredMobile = trimText(body.registeredMobile);
   const portalLoginUrl = PUBLIC_PORTAL_LOGIN_URL;
+  const isResend = trimText(body.sourceEvent) === "portal_credentials_resent";
   if (!recipientEmail || !recipientEmail.includes("@")) throw new Error("A valid recipient email is required");
   if (username !== recipientEmail) throw new Error("Portal username must be the recipient email address");
   if (initialPassword.length < 8) throw new Error("Initial password must be at least 8 characters");
@@ -945,7 +954,7 @@ async function sendPortalCredentials(req: Request, admin: any, body: Record<stri
   const pdfBytes = buildPortalCredentialPdf(input, branding);
   const result = await sendModuleEmail(req, admin, {
     to: [{ address: recipientEmail, name: input.recipientName }],
-    subject: `Your ${input.portalType} access | Varada Nexus`,
+    subject: `${isResend ? "Updated credentials for" : "Your"} ${input.portalType} | Varada Nexus`,
     bodyHtml: buildPortalCredentialEmailHtml(input),
     textBody: buildPortalCredentialEmailText(input),
     attachments: [{
@@ -957,7 +966,90 @@ async function sendPortalCredentials(req: Request, admin: any, body: Record<stri
     archiveAttachments: false,
     senderKey: "noreply",
     sourceModule: "portal-access",
-    sourceEvent: "portal_credentials_created"
+    sourceEvent: isResend ? "portal_credentials_resent" : "portal_credentials_created"
+  });
+  return { ...result, senderKey: "noreply", recipientEmail };
+}
+
+function buildUserCredentialEmailHtml(input: Record<string, any>) {
+  const recipient = escapeHtml(trimText(input.recipientName) || "Team Member");
+  const role = escapeHtml(trimText(input.roleName) || "Assigned role");
+  const division = escapeHtml(trimText(input.divisionName) || "Assigned workspace");
+  return `
+    <p style="margin:0 0 14px;">Hello ${recipient},</p>
+    <p style="margin:0 0 14px;">Your Varada Nexus EMS staff account has been created. Your username and initial password are provided only in the attached protected PDF.</p>
+    <div style="border:1px solid #dbe4f0;border-radius:14px;padding:18px;background:#f8fafc;margin:18px 0;">
+      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Assigned access</div>
+      <p style="margin:8px 0 0;"><strong>Role:</strong> ${role}<br /><strong>Division:</strong> ${division}</p>
+      <p style="margin:10px 0 0;">Use your <strong>10-digit registered mobile number</strong> as the PDF password.</p>
+    </div>
+    <p style="margin:0 0 10px;"><strong>How to sign in</strong></p>
+    <ol style="padding-left:20px;margin:0 0 18px;">
+      <li>Open the protected PDF and note the credentials.</li>
+      <li>Visit <a href="${PUBLIC_PORTAL_LOGIN_URL}" style="color:#0f4c81;font-weight:700;">${PUBLIC_PORTAL_LOGIN_LABEL}</a>.</li>
+      <li>Enter the username and initial password exactly as shown.</li>
+      <li>Review and accept the EMS terms when prompted.</li>
+    </ol>
+    <div style="border-left:4px solid #e7c976;padding:12px 16px;background:#fffbeb;margin:18px 0;">
+      <strong>Confidential company access</strong><br />This account is personal and role-based. Activity may be logged and audited. Never share credentials, client information, internal records, or confidential Company data.
+    </div>
+    <p style="margin:18px 0 0;">If you did not expect this account, contact <a href="mailto:support@varadanexus.com">support@varadanexus.com</a> immediately.</p>`;
+}
+
+function buildUserCredentialEmailText(input: Record<string, any>) {
+  return [
+    `Hello ${trimText(input.recipientName) || "Team Member"},`, "",
+    "Your Varada Nexus EMS staff account has been created.",
+    "Your username and initial password are in the attached protected PDF.",
+    "PDF password: your 10-digit registered mobile number.", "",
+    `Role: ${trimText(input.roleName) || "Assigned role"}`,
+    `Division: ${trimText(input.divisionName) || "Assigned workspace"}`,
+    `Login: ${PUBLIC_PORTAL_LOGIN_LABEL}`, "",
+    "Open the PDF, enter the credentials exactly as shown, and accept the EMS terms when prompted.",
+    "This account is personal and role-based. Activity may be logged and audited. Never share credentials or confidential Company information.", "",
+    "For help, contact support@varadanexus.com.", "", "Varada Nexus Private Limited"
+  ].join("\n");
+}
+
+async function sendUserCredentials(req: Request, admin: any, body: Record<string, any>) {
+  const recipientEmail = normalizeEmail(body.recipientEmail);
+  const username = trimText(body.username);
+  const initialPassword = trimText(body.initialPassword);
+  const registeredMobile = trimText(body.registeredMobile);
+  const isResend = trimText(body.sourceEvent) === "ems_user_credentials_resent";
+  if (!recipientEmail || !recipientEmail.includes("@")) throw new Error("A valid recipient email is required");
+  if (!username) throw new Error("A username is required");
+  if (initialPassword.length < 8) throw new Error("Initial password must be at least 8 characters");
+  if (!normalizeMobilePassword(registeredMobile)) throw new Error("A valid registered mobile number is required");
+  const input = {
+    accessKind: "staff",
+    recipientEmail,
+    recipientName: trimText(body.recipientName) || recipientEmail,
+    username,
+    initialPassword,
+    registeredMobile,
+    portalType: "Varada Nexus EMS",
+    roleName: trimText(body.roleName),
+    divisionName: trimText(body.divisionName),
+    portalUserCode: trimText(body.roleName) || "EMS User"
+  };
+  const branding = await loadBranding(admin);
+  const pdfBytes = buildPortalCredentialPdf(input, branding);
+  const result = await sendModuleEmail(req, admin, {
+    to: [{ address: recipientEmail, name: input.recipientName }],
+    subject: isResend ? "Your updated Varada Nexus EMS credentials" : "Your Varada Nexus EMS access",
+    bodyHtml: buildUserCredentialEmailHtml(input),
+    textBody: buildUserCredentialEmailText(input),
+    attachments: [{
+      name: `Varada-Nexus-EMS-Credentials-${safeFilePart(recipientEmail)}.pdf`,
+      mimeType: "application/pdf",
+      size: pdfBytes.byteLength,
+      base64: bytesToBase64(pdfBytes)
+    }],
+    archiveAttachments: false,
+    senderKey: "noreply",
+    sourceModule: "users",
+    sourceEvent: isResend ? "ems_user_credentials_resent" : "ems_user_credentials_created"
   });
   return { ...result, senderKey: "noreply", recipientEmail };
 }
@@ -1340,6 +1432,7 @@ Deno.serve(async (req) => {
     if (action === "list_email_workspace_data") return json(await listEmailWorkspaceData(req, admin));
     if (action === "send_module_email") return json(await sendModuleEmail(req, admin, body));
     if (action === "send_portal_credentials") return json(await sendPortalCredentials(req, admin, body));
+    if (action === "send_user_credentials") return json(await sendUserCredentials(req, admin, body));
     if (action === "list_email_history") return json(await listEmailHistory(req, admin));
     if (action === "list_email_inbound") return json(await listEmailInbound(req, admin));
     if (action === "mark_inbound_read") return json(await markInboundRead(req, admin, body));

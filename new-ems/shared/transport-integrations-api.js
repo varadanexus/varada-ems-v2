@@ -38,6 +38,10 @@ export function notifyPortalAccessCreated(payload) {
   return transportIntegration("notify_portal_access_created", payload);
 }
 
+export function notifyEmsUserCreated(payload) {
+  return transportIntegration("notify_ems_user_created", payload);
+}
+
 export function notifyTransportBillGenerated(clientBillId) {
   return transportIntegration("notify_bill_created", { clientBillId });
 }

@@ -4,7 +4,7 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
-import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-20260704-v5";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-owner-bypass-1";
 
 console.log("CLIENT_APP_BOOT");
 
@@ -23,6 +23,7 @@ const PAGE_STATE = {
   access: [],
   approvals: [],
   designs: [],
+  designFiles: [],
   siteUpdates: [],
   photos: [],
   billingHeaders: [],
@@ -108,7 +109,7 @@ function ensureImmediateBootShell() {
   app.classList.add("page-enter-active");
 }
 
-const CLIENT_VISIBLE_DESIGN_STATUSES = new Set(["submitted", "approved", "revision_requested"]);
+const CLIENT_VISIBLE_DESIGN_STATUSES = new Set(["approved", "rejected", "revision_requested"]);
 const CLIENT_VISIBLE_BILL_STATUSES = new Set(["submitted", "approved", "ready_for_accounts"]);
 
 function escapeHtml(value) {
@@ -150,6 +151,17 @@ function latestUpdateForProject(sharedProjectId) {
 
 function visibleDesigns() {
   return PAGE_STATE.designs.filter((row) => CLIENT_VISIBLE_DESIGN_STATUSES.has(String(row.status || "draft")));
+}
+
+function designFiles(designId) {
+  return PAGE_STATE.designFiles.filter((row) => String(row.entity_id) === String(designId));
+}
+
+function renderDesignFileActions(row) {
+  const files = designFiles(row.id);
+  const links = files.map((file) => `<a class="btn btn-sm" href="${escapeHtml(file.web_view_link)}" target="_blank" rel="noopener">${escapeHtml(file.file_name || "Open file")}</a>`).join("");
+  if (links) return links;
+  return row.file_url ? `<a class="btn btn-sm" href="${escapeHtml(row.file_url)}" target="_blank" rel="noopener">Open design</a>` : `<button class="btn btn-sm" disabled>No File</button>`;
 }
 
 function pendingApprovals() {
@@ -705,7 +717,7 @@ function renderDesignCards(rows) {
           <div class="client-surface-head"><strong>${escapeHtml(row.design_title || "Design")}</strong>${statusBadgeHtml(row.status)}</div>
           <p class="muted">Version ${escapeHtml(String(row.version_no || 1))} · Designer: Project Team · ${escapeHtml(formatDateTime(row.uploaded_at || row.updated_at))}</p>
           <div class="client-actions">
-            ${row.file_url ? `<button class="btn btn-sm" data-lightbox-src="${row.file_url}" type="button">Preview</button><a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener" download>Download PDF</a>` : `<button class="btn btn-sm" disabled>No File</button>`}
+            ${renderDesignFileActions(row)}
             <button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">Details</button>
             <button class="btn btn-sm" data-section-tab="approvals" type="button">Approve</button>
             <button class="btn btn-sm" data-section-tab="approvals" type="button">Request Revision</button>
@@ -723,7 +735,7 @@ function renderDesignsSection() {
   return `
     <section class="client-surface">
       <div class="client-surface-head"><h3>Design Library</h3><div class="client-inline-tools">${renderSearchInput("designs", "Search designs")}${renderDesignViewToggle()}<button class="btn btn-sm" data-pdf-action="project-summary" type="button">Export Summary</button></div></div>
-      ${mode === "cards" ? renderDesignCards(rows) : renderDataTable(["Design Name", "Version", "Uploaded Date", "Status", "Uploaded By", "Actions"], rows.map((row) => `<tr><td><strong>${escapeHtml(row.design_title || "Design")}</strong></td><td>v${escapeHtml(String(row.version_no || 1))}</td><td>${escapeHtml(formatDateTime(row.uploaded_at || row.updated_at))}</td><td>${statusBadgeHtml(row.status)}</td><td>Project Team</td><td><div class="client-actions">${row.file_url ? `<button class="btn btn-sm" data-lightbox-src="${row.file_url}" type="button">View</button><a class="btn btn-sm" href="${row.file_url}" target="_blank" rel="noopener" download>Download</a>` : `<button class="btn btn-sm" disabled>No File</button>`}<button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">PDF</button></div></td></tr>`), "No designs match your search.")}
+      ${mode === "cards" ? renderDesignCards(rows) : renderDataTable(["Design Name", "Version", "Published", "Status", "Files", "Actions"], rows.map((row) => `<tr><td><strong>${escapeHtml(row.design_title || "Design")}</strong></td><td>v${escapeHtml(String(row.version_no || 1))}</td><td>${escapeHtml(formatDateTime(row.published_at || row.updated_at))}</td><td>${statusBadgeHtml(row.client_decision || row.status)}</td><td>${designFiles(row.id).length || (row.file_url ? 1 : 0)}</td><td><div class="client-actions">${renderDesignFileActions(row)}<button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">Details</button></div></td></tr>`), "No designs match your search.")}
       ${renderPagination("designs", allRows.length, 5)}
     </section>
   `;
@@ -1502,12 +1514,28 @@ async function updateApprovalDecision(approvalId, decision) {
   const row = PAGE_STATE.approvals.find((item) => String(item.id) === String(approvalId));
   if (!row) return;
   try {
-    const { error } = await getClient()
-      .from("interior_client_approvals")
-      .update({ decision, decided_at: new Date().toISOString() })
-      .eq("id", approvalId);
+    const normalizedDecision = decision === "approve" ? "approved" : decision;
+    const remarks = normalizedDecision === "approved"
+      ? (window.prompt("Optional approval note:", "") || "").trim()
+      : (window.prompt("Please describe the required revision or reason:", "") || "").trim();
+    if (normalizedDecision !== "approved" && !remarks) {
+      showToast("Remarks are required for a rejection or revision request.", TOAST_TYPES.ERROR);
+      return;
+    }
+    const response = row.approval_type === "design" && row.reference_table === "interior_designs"
+      ? await getClient().rpc("interiors_client_decide_design", {
+          p_approval_id: approvalId,
+          p_decision: normalizedDecision,
+          p_remarks: remarks || null
+        })
+      : await getClient().from("interior_client_approvals").update({
+          decision: normalizedDecision,
+          remarks: remarks || row.remarks || null,
+          decided_at: new Date().toISOString()
+        }).eq("id", approvalId);
+    const { error } = response;
     if (error) throw error;
-    showToast(`Approval marked ${normalizeStatus(decision)}.`, TOAST_TYPES.SUCCESS);
+    showToast(`Design marked ${normalizeStatus(normalizedDecision)}.`, TOAST_TYPES.SUCCESS);
     await loadData();
     render();
   } catch (error) {
@@ -1566,6 +1594,7 @@ async function loadData() {
     PAGE_STATE.projects = [];
     PAGE_STATE.approvals = [];
     PAGE_STATE.designs = [];
+    PAGE_STATE.designFiles = [];
     PAGE_STATE.siteUpdates = [];
     PAGE_STATE.photos = [];
     PAGE_STATE.billingHeaders = [];
@@ -1573,7 +1602,7 @@ async function loadData() {
   }
 
   const projectsRes = interiorProjectIds.length
-    ? await client.from("interior_projects").select("id,project_code,project_name,project_title,shared_project_id,status,interior_client_id").in("id", interiorProjectIds).order("project_name")
+    ? await client.from("interior_projects").select("id,project_code,project_name,project_title,shared_project_id,status,workflow_stage,design_gate_status,interior_client_id").in("id", interiorProjectIds).order("project_name")
     : { data: [], error: null };
   if (projectsRes.error) throw projectsRes.error;
   PAGE_STATE.projects = (projectsRes.data || []).filter((row) => row?.shared_project_id);
@@ -1581,6 +1610,7 @@ async function loadData() {
   if (!PAGE_STATE.projects.length) {
     PAGE_STATE.approvals = [];
     PAGE_STATE.designs = [];
+    PAGE_STATE.designFiles = [];
     PAGE_STATE.siteUpdates = [];
     PAGE_STATE.photos = [];
     PAGE_STATE.billingHeaders = [];
@@ -1589,7 +1619,7 @@ async function loadData() {
 
   const [approvalsRes, designsRes, siteUpdatesRes, photosRes, billingRes] = await Promise.all([
     interiorProjectIds.length ? client.from("interior_client_approvals").select("*").in("interior_project_id", interiorProjectIds).order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
-    sharedProjectIds.length ? client.from("interior_designs").select("id,project_id,version_no,design_title,status,uploaded_at,updated_at,file_url").in("project_id", sharedProjectIds).order("uploaded_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
+    sharedProjectIds.length ? client.from("interior_designs").select("id,project_id,version_no,design_title,status,client_decision,published_at,uploaded_at,updated_at,file_url").in("project_id", sharedProjectIds).order("uploaded_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
     sharedProjectIds.length ? client.from("interior_site_updates").select("id,project_id,update_date,progress_percent,update_title,created_at").in("project_id", sharedProjectIds).order("update_date", { ascending: false }) : Promise.resolve({ data: [], error: null }),
     sharedProjectIds.length ? client.from("interior_project_photos").select("id,project_id,photo_title,photo_url,photo_category,uploaded_at").in("project_id", sharedProjectIds).eq("is_client_visible", true).order("uploaded_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
     sharedProjectIds.length ? client.from("interior_billing_headers").select("id,project_id,bill_number,status,total_amount,bill_date,created_at").in("project_id", sharedProjectIds).order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null })
@@ -1603,6 +1633,16 @@ async function loadData() {
 
   PAGE_STATE.approvals = approvalsRes.data || [];
   PAGE_STATE.designs = (designsRes.data || []).sort((a, b) => new Date(b.updated_at || b.uploaded_at || 0).getTime() - new Date(a.updated_at || a.uploaded_at || 0).getTime());
+  const designIds = PAGE_STATE.designs.map((row) => row.id).filter(Boolean);
+  if (designIds.length) {
+    const filesRes = await client.from("drive_documents")
+      .select("id,entity_id,file_name,file_size,mime_type,web_view_link,created_at")
+      .eq("category", "INTERIORS_DESIGN").in("entity_id", designIds).is("deleted_at", null).order("created_at", { ascending: false });
+    if (filesRes.error) throw filesRes.error;
+    PAGE_STATE.designFiles = filesRes.data || [];
+  } else {
+    PAGE_STATE.designFiles = [];
+  }
   PAGE_STATE.siteUpdates = siteUpdatesRes.data || [];
   PAGE_STATE.photos = photosRes.data || [];
   PAGE_STATE.billingHeaders = (billingRes.data || []).sort((a, b) => new Date(b.bill_date || b.created_at || 0).getTime() - new Date(a.bill_date || a.created_at || 0).getTime());
