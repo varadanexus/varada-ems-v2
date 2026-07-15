@@ -6,7 +6,7 @@ import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-owner-bypass-1";
 import { showToast } from "./utils.js";
 import { architectPortalLogout, getArchitectPortalSession, requireArchitectPortalSession } from "./interiors-architect-portal-auth.js";
 import { listInteriorsArchitectDesignFiles, uploadInteriorsArchitectDesignToDrive } from "./drive-api.js?v=architect-drive-1";
-import { compressDesignBookImage, generateInteriorDesignBookPdf } from "./interiors-design-book-pdf.js?v=2";
+import { compressDesignBookImage, generateInteriorDesignBookPdf } from "./interiors-design-book-pdf.js?v=3";
 
 const client = getSupabaseClient();
 const STATE = { session: null, context: null, detail: null, activeView: "dashboard", activeProjectId: "", busy: false, designBook: null, generatedDesignBookFile: null };
@@ -128,7 +128,11 @@ function createDesignBookState() {
       executiveNote: "",
       confidential: true
     },
-    pages: []
+    pages: [],
+    selectedPageIndex: 0,
+    selectedElementId: null,
+    zoom: 0.72,
+    clipboard: null
   };
 }
 
@@ -169,17 +173,78 @@ function renderBookBrief() {
 
 function renderBookPages() {
   const book = STATE.designBook;
-  const editing = Number.isInteger(book.editingPageIndex) ? book.pages[book.editingPageIndex] : null;
-  const page = editing || { type: book.pages.length ? "hero" : "cover", title: "", subtitle: "", space: "", location: "", tags: [], description: "", images: [] };
-  return `<section class="db-panel"><span class="db-kicker">PAGE COMPOSER</span><h2>Build the presentation page by page</h2><p>Select a luxury layout, add imagery and its design narrative, then arrange pages into the final issue.</p><div class="db-page-layout">
-    <form id="designBookPageForm" class="db-editor"><input id="bookEditingPage" type="hidden" value="${Number.isInteger(book.editingPageIndex) ? book.editingPageIndex : ""}"/><label class="db-field">Page layout</label><div class="db-template-grid">${DESIGN_BOOK_TYPES.map(([key,title]) => `<button class="db-template ${page.type === key ? "active" : ""}" data-page-template="${key}" type="button">${title}</button>`).join("")}</div><input id="bookPageType" type="hidden" value="${page.type}"/>
-      <div class="db-grid"><label class="db-field wide">Page title *<input id="bookPageTitle" value="${esc(page.title)}" required placeholder="Living room concept"/></label><label class="db-field">Subtitle / design direction<input id="bookPageSubtitle" value="${esc(page.subtitle)}" placeholder="Warm contemporary living"/></label><label class="db-field">Room / space<input id="bookPageSpace" value="${esc(page.space)}" placeholder="Living Room"/></label><label class="db-field">Drawing / location reference<input id="bookPageLocation" value="${esc(page.location)}" placeholder="Ground Floor / DWG-04"/></label><label class="db-field">Tags / materials<input id="bookPageTags" value="${esc((page.tags || []).join(", "))}" placeholder="Oak, brass, ivory"/></label><label class="db-field wide">Image description / design narrative *<textarea id="bookPageDescription" required placeholder="Explain the design intent, material selection, spatial purpose, key dimensions, or client decision required…">${esc(page.description)}</textarea></label></div>
-      <label class="db-upload">Select page images<input id="bookPageImages" type="file" multiple accept="image/png,image/jpeg,image/webp"/><small>Up to 4 images · images are optimised for a sharp, practical PDF</small></label>
-      <div id="bookPageImagePreview" class="db-preview-strip">${(page.images || []).map((image) => `<img src="${image.dataUrl}" alt="${esc(image.name)}"/>`).join("")}</div>
-      <div class="db-editor-actions">${editing ? `<button class="db-btn" id="cancelPageEditBtn" type="button">Cancel edit</button>` : ""}<button class="db-btn primary" type="submit">${editing ? "Update page" : "Add page"}</button></div>
-    </form>
-    <section class="db-page-register"><span class="db-kicker">PAGE REGISTER</span><h3>${book.pages.length} page${book.pages.length === 1 ? "" : "s"} prepared</h3><div class="db-page-list">${book.pages.length ? book.pages.map(renderBookPageCard).join("") : `<div class="db-empty">Add a branded cover, then build the presentation with image, gallery, detail, material, and specification pages.</div>`}</div></section>
-  </div></section>`;
+  if (!book.pages.length) book.pages.push(createCanvasPage("cover"));
+  book.selectedPageIndex = Math.min(Math.max(0, Number(book.selectedPageIndex || 0)), book.pages.length - 1);
+  const page = book.pages[book.selectedPageIndex];
+  if (!page.elements) Object.assign(page, createCanvasPage(page.type || "content"));
+  const selected = page.elements.find((element) => element.id === book.selectedElementId) || null;
+  const zoomPercent = Math.round(book.zoom * 100);
+  return `<section class="db-canva-shell">
+    <header class="db-canva-toolbar">
+      <div class="db-toolbar-group"><button class="db-icon-btn" id="undoCanvasBtn" type="button" title="Undo last change">↶</button><button class="db-icon-btn" id="duplicateElementBtn" type="button" ${selected ? "" : "disabled"} title="Duplicate selected">⧉</button><button class="db-icon-btn danger" id="deleteElementBtn" type="button" ${selected ? "" : "disabled"} title="Delete selected">⌫</button></div>
+      <div class="db-toolbar-group db-insert-tools"><button data-add-element="logo" type="button"><b>VN</b> Logo</button><button data-add-element="company" type="button"><b>Co</b> Company Name</button><button data-add-element="heading" type="button"><b>T</b> Heading</button><button data-add-element="body" type="button"><b>Tt</b> Text</button><label class="db-toolbar-upload"><b>▧</b> Image<input id="canvasImageUpload" type="file" accept="image/png,image/jpeg,image/webp"/></label><button data-add-element="shape" type="button"><b>□</b> Shape</button><button data-add-element="line" type="button"><b>―</b> Line</button></div>
+      <div class="db-toolbar-group"><button id="zoomOutBtn" class="db-icon-btn" type="button">−</button><span class="db-zoom-label">${zoomPercent}%</span><button id="zoomInBtn" class="db-icon-btn" type="button">+</button><button id="previewCanvasBtn" type="button">Preview PDF</button></div>
+    </header>
+    <div class="db-canva-workspace">
+      <aside class="db-pages-rail"><header><span>PAGES</span><button id="addCanvasPageBtn" type="button">＋</button></header><div class="db-page-thumbnails">${book.pages.map((item, index) => renderCanvasThumbnail(item, index, index === book.selectedPageIndex)).join("")}</div><div class="db-page-template-menu"><small>ADD A PAGE</small>${[["cover","Cover"],["content","Editorial"],["gallery","Gallery"],["blank","Blank"]].map(([key,title]) => `<button data-add-page-template="${key}" type="button">${title}</button>`).join("")}</div></aside>
+      <main class="db-canvas-stage" id="canvasStage"><div class="db-canvas-frame" style="--canvas-zoom:${book.zoom}"><div class="db-a4-canvas" id="designCanvas" data-page-index="${book.selectedPageIndex}" style="background:${esc(page.background || "#f8f6ef")}">${page.elements.slice().sort((a,b) => (a.z || 0) - (b.z || 0)).map((element) => renderCanvasElement(element, element.id === book.selectedElementId)).join("")}<div class="db-page-safe-area"></div></div></div><div class="db-canvas-caption">A4 Portrait · ${zoomPercent}% · Page ${book.selectedPageIndex + 1} of ${book.pages.length}</div></main>
+      <aside class="db-properties-panel">${renderCanvasProperties(page, selected)}</aside>
+    </div>
+  </section>`;
+}
+
+function canvasId(prefix = "el") { return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`; }
+
+function canvasText(content, x, y, w, h, options = {}) {
+  return { id: canvasId("text"), kind: "text", content, x, y, w, h, fontSize: options.fontSize || 32, fontFamily: options.fontFamily || "Georgia", fontWeight: options.fontWeight || 400, color: options.color || "#10141c", align: options.align || "left", opacity: 1, z: options.z || 3 };
+}
+
+function createCanvasPage(template = "content") {
+  const page = { type: "canvas", template, title: label(template), background: template === "cover" ? "#0b1424" : "#f8f6ef", elements: [] };
+  if (template === "cover") {
+    page.elements = [
+      { id: canvasId("shape"), kind: "shape", x: 6, y: 7, w: 2, h: 61, color: "#d8b65c", opacity: 1, radius: 0, z: 1 },
+      canvasText("VARADA NEXUS / INTERIORS", 12, 10, 73, 7, { fontSize: 15, fontFamily: "Arial", fontWeight: 700, color: "#e6c86f", z: 2 }),
+      canvasText("INTERIOR DESIGN\nPRESENTATION", 12, 27, 76, 22, { fontSize: 42, fontWeight: 700, color: "#ffffff", z: 3 }),
+      canvasText(STATE.designBook?.meta?.projectName || "Project Design Book", 12, 53, 72, 9, { fontSize: 21, color: "#ffffff", z: 3 }),
+      canvasText("Prepared for review · Revision controlled", 12, 83, 76, 6, { fontSize: 12, fontFamily: "Arial", color: "#d9dce3", z: 3 })
+    ];
+  } else if (template === "gallery") {
+    page.elements = [canvasText("Design Gallery", 8, 7, 84, 10, { fontSize: 34, fontWeight: 700 }), canvasText("CURATED VISUAL DIRECTION", 8, 18, 84, 5, { fontSize: 12, fontFamily: "Arial", fontWeight: 700, color: "#b08a32" })];
+    [[8,27],[52,27],[8,58],[52,58]].forEach(([x,y]) => page.elements.push({ id: canvasId("shape"), kind: "shape", x, y, w: 40, h: 27, color: "#e8e4d9", opacity: 1, radius: 3, z: 1 }));
+  } else if (template !== "blank") {
+    page.elements = [
+      canvasText("Design Direction", 8, 7, 84, 11, { fontSize: 36, fontWeight: 700 }),
+      canvasText("SPACE / CONCEPT / REVISION", 8, 19, 84, 5, { fontSize: 12, fontFamily: "Arial", fontWeight: 700, color: "#b08a32" }),
+      { id: canvasId("shape"), kind: "shape", x: 8, y: 29, w: 55, h: 47, color: "#e8e4d9", opacity: 1, radius: 2, z: 1 },
+      canvasText("Add the design narrative, material rationale, dimensions, or decision required from the review team.", 67, 30, 25, 38, { fontSize: 15, fontFamily: "Arial", color: "#596170", z: 3 }),
+      { id: canvasId("line"), kind: "line", x: 8, y: 82, w: 84, h: 0.5, color: "#d8b65c", opacity: 1, z: 2 }
+    ];
+  }
+  return page;
+}
+
+function renderCanvasElement(element, selected) {
+  const style = `left:${element.x}%;top:${element.y}%;width:${element.w}%;height:${Math.max(element.h, .35)}%;z-index:${element.z || 1};opacity:${element.opacity ?? 1};`;
+  const common = `class="db-canvas-element ${selected ? "selected" : ""} db-kind-${element.kind}" data-element-id="${element.id}" style="${style}"`;
+  let content = "";
+  if (element.kind === "text") content = `<div class="db-canvas-text" style="font-family:${esc(element.fontFamily || "Arial")};font-size:${Number(element.fontSize || 18)}px;font-weight:${Number(element.fontWeight || 400)};color:${esc(element.color || "#111")};text-align:${esc(element.align || "left")};line-height:${Number(element.lineHeight || 1.14)}">${esc(element.content || "Text").replace(/\n/g, "<br>")}</div>`;
+  else if (element.kind === "image" || element.kind === "logo") content = `<img src="${element.kind === "logo" ? "/new-ems/assets/pdf/vn-logo.png" : element.dataUrl}" alt="${esc(element.name || "Design image")}" style="object-fit:${element.fit || "cover"};border-radius:${Number(element.radius || 0)}px"/>`;
+  else if (element.kind === "line") content = `<span style="background:${esc(element.color || "#d8b65c")}"></span>`;
+  else content = `<span style="background:${esc(element.color || "#d8b65c")};border-radius:${Number(element.radius || 0)}px"></span>`;
+  return `<div ${common}>${content}${selected ? `<i class="db-resize-handle" data-resize-handle="se"></i>` : ""}</div>`;
+}
+
+function renderCanvasThumbnail(page, index, active) {
+  const title = page.title || label(page.template || "Page");
+  return `<button class="db-canvas-thumb ${active ? "active" : ""}" data-canvas-page="${index}" type="button"><span>${String(index + 1).padStart(2,"0")}</span><div style="background:${esc(page.background || "#fff")}">${(page.elements || []).slice(0, 7).map((el) => `<i style="left:${el.x}%;top:${el.y}%;width:${el.w}%;height:${Math.max(el.h,1)}%;background:${el.kind === "image" ? `url('${el.dataUrl}') center/cover` : esc(el.color || "#c8c3b7")}"></i>`).join("")}</div><b>${esc(title)}</b><em data-page-menu="${index}">•••</em></button>`;
+}
+
+function renderCanvasProperties(page, selected) {
+  if (!selected) return `<div class="db-properties-head"><span>DESIGN</span><h3>Page settings</h3></div><label class="db-prop-field">Page name<input id="canvasPageTitle" value="${esc(page.title || "Untitled page")}"/></label><label class="db-prop-field">Background<input id="canvasPageBackground" type="color" value="${esc(page.background || "#f8f6ef")}"/></label><div class="db-layer-actions"><button data-add-page-template="content" type="button">Editorial page</button><button data-add-page-template="gallery" type="button">Gallery page</button><button id="duplicateCanvasPageBtn" type="button">Duplicate page</button><button id="deleteCanvasPageBtn" class="danger" type="button" ${STATE.designBook.pages.length === 1 ? "disabled" : ""}>Delete page</button></div><div class="db-editor-tip"><b>Canva-style editing</b><p>Select an element on the page. Drag to move it, use the gold corner to resize, or edit its exact properties here.</p></div>`;
+  const isText = selected.kind === "text";
+  const isImage = selected.kind === "image" || selected.kind === "logo";
+  return `<div class="db-properties-head"><span>${esc(selected.kind.toUpperCase())}</span><h3>Edit element</h3></div>${isText ? `<label class="db-prop-field">Text<textarea id="propContent">${esc(selected.content || "")}</textarea></label><div class="db-prop-row"><label>Font<select id="propFontFamily">${["Georgia","Arial","Times New Roman","Verdana"].map((font) => `<option ${selected.fontFamily === font ? "selected" : ""}>${font}</option>`).join("")}</select></label><label>Size<input id="propFontSize" type="number" min="8" max="96" value="${Number(selected.fontSize || 18)}"/></label></div><div class="db-prop-row"><label>Weight<select id="propFontWeight"><option value="400" ${Number(selected.fontWeight) === 400 ? "selected" : ""}>Regular</option><option value="600" ${Number(selected.fontWeight) === 600 ? "selected" : ""}>Semibold</option><option value="700" ${Number(selected.fontWeight) === 700 ? "selected" : ""}>Bold</option></select></label><label>Align<select id="propAlign">${["left","center","right"].map((v) => `<option ${selected.align === v ? "selected" : ""}>${label(v)}</option>`).join("")}</select></label></div>` : ""}<div class="db-prop-row"><label>Colour<input id="propColor" type="color" value="${esc(selected.color || "#d8b65c")}"/></label><label>Opacity<input id="propOpacity" type="range" min="10" max="100" value="${Math.round((selected.opacity ?? 1) * 100)}"/></label></div>${isImage ? `<div class="db-prop-row"><label>Image fit<select id="propImageFit"><option value="cover" ${selected.fit !== "contain" ? "selected" : ""}>Crop to fill</option><option value="contain" ${selected.fit === "contain" ? "selected" : ""}>Show full image</option></select></label><label>Corner radius<input id="propRadius" type="number" min="0" max="80" value="${Number(selected.radius || 0)}"/></label></div>` : ""}<div class="db-position-grid"><label>X<input id="propX" type="number" min="0" max="100" step=".1" value="${Number(selected.x).toFixed(1)}"/></label><label>Y<input id="propY" type="number" min="0" max="100" step=".1" value="${Number(selected.y).toFixed(1)}"/></label><label>W<input id="propW" type="number" min="1" max="100" step=".1" value="${Number(selected.w).toFixed(1)}"/></label><label>H<input id="propH" type="number" min=".3" max="100" step=".1" value="${Number(selected.h).toFixed(1)}"/></label></div><div class="db-layer-actions"><button data-layer="front" type="button">Bring forward</button><button data-layer="back" type="button">Send backward</button><button id="duplicateElementSideBtn" type="button">Duplicate</button><button id="deleteElementSideBtn" class="danger" type="button">Delete</button></div>`;
 }
 
 function renderBookPageCard(page, index) {
@@ -231,7 +296,7 @@ function content() {
 
 function render() {
   const profile = STATE.context?.profile || {};
-  document.querySelector("#app").innerHTML = `<style>${CSS}</style><div class="ap-shell"><aside class="ap-sidebar"><div class="ap-brand"><img src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus"/><div><strong>VARADA NEXUS</strong><small>ARCHITECT PORTAL</small></div></div><div class="ap-nav-title">DESIGN WORKSPACE</div><nav>${NAV.map(([key, icon, title]) => `<button class="${STATE.activeView === key ? "active" : ""}" data-view="${key}" type="button"><span>${icon}</span>${title}</button>`).join("")}</nav><footer><div class="ap-avatar">${esc((profile.name || "A").slice(0, 1).toUpperCase())}</div><div><b>${esc(profile.name || "Architect")}</b><small>${esc(profile.email || "Secure account")}</small></div><button id="logoutBtn" title="Sign out">↗</button></footer></aside><main class="ap-main"><header class="ap-top"><div><small>INTERIORS / ${esc(STATE.activeView.toUpperCase())}</small><h1>${esc(NAV.find(([k]) => k === STATE.activeView)?.[2] || "Architect Portal")}</h1></div><span><i></i> Secure architect session</span></header><div class="ap-content">${content()}</div><footer class="ap-foot">Varada Nexus Private Limited · Secure Architect Workspace</footer></main></div>${renderDesignBookModal()}<div id="toastHost" class="toast-host" aria-live="polite"></div>`;
+  document.querySelector("#app").innerHTML = `<style>${CSS}</style><div class="ap-shell"><aside class="ap-sidebar"><div class="ap-brand"><img src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus"/><div><strong>VARADA NEXUS</strong><small>ARCHITECT PORTAL</small></div></div><div class="ap-nav-title">DESIGN WORKSPACE</div><nav>${NAV.map(([key, icon, title]) => `<button class="${STATE.activeView === key ? "active" : ""}" data-view="${key}" type="button"><span>${icon}</span>${title}</button>`).join("")}</nav><footer><div class="ap-profile"><div class="ap-avatar">${esc((profile.name || "A").slice(0, 1).toUpperCase())}</div><div class="ap-user-copy"><b>${esc(profile.name || "Architect")}</b><small>${esc(profile.email || "Secure account")}</small></div></div><button id="logoutBtn" type="button" title="Sign out of Architect Portal">Sign out</button></footer></aside><main class="ap-main"><header class="ap-top"><div><small>INTERIORS / ${esc(STATE.activeView.toUpperCase())}</small><h1>${esc(NAV.find(([k]) => k === STATE.activeView)?.[2] || "Architect Portal")}</h1></div><span><i></i> Secure architect session</span></header><div class="ap-content">${content()}</div><footer class="ap-foot">Varada Nexus Private Limited · Secure Architect Workspace</footer></main></div>${renderDesignBookModal()}<div id="toastHost" class="toast-host" aria-live="polite"></div>`;
   bind();
 }
 
@@ -267,6 +332,227 @@ function bind() {
   document.querySelector("#generateDesignBookBtn")?.addEventListener("click", generateDesignBookPreview);
   document.querySelector("#downloadDesignBookBtn")?.addEventListener("click", downloadDesignBookProof);
   document.querySelector("#attachDesignBookBtn")?.addEventListener("click", attachDesignBookToSubmission);
+  bindCanvasDesigner();
+}
+
+function activeCanvasPage() {
+  const book = STATE.designBook;
+  return book?.pages?.[book.selectedPageIndex] || null;
+}
+
+function selectedCanvasElement() {
+  return activeCanvasPage()?.elements?.find((element) => element.id === STATE.designBook?.selectedElementId) || null;
+}
+
+function invalidateDesignBook() {
+  const book = STATE.designBook;
+  if (!book) return;
+  if (book.previewUrl) URL.revokeObjectURL(book.previewUrl);
+  book.previewUrl = null;
+  book.generatedFile = null;
+}
+
+function pushCanvasHistory() {
+  const book = STATE.designBook;
+  if (!book) return;
+  book.history ||= [];
+  book.history.push(JSON.stringify({ pages: book.pages, selectedPageIndex: book.selectedPageIndex, selectedElementId: book.selectedElementId }));
+  if (book.history.length > 30) book.history.shift();
+}
+
+function undoCanvasChange() {
+  const book = STATE.designBook;
+  const snapshot = book?.history?.pop();
+  if (!snapshot) return showToast("Nothing to undo yet.", TOAST_TYPES.INFO);
+  const restored = JSON.parse(snapshot);
+  book.pages = restored.pages;
+  book.selectedPageIndex = restored.selectedPageIndex;
+  book.selectedElementId = restored.selectedElementId;
+  invalidateDesignBook();
+  render();
+}
+
+function addCanvasElement(kind, image = null) {
+  const page = activeCanvasPage();
+  if (!page) return;
+  pushCanvasHistory();
+  let element;
+  if (kind === "logo") element = { id: canvasId("logo"), kind: "logo", x: 8, y: 7, w: 22, h: 9, name: "Varada Nexus logo", fit: "contain", opacity: 1, z: page.elements.length + 1 };
+  else if (kind === "company") element = canvasText("VARADA NEXUS PRIVATE LIMITED", 31, 8.5, 61, 7, { fontSize: 24, fontWeight: 700, fontFamily: "Arial", color: "#111827", align: "left", lineHeight: 1.05 });
+  else if (kind === "heading") element = canvasText("Add a heading", 16, 15, 68, 10, { fontSize: 36, fontWeight: 700 });
+  else if (kind === "body") element = canvasText("Add your design narrative here.", 20, 30, 60, 18, { fontSize: 16, fontFamily: "Arial", color: "#4f5867" });
+  else if (kind === "shape") element = { id: canvasId("shape"), kind: "shape", x: 25, y: 30, w: 50, h: 25, color: "#d8b65c", opacity: 1, radius: 3, z: page.elements.length + 1 };
+  else if (kind === "line") element = { id: canvasId("line"), kind: "line", x: 20, y: 45, w: 60, h: .5, color: "#d8b65c", opacity: 1, z: page.elements.length + 1 };
+  else if (kind === "image" && image) element = { id: canvasId("image"), kind: "image", x: 15, y: 20, w: 70, h: 50, dataUrl: image.dataUrl, name: image.name, fit: "cover", radius: 2, opacity: 1, z: page.elements.length + 1 };
+  if (!element) return;
+  page.elements.push(element);
+  STATE.designBook.selectedElementId = element.id;
+  invalidateDesignBook();
+  render();
+}
+
+function duplicateCanvasElement() {
+  const page = activeCanvasPage();
+  const source = selectedCanvasElement();
+  if (!page || !source) return;
+  pushCanvasHistory();
+  const copy = { ...source, id: canvasId(source.kind), x: Math.min(96 - source.w, source.x + 3), y: Math.min(96 - source.h, source.y + 3), z: page.elements.length + 1 };
+  page.elements.push(copy);
+  STATE.designBook.selectedElementId = copy.id;
+  invalidateDesignBook();
+  render();
+}
+
+function deleteCanvasElement() {
+  const page = activeCanvasPage();
+  const id = STATE.designBook?.selectedElementId;
+  if (!page || !id) return;
+  pushCanvasHistory();
+  page.elements = page.elements.filter((element) => element.id !== id);
+  STATE.designBook.selectedElementId = null;
+  invalidateDesignBook();
+  render();
+}
+
+function addCanvasPage(template = "blank") {
+  const book = STATE.designBook;
+  if (!book) return;
+  pushCanvasHistory();
+  book.pages.push(createCanvasPage(template));
+  book.selectedPageIndex = book.pages.length - 1;
+  book.selectedElementId = null;
+  invalidateDesignBook();
+  render();
+}
+
+async function addCanvasImage(file) {
+  if (!file) return;
+  if (file.size > 12 * 1024 * 1024) return showToast("The image must be 12 MB or smaller.", TOAST_TYPES.ERROR);
+  try {
+    const image = await compressDesignBookImage(file, { maxDimension: 2200, quality: .88 });
+    addCanvasElement("image", image);
+  } catch (error) {
+    showToast(error?.message || "Could not add that image.", TOAST_TYPES.ERROR);
+  }
+}
+
+function updateCanvasProperty(key, value) {
+  const element = selectedCanvasElement();
+  if (!element) return;
+  pushCanvasHistory();
+  element[key] = ["x", "y", "w", "h", "fontSize", "fontWeight", "radius", "opacity"].includes(key) ? Number(value) : value;
+  invalidateDesignBook();
+  render();
+}
+
+function startCanvasPointer(event, elementNode) {
+  const page = activeCanvasPage();
+  const element = page?.elements?.find((item) => item.id === elementNode.dataset.elementId);
+  const canvas = document.querySelector("#designCanvas");
+  if (!element || !canvas) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (STATE.designBook.selectedElementId !== element.id) {
+    STATE.designBook.selectedElementId = element.id;
+    render();
+    return;
+  }
+  pushCanvasHistory();
+  const rect = canvas.getBoundingClientRect();
+  const start = { x: event.clientX, y: event.clientY, ex: element.x, ey: element.y, ew: element.w, eh: element.h };
+  const resizing = Boolean(event.target.closest("[data-resize-handle]"));
+  const onMove = (moveEvent) => {
+    const dx = (moveEvent.clientX - start.x) / rect.width * 100;
+    const dy = (moveEvent.clientY - start.y) / rect.height * 100;
+    if (resizing) {
+      element.w = Math.max(2, Math.min(100 - element.x, start.ew + dx));
+      element.h = Math.max(.35, Math.min(100 - element.y, start.eh + dy));
+    } else {
+      element.x = Math.max(0, Math.min(100 - element.w, start.ex + dx));
+      element.y = Math.max(0, Math.min(100 - element.h, start.ey + dy));
+    }
+    elementNode.style.left = `${element.x}%`;
+    elementNode.style.top = `${element.y}%`;
+    elementNode.style.width = `${element.w}%`;
+    elementNode.style.height = `${element.h}%`;
+  };
+  const onUp = () => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    invalidateDesignBook();
+    render();
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp, { once: true });
+}
+
+function bindCanvasDesigner() {
+  const book = STATE.designBook;
+  if (!book?.open || book.step !== "pages") return;
+  document.querySelectorAll("[data-canvas-page]").forEach((button) => button.addEventListener("click", (event) => {
+    if (event.target.closest("[data-page-menu]")) return;
+    book.selectedPageIndex = Number(button.dataset.canvasPage);
+    book.selectedElementId = null;
+    render();
+  }));
+  document.querySelectorAll("[data-page-menu]").forEach((menu) => menu.addEventListener("click", (event) => {
+    event.preventDefault(); event.stopPropagation();
+    const index = Number(menu.dataset.pageMenu);
+    pushCanvasHistory();
+    const source = book.pages[index];
+    const copy = JSON.parse(JSON.stringify(source));
+    copy.title = `${source.title || "Page"} copy`;
+    copy.elements.forEach((element) => { element.id = canvasId(element.kind); });
+    book.pages.splice(index + 1, 0, copy);
+    book.selectedPageIndex = index + 1;
+    book.selectedElementId = null;
+    invalidateDesignBook(); render();
+  }));
+  document.querySelectorAll("[data-add-page-template]").forEach((button) => button.addEventListener("click", () => addCanvasPage(button.dataset.addPageTemplate)));
+  document.querySelector("#addCanvasPageBtn")?.addEventListener("click", () => addCanvasPage("blank"));
+  document.querySelectorAll("[data-add-element]").forEach((button) => button.addEventListener("click", () => addCanvasElement(button.dataset.addElement)));
+  document.querySelector("#canvasImageUpload")?.addEventListener("change", (event) => addCanvasImage(event.target.files?.[0]));
+  document.querySelectorAll(".db-canvas-element").forEach((node) => node.addEventListener("pointerdown", (event) => startCanvasPointer(event, node)));
+  document.querySelector("#designCanvas")?.addEventListener("pointerdown", (event) => { if (event.target.id === "designCanvas") { book.selectedElementId = null; render(); } });
+  document.querySelector("#undoCanvasBtn")?.addEventListener("click", undoCanvasChange);
+  ["#duplicateElementBtn", "#duplicateElementSideBtn"].forEach((selector) => document.querySelector(selector)?.addEventListener("click", duplicateCanvasElement));
+  ["#deleteElementBtn", "#deleteElementSideBtn"].forEach((selector) => document.querySelector(selector)?.addEventListener("click", deleteCanvasElement));
+  document.querySelector("#zoomInBtn")?.addEventListener("click", () => { book.zoom = Math.min(1.05, book.zoom + .08); render(); });
+  document.querySelector("#zoomOutBtn")?.addEventListener("click", () => { book.zoom = Math.max(.42, book.zoom - .08); render(); });
+  document.querySelector("#previewCanvasBtn")?.addEventListener("click", () => navigateDesignBook("review"));
+  document.querySelector("#canvasPageTitle")?.addEventListener("change", (event) => { activeCanvasPage().title = event.target.value.trim() || "Untitled page"; invalidateDesignBook(); render(); });
+  document.querySelector("#canvasPageBackground")?.addEventListener("change", (event) => { activeCanvasPage().background = event.target.value; invalidateDesignBook(); render(); });
+  document.querySelector("#duplicateCanvasPageBtn")?.addEventListener("click", () => {
+    pushCanvasHistory();
+    const source = activeCanvasPage();
+    const copy = JSON.parse(JSON.stringify(source));
+    copy.title = `${source.title || "Page"} copy`;
+    copy.elements.forEach((element) => { element.id = canvasId(element.kind); });
+    book.pages.splice(book.selectedPageIndex + 1, 0, copy);
+    book.selectedPageIndex += 1; book.selectedElementId = null; invalidateDesignBook(); render();
+  });
+  document.querySelector("#deleteCanvasPageBtn")?.addEventListener("click", () => {
+    if (book.pages.length <= 1) return;
+    pushCanvasHistory(); book.pages.splice(book.selectedPageIndex, 1);
+    book.selectedPageIndex = Math.max(0, Math.min(book.selectedPageIndex, book.pages.length - 1));
+    book.selectedElementId = null; invalidateDesignBook(); render();
+  });
+  document.querySelector("#propContent")?.addEventListener("focus", pushCanvasHistory, { once: true });
+  document.querySelector("#propContent")?.addEventListener("input", (event) => {
+    const element = selectedCanvasElement();
+    if (!element) return;
+    element.content = event.target.value;
+    const textNode = document.querySelector(`[data-element-id="${element.id}"] .db-canvas-text`);
+    if (textNode) textNode.textContent = element.content;
+    invalidateDesignBook();
+  });
+  const propertyMap = { propFontFamily: "fontFamily", propFontSize: "fontSize", propFontWeight: "fontWeight", propAlign: "align", propColor: "color", propImageFit: "fit", propRadius: "radius", propX: "x", propY: "y", propW: "w", propH: "h" };
+  Object.entries(propertyMap).forEach(([id, key]) => document.querySelector(`#${id}`)?.addEventListener("change", (event) => updateCanvasProperty(key, event.target.value)));
+  document.querySelector("#propOpacity")?.addEventListener("change", (event) => updateCanvasProperty("opacity", Number(event.target.value) / 100));
+  document.querySelectorAll("[data-layer]").forEach((button) => button.addEventListener("click", () => {
+    const element = selectedCanvasElement(); if (!element) return; pushCanvasHistory();
+    element.z = Math.max(1, Number(element.z || 1) + (button.dataset.layer === "front" ? 1 : -1)); invalidateDesignBook(); render();
+  }));
 }
 
 function openDesignBook() {
@@ -543,6 +829,8 @@ function formatFileSize(bytes) {
 
 const CSS = `
   :root{--ap-gold:#d8b65c;--ap-gold2:#f1d787;--ap-bg:#05070b;--ap-panel:#0b0e14;--ap-line:rgba(216,182,92,.22);--ap-text:#f4f1e8;--ap-muted:#8993a5}*{box-sizing:border-box}.ap-loading{min-height:100vh;display:grid;place-content:center;text-align:center;background:#05070b;color:#f4f1e8}.ap-loading strong,.ap-loading p{color:#d8b65c}.ap-shell{min-height:100vh;background:var(--ap-bg);color:var(--ap-text);display:grid;grid-template-columns:270px 1fr}.ap-sidebar{position:sticky;top:0;height:100vh;border-right:1px solid var(--ap-line);padding:1.4rem 1rem;display:flex;flex-direction:column;background:linear-gradient(180deg,#090c12,#05070b)}.ap-brand{display:flex;align-items:center;gap:.8rem;padding:.3rem .5rem 1.4rem;border-bottom:1px solid rgba(255,255,255,.07)}.ap-brand img{width:45px;height:45px;object-fit:contain}.ap-brand strong{display:block;letter-spacing:.2em;font-size:.78rem;color:#fff}.ap-brand small{display:block;letter-spacing:.2em;color:var(--ap-gold);font-size:.62rem;margin-top:.2rem}.ap-nav-title{font-size:.62rem;letter-spacing:.2em;color:#657186;margin:1.45rem .55rem .7rem}.ap-sidebar nav{display:grid;gap:.28rem}.ap-sidebar nav button{border:1px solid transparent;background:transparent;color:#b7c0cf;border-radius:12px;padding:.75rem;display:flex;align-items:center;gap:.72rem;text-align:left;cursor:pointer}.ap-sidebar nav button span{width:31px;height:31px;border:1px solid rgba(216,182,92,.2);border-radius:9px;display:grid;place-content:center;color:var(--ap-gold);font-size:.68rem}.ap-sidebar nav button.active{background:linear-gradient(90deg,rgba(216,182,92,.14),rgba(216,182,92,.04));border-color:rgba(216,182,92,.35);color:#fff;box-shadow:inset 3px 0 var(--ap-gold)}.ap-sidebar footer{margin-top:auto;border-top:1px solid rgba(255,255,255,.07);padding:.9rem .45rem 0;display:grid;grid-template-columns:auto 1fr auto;gap:.65rem;align-items:center}.ap-sidebar footer b,.ap-sidebar footer small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:135px}.ap-sidebar footer small{color:var(--ap-muted);font-size:.7rem}.ap-sidebar footer button{background:none;border:0;color:var(--ap-gold);font-size:1.1rem;cursor:pointer}.ap-avatar,.ap-project-mark{width:36px;height:36px;border-radius:11px;display:grid;place-content:center;background:rgba(216,182,92,.12);border:1px solid rgba(216,182,92,.28);color:var(--ap-gold2);font-weight:800}.ap-main{min-width:0}.ap-top{height:110px;padding:1.3rem 2rem;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between}.ap-top small,.ap-panel header small,.ap-hero span,.ap-picker small{font-size:.64rem;letter-spacing:.18em;color:var(--ap-gold);font-weight:800}.ap-top h1{margin:.25rem 0 0;font-family:Georgia,serif;font-size:2rem}.ap-top>span{color:var(--ap-muted);font-size:.75rem}.ap-top>span i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#46d889;box-shadow:0 0 10px #46d889;margin-right:.4rem}.ap-content{padding:1.7rem 2rem 3rem;max-width:1500px;margin:0 auto}.ap-hero,.ap-panel,.ap-picker,.ap-metric{border:1px solid var(--ap-line);background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012));border-radius:20px}.ap-hero{padding:2rem;display:grid;grid-template-columns:1fr auto;gap:2rem;align-items:center;overflow:hidden;position:relative}.ap-hero:after{content:"";position:absolute;width:300px;height:300px;border:1px solid rgba(216,182,92,.12);border-radius:50%;right:-120px;top:-130px}.ap-hero h2{font-family:Georgia,serif;font-size:2.65rem;margin:.55rem 0}.ap-hero p{color:#a6afbd;max-width:760px;line-height:1.65}.ap-hero aside{border-left:1px solid var(--ap-line);padding:1rem 2rem;min-width:170px}.ap-hero aside>*{display:block}.ap-hero aside strong{font-family:Georgia,serif;font-size:2.4rem;color:var(--ap-gold2);margin:.35rem 0}.ap-hero aside span{font-size:.72rem;color:var(--ap-muted);letter-spacing:normal}.ap-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin:1rem 0}.ap-metric{padding:1.1rem}.ap-metric>*{display:block}.ap-metric small{color:#8d98aa}.ap-metric strong{font-family:Georgia,serif;color:#fff;font-size:1.65rem;margin:.38rem 0}.ap-metric span{font-size:.68rem;color:#657186}.ap-split{display:grid;grid-template-columns:1.55fr 1fr;gap:1rem;margin-top:1rem}.ap-panel{padding:1.1rem;margin-top:1rem;min-width:0}.ap-split>.ap-panel{margin-top:0}.ap-panel header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}.ap-panel h3{font-family:Georgia,serif;font-size:1.35rem;margin:.22rem 0}.ap-panel header>button,.ap-panel header>span{background:none;border:0;color:#93a5c1;font-size:.72rem}.ap-project-list{display:grid;gap:.55rem}.ap-project{width:100%;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.8rem;text-align:left;padding:.75rem;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:#090c12;color:#fff;cursor:pointer}.ap-project.active{border-color:rgba(216,182,92,.5);background:rgba(216,182,92,.07)}.ap-project-copy b,.ap-project-copy small,.ap-project-side>*{display:block}.ap-project-copy small{color:#7f8b9f;font-size:.72rem;margin:.25rem 0 .45rem}.ap-project-copy i{display:block;height:5px;background:#151b25;border-radius:99px;overflow:hidden}.ap-project-copy i span{display:block;height:100%;background:linear-gradient(90deg,#b58a2d,#f1d787)}.ap-project-side{text-align:right}.ap-project-side em,.ap-record em,.ap-line em,.ap-status{font-style:normal;font-size:.64rem;color:var(--ap-gold2);border:1px solid rgba(216,182,92,.26);border-radius:99px;padding:.22rem .45rem}.ap-project-side b{margin-top:.45rem}.ap-pulse,.ap-line{display:flex;gap:.8rem;align-items:center;padding:.8rem 0;border-bottom:1px solid rgba(255,255,255,.06)}.ap-pulse>span{width:42px;height:42px;border:1px solid var(--ap-line);border-radius:12px;display:grid;place-content:center;color:var(--ap-gold);font-size:.68rem}.ap-pulse b,.ap-pulse small,.ap-line b,.ap-line small{display:block}.ap-pulse small,.ap-line small{color:var(--ap-muted);font-size:.72rem;margin-top:.25rem}.ap-empty{border:1px dashed rgba(216,182,92,.2);border-radius:14px;padding:2rem;text-align:center;color:#778399}.ap-picker{padding:.9rem 1rem;display:flex;justify-content:space-between;align-items:end;margin-bottom:1rem}.ap-picker label{font-size:.72rem;color:#9aa5b6}.ap-picker select,.ap-form input,.ap-form textarea{display:block;margin-top:.35rem;background:#07090e;border:1px solid rgba(216,182,92,.22);border-radius:10px;color:#fff;padding:.72rem;width:100%}.ap-picker select{min-width:360px}.ap-picker div>*{display:block;text-align:right}.ap-picker div b{margin-top:.25rem}.ap-info-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;margin:1rem 0}.ap-info-grid>div{padding:.8rem;border:1px solid rgba(255,255,255,.07);border-radius:12px}.ap-info-grid small,.ap-info-grid b{display:block}.ap-info-grid small{color:#738097;font-size:.63rem;text-transform:uppercase;letter-spacing:.12em}.ap-info-grid b{font-size:.8rem;margin-top:.35rem}.ap-detail p{color:#9ba6b8;line-height:1.6}.ap-design-layout{grid-template-columns:.8fr 1.3fr}.ap-form{display:grid;gap:.8rem}.ap-form label{font-size:.75rem;color:#b4bdca}.ap-primary{background:linear-gradient(135deg,#c49b3d,#f1d787);border:0;color:#13100a;font-weight:800;padding:.75rem 1rem;border-radius:10px;cursor:pointer}.ap-upload{position:relative;display:block;border:1px dashed rgba(216,182,92,.38);border-radius:14px;padding:1rem;background:rgba(216,182,92,.055);cursor:pointer}.ap-upload input{position:absolute;inset:0;opacity:0;cursor:pointer;margin:0}.ap-upload span,.ap-upload span>*{display:block}.ap-upload span b{color:var(--ap-gold2);font-size:.84rem}.ap-upload span small{color:var(--ap-muted);font-size:.68rem;margin-top:.3rem}.ap-file-selection{display:grid;gap:.35rem}.ap-file-selection>span{display:flex;justify-content:space-between;gap:.5rem;padding:.45rem .6rem;border:1px solid rgba(255,255,255,.07);border-radius:9px;color:#8d98aa;font-size:.7rem}.ap-file-selection>span b{color:#dce2eb;overflow:hidden;text-overflow:ellipsis}.ap-drive-route{padding:.7rem;border-left:2px solid var(--ap-gold);background:rgba(216,182,92,.06)}.ap-drive-route>*{display:block}.ap-drive-route b{font-size:.72rem;color:var(--ap-gold2)}.ap-drive-route span{font-size:.66rem;color:var(--ap-muted);margin-top:.25rem}.ap-file-links{display:grid;gap:.35rem;margin-top:.7rem}.ap-file-links a{display:flex;justify-content:space-between;gap:.6rem;padding:.55rem .65rem;border:1px solid rgba(216,182,92,.18);border-radius:9px;color:#dfe6f1;text-decoration:none}.ap-file-links a:hover{border-color:var(--ap-gold)}.ap-file-links a b{font-size:.7rem;overflow:hidden;text-overflow:ellipsis}.ap-file-links a small{font-size:.62rem;color:var(--ap-gold);white-space:nowrap}.ap-record{display:grid;grid-template-columns:1fr auto;gap:1rem;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:1rem;margin:.55rem 0;background:#080b10}.ap-record h4{margin:.35rem 0}.ap-record p{color:#8e99aa;font-size:.78rem}.ap-record>div>span{color:var(--ap-gold);font-size:.68rem}.ap-record aside{text-align:right}.ap-record aside>*{display:block;margin-bottom:.45rem}.ap-record aside a{color:#d8b65c;font-size:.72rem}.ap-record footer{grid-column:1/-1;border-top:1px solid rgba(255,255,255,.06)}.ap-line{justify-content:space-between}.ap-line aside{text-align:right}.ap-line aside>*{display:block;margin-bottom:.25rem}.ap-timeline article{display:grid;grid-template-columns:65px 1fr;gap:1rem;padding:1rem 0;border-bottom:1px solid rgba(255,255,255,.07)}.ap-timeline article>span{color:var(--ap-gold2);font-family:Georgia,serif;font-size:1.3rem}.ap-timeline h4{margin:.25rem 0}.ap-timeline p{color:#8995a7}.ap-foot{text-align:center;color:#4e596b;font-size:.65rem;padding:1.5rem}.ap-query{margin-bottom:1rem}@media(max-width:1000px){.ap-shell{grid-template-columns:82px 1fr}.ap-brand div,.ap-nav-title,.ap-sidebar nav button:not(.active){font-size:0}.ap-sidebar nav button{justify-content:center}.ap-sidebar footer div:not(.ap-avatar),.ap-sidebar footer button{display:none}.ap-metrics{grid-template-columns:repeat(2,1fr)}.ap-split{grid-template-columns:1fr}.ap-info-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:680px){.ap-shell{display:block}.ap-sidebar{position:static;width:100%;height:auto}.ap-sidebar nav{grid-template-columns:repeat(4,1fr)}.ap-sidebar nav button{font-size:0}.ap-sidebar footer{display:none}.ap-top,.ap-content{padding-left:1rem;padding-right:1rem}.ap-hero{grid-template-columns:1fr}.ap-hero h2{font-size:2rem}.ap-hero aside{border-left:0;border-top:1px solid var(--ap-line)}.ap-metrics{grid-template-columns:1fr 1fr}.ap-picker{display:block}.ap-picker select{min-width:0}.ap-picker div{margin-top:.8rem}.ap-info-grid{grid-template-columns:1fr}.ap-project-side{display:none}}
+  .ap-sidebar footer{grid-template-columns:1fr;align-items:stretch}.ap-profile{display:grid;grid-template-columns:auto 1fr;gap:.65rem;align-items:center;min-width:0}.ap-user-copy{min-width:0}.ap-sidebar footer b,.ap-sidebar footer small{max-width:170px}.ap-sidebar footer button{display:block;width:100%;border:1px solid rgba(255,255,255,.1);border-radius:9px;padding:.66rem .8rem;background:#07090d;color:#b9c6dc;font-size:.75rem;font-weight:500;letter-spacing:0;transition:.18s ease}.ap-sidebar footer button:hover{border-color:rgba(216,182,92,.5);color:var(--ap-gold2);background:rgba(216,182,92,.05)}
+  @media(max-width:1000px) and (min-width:681px){.ap-sidebar footer{display:grid;padding-left:0;padding-right:0}.ap-profile{grid-template-columns:1fr;justify-items:center}.ap-user-copy{display:none}.ap-sidebar footer button{display:grid;place-content:center;font-size:.62rem;padding:.6rem .2rem}}
 `;
 
 async function init() {

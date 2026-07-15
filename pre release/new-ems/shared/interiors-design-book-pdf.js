@@ -271,7 +271,55 @@ function renderNotes(doc, page) {
   addMetaChips(doc, page, 27, y + 178, 156);
 }
 
+function hexToRgb(value, fallback = [16, 20, 28]) {
+  const hex = String(value || "").replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return fallback;
+  return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
+}
+
+function renderCanvasPage(doc, page, logo) {
+  doc.setFillColor(...hexToRgb(page.background, COLORS.ivory));
+  doc.rect(0, 0, 210, 297, "F");
+  (page.elements || []).slice().sort((a, b) => Number(a.z || 0) - Number(b.z || 0)).forEach((element) => {
+    const x = Number(element.x || 0) * 2.1;
+    const y = Number(element.y || 0) * 2.97;
+    const width = Math.max(.5, Number(element.w || 1) * 2.1);
+    const height = Math.max(.5, Number(element.h || 1) * 2.97);
+    const opacity = Math.max(.1, Math.min(1, Number(element.opacity ?? 1)));
+    try { doc.setGState(new doc.GState({ opacity })); } catch { /* older jsPDF fallback */ }
+    if ((element.kind === "image" && element.dataUrl) || (element.kind === "logo" && logo)) {
+      const image = element.kind === "logo" ? { ...element, dataUrl: logo } : element;
+      if (element.fit === "contain" || element.kind === "logo") addImageContain(doc, image, x, y, width, height, 0);
+      else addImageCover(doc, image, x, y, width, height);
+    } else if (element.kind === "shape") {
+      doc.setFillColor(...hexToRgb(element.color, COLORS.gold));
+      const radius = Math.min(width / 2, height / 2, Number(element.radius || 0) * .28);
+      radius ? doc.roundedRect(x, y, width, height, radius, radius, "F") : doc.rect(x, y, width, height, "F");
+    } else if (element.kind === "line") {
+      doc.setDrawColor(...hexToRgb(element.color, COLORS.gold));
+      doc.setLineWidth(Math.max(.25, height));
+      doc.line(x, y + height / 2, x + width, y + height / 2);
+    } else if (element.kind === "text") {
+      const family = String(element.fontFamily || "Arial").toLowerCase().includes("georgia") || String(element.fontFamily || "").toLowerCase().includes("times") ? "times" : "helvetica";
+      const weight = Number(element.fontWeight || 400) >= 600 ? "bold" : "normal";
+      const fontSize = Math.max(6, Number(element.fontSize || 18) * .52);
+      setText(doc, hexToRgb(element.color, COLORS.ink), fontSize, weight, family);
+      doc.setLineHeightFactor(Number(element.lineHeight || 1.14));
+      const explicitLines = String(element.content || "Text").split("\n");
+      const lines = explicitLines.flatMap((line) => doc.splitTextToSize(line || " ", width));
+      const align = ["left", "center", "right"].includes(element.align) ? element.align : "left";
+      const textX = align === "center" ? x + width / 2 : align === "right" ? x + width : x;
+      doc.text(lines, textX, y + fontSize * .36, { align, baseline: "top", maxWidth: width });
+    }
+    try { doc.setGState(new doc.GState({ opacity: 1 })); } catch { /* older jsPDF fallback */ }
+  });
+}
+
 function renderPage(doc, page, meta, logo, pageNumber, totalPages) {
+  if (page.type === "canvas" || Array.isArray(page.elements)) {
+    renderCanvasPage(doc, page, logo);
+    return;
+  }
   if (page.type === "cover") {
     renderCover(doc, page, meta, logo);
     return;
