@@ -1,11 +1,13 @@
 import { APP_NAME } from "./constants.js";
 
 let clientInstance = null;
+let clientMode = null;
+const LOCAL_SESSION_KEY = "ems_local_staff_session";
 // Sprint 13F: for LOCAL staff (auth_provider='local') we bind a minted,
 // Supabase-compatible JWT as the Authorization header on the client instead of
 // using GoTrue sessions. When set, the client runs as that authenticated user
 // (auth.uid() = the token's sub), so RLS works exactly as for Supabase-Auth users.
-// The super admin path leaves this null and continues to use GoTrue normally.
+// Supabase-Auth accounts leave this null and continue to use GoTrue normally.
 let localAuthToken = null;
 
 function getRuntimeConfig() {
@@ -16,16 +18,32 @@ function getRuntimeConfig() {
   };
 }
 
-// Bind (or rebind) the local staff JWT and force the client to be rebuilt so the
-// new Authorization header takes effect on every subsequent request.
+function hasStoredLocalSession() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LOCAL_SESSION_KEY) || "null");
+    return Boolean(stored?.sessionToken);
+  } catch {
+    return false;
+  }
+}
+
+// Bind (or rebind) the local staff JWT. On a fresh local login the existing
+// normal-auth client is discarded; subsequent protected pages initialise in
+// local mode from the stored session before their first database request.
 export function setLocalAuthToken(token) {
   localAuthToken = token || null;
-  clientInstance = null;
+  if (localAuthToken && clientMode && clientMode !== "local") {
+    clientInstance = null;
+    clientMode = null;
+  }
 }
 
 export function clearLocalAuthToken() {
   localAuthToken = null;
-  clientInstance = null;
+  if (clientMode === "local") {
+    clientInstance = null;
+    clientMode = null;
+  }
 }
 
 export function getSupabaseClient() {
@@ -41,14 +59,19 @@ export function getSupabaseClient() {
     throw new Error(`${APP_NAME}: Missing Supabase runtime config`);
   }
 
-  const options = localAuthToken
+  const useLocalSession = hasStoredLocalSession();
+  const options = useLocalSession
     ? {
-        global: { headers: { Authorization: `Bearer ${localAuthToken}` } },
-        auth: { persistSession: false, autoRefreshToken: false }
+        // Supabase's supported custom-JWT path. The callback is evaluated for
+        // each request, so tokens re-minted by restoreLocalSession() and the
+        // refresh timer are used without recreating page-level clients.
+        accessToken: async () => localAuthToken || null,
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       }
     : {};
 
   clientInstance = window.supabase.createClient(supabaseUrl, supabaseAnonKey, options);
+  clientMode = useLocalSession ? "local" : "supabase";
   return clientInstance;
 }
 
