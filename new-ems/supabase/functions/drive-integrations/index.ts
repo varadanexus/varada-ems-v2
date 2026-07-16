@@ -11,6 +11,7 @@
 //   GDRIVE_ROOT_FOLDER_ID        id of the shared-drive folder to store under
 //   GDRIVE_MARKETING_VENDOR_FOLDER_ID  optional Digital Marketing root folder
 //   GDRIVE_INTERIORS_FOLDER_ID   optional Interiors root folder
+//   GDRIVE_TERMS_FOLDER_ID       optional restricted Terms evidence root folder
 // Provided automatically by the platform:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 //
@@ -18,6 +19,7 @@
 // Drive so files are owned by the drive (no personal storage-quota issues).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -270,6 +272,142 @@ function legalSubfolder(documentType: string) {
   return "Agreements";
 }
 
+async function findFileInFolder(token: string, folderId: string, fileName: string) {
+  const q = [
+    `name='${escapeDriveQuery(fileName)}'`,
+    `'${folderId}' in parents`,
+    "trashed=false"
+  ].join(" and ");
+  const url = `https://www.googleapis.com/drive/v3/files?${DRIVE_QS}`
+    + `&corpora=allDrives&q=${encodeURIComponent(q)}`
+    + "&fields=files(id,name,webViewLink,webContentLink,size,mimeType)";
+  const found = await driveFetch(url, token);
+  return found?.files?.[0] || null;
+}
+
+async function uploadFileIfMissing(token: string, folderId: string, fileName: string, mimeType: string, bytes: Uint8Array) {
+  return await findFileInFolder(token, folderId, fileName)
+    || await uploadFile(token, folderId, fileName, mimeType, bytes);
+}
+
+function postgresByteaToBytes(value: unknown) {
+  if (value instanceof Uint8Array) return value;
+  const raw = String(value || "");
+  if (raw.startsWith("\\x")) {
+    const hex = raw.slice(2);
+    const bytes = new Uint8Array(Math.floor(hex.length / 2));
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    return bytes;
+  }
+  return raw ? base64ToBytes(raw) : new Uint8Array();
+}
+
+function pdfSafe(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
+}
+
+function wrapPdfText(text: string, font: any, size: number, maxWidth: number) {
+  const lines: string[] = [];
+  for (const paragraph of pdfSafe(text).split(/\n+/)) {
+    const words = paragraph.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) { lines.push(""); continue; }
+    let line = "";
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (line && font.widthOfTextAtSize(candidate, size) > maxWidth) {
+        lines.push(line);
+        line = word;
+      } else line = candidate;
+    }
+    if (line) lines.push(line);
+  }
+  return lines;
+}
+
+async function buildTermsAcceptancePdf(context: any) {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(0.035, 0.075, 0.14);
+  const gold = rgb(0.78, 0.61, 0.25);
+  const muted = rgb(0.34, 0.38, 0.44);
+  const width = 595.28;
+  const height = 841.89;
+  const margin = 48;
+  let page: any;
+  let y = 0;
+
+  const addPage = () => {
+    page = pdf.addPage([width, height]);
+    page.drawRectangle({ x: 0, y: height - 82, width, height: 82, color: navy });
+    page.drawRectangle({ x: 0, y: height - 84, width, height: 2, color: gold });
+    page.drawText("VARADA NEXUS PRIVATE LIMITED", { x: margin, y: height - 45, size: 16, font: bold, color: rgb(1, 1, 1) });
+    page.drawText("SECURE ELECTRONIC ACCEPTANCE RECORD", { x: margin, y: height - 64, size: 8, font: bold, color: gold });
+    y = height - 112;
+  };
+  const ensure = (needed: number) => { if (y - needed < 54) addPage(); };
+  const line = (label: string, value: unknown) => {
+    ensure(30);
+    page.drawText(pdfSafe(label).toUpperCase(), { x: margin, y, size: 7.5, font: bold, color: gold });
+    page.drawText(pdfSafe(value) || "-", { x: margin + 142, y: y - 1, size: 10, font: regular, color: navy });
+    y -= 24;
+  };
+  const paragraph = (text: unknown, size = 9.2) => {
+    const lines = wrapPdfText(pdfSafe(text), regular, size, width - margin * 2);
+    for (const item of lines) {
+      ensure(size + 6);
+      if (item) page.drawText(item, { x: margin, y, size, font: regular, color: navy });
+      y -= size + 4;
+    }
+    y -= 5;
+  };
+
+  addPage();
+  page.drawText("Terms & Conditions Acceptance Certificate", { x: margin, y, size: 22, font: bold, color: navy });
+  y -= 38;
+  line("Account holder", context.actor.displayName);
+  line("Account", context.actor.account);
+  line("Portal / account type", context.actor.label);
+  line("Terms version", context.acceptance.terms_version);
+  line("Terms title", context.terms.title);
+  line("Effective", new Date(context.terms.effective_at).toISOString());
+  line("Accepted", new Date(context.acceptance.accepted_at).toISOString());
+  line("Acceptance method", context.acceptance.acceptance_metadata?.method || "electronic acceptance");
+  line("Server-recorded IP", context.acceptance.accepted_ip || "Not available");
+  line("EMS device ID", context.acceptance.device_id || "Not available");
+  line("Evidence SHA-256", context.evidence?.image_sha256 || "No live image attached");
+  line("Acceptance record", context.acceptance.id);
+  y -= 8;
+  paragraph("This certificate records the account holder's electronic acceptance of the terms version identified above. The authoritative acceptance and restricted identity evidence remain secured in the Varada Nexus EMS audit database.", 10);
+
+  const sections = Array.isArray(context.sections) ? context.sections.filter((s: any) => s?.enabled !== false) : [];
+  if (sections.length) {
+    addPage();
+    page.drawText("Accepted Terms", { x: margin, y, size: 22, font: bold, color: navy });
+    y -= 35;
+    for (let i = 0; i < sections.length; i++) {
+      const section = sections[i] || {};
+      ensure(46);
+      page.drawText(`${i + 1}. ${pdfSafe(section.title || `Section ${i + 1}`)}`, { x: margin, y, size: 12, font: bold, color: navy });
+      y -= 20;
+      paragraph(section.body || "-", 9);
+    }
+  }
+  const pages = pdf.getPages();
+  pages.forEach((item: any, index: number) => {
+    item.drawLine({ start: { x: margin, y: 40 }, end: { x: width - margin, y: 40 }, thickness: .5, color: gold });
+    item.drawText(`Varada Nexus Private Limited | Confidential acceptance evidence | Page ${index + 1} of ${pages.length}`, {
+      x: margin, y: 25, size: 7, font: regular, color: muted
+    });
+  });
+  return await pdf.save();
+}
+
 function safeFolderSegment(value: unknown, fallback: string) {
   const cleaned = String(value || "")
     .replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-")
@@ -400,10 +538,12 @@ async function handleHealth() {
   const rootId = env("GDRIVE_ROOT_FOLDER_ID");
   const marketingVendorRoot = env("GDRIVE_MARKETING_VENDOR_FOLDER_ID", "1FaMwA7oEKpBQEBEoFjnZTAXgZnGn5Yb5");
   const interiorsRoot = env("GDRIVE_INTERIORS_FOLDER_ID", "1-8Pu3TFUdhOyM3FxieCKr6ePWzFl3bLy");
+  const termsRoot = env("GDRIVE_TERMS_FOLDER_ID", "1oUSH1IacRP7UyYs6kTspDX4nDspGxGT3");
   const targets: Record<string, string> = { ...map };
   if (rootId) targets.ROOT = rootId;
   if (marketingVendorRoot) targets.MARKETING_VENDOR_ROOT = marketingVendorRoot;
   if (interiorsRoot) targets.INTERIORS_ROOT = interiorsRoot;
+  if (termsRoot) targets.TERMS_ROOT = termsRoot;
   if (!Object.keys(targets).length) {
     throw new Error("No folders configured: set GDRIVE_FOLDER_MAP and/or GDRIVE_ROOT_FOLDER_ID");
   }
@@ -437,6 +577,12 @@ async function handleHealth() {
         ok: true,
         path: name
       };
+    }
+  }
+  if (folders.TERMS_ROOT?.ok) {
+    for (const name of ["01 Staff Accounts", "02 Transportation Portals", "03 External Portals"]) {
+      const id = await ensureFolderPath(token, termsRoot, [name]);
+      folders[`TERMS_${name.slice(0, 2)}`] = { id, name, ok: true, path: name };
     }
   }
   return { ok: true, subfolders: useDateSubfolders() ? "date" : "none", folders };
@@ -962,6 +1108,234 @@ async function handleUploadMarketingVendorInvoice(payload: any) {
   };
 }
 
+async function resolveTermsArchiveActor(req: Request, payload: any) {
+  const db = adminClient();
+  if (payload.externalSessionToken) {
+    const { data, error } = await db.rpc("external_portal_validate_session", {
+      p_session_token: payload.externalSessionToken
+    });
+    const session = Array.isArray(data) ? data[0] : data;
+    if (error || !session?.portal_user_id) throw new Error("The external portal session is invalid or expired");
+    const { data: user, error: userError } = await db.from("external_portal_users")
+      .select("id,display_name,username,email,user_type")
+      .eq("id", session.portal_user_id).single();
+    if (userError) throw new Error(userError.message);
+    return {
+      db,
+      actorType: "external_portal",
+      actorId: user.id,
+      displayName: user.display_name || user.username || "External Portal User",
+      account: user.email || user.username || user.id,
+      label: `${String(user.user_type || "external").replace(/_/g, " ")} portal`,
+      rootGroup: "03 External Portals"
+    };
+  }
+  if (payload.transportSessionToken) {
+    const { data, error } = await db.rpc("transport_portal_validate_session", {
+      p_session_token: payload.transportSessionToken
+    });
+    const session = Array.isArray(data) ? data[0] : data;
+    if (error || !session?.portal_user_id) throw new Error("The transportation portal session is invalid or expired");
+    const { data: user, error: userError } = await db.from("transport_portal_users")
+      .select("id,display_name,username,email")
+      .eq("id", session.portal_user_id).single();
+    if (userError) throw new Error(userError.message);
+    return {
+      db,
+      actorType: "transport_portal",
+      actorId: user.id,
+      displayName: user.display_name || user.username || "Transportation Portal User",
+      account: user.email || user.username || user.id,
+      label: "Transportation portal",
+      rootGroup: "02 Transportation Portals"
+    };
+  }
+  const { appUser } = await authenticatedCaller(req);
+  const { data: user, error: userError } = await db.from("app_users")
+    .select("id,display_name,email")
+    .eq("id", appUser.id).single();
+  if (userError) throw new Error(userError.message);
+  return {
+    db,
+    actorType: "staff",
+    actorId: user.id,
+    displayName: user.display_name || user.email || "EMS Staff",
+    account: user.email || user.id,
+    label: "EMS staff account",
+    rootGroup: "01 Staff Accounts"
+  };
+}
+
+function requestIp(req: Request) {
+  return String(
+    req.headers.get("cf-connecting-ip")
+    || req.headers.get("x-real-ip")
+    || req.headers.get("x-forwarded-for")?.split(",")[0]
+    || ""
+  ).trim().slice(0, 120) || null;
+}
+
+async function registerTermsDriveFile(db: any, acceptance: any, uploaded: any, folderId: string, fileName: string, mimeType: string, bytes: Uint8Array, documentType: string) {
+  const { data: existing } = await db.from("drive_documents")
+    .select("id")
+    .eq("drive_file_id", uploaded.id)
+    .maybeSingle();
+  if (existing?.id) return existing.id;
+  const { data, error } = await db.from("drive_documents").insert({
+    category: "TERMS_ACCEPTANCE",
+    document_type: documentType,
+    entity_type: "legal_terms_acceptances",
+    entity_id: acceptance.id,
+    document_no: acceptance.terms_version,
+    file_name: uploaded.name || fileName,
+    mime_type: mimeType,
+    file_size: uploaded.size ? Number(uploaded.size) : bytes.length,
+    drive_file_id: uploaded.id,
+    drive_folder_id: folderId,
+    web_view_link: uploaded.webViewLink || null,
+    web_content_link: uploaded.webContentLink || null,
+    upload_status: "stored"
+  }).select("id").single();
+  if (error) throw new Error(`Terms document registry failed: ${error.message}`);
+  return data.id;
+}
+
+async function handleArchiveTermsAcceptance(req: Request, payload: any) {
+  const actor = await resolveTermsArchiveActor(req, payload);
+  const db = actor.db;
+  const termsVersion = String(payload.termsVersion || "").trim();
+  let acceptanceQuery = db.from("legal_terms_acceptances")
+    .select("id,actor_type,actor_id,terms_version,accepted_at,user_agent,acceptance_metadata,identity_image_consent_at,privacy_notice_version,accepted_ip,device_id,device_fingerprint_version")
+    .eq("actor_type", actor.actorType)
+    .eq("actor_id", actor.actorId)
+    .order("accepted_at", { ascending: false })
+    .limit(1);
+  if (termsVersion) acceptanceQuery = acceptanceQuery.eq("terms_version", termsVersion);
+  const { data: acceptanceRows, error: acceptanceError } = await acceptanceQuery;
+  const acceptance = acceptanceRows?.[0];
+  if (acceptanceError || !acceptance?.id) throw new Error("No matching accepted Terms record was found for this account");
+
+  const { data: archiveRow } = await db.from("legal_terms_drive_archives")
+    .select("*").eq("acceptance_id", acceptance.id).maybeSingle();
+  if (archiveRow?.status === "stored" && archiveRow.drive_folder_id) {
+    return { ok: true, archived: true, alreadyStored: true, folderPath: archiveRow.folder_path };
+  }
+  const attempts = Number(archiveRow?.attempts || 0) + 1;
+  await db.from("legal_terms_drive_archives").upsert({
+    acceptance_id: acceptance.id,
+    status: "pending",
+    attempts,
+    last_attempt_at: new Date().toISOString(),
+    request_ip: requestIp(req),
+    last_error: null,
+    updated_at: new Date().toISOString()
+  });
+
+  try {
+    const [{ data: terms, error: termsError }, { data: evidence, error: evidenceError }, { data: policyRow }] = await Promise.all([
+      db.from("legal_terms_versions").select("version,title,effective_at,content_hash").eq("version", acceptance.terms_version).single(),
+      db.from("legal_terms_acceptance_evidence").select("mime_type,image_data,image_size_bytes,image_sha256,captured_at,purpose,face_detected,face_detection_confidence,face_detector").eq("acceptance_id", acceptance.id).maybeSingle(),
+      db.from("system_settings").select("value").eq("key", "terms.policy").maybeSingle()
+    ]);
+    if (termsError) throw new Error(termsError.message);
+    if (evidenceError) throw new Error(evidenceError.message);
+    const rootId = env("GDRIVE_TERMS_FOLDER_ID", "1oUSH1IacRP7UyYs6kTspDX4nDspGxGT3");
+    const acceptedAt = new Date(acceptance.accepted_at);
+    const dateFolder = isoDateFolder(acceptedAt);
+    const timeFolder = acceptedAt.toISOString().slice(11, 19).replace(/:/g, "-");
+    const userFolder = safeFolderSegment(`${actor.displayName} - ${actor.account}`, "Unknown Account");
+    const versionFolder = safeFolderSegment(`Terms ${acceptance.terms_version}`, "Terms");
+    const acceptanceFolder = `Acceptance ${dateFolder} ${timeFolder} UTC`;
+    const segments = [actor.rootGroup, userFolder, versionFolder, dateFolder, acceptanceFolder];
+    const token = await getAccessToken();
+    const folderId = await ensureFolderPath(token, rootId, segments);
+    const shortName = safeFolderSegment(actor.displayName, "Account");
+    let photo: any = null;
+    let photoBytes = new Uint8Array();
+    if (evidence?.image_data) {
+      photoBytes = postgresByteaToBytes(evidence.image_data);
+      const extension = evidence.mime_type === "image/png" ? "png" : "jpg";
+      const photoName = `01 Live Photo - ${shortName}.${extension}`;
+      photo = await uploadFileIfMissing(token, folderId, photoName, evidence.mime_type || "image/jpeg", photoBytes);
+      await registerTermsDriveFile(db, acceptance, photo, folderId, photoName, evidence.mime_type || "image/jpeg", photoBytes, "LIVE_PHOTO");
+    }
+
+    const sections = Array.isArray(policyRow?.value?.sections) ? policyRow.value.sections : [];
+    const pdfBytes = await buildTermsAcceptancePdf({ actor, acceptance, terms, evidence, sections });
+    const pdfName = `02 Accepted Terms - ${safeFolderSegment(acceptance.terms_version, "Terms")}.pdf`;
+    const pdfFile = await uploadFileIfMissing(token, folderId, pdfName, "application/pdf", pdfBytes);
+    await registerTermsDriveFile(db, acceptance, pdfFile, folderId, pdfName, "application/pdf", pdfBytes, "ACCEPTED_TERMS_PDF");
+
+    const audit = {
+      schema: "varada-nexus-terms-acceptance-archive-v1",
+      generated_at: new Date().toISOString(),
+      acceptance: {
+        id: acceptance.id,
+        actor_type: acceptance.actor_type,
+        actor_id: acceptance.actor_id,
+        display_name: actor.displayName,
+        account: actor.account,
+        terms_version: acceptance.terms_version,
+        terms_title: terms.title,
+        terms_content_hash: terms.content_hash,
+        terms_effective_at: terms.effective_at,
+        accepted_at: acceptance.accepted_at,
+        method: acceptance.acceptance_metadata?.method || null,
+        acceptance_metadata: acceptance.acceptance_metadata,
+        identity_image_consent_at: acceptance.identity_image_consent_at,
+        privacy_notice_version: acceptance.privacy_notice_version,
+        accepted_ip: acceptance.accepted_ip,
+        device_id: acceptance.device_id,
+        device_identifier_type: acceptance.device_fingerprint_version,
+        user_agent: acceptance.user_agent,
+        server_observed_archive_request_ip: requestIp(req)
+      },
+      evidence: evidence ? {
+        mime_type: evidence.mime_type,
+        image_size_bytes: evidence.image_size_bytes,
+        image_sha256: evidence.image_sha256,
+        captured_at: evidence.captured_at,
+        purpose: evidence.purpose,
+        face_detected: evidence.face_detected,
+        face_detection_confidence: evidence.face_detection_confidence,
+        face_detector: evidence.face_detector,
+        drive_file_id: photo?.id || null
+      } : null,
+      files: { terms_pdf_file_id: pdfFile.id, live_photo_file_id: photo?.id || null }
+    };
+    const jsonBytes = new TextEncoder().encode(JSON.stringify(audit, null, 2));
+    const jsonName = "03 Acceptance Audit Record.json";
+    const metadataFile = await uploadFileIfMissing(token, folderId, jsonName, "application/json", jsonBytes);
+    await registerTermsDriveFile(db, acceptance, metadataFile, folderId, jsonName, "application/json", jsonBytes, "ACCEPTANCE_AUDIT_JSON");
+
+    const folderPath = segments.join(" / ");
+    const { error: updateError } = await db.from("legal_terms_drive_archives").update({
+      status: "stored",
+      archived_at: new Date().toISOString(),
+      root_folder_id: rootId,
+      drive_folder_id: folderId,
+      live_photo_file_id: photo?.id || null,
+      live_photo_web_view_link: photo?.webViewLink || null,
+      terms_pdf_file_id: pdfFile.id,
+      terms_pdf_web_view_link: pdfFile.webViewLink || null,
+      metadata_file_id: metadataFile.id,
+      metadata_web_view_link: metadataFile.webViewLink || null,
+      folder_path: folderPath,
+      last_error: null,
+      updated_at: new Date().toISOString()
+    }).eq("acceptance_id", acceptance.id);
+    if (updateError) throw new Error(updateError.message);
+    return { ok: true, archived: true, folderPath };
+  } catch (error) {
+    await db.from("legal_terms_drive_archives").update({
+      status: "failed",
+      last_error: String(error?.message || error).slice(0, 1000),
+      updated_at: new Date().toISOString()
+    }).eq("acceptance_id", acceptance.id);
+    throw error;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -992,6 +1366,8 @@ Deno.serve(async (req) => {
         return json(await handleUploadTripDocument(payload));
       case "upload_marketing_vendor_invoice":
         return json(await handleUploadMarketingVendorInvoice(payload));
+      case "archive_terms_acceptance":
+        return json(await handleArchiveTermsAcceptance(req, payload));
       default:
         return json({ error: `Unknown action: ${action || "(none)"}` }, 400);
     }

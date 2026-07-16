@@ -1,119 +1,76 @@
 import { ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 
-// Interiors Client Portal auth — Supabase Auth based.
-//
-// Architecture: interior_client_portal_users.auth_user_id links a Supabase Auth user
-// to their interior client project. Login = client.auth.signInWithPassword().
-// Access check = interiors_portal_list_my_access() SECURITY DEFINER RPC (uses auth.uid()).
-//
-// The localStorage marker distinguishes interiors portal users from EMS staff,
-// both of whom use Supabase Auth. Without the marker, checkExistingSession in
-// page-login-unified.js cannot tell them apart.
-
+// Interiors client identities use the EMS-managed external portal credential
+// store. No Supabase Auth user or browser Auth session is created.
 const STORAGE_KEY = "ems_interiors_portal_session";
+const EXTERNAL_STORAGE_KEY = "ems_external_portal_session";
 
 export function getStoredInteriorsPortalSession() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || localStorage.getItem(EXTERNAL_STORAGE_KEY) || "null");
+  } catch { return null; }
 }
 
-function storeSession(data) {
+function storeSession(value) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    localStorage.setItem(EXTERNAL_STORAGE_KEY, JSON.stringify(value));
   } catch {}
 }
 
-// Removes the interiors portal marker and signs out of Supabase Auth (fire-and-forget).
-// Kept synchronous so callers do not need to await it when clearing on error.
 export function clearStoredInteriorsPortalSession() {
   try { localStorage.removeItem(STORAGE_KEY); } catch {}
-  // Sign out in background — do not block the caller.
-  try { getSupabaseClient().auth.signOut().catch(() => {}); } catch {}
+  try { localStorage.removeItem(EXTERNAL_STORAGE_KEY); } catch {}
 }
 
-// Login via Supabase Auth signInWithPassword.
-// Confirms project access exists before storing the session marker.
-// If no project access is linked, signs back out and throws.
-//
-// Never call interiors_portal_login RPC (does not exist).
-// Never use a session_token for interiors — Supabase Auth JWT handles auth.
-export async function interiorsPortalLogin(email, password) {
+export async function interiorsPortalLogin(identifier, password) {
   const client = getSupabaseClient();
-
-  const { data: authData, error: authError } = await client.auth.signInWithPassword({
-    email,
-    password
-  });
-  if (authError) throw authError;
-  if (!authData?.session) throw new Error("Authentication failed. Please try again.");
-
-  // Verify at least one active/invited project is linked to this auth user.
-  // interiors_portal_list_my_access() uses auth.uid() — JWT is now set.
-  const { data: accessRows, error: accessError } = await client.rpc("interiors_portal_list_my_access");
-  if (accessError || !accessRows?.length) {
-    await client.auth.signOut().catch(() => {});
-    throw new Error(
-      accessError
-        ? "Could not verify portal access. Contact your administrator."
-        : "No active project access is linked to this portal account."
-    );
+  const { data, error } = await client.rpc("external_portal_login", { p_username: identifier, p_password: password });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.session_token || row.user_type !== "client") throw new Error("This login is not linked to an Interiors client portal.");
+  const { data: grants, error: accessError } = await client.rpc("external_portal_list_my_access", { p_session_token: row.session_token });
+  if (accessError) throw accessError;
+  if (!(grants || []).some((item) => item.source_module === "interiors" && item.access_scope === "interiors_client_portal")) {
+    throw new Error("No active Interiors client access is linked to this account.");
   }
-
-  // Store marker + cached access info. isInteriorPortalUser distinguishes this
-  // from an EMS Supabase Auth session in checkExistingSession.
-  const row = accessRows[0];
-  const stored = {
-    isInteriorPortalUser: true,
-    portalUserId:  row.portal_user_id,
-    portalUserCode: row.portal_user_code,
-    displayName:   row.client_name,
-    clientName:    row.client_name,
-    accessStatus:  row.access_status
-  };
+  const stored = { isInteriorPortalUser: true, sessionToken: row.session_token, portalUserId: row.portal_user_id, displayName: row.display_name, userType: row.user_type };
   storeSession(stored);
   return stored;
 }
 
-// No parameters — Supabase Auth JWT is auto-attached, auth.uid() resolves in the RPC.
 export async function listMyInteriorsAccess() {
-  const client = getSupabaseClient();
-  const { data, error } = await client.rpc("interiors_portal_list_my_access");
+  const stored = getStoredInteriorsPortalSession();
+  if (!stored?.sessionToken) return [];
+  const { data, error } = await getSupabaseClient().rpc("external_portal_list_my_access", { p_session_token: stored.sessionToken });
   if (error) throw error;
-  return data || [];
+  return (data || []).filter((item) => item.source_module === "interiors" && item.access_scope === "interiors_client_portal");
 }
 
 export async function interiorsPortalLogout() {
+  const stored = getStoredInteriorsPortalSession();
+  if (stored?.sessionToken) {
+    try { await getSupabaseClient().rpc("external_portal_logout", { p_session_token: stored.sessionToken }); } catch {}
+  }
   clearStoredInteriorsPortalSession();
 }
 
-// Used by interiors portal page modules to gate access.
-// Validates: localStorage marker present + Supabase Auth session active + access rows exist.
 export async function requireInteriorsPortalSession() {
   const stored = getStoredInteriorsPortalSession();
-  if (!stored?.isInteriorPortalUser) {
-    window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN);
-    return null;
-  }
-
-  const client = getSupabaseClient();
-  const { data: { session } } = await client.auth.getSession();
-  if (!session) {
+  if (!stored?.sessionToken) { window.location.assign(ROUTES.LOGIN); return null; }
+  const { data, error } = await getSupabaseClient().rpc("external_portal_validate_session", { p_session_token: stored.sessionToken });
+  const row = Array.isArray(data) ? data[0] : data;
+  if (error || row?.user_type !== "client") {
     clearStoredInteriorsPortalSession();
-    window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN);
+    window.location.assign(ROUTES.LOGIN);
     return null;
   }
-
-  const { data, error } = await client.rpc("interiors_portal_list_my_access");
-  if (error || !data?.length) {
+  const access = await listMyInteriorsAccess();
+  if (!access.length) {
     clearStoredInteriorsPortalSession();
-    window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN);
+    window.location.assign(ROUTES.LOGIN);
     return null;
   }
-
-  return data[0];
+  return { ...stored, ...row };
 }

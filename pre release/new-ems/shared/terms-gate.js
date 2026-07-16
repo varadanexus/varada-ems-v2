@@ -4,8 +4,42 @@ import { getChatSessionTokens } from "./chat-api.js";
 
 export const CURRENT_TERMS_VERSION = "2026-07-04-v4";
 const TERMS_BYPASS_SESSION_KEY = "ems_terms_owner_bypass_session";
+const TERMS_DEVICE_ID_KEY = "ems_terms_device_id_v1";
+const MIN_FACE_CONFIDENCE = 0.90;
+
+function getOrCreateTermsDeviceId() {
+  try {
+    const existing = localStorage.getItem(TERMS_DEVICE_ID_KEY);
+    if (/^ems-device-v1:[0-9a-f-]{36}$/i.test(existing || "")) return existing;
+    const uuid = typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : [...crypto.getRandomValues(new Uint8Array(16))]
+        .map((value) => value.toString(16).padStart(2, "0"))
+        .join("")
+        .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, "$1-$2-$3-$4-$5");
+    const deviceId = `ems-device-v1:${uuid}`;
+    localStorage.setItem(TERMS_DEVICE_ID_KEY, deviceId);
+    return deviceId;
+  } catch {
+    return null;
+  }
+}
 
 let faceDetectorPromise = null;
+let qrCodePromise = null;
+
+function loadQrCodeLibrary() {
+  if (window.QRCode?.toCanvas) return Promise.resolve(window.QRCode);
+  if (qrCodePromise) return qrCodePromise;
+  qrCodePromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js";
+    script.onload = () => window.QRCode?.toCanvas ? resolve(window.QRCode) : reject(new Error("QR generator did not load"));
+    script.onerror = () => reject(new Error("QR generator could not load"));
+    document.head.appendChild(script);
+  });
+  return qrCodePromise;
+}
 
 function loadFaceDetector() {
   if (faceDetectorPromise) return faceDetectorPromise;
@@ -19,7 +53,7 @@ function loadFaceDetector() {
         modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite"
       },
       runningMode: "IMAGE",
-      minDetectionConfidence: 0.7,
+      minDetectionConfidence: MIN_FACE_CONFIDENCE,
       minSuppressionThreshold: 0.3
     });
   })();
@@ -179,6 +213,9 @@ async function acceptTerms(termsVersion, evidenceDataUrl = "", faceConfidence = 
   const client = getSupabaseClient();
   const match = String(evidenceDataUrl || "").match(/^data:(image\/(?:jpeg|png));base64,(.+)$/);
   if (identityRequired && !match) throw new Error("Capture a valid live identity image.");
+  if (identityRequired && Number(faceConfidence || 0) < MIN_FACE_CONFIDENCE) {
+    throw new Error("Recapture is required with at least 90% face detection confidence.");
+  }
   const { data, error } = await client.rpc("accept_current_terms", rpcArgs({
     p_terms_version: termsVersion || CURRENT_TERMS_VERSION,
     p_user_agent: navigator.userAgent || null,
@@ -186,9 +223,51 @@ async function acceptTerms(termsVersion, evidenceDataUrl = "", faceConfidence = 
     p_evidence_base64: match?.[2] || null,
     p_photo_consent: identityRequired,
     p_face_detected: identityRequired,
-    p_face_confidence: identityRequired ? Number(faceConfidence || 0) : 0
+    p_face_confidence: identityRequired ? Number(faceConfidence || 0) : 0,
+    p_device_id: getOrCreateTermsDeviceId()
   }));
   if (error) throw error;
+  return data;
+}
+
+async function createMobileHandoff() {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("create_terms_mobile_handoff", rpcArgs({
+    p_device_id: getOrCreateTermsDeviceId()
+  }));
+  if (error) throw error;
+  return data;
+}
+
+async function getMobileHandoffStatus(handoffToken) {
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("get_terms_mobile_handoff_status", {
+    p_handoff_token: handoffToken
+  });
+  if (error) throw error;
+  return data;
+}
+
+async function archiveTermsAcceptance(termsVersion) {
+  const client = getSupabaseClient();
+  const tokens = getChatSessionTokens();
+  const { data, error } = await client.functions.invoke("drive-integrations", {
+    body: {
+      action: "archive_terms_acceptance",
+      termsVersion: termsVersion || CURRENT_TERMS_VERSION,
+      transportSessionToken: tokens.transport,
+      externalSessionToken: tokens.external
+    }
+  });
+  if (error) {
+    let message = error.message || "Terms evidence could not be archived to Drive.";
+    if (error.context && typeof error.context.json === "function") {
+      const detail = await error.context.json().catch(() => null);
+      if (detail?.error) message = detail.error;
+    }
+    throw new Error(message);
+  }
+  if (data?.error) throw new Error(data.error);
   return data;
 }
 
@@ -239,6 +318,7 @@ function injectStyles() {
     .ems-terms-camera{width:100%;aspect-ratio:4/3;border-radius:12px;background:#020617;object-fit:cover;border:1px solid rgba(148,163,184,.25)}
     .ems-terms-evidence p{margin:.25rem 0 .65rem;color:#aebdd0;font-size:.8rem;line-height:1.4}
     .ems-terms-evidence-actions{display:flex;gap:.45rem;flex-wrap:wrap}.ems-terms-file{max-width:100%;font-size:.78rem;color:#cbd5e1}
+    .ems-terms-phone{margin-top:.75rem;padding:.8rem;border:1px solid rgba(212,178,106,.3);border-radius:14px;background:#070d17}.ems-terms-phone-grid{display:grid;grid-template-columns:190px 1fr;gap:.9rem;align-items:center}.ems-terms-qr{width:190px;height:190px;padding:10px;border-radius:12px;background:#fff}.ems-terms-phone h3{margin:0 0 .35rem;color:#f3cc75}.ems-terms-phone p{margin:.25rem 0;color:#aebdd0;font-size:.82rem;line-height:1.45}
     .ems-terms-actions{display:flex;justify-content:flex-end;gap:.65rem;margin-top:.9rem}
     .ems-terms-btn{border:1px solid rgba(148,163,184,.35);border-radius:11px;padding:.65rem .95rem;background:#14223a;color:#eef4fb;font-weight:800;cursor:pointer}
     .ems-terms-btn.primary{background:#b9903e;border-color:#d4b26a;color:#08111f}.ems-terms-btn:disabled{opacity:.45;cursor:not-allowed}
@@ -249,7 +329,7 @@ function injectStyles() {
     .ems-terms-modal [hidden]{display:none!important}
     .ems-identity-step{padding:1.15rem 1.35rem;overflow:auto;min-height:0;flex:1}
     .ems-identity-intro{margin:0 0 .8rem;color:#b8c7d9;line-height:1.5}
-    @media(max-width:700px){.ems-terms-owner-bypass-row{grid-template-columns:1fr 1fr}.ems-terms-owner-bypass input{grid-column:1/-1}}
+    @media(max-width:700px){.ems-terms-owner-bypass-row{grid-template-columns:1fr 1fr}.ems-terms-owner-bypass input{grid-column:1/-1}.ems-terms-phone-grid{grid-template-columns:1fr}.ems-terms-qr{justify-self:center}}
   `;
   document.head.appendChild(style);
 }
@@ -317,12 +397,24 @@ function showGate(status) {
               <video class="ems-terms-camera" id="emsTermsCamera" autoplay playsinline muted></video>
               <div>
                 <strong>Take a quick live photo</strong>
-                <p>Keep only the accepting person in frame. Face detection runs on this device and checks that one clear face is present before the image can be submitted.</p>
+                <p>Keep only the accepting person in frame. The capture must confirm exactly one clear face at 90% confidence or higher. Lower-confidence images are rejected and must be recaptured.</p>
                 <div class="ems-terms-evidence-actions">
                   <button class="ems-terms-btn" id="emsTermsStartCamera" type="button">Enable Camera</button>
                   <button class="ems-terms-btn" id="emsTermsCapture" type="button" disabled>Capture Live Image</button>
+                  <button class="ems-terms-btn" id="emsTermsUsePhone" type="button">Use phone instead</button>
                 </div>
                 <label class="ems-terms-check" style="margin-top:.7rem;"><input id="emsTermsPhotoConsent" type="checkbox" /><span>I consent to this identity image being collected and retained solely as evidence of my acceptance and for related security, audit or dispute purposes.</span></label>
+              </div>
+            </div>
+            <div class="ems-terms-phone" id="emsTermsPhonePanel" hidden>
+              <div class="ems-terms-phone-grid">
+                <canvas class="ems-terms-qr" id="emsTermsPhoneQr" width="190" height="190"></canvas>
+                <div>
+                  <h3>Continue securely on your phone</h3>
+                  <p>Scan this one-time QR code with your phone camera. The mobile guide will help you capture one clear face above 90% confidence.</p>
+                  <p id="emsTermsPhoneExpiry">Generating a secure 10-minute link…</p>
+                  <button class="ems-terms-btn" id="emsTermsRefreshPhoneQr" type="button">Generate a new QR code</button>
+                </div>
               </div>
             </div>
           </div>
@@ -346,6 +438,11 @@ function showGate(status) {
     const photoConsent = overlay.querySelector("#emsTermsPhotoConsent");
     const video = overlay.querySelector("#emsTermsCamera");
     const capture = overlay.querySelector("#emsTermsCapture");
+    const usePhone = overlay.querySelector("#emsTermsUsePhone");
+    const phonePanel = overlay.querySelector("#emsTermsPhonePanel");
+    const phoneQr = overlay.querySelector("#emsTermsPhoneQr");
+    const phoneExpiry = overlay.querySelector("#emsTermsPhoneExpiry");
+    const refreshPhoneQr = overlay.querySelector("#emsTermsRefreshPhoneQr");
     const bypassPanel = overlay.querySelector("#emsTermsOwnerBypass");
     const bypassInput = overlay.querySelector("#emsTermsBypassCode");
     const bypassApply = overlay.querySelector("#emsTermsBypassApply");
@@ -354,6 +451,8 @@ function showGate(status) {
     let faceConfidence = 0;
     let faceDetector = null;
     let cameraStream = null;
+    let mobileHandoffToken = "";
+    let mobilePollTimer = null;
     let termsRead = !requireFullScroll;
     const statusText = overlay.querySelector("#emsTermsStatus");
     const ownerShortcut = (event) => {
@@ -366,6 +465,7 @@ function showGate(status) {
     document.addEventListener("keydown", ownerShortcut);
     const removeGate = () => {
       document.removeEventListener("keydown", ownerShortcut);
+      if (mobilePollTimer) clearInterval(mobilePollTimer);
       overlay.remove();
       document.documentElement.classList.remove("ems-terms-lock");
       document.body.classList.remove("ems-terms-lock");
@@ -374,6 +474,73 @@ function showGate(status) {
       accept.disabled = identityRequired
         ? !(agree.checked && photoConsent.checked && evidenceDataUrl)
         : !agree.checked;
+    };
+    const finishMobileAcceptance = async () => {
+      if (mobilePollTimer) clearInterval(mobilePollTimer);
+      mobilePollTimer = null;
+      statusText.textContent = "Phone capture verified. Securing the evidence archive…";
+      statusText.style.color = "#a7f3d0";
+      try {
+        await archiveTermsAcceptance(termsVersion);
+      } catch (archiveError) {
+        console.warn("Terms Drive archive is pending and will retry:", archiveError?.message || archiveError);
+      }
+      cameraStream?.getTracks().forEach((track) => track.stop());
+      removeGate();
+      resolve(true);
+    };
+    const pollMobileHandoff = async () => {
+      if (!mobileHandoffToken) return;
+      try {
+        const handoff = await getMobileHandoffStatus(mobileHandoffToken);
+        if (handoff?.status === "completed") {
+          await finishMobileAcceptance();
+        } else if (["expired", "cancelled"].includes(handoff?.status)) {
+          if (mobilePollTimer) clearInterval(mobilePollTimer);
+          mobilePollTimer = null;
+          phoneExpiry.textContent = "This QR code expired or was replaced. Generate a new one.";
+          statusText.textContent = "The phone link is no longer active. Generate a new QR code.";
+          statusText.style.color = "#fca5a5";
+        }
+      } catch (error) {
+        console.warn("Phone handoff status check failed:", error?.message || error);
+      }
+    };
+    const generateMobileHandoff = async () => {
+      usePhone.disabled = true;
+      refreshPhoneQr.disabled = true;
+      phonePanel.hidden = false;
+      phoneExpiry.textContent = "Generating a secure 10-minute link…";
+      statusText.textContent = "Preparing phone camera handoff…";
+      statusText.style.color = "#dbeafe";
+      try {
+        const [handoff, QRCode] = await Promise.all([createMobileHandoff(), loadQrCodeLibrary()]);
+        mobileHandoffToken = handoff?.handoff_token || "";
+        if (!mobileHandoffToken) throw new Error("The secure phone link could not be created.");
+        const mobileUrl = new URL("https://www.varadanexus.com/terms-mobile.html");
+        mobileUrl.searchParams.set("handoff", mobileHandoffToken);
+        await QRCode.toCanvas(phoneQr, mobileUrl.toString(), {
+          width: 190,
+          margin: 1,
+          color: { dark: "#05070b", light: "#ffffff" },
+          errorCorrectionLevel: "H"
+        });
+        const expiry = handoff?.expires_at
+          ? new Date(handoff.expires_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "10 minutes";
+        phoneExpiry.textContent = `Single-use link · Expires at ${expiry}. This computer will continue automatically after successful capture.`;
+        statusText.textContent = "Scan the QR code and complete the guided capture on your phone.";
+        statusText.style.color = "#a7f3d0";
+        if (mobilePollTimer) clearInterval(mobilePollTimer);
+        mobilePollTimer = setInterval(pollMobileHandoff, 2500);
+      } catch (error) {
+        phoneExpiry.textContent = error?.message || "The phone handoff could not be created.";
+        statusText.textContent = phoneExpiry.textContent;
+        statusText.style.color = "#fca5a5";
+      } finally {
+        usePhone.disabled = false;
+        refreshPhoneQr.disabled = false;
+      }
     };
     const updateScrollState = () => {
       if (!requireFullScroll) {
@@ -405,6 +572,15 @@ function showGate(status) {
       messageTarget.style.color = "#dbeafe";
       try {
         await acceptTerms(termsVersion, evidenceDataUrl, faceConfidence, identityRequired);
+        messageTarget.textContent = "Acceptance recorded. Securing the photo and accepted Terms in the company archive…";
+        messageTarget.style.color = "#dbeafe";
+        try {
+          await archiveTermsAcceptance(termsVersion);
+        } catch (archiveError) {
+          // The restricted database record remains authoritative. The archive
+          // queue retries idempotently on the user's next authenticated visit.
+          console.warn("Terms Drive archive is pending and will retry:", archiveError?.message || archiveError);
+        }
         cameraStream?.getTracks().forEach((track) => track.stop());
         removeGate();
         resolve(true);
@@ -460,8 +636,9 @@ function showGate(status) {
       } catch (error) {
         cameraStream?.getTracks().forEach((track) => track.stop());
         cameraStream = null;
-        statusText.textContent = "Camera or local face detection could not start. Camera permission and an internet connection for the detector model are required.";
+        statusText.textContent = "This computer camera is unavailable. Scan the phone QR code to complete the guided live-face capture.";
         statusText.style.color = "#fca5a5";
+        await generateMobileHandoff();
       }
     });
     capture.addEventListener("click", () => {
@@ -486,8 +663,10 @@ function showGate(status) {
       const faceArea = Number(box.width || 0) * Number(box.height || 0);
       const frameArea = width * height;
       faceConfidence = Number(detection.categories?.[0]?.score || 0);
-      if (faceConfidence < .7 || !frameArea || faceArea / frameArea < .06) {
-        statusText.textContent = "A face was detected, but it is not clear or close enough. Move closer and try again.";
+      if (faceConfidence < MIN_FACE_CONFIDENCE || !frameArea || faceArea / frameArea < .08) {
+        evidenceDataUrl = "";
+        updateAcceptState();
+        statusText.textContent = `Capture rejected at ${Math.round(faceConfidence * 100)}%. Improve the light, move closer, and recapture above 90%.`;
         statusText.style.color = "#fca5a5";
         return;
       }
@@ -496,10 +675,12 @@ function showGate(status) {
       video.poster = evidenceDataUrl;
       cameraStream?.getTracks().forEach((track) => track.stop());
       cameraStream = null;
-      statusText.textContent = `One person detected (${Math.round(faceConfidence * 100)}% confidence). Confirm both checkboxes to continue.`;
+      statusText.textContent = `One clear face confirmed (${Math.round(faceConfidence * 100)}% confidence). Confirm both checkboxes to continue.`;
       statusText.style.color = "#a7f3d0";
       updateAcceptState();
     });
+    usePhone.addEventListener("click", generateMobileHandoff);
+    refreshPhoneQr.addEventListener("click", generateMobileHandoff);
     overlay.querySelector("#emsTermsDecline").addEventListener("click", declineAndLogout);
     overlay.querySelector("#emsTermsBypassCancel").addEventListener("click", () => {
       bypassInput.value = "";
@@ -549,7 +730,12 @@ export async function enforceTermsAcceptance() {
     status = null;
   }
   if (status?.popup_enabled === false) return true;
-  if (status?.accepted) return true;
+  if (status?.accepted) {
+    archiveTermsAcceptance(status.terms_version).catch((error) => {
+      console.warn("Terms Drive archive retry remains pending:", error?.message || error);
+    });
+    return true;
+  }
   if (await hasValidTermsBypassSession()) return true;
   return await showGate(status);
 }

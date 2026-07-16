@@ -5,7 +5,7 @@ import { showToast, qs } from "./utils.js";
 import { initTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
-import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-owner-bypass-1";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-1";
 
 const client = getSupabaseClient();
 

@@ -4,7 +4,7 @@ import { getCurrentAppUser } from "./auth.js";
 import { logAuditEvent } from "./audit.js";
 import { getEmailConfigStatus, getEmailProviderHealth, sendEmailTest } from "./email-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
-import { getDefaultTermsSections } from "./terms-gate.js?v=terms-owner-bypass-1";
+import { getDefaultTermsSections } from "./terms-gate.js?v=terms-face-handoff-1";
 import { qs, showToast } from "./utils.js";
 
 const TERMS_POLICY_KEY = "terms.policy";

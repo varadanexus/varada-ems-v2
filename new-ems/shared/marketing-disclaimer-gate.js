@@ -1,7 +1,7 @@
 import { ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { getMarketingPortalSessionToken, signOutMarketingPortal } from "./marketing-api.js?v=marketing-whatsapp-1";
-import { hasValidTermsBypassSession, redeemTermsBypassCode } from "./terms-gate.js?v=terms-owner-bypass-1";
+import { hasValidTermsBypassSession, redeemTermsBypassCode } from "./terms-gate.js?v=terms-face-handoff-1";
 
 let faceDetectorPromise = null;
 

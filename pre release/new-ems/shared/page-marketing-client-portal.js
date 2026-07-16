@@ -6,7 +6,7 @@ import {
   listMarketingQueries, marketingSetupMessage, signOutMarketingPortal,
   subscribeToMarketingQueries, updateMarketingQuery
 } from "./marketing-api.js?v=marketing-whatsapp-1";
-import { enforceMarketingPortalDisclaimer } from "./marketing-disclaimer-gate.js?v=terms-owner-bypass-1";
+import { enforceMarketingPortalDisclaimer } from "./marketing-disclaimer-gate.js?v=terms-face-handoff-1";
 
 const state = {
   identity: null, projects: [], deliverables: [], queries: [], invoices: [], payments: [],
