@@ -29,15 +29,51 @@ let faceDetectorPromise = null;
 let qrCodePromise = null;
 
 function loadQrCodeLibrary() {
-  if (window.QRCode?.toCanvas) return Promise.resolve(window.QRCode);
   if (qrCodePromise) return qrCodePromise;
-  qrCodePromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js";
-    script.onload = () => window.QRCode?.toCanvas ? resolve(window.QRCode) : reject(new Error("QR generator did not load"));
-    script.onerror = () => reject(new Error("QR generator could not load"));
-    document.head.appendChild(script);
-  });
+  qrCodePromise = (async () => {
+    try {
+      const module = await import("https://esm.sh/qrcode@1.5.4");
+      const api = module.default || module;
+      if (typeof api?.toCanvas === "function") return api;
+    } catch (error) {
+      console.warn("Primary QR module unavailable; loading fallback:", error?.message || error);
+    }
+
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js";
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("QR fallback generator could not load"));
+      document.head.appendChild(script);
+    });
+    if (typeof window.QRCode !== "function") throw new Error("QR generator could not load");
+    return {
+      async toCanvas(targetCanvas, value, options = {}) {
+        const holder = document.createElement("div");
+        holder.style.cssText = "position:fixed;left:-9999px;top:-9999px";
+        document.body.appendChild(holder);
+        try {
+          new window.QRCode(holder, {
+            text: value,
+            width: Number(options.width || 190),
+            height: Number(options.width || 190),
+            colorDark: options.color?.dark || "#05070b",
+            colorLight: options.color?.light || "#ffffff",
+            correctLevel: window.QRCode.CorrectLevel?.H
+          });
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const generated = holder.querySelector("canvas");
+          if (!generated) throw new Error("QR fallback did not render");
+          const context = targetCanvas.getContext("2d", { alpha: false });
+          targetCanvas.width = generated.width;
+          targetCanvas.height = generated.height;
+          context.drawImage(generated, 0, 0);
+        } finally {
+          holder.remove();
+        }
+      }
+    };
+  })();
   return qrCodePromise;
 }
 

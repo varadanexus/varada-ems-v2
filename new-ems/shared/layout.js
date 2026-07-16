@@ -6,7 +6,7 @@ import { renderNavbar } from "./navbar.js";
 import { getAccessibleModules, getUserDivisionAccessContext, hasAnyRolePermission, setDbPermissionSet } from "./permissions.js";
 import { getSearchIndex, renderSidebar } from "./sidebar.js";
 import { initTheme } from "./theme.js";
-import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-1";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 import { initNotificationShell } from "./notification-ui.js?v=notifications-1";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";

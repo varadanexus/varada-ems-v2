@@ -8,6 +8,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
+const PUBLIC_WEBSITE_ORIGIN = "https://www.varadanexus.com";
+const PUBLIC_SIGNING_BASE_URL = `${PUBLIC_WEBSITE_ORIGIN}/new-ems/modules/legal-public-sign/index.html`;
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -23,12 +26,12 @@ function adminClient() {
   return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"));
 }
 
-function publicOrigin(req: Request) {
-  return env("EMS_PUBLIC_ORIGIN") || new URL(req.url).origin.replace(/\/functions\/v1.*/, "");
+function publicOrigin(_req: Request) {
+  return PUBLIC_WEBSITE_ORIGIN;
 }
 
-function publicSigningBaseUrl(req: Request) {
-  return env("EMS_PUBLIC_SIGN_BASE_URL") || `${publicOrigin(req)}/new-ems/modules/legal-public-sign/index.html`;
+function publicSigningBaseUrl(_req: Request) {
+  return PUBLIC_SIGNING_BASE_URL;
 }
 
 function normalizePhone(value = "") {

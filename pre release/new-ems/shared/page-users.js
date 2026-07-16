@@ -8,6 +8,9 @@ import { getCurrentAppUser } from "./auth.js";
 import { requestUserPasswordReset } from "./admin-api.js";
 import { sendUserCredentialEmail } from "./email-api.js";
 import { notifyEmsUserCreated } from "./transport-integrations-api.js";
+import { getSupabaseClient } from "../config/supabase.js";
+
+const client = getSupabaseClient();
 
 let allUsers = [];
 let allRoles = [];
@@ -15,6 +18,8 @@ let allDivisions = [];
 let currentPage = 1;
 const PAGE_SIZE = 10;
 let currentAppUserId = null;
+let selectedUserId = null;
+let termsAcceptanceModal = null;
 
 async function init() {
   await bootstrapProtectedPage({
@@ -28,6 +33,40 @@ async function init() {
   currentAppUserId = me?.id || null;
 
   renderModuleContent(`
+    <style>
+      .eu-directory-head{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;margin-bottom:1rem}
+      .eu-directory-head h3{margin:0}.eu-directory-head p{margin:.3rem 0 0}
+      .eu-user-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.85rem}
+      .eu-user-card{appearance:none;width:100%;min-width:0;min-height:190px;overflow:hidden;padding:1rem;text-align:left;color:inherit;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012));border:1px solid rgba(230,200,126,.18);border-radius:16px;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+      .eu-user-card:hover,.eu-user-card:focus-visible{transform:translateY(-2px);border-color:rgba(230,200,126,.62);box-shadow:0 16px 34px rgba(0,0,0,.24);outline:none}
+      .eu-user-card *{min-width:0}.eu-user-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.7rem}
+      .eu-user-identity{display:flex;align-items:center;gap:.75rem;min-width:0;overflow:hidden}
+      .eu-user-avatar{width:42px;height:42px;display:grid;place-items:center;flex:0 0 42px;border-radius:13px;background:linear-gradient(145deg,#e7c76f,#8e6924);color:#080807;font-weight:900;font-size:.9rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.45)}
+      .eu-user-name{color:#f7f4ec;font-weight:800;line-height:1.25;overflow-wrap:anywhere;word-break:break-word}
+      .eu-user-email{margin-top:.18rem;color:#9aa4b5;font-size:.73rem;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}
+      .eu-status{display:inline-flex;align-items:center;gap:.38rem;flex:0 0 auto;padding:.28rem .58rem;border:1px solid;border-radius:999px;font-size:.67rem;font-weight:850;letter-spacing:.045em;text-transform:uppercase;line-height:1}
+      .eu-status::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
+      .eu-status-active{color:#72e4a2;background:rgba(34,197,94,.10);border-color:rgba(74,222,128,.34)}
+      .eu-status-disabled{color:#aab2c0;background:rgba(148,163,184,.08);border-color:rgba(148,163,184,.25)}
+      .eu-status-locked{color:#fca5a5;background:rgba(239,68,68,.09);border-color:rgba(248,113,113,.32)}
+      .eu-user-role{margin:.9rem 0 .8rem;padding-bottom:.8rem;border-bottom:1px solid rgba(148,163,184,.12);color:#e6c87e;font-size:.78rem;font-weight:800;letter-spacing:.055em;text-transform:uppercase;overflow-wrap:anywhere}
+      .eu-user-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem}.eu-user-meta>div{min-width:0}
+      .eu-user-meta span{display:block;color:#7f8a9c;font-size:.65rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase}
+      .eu-user-meta strong{display:block;margin-top:.2rem;color:#d7dbe3;font-size:.8rem;font-weight:600;line-height:1.35;overflow-wrap:anywhere;word-break:break-word}
+      .eu-user-open{display:flex;align-items:flex-end;justify-content:space-between;gap:.65rem;margin-top:.9rem;color:#9da8b9;font-size:.72rem}.eu-user-open span{overflow-wrap:anywhere}.eu-user-open b{flex:0 0 auto;color:#e6c87e;font-size:.76rem}
+      .eu-modal{position:fixed;inset:0;z-index:3600;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(2,4,8,.84);backdrop-filter:blur(9px)}
+      .eu-modal-panel{width:min(820px,calc(100vw - 2rem));max-height:calc(100vh - 2rem);overflow:auto;border:1px solid rgba(230,200,126,.28);border-radius:20px;background:linear-gradient(150deg,#111216,#06070a 58%,#050609);box-shadow:0 30px 90px rgba(0,0,0,.72)}
+      .eu-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.25rem 1.35rem;border-bottom:1px solid rgba(230,200,126,.16);background:linear-gradient(130deg,rgba(230,200,126,.10),rgba(10,12,17,.2))}
+      .eu-modal-title{display:flex;align-items:center;gap:.85rem;min-width:0}.eu-modal-title>div{min-width:0}.eu-modal-title h3{margin:0;overflow-wrap:anywhere}.eu-modal-title p{margin:.25rem 0 0;overflow-wrap:anywhere}
+      .eu-modal-body{padding:1.25rem 1.35rem}.eu-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem}
+      .eu-detail{min-height:68px;padding:.75rem .85rem;border:1px solid rgba(148,163,184,.13);border-radius:12px;background:rgba(4,6,10,.46)}
+      .eu-detail span{display:block;color:#788499;font-size:.64rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase}.eu-detail .eu-status{display:inline-flex}.eu-detail strong{display:block;margin-top:.3rem;color:#edf0f5;font-size:.84rem;overflow-wrap:anywhere;word-break:break-word}
+      .eu-action-section{margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(148,163,184,.13)}.eu-action-section h4{margin:0 0 .7rem;color:#e6c87e;font-size:.76rem;letter-spacing:.1em;text-transform:uppercase}
+      .eu-action-grid{display:flex;flex-wrap:wrap;gap:.5rem}.eu-mapping-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem}.eu-mapping-grid select{width:100%;min-height:116px}
+      .eu-edit-form{display:none;margin-top:.8rem;padding:.85rem;border:1px solid rgba(230,200,126,.18);border-radius:12px;background:rgba(255,255,255,.018)}.eu-edit-form input{display:block;width:100%;margin-bottom:.45rem}
+      .eu-empty{padding:3rem 1rem;text-align:center;border:1px dashed rgba(230,200,126,.22);border-radius:16px}
+      @media(max-width:700px){.eu-user-grid{grid-template-columns:1fr}.eu-directory-head{align-items:flex-start;flex-direction:column}.eu-detail-grid,.eu-mapping-grid{grid-template-columns:1fr}.eu-modal-head,.eu-modal-body{padding:1rem}}
+    </style>
     <div class="card" style="margin-bottom:1rem;">
       <h3>Create User</h3>
       <form id="createUserForm" class="form-row">
@@ -49,14 +88,13 @@ async function init() {
     <div class="card" style="margin-bottom:1rem;">
       <input id="userSearch" type="text" placeholder="Search by user/email/role/division" />
     </div>
-    <div class="table-shell">
-      <table>
-        <thead>
-          <tr><th>User</th><th>Role</th><th>Status</th><th>Last Login</th><th>Division Scope</th><th>Actions</th></tr>
-        </thead>
-        <tbody id="usersBody"></tbody>
-      </table>
-    </div>
+    <section class="card">
+      <div class="eu-directory-head">
+        <div><h3>EMS Users</h3><p class="muted">Select a user to view access details and account actions.</p></div>
+        <span class="meta-pill" id="usersCount"></span>
+      </div>
+      <div id="usersBody" class="eu-user-grid"></div>
+    </section>
     <div style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center;">
       <button class="btn" id="prevPageBtn">Prev</button>
       <span id="pageMeta"></span>
@@ -135,6 +173,148 @@ async function deliverStaffCredentials(user, password, sourceEvent = "ems_user_c
   return warnings;
 }
 
+function userInitials(user) {
+  const source = String(user.display_name || user.username || user.email || "User").trim();
+  return escAttr(source.split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase() || "U");
+}
+
+function formatUserDate(value) {
+  if (!value) return "Never";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Never" : date.toLocaleString();
+}
+
+function userStatusBadge(user) {
+  if (user.is_locked) return `<span class="eu-status eu-status-locked">Locked</span>`;
+  if (String(user.status).toLowerCase() === "active") return `<span class="eu-status eu-status-active">Active</span>`;
+  return `<span class="eu-status eu-status-disabled">Disabled</span>`;
+}
+
+function userDetail(label, value, trustedHtml = false) {
+  return `<div class="eu-detail"><span>${escAttr(label)}</span><strong>${trustedHtml ? value : escAttr(value)}</strong></div>`;
+}
+
+function renderStaffTermsModal() {
+  const modal = termsAcceptanceModal;
+  if (!modal) return "";
+  const user = modal.user;
+  const status = modal.status;
+  const sourceLabel = status?.reacceptance_pending
+    ? "Fresh live-camera acceptance pending"
+    : status?.acceptance_source === "user_live_camera"
+      ? "Accepted directly with live-camera evidence"
+      : status?.acceptance_source === "user_electronic"
+        ? "Accepted directly by the user"
+        : status?.acceptance_source === "admin_recorded"
+          ? "Consent recorded by authorised staff"
+          : "Not yet accepted";
+  const evidenceImage = /^data:image\/(?:jpeg|png);base64,/i.test(String(status?.evidence_image_data_url || ""))
+    ? status.evidence_image_data_url
+    : "";
+  const confidence = status?.face_confidence == null ? "Not recorded" : `${Math.round(Number(status.face_confidence) * 100)}%`;
+  return `
+    <div class="eu-modal" role="dialog" aria-modal="true" aria-labelledby="euTermsModalTitle">
+      <div class="eu-modal-panel">
+        <div class="eu-modal-head">
+          <div class="eu-modal-title"><span class="eu-user-avatar">${userInitials(user)}</span><div><h3 id="euTermsModalTitle">T&amp;C acceptance</h3><p class="muted">${escAttr(user.display_name || user.email)} · EMS staff account</p></div></div>
+          <div class="eu-action-grid">
+            ${!modal.loading && !status?.reacceptance_pending ? `<button class="btn" type="button" data-request-terms-user-id="${escAttr(user.id)}">${status?.accepted ? "Request acceptance again" : "Require acceptance"}</button>` : ""}
+            <button class="btn" type="button" data-close-terms-modal>Close</button>
+          </div>
+        </div>
+        <div class="eu-modal-body">
+          ${modal.loading ? `<div class="eu-detail"><strong>Checking the current Terms and Conditions record…</strong></div>` : `
+            <div class="eu-detail-grid">
+              ${userDetail("Current terms", status?.terms_version || "Not configured")}
+              ${userDetail("Acceptance status", sourceLabel)}
+              ${userDetail("Recorded at", status?.accepted_at ? formatUserDate(status.accepted_at) : "Not yet accepted")}
+              ${userDetail("Server-recorded IP", status?.accepted_ip || "Not captured")}
+              ${userDetail("EMS device ID", status?.device_id || "Not captured")}
+              ${userDetail("Face confidence", confidence)}
+              ${userDetail("Drive archive", status?.drive_archive_status || "Not archived")}
+              ${userDetail("New acceptance", status?.reacceptance_pending ? "Pending from original user" : "Not pending")}
+            </div>
+            ${evidenceImage ? `
+              <div class="eu-action-section">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.75rem">
+                  <div><h4 style="margin:0">Live-camera evidence</h4><p class="muted" style="margin:.25rem 0 0">Restricted identity image captured during acceptance.</p></div>
+                  <div class="eu-action-grid">
+                    ${status?.drive_live_photo_url ? `<a class="btn" href="${escAttr(status.drive_live_photo_url)}" target="_blank" rel="noopener noreferrer">Open Drive photo</a>` : ""}
+                    ${status?.drive_terms_pdf_url ? `<a class="btn" href="${escAttr(status.drive_terms_pdf_url)}" target="_blank" rel="noopener noreferrer">Open accepted terms</a>` : ""}
+                  </div>
+                </div>
+                <img src="${escAttr(evidenceImage)}" alt="Restricted live-camera T&C acceptance evidence for ${escAttr(user.display_name || user.email)}" style="display:block;width:min(100%,520px);max-height:420px;object-fit:contain;margin:0 auto;border:1px solid rgba(230,200,126,.32);border-radius:14px;background:#05070b" />
+                <div class="eu-detail-grid" style="margin-top:.8rem">
+                  ${userDetail("Evidence SHA-256", status?.evidence_sha256 || "Not recorded")}
+                  ${userDetail("Face detector", status?.face_detector || "Not recorded")}
+                </div>
+              </div>` : `<div class="eu-action-section"><h4>Live-camera evidence</h4><p class="muted">${status?.accepted ? "No live-camera image is attached to this earlier acceptance." : "The user must complete the live-camera identity step when accepting."}</p></div>`}
+            ${status?.reacceptance_pending ? `<div class="eu-action-section"><span class="eu-status eu-status-disabled">Acceptance pending</span><p class="muted">The user will be stopped by the T&amp;C gate and must provide a new qualifying live-camera image before continuing.</p></div>` : ""}
+          `}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderUserModal(user) {
+  const role = (user.user_roles || []).map((x) => x.roles?.name || x.roles?.code).filter(Boolean).join(", ") || "Assigned role";
+  const hasAllScope = (user.user_divisions || []).some((x) => String(x.scope || "").toLowerCase() === "all");
+  const divisions = hasAllScope
+    ? "All Divisions"
+    : ((user.user_divisions || []).map((x) => x.divisions?.name || x.divisions?.code).filter(Boolean).join(", ") || "No Division");
+  const nextStatus = user.status === "active" ? "disabled" : "active";
+  return `
+    <div class="eu-modal" role="dialog" aria-modal="true" aria-labelledby="euUserModalTitle">
+      <div class="eu-modal-panel">
+        <div class="eu-modal-head">
+          <div class="eu-modal-title"><span class="eu-user-avatar">${userInitials(user)}</span><div><h3 id="euUserModalTitle">${escAttr(user.display_name || user.email)}</h3><p class="muted">${escAttr(user.email || user.username || "EMS user")}</p></div></div>
+          <button class="btn" type="button" data-close-user-modal>Close</button>
+        </div>
+        <div class="eu-modal-body">
+          <div class="eu-detail-grid">
+            ${userDetail("Status", userStatusBadge(user), true)}
+            ${userDetail("Role", role)}
+            ${userDetail("Division scope", divisions)}
+            ${userDetail("Username", user.username || "Not provided")}
+            ${userDetail("Phone", user.phone || "Not provided")}
+            ${userDetail("Authentication", user.auth_provider === "supabase" ? "Supabase Auth" : "Local account")}
+            ${userDetail("Last login", formatUserDate(user.last_login_at))}
+            ${userDetail("Account ID", user.id)}
+          </div>
+
+          <div class="eu-action-section">
+            <h4>Account actions</h4>
+            <div class="eu-action-grid">
+              <button class="btn" data-user-id="${escAttr(user.id)}" data-next-status="${nextStatus}">${nextStatus === "active" ? "Enable" : "Disable"}</button>
+              <button class="btn" data-lock-user-id="${escAttr(user.id)}" data-next-lock="${user.is_locked ? "false" : "true"}">${user.is_locked ? "Unlock" : "Lock"}</button>
+              <button class="btn" data-reset-user-id="${escAttr(user.id)}">${user.auth_provider === "supabase" ? "Reset Password" : "Set Password"}</button>
+              <button class="btn" data-resend-user-id="${escAttr(user.id)}">Resend credentials</button>
+              <button class="btn" data-terms-user-id="${escAttr(user.id)}">T&amp;C acceptance</button>
+              <button class="btn" data-edit-user-id="${escAttr(user.id)}">Edit details</button>
+              ${user.auth_provider === "supabase" ? "" : `<button class="btn" data-delete-user-id="${escAttr(user.id)}" style="color:#fca5a5;border-color:rgba(248,113,113,.38)">Delete user</button>`}
+            </div>
+            <div class="eu-edit-form" data-edit-form="${escAttr(user.id)}">
+              <input data-edit-name="${escAttr(user.id)}" placeholder="Display name" value="${escAttr(user.display_name)}" />
+              <input data-edit-email="${escAttr(user.id)}" placeholder="Email" value="${escAttr(user.email)}" ${user.auth_provider === "supabase" ? "disabled title='Managed by Supabase Auth'" : ""} />
+              <input data-edit-username="${escAttr(user.id)}" placeholder="Username" value="${escAttr(user.username)}" ${user.auth_provider === "supabase" ? "disabled" : ""} />
+              <input data-edit-phone="${escAttr(user.id)}" placeholder="Phone" value="${escAttr(user.phone)}" ${user.auth_provider === "supabase" ? "disabled" : ""} />
+              <div class="eu-action-grid"><button class="btn" data-edit-save="${escAttr(user.id)}">Save details</button><button class="btn" data-edit-cancel="${escAttr(user.id)}">Cancel</button></div>
+            </div>
+          </div>
+
+          <div class="eu-action-section">
+            <h4>Roles and division access</h4>
+            <div class="eu-mapping-grid">
+              <label><span class="muted">Roles</span><select data-role-user-id="${escAttr(user.id)}" multiple size="5">${renderRoleOptions((user.user_roles || []).map((x) => x.roles?.id))}</select></label>
+              <label><span class="muted">Divisions</span><select data-division-user-id="${escAttr(user.id)}" multiple size="5">${renderDivisionOptions((user.user_divisions || []).map((x) => x.divisions?.id))}</select></label>
+            </div>
+            <button class="btn" data-save-user-id="${escAttr(user.id)}" style="margin-top:.7rem">Save access</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderUsers() {
   const rows = getFilteredUsers();
   const body = qs("#usersBody");
@@ -149,54 +329,104 @@ function renderUsers() {
 
   if (pageMeta) pageMeta.textContent = `Page ${currentPage} / ${totalPages}`;
 
+  const usersCount = qs("#usersCount");
+  if (usersCount) usersCount.textContent = `${rows.length} user${rows.length === 1 ? "" : "s"}`;
+
   if (!pageRows.length) {
-    body.innerHTML = `<tr><td colspan="5" class="muted">No user records available.</td></tr>`;
-    if (empty) empty.style.display = "block";
+    selectedUserId = null;
+    body.innerHTML = `<div class="eu-empty"><h4>No users found</h4><p class="muted">Try a different search or create a user.</p></div>`;
+    if (empty) empty.style.display = "none";
     return;
   }
 
   if (empty) empty.style.display = "none";
-  body.innerHTML = pageRows.map((u) => {
+  const cards = pageRows.map((u) => {
     const role = (u.user_roles || []).map((x) => x.roles?.name || x.roles?.code).filter(Boolean).join(", ") || "-";
     const hasAllScope = (u.user_divisions || []).some((x) => String(x.scope || "").toLowerCase() === "all");
     const divisions = hasAllScope
       ? "All Divisions"
       : ((u.user_divisions || []).map((x) => x.divisions?.name || x.divisions?.code).filter(Boolean).join(", ") || "—");
-    const nextStatus = u.status === "active" ? "disabled" : "active";
     return `
-      <tr>
-        <td>${u.display_name || u.email}</td>
-        <td>${role}</td>
-        <td>
-          <span class="meta-pill">${u.status === "active" ? "Active" : "Disabled"}</span>
-          ${u.is_locked ? '<span class="meta-pill" style="margin-left:0.4rem;">Locked</span>' : '<span class="meta-pill" style="margin-left:0.4rem;">Unlocked</span>'}
-        </td>
-        <td>${u.last_login_at ? new Date(u.last_login_at).toLocaleString() : "Never"}</td>
-        <td>${divisions}</td>
-        <td>
-          <button class="btn" data-user-id="${u.id}" data-next-status="${nextStatus}">${nextStatus === "active" ? "Enable" : "Disable"}</button>
-          <button class="btn" data-lock-user-id="${u.id}" data-next-lock="${u.is_locked ? "false" : "true"}">${u.is_locked ? "Unlock" : "Lock"}</button>
-          <button class="btn" data-reset-user-id="${u.id}">${u.auth_provider === "supabase" ? "Reset Password*" : "Set Password"}</button>
-          <button class="btn" data-resend-user-id="${u.id}">Resend credentials</button>
-          <button class="btn" data-edit-user-id="${u.id}">Edit</button>
-          ${u.auth_provider === "supabase" ? "" : `<button class="btn" data-delete-user-id="${u.id}" style="color:#f87171;border-color:#f8717155;">Delete</button>`}
-          <div data-edit-form="${u.id}" style="display:none;margin-top:.5rem;padding:.5rem;border:1px solid rgba(255,255,255,.12);border-radius:8px;">
-            <input data-edit-name="${u.id}" placeholder="Display name" value="${escAttr(u.display_name)}" style="display:block;width:100%;margin-bottom:.35rem;" />
-            <input data-edit-email="${u.id}" placeholder="Email" value="${escAttr(u.email)}" style="display:block;width:100%;margin-bottom:.35rem;" ${u.auth_provider === "supabase" ? "disabled title='Managed by Supabase Auth'" : ""} />
-            <input data-edit-username="${u.id}" placeholder="Username" value="${escAttr(u.username)}" style="display:block;width:100%;margin-bottom:.35rem;" ${u.auth_provider === "supabase" ? "disabled" : ""} />
-            <input data-edit-phone="${u.id}" placeholder="Phone" value="${escAttr(u.phone)}" style="display:block;width:100%;margin-bottom:.35rem;" ${u.auth_provider === "supabase" ? "disabled" : ""} />
-            <button class="btn" data-edit-save="${u.id}">Save details</button>
-            <button class="btn" data-edit-cancel="${u.id}">Cancel</button>
-          </div>
-          <label class="muted" style="display:block;margin-top:.35rem;">Roles</label>
-          <select data-role-user-id="${u.id}" multiple size="4" style="min-width:12rem;">${renderRoleOptions((u.user_roles || []).map((x) => x.roles?.id))}</select>
-          <label class="muted" style="display:block;margin-top:.35rem;">Divisions</label>
-          <select data-division-user-id="${u.id}" multiple size="4" style="min-width:12rem;">${renderDivisionOptions((u.user_divisions || []).map((x) => x.divisions?.id))}</select>
-          <button class="btn" data-save-user-id="${u.id}">Save</button>
-        </td>
-      </tr>
+      <button class="eu-user-card" type="button" data-open-user-id="${escAttr(u.id)}" aria-label="View details for ${escAttr(u.display_name || u.email)}">
+        <div class="eu-user-top">
+          <div class="eu-user-identity"><span class="eu-user-avatar">${userInitials(u)}</span><div><div class="eu-user-name">${escAttr(u.display_name || u.email)}</div><div class="eu-user-email">${escAttr(u.email || u.username || "No email")}</div></div></div>
+          ${userStatusBadge(u)}
+        </div>
+        <div class="eu-user-role">${escAttr(role)}</div>
+        <div class="eu-user-meta">
+          <div><span>Division scope</span><strong>${escAttr(divisions)}</strong></div>
+          <div><span>Authentication</span><strong>${escAttr(u.auth_provider === "supabase" ? "Supabase Auth" : "Local account")}</strong></div>
+        </div>
+        <div class="eu-user-open"><span>Last login: ${escAttr(formatUserDate(u.last_login_at))}</span><b>View details →</b></div>
+      </button>
     `;
   }).join("");
+  const selected = allUsers.find((u) => String(u.id) === String(selectedUserId));
+  body.innerHTML = cards + (selected ? renderUserModal(selected) : "") + renderStaffTermsModal();
+
+  body.querySelectorAll("button[data-open-user-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selectedUserId = btn.getAttribute("data-open-user-id");
+      renderUsers();
+    });
+  });
+  const closeModal = () => {
+    if (termsAcceptanceModal) termsAcceptanceModal = null;
+    else selectedUserId = null;
+    renderUsers();
+  };
+  body.querySelector("[data-close-user-modal]")?.addEventListener("click", closeModal);
+  body.querySelector(".eu-modal")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeModal();
+  });
+
+  body.querySelectorAll("button[data-terms-user-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const user = allUsers.find((item) => String(item.id) === String(btn.getAttribute("data-terms-user-id")));
+      if (!user) return showToast("User record not found", "error");
+      selectedUserId = null;
+      termsAcceptanceModal = { user, loading: true, status: null };
+      renderUsers();
+      try {
+        const { data, error } = await client.rpc("admin_get_staff_terms_consent_status", { p_app_user_id: user.id });
+        if (error) throw error;
+        termsAcceptanceModal = { user, loading: false, status: data || {} };
+      } catch (error) {
+        termsAcceptanceModal = null;
+        showToast(error?.message || "Failed to load T&C acceptance", "error");
+      }
+      renderUsers();
+    });
+  });
+
+  body.querySelector("[data-close-terms-modal]")?.addEventListener("click", () => {
+    termsAcceptanceModal = null;
+    renderUsers();
+  });
+
+  body.querySelector("button[data-request-terms-user-id]")?.addEventListener("click", async (event) => {
+    const modal = termsAcceptanceModal;
+    if (!modal?.user || modal.status?.reacceptance_pending) return;
+    const identity = modal.user.display_name || modal.user.email || "this user";
+    if (!window.confirm(`Require a fresh live-camera Terms and Conditions acceptance from ${identity}? Existing evidence will be retained and local EMS sessions will be revoked.`)) return;
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = "Requesting…";
+    try {
+      const { error } = await client.rpc("admin_request_staff_terms_reacceptance", {
+        p_app_user_id: modal.user.id,
+        p_reason: "Fresh acceptance requested from EMS User Management"
+      });
+      if (error) throw error;
+      const { data, error: statusError } = await client.rpc("admin_get_staff_terms_consent_status", { p_app_user_id: modal.user.id });
+      if (statusError) throw statusError;
+      termsAcceptanceModal = { user: modal.user, loading: false, status: data || {} };
+      showToast("Fresh T&C acceptance requested. The user must accept again with live-camera evidence.", "success");
+    } catch (error) {
+      showToast(error?.message || "Failed to request fresh T&C acceptance", "error");
+    }
+    renderUsers();
+  });
 
   body.querySelectorAll("button[data-user-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
