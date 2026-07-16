@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex,nofollow,noarchive" />
+    <title>Secure Terms Face Capture | Varada Nexus</title>
+    <link rel="icon" type="image/png" href="/images/logo.png" />
+    <style>
+      :root{color-scheme:dark;--gold:#d9b95f;--gold2:#f2d982;--ink:#05070b;--panel:#0d1118;--line:rgba(217,185,95,.3);--muted:#9ba7b8;--ok:#5ee49b;--bad:#ff8e8e}
+      *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0,#1b1a13 0,#080a0f 36%,#030406 100%);color:#f7f3e8;font-family:Inter,system-ui,sans-serif;padding:18px}
+      main{width:min(620px,100%);margin:0 auto}.brand{display:flex;align-items:center;gap:14px;padding:12px 2px 22px;border-bottom:1px solid var(--line)}.brand img{width:52px;height:42px;object-fit:contain}.brand strong{display:block;letter-spacing:.16em}.brand small{display:block;color:var(--gold);letter-spacing:.18em;margin-top:3px}
+      .card{margin-top:18px;background:linear-gradient(155deg,rgba(18,20,25,.98),rgba(7,9,13,.98));border:1px solid var(--line);border-radius:22px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.5)}h1{font-family:Georgia,serif;font-size:clamp(1.8rem,8vw,2.55rem);margin:4px 0 8px}.eyebrow{color:var(--gold);font-weight:800;letter-spacing:.16em;font-size:.72rem}.muted{color:var(--muted);line-height:1.55}.guide{display:grid;gap:8px;margin:16px 0}.guide div{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#090c11}.guide b{display:grid;place-items:center;min-width:25px;height:25px;border-radius:50%;background:rgba(217,185,95,.12);color:var(--gold2)}
+      video,.preview{width:100%;aspect-ratio:4/3;object-fit:cover;background:#010203;border:1px solid var(--line);border-radius:18px}.preview{display:none}.meter{margin:12px 0;height:10px;background:#171b22;border-radius:99px;overflow:hidden}.meter span{display:block;width:0;height:100%;background:linear-gradient(90deg,#d19d3e,var(--ok));transition:width .25s}.confidence{display:flex;justify-content:space-between;font-size:.84rem;color:var(--muted)}
+      .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}.btn{min-height:48px;border-radius:13px;border:1px solid var(--line);background:#11161e;color:#fff;font-weight:850;padding:10px 14px}.btn.primary{background:linear-gradient(135deg,#c79b3e,#f0d477);color:#111;border-color:#f1d67b}.btn:disabled{opacity:.42}.checks{display:grid;gap:10px;margin-top:16px}.check{display:grid;grid-template-columns:22px 1fr;gap:10px;color:#d7dce5;line-height:1.4;font-size:.88rem}.check input{width:19px;height:19px;accent-color:var(--gold)}.status{margin-top:14px;padding:12px;border-radius:12px;background:#090d13;color:#cbd5e1;border:1px solid rgba(255,255,255,.08);line-height:1.45}.status.ok{color:var(--ok);border-color:rgba(94,228,155,.3)}.status.bad{color:var(--bad);border-color:rgba(255,142,142,.3)}[hidden]{display:none!important}
+      @media(max-width:440px){body{padding:10px}.card{padding:15px;border-radius:18px}.actions{grid-template-columns:1fr}}
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="brand"><img src="/images/logo.png" alt="Varada Nexus logo" /><div><strong>VARADA NEXUS</strong><small>SECURE ACCEPTANCE</small></div></header>
+      <section class="card" id="captureCard">
+        <div class="eyebrow">MOBILE CAMERA HANDOFF</div>
+        <h1>Clear live-face capture</h1>
+        <p class="muted" id="termsSummary">Validating this secure, single-use link…</p>
+        <div class="guide">
+          <div><b>1</b><span>Use a well-lit area and clean the front camera lens.</span></div>
+          <div><b>2</b><span>Remove masks and sunglasses; keep exactly one face in frame.</span></div>
+          <div><b>3</b><span>Look straight at the camera and move closer until confidence is at least 90%.</span></div>
+        </div>
+        <video id="camera" autoplay playsinline muted></video>
+        <img class="preview" id="preview" alt="Captured live face evidence" />
+        <div class="meter"><span id="meterBar"></span></div>
+        <div class="confidence"><span>Face detection confidence</span><strong id="confidenceValue">Not captured</strong></div>
+        <div class="actions">
+          <button class="btn" id="startCamera" type="button" disabled>Enable front camera</button>
+          <button class="btn primary" id="capture" type="button" disabled>Capture and check</button>
+          <button class="btn" id="recapture" type="button" hidden>Recapture</button>
+        </div>
+        <div class="checks">
+          <label class="check"><input id="termsAccepted" type="checkbox" /><span>I confirm that I am the authorised account holder and accept the current Terms and Conditions shown on the computer.</span></label>
+          <label class="check"><input id="photoConsent" type="checkbox" /><span>I consent to this live image being retained as evidence of my acceptance for security, audit and dispute purposes.</span></label>
+        </div>
+        <button class="btn primary" id="complete" type="button" style="width:100%;margin-top:16px" disabled>Confirm acceptance securely</button>
+        <div class="status" id="status" aria-live="polite">This link expires after 10 minutes and works only once.</div>
+      </section>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/new-ems/config/runtime.js?v=terms-mobile-1"></script>
+    <script type="module" src="/new-ems/shared/page-terms-mobile.js?v=terms-mobile-1"></script>
+  </body>
+</html>

@@ -10,7 +10,7 @@
 // Session storage keys (kept completely separate):
 //   EMS Staff        → Supabase Auth session / minted local JWT
 //   Transport Portal → "ems_transport_portal_session"
-//   Interiors Portal → "ems_interiors_portal_session" (+ Supabase Auth JWT)
+//   Interiors Portal → EMS-managed external portal session token
 //   External Portal  → "ems_external_portal_session"
 
 import { ROUTES } from "../config/constants.js";
@@ -176,6 +176,9 @@ async function resolveExternalDashboard(sessionToken) {
   const access = Array.isArray(data) ? data : [];
   if (access.some((item) => item.source_module === "interiors" && item.access_scope === "interiors_architect_portal")) {
     return ROUTES.INTERIORS_ARCHITECT_PORTAL;
+  }
+  if (access.some((item) => item.source_module === "interiors" && item.access_scope === "interiors_client_portal")) {
+    return ROUTES.INTERIORS_CLIENT_APP;
   }
   if (access.some((item) => item.source_module === "digital-services" && item.access_scope === "marketing_client_portal")) {
     return ROUTES.MARKETING_CLIENT_PORTAL;

@@ -4,7 +4,7 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
-import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-owner-bypass-1";
+import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 
 console.log("CLIENT_APP_BOOT");
 
@@ -82,7 +82,7 @@ function renderShell({ title = "Interiors Client Portal", message = "Loading you
     </div>
     <div id="toastHost" class="toast-host" aria-live="polite"></div>
   `;
-  qs("#logoutBtn")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN)));
+  qs("#logoutBtn")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.LOGIN)));
   app.classList.add("page-enter-active");
 }
 
@@ -1497,15 +1497,15 @@ function bindClientAppEvents(app) {
   app.querySelectorAll("[data-approval-action]").forEach((button) => button.addEventListener("click", () => updateApprovalDecision(button.dataset.approvalId, button.dataset.approvalAction)));
   app.querySelectorAll("[data-pdf-action]").forEach((button) => button.addEventListener("click", () => handlePdfAction(button.dataset.pdfAction, button.dataset.pdfId)));
 
-  qs("#logoutBtn")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN)));
-  qs("#logoutBtnSidebar")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN)));
+  qs("#logoutBtn")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.LOGIN)));
+  qs("#logoutBtnSidebar")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.LOGIN)));
   qs("#markNotificationsReadBtn")?.addEventListener("click", () => { markNotificationsSeenNow(); render(); });
   qs("#switchPortalBtn")?.addEventListener("click", async () => {
     const current = getStoredInteriorsPortalSession();
     if (current?.sessionToken) {
       await interiorsPortalLogout();
     }
-    window.location.assign(ROUTES.INTERIORS_PORTAL_LOGIN);
+    window.location.assign(ROUTES.LOGIN);
   });
 }
 
@@ -1522,8 +1522,10 @@ async function updateApprovalDecision(approvalId, decision) {
       showToast("Remarks are required for a rejection or revision request.", TOAST_TYPES.ERROR);
       return;
     }
+    const storedSession = getStoredInteriorsPortalSession();
     const response = row.approval_type === "design" && row.reference_table === "interior_designs"
-      ? await getClient().rpc("interiors_client_decide_design", {
+      ? await getClient().rpc("interiors_client_portal_decide_design", {
+          p_session_token: storedSession?.sessionToken,
           p_approval_id: approvalId,
           p_decision: normalizedDecision,
           p_remarks: remarks || null
@@ -1564,88 +1566,20 @@ function submitSupportRequest(category, subject, message) {
 async function loadData() {
   const client = getClient();
   const session = await requireInteriorsPortalSession();
-  if (!session?.portalUserId) return;
+  if (!session?.sessionToken) return;
   PAGE_STATE.appUser = null;
-  const portalUserRes = await client
-    .from("interior_client_portal_users")
-    .select("*, interior_clients(id, client_name, client_code)")
-    .eq("id", session.portalUserId)
-    .eq("portal_status", "active")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (portalUserRes.error) throw portalUserRes.error;
-  PAGE_STATE.portalUser = portalUserRes.data || null;
-  PAGE_STATE.clientRecord = PAGE_STATE.portalUser?.interior_clients || null;
-  if (!PAGE_STATE.portalUser?.id) {
-    throw new Error("No active client portal access is linked to this account.");
-  }
-
-  const accessRes = await client
-    .from("interior_client_project_access")
-    .select("*")
-    .eq("portal_user_id", PAGE_STATE.portalUser.id)
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
-  if (accessRes.error) throw accessRes.error;
-  PAGE_STATE.access = accessRes.data || [];
-  const interiorProjectIds = PAGE_STATE.access.map((row) => row.interior_project_id).filter(Boolean);
-  if (!interiorProjectIds.length) {
-    PAGE_STATE.projects = [];
-    PAGE_STATE.approvals = [];
-    PAGE_STATE.designs = [];
-    PAGE_STATE.designFiles = [];
-    PAGE_STATE.siteUpdates = [];
-    PAGE_STATE.photos = [];
-    PAGE_STATE.billingHeaders = [];
-    return;
-  }
-
-  const projectsRes = interiorProjectIds.length
-    ? await client.from("interior_projects").select("id,project_code,project_name,project_title,shared_project_id,status,workflow_stage,design_gate_status,interior_client_id").in("id", interiorProjectIds).order("project_name")
-    : { data: [], error: null };
-  if (projectsRes.error) throw projectsRes.error;
-  PAGE_STATE.projects = (projectsRes.data || []).filter((row) => row?.shared_project_id);
-  const sharedProjectIds = PAGE_STATE.projects.map((row) => row.shared_project_id).filter(Boolean);
-  if (!PAGE_STATE.projects.length) {
-    PAGE_STATE.approvals = [];
-    PAGE_STATE.designs = [];
-    PAGE_STATE.designFiles = [];
-    PAGE_STATE.siteUpdates = [];
-    PAGE_STATE.photos = [];
-    PAGE_STATE.billingHeaders = [];
-    return;
-  }
-
-  const [approvalsRes, designsRes, siteUpdatesRes, photosRes, billingRes] = await Promise.all([
-    interiorProjectIds.length ? client.from("interior_client_approvals").select("*").in("interior_project_id", interiorProjectIds).order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
-    sharedProjectIds.length ? client.from("interior_designs").select("id,project_id,version_no,design_title,status,client_decision,published_at,uploaded_at,updated_at,file_url").in("project_id", sharedProjectIds).order("uploaded_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
-    sharedProjectIds.length ? client.from("interior_site_updates").select("id,project_id,update_date,progress_percent,update_title,created_at").in("project_id", sharedProjectIds).order("update_date", { ascending: false }) : Promise.resolve({ data: [], error: null }),
-    sharedProjectIds.length ? client.from("interior_project_photos").select("id,project_id,photo_title,photo_url,photo_category,uploaded_at").in("project_id", sharedProjectIds).eq("is_client_visible", true).order("uploaded_at", { ascending: false }) : Promise.resolve({ data: [], error: null }),
-    sharedProjectIds.length ? client.from("interior_billing_headers").select("id,project_id,bill_number,status,total_amount,bill_date,created_at").in("project_id", sharedProjectIds).order("created_at", { ascending: false }) : Promise.resolve({ data: [], error: null })
-  ]);
-
-  if (approvalsRes.error) throw approvalsRes.error;
-  if (designsRes.error) throw designsRes.error;
-  if (siteUpdatesRes.error) throw siteUpdatesRes.error;
-  if (photosRes.error) throw photosRes.error;
-  if (billingRes.error) throw billingRes.error;
-
-  PAGE_STATE.approvals = approvalsRes.data || [];
-  PAGE_STATE.designs = (designsRes.data || []).sort((a, b) => new Date(b.updated_at || b.uploaded_at || 0).getTime() - new Date(a.updated_at || a.uploaded_at || 0).getTime());
-  const designIds = PAGE_STATE.designs.map((row) => row.id).filter(Boolean);
-  if (designIds.length) {
-    const filesRes = await client.from("drive_documents")
-      .select("id,entity_id,file_name,file_size,mime_type,web_view_link,created_at")
-      .eq("category", "INTERIORS_DESIGN").in("entity_id", designIds).is("deleted_at", null).order("created_at", { ascending: false });
-    if (filesRes.error) throw filesRes.error;
-    PAGE_STATE.designFiles = filesRes.data || [];
-  } else {
-    PAGE_STATE.designFiles = [];
-  }
-  PAGE_STATE.siteUpdates = siteUpdatesRes.data || [];
-  PAGE_STATE.photos = photosRes.data || [];
-  PAGE_STATE.billingHeaders = (billingRes.data || []).sort((a, b) => new Date(b.bill_date || b.created_at || 0).getTime() - new Date(a.bill_date || a.created_at || 0).getTime());
+  const { data, error } = await client.rpc("interiors_client_portal_context", { p_session_token: session.sessionToken });
+  if (error) throw error;
+  PAGE_STATE.portalUser = data?.portalUser || null;
+  PAGE_STATE.clientRecord = data?.clientRecord || PAGE_STATE.portalUser?.interior_clients || null;
+  PAGE_STATE.access = data?.access || [];
+  PAGE_STATE.projects = (data?.projects || []).filter((row) => row?.shared_project_id);
+  PAGE_STATE.approvals = data?.approvals || [];
+  PAGE_STATE.designs = data?.designs || [];
+  PAGE_STATE.designFiles = data?.designFiles || [];
+  PAGE_STATE.siteUpdates = data?.siteUpdates || [];
+  PAGE_STATE.photos = data?.photos || [];
+  PAGE_STATE.billingHeaders = data?.billingHeaders || [];
   if (!PAGE_STATE.activeProjectId && PAGE_STATE.projects[0]?.id) PAGE_STATE.activeProjectId = PAGE_STATE.projects[0].id;
   console.log("CLIENT_APP_DATA_LOADED", {
     clientName: PAGE_STATE.clientRecord?.client_name || null,

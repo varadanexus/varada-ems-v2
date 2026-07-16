@@ -155,7 +155,9 @@ async function init() {
     const groupedModules = [...COMMS_MODULES, MODULES.LEGAL];
     const nonGroupedBusinessCards = activeBusinessCards.filter((m) => !groupedModules.includes(m.module));
     const launchCards = [...nonGroupedBusinessCards];
-    const activeModuleCount = launchCards.length + (financeCards.length ? 1 : 0);
+    // This KPI reports active business divisions only. Finance, Legal,
+    // Communications and Administration are separate command-center scopes.
+    const activeModuleCount = launchCards.length;
     const pendingActions = configCards.length + developerCards.filter((d) => d.tone === "setup").length;
 
     // Signed-in identity

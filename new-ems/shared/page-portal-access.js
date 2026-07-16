@@ -25,7 +25,7 @@ const DIVISION_ENTITY_MAP = {
   interiors: {
     label: "Interiors",
     entities: [
-      { key: "client", label: "Client", table: "interior_clients", nameCol: "client_name", system: "interiors_client_deeplink", portalType: "Interiors Client Portal", portalLoginUrl: ROUTES.INTERIORS_PORTAL_LOGIN },
+      { key: "client", label: "Client", table: "interior_clients", nameCol: "client_name", system: "external", userType: "client", sourceModule: "interiors", accessScope: "interiors_client_portal", portalType: "Interiors Client Portal", portalLoginUrl: ROUTES.LOGIN },
       { key: "architect", label: "Architect", table: "interior_vendors", nameCol: "vendor_name", filterCol: "vendor_type", filterValue: "architect", system: "external", userType: "architect", sourceModule: "interiors", accessScope: "interiors_architect_portal", portalType: "Interiors Architect Portal", portalLoginUrl: ROUTES.LOGIN },
       { key: "vendor", label: "Vendor", table: "interior_vendors", nameCol: "vendor_name", system: "external", userType: "vendor", portalType: "Interiors Vendor Portal", portalLoginUrl: ROUTES.TRANSPORT_PORTAL_LOGIN }
     ]
@@ -52,7 +52,8 @@ const PAGE_STATE = {
   userDetailsModal: null,
   historyModal: null,
   revealModal: null,
-  resetPasswordModal: null
+  resetPasswordModal: null,
+  termsConsentModal: null
 };
 
 const REVEAL_ALLOWED_EMAILS = ["admin@varadanexus.com", "prudhvi@varadanexus.com"];
@@ -169,6 +170,7 @@ async function loadAudit() {
 
 function externalLinkedEntityLabel(user, access) {
   const recordType = String(access?.record_type || "").toLowerCase();
+  if (recordType.includes("interior_clients")) return "Interiors Client";
   if (recordType.includes("marketing_clients")) return "Marketing Client";
   if (recordType.includes("marketing_vendors")) return "Marketing Vendor";
   if (recordType.includes("interior_vendors")) return "Vendor";
@@ -182,6 +184,7 @@ function baseRow(u, system, division, entityType, linkedName, portalType, access
 }
 
 function portalTypeLabel(userType, sourceModule) {
+  if (sourceModule === "interiors" && userType === "client") return "Interiors Client Portal";
   if (sourceModule === "digital-services" && userType === "vendor") return "Marketing Delivery Team Portal";
   if (sourceModule === "digital-services" && userType === "partner") return "Marketing Client Portal";
   if (userType === "agent") return "Transportation Agent Portal";
@@ -256,9 +259,11 @@ function render() {
       .pa-cred-box{background:var(--surface,#f9fafb);border:1px solid var(--border,#d1d5db);border-radius:8px;padding:1rem;margin:.5rem 0;}
       .pa-cred-row{display:flex;align-items:center;gap:.5rem;margin:.4rem 0;}
       .pa-cred-row input{flex:1;font-family:monospace;}
-      .pa-badge-active{color:#16a34a;font-weight:600;}
-      .pa-badge-revoked{color:#6b7280;}
-      .pa-badge-expired{color:#dc2626;}
+      .pa-badge-active,.pa-badge-revoked,.pa-badge-expired,.pa-status{display:inline-flex;align-items:center;gap:.38rem;width:auto;max-width:100%;padding:.28rem .58rem;border:1px solid;border-radius:999px;font-size:.67rem;font-weight:850;letter-spacing:.045em;text-transform:uppercase;line-height:1;white-space:nowrap;}
+      .pa-badge-active::before,.pa-badge-revoked::before,.pa-badge-expired::before,.pa-status::before{content:"";width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor;}
+      .pa-badge-active,.pa-status-active{color:#72e4a2;background:rgba(34,197,94,.10);border-color:rgba(74,222,128,.34);}
+      .pa-badge-revoked,.pa-status-disabled{color:#aab2c0;background:rgba(148,163,184,.08);border-color:rgba(148,163,184,.25);}
+      .pa-badge-expired,.pa-status-locked{color:#fca5a5;background:rgba(239,68,68,.09);border-color:rgba(248,113,113,.32);}
       .pa-pw-panel{background:var(--surface,#f9fafb);border:1px solid var(--border,#d1d5db);border-radius:8px;padding:1.25rem;margin-top:1rem;}
       .pa-entity-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:.55rem;max-height:360px;overflow:auto;margin-top:.65rem;padding:.2rem .2rem .2rem 0;}
       .pa-entity-option{display:flex;align-items:center;justify-content:space-between;gap:.75rem;width:100%;padding:.8rem .9rem;text-align:left;border:1px solid rgba(230,200,126,.16);border-radius:12px;background:rgba(255,255,255,.022);color:#e8e5dc;cursor:pointer;transition:border-color .16s ease,background .16s ease,transform .16s ease;}
@@ -271,19 +276,21 @@ function render() {
       .pa-directory-head h4{margin:0;font-size:1.15rem;}
       .pa-directory-head p{margin:.3rem 0 0;}
       .pa-user-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.85rem;}
-      .pa-user-card{appearance:none;width:100%;min-height:180px;padding:1rem;text-align:left;color:inherit;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012));border:1px solid rgba(230,200,126,.18);border-radius:16px;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
+      .pa-user-card{appearance:none;width:100%;min-width:0;min-height:180px;overflow:hidden;padding:1rem;text-align:left;color:inherit;background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012));border:1px solid rgba(230,200,126,.18);border-radius:16px;cursor:pointer;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;}
+      .pa-user-card *{min-width:0;}
       .pa-user-card:hover,.pa-user-card:focus-visible{transform:translateY(-2px);border-color:rgba(230,200,126,.62);box-shadow:0 16px 34px rgba(0,0,0,.24);outline:none;}
       .pa-user-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;}
       .pa-user-identity{display:flex;align-items:center;gap:.75rem;min-width:0;}
       .pa-user-avatar{width:42px;height:42px;display:grid;place-items:center;flex:0 0 42px;border-radius:13px;background:linear-gradient(145deg,#e7c76f,#8e6924);color:#080807;font-weight:900;font-size:.9rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.45);}
-      .pa-user-name{font-weight:800;color:#f7f4ec;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-      .pa-user-code{margin-top:.15rem;color:#9aa4b5;font-size:.73rem;letter-spacing:.06em;}
-      .pa-user-portal{margin:.9rem 0 .8rem;padding-bottom:.8rem;border-bottom:1px solid rgba(148,163,184,.12);color:#e6c87e;font-size:.78rem;font-weight:800;letter-spacing:.055em;text-transform:uppercase;}
+      .pa-user-name{font-weight:800;color:#f7f4ec;line-height:1.25;overflow-wrap:anywhere;word-break:break-word;}
+      .pa-user-code{margin-top:.15rem;color:#9aa4b5;font-size:.73rem;letter-spacing:.06em;overflow-wrap:anywhere;word-break:break-word;}
+      .pa-user-portal{margin:.9rem 0 .8rem;padding-bottom:.8rem;border-bottom:1px solid rgba(148,163,184,.12);color:#e6c87e;font-size:.78rem;font-weight:800;letter-spacing:.055em;text-transform:uppercase;overflow-wrap:anywhere;word-break:break-word;}
       .pa-user-meta{display:grid;grid-template-columns:1fr 1fr;gap:.65rem;}
+      .pa-user-meta>div{min-width:0;overflow:hidden;}
       .pa-user-meta span{display:block;color:#7f8a9c;font-size:.65rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;}
-      .pa-user-meta strong{display:block;margin-top:.2rem;color:#d7dbe3;font-size:.8rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-      .pa-user-open{display:flex;align-items:center;justify-content:space-between;margin-top:.9rem;color:#9da8b9;font-size:.75rem;}
-      .pa-user-open b{color:#e6c87e;font-size:.78rem;}
+      .pa-user-meta strong{display:block;margin-top:.2rem;color:#d7dbe3;font-size:.8rem;font-weight:600;line-height:1.35;overflow-wrap:anywhere;word-break:break-word;}
+      .pa-user-open{display:flex;align-items:flex-end;justify-content:space-between;gap:.65rem;margin-top:.9rem;color:#9da8b9;font-size:.75rem;}
+      .pa-user-open span{min-width:0;overflow-wrap:anywhere;word-break:break-word;}.pa-user-open b{flex:0 0 auto;color:#e6c87e;font-size:.78rem;}
       .modal{position:fixed;inset:0;z-index:3500;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(2,4,8,.82)!important;border:0!important;box-shadow:none!important;backdrop-filter:blur(8px);}
       .modal-panel{width:min(680px,calc(100vw - 2rem));max-height:calc(100vh - 2rem);overflow:auto;padding:1.25rem;border:1px solid rgba(230,200,126,.28);border-radius:18px;background:linear-gradient(150deg,#111216,#06070a 58%,#050609);box-shadow:0 30px 90px rgba(0,0,0,.72);}
       .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;}
@@ -298,6 +305,7 @@ function render() {
       .pa-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;}
       .pa-detail{min-height:68px;padding:.75rem .85rem;border:1px solid rgba(148,163,184,.13);border-radius:12px;background:rgba(4,6,10,.46);}
       .pa-detail span{display:block;color:#788499;font-size:.64rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;}
+      .pa-detail .pa-status{display:inline-flex;}
       .pa-detail strong{display:block;margin-top:.3rem;color:#edf0f5;font-size:.84rem;overflow-wrap:anywhere;}
       .pa-detail .badge{display:inline-flex!important;width:auto!important;padding:.22rem .55rem!important;border-radius:999px!important;}
       .pa-action-section{margin-top:1rem;padding-top:1rem;border-top:1px solid rgba(148,163,184,.13);}
@@ -330,6 +338,7 @@ function render() {
     ${PAGE_STATE.revealModal ? renderRevealModal() : ""}
     ${PAGE_STATE.historyModal ? renderHistoryModal() : ""}
     ${PAGE_STATE.resetPasswordModal ? renderResetPasswordModal() : ""}
+    ${PAGE_STATE.termsConsentModal ? renderTermsConsentModal() : ""}
     ${PAGE_STATE.userDetailsModal ? renderUserDetailsModal() : ""}
   `);
   bindEvents();
@@ -405,14 +414,7 @@ function renderWizard() {
         </div>
       </div>
 
-      ${entityDef && entityDef.system === "interiors_client_deeplink" ? `
-        <div class="card" style="margin-top:1rem;background:rgba(245,193,108,.08);">
-          <p class="muted">Interiors Client Portal uses a separate Supabase Auth-backed identity stack. Portal access for Interiors clients is administered from the dedicated Interiors Client Portal management page.</p>
-          <a class="btn" href="${ROUTES.INTERIORS_CLIENT_PORTAL}">Open Interiors Client Portal Management</a>
-        </div>
-      ` : ""}
-
-      ${entityDef && entityDef.system !== "interiors_client_deeplink" ? `
+      ${entityDef ? `
         <div style="margin-top:1rem;">
           <label>Available ${escapeHtml(entityDef.label)} users</label>
           <input id="paSearch" type="search" placeholder="Optional: filter the available list by name..." value="${escapeHtml(w.searchTerm)}" autocomplete="off" />
@@ -555,6 +557,7 @@ function rowActions(r) {
       <button class="btn btn-sm" data-pa-action="resend-credentials" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Resend credentials</button>
       <button class="btn btn-sm" data-pa-action="force-logout" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Force Logout</button>
       <button class="btn btn-sm" data-pa-action="login-history" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">View Audit</button>
+      <button class="btn btn-sm" data-pa-action="terms-consent" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Record T&amp;C Consent</button>
       ${canReveal() ? `<button class="btn btn-sm" data-pa-action="reveal-password" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button" style="border-color:#b45309;color:#b45309;">Reveal Password</button>` : ""}
       <button class="btn btn-sm btn-danger" data-pa-action="delete-account" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Delete Account</button>
     </div>
@@ -645,9 +648,9 @@ function renderPasswordTools() {
 }
 
 function statusBadge(status, locked) {
-  if (locked) return `<span class="badge" style="background:#dc2626;color:#fff;">Locked</span>`;
-  if (status === "active") return `<span class="badge" style="background:#16a34a;color:#fff;">Active</span>`;
-  return `<span class="badge" style="background:#6b7280;color:#fff;">${escapeHtml(capitalize(status || "unknown"))}</span>`;
+  if (locked) return `<span class="pa-status pa-status-locked">Locked</span>`;
+  if (status === "active") return `<span class="pa-status pa-status-active">Active</span>`;
+  return `<span class="pa-status pa-status-disabled">${escapeHtml(capitalize(status || "unknown"))}</span>`;
 }
 
 function renderRevealModal() {
@@ -759,6 +762,10 @@ function bindEvents() {
   }));
   document.getElementById("paCloseUserDetails")?.addEventListener("click", closeUserDetailsModal);
   document.getElementById("paUserDetailsModal")?.addEventListener("click", (event) => { if (event.target?.id === "paUserDetailsModal") closeUserDetailsModal(); });
+  document.getElementById("paCloseTermsConsent")?.addEventListener("click", closeTermsConsentModal);
+  document.getElementById("paTermsConsentModal")?.addEventListener("click", (event) => { if (event.target?.id === "paTermsConsentModal") closeTermsConsentModal(); });
+  document.getElementById("paConfirmTermsConsent")?.addEventListener("click", handleConfirmTermsConsent);
+  document.getElementById("paRequestTermsReacceptance")?.addEventListener("click", handleRequestTermsReacceptance);
 
   // Copy buttons (credentials display)
   document.querySelectorAll("[data-pa-copy]").forEach((btn) => btn.addEventListener("click", () => {
@@ -856,9 +863,88 @@ async function handleWizardSearch(event) {
   await loadAvailableEntities(term);
 }
 
+function renderTermsConsentModal() {
+  const m = PAGE_STATE.termsConsentModal;
+  if (!m) return "";
+  const s = m.status;
+  const sourceLabel = s?.reacceptance_pending
+    ? "Fresh live-camera acceptance pending"
+    : s?.acceptance_source === "user_live_camera"
+    ? "Accepted directly with live-camera evidence"
+    : s?.acceptance_source === "user_electronic"
+      ? "Accepted directly by the user"
+      : s?.acceptance_source === "admin_recorded"
+        ? "Consent recorded by an authorised staff member"
+        : "Not yet accepted";
+  const directlyAccepted = s?.accepted && s?.acceptance_source !== "admin_recorded";
+  const evidenceImage = /^data:image\/(?:jpeg|png);base64,/i.test(String(s?.evidence_image_data_url || ""))
+    ? s.evidence_image_data_url
+    : "";
+  return `
+    <div id="paTermsConsentModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="paTermsConsentTitle">
+      <div class="modal-panel">
+        <div class="modal-head">
+          <div><h3 id="paTermsConsentTitle">Individual T&amp;C consent</h3><p class="muted">${escapeHtml(m.row.displayName || m.row.linkedName || m.row.username)} · ${escapeHtml(m.row.portalUserCode)}</p></div>
+          <div style="display:flex;gap:.45rem;flex-wrap:wrap;justify-content:flex-end;">
+            ${canEdit() && s?.accepted && !s?.reacceptance_pending ? `<button class="btn btn-sm" id="paRequestTermsReacceptance" type="button">Request acceptance again</button>` : ""}
+            <button class="btn btn-sm" id="paCloseTermsConsent" type="button">Close</button>
+          </div>
+        </div>
+        ${m.loading ? `<div class="pa-cred-box"><p class="muted">Checking the current Terms and Conditions record...</p></div>` : `
+          <div class="pa-cred-box">
+            <div class="pa-detail-grid">
+              ${detailItem("Current terms", s?.terms_version || "Not configured")}
+              ${detailItem("Consent status", sourceLabel)}
+              ${s?.accepted_at ? detailItem("Recorded at", formatDateTime(s.accepted_at)) : ""}
+              ${s?.accepted_ip ? detailItem("Server-recorded IP", s.accepted_ip) : detailItem("Server-recorded IP", "Not captured for this earlier acceptance")}
+              ${s?.device_id ? detailItem("EMS device ID", s.device_id) : detailItem("EMS device ID", "Not captured for this earlier acceptance")}
+              ${s?.recorded_by_name ? detailItem("Recorded by", `${s.recorded_by_name}${s.recorded_by_email ? ` · ${s.recorded_by_email}` : ""}`) : ""}
+              ${s?.reacceptance_pending ? detailItem("New acceptance", "Pending from original user") : ""}
+            </div>
+          </div>
+          ${evidenceImage ? `
+            <div class="pa-cred-box">
+              <div style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;margin-bottom:.75rem;">
+                <div><strong>Live-camera acceptance evidence</strong><p class="muted" style="margin:.25rem 0 0;">Captured ${escapeHtml(formatDateTime(s.evidence_captured_at))} · Face confidence ${escapeHtml(s.face_confidence == null ? "-" : `${Math.round(Number(s.face_confidence) * 100)}%`)}</p></div>
+                ${s?.drive_live_photo_url ? `<a class="btn btn-sm" href="${escapeHtml(s.drive_live_photo_url)}" target="_blank" rel="noopener noreferrer">Open secured Drive copy</a>` : ""}
+              </div>
+              <img src="${escapeHtml(evidenceImage)}" alt="Restricted live-camera Terms acceptance evidence for ${escapeHtml(m.row.displayName || m.row.username)}" style="display:block;width:min(100%,520px);max-height:420px;object-fit:contain;border-radius:14px;border:1px solid rgba(212,178,106,.42);background:#05070b;margin:0 auto;" />
+              <div class="pa-detail-grid" style="margin-top:.85rem;">
+                ${detailItem("Evidence SHA-256", s.evidence_sha256 || "-")}
+                ${detailItem("Evidence size", s.evidence_size_bytes ? `${Number(s.evidence_size_bytes).toLocaleString()} bytes` : "-")}
+                ${detailItem("Face detector", s.face_detector || "-")}
+                ${detailItem("Drive archive", s.drive_archive_status || "Pending")}
+              </div>
+            </div>
+          ` : s?.accepted ? `<div class="pa-cred-box"><strong>No live-camera image is attached.</strong><p class="muted" style="margin-bottom:0;">This may be an earlier electronic or staff-recorded consent.</p></div>` : ""}
+          ${directlyAccepted ? `
+            <div class="pa-cred-box"><strong>Direct acceptance is already complete.</strong><p class="muted" style="margin-bottom:0;">This evidence-backed record cannot be replaced from Portal Access.</p></div>
+          ` : `
+            <div class="pa-cred-box">
+              <p style="margin-top:0;"><strong>${s?.accepted ? "Update the recorded consent" : "Record consent for this account"}</strong></p>
+              <p class="muted">Use this only after the named person has explicitly agreed to the current login Terms and Conditions. This action is audited and is not represented as camera-based self-acceptance.</p>
+              <div class="form-group"><label for="paConsentGivenBy">Full name of person giving consent *</label><input id="paConsentGivenBy" type="text" maxlength="200" value="${escapeHtml(s?.consent_given_by || m.row.displayName || "")}" autocomplete="off" /></div>
+              <div class="form-group"><label for="paConsentBasis">How consent was obtained *</label><select id="paConsentBasis">
+                <option value="">Select basis...</option>
+                <option value="verbal_confirmation" ${s?.consent_basis === "verbal_confirmation" ? "selected" : ""}>Verbal confirmation</option>
+                <option value="signed_document" ${s?.consent_basis === "signed_document" ? "selected" : ""}>Signed document</option>
+                <option value="recorded_email" ${s?.consent_basis === "recorded_email" ? "selected" : ""}>Recorded email</option>
+                <option value="video_call" ${s?.consent_basis === "video_call" ? "selected" : ""}>Video call</option>
+                <option value="other" ${s?.consent_basis === "other" ? "selected" : ""}>Other documented basis</option>
+              </select></div>
+              <div class="form-group"><label for="paConsentNotes">Reference / notes</label><textarea id="paConsentNotes" rows="3" maxlength="2000" placeholder="Email date, document reference, call details, or other supporting note">${escapeHtml(s?.notes || "")}</textarea></div>
+              <label style="display:flex;align-items:flex-start;gap:.6rem;margin:.8rem 0;cursor:pointer;"><input id="paConsentConfirm" type="checkbox" style="margin-top:.2rem;" /><span>I confirm that I personally obtained explicit consent from the named person for the current Terms and Conditions.</span></label>
+              <button class="btn" id="paConfirmTermsConsent" type="button">${s?.accepted ? "Update individual consent" : "Record individual consent"}</button>
+            </div>
+          `}
+        `}
+      </div>
+    </div>`;
+}
+
 async function loadAvailableEntities(term = "") {
   const entityDef = DIVISION_ENTITY_MAP[PAGE_STATE.wizard.division]?.entities.find((e) => e.key === PAGE_STATE.wizard.entityType);
-  if (!entityDef || entityDef.system === "interiors_client_deeplink") {
+  if (!entityDef) {
     PAGE_STATE.wizard.searchResults = [];
     PAGE_STATE.wizard.resultsLoading = false;
     render();
@@ -1082,6 +1168,20 @@ async function handleRowAction(btn) {
       render();
       await loadHistory(id);
       return;
+    } else if (action === "terms-consent") {
+      const row = PAGE_STATE.allRows.find((item) => item.portalUserId === id && item.system === system);
+      if (!row) throw new Error("Portal user record not found");
+      PAGE_STATE.userDetailsModal = null;
+      PAGE_STATE.termsConsentModal = { row, loading: true, status: null };
+      render();
+      const { data, error } = await client.rpc("admin_get_portal_terms_consent_status", {
+        p_portal_system: system,
+        p_portal_user_id: id
+      });
+      if (error) throw error;
+      PAGE_STATE.termsConsentModal = { row, loading: false, status: data || {} };
+      render();
+      return;
     }
     showToast("Action completed.", TOAST_TYPES.SUCCESS);
     PAGE_STATE.userDetailsModal = null;
@@ -1090,6 +1190,82 @@ async function handleRowAction(btn) {
     render();
   } catch (error) {
     showToast(error?.message || "Action failed.", TOAST_TYPES.ERROR);
+  }
+}
+
+function closeTermsConsentModal() {
+  PAGE_STATE.termsConsentModal = null;
+  render();
+}
+
+async function handleRequestTermsReacceptance() {
+  const modal = PAGE_STATE.termsConsentModal;
+  if (!modal?.row || modal.status?.reacceptance_pending) {
+    if (modal?.status?.reacceptance_pending) showToast("A fresh acceptance is already pending for this user.", TOAST_TYPES.INFO);
+    return;
+  }
+  const identity = modal.row.displayName || modal.row.linkedName || modal.row.username;
+  const confirmed = window.confirm(`Request a fresh live-camera Terms acceptance from ${identity}? Existing evidence will be retained, active portal sessions will be revoked, and the user must accept again at next login.`);
+  if (!confirmed) return;
+  const button = document.getElementById("paRequestTermsReacceptance");
+  if (button) { button.disabled = true; button.textContent = "Requesting..."; }
+  try {
+    const { error } = await client.rpc("admin_request_portal_terms_reacceptance", {
+      p_portal_system: modal.row.system,
+      p_portal_user_id: modal.row.portalUserId,
+      p_reason: "Fresh acceptance requested from Portal Access"
+    });
+    if (error) throw error;
+    const { data: status, error: statusError } = await client.rpc("admin_get_portal_terms_consent_status", {
+      p_portal_system: modal.row.system,
+      p_portal_user_id: modal.row.portalUserId
+    });
+    if (statusError) throw statusError;
+    PAGE_STATE.termsConsentModal = { row: modal.row, loading: false, status: status || {} };
+    PAGE_STATE.auditLoaded = false;
+    render();
+    showToast("Fresh Terms acceptance requested. Existing evidence was retained and active sessions were revoked.", TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    showToast(error?.message || "Failed to request a fresh acceptance.", TOAST_TYPES.ERROR);
+    render();
+  }
+}
+
+async function handleConfirmTermsConsent() {
+  const m = PAGE_STATE.termsConsentModal;
+  if (!m) return;
+  const consentGivenBy = String(document.getElementById("paConsentGivenBy")?.value || "").trim();
+  const consentBasis = String(document.getElementById("paConsentBasis")?.value || "").trim();
+  const notes = String(document.getElementById("paConsentNotes")?.value || "").trim();
+  const confirmed = Boolean(document.getElementById("paConsentConfirm")?.checked);
+  if (consentGivenBy.length < 2) return showToast("Enter the full name of the person giving consent.", TOAST_TYPES.ERROR);
+  if (!consentBasis) return showToast("Select how consent was obtained.", TOAST_TYPES.ERROR);
+  if (!confirmed) return showToast("Confirm that explicit consent was personally obtained.", TOAST_TYPES.ERROR);
+
+  const button = document.getElementById("paConfirmTermsConsent");
+  if (button) { button.disabled = true; button.textContent = "Recording consent..."; }
+  try {
+    const { error } = await client.rpc("admin_record_portal_terms_consent", {
+      p_portal_system: m.row.system,
+      p_portal_user_id: m.row.portalUserId,
+      p_consent_given_by: consentGivenBy,
+      p_consent_basis: consentBasis,
+      p_notes: notes || null,
+      p_explicit_confirmation: true
+    });
+    if (error) throw error;
+    const { data: status, error: statusError } = await client.rpc("admin_get_portal_terms_consent_status", {
+      p_portal_system: m.row.system,
+      p_portal_user_id: m.row.portalUserId
+    });
+    if (statusError) throw statusError;
+    PAGE_STATE.termsConsentModal = { row: m.row, loading: false, status: status || {} };
+    PAGE_STATE.auditLoaded = false;
+    render();
+    showToast("Individual Terms and Conditions consent recorded and audited.", TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    showToast(error?.message || "Failed to record consent.", TOAST_TYPES.ERROR);
+    render();
   }
 }
 
