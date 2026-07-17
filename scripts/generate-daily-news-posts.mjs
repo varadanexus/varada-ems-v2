@@ -10,6 +10,7 @@
 // Optional env: POSTS_PER_DAY (default 5)
 
 import { callAI } from "./ai-router.mjs";
+import { generateCoverImage } from "./image-gen.mjs";
 
 const {
   SUPABASE_URL,
@@ -356,10 +357,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       if (quality < settings.min_quality_score) reasons.push(`quality ${quality} < ${settings.min_quality_score}`);
       if (confidence < settings.min_confidence_score) reasons.push(`confidence ${confidence} < ${settings.min_confidence_score}`);
       const publishNow = reasons.length === 0;
+      const title = String(post.title).slice(0, 120);
+      const slug = slugify(post.title) + "-" + datePart;
+
+      // Real, unique cover image per post (Gemini → Supabase Storage).
+      // Never throws; null falls back to the DB trigger's small stock pool.
+      const cover_image = await generateCoverImage({
+        prompt: post.featured_image_prompt || null,
+        title, category, keywords: [category, sector.tag], seed: slug,
+      });
+      if (!cover_image) throw new Error("unique cover image generation failed; post was not published");
 
       const rec = {
-        title: String(post.title).slice(0, 120),
-        slug: slugify(post.title) + "-" + datePart,
+        title,
+        slug,
         excerpt: post.excerpt || null,
         content: body + referencesHtml(item),
         tags: [...new Set([...(Array.isArray(post.tags) ? post.tags : []), sector.tag, "news"])].slice(0, 6),
@@ -379,6 +390,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         seo_score: seo || null,
         quality_score: quality || null,
         confidence_score: confidence || null,
+        cover_image: cover_image || null,
         featured_image_prompt: post.featured_image_prompt || null,
         alt_text: post.alt_text || null,
         linkedin_post_text: post.linkedin_post_text || null,
@@ -393,7 +405,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         if (!/column/i.test(String(e.message))) throw e;
         const legacy = { title: rec.title, slug: rec.slug, excerpt: rec.excerpt, content: rec.content,
           tags: rec.tags, author: rec.author, status: publishNow ? "published" : "draft",
-          source: "ai", published_at: rec.published_at };
+          source: "ai", published_at: rec.published_at,
+          cover_image: rec.cover_image, alt_text: rec.alt_text,
+        };
         saved = await insertPost(legacy);
       }
       const postId = Array.isArray(saved) ? saved[0]?.id : saved?.id;

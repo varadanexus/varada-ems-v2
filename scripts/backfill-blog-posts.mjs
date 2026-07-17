@@ -19,6 +19,7 @@
 // AI is handled by ai-router.mjs — configure providers via env keys.
 
 import { callAI, RUN_ID } from "./ai-router.mjs";
+import { generateCoverImage } from "./image-gen.mjs";
 
 const {
   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
@@ -259,9 +260,20 @@ async function runJob(job) {
       usedTitles.add(slugify(post.title));
 
       const body = String(post.content_html).replace(/<a\b[^>]*>/gi, "").replace(/<\/a>/gi, "");
+      const title = String(post.title).slice(0, 120);
+      const slug = slugify(post.title) + "-" + dateISO.replace(/-/g, "");
+
+      // Real, unique cover image per post (Gemini → Supabase Storage).
+      // Never throws; null falls back to the DB trigger's small stock pool.
+      const cover_image = await generateCoverImage({
+        prompt: post.featured_image_prompt || null,
+        title, category, seed: slug,
+      });
+      if (!cover_image) throw new Error("unique cover image generation failed; post was not created");
+
       const rec = {
-        title: String(post.title).slice(0, 120),
-        slug: slugify(post.title) + "-" + dateISO.replace(/-/g, ""),
+        title,
+        slug,
         excerpt: post.excerpt || null,
         content: body + refs,
         tags: Array.isArray(post.tags) ? post.tags.slice(0, 5) : [],
@@ -280,6 +292,7 @@ async function runJob(job) {
         seo_score: Number(post.seo_score) || null,
         quality_score: Number(post.quality_score) || null,
         confidence_score: Number(post.confidence_score) || null,
+        cover_image: cover_image || null,
         featured_image_prompt: post.featured_image_prompt || null,
         alt_text: post.alt_text || null,
         linkedin_post_text: post.linkedin_post_text || null,

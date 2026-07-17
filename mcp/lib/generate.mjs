@@ -5,6 +5,7 @@
 // blog_posts, along with the quality scores.
 
 import { callAI } from "../../scripts/ai-router.mjs";
+import { generateCoverImage } from "../../scripts/image-gen.mjs";
 import { slugify } from "./supabase.mjs";
 
 const SYSTEM =
@@ -63,8 +64,24 @@ export async function generatePost({ topic, category, contentType, keywords, use
     confidence_score: Number(post.confidence_score) || null,
   };
 
+  const title = String(post.title).slice(0, 120);
+
+  // Generate a real, unique cover image (Gemini image model → Supabase
+  // Storage). Never throws; returns null on any failure, in which case the
+  // DB trigger fallback (a small fixed stock-photo pool) applies instead.
+  const cover_image = await generateCoverImage({
+    prompt: post.featured_image_prompt || null,
+    title,
+    category: category || null,
+    keywords,
+    seed: postId || title,
+  });
+  if (!cover_image) {
+    throw new Error("Unique cover image generation failed; the post was not created.");
+  }
+
   const rec = {
-    title: String(post.title).slice(0, 120),
+    title,
     slug: slugify(post.title) + "-" + datePart,
     excerpt: post.excerpt ? String(post.excerpt).slice(0, 200) : null,
     content: body,
@@ -76,6 +93,7 @@ export async function generatePost({ topic, category, contentType, keywords, use
     region: "India",
     meta_title: post.meta_title ? String(post.meta_title).slice(0, 70) : null,
     meta_description: post.meta_description ? String(post.meta_description).slice(0, 160) : null,
+    cover_image: cover_image || null,
     alt_text: post.alt_text || null,
     featured_image_prompt: post.featured_image_prompt || null,
     linkedin_post_text: post.linkedin_post_text || null,

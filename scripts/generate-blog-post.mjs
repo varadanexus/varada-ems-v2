@@ -8,6 +8,7 @@
 // Required env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { callAI } from "./ai-router.mjs";
+import { generateCoverImage } from "./image-gen.mjs";
 
 const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
 
@@ -42,6 +43,8 @@ const USER =
   "Return ONLY a strict JSON object with keys: title (string, <=70 chars), excerpt (string, 1 sentence <=160 chars), " +
   "tags (array of 3-5 short strings), content_html (string: valid HTML using <p>, <h2>, <h3>, <ul>/<li>, <blockquote> — " +
   "no <html>/<head>/<body>, no inline styles, no <h1>), " +
+  "featured_image_prompt (one sentence describing an ideal, specific cover image for this exact article), " +
+  "alt_text (<=110 chars describing that image), " +
   "seo_score (0-100), quality_score (0-100), confidence_score (0-100).";
 
 function slugify(s) {
@@ -76,9 +79,19 @@ async function insertPost(rec) {
   if (!post.title || !post.content_html) throw new Error("AI returned an incomplete post");
 
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const slug = slugify(post.title) + "-" + datePart;
+
+  // Real, unique cover image per post (Gemini → Supabase Storage).
+  // Never throws; null falls back to the DB trigger's small stock pool.
+  const cover_image = await generateCoverImage({
+    prompt: post.featured_image_prompt || null,
+    title: post.title, category: topic, seed: slug,
+  });
+  if (!cover_image) throw new Error("Unique cover image generation failed; post was not published.");
+
   const rec = {
     title:            post.title,
-    slug:             slugify(post.title) + "-" + datePart,
+    slug,
     excerpt:          post.excerpt || null,
     content:          post.content_html || "",
     tags:             Array.isArray(post.tags) ? post.tags : [],
@@ -89,6 +102,9 @@ async function insertPost(rec) {
     seo_score:        Number(post.seo_score)        || null,
     quality_score:    Number(post.quality_score)    || null,
     confidence_score: Number(post.confidence_score) || null,
+    cover_image:      cover_image || null,
+    alt_text:         post.alt_text || null,
+    featured_image_prompt: post.featured_image_prompt || null,
   };
 
   await insertPost(rec);
