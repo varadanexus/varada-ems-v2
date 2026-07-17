@@ -1,106 +1,472 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Transportation &amp;amp; Logistics Tools | Varada Nexus</title>
-<meta name="description" content="Freight, fleet, fuel and route cost calculators.">
-<meta name="author" content="Varada Nexus Private Limited">
-<meta name="robots" content="index, follow">
-<link rel="canonical" href="https://www.varadanexus.com/professional-tools/transportation-logistics/">
-<meta property="og:title" content="Transportation &amp;amp; Logistics Tools | Varada Nexus"><meta property="og:description" content="Freight, fleet, fuel and route cost calculators.">
-<meta property="og:type" content="website"><meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/site.css">
-<link rel="stylesheet" href="/professional-tools/assets/tools.css">
-<link rel="icon" type="image/png" href="/images/logo.png">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transportation &amp;amp; Logistics Tools | Varada Nexus</title>
+    <meta
+      name="description"
+      content="Freight, fleet, fuel and route cost calculators."
+    />
+    <meta name="author" content="Varada Nexus Private Limited" />
+    <meta name="robots" content="index, follow" />
+    <link
+      rel="canonical"
+      href="https://www.varadanexus.com/professional-tools/transportation-logistics/"
+    />
+    <meta
+      property="og:title"
+      content="Transportation &amp;amp; Logistics Tools | Varada Nexus"
+    />
+    <meta
+      property="og:description"
+      content="Freight, fleet, fuel and route cost calculators."
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:image"
+      content="https://www.varadanexus.com/images/logo.png"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap"
+    />
+    <link rel="stylesheet" href="/assets/site.css" />
+    <link rel="stylesheet" href="/professional-tools/assets/tools.css" />
+    <link rel="icon" type="image/png" href="/images/logo.png" />
 
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.varadanexus.com/"},{"@type":"ListItem","position":2,"name":"Professional Tools","item":"https://www.varadanexus.com/professional-tools/"},{"@type":"ListItem","position":3,"name":"Transportation & Logistics","item":"https://www.varadanexus.com/professional-tools/transportation-logistics/"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"ItemList","itemListElement":[{"@type":"ListItem","position":1,"name":"Cold Chain Logistics Cost Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/cold-chain-cost-calculator/"},{"@type":"ListItem","position":2,"name":"Customs Duty & Import Cost Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/customs-duty-calculator/"},{"@type":"ListItem","position":3,"name":"Delivery Route Cost Planner","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/delivery-route-planner/"},{"@type":"ListItem","position":4,"name":"Port Demurrage & Detention Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/demurrage-calculator/"},{"@type":"ListItem","position":5,"name":"Fleet Maintenance Cost Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/fleet-maintenance-cost/"},{"@type":"ListItem","position":6,"name":"Freight Cost Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/freight-cost-calculator/"},{"@type":"ListItem","position":7,"name":"Freight Insurance Cost Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/freight-insurance-calculator/"},{"@type":"ListItem","position":8,"name":"Inventory Turnover & Days Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/inventory-turnover-calculator/"},{"@type":"ListItem","position":9,"name":"Load Factor & Capacity Utilisation Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/load-factor-calculator/"},{"@type":"ListItem","position":10,"name":"Logistics Cost as % of Revenue","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/logistics-cost-revenue/"},{"@type":"ListItem","position":11,"name":"Logistics KPI Dashboard","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/logistics-kpi-dashboard/"},{"@type":"ListItem","position":12,"name":"Logistics RFQ Evaluator & Comparison","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/logistics-rfq-evaluator/"},{"@type":"ListItem","position":13,"name":"Shipment ETA & Transit Time Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/shipment-eta-calculator/"},{"@type":"ListItem","position":14,"name":"Supply Chain Lead Time Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/supply-chain-lead-time/"},{"@type":"ListItem","position":15,"name":"Transport & Logistics Compliance Checklist","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/transport-compliance-checklist/"},{"@type":"ListItem","position":16,"name":"Trip Fuel Cost Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/trip-fuel-cost-calculator/"},{"@type":"ListItem","position":17,"name":"Vehicle Operating Cost Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/vehicle-operating-cost/"},{"@type":"ListItem","position":18,"name":"Vehicle Payload & GVW Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/vehicle-payload-calculator/"},{"@type":"ListItem","position":19,"name":"Warehouse Storage Cost Calculator","url":"https://www.varadanexus.com/professional-tools/transportation-logistics/warehouse-storage-cost/"}]}</script>
-</head>
-<body>
-<div class="ambient"></div>
-<header class="site-nav">
-  <div class="nav-inner">
-    <a class="nav-brand" href="/">
-      <img src="/images/logo.png" alt="Varada Nexus logo">
-      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
-    </a>
-    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
-    <nav class="nav-links">
-      <a href="/">Home</a>
-      <a href="/founder.html">Founder</a>
-      <div class="nav-item">
-        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
-        <div class="nav-drop">
-          <a href="/hospital.html">Hospital Infrastructure</a>
-          <a href="/consultancy.html">Hospital Consultancy</a>
-          <a href="/logistics.html">Mining &amp; Logistics</a>
-          <a href="/import-export.html">Import &amp; Export</a>
-          <a href="/ecommerce.html">E-Commerce</a>
-          <a href="/hr.html">HR &amp; PR</a>
-          <a href="/arbitrage.html">Strategic Arbitrage</a>
-          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
-        </div>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://www.varadanexus.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Professional Tools",
+            "item": "https://www.varadanexus.com/professional-tools/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "Transportation & Logistics",
+            "item": "https://www.varadanexus.com/professional-tools/transportation-logistics/"
+          }
+        ]
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Cold Chain Logistics Cost Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/cold-chain-cost-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Customs Duty & Import Cost Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/customs-duty-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "Delivery Route Cost Planner",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/delivery-route-planner/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 4,
+            "name": "Port Demurrage & Detention Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/demurrage-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 5,
+            "name": "Fleet Maintenance Cost Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/fleet-maintenance-cost/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 6,
+            "name": "Freight Cost Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/freight-cost-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 7,
+            "name": "Freight Insurance Cost Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/freight-insurance-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 8,
+            "name": "Inventory Turnover & Days Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/inventory-turnover-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 9,
+            "name": "Load Factor & Capacity Utilisation Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/load-factor-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 10,
+            "name": "Logistics Cost as % of Revenue",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/logistics-cost-revenue/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 11,
+            "name": "Logistics KPI Dashboard",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/logistics-kpi-dashboard/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 12,
+            "name": "Logistics RFQ Evaluator & Comparison",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/logistics-rfq-evaluator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 13,
+            "name": "Shipment ETA & Transit Time Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/shipment-eta-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 14,
+            "name": "Supply Chain Lead Time Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/supply-chain-lead-time/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 15,
+            "name": "Transport & Logistics Compliance Checklist",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/transport-compliance-checklist/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 16,
+            "name": "Trip Fuel Cost Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/trip-fuel-cost-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 17,
+            "name": "Vehicle Operating Cost Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/vehicle-operating-cost/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 18,
+            "name": "Vehicle Payload & GVW Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/vehicle-payload-calculator/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 19,
+            "name": "Warehouse Storage Cost Calculator",
+            "url": "https://www.varadanexus.com/professional-tools/transportation-logistics/warehouse-storage-cost/"
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <div class="ambient"></div>
+    <header class="site-nav">
+      <div class="nav-inner">
+        <a class="nav-brand" href="/">
+          <img src="/images/logo.png" alt="Varada Nexus logo" />
+          <span
+            ><span class="b-name"
+              >Varada <span class="gold-text">Nexus</span></span
+            ><span class="b-sub">Private Limited</span></span
+          >
+        </a>
+        <button class="nav-toggle" aria-label="Menu">
+          <span></span><span></span><span></span>
+        </button>
+        <nav class="nav-links">
+          <a href="/">Home</a>
+          <a href="/founder.html">Founder</a>
+          <div class="nav-item">
+            <a href="/services.html" class="nav-drop-toggle"
+              >Services<span class="nav-caret" aria-hidden="true"></span
+            ></a>
+            <div class="nav-drop">
+              <a href="/hospital.html">Hospital Infrastructure</a>
+              <a href="/consultancy.html">Hospital Consultancy</a>
+              <a href="/logistics.html">Mining &amp; Logistics</a>
+              <a href="/import-export.html">Import &amp; Export</a>
+              <a href="/ecommerce.html">E-Commerce</a>
+              <a href="/hr.html">HR &amp; PR</a>
+              <a href="/arbitrage.html">Strategic Arbitrage</a>
+              <a href="/services.html" class="nav-drop-all"
+                >All Services &rarr;</a
+              >
+            </div>
+          </div>
+          <a href="/team.html">Team</a>
+          <a href="/contact.html">Contact</a>
+          <a href="/login.html">Login</a>
+          <a href="/portals/meeting/meeting-login.html" class="nav-cta"
+            >Join Meeting</a
+          >
+        </nav>
       </div>
-      <a href="/team.html">Team</a>
-      <a href="/contact.html">Contact</a>
-      <a href="/login.html">Login</a>
-      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
-    </nav>
-  </div>
-</header>
+    </header>
 
-<main class="wrap vt-main">
-<div class="vt-crumb"><a href="/">Home</a> / <a href="/professional-tools/">Professional Tools</a> / Transportation &amp; Logistics</div>
-<span class="eyebrow reveal">Transportation &amp; Logistics</span><h1 class="display reveal reveal-d1" style="font-size:clamp(30px,5vw,50px)">Transportation &amp; Logistics <span class="gold-text">Tools</span></h1><p class="sub reveal reveal-d2">Freight, fleet, fuel and route cost calculators.</p><div class="grid grid-3" style="margin-top:26px"><a class="card reveal" href="/professional-tools/transportation-logistics/cold-chain-cost-calculator/"><div class="card-icon">🚚</div><h3>Cold Chain Logistics Cost Calculator</h3><p>Temperature-controlled logistics cost for perishables.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d1" href="/professional-tools/transportation-logistics/customs-duty-calculator/"><div class="card-icon">🚚</div><h3>Customs Duty &amp; Import Cost Calculator</h3><p>Total import cost with customs duty, IGST and landing charges.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d2" href="/professional-tools/transportation-logistics/delivery-route-planner/"><div class="card-icon">🚚</div><h3>Delivery Route Cost Planner</h3><p>Multi-stop delivery cost and time planning.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal" href="/professional-tools/transportation-logistics/demurrage-calculator/"><div class="card-icon">🚚</div><h3>Port Demurrage &amp; Detention Calculator</h3><p>Demurrage and detention costs for containers.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d1" href="/professional-tools/transportation-logistics/fleet-maintenance-cost/"><div class="card-icon">🚚</div><h3>Fleet Maintenance Cost Calculator</h3><p>Monthly fleet maintenance cost and cost per vehicle.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d2" href="/professional-tools/transportation-logistics/freight-cost-calculator/"><div class="card-icon">🚚</div><h3>Freight Cost Calculator</h3><p>Road, rail and air freight cost by weight and distance.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal" href="/professional-tools/transportation-logistics/freight-insurance-calculator/"><div class="card-icon">🚚</div><h3>Freight Insurance Cost Calculator</h3><p>Cargo insurance premium for shipments.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d1" href="/professional-tools/transportation-logistics/inventory-turnover-calculator/"><div class="card-icon">🚚</div><h3>Inventory Turnover &amp; Days Calculator</h3><p>Inventory turnover ratio, DIO and carrying cost.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d2" href="/professional-tools/transportation-logistics/load-factor-calculator/"><div class="card-icon">🚚</div><h3>Load Factor &amp; Capacity Utilisation Calculator</h3><p>Vehicle load factor, deadweight loss and efficiency.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal" href="/professional-tools/transportation-logistics/logistics-cost-revenue/"><div class="card-icon">🚚</div><h3>Logistics Cost as % of Revenue</h3><p>Logistics spend as percentage of revenue benchmark.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d1" href="/professional-tools/transportation-logistics/logistics-kpi-dashboard/"><div class="card-icon">🚚</div><h3>Logistics KPI Dashboard</h3><p>Key logistics performance metrics: OTIF, fill rate, cost per order.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d2" href="/professional-tools/transportation-logistics/logistics-rfq-evaluator/"><div class="card-icon">🚚</div><h3>Logistics RFQ Evaluator &amp; Comparison</h3><p>Compare logistics vendor quotes on cost and service.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal" href="/professional-tools/transportation-logistics/shipment-eta-calculator/"><div class="card-icon">🚚</div><h3>Shipment ETA &amp; Transit Time Calculator</h3><p>Expected delivery date from dispatch and transit time.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d1" href="/professional-tools/transportation-logistics/supply-chain-lead-time/"><div class="card-icon">🚚</div><h3>Supply Chain Lead Time Calculator</h3><p>Total end-to-end supply chain lead time from order to delivery.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d2" href="/professional-tools/transportation-logistics/transport-compliance-checklist/"><div class="card-icon">🚚</div><h3>Transport &amp; Logistics Compliance Checklist</h3><p>Vehicle, driver and freight compliance audit.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal" href="/professional-tools/transportation-logistics/trip-fuel-cost-calculator/"><div class="card-icon">🚚</div><h3>Trip Fuel Cost Calculator</h3><p>Fuel used, fuel cost, tolls and total cost per trip and per km.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d1" href="/professional-tools/transportation-logistics/vehicle-operating-cost/"><div class="card-icon">🚚</div><h3>Vehicle Operating Cost Calculator</h3><p>Per-km and monthly vehicle cost including depreciation.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal reveal-d2" href="/professional-tools/transportation-logistics/vehicle-payload-calculator/"><div class="card-icon">🚚</div><h3>Vehicle Payload &amp; GVW Calculator</h3><p>Legal payload capacity and overloading check.</p><span class="card-more">Open &rarr;</span></a><a class="card reveal" href="/professional-tools/transportation-logistics/warehouse-storage-cost/"><div class="card-icon">🚚</div><h3>Warehouse Storage Cost Calculator</h3><p>Monthly warehousing cost per unit and per pallet.</p><span class="card-more">Open &rarr;</span></a></div><div style="margin-top:22px"><span class="eyebrow" style="display:block;margin-bottom:10px">Related services</span><a class="chip" href="/logistics.html">Mining &amp; Logistics</a></div><div class="vt-cta" style="margin-top:24px"><h3>Ready to go further?</h3><p>Get sector-specific guidance from the Varada Nexus team.</p><a href="/contact.html">Contact Varada Nexus for detailed consultation</a></div>
-</main>
-<footer class="site-footer">
-  <div class="wrap">
-    <div class="footer-grid">
-      <div>
-        <div class="footer-brand">
-          <img src="/images/logo.png" alt="Varada Nexus">
+    <main class="wrap vt-main">
+      <div class="vt-crumb">
+        <a href="/">Home</a> /
+        <a href="/professional-tools/">Professional Tools</a> / Transportation
+        &amp; Logistics
+      </div>
+      <span class="eyebrow reveal">Transportation &amp; Logistics</span>
+      <h1
+        class="display reveal reveal-d1"
+        style="font-size: clamp(30px, 5vw, 50px)"
+      >
+        Transportation &amp; Logistics <span class="gold-text">Tools</span>
+      </h1>
+      <p class="sub reveal reveal-d2">
+        Freight, fleet, fuel and route cost calculators.
+      </p>
+      <section
+        class="vt-card reveal"
+        style="margin-top: 26px; border-color: var(--border-gold)"
+      >
+        <span class="eyebrow">New profitability tool</span>
+        <h2 style="font-family: var(--font-serif); margin: 8px 0">
+          Transporter Trip Profit Calculator
+        </h2>
+        <p>
+          Calculate monthly revenue and exact operating profit across multiple
+          commodities, trucks, route cycles, fuel, tolls, drivers and custom
+          expenses.
+        </p>
+        <a
+          class="vt-btn"
+          style="display: inline-block; width: auto; text-decoration: none"
+          href="/professional-tools/transportation-logistics/transporter-trip-profit-calculator/"
+          >Open profit calculator &rarr;</a
+        >
+      </section>
+      <div class="grid grid-3" style="margin-top: 26px">
+        <a
+          class="card reveal"
+          href="/professional-tools/transportation-logistics/cold-chain-cost-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Cold Chain Logistics Cost Calculator</h3>
+          <p>Temperature-controlled logistics cost for perishables.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d1"
+          href="/professional-tools/transportation-logistics/customs-duty-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Customs Duty &amp; Import Cost Calculator</h3>
+          <p>Total import cost with customs duty, IGST and landing charges.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d2"
+          href="/professional-tools/transportation-logistics/delivery-route-planner/"
+          ><div class="card-icon">🚚</div>
+          <h3>Delivery Route Cost Planner</h3>
+          <p>Multi-stop delivery cost and time planning.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal"
+          href="/professional-tools/transportation-logistics/demurrage-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Port Demurrage &amp; Detention Calculator</h3>
+          <p>Demurrage and detention costs for containers.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d1"
+          href="/professional-tools/transportation-logistics/fleet-maintenance-cost/"
+          ><div class="card-icon">🚚</div>
+          <h3>Fleet Maintenance Cost Calculator</h3>
+          <p>Monthly fleet maintenance cost and cost per vehicle.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d2"
+          href="/professional-tools/transportation-logistics/freight-cost-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Freight Cost Calculator</h3>
+          <p>Road, rail and air freight cost by weight and distance.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal"
+          href="/professional-tools/transportation-logistics/freight-insurance-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Freight Insurance Cost Calculator</h3>
+          <p>Cargo insurance premium for shipments.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d1"
+          href="/professional-tools/transportation-logistics/inventory-turnover-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Inventory Turnover &amp; Days Calculator</h3>
+          <p>Inventory turnover ratio, DIO and carrying cost.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d2"
+          href="/professional-tools/transportation-logistics/load-factor-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Load Factor &amp; Capacity Utilisation Calculator</h3>
+          <p>Vehicle load factor, deadweight loss and efficiency.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal"
+          href="/professional-tools/transportation-logistics/logistics-cost-revenue/"
+          ><div class="card-icon">🚚</div>
+          <h3>Logistics Cost as % of Revenue</h3>
+          <p>Logistics spend as percentage of revenue benchmark.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d1"
+          href="/professional-tools/transportation-logistics/logistics-kpi-dashboard/"
+          ><div class="card-icon">🚚</div>
+          <h3>Logistics KPI Dashboard</h3>
+          <p>
+            Key logistics performance metrics: OTIF, fill rate, cost per order.
+          </p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d2"
+          href="/professional-tools/transportation-logistics/logistics-rfq-evaluator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Logistics RFQ Evaluator &amp; Comparison</h3>
+          <p>Compare logistics vendor quotes on cost and service.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal"
+          href="/professional-tools/transportation-logistics/shipment-eta-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Shipment ETA &amp; Transit Time Calculator</h3>
+          <p>Expected delivery date from dispatch and transit time.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d1"
+          href="/professional-tools/transportation-logistics/supply-chain-lead-time/"
+          ><div class="card-icon">🚚</div>
+          <h3>Supply Chain Lead Time Calculator</h3>
+          <p>Total end-to-end supply chain lead time from order to delivery.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d2"
+          href="/professional-tools/transportation-logistics/transport-compliance-checklist/"
+          ><div class="card-icon">🚚</div>
+          <h3>Transport &amp; Logistics Compliance Checklist</h3>
+          <p>Vehicle, driver and freight compliance audit.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal"
+          href="/professional-tools/transportation-logistics/trip-fuel-cost-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Trip Fuel Cost Calculator</h3>
+          <p>Fuel used, fuel cost, tolls and total cost per trip and per km.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d1"
+          href="/professional-tools/transportation-logistics/vehicle-operating-cost/"
+          ><div class="card-icon">🚚</div>
+          <h3>Vehicle Operating Cost Calculator</h3>
+          <p>Per-km and monthly vehicle cost including depreciation.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal reveal-d2"
+          href="/professional-tools/transportation-logistics/vehicle-payload-calculator/"
+          ><div class="card-icon">🚚</div>
+          <h3>Vehicle Payload &amp; GVW Calculator</h3>
+          <p>Legal payload capacity and overloading check.</p>
+          <span class="card-more">Open &rarr;</span></a
+        ><a
+          class="card reveal"
+          href="/professional-tools/transportation-logistics/warehouse-storage-cost/"
+          ><div class="card-icon">🚚</div>
+          <h3>Warehouse Storage Cost Calculator</h3>
+          <p>Monthly warehousing cost per unit and per pallet.</p>
+          <span class="card-more">Open &rarr;</span></a
+        >
+      </div>
+      <div style="margin-top: 22px">
+        <span class="eyebrow" style="display: block; margin-bottom: 10px"
+          >Related services</span
+        ><a class="chip" href="/logistics.html">Mining &amp; Logistics</a>
+      </div>
+      <div class="vt-cta" style="margin-top: 24px">
+        <h3>Ready to go further?</h3>
+        <p>Get sector-specific guidance from the Varada Nexus team.</p>
+        <a href="/contact.html"
+          >Contact Varada Nexus for detailed consultation</a
+        >
+      </div>
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="footer-grid">
           <div>
-            <div class="fb-name">Varada Nexus Private Limited</div>
-            <p>Building and operating systems across healthcare, mining, logistics, global trade, and digital commerce.</p>
+            <div class="footer-brand">
+              <img src="/images/logo.png" alt="Varada Nexus" />
+              <div>
+                <div class="fb-name">Varada Nexus Private Limited</div>
+                <p>
+                  Building and operating systems across healthcare, mining,
+                  logistics, global trade, and digital commerce.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="footer-col">
+            <h4>Company</h4>
+            <a href="/">Home</a>
+            <a href="/founder.html">Founder</a>
+            <a href="/team.html">Team</a>
+            <a href="/contact.html">Contact</a>
+          </div>
+          <div class="footer-col">
+            <h4>Services</h4>
+            <a href="/hospital.html">Hospital Infrastructure</a>
+            <a href="/consultancy.html">Hospital Consultancy</a>
+            <a href="/logistics.html">Mining &amp; Logistics</a>
+            <a href="/import-export.html">Import &amp; Export</a>
+            <a href="/ecommerce.html">E-Commerce</a>
+            <a href="/hr.html">HR &amp; PR</a>
+            <a href="/arbitrage.html">Strategic Arbitrage</a>
+          </div>
+          <div class="footer-col">
+            <h4>Access</h4>
+            <a href="/login.html">EMS Login</a>
+            <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
+            <a href="/services.html">All Services</a>
           </div>
         </div>
+        <div class="footer-bottom">
+          <span
+            >&copy; <span data-year>2026</span> Varada Nexus Private Limited.
+            All rights reserved.</span
+          >
+          <span>Rajahmundry, Andhra Pradesh, India</span>
+        </div>
       </div>
-      <div class="footer-col">
-        <h4>Company</h4>
-        <a href="/">Home</a>
-        <a href="/founder.html">Founder</a>
-        <a href="/team.html">Team</a>
-        <a href="/contact.html">Contact</a>
-      </div>
-      <div class="footer-col">
-        <h4>Services</h4>
-        <a href="/hospital.html">Hospital Infrastructure</a>
-        <a href="/consultancy.html">Hospital Consultancy</a>
-        <a href="/logistics.html">Mining &amp; Logistics</a>
-        <a href="/import-export.html">Import &amp; Export</a>
-        <a href="/ecommerce.html">E-Commerce</a>
-        <a href="/hr.html">HR &amp; PR</a>
-        <a href="/arbitrage.html">Strategic Arbitrage</a>
-      </div>
-      <div class="footer-col">
-        <h4>Access</h4>
-        <a href="/login.html">EMS Login</a>
-        <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
-        <a href="/services.html">All Services</a>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
-      <span>Rajahmundry, Andhra Pradesh, India</span>
-    </div>
-  </div>
-</footer>
+    </footer>
 
-<script src="/assets/site.js"></script>
-
-
-</body>
+    <script src="/assets/site.js"></script>
+  </body>
 </html>
