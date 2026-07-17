@@ -1,0 +1,38 @@
+name: Repair blog cover images
+
+on:
+  workflow_dispatch:
+    inputs:
+      repair_all:
+        description: "Regenerate every post cover, not only missing/repeated/legacy covers"
+        type: boolean
+        required: false
+        default: false
+      dry_run:
+        description: "List affected posts without changing them"
+        type: boolean
+        required: false
+        default: false
+      max_covers:
+        description: "Maximum covers to repair in this run"
+        required: false
+        default: "500"
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Repair missing and repeated covers
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          REPAIR_ALL: ${{ inputs.repair_all }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          MAX_COVERS: ${{ inputs.max_covers }}
+        run: node scripts/repair-blog-cover-images.mjs

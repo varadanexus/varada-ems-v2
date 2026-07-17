@@ -5,6 +5,7 @@ import { sbGet, sbInsert, sbUpdate, enc, findPost } from "../lib/supabase.mjs";
 import { audit } from "../lib/audit.mjs";
 import { CONFIG, hasAnyAiProvider } from "../lib/config.mjs";
 import { generatePost } from "../lib/generate.mjs";
+import { generateCoverImage } from "../../scripts/image-gen.mjs";
 import { ok, fail, guard, confirmation } from "./_util.mjs";
 
 const CONTENT_TYPES = ["evergreen", "trending_news", "how_to", "comparison", "case_study",
@@ -323,6 +324,47 @@ export function register(server) {
       return ok({ id: updated.id, slug: updated.slug, slug_preserved: !a.change_slug, scores,
         url: postUrl(updated.slug) },
         "Refreshed and held as needs_review. Publish it when you're happy with the update.");
+    })
+  );
+
+  // 23) regenerate_cover_image -------------------------------------------
+  server.registerTool(
+    "regenerate_cover_image",
+    {
+      title: "Regenerate cover image",
+      description:
+        "Generate a real, unique cover image for an existing post via Gemini's image model, upload it " +
+        "to the blog-covers Supabase Storage bucket, and update cover_image + alt_text. Use this to fix " +
+        "posts that currently show a generic/duplicate/missing image (e.g. ones the DB trigger's small " +
+        "stock-photo fallback pool assigned). Requires GEMINI_API_KEY and a 'blog-covers' storage bucket " +
+        "(see migration new-ems/supabase/migrations/<ts>_create_blog_covers_bucket.sql).",
+      inputSchema: {
+        blog_id: z.string().describe("Post uuid or slug."),
+        prompt_override: z.string().optional().describe("Custom image prompt; defaults to the post's featured_image_prompt or title/category."),
+      },
+    },
+    guard(async (a) => {
+      const post = await findPost(a.blog_id, "id,slug,title,primary_category,sector,featured_image_prompt,tags");
+      const cover_image = await generateCoverImage({
+        prompt: a.prompt_override || post.featured_image_prompt || null,
+        title: post.title,
+        category: post.primary_category || post.sector || null,
+        keywords: post.tags,
+        seed: post.slug,
+      });
+      if (!cover_image) {
+        return fail(
+          "Image generation failed or GEMINI_API_KEY is not set on the MCP server. " +
+          "Check server logs (stderr) for the specific Gemini/Storage error."
+        );
+      }
+      const [updated] = await sbUpdate("blog_posts", `id=eq.${enc(post.id)}`, {
+        cover_image, alt_text: `${post.title} — Varada Nexus insight`,
+      });
+      await audit({ tool: "regenerate_cover_image", action: "update", targetId: post.id,
+        summary: `Regenerated cover image for ${post.title}`, detail: { cover_image } });
+      return ok({ id: updated.id, slug: updated.slug, cover_image: updated.cover_image,
+        url: postUrl(updated.slug) }, "Cover image regenerated and saved.");
     })
   );
 }
