@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transport Brokerage Calculator — Trips, Tonnes &amp; Trucks | Varada Nexus</title>
+<meta name="description" content="Calculate transport brokerage by commodity, trips, tonnes, trucks and working days. Supports brokerage per tonne, per trip or percentage of freight value.">
+<meta name="author" content="Varada Nexus Private Limited"><meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.varadanexus.com/professional-tools/transportation-logistics/transport-brokerage-calculator/">
+<meta property="og:title" content="Transport Brokerage Calculator | Varada Nexus"><meta property="og:description" content="Monthly transport brokerage across multiple commodities, trucks, trips and tonnes."><meta property="og:type" content="website"><meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;family=Playfair+Display:wght@600;700;800&amp;display=swap"><link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/professional-tools/assets/tools.css"><link rel="icon" type="image/png" href="/images/logo.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Transport Brokerage Calculator","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
+</head>
+<body>
+<div class="ambient"></div>
+<header class="site-nav"><div class="nav-inner"><a class="nav-brand" href="/"><img src="/images/logo.png" alt="Varada Nexus logo"><span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span></a><button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button><nav class="nav-links"><a href="/">Home</a><a href="/founder.html">Founder</a><a href="/services.html">Services</a><a href="/team.html">Team</a><a href="/contact.html">Contact</a><a href="/login.html">Login</a></nav></div></header>
+<main class="wrap vt-main">
+  <div class="vt-crumb"><a href="/">Home</a> / <a href="/professional-tools/">Professional Tools</a> / <a href="/professional-tools/transportation-logistics/">Transportation &amp; Logistics</a> / Transport Brokerage Calculator</div>
+  <span class="eyebrow reveal">Transportation &amp; Logistics</span>
+  <h1 class="display reveal reveal-d1" style="font-size:clamp(30px,4.8vw,50px)">Transport <span class="gold-text">Brokerage Calculator</span></h1>
+  <p class="sub reveal reveal-d2">Calculate monthly brokerage across every commodity, truck, loaded trip and tonne. Each commodity can use a different brokerage method.</p>
+
+  <section class="vt-card no-print"><div class="profit-section-title"><div><h2>1. Fleet and working schedule</h2><p>Enter the trucks whose trips generate brokerage.</p></div></div><div class="profit-form-grid">
+    <div class="profit-field"><label for="trucks">Number of trucks</label><input id="trucks" type="number" min="1" step="1"></div>
+    <div class="profit-field"><label for="workingDays">Working days per month</label><input id="workingDays" type="number" min="1" step="1"></div>
+  </div></section>
+
+  <section class="vt-card no-print"><div class="profit-section-title"><div><h2>2. Commodities and brokerage</h2><p>Add outbound and return-load commodities separately when their trips or brokerage rates differ.</p></div><button class="profit-add" id="addCommodity" type="button">+ Add commodity</button></div><div class="profit-repeater" id="commodityRows"></div></section>
+
+  <section class="vt-card no-print"><div class="profit-section-title"><div><h2>3. Deductions and expenses</h2><p>TDS is shown separately because it is normally recoverable tax withholding, not an operating expense.</p></div></div><div class="profit-form-grid">
+    <div class="profit-field"><label for="tdsPercent">TDS on brokerage (%)</label><input id="tdsPercent" type="number" min="0" max="100" step="0.01"></div>
+    <div class="profit-field"><label for="monthlyExpenses">Brokerage office and operating expenses / month (₹)</label><input id="monthlyExpenses" type="number" min="0" step="0.01"></div>
+  </div><div class="profit-errors" id="formErrors" role="alert" hidden></div><button class="vt-btn" id="calculate" type="button">Calculate brokerage</button></section>
+
+  <section class="vt-card vt-results" id="results"><div class="profit-section-title"><div><h2>Monthly brokerage result</h2><p>Calculated from the fleet, working days and commodity rows entered above.</p></div></div><div class="vt-kpis" id="brokerageKpis"></div><div class="profit-summary" id="summaryStrip"></div>
+    <h3 class="vt-chapter">Commodity brokerage breakdown</h3><div class="profit-table-wrap"><table class="vt-table"><thead><tr><th>Commodity</th><th>Basis</th><th class="num">Trips</th><th class="num">Tonnes</th><th class="num">Freight value</th><th class="num">Brokerage</th></tr></thead><tbody id="commodityBreakdown"></tbody></table></div>
+    <div class="profit-details" id="brokerageDetails"></div>
+    <div class="profit-calculation-note"><div><b>Trips</b><br><code>trucks × working days × trips/truck/day</code></div><div><b>Tonnage</b><br><code>trips × tonnes/trip</code></div><div><b>Brokerage</b><br><code>tonnage × ₹/tonne</code>, <code>trips × ₹/trip</code>, or <code>freight value × %</code></div></div>
+    <div class="profit-actions no-print"><button class="vt-btn sec" id="print" type="button">Download branded PDF</button><button class="vt-btn wa" id="whatsapp" type="button">Share result on WhatsApp</button></div>
+    <p class="vt-disc"><b>Disclaimer:</b> This calculator and its generated report are informational tools only. All figures are based solely on data entered by the user and do not represent, bind, certify or create any obligation for Varada Nexus Private Limited. Varada Nexus Private Limited accepts no liability for decisions, losses, tax treatment, contractual claims or other outcomes arising from their use. Verify every input and obtain appropriate professional advice before acting. TDS, GST and income-tax treatment must be confirmed independently.</p>
+  </section>
+  <div class="vt-card"><b>Related tool:</b> <a href="/professional-tools/transportation-logistics/transporter-trip-profit-calculator/">Transporter Trip Profit Calculator</a><br><b>Browse:</b> <a href="/professional-tools/transportation-logistics/">Transportation &amp; Logistics tools</a></div>
+</main>
+<footer class="site-footer"><div class="wrap"><div class="footer-bottom"><span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span><span>Rajahmundry, Andhra Pradesh, India</span></div></div></footer>
+<script src="/assets/site.js"></script><script type="module" src="/professional-tools/transportation-logistics/transport-brokerage-calculator/app.js"></script>
+</body></html>

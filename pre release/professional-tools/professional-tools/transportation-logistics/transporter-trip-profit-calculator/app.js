@@ -1,4 +1,5 @@
 import { compute } from "./logic.js";
+import { downloadTransportReport, pdfFormat } from "/professional-tools/assets/transport-report-pdf.js";
 
 const $ = (id) => document.getElementById(id);
 const money = (value) => new Intl.NumberFormat("en-IN", {
@@ -133,10 +134,70 @@ function whatsapp() {
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
 }
 
+async function downloadPdf() {
+  const result = window.__LAST_PROFIT_RESULT__;
+  if (!result) return;
+  const button = $("print");
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "Generating PDF...";
+  try {
+    await downloadTransportReport({
+      title: "Transporter Trip Profit Report",
+      subtitle: "Monthly profitability across trucks, route cycles and commodities",
+      filename: `varada-nexus-transporter-profit-${new Date().toISOString().slice(0, 10)}.pdf`,
+      kpis: [
+        { label: "Monthly revenue", value: pdfFormat.money(result.revenue) },
+        { label: "Monthly total cost", value: pdfFormat.money(result.totalCost) },
+        { label: result.profit >= 0 ? "Net transporter profit" : "Net transporter loss", value: pdfFormat.money(result.profit), positive: result.profit >= 0 },
+        { label: "Profit margin", value: `${pdfFormat.number(result.profitMargin)}%` },
+        { label: "Profit / loaded trip", value: pdfFormat.money(result.profitPerLoadedTrip) },
+        { label: "Profit / truck / month", value: pdfFormat.money(result.profitPerTruck) },
+      ],
+      highlights: [
+        { label: "Completed round trips / month", value: pdfFormat.number(result.roundTrips) },
+        { label: "Loaded commodity trips / month", value: pdfFormat.number(result.loadedTrips) },
+        { label: "Total tonnage / month", value: `${pdfFormat.number(result.tonnage)} tonnes` },
+        { label: "Total route kilometres / month", value: `${pdfFormat.number(result.totalKilometres)} km` },
+        { label: "Fuel consumed / month", value: `${pdfFormat.number(result.fuelLitres)} litres` },
+      ],
+      tables: [
+        {
+          title: "Commodity revenue breakdown",
+          head: ["Commodity", "Loaded trips", "Tonnes", "Rate / tonne", "Revenue"],
+          body: result.commodityRows.map((row) => [row.name, pdfFormat.number(row.monthlyTrips), pdfFormat.number(row.monthlyTonnage), pdfFormat.money(row.ratePerTon), pdfFormat.money(row.revenue)]),
+          foot: ["Total", pdfFormat.number(result.loadedTrips), pdfFormat.number(result.tonnage), "", pdfFormat.money(result.revenue)],
+        },
+        {
+          title: "Cost breakdown",
+          head: ["Cost component", "Monthly cost", "Per loaded trip", "% of revenue"],
+          body: result.costRows.map((row) => [row.label, pdfFormat.money(row.amount), pdfFormat.money(result.loadedTrips ? row.amount / result.loadedTrips : 0), `${pdfFormat.number(result.revenue ? row.amount / result.revenue * 100 : 0)}%`]),
+          foot: ["Total operating cost", pdfFormat.money(result.totalCost), pdfFormat.money(result.costPerLoadedTrip), `${pdfFormat.number(result.revenue ? result.totalCost / result.revenue * 100 : 0)}%`],
+        },
+      ],
+      details: [
+        { label: "Revenue / loaded trip", value: pdfFormat.money(result.revenuePerLoadedTrip) },
+        { label: "Cost / loaded trip", value: pdfFormat.money(result.costPerLoadedTrip) },
+        { label: "Profit / completed round trip", value: pdfFormat.money(result.profitPerRoundTrip) },
+        { label: "Profit / tonne", value: pdfFormat.money(result.profitPerTon) },
+        { label: "Break-even average rate / tonne", value: pdfFormat.money(result.breakEvenRatePerTon) },
+        { label: "Profit before partner commission", value: pdfFormat.money(result.profitBeforeCommission) },
+        { label: "Partner / company commission", value: pdfFormat.money(result.commissionCost) },
+      ],
+    });
+  } catch (error) {
+    alert("The PDF could not be generated. Check your internet connection and try again.");
+    console.error(error);
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
+
 commodityDefaults.forEach(commodityRow);
 expenseRow({ basis: "fleet_month" });
 $("addCommodity").addEventListener("click", () => commodityRow({}));
 $("addExpense").addEventListener("click", () => expenseRow({}));
 $("calculate").addEventListener("click", render);
-$("print").addEventListener("click", () => window.print());
+$("print").addEventListener("click", downloadPdf);
 $("whatsapp").addEventListener("click", whatsapp);
