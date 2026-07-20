@@ -768,6 +768,51 @@ async function handleInteriorsUpload(req: Request, payload: any) {
   });
 }
 
+async function handleInteriorsClientDocumentPreview(payload: any) {
+  const sessionToken = String(payload.sessionToken || "").trim();
+  const documentId = String(payload.documentId || "").trim();
+  if (!sessionToken) throw new Error("Client portal session is required");
+  if (!documentId) throw new Error("Document is required");
+
+  const db = adminClient();
+  const { data: context, error: contextError } = await db.rpc("interiors_client_portal_context", {
+    p_session_token: sessionToken
+  });
+  if (contextError) throw new Error(contextError.message || "Client portal access could not be verified");
+
+  const visibleFiles = Array.isArray(context?.designFiles) ? context.designFiles : [];
+  const document = visibleFiles.find((row: any) => String(row?.id || "") === documentId);
+  if (!document?.drive_file_id || String(document.upload_status || "") !== "stored") {
+    throw new Error("This document is not available in the client portal");
+  }
+
+  const token = await getAccessToken();
+  const driveResponse = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?alt=media&supportsAllDrives=true`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!driveResponse.ok || !driveResponse.body) {
+    let message = `Drive API ${driveResponse.status}`;
+    try {
+      const details = await driveResponse.json();
+      message = details?.error?.message || message;
+    } catch { /* use status fallback */ }
+    throw new Error(message);
+  }
+
+  const fileName = cleanUploadFileName(document.file_name || "design-document");
+  return new Response(driveResponse.body, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": document.mime_type || driveResponse.headers.get("Content-Type") || "application/octet-stream",
+      "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      "Cache-Control": "private, no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff"
+    }
+  });
+}
+
 async function resolveInteriorsArchitectUploadContext(payload: any, requireDesign = false) {
   const sessionToken = String(payload.sessionToken || "").trim();
   const projectId = String(payload.projectId || "").trim();
@@ -1356,6 +1401,8 @@ Deno.serve(async (req) => {
         return json(await handleUpload(payload));
       case "upload_interiors_document":
         return json(await handleInteriorsUpload(req, payload));
+      case "preview_interiors_client_document":
+        return await handleInteriorsClientDocumentPreview(payload);
       case "upload_interiors_architect_design":
         return json(await handleInteriorsArchitectDesignUpload(payload));
       case "list_interiors_architect_design_files":

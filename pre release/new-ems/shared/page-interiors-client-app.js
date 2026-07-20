@@ -40,6 +40,7 @@ const PAGE_STATE = {
 
 const NOTIFICATIONS_SEEN_KEY = "ems_client_portal_notifications_seen_at";
 let portalRefreshTimer = null;
+let clientDocumentObjectUrl = null;
 
 function getNotificationsSeenAt() {
   try { return localStorage.getItem(NOTIFICATIONS_SEEN_KEY) || null; } catch { return null; }
@@ -162,9 +163,15 @@ function designFiles(designId) {
 
 function renderDesignFileActions(row) {
   const files = designFiles(row.id);
-  const links = files.map((file) => `<a class="btn btn-sm" href="${escapeHtml(file.web_view_link)}" target="_blank" rel="noopener">${escapeHtml(file.file_name || "Open file")}</a>`).join("");
+  const links = files.map((file) => `<button class="btn btn-sm" data-client-document-id="${escapeHtml(file.id)}" data-client-document-name="${escapeHtml(file.file_name || "Design document")}" type="button">${escapeHtml(file.file_name || "Open file")}</button>`).join("");
   if (links) return links;
-  return row.file_url ? `<a class="btn btn-sm" href="${escapeHtml(row.file_url)}" target="_blank" rel="noopener">Open design</a>` : `<button class="btn btn-sm" disabled>No File</button>`;
+  return row.file_url ? `<button class="btn btn-sm" data-lightbox-src="${escapeHtml(row.file_url)}" data-document-name="${escapeHtml(row.design_title || "Design document")}" type="button">Open design</button>` : `<button class="btn btn-sm" disabled>No File</button>`;
+}
+
+function pendingApprovalForDesign(designId) {
+  return PAGE_STATE.approvals.find((row) => row.reference_table === "interior_designs"
+    && String(row.reference_id || "") === String(designId)
+    && String(row.decision || "pending") === "pending") || null;
 }
 
 function pendingApprovals() {
@@ -338,11 +345,14 @@ function projectStatusBadge(project) {
 function activeDocuments() {
   const docs = [];
   activeProjectDesigns().forEach((row) => {
+    const storedFile = designFiles(row.id)[0] || null;
     docs.push({
       category: "Design Drawings",
       title: row.design_title || "Design File",
       subtitle: `Version ${row.version_no || 1} · ${normalizeStatus(row.status)}`,
       href: row.file_url || null,
+      documentId: storedFile?.id || null,
+      fileName: storedFile?.file_name || row.design_title || "Design document",
       at: row.updated_at || row.uploaded_at
     });
   });
@@ -506,12 +516,7 @@ function renderSidebar() {
         `).join("")}
       </nav>
       <div class="client-sidebar-foot">
-        <div class="client-support-card">
-          <strong>Need Help?</strong>
-          <a class="muted client-support-email" href="mailto:support@varadanexus.com">support@varadanexus.com</a>
-          <a class="btn btn-sm" href="mailto:support@varadanexus.com" style="width:100%;margin-top:.6rem;text-align:center;">Contact Support</a>
-        </div>
-        <div class="client-sidebar-foot-row" style="margin-top:.85rem;"><span class="muted">Progress</span><strong>${progress}%</strong></div>
+        <div class="client-sidebar-foot-row"><span class="muted">Progress</span><strong>${progress}%</strong></div>
         <div class="client-progress-bar" style="margin-top:.35rem;"><span style="width:${progress}%"></span></div>
         <div class="client-sidebar-foot-row" style="margin-top:.6rem;"><span class="muted">Current Phase</span><strong>${escapeHtml(projectStageLabel(currentProject, progress))}</strong></div>
         <button class="btn btn-sm" id="switchPortalBtn" type="button" style="width:100%;margin-top:.75rem;">Return to Selector</button>
@@ -564,6 +569,7 @@ function renderDashboard() {
   const notifications = notificationItems();
   const timeline = buildTimeline().slice(0, 8);
   const latestDesign = activeProjectDesigns()[0] || null;
+  const latestDesignDocument = latestDesign ? designFiles(latestDesign.id)[0] || null : null;
   return `
     <section class="client-dashboard-stack">
       ${renderMetricCards()}
@@ -588,7 +594,7 @@ function renderDashboard() {
         <article class="client-surface"><div class="client-surface-head"><h3>Latest Site Update</h3><button class="btn btn-sm" data-section-tab="updates" type="button">View Updates</button></div>${latestUpdate ? `<div class="client-feed-card"><div class="client-feed-media">${activeProjectPhotos()[0]?.photo_url ? `<img src="${activeProjectPhotos()[0].photo_url}" alt="Site update" loading="lazy" data-lightbox-src="${activeProjectPhotos()[0].photo_url}" />` : `<div class="empty-illustration">🏗️</div>`}</div><div><span class="meta-pill">${numberValue(latestUpdate.progress_percent)}% Progress</span><h3>${escapeHtml(latestUpdate.update_title || "Site Update")}</h3><p class="muted">${escapeHtml(formatDate(latestUpdate.update_date || latestUpdate.created_at))}</p></div></div>` : `<div class="empty-state"><div class="empty-illustration">🏗️</div><strong>No site updates yet</strong><p class="muted">Your project team will share progress updates here.</p></div>`}</article>
         <article class="client-surface"><div class="client-surface-head"><h3>Outstanding Bills</h3><button class="btn btn-sm" data-section-tab="billing" type="button">Open Finance</button></div><div class="client-list compact" style="margin-top:1rem;">${activeProjectBills().slice(0, 3).map((row) => `<div class="client-list-item"><strong>${escapeHtml(row.bill_number || "Invoice")}</strong><div class="muted">${escapeHtml(formatDate(row.bill_date || row.created_at))} · ${formatMoney(row.total_amount || 0)}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">💳</div><strong>No outstanding invoices</strong><p class="muted">Visible invoices will appear here.</p></div>`}</div></article>
         <article class="client-surface"><div class="client-surface-head"><h3>Pending Approvals</h3><button class="btn btn-sm" data-section-tab="approvals" type="button">Review</button></div><div class="client-list compact" style="margin-top:1rem;">${activeProjectApprovals().filter((row) => String(row.decision || "pending") === "pending").slice(0, 3).map((row) => `<div class="client-list-item"><strong>${escapeHtml(normalizeStatus(row.approval_type, "Approval"))}</strong><div class="muted">${escapeHtml(formatDateTime(row.created_at))}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">✅</div><strong>Nothing pending</strong><p class="muted">Approval requests will appear here.</p></div>`}</div></article>
-        <article class="client-surface"><div class="client-surface-head"><h3>Quick Downloads</h3><button class="btn btn-sm" data-section-tab="documents" type="button">Documents</button></div><div class="client-list compact" style="margin-top:1rem;"><div class="client-list-item"><strong>Project Summary</strong><div class="muted">Current snapshot</div><button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download PDF</button></div>${latestDesign?.file_url ? `<div class="client-list-item"><strong>Latest Design</strong><div class="muted">Current shared package</div><a class="btn btn-sm" href="${latestDesign.file_url}" target="_blank" rel="noopener">Download</a></div>` : ""}</div></article>
+        <article class="client-surface"><div class="client-surface-head"><h3>Quick Downloads</h3><button class="btn btn-sm" data-section-tab="documents" type="button">Documents</button></div><div class="client-list compact" style="margin-top:1rem;"><div class="client-list-item"><strong>Project Summary</strong><div class="muted">Current snapshot</div><button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download PDF</button></div>${latestDesignDocument ? `<div class="client-list-item"><strong>Latest Design</strong><div class="muted">Current shared package</div><button class="btn btn-sm" data-client-document-id="${escapeHtml(latestDesignDocument.id)}" data-client-document-name="${escapeHtml(latestDesignDocument.file_name || "Design document")}" type="button">Open</button></div>` : ""}</div></article>
         <article class="client-surface"><div class="client-surface-head"><h3>Latest Documents</h3><button class="btn btn-sm" data-section-tab="documents" type="button">View All</button></div><div class="client-list compact" style="margin-top:1rem;">${activeDocuments().slice(0, 3).map((doc) => `<div class="client-list-item"><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(formatDate(doc.at))}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents yet</strong></div>`}</div></article>
         <article class="client-surface"><div class="client-surface-head"><h3>Upcoming Milestones</h3><button class="btn btn-sm" data-section-tab="overview" type="button">View Progress</button></div>${renderMilestoneStepper(progress)}</article>
       </section>
@@ -723,7 +729,10 @@ function renderDesignViewToggle() {
 
 function renderDesignCards(rows) {
   return `
-    <div class="client-gallery-grid" style="margin-top:1rem;">${rows.length ? rows.map((row) => `
+    <div class="client-gallery-grid" style="margin-top:1rem;">${rows.length ? rows.map((row) => {
+      const approval = pendingApprovalForDesign(row.id);
+      const canDecide = approval && canApproveProject(approval.interior_project_id);
+      return `
       <article class="client-gallery-card client-design-card">
         <div class="client-gallery-media client-design-preview"><div class="empty-illustration">📐</div></div>
         <div class="client-gallery-body">
@@ -732,11 +741,11 @@ function renderDesignCards(rows) {
           <div class="client-actions">
             ${renderDesignFileActions(row)}
             <button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">Details</button>
-            <button class="btn btn-sm" data-section-tab="approvals" type="button">Approve</button>
-            <button class="btn btn-sm" data-section-tab="approvals" type="button">Request Revision</button>
+            ${canDecide ? `<button class="btn btn-sm" data-approval-action="approve" data-approval-id="${approval.id}" type="button">Approve</button><button class="btn btn-sm" data-approval-action="revision_requested" data-approval-id="${approval.id}" type="button">Request Revision</button>` : approval ? `<button class="btn btn-sm" data-section-tab="approvals" type="button">View Approval</button>` : ""}
           </div>
         </div>
-      </article>`).join("") : `<div class="empty-state">No designs match your search.</div>`}</div>
+      </article>`;
+    }).join("") : `<div class="empty-state">No designs match your search.</div>`}</div>
   `;
 }
 
@@ -890,7 +899,7 @@ function renderDocumentsSection() {
       </article>
       <article class="client-surface client-surface-lg">
         <div class="client-surface-head"><h3>Downloads</h3><div class="client-inline-tools">${renderSearchInput("documents", "Search documents")}<button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register PDF</button></div></div>
-        <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((doc) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(doc.subtitle)}</div></div><div class="client-actions">${doc.href ? `<button class="btn btn-sm" data-lightbox-src="${doc.href}" type="button">Preview</button><a class="btn btn-sm" href="${doc.href}" target="_blank" rel="noopener" download>Download</a>` : `<button class="btn btn-sm" disabled>Unavailable</button>`}</div></div></div>`).join("") : `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents found</strong><p class="muted">Shared drawings, invoices, approvals, and reports will appear here.</p><button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register</button></div>`}</div>
+        <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((doc) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(doc.subtitle)}</div></div><div class="client-actions">${doc.documentId ? `<button class="btn btn-sm" data-client-document-id="${escapeHtml(doc.documentId)}" data-client-document-name="${escapeHtml(doc.fileName || doc.title)}" type="button">Open document</button>` : doc.href ? `<button class="btn btn-sm" data-lightbox-src="${escapeHtml(doc.href)}" data-document-name="${escapeHtml(doc.title)}" type="button">Preview</button>` : `<button class="btn btn-sm" disabled>Unavailable</button>`}</div></div></div>`).join("") : `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents found</strong><p class="muted">Shared drawings, invoices, approvals, and reports will appear here.</p><button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register</button></div>`}</div>
         ${renderPagination("documents", docs.length, 6)}
       </article>
     </section>
@@ -1207,7 +1216,10 @@ const CLIENT_APP_STYLES = `
   .client-lightbox{display:none;position:fixed;inset:0;background:rgba(2,8,23,.85);z-index:80;align-items:center;justify-content:center;padding:2rem;}
   .client-lightbox.visible{display:flex;}
   .client-lightbox img{max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:var(--shadow);}
-  .client-lightbox-close{position:absolute;top:1.25rem;right:1.5rem;}
+  .client-lightbox-toolbar{position:absolute;top:1rem;left:1.5rem;right:1.5rem;display:flex;justify-content:flex-end;align-items:center;gap:.6rem;padding:.65rem .8rem;border:1px solid var(--border);border-radius:14px;background:rgba(5,6,9,.92);box-shadow:var(--shadow);}
+  .client-lightbox-toolbar strong{margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .client-lightbox-loading{min-width:280px;min-height:120px;place-items:center;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--primary);font-weight:700;}
+  .client-lightbox iframe{margin-top:3.5rem;max-height:calc(100vh - 7rem) !important;}
 
   .client-actions{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
   .client-inline-tools{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
@@ -1351,6 +1363,7 @@ function render() {
   const clientName = PAGE_STATE.clientRecord?.client_name || "-";
   const progress = project ? projectProgressValue(project) : overallProgressValue();
   const latestDesign = activeProjectDesigns()[0] || null;
+  const latestDesignDocument = latestDesign ? designFiles(latestDesign.id)[0] || null : null;
   const unread = unreadNotificationCount();
   const html = `
     <style>${CLIENT_APP_STYLES}</style>
@@ -1380,7 +1393,7 @@ function render() {
             <span class="meta-pill">${project ? escapeHtml(projectStageLabel(project, progress)) : `Progress ${progress}%`}</span>
             <button class="btn btn-sm btn-ghost" id="refreshPortalBtn" type="button" ${PAGE_STATE.isRefreshing ? "disabled" : ""}>${PAGE_STATE.isRefreshing ? "Refreshing…" : "↻ Refresh updates"}</button>
             <button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download Summary PDF</button>
-            ${latestDesign?.file_url ? `<a class="btn btn-sm client-download" href="${latestDesign.file_url}" target="_blank" rel="noopener">⬇ Latest Design</a>` : ""}
+            ${latestDesignDocument ? `<button class="btn btn-sm client-download" data-client-document-id="${escapeHtml(latestDesignDocument.id)}" data-client-document-name="${escapeHtml(latestDesignDocument.file_name || "Design document")}" type="button">▣ Latest Design</button>` : latestDesign?.file_url ? `<button class="btn btn-sm client-download" data-lightbox-src="${escapeHtml(latestDesign.file_url)}" data-document-name="${escapeHtml(latestDesign.design_title || "Design document")}" type="button">▣ Latest Design</button>` : ""}
             ${PAGE_STATE.lastRefreshedAt ? `<small class="muted">Updated ${escapeHtml(new Date(PAGE_STATE.lastRefreshedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</small>` : ""}
           </div>
         </section>
@@ -1392,7 +1405,12 @@ function render() {
     </div>
     <div class="client-sidebar-backdrop" id="clientSidebarBackdrop"></div>
     <div class="client-lightbox" id="clientLightbox">
-      <button class="btn btn-sm client-lightbox-close" id="clientLightboxClose" type="button">✕ Close</button>
+      <div class="client-lightbox-toolbar">
+        <strong id="clientLightboxTitle">Document preview</strong>
+        <a class="btn btn-sm" id="clientLightboxDownload" href="#" download style="display:none;">Download</a>
+        <button class="btn btn-sm" id="clientLightboxClose" type="button">✕ Close</button>
+      </div>
+      <div class="client-lightbox-loading" id="clientLightboxLoading" style="display:none;">Loading secure document…</div>
       <img id="clientLightboxImg" src="" alt="Preview" />
       <iframe id="clientLightboxFrame" src="" title="Document preview" style="display:none;width:90vw;height:88vh;border:0;border-radius:12px;background:#fff;"></iframe>
     </div>
@@ -1425,10 +1443,19 @@ function bindClientAppEvents(app) {
   const lightbox = qs("#clientLightbox");
   const lightboxImg = qs("#clientLightboxImg");
   const lightboxFrame = qs("#clientLightboxFrame");
+  const lightboxTitle = qs("#clientLightboxTitle");
+  const lightboxDownload = qs("#clientLightboxDownload");
+  const lightboxLoading = qs("#clientLightboxLoading");
   const closeLightbox = () => {
     lightbox?.classList.remove("visible");
-    if (lightboxFrame) lightboxFrame.style.display = "none";
+    if (lightboxFrame) { lightboxFrame.style.display = "none"; lightboxFrame.src = ""; }
     if (lightboxImg) lightboxImg.style.display = "none";
+    if (lightboxDownload) lightboxDownload.style.display = "none";
+    if (lightboxLoading) lightboxLoading.style.display = "none";
+    if (clientDocumentObjectUrl) {
+      URL.revokeObjectURL(clientDocumentObjectUrl);
+      clientDocumentObjectUrl = null;
+    }
   };
   app.querySelectorAll("[data-lightbox-src]").forEach((el) => el.addEventListener("click", () => {
     if (!lightbox) return;
@@ -1444,6 +1471,41 @@ function bindClientAppEvents(app) {
       if (lightboxFrame) lightboxFrame.style.display = "none";
     }
     lightbox.classList.add("visible");
+  }));
+  app.querySelectorAll("[data-client-document-id]").forEach((button) => button.addEventListener("click", async () => {
+    if (!lightbox || !lightboxFrame) return;
+    const documentId = button.dataset.clientDocumentId || "";
+    const fileName = button.dataset.clientDocumentName || "Design document";
+    if (lightboxTitle) lightboxTitle.textContent = fileName;
+    if (lightboxImg) lightboxImg.style.display = "none";
+    lightboxFrame.style.display = "none";
+    if (lightboxDownload) lightboxDownload.style.display = "none";
+    if (lightboxLoading) lightboxLoading.style.display = "grid";
+    lightbox.classList.add("visible");
+    try {
+      const storedSession = getStoredInteriorsPortalSession();
+      const { data, error } = await getClient().functions.invoke("drive-integrations", {
+        body: {
+          action: "preview_interiors_client_document",
+          sessionToken: storedSession?.sessionToken,
+          documentId
+        }
+      });
+      if (error) throw error;
+      const blob = data instanceof Blob ? data : new Blob([data], { type: "application/octet-stream" });
+      clientDocumentObjectUrl = URL.createObjectURL(blob);
+      lightboxFrame.src = clientDocumentObjectUrl;
+      lightboxFrame.style.display = "block";
+      if (lightboxDownload) {
+        lightboxDownload.href = clientDocumentObjectUrl;
+        lightboxDownload.download = fileName;
+        lightboxDownload.style.display = "inline-flex";
+      }
+      if (lightboxLoading) lightboxLoading.style.display = "none";
+    } catch (error) {
+      closeLightbox();
+      showToast(error?.message || "The document could not be opened.", TOAST_TYPES.ERROR);
+    }
   }));
   lightbox?.addEventListener("click", (event) => {
     if (event.target === lightbox) closeLightbox();
@@ -1544,8 +1606,9 @@ async function updateApprovalDecision(approvalId, decision) {
   if (!row) return;
   try {
     const normalizedDecision = decision === "approve" ? "approved" : decision;
+    if (normalizedDecision === "approved" && !window.confirm("Approve this design for the project?")) return;
     const remarks = normalizedDecision === "approved"
-      ? (window.prompt("Optional approval note:", "") || "").trim()
+      ? ""
       : (window.prompt("Please describe the required revision or reason:", "") || "").trim();
     if (normalizedDecision !== "approved" && !remarks) {
       showToast("Remarks are required for a rejection or revision request.", TOAST_TYPES.ERROR);
@@ -1659,7 +1722,7 @@ async function init() {
   render();
   if (portalRefreshTimer) window.clearInterval(portalRefreshTimer);
   portalRefreshTimer = window.setInterval(() => {
-    if (document.visibilityState === "visible") refreshPortalData({ silent: true });
+    if (document.visibilityState === "visible" && !document.querySelector("#clientLightbox.visible")) refreshPortalData({ silent: true });
   }, 30000);
 }
 
