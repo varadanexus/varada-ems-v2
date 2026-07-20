@@ -14,6 +14,7 @@ const PAGE_STATE = {
   projectTypeId: null,
   clients: [],
   projects: [],
+  editingProjectId: null,
   isSaving: false
 };
 
@@ -60,7 +61,7 @@ async function loadData() {
 
   const [clientsRes, projectsRes] = await Promise.all([
     client.from("interior_clients").select("id,client_name,client_code,is_active").eq("division_id", PAGE_STATE.divisionId).order("client_name"),
-    client.from("interior_projects").select("id,division_id,interior_client_id,shared_project_id,project_code,project_name,project_title,site_address,start_date,target_end_date,status,priority,summary,is_active,project_manager,interior_clients(client_name,client_code)").eq("division_id", PAGE_STATE.divisionId).order("created_at", { ascending: false })
+    client.from("interior_projects").select("id,division_id,interior_client_id,shared_project_id,project_code,project_name,project_title,site_address,start_date,target_end_date,status,priority,summary,is_active,project_manager,interior_clients(client_name,client_code),shared_project:projects!interior_projects_shared_project_id_fkey(project_manager_app_user_id,manager:app_users!projects_project_manager_app_user_id_fkey(display_name,email))").eq("division_id", PAGE_STATE.divisionId).order("created_at", { ascending: false })
   ]);
   if (clientsRes.error) throw clientsRes.error;
   if (projectsRes.error) throw projectsRes.error;
@@ -73,6 +74,9 @@ function render() {
   const roleCodes = PAGE_STATE.boot?.roleCodes || [];
   const allowedModules = PAGE_STATE.boot?.allowedModules || [];
   const canCreate = hasAnyRolePermission(roleCodes, MODULES.INTERIORS_PROJECTS, PERMISSIONS.CREATE, { allowedModules });
+  const canEdit = hasAnyRolePermission(roleCodes, MODULES.INTERIORS_PROJECTS, PERMISSIONS.EDIT, { allowedModules });
+  const editingProject = PAGE_STATE.projects.find((row) => row.id === PAGE_STATE.editingProjectId) || null;
+  const showEditor = canCreate || Boolean(editingProject && canEdit);
 
   renderModuleContent(`
     <section class="card">
@@ -85,18 +89,22 @@ function render() {
       </style>
       <h3>Projects</h3>
       <p class="muted">Projects are scoped to your current Interiors division. Users select Clients only; shared backbone rows are created automatically in the background.</p>
-      ${canCreate ? `
-        <div class="ip-grid" style="margin-top:1rem;">
-          <div><label for="ipClientId">Client *</label><select id="ipClientId"><option value="">Select Client</option>${PAGE_STATE.clients.map((row) => `<option value="${row.id}">${escapeHtml(row.client_name)}${row.client_code ? ` (${escapeHtml(row.client_code)})` : ""}</option>`).join("")}</select></div>
-          <div><label for="ipProjectName">Project Name *</label><input id="ipProjectName" type="text" maxlength="200" /></div>
-          <div><label for="ipProjectTitle">Display Title</label><input id="ipProjectTitle" type="text" maxlength="200" /></div>
-          <div><label for="ipStatus">Status *</label><select id="ipStatus">${renderOptions(["draft","active","on_hold","completed","cancelled","archived"], "draft")}</select></div>
-          <div><label for="ipPriority">Priority *</label><select id="ipPriority">${renderOptions(["low","medium","high","critical"], "medium")}</select></div>
-          <div><label for="ipStartDate">Start Date</label><input id="ipStartDate" type="date" /></div>
-          <div><label for="ipTargetEndDate">Target End Date</label><input id="ipTargetEndDate" type="date" /></div>
-          <div class="full"><label for="ipSummary">Summary</label><textarea id="ipSummary" rows="3"></textarea></div>
+      ${showEditor ? `
+        <div id="interiorProjectEditor" style="margin-top:1rem;">
+          <h4 style="margin:0 0 .75rem;">${editingProject ? `Edit ${escapeHtml(editingProject.project_code || "Project")}` : "Create Project"}</h4>
         </div>
-        <div style="margin-top:1rem;"><button class="btn" id="createInteriorProjectBtn" type="button">Create Project</button></div>
+        <div class="ip-grid">
+          <div><label for="ipClientId">Client *</label><select id="ipClientId"><option value="">Select Client</option>${PAGE_STATE.clients.map((row) => `<option value="${row.id}" ${row.id === editingProject?.interior_client_id ? "selected" : ""}>${escapeHtml(row.client_name)}${row.client_code ? ` (${escapeHtml(row.client_code)})` : ""}</option>`).join("")}</select></div>
+          <div><label for="ipProjectName">Project Name *</label><input id="ipProjectName" type="text" maxlength="200" value="${escapeHtml(editingProject?.project_name || "")}" /></div>
+          <div><label for="ipProjectTitle">Display Title</label><input id="ipProjectTitle" type="text" maxlength="200" value="${escapeHtml(editingProject?.project_title || "")}" /></div>
+          <div><label for="ipStatus">Status *</label><select id="ipStatus">${renderOptions(["draft","active","on_hold","completed","cancelled","archived"], editingProject?.status || "draft")}</select></div>
+          <div><label for="ipPriority">Priority *</label><select id="ipPriority">${renderOptions(["low","medium","high","critical"], editingProject?.priority || "medium")}</select></div>
+          <div><label for="ipStartDate">Start Date</label><input id="ipStartDate" type="date" value="${escapeHtml(editingProject?.start_date || "")}" /></div>
+          <div><label for="ipTargetEndDate">Target End Date</label><input id="ipTargetEndDate" type="date" value="${escapeHtml(editingProject?.target_end_date || "")}" /></div>
+          <div class="full"><label for="ipSiteAddress">Site Address</label><textarea id="ipSiteAddress" rows="2">${escapeHtml(editingProject?.site_address || "")}</textarea></div>
+          <div class="full"><label for="ipSummary">Summary</label><textarea id="ipSummary" rows="3">${escapeHtml(editingProject?.summary || "")}</textarea></div>
+        </div>
+        <div style="margin-top:1rem;display:flex;gap:.55rem;flex-wrap:wrap;"><button class="btn" id="saveInteriorProjectBtn" type="button">${editingProject ? "Save Changes" : "Create Project"}</button>${editingProject ? '<button class="btn btn-secondary" id="cancelInteriorProjectEditBtn" type="button">Cancel Edit</button>' : ""}</div>
       ` : ""}
       <div class="table-container">
         <table>
@@ -109,9 +117,9 @@ function render() {
                 <td>${escapeHtml(project.interior_clients?.client_name || "-")}</td>
                 <td>${escapeHtml(project.site_address || "Pending site address")}</td>
                 <td>Interior Project</td>
-                <td>${escapeHtml(project.project_manager || "Pending assignment")}</td>
+                <td>${escapeHtml(project.shared_project?.manager?.display_name || project.shared_project?.manager?.email || project.project_manager || "Pending assignment")}</td>
                 <td><span class="ip-status" style="${STATUS_STYLES[project.status] || STATUS_STYLES.draft}">${escapeHtml(project.status || "-")}</span><br/><span class="muted">${escapeHtml(project.priority || "-")}</span></td>
-                <td><div class="ip-actions"><a class="btn btn-sm" href="${ROUTES.INTERIORS_PROJECT_DETAIL}?id=${project.id}">Open Project</a>${project.shared_project_id ? `<a class="btn btn-sm" href="${ROUTES.PROJECT_ENGINE_PROJECT_DETAILS}?id=${project.shared_project_id}&workspace=interiors">Advanced</a>` : ""}</div></td>
+                <td><div class="ip-actions"><a class="btn btn-sm" href="${ROUTES.INTERIORS_PROJECT_DETAIL}?id=${project.id}">Open Project</a>${canEdit ? `<button class="btn btn-sm" data-edit-interior-project="${project.id}" type="button">Edit Project</button>` : ""}${project.shared_project_id ? `<a class="btn btn-sm" href="${ROUTES.PROJECT_ENGINE_PROJECT_DETAILS}?id=${project.shared_project_id}&workspace=interiors">Advanced</a>` : ""}</div></td>
               </tr>`).join("")}
           </tbody>
         </table>
@@ -121,10 +129,21 @@ function render() {
 }
 
 function bindEvents() {
-  document.getElementById("createInteriorProjectBtn")?.addEventListener("click", handleCreateProject);
+  document.getElementById("saveInteriorProjectBtn")?.addEventListener("click", handleSaveProject);
+  document.getElementById("cancelInteriorProjectEditBtn")?.addEventListener("click", () => {
+    PAGE_STATE.editingProjectId = null;
+    render();
+    bindEvents();
+  });
+  document.querySelectorAll("[data-edit-interior-project]").forEach((button) => button.addEventListener("click", () => {
+    PAGE_STATE.editingProjectId = button.dataset.editInteriorProject || null;
+    render();
+    bindEvents();
+    document.getElementById("interiorProjectEditor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
 }
 
-async function handleCreateProject() {
+async function handleSaveProject() {
   if (PAGE_STATE.isSaving) return;
   const payload = {
     interior_client_id: document.getElementById("ipClientId")?.value || null,
@@ -134,15 +153,38 @@ async function handleCreateProject() {
     priority: document.getElementById("ipPriority")?.value || "medium",
     start_date: document.getElementById("ipStartDate")?.value || null,
     target_end_date: document.getElementById("ipTargetEndDate")?.value || null,
+    site_address: optionalValue("ipSiteAddress"),
     summary: optionalValue("ipSummary")
   };
   if (!payload.interior_client_id) return showToast("Interior client is required.", TOAST_TYPES.ERROR);
   if (!payload.project_name) return showToast("Project name is required.", TOAST_TYPES.ERROR);
   if (payload.target_end_date && payload.start_date && new Date(payload.target_end_date) < new Date(payload.start_date)) return showToast("Target end date cannot be before start date.", TOAST_TYPES.ERROR);
-  if (!PAGE_STATE.projectTypeId) return showToast("Interior project type is not configured.", TOAST_TYPES.ERROR);
+  if (!PAGE_STATE.editingProjectId && !PAGE_STATE.projectTypeId) return showToast("Interior project type is not configured.", TOAST_TYPES.ERROR);
 
   PAGE_STATE.isSaving = true;
   try {
+    if (PAGE_STATE.editingProjectId) {
+      const { error } = await client.rpc("update_interior_project", {
+        p_interior_project_id: PAGE_STATE.editingProjectId,
+        p_interior_client_id: payload.interior_client_id,
+        p_project_name: payload.project_name,
+        p_project_title: payload.project_title,
+        p_site_address: payload.site_address,
+        p_status: payload.status,
+        p_priority: payload.priority,
+        p_start_date: payload.start_date,
+        p_target_end_date: payload.target_end_date,
+        p_summary: payload.summary
+      });
+      if (error) throw error;
+      showToast("Interior project updated successfully", TOAST_TYPES.SUCCESS);
+      PAGE_STATE.editingProjectId = null;
+      await loadData();
+      render();
+      bindEvents();
+      return;
+    }
+
     const projectCode = await resolveProjectCode(PAGE_STATE.divisionId, PAGE_STATE.projectTypeId);
 
     // Use security definer RPC to bypass projects RLS for authenticated Interiors users.
@@ -164,6 +206,21 @@ async function handleCreateProject() {
     if (rpcError) throw rpcError;
 
     if (rpcResult?.interior_project_id) {
+      if (payload.site_address) {
+        const { error: updateError } = await client.rpc("update_interior_project", {
+          p_interior_project_id: rpcResult.interior_project_id,
+          p_interior_client_id: payload.interior_client_id,
+          p_project_name: payload.project_name,
+          p_project_title: payload.project_title,
+          p_site_address: payload.site_address,
+          p_status: payload.status,
+          p_priority: payload.priority,
+          p_start_date: payload.start_date,
+          p_target_end_date: payload.target_end_date,
+          p_summary: payload.summary
+        });
+        if (updateError) throw updateError;
+      }
       await notifyInteriorsWhatsAppSafely("project_created", rpcResult.interior_project_id);
     }
 
@@ -172,8 +229,8 @@ async function handleCreateProject() {
     render();
     bindEvents();
   } catch (error) {
-    console.error("Create Interior project failed:", error);
-    showToast(error?.message || "Create Interior project failed", TOAST_TYPES.ERROR);
+    console.error("Save Interior project failed:", error);
+    showToast(error?.message || "Save Interior project failed", TOAST_TYPES.ERROR);
   } finally {
     PAGE_STATE.isSaving = false;
   }
