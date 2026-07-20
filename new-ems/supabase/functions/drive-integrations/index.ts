@@ -786,6 +786,10 @@ async function handleInteriorsClientDocumentPreview(payload: any) {
     throw new Error("This document is not available in the client portal");
   }
 
+  return await streamDriveDocument(document);
+}
+
+async function streamDriveDocument(document: any) {
   const token = await getAccessToken();
   const driveResponse = await fetch(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?alt=media&supportsAllDrives=true`,
@@ -811,6 +815,46 @@ async function handleInteriorsClientDocumentPreview(payload: any) {
       "X-Content-Type-Options": "nosniff"
     }
   });
+}
+
+async function handleInteriorsStaffDocumentPreview(req: Request, payload: any) {
+  const documentId = String(payload.documentId || "").trim();
+  if (!documentId) throw new Error("Document is required");
+
+  const { caller, db } = await authenticatedCaller(req);
+  const { data: document, error: documentError } = await db
+    .from("drive_documents")
+    .select("id,category,entity_id,file_name,mime_type,drive_file_id,upload_status,deleted_at")
+    .eq("id", documentId)
+    .in("category", ["INTERIORS_DESIGN", "INTERIORS_DOCUMENT"])
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (documentError || !document?.id || !document.drive_file_id || document.upload_status !== "stored") {
+    throw new Error("This Interiors document is not available");
+  }
+
+  let projectId = String(document.entity_id || "");
+  let moduleCode = "interiors-projects";
+  if (document.category === "INTERIORS_DESIGN") {
+    moduleCode = "interiors-designs";
+    const { data: design, error: designError } = await db
+      .from("interior_designs")
+      .select("project_id")
+      .eq("id", document.entity_id)
+      .maybeSingle();
+    if (designError || !design?.project_id) throw new Error("The linked design could not be verified");
+    projectId = String(design.project_id);
+  }
+
+  const [{ data: canViewProject, error: projectAccessError }, { data: canViewModule, error: moduleAccessError }] = await Promise.all([
+    caller.rpc("can_view_project_by_id", { p_project_id: projectId }),
+    caller.rpc("has_permission", { module_code: moduleCode, action_code: "view" })
+  ]);
+  if (projectAccessError || moduleAccessError || canViewProject !== true || canViewModule !== true) {
+    throw new Error("You do not have permission to view this Interiors document");
+  }
+
+  return await streamDriveDocument(document);
 }
 
 async function resolveInteriorsArchitectUploadContext(payload: any, requireDesign = false) {
@@ -1403,6 +1447,8 @@ Deno.serve(async (req) => {
         return json(await handleInteriorsUpload(req, payload));
       case "preview_interiors_client_document":
         return await handleInteriorsClientDocumentPreview(payload);
+      case "preview_interiors_staff_document":
+        return await handleInteriorsStaffDocumentPreview(req, payload);
       case "upload_interiors_architect_design":
         return json(await handleInteriorsArchitectDesignUpload(payload));
       case "list_interiors_architect_design_files":
