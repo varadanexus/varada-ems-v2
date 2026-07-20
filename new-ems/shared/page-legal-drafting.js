@@ -18,6 +18,7 @@ let wordEditorDocumentId = "";
 let wordEditorLastSavedAt = "";
 let wordEditorScriptUrl = "";
 let wordEditorExtractedText = "";
+let manualDocxResizeObserver = null;
 
 function buildGeminiPrompt() {
   const value = (key) => document.querySelector(`[data-draft="${key}"]`)?.value || "";
@@ -438,6 +439,7 @@ function setDraftMode(mode) {
   generateButton.hidden = isManual;
   output.hidden = isManual;
   documentEditorChoice.hidden = !isManual;
+  document.querySelector(".legal-draft-layout")?.classList.toggle("is-manual-mode", isManual);
   saveButton.textContent = isManual ? "Save Manual Draft to EMS" : "Save Draft";
   editorTitle.textContent = isManual ? "Professional Document Editor" : "Draft Editor";
   editorDescription.textContent = isManual
@@ -489,9 +491,10 @@ function printManualDraft() {
   }
   const header = document.querySelector("#manualPageHeader")?.innerHTML || "";
   const footer = document.querySelector("#manualPageFooter")?.innerHTML || "";
+  const importedStyles = document.querySelector("#manualImportedDocxStyles")?.innerHTML || "";
   printWindow.document.write(`<!doctype html><html><head><title>Legal Draft</title><style>
-    @page{size:A4;margin:22mm 20mm}body{margin:0;color:#111;font-family:Cambria,Georgia,serif;font-size:11.5pt;line-height:1.55}header,footer{color:#666;font:9pt Arial,sans-serif}header{border-bottom:1px solid #bbb;padding-bottom:6pt;margin-bottom:14pt}footer{border-top:1px solid #bbb;padding-top:6pt;margin-top:14pt}h1,h2,h3{page-break-after:avoid}h1{text-align:center;font-size:20pt}h2{font-size:15pt}h3{font-size:12.5pt}p{margin:0 0 9pt}table{width:100%;border-collapse:collapse;margin:12pt 0}th,td{border:1px solid #777;padding:6pt;text-align:left}.manual-page-break{break-after:page;height:0;border:0}ul,ol{padding-left:24pt}a{color:inherit}
-  </style></head><body><header>${header}</header>${editor.innerHTML}<footer>${footer}</footer></body></html>`);
+    @page{size:A4;margin:22mm 20mm}body{margin:0;color:#111;font-family:Cambria,Georgia,serif;font-size:11.5pt;line-height:1.55}header,footer{color:#666;font:9pt Arial,sans-serif}header{border-bottom:1px solid #bbb;padding-bottom:6pt;margin-bottom:14pt}footer{border-top:1px solid #bbb;padding-top:6pt;margin-top:14pt}h1,h2,h3{page-break-after:avoid}h1{text-align:center;font-size:20pt}h2{font-size:15pt}h3{font-size:12.5pt}p{margin:0 0 9pt}table{max-width:100%;border-collapse:collapse;margin:12pt 0;table-layout:fixed}th,td{box-sizing:border-box;max-width:100%;border:1px solid #777;padding:6pt;text-align:left;overflow-wrap:anywhere}.manual-page-break{break-after:page;height:0;border:0}ul,ol{padding-left:24pt}a{color:inherit}
+  </style>${importedStyles}</head><body><header>${header}</header>${manualEditorHtmlForOutput(editor)}<footer>${footer}</footer></body></html>`);
   printWindow.document.close();
   printWindow.opener = null;
   printWindow.focus();
@@ -529,9 +532,10 @@ function downloadManualWordDocument() {
   }
   const header = document.querySelector("#manualPageHeader")?.innerHTML || "";
   const footer = document.querySelector("#manualPageFooter")?.innerHTML || "";
+  const importedStyles = document.querySelector("#manualImportedDocxStyles")?.innerHTML || "";
   const title = document.querySelector('[data-manual="title"]')?.value?.trim() || "Legal Draft";
   const fileName = `${title.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "legal-draft"}.doc`;
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeEditorHtml(title)}</title><style>@page{size:A4;margin:22mm 20mm}body{font-family:Cambria,Georgia,serif;font-size:11.5pt;line-height:1.55;color:#111}header,footer{color:#666;font:9pt Arial,sans-serif}header{border-bottom:1px solid #bbb;margin-bottom:14pt}footer{border-top:1px solid #bbb;margin-top:14pt}table{width:100%;border-collapse:collapse}th,td{border:1px solid #777;padding:6pt}.manual-page-break{page-break-after:always}</style></head><body><header>${header}</header>${editor.innerHTML}<footer>${footer}</footer></body></html>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeEditorHtml(title)}</title><style>@page{size:A4;margin:22mm 20mm}body{font-family:Cambria,Georgia,serif;font-size:11.5pt;line-height:1.55;color:#111}header,footer{color:#666;font:9pt Arial,sans-serif}header{border-bottom:1px solid #bbb;margin-bottom:14pt}footer{border-top:1px solid #bbb;margin-top:14pt}table{max-width:100%;width:100%;border-collapse:collapse;table-layout:fixed}th,td{box-sizing:border-box;max-width:100%;border:1px solid #777;padding:6pt;overflow-wrap:anywhere}.manual-page-break{page-break-after:always}</style>${importedStyles}</head><body><header>${header}</header>${manualEditorHtmlForOutput(editor)}<footer>${footer}</footer></body></html>`;
   const url = URL.createObjectURL(new Blob(["\ufeff", html], { type: "application/msword" }));
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -557,6 +561,28 @@ function sanitizeImportedWordHtml(value = "") {
   return template.innerHTML;
 }
 
+function manualEditorHtmlForOutput(editor) {
+  const clone = editor.cloneNode(true);
+  clone.querySelectorAll("section.ems-docx").forEach((page) => {
+    page.style.removeProperty("zoom");
+    page.removeAttribute("data-ems-fit-scale");
+  });
+  return clone.innerHTML;
+}
+
+function fitImportedDocxPages(editor) {
+  const wrapper = editor.querySelector(".ems-docx-wrapper");
+  if (!wrapper) return;
+  const availableWidth = Math.max(280, wrapper.clientWidth - 36);
+  wrapper.querySelectorAll(":scope > section.ems-docx").forEach((page) => {
+    page.style.removeProperty("zoom");
+    const naturalWidth = page.getBoundingClientRect().width;
+    const scale = naturalWidth > availableWidth ? availableWidth / naturalWidth : 1;
+    page.style.setProperty("zoom", String(Math.max(0.35, Math.min(1, scale))));
+    page.dataset.emsFitScale = scale.toFixed(4);
+  });
+}
+
 async function importManualWordFile(event) {
   const input = event.currentTarget;
   const file = input.files?.[0];
@@ -564,19 +590,52 @@ async function importManualWordFile(event) {
   try {
     if (!/\.docx$/i.test(file.name)) throw new Error("Only modern Word .docx files are supported. Open a legacy .doc file in Word and save it as .docx first.");
     if (file.size > 25 * 1024 * 1024) throw new Error("The Word file must be 25 MB or smaller.");
-    if (!window.mammoth?.convertToHtml) throw new Error("The Word importer did not load. Refresh the page and try again.");
+    if (!window.docx?.renderAsync && !window.mammoth?.convertToHtml) throw new Error("The Word importer did not load. Refresh the page and try again.");
     const editor = document.querySelector("#manualRichEditor");
     if (!editor) throw new Error("The EMS document editor is unavailable.");
     if (editor.innerText.trim() && !window.confirm("Replace the current editor content with this Word document?")) return;
-    const result = await window.mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
-    const safeHtml = sanitizeImportedWordHtml(result.value || "");
+    const arrayBuffer = await file.arrayBuffer();
+    let safeHtml = "";
+    let warnings = 0;
+    if (window.docx?.renderAsync) {
+      const renderTarget = document.createElement("div");
+      const styleTarget = document.querySelector("#manualImportedDocxStyles") || document.createElement("div");
+      styleTarget.innerHTML = "";
+      await window.docx.renderAsync(arrayBuffer, renderTarget, styleTarget, {
+        className: "ems-docx",
+        inWrapper: true,
+        breakPages: true,
+        ignoreLastRenderedPageBreak: false,
+        renderHeaders: true,
+        renderFooters: true,
+        renderFootnotes: true,
+        renderEndnotes: true,
+        renderComments: false,
+        renderAltChunks: true,
+        useBase64URL: true,
+        experimental: true
+      });
+      safeHtml = sanitizeImportedWordHtml(renderTarget.innerHTML);
+      document.querySelector("#manualDocumentPage")?.classList.add("is-imported-docx");
+    } else {
+      const result = await window.mammoth.convertToHtml({ arrayBuffer });
+      safeHtml = sanitizeImportedWordHtml(result.value || "");
+      warnings = Array.isArray(result.messages) ? result.messages.length : 0;
+      document.querySelector("#manualDocumentPage")?.classList.remove("is-imported-docx");
+    }
     if (!safeHtml.trim()) throw new Error("No editable text could be extracted from this Word file.");
     editor.innerHTML = safeHtml;
+    if (document.querySelector("#manualDocumentPage")?.classList.contains("is-imported-docx")) {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      fitImportedDocxPages(editor);
+      manualDocxResizeObserver?.disconnect();
+      manualDocxResizeObserver = new ResizeObserver(() => fitImportedDocxPages(editor));
+      manualDocxResizeObserver.observe(document.querySelector("#manualEditorShell"));
+    }
     const titleInput = document.querySelector('[data-manual="title"]');
     if (titleInput && !titleInput.value.trim()) titleInput.value = file.name.replace(/\.docx$/i, "");
     editor.focus();
     updateManualEditorStatus();
-    const warnings = Array.isArray(result.messages) ? result.messages.length : 0;
     showToast(warnings
       ? `Word document imported with ${warnings} formatting notice${warnings === 1 ? "" : "s"}. Review it before saving.`
       : "Word document imported. Review it before saving to EMS.", warnings ? TOAST_TYPES.WARNING : TOAST_TYPES.SUCCESS);
@@ -649,6 +708,11 @@ function startBlankManualDraft() {
   if ((editor.innerText.trim() || output.value.trim()) && !window.confirm("Clear the current editor and start a new blank manual draft?")) return;
   output.value = "";
   editor.innerHTML = "<p><br></p>";
+  document.querySelector("#manualDocumentPage")?.classList.remove("is-imported-docx");
+  manualDocxResizeObserver?.disconnect();
+  manualDocxResizeObserver = null;
+  const importedStyles = document.querySelector("#manualImportedDocxStyles");
+  if (importedStyles) importedStyles.innerHTML = "";
   const header = document.querySelector("#manualPageHeader");
   const footer = document.querySelector("#manualPageFooter");
   if (header) header.innerHTML = "";
@@ -691,6 +755,7 @@ function renderPage() {
   renderModuleContent(`
     <style>
       .legal-draft-layout{display:grid;grid-template-columns:minmax(360px,1.05fr) minmax(0,.95fr);gap:1rem;align-items:start}
+      .legal-draft-layout.is-manual-mode{grid-template-columns:minmax(280px,.38fr) minmax(0,1.62fr)}
       .draft-mode-picker{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem;padding:.85rem 1rem;border:1px solid rgba(230,200,126,.2);border-radius:14px;background:linear-gradient(135deg,rgba(230,200,126,.08),rgba(7,8,13,.98))}
       .draft-mode-picker h3,.draft-mode-picker p{margin:0}
       .draft-mode-actions{display:flex;gap:.5rem;flex-wrap:wrap}
@@ -748,6 +813,13 @@ function renderPage() {
       .manual-document-body th,.manual-document-body td{position:relative;min-width:42px;border:1px solid #777;padding:6pt;vertical-align:top;resize:horizontal;overflow:auto}
       .manual-document-body img{display:block;max-width:100%;height:auto;margin:10pt auto}
       .manual-document-page th{background:#eee;font-weight:700}
+      .manual-document-page.is-imported-docx{width:100%;max-width:none;min-height:0;padding:0;background:transparent;box-shadow:none}
+      .manual-document-page.is-imported-docx>.manual-page-header,.manual-document-page.is-imported-docx>.manual-page-footer{display:none}
+      .manual-document-page.is-imported-docx>.manual-document-body{min-height:0}
+      .manual-document-body .ems-docx-wrapper{box-sizing:border-box;max-width:100%;padding:18px!important;background:#2d2f32!important;overflow-x:hidden}
+      .manual-document-body .ems-docx-wrapper>section.ems-docx{box-sizing:border-box;max-width:none!important;margin:0 auto 22px!important;overflow:visible;box-shadow:0 4px 18px rgba(0,0,0,.36);transform-origin:top center}
+      .manual-document-body .ems-docx-wrapper table{box-sizing:border-box}
+      .manual-document-body .ems-docx-wrapper td,.manual-document-body .ems-docx-wrapper th{box-sizing:border-box;resize:none}
       .manual-page-break{height:18px;margin:14pt -22mm;border-top:2px dashed #9aa0a6;border-bottom:2px dashed #9aa0a6;background:#eef1f4;color:#666;text-align:center;font:8pt/14px Arial,sans-serif;break-after:page;page-break-after:always;user-select:none}
       .manual-editor-status{display:flex;justify-content:space-between;gap:.75rem;padding:.42rem .75rem;background:#f3f3f3;border-top:1px solid #c9c9c9;color:#555;font:600 .72rem Arial,sans-serif}
       .prompt-output{min-height:180px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem}
@@ -755,7 +827,8 @@ function renderPage() {
       .legal-checklist{display:grid;gap:.5rem;margin:0;padding:0;list-style:none}
       .legal-checklist li{border:1px solid rgba(230,200,126,.14);border-radius:12px;padding:.65rem;background:#07080d;color:#c9c5b8}
       [hidden]{display:none!important}
-      @media (max-width: 980px){.legal-draft-layout,.draft-grid,.draft-checks{grid-template-columns:1fr}.draft-mode-picker{align-items:flex-start;flex-direction:column}.manual-editor-workspace{padding:12px}.manual-document-page{min-height:70vh;padding:18mm 12mm}.word-editor-frame{height:76vh;min-height:560px}}
+      @media (max-width: 1180px){.legal-draft-layout.is-manual-mode{grid-template-columns:1fr}}
+      @media (max-width: 980px){.legal-draft-layout,.draft-grid,.draft-checks{grid-template-columns:1fr}.draft-mode-picker{align-items:flex-start;flex-direction:column}.manual-editor-workspace{padding:12px}.manual-document-page:not(.is-imported-docx){min-height:70vh;padding:18mm 12mm}.manual-document-body .ems-docx-wrapper{padding:8px!important}.word-editor-frame{height:76vh;min-height:560px}}
     </style>
     <section class="draft-mode-picker">
       <div>
@@ -986,11 +1059,12 @@ function renderPage() {
             </div>
           </div>
           <div class="manual-editor-workspace">
-            <section class="manual-document-page" aria-label="A4 document page">
+            <section id="manualDocumentPage" class="manual-document-page" aria-label="A4 document page">
               <header id="manualPageHeader" class="manual-page-header" contenteditable="true" spellcheck="true" data-placeholder="Click to add a document header"></header>
               <article id="manualRichEditor" class="manual-document-body" contenteditable="true" spellcheck="true" data-placeholder="Start typing your legal agreement, or paste an existing draft here..."><p><br></p></article>
               <footer id="manualPageFooter" class="manual-page-footer" contenteditable="true" spellcheck="true" data-placeholder="Click to add a document footer"></footer>
             </section>
+            <div id="manualImportedDocxStyles" hidden></div>
           </div>
           <div class="manual-editor-status">
             <span id="manualEditorStatus">0 words · 0 characters</span>
