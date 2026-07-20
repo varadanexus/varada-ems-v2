@@ -62,8 +62,16 @@ export async function uploadOfflineLegalDraftVersion(payload) {
   return legalIntegration("offline_draft_upload", payload);
 }
 
-export async function listOfflineLegalDraftVersions(seriesId = "") {
-  return legalIntegration("offline_draft_list", { seriesId });
+export async function listOfflineLegalDraftVersions(seriesId = "", agreementId = "") {
+  return legalIntegration("offline_draft_list", { seriesId, agreementId });
+}
+
+export async function listOfflineLegalDraftSeries() {
+  return legalIntegration("offline_draft_series_list");
+}
+
+export async function uploadManualLegalSigningArtifact(payload) {
+  return legalIntegration("manual_signing_artifact_upload", payload);
 }
 
 export async function downloadOfflineLegalDraftVersion(versionId) {

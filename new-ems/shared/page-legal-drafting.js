@@ -6,12 +6,13 @@ import {
   generateLegalDraft,
   getLegalWordEditorStatus,
   downloadOfflineLegalDraftVersion,
+  listOfflineLegalDraftSeries,
   listOfflineLegalDraftVersions,
   reviseLegalDraft,
   saveLegalDraft,
   startLegalWordEditor,
   uploadOfflineLegalDraftVersion
-} from "./legal-api.js?v=ems-editor-5";
+} from "./legal-api.js?v=ems-editor-6";
 import { showToast } from "./utils.js";
 
 let currentDraftMode = "ai";
@@ -24,6 +25,7 @@ let wordEditorExtractedText = "";
 let manualDocxResizeObserver = null;
 let manualDriveSeriesId = sessionStorage.getItem("emsLegalDraftSeriesId") || "";
 let manualDriveVersions = [];
+let manualDriveSeries = [];
 
 function buildGeminiPrompt() {
   const value = (key) => document.querySelector(`[data-draft="${key}"]`)?.value || "";
@@ -415,6 +417,7 @@ async function saveDraft() {
   try {
     const result = await saveLegalDraft(draftSavePayload());
     showToast(`Draft saved as ${result.agreement?.agreement_no || "agreement"}.`, TOAST_TYPES.SUCCESS);
+    if (currentDraftMode === "manual" && manualDriveSeriesId) await refreshDriveDraftSeries();
   } catch (error) {
     showToast(error?.message || "Draft save failed.", TOAST_TYPES.ERROR);
   } finally {
@@ -627,6 +630,26 @@ function renderDriveDraftVersions() {
   });
 }
 
+function renderDriveDraftSeries() {
+  const select = document.querySelector("#manualDriveSeriesSelect");
+  if (!select) return;
+  select.innerHTML = [
+    '<option value="">New document · create Version 1</option>',
+    ...manualDriveSeries.map((series) => `<option value="${series.seriesId}">${escapeEditorHtml(`${series.agreementNo ? `${series.agreementNo} · ` : ""}${series.title} · ${series.versionCount} version${series.versionCount === 1 ? "" : "s"}`)}</option>`)
+  ].join("");
+  select.value = manualDriveSeriesId;
+}
+
+async function refreshDriveDraftSeries() {
+  try {
+    const result = await listOfflineLegalDraftSeries();
+    manualDriveSeries = result.series || [];
+  } catch {
+    manualDriveSeries = [];
+  }
+  renderDriveDraftSeries();
+}
+
 async function refreshDriveDraftVersions() {
   if (!manualDriveSeriesId) {
     manualDriveVersions = [];
@@ -662,6 +685,7 @@ async function archiveOfflineDocx(file, arrayBuffer) {
   manualDriveSeriesId = result.seriesId;
   sessionStorage.setItem("emsLegalDraftSeriesId", manualDriveSeriesId);
   await refreshDriveDraftVersions();
+  await refreshDriveDraftSeries();
   if (status) status.textContent = `Version ${result.version.version_no} is safely archived in Drive. The uploaded DOCX bytes were not converted or reformatted.`;
   return result.version;
 }
@@ -689,6 +713,7 @@ function startNewDriveDraftSeries() {
   const status = document.querySelector("#manualDriveArchiveStatus");
   if (status) status.textContent = "Choose a DOCX to create Version 1 in the private legal Drive archive.";
   renderDriveDraftVersions();
+  renderDriveDraftSeries();
 }
 
 async function importManualWordFile(event) {
@@ -799,12 +824,18 @@ function bindManualRichEditor() {
   });
   document.querySelector("#manualDownloadLatestBtn")?.addEventListener("click", () => downloadDriveDraftVersion(manualDriveVersions[0]?.id));
   document.querySelector("#manualNewDriveSeriesBtn")?.addEventListener("click", startNewDriveDraftSeries);
+  document.querySelector("#manualDriveSeriesSelect")?.addEventListener("change", async (event) => {
+    manualDriveSeriesId = event.currentTarget.value || "";
+    if (manualDriveSeriesId) sessionStorage.setItem("emsLegalDraftSeriesId", manualDriveSeriesId);
+    else sessionStorage.removeItem("emsLegalDraftSeriesId");
+    await refreshDriveDraftVersions();
+  });
   editor.addEventListener("input", updateManualEditorStatus);
   editor.addEventListener("paste", () => window.setTimeout(updateManualEditorStatus, 0));
   document.querySelector("#manualPageHeader")?.addEventListener("input", updateManualEditorStatus);
   document.querySelector("#manualPageFooter")?.addEventListener("input", updateManualEditorStatus);
   updateManualEditorStatus();
-  refreshDriveDraftVersions();
+  Promise.all([refreshDriveDraftSeries(), refreshDriveDraftVersions()]);
 }
 
 function copyIntakeToManualDetails() {
@@ -912,6 +943,7 @@ function renderPage() {
       .manual-drive-archive{padding:.85rem;background:linear-gradient(135deg,#111318,#08090d);border-bottom:1px solid rgba(230,200,126,.25);color:#d7d3c7}
       .manual-drive-archive-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
       .manual-drive-archive h4,.manual-drive-archive p{margin:0}.manual-drive-archive p{color:#aaa79d;font-size:.83rem;line-height:1.5}
+      .manual-drive-series-picker{display:grid;gap:.3rem;margin-top:.7rem}.manual-drive-series-picker label{font-size:.78rem;font-weight:800;color:#d9c47e}.manual-drive-series-picker select{width:100%;background:#08090d;color:#eee9dc;border:1px solid rgba(230,200,126,.25);border-radius:9px;padding:.58rem}
       .manual-drive-actions{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.65rem}
       .manual-drive-version-list{display:grid;gap:.35rem;margin-top:.65rem;max-height:190px;overflow:auto}
       .manual-drive-version-row{display:flex;align-items:center;justify-content:space-between;gap:.65rem;padding:.5rem .6rem;border:1px solid rgba(230,200,126,.14);border-radius:10px;background:rgba(255,255,255,.025);font-size:.78rem}
@@ -1145,6 +1177,10 @@ function renderPage() {
                 <p id="manualDriveArchiveStatus">Upload the DOCX drafted on your computer. EMS stores the unchanged file as Version 1; upload the edited file later to create Version 2, Version 3, and so on.</p>
               </div>
               <button class="btn btn-sm btn-ghost" id="manualNewDriveSeriesBtn" type="button">Start New Document</button>
+            </div>
+            <div class="manual-drive-series-picker">
+              <label for="manualDriveSeriesSelect">Document to upgrade</label>
+              <select id="manualDriveSeriesSelect"><option value="">New document · create Version 1</option></select>
             </div>
             <div class="manual-drive-actions">
               <button class="btn btn-sm" id="manualUploadWordBtn" type="button">Upload Original DOCX</button>

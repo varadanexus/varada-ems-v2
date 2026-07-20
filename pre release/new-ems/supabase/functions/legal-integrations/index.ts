@@ -930,6 +930,27 @@ async function saveDraftAgreement(req: Request, body: any) {
     updated_at: new Date().toISOString()
   }).eq("id", agreement.id);
 
+  const driveDraftSeriesId = String(body.driveDraftSeriesId || "").trim();
+  if (isUuid(driveDraftSeriesId)) {
+    const draftDocuments = await admin.from("drive_documents")
+      .select("id,error_detail")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .eq("entity_id", driveDraftSeriesId)
+      .eq("uploaded_by", caller.id)
+      .is("deleted_at", null);
+    if (draftDocuments.error) throw draftDocuments.error;
+    for (const document of draftDocuments.data || []) {
+      const metadata = String(document.error_detail || "")
+        .replace(/agreement-id:[0-9a-f-]+;/ig, "")
+        .replace(/series:[0-9a-f-]+;/ig, "");
+      const linkResult = await admin.from("drive_documents").update({
+        error_detail: `series:${driveDraftSeriesId};agreement-id:${agreement.id};${metadata}`.slice(0, 500)
+      }).eq("id", document.id);
+      if (linkResult.error) throw linkResult.error;
+    }
+  }
+
   await admin.from("legal_provider_events").insert({
     agreement_id: agreement.id,
     signing_request_id: null,
@@ -1310,18 +1331,31 @@ async function uploadOfflineDraftVersion(req: Request, body: any) {
 
   const requestedSeriesId = String(body.seriesId || "").trim();
   const seriesId = requestedSeriesId ? requestedSeriesId : crypto.randomUUID();
+  const agreementId = String(body.agreementId || "").trim();
   if (!isUuid(seriesId)) return json({ error: "Invalid draft series identifier." }, 400);
+  if (agreementId && !isUuid(agreementId)) return json({ error: "Invalid agreement identifier." }, 400);
+  if (agreementId) {
+    const agreementCheck = await admin.from("legal_agreements").select("id").eq("id", agreementId).is("deleted_at", null).maybeSingle();
+    if (agreementCheck.error) throw agreementCheck.error;
+    if (!agreementCheck.data?.id) return json({ error: "Agreement not found." }, 404);
+  }
   if (requestedSeriesId) {
     const ownership = await admin.from("drive_documents")
-      .select("id")
+      .select("id,uploaded_by,error_detail")
       .eq("category", "LEGAL_DRAFT")
       .eq("entity_type", "legal_draft_series")
       .eq("entity_id", seriesId)
-      .eq("uploaded_by", caller.id)
       .limit(1)
       .maybeSingle();
     if (ownership.error) throw ownership.error;
-    if (!ownership.data?.id) return json({ error: "This draft series is unavailable or belongs to another user." }, 404);
+    const linkedToAgreement = agreementId && String(ownership.data?.error_detail || "").includes(`agreement-id:${agreementId};`);
+    const ownedByCaller = ownership.data?.uploaded_by === caller.id;
+    if (ownership.data?.id && !ownedByCaller && !linkedToAgreement) {
+      return json({ error: "This draft series belongs to another agreement or user." }, 403);
+    }
+    if (!ownership.data?.id && !(agreementId && seriesId === agreementId)) {
+      return json({ error: "This draft series is unavailable or belongs to another user." }, 404);
+    }
   }
 
   const latestResult = await admin.from("drive_documents")
@@ -1329,7 +1363,6 @@ async function uploadOfflineDraftVersion(req: Request, body: any) {
     .eq("category", "LEGAL_DRAFT")
     .eq("entity_type", "legal_draft_series")
     .eq("entity_id", seriesId)
-    .eq("uploaded_by", caller.id)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -1365,7 +1398,7 @@ async function uploadOfflineDraftVersion(req: Request, body: any) {
     web_view_link: uploaded.webViewLink || null,
     upload_status: "stored",
     uploaded_by: caller.id,
-    error_detail: `sha256:${fileHash};original:${originalFileName};agreement:${agreementNo || ""};title:${title}`.slice(0, 500)
+    error_detail: `series:${seriesId};${agreementId ? `agreement-id:${agreementId};` : ""}sha256:${fileHash};original:${originalFileName};agreement:${agreementNo || ""};title:${title}`.slice(0, 500)
   }).select("*").single();
   if (insertResult.error) {
     await deleteDriveFile(uploaded.id).catch(() => null);
@@ -1389,7 +1422,31 @@ async function listOfflineDraftVersions(req: Request, body: any) {
   const admin = adminClient();
   const caller = await requireLegalCaller(req, admin);
   let seriesId = String(body.seriesId || "").trim();
+  const agreementId = String(body.agreementId || "").trim();
   if (seriesId && !isUuid(seriesId)) return json({ error: "Invalid draft series identifier." }, 400);
+  if (agreementId && !isUuid(agreementId)) return json({ error: "Invalid agreement identifier." }, 400);
+  if (agreementId) {
+    const linked = await admin.from("drive_documents")
+      .select("id,entity_id,document_no,file_name,file_size,error_detail,created_at")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .like("error_detail", `%agreement-id:${agreementId};%`)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
+    if (linked.error) throw linked.error;
+    const versions = (linked.data || []).map((row: any) => ({
+      id: row.id,
+      series_id: String(row.error_detail || "").match(/series:([0-9a-f-]{36});/i)?.[1] || row.entity_id,
+      agreement_id: agreementId,
+      version_no: Number(row.document_no || 0),
+      original_file_name: row.file_name,
+      drive_file_name: row.file_name,
+      file_size: row.file_size,
+      file_sha256: String(row.error_detail || "").match(/sha256:([0-9a-f]{64})/i)?.[1] || null,
+      created_at: row.created_at
+    }));
+    return json({ success: true, seriesId: versions[0]?.series_id || agreementId, versions });
+  }
   if (!seriesId) {
     const latest = await admin.from("drive_documents")
       .select("entity_id")
@@ -1425,6 +1482,40 @@ async function listOfflineDraftVersions(req: Request, body: any) {
   return json({ success: true, seriesId, versions });
 }
 
+async function listOfflineDraftSeries(req: Request) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const result = await admin.from("drive_documents")
+    .select("id,entity_id,document_no,file_name,file_size,error_detail,created_at")
+    .eq("category", "LEGAL_DRAFT")
+    .eq("entity_type", "legal_draft_series")
+    .eq("uploaded_by", caller.id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (result.error) throw result.error;
+  const grouped = new Map<string, any>();
+  for (const row of result.data || []) {
+    const metadata = String(row.error_detail || "");
+    const seriesId = metadata.match(/series:([0-9a-f-]{36});/i)?.[1] || row.entity_id;
+    if (!seriesId) continue;
+    const current = grouped.get(seriesId) || {
+      seriesId,
+      title: metadata.match(/(?:^|;)title:([^;]*)/i)?.[1] || row.file_name?.replace(/-V\d+\.docx$/i, "") || "Legal Draft",
+      agreementNo: metadata.match(/(?:^|;)agreement:([^;]*)/i)?.[1] || "",
+      agreementId: metadata.match(/agreement-id:([0-9a-f-]{36});/i)?.[1] || null,
+      versionCount: 0,
+      latestVersion: 0,
+      latestFileName: row.file_name,
+      latestAt: row.created_at
+    };
+    current.versionCount += 1;
+    current.latestVersion = Math.max(current.latestVersion, Number(row.document_no || 0));
+    grouped.set(seriesId, current);
+  }
+  return json({ success: true, series: Array.from(grouped.values()) });
+}
+
 async function offlineDraftVersionProxy(req: Request, body: any) {
   const admin = adminClient();
   const caller = await requireLegalCaller(req, admin);
@@ -1432,10 +1523,9 @@ async function offlineDraftVersionProxy(req: Request, body: any) {
   if (!isUuid(versionId)) return json({ error: "A valid draft version is required." }, 400);
   const result = await admin.from("drive_documents")
     .select("drive_file_id,file_name,mime_type")
-      .eq("id", versionId)
+    .eq("id", versionId)
     .eq("category", "LEGAL_DRAFT")
     .eq("entity_type", "legal_draft_series")
-    .eq("uploaded_by", caller.id)
     .maybeSingle();
   if (result.error) throw result.error;
   if (!result.data?.drive_file_id) return json({ error: "Draft version not found." }, 404);
@@ -1452,6 +1542,65 @@ async function offlineDraftVersionProxy(req: Request, body: any) {
       "Cache-Control": "private, no-store"
     }
   });
+}
+
+async function uploadManualSigningArtifact(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const agreementId = String(body.agreementId || "").trim();
+  const fileKind = String(body.fileKind || "").trim();
+  const allowedKinds = new Set(["signed_pdf", "acceptance_certificate_pdf", "evidence_pdf"]);
+  if (!isUuid(agreementId)) return json({ error: "A valid agreement is required." }, 400);
+  if (!allowedKinds.has(fileKind)) return json({ error: "Choose a signed agreement, certificate, or evidence PDF." }, 400);
+  const encoded = String(body.base64 || "").replace(/^data:[^;]+;base64,/, "");
+  if (!encoded) return json({ error: "PDF content is required." }, 400);
+  const bytes = base64ToBytes(encoded);
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) return json({ error: "The PDF must be 10 MB or smaller." }, 400);
+  if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-") return json({ error: "The selected file is not a valid PDF." }, 400);
+
+  const agreementResult = await admin.from("legal_agreements").select("*").eq("id", agreementId).is("deleted_at", null).maybeSingle();
+  if (agreementResult.error) throw agreementResult.error;
+  if (!agreementResult.data?.id) return json({ error: "Agreement not found." }, 404);
+  const agreement = agreementResult.data;
+  const [requestResult, versionResult] = await Promise.all([
+    admin.from("legal_signing_requests").select("id,recipient_name").eq("agreement_id", agreementId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    agreement.current_version_id
+      ? admin.from("legal_agreement_versions").select("version_no").eq("id", agreement.current_version_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null })
+  ]);
+  if (requestResult.error) throw requestResult.error;
+  if (versionResult.error) throw versionResult.error;
+  const request = { agreement_id: agreementId, id: requestResult.data?.id || null, recipient_name: requestResult.data?.recipient_name || agreement.signer_name || agreement.party_name };
+  const drivePath = await ensureLegalDrivePath(agreement, request);
+  const targetFolder = driveFolderForFileKind(drivePath, fileKind);
+  const labels: Record<string, string> = {
+    signed_pdf: "signed-agreement",
+    acceptance_certificate_pdf: "signing-certificate",
+    evidence_pdf: "signing-evidence"
+  };
+  const versionNo = Number(versionResult.data?.version_no || 1);
+  const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+  const fileName = archiveFileName(agreement.agreement_no, `${versionTag(versionNo)}-${labels[fileKind]}-${timestamp}.pdf`);
+  const uploaded = await uploadDriveFile(fileName, "application/pdf", bytes, targetFolder.id);
+  if (!uploaded?.id) throw new Error(uploaded?.payload?.error || "Google Drive upload failed.");
+  const fileHash = await sha256(bytes);
+  let archive;
+  try {
+    archive = await recordArchiveFile(admin, request, fileKind, uploaded, fileName, "application/pdf", fileHash, targetFolder.id);
+  } catch (error) {
+    await deleteDriveFile(uploaded.id).catch(() => null);
+    throw error;
+  }
+  await admin.from("legal_provider_events").insert({
+    agreement_id: agreementId,
+    signing_request_id: request.id,
+    provider: "google_drive",
+    provider_event_id: uploaded.id,
+    event_type: `manual.${fileKind}.upload`,
+    status: "archived",
+    payload: { uploadedBy: caller.id, fileName, fileHash, fileKind }
+  });
+  return json({ success: true, archive, fileName, fileHash, driveFolder: targetFolder.name });
 }
 
 function escapeHtml(value = "") {
@@ -2160,17 +2309,37 @@ async function getLegalAgreement(req: Request, body: any) {
     .order("version_no", { ascending: false });
   if (versionsResult.error) throw versionsResult.error;
 
-  const signaturesResult = await admin
-    .from("legal_execution_signatures")
-    .select("*")
-    .eq("agreement_id", agreementId)
-    .order("signed_at", { ascending: true });
+  const [signaturesResult, documentsResult, archiveFilesResult] = await Promise.all([
+    admin.from("legal_execution_signatures").select("*").eq("agreement_id", agreementId).order("signed_at", { ascending: true }),
+    admin.from("drive_documents")
+      .select("id,entity_id,document_no,file_name,file_size,error_detail,created_at")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .like("error_detail", `%agreement-id:${agreementId};%`)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
+    admin.from("legal_archive_files").select("*").eq("agreement_id", agreementId).order("uploaded_at", { ascending: false })
+  ]);
   if (signaturesResult.error) throw signaturesResult.error;
+  if (documentsResult.error) throw documentsResult.error;
+  if (archiveFilesResult.error) throw archiveFilesResult.error;
+  const documentVersions = (documentsResult.data || []).map((row: any) => ({
+    id: row.id,
+    series_id: String(row.error_detail || "").match(/series:([0-9a-f-]{36});/i)?.[1] || row.entity_id,
+    agreement_id: agreementId,
+    version_no: Number(row.document_no || 0),
+    drive_file_name: row.file_name,
+    file_size: row.file_size,
+    file_sha256: String(row.error_detail || "").match(/sha256:([0-9a-f]{64})/i)?.[1] || null,
+    created_at: row.created_at
+  }));
 
   return json({
     agreement: agreementResult.data,
     versions: versionsResult.data || [],
-    signatures: signaturesResult.data || []
+    signatures: signaturesResult.data || [],
+    documentVersions,
+    archiveFiles: archiveFilesResult.data || []
   });
 }
 
@@ -2190,12 +2359,14 @@ async function deleteLegalAgreement(req: Request, body: any) {
   const agreement = agreementResult.data;
   if (!agreement) throw new Error("Agreement not found");
 
-  const [archiveFilesResult, requestsResult] = await Promise.all([
+  const [archiveFilesResult, requestsResult, draftDocumentsResult] = await Promise.all([
     admin.from("legal_archive_files").select("id,drive_file_id,drive_folder_id,file_name,file_kind").eq("agreement_id", agreementId),
-    admin.from("legal_signing_requests").select("id,evidence_drive_file_id,live_photo_drive_file_id").eq("agreement_id", agreementId)
+    admin.from("legal_signing_requests").select("id,evidence_drive_file_id,live_photo_drive_file_id").eq("agreement_id", agreementId),
+    admin.from("drive_documents").select("id,drive_file_id,drive_folder_id").eq("category", "LEGAL_DRAFT").like("error_detail", `%agreement-id:${agreementId};%`).is("deleted_at", null)
   ]);
   if (archiveFilesResult.error) throw archiveFilesResult.error;
   if (requestsResult.error) throw requestsResult.error;
+  if (draftDocumentsResult.error) throw draftDocumentsResult.error;
   const requestIds = (requestsResult.data || []).map((row: any) => row.id).filter(Boolean);
   const evidenceResult = requestIds.length
     ? await admin.from("legal_signing_evidence").select("id,live_photo_drive_file_id").in("signing_request_id", requestIds)
@@ -2205,14 +2376,17 @@ async function deleteLegalAgreement(req: Request, body: any) {
   const archiveFiles = archiveFilesResult.data || [];
   const requests = requestsResult.data || [];
   const evidences = evidenceResult.data || [];
+  const draftDocuments = draftDocumentsResult.data || [];
   const driveFileIds = Array.from(new Set([
     ...archiveFiles.map((row: any) => row.drive_file_id),
+    ...draftDocuments.map((row: any) => row.drive_file_id),
     ...requests.map((row: any) => row.evidence_drive_file_id),
     ...requests.map((row: any) => row.live_photo_drive_file_id),
     ...evidences.map((row: any) => row.live_photo_drive_file_id)
   ].filter(Boolean)));
   const folderIds = Array.from(new Set([
     ...archiveFiles.map((row: any) => row.drive_folder_id),
+    ...draftDocuments.map((row: any) => row.drive_folder_id),
     agreement.google_drive_folder_id
   ].filter(Boolean)));
 
@@ -2225,6 +2399,11 @@ async function deleteLegalAgreement(req: Request, body: any) {
     } catch (error) {
       failedDriveFiles.push({ fileId, error: error?.message || "Drive delete failed" });
     }
+  }
+
+  if (draftDocuments.length) {
+    const draftDelete = await admin.from("drive_documents").delete().in("id", draftDocuments.map((row: any) => row.id));
+    if (draftDelete.error) throw draftDelete.error;
   }
 
   const deleteAgreementResult = await admin.from("legal_agreements").delete().eq("id", agreementId);
@@ -3598,7 +3777,9 @@ Deno.serve(async (req) => {
     if (action === "word_editor_finalize") return await finalizeWordDraft(req, body);
     if (action === "offline_draft_upload") return await uploadOfflineDraftVersion(req, body);
     if (action === "offline_draft_list") return await listOfflineDraftVersions(req, body);
+    if (action === "offline_draft_series_list") return await listOfflineDraftSeries(req);
     if (action === "offline_draft_download") return await offlineDraftVersionProxy(req, body);
+    if (action === "manual_signing_artifact_upload") return await uploadManualSigningArtifact(req, body);
     if (action === "list_legal_data") return await listLegalData(req);
     if (action === "get_agreement") return await getLegalAgreement(req, body);
     if (action === "delete_agreement") return await deleteLegalAgreement(req, body);
