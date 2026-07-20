@@ -913,7 +913,7 @@ function renderPage() {
         <h3 id="draftEditorTitle">Draft Editor</h3>
         <p class="muted" id="draftEditorDescription">The generated or edited draft appears here. The AI prompt is kept separately below.</p>
         <div class="document-editor-choice" id="documentEditorChoice" hidden>
-          <p><strong>EMS Document Editor</strong> · Create a draft or upload a `.docx`. Import happens privately in your browser; review complex layouts, headers and footers before saving.</p>
+          <p><strong>EMS Document Editor</strong> · Create a draft or upload a <code>.docx</code>. Import happens privately in your browser; review complex layouts, headers and footers before saving.</p>
         </div>
         <textarea id="draftOutput" class="legal-output" placeholder="Generated draft will appear here. You can edit it before saving."></textarea>
         <div class="word-editor-shell" id="wordEditorShell" hidden>
