@@ -1,15 +1,17 @@
 // @ts-nocheck
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import JSZip from "https://esm.sh/jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-didit-signature, x-signature, x-signature-v2, x-signature-simple, x-timestamp, x-twilio-signature",
+  "Access-Control-Allow-Headers": "authorization, authorizationjwt, x-client-info, apikey, content-type, x-didit-signature, x-signature, x-signature-v2, x-signature-simple, x-timestamp, x-twilio-signature",
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
 const PUBLIC_WEBSITE_ORIGIN = "https://www.varadanexus.com";
 const PUBLIC_SIGNING_BASE_URL = `${PUBLIC_WEBSITE_ORIGIN}/new-ems/modules/legal-public-sign/index.html`;
+const LEGAL_DOCUMENT_BUCKET = "legal-documents";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -119,6 +121,339 @@ async function requireLegalCaller(req: Request, admin: any) {
     throw new Error("Legal permission required");
   }
   return caller;
+}
+
+function onlyOfficeServerUrl() {
+  return env("ONLYOFFICE_DOCUMENT_SERVER_URL").replace(/\/+$/, "");
+}
+
+function onlyOfficeSecret() {
+  return env("ONLYOFFICE_JWT_SECRET");
+}
+
+function requireOnlyOfficeConfiguration() {
+  const serverUrl = onlyOfficeServerUrl();
+  const secret = onlyOfficeSecret();
+  if (!serverUrl || !secret) {
+    throw new Error("Word editor is not configured. Set ONLYOFFICE_DOCUMENT_SERVER_URL and ONLYOFFICE_JWT_SECRET.");
+  }
+  if (!/^https:\/\//i.test(serverUrl) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(serverUrl)) {
+    throw new Error("ONLYOFFICE_DOCUMENT_SERVER_URL must use HTTPS outside local development.");
+  }
+  return { serverUrl, secret };
+}
+
+function utf8Base64Url(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => binary += String.fromCharCode(byte));
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function signOnlyOfficeJwt(payload: any, secret = onlyOfficeSecret()) {
+  if (!secret) throw new Error("ONLYOFFICE_JWT_SECRET is missing");
+  const header = utf8Base64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = utf8Base64Url(JSON.stringify(payload));
+  const signingInput = `${header}.${body}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signingInput));
+  return `${signingInput}.${base64Url(signature)}`;
+}
+
+function decodeBase64Url(value: string) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+}
+
+async function verifyOnlyOfficeJwt(token = "") {
+  const secret = onlyOfficeSecret();
+  const parts = String(token).split(".");
+  if (!secret || parts.length !== 3) return false;
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+    return await crypto.subtle.verify(
+      "HMAC",
+      key,
+      decodeBase64Url(parts[2]),
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function xmlEscape(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+async function createBlankLegalDocx(text = "") {
+  const zip = new JSZip();
+  const paragraphs = String(text || "")
+    .replace(/\r/g, "")
+    .split(/\n/)
+    .map((line) => `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(line || " ")}</w:t></w:r></w:p>`)
+    .join("");
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>`);
+  zip.folder("_rels")?.file(".rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+  zip.folder("word")?.file("document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>${paragraphs || "<w:p/>"}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body>
+</w:document>`);
+  zip.folder("word")?.file("styles.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+</w:styles>`);
+  zip.folder("word")?.folder("_rels")?.file("document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
+  return await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+}
+
+function safeDocxTitle(value = "Legal Draft") {
+  const base = String(value || "Legal Draft")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120) || "Legal Draft";
+  return base.toLowerCase().endsWith(".docx") ? base : `${base}.docx`;
+}
+
+async function ownedWordDocument(admin: any, caller: any, documentId: string) {
+  const { data, error } = await admin
+    .from("legal_word_documents")
+    .select("*")
+    .eq("id", documentId)
+    .eq("owner_user_id", caller.id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.id) throw new Error("Word document was not found or is not available to this user.");
+  return data;
+}
+
+async function createWordEditorSession(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const { serverUrl, secret } = requireOnlyOfficeConfiguration();
+  const documentId = crypto.randomUUID();
+  const title = safeDocxTitle(body.title || body.agreementTitle || "Legal Draft");
+  const objectPath = `${caller.id}/${documentId}.docx`;
+  const documentKey = (await sha256(`${documentId}:${Date.now()}:${randomToken()}`)).slice(0, 48);
+  const file = await createBlankLegalDocx(body.draftText || "");
+  const upload = await admin.storage.from(LEGAL_DOCUMENT_BUCKET).upload(objectPath, file, {
+    contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    upsert: false
+  });
+  if (upload.error) throw upload.error;
+
+  const inserted = await admin.from("legal_word_documents").insert({
+    id: documentId,
+    owner_user_id: caller.id,
+    object_path: objectPath,
+    document_key: documentKey,
+    title,
+    status: "editing"
+  }).select("*").single();
+  if (inserted.error) {
+    await admin.storage.from(LEGAL_DOCUMENT_BUCKET).remove([objectPath]);
+    throw inserted.error;
+  }
+
+  const signed = await admin.storage.from(LEGAL_DOCUMENT_BUCKET).createSignedUrl(objectPath, 86400);
+  if (signed.error || !signed.data?.signedUrl) throw signed.error || new Error("Could not create document URL");
+  const callbackUrl = `${env("SUPABASE_URL")}/functions/v1/legal-integrations?onlyoffice_callback=1&document_id=${documentId}`;
+  const config: any = {
+    documentType: "word",
+    type: "desktop",
+    width: "100%",
+    height: "100%",
+    document: {
+      fileType: "docx",
+      key: documentKey,
+      title,
+      url: signed.data.signedUrl,
+      permissions: {
+        edit: true,
+        download: true,
+        print: true,
+        comment: true,
+        review: true,
+        copy: true
+      }
+    },
+    editorConfig: {
+      mode: "edit",
+      lang: "en",
+      region: "en-IN",
+      callbackUrl,
+      user: {
+        id: caller.id,
+        name: caller.display_name || caller.email || "Varada Nexus User"
+      },
+      customization: {
+        autosave: true,
+        forcesave: true,
+        compactToolbar: false,
+        feedback: false,
+        help: true,
+        hideRightMenu: false,
+        toolbarNoTabs: false,
+        unit: "cm"
+      }
+    }
+  };
+  config.token = await signOnlyOfficeJwt(config, secret);
+  return json({
+    success: true,
+    documentId,
+    documentServerUrl: serverUrl,
+    config,
+    updatedAt: inserted.data.updated_at
+  });
+}
+
+async function onlyOfficeCallback(req: Request, body: any) {
+  const admin = adminClient();
+  const documentId = new URL(req.url).searchParams.get("document_id") || "";
+  const headerToken = req.headers.get("authorizationjwt") || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+  if (!documentId || !await verifyOnlyOfficeJwt(body.token || headerToken)) return json({ error: 1 }, 403);
+  const recordResult = await admin.from("legal_word_documents").select("*").eq("id", documentId).maybeSingle();
+  const record = recordResult.data;
+  if (!record?.id || String(body.key || "") !== String(record.document_key)) return json({ error: 1 }, 403);
+  const status = Number(body.status || 0);
+  if ([2, 6].includes(status) && body.url) {
+    const response = await fetch(body.url);
+    if (!response.ok) return json({ error: 1 }, 502);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const upload = await admin.storage.from(LEGAL_DOCUMENT_BUCKET).upload(record.object_path, bytes, {
+      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      upsert: true
+    });
+    if (upload.error) return json({ error: 1 }, 500);
+    await admin.from("legal_word_documents").update({
+      status: "saved",
+      last_callback_status: status,
+      last_saved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq("id", record.id);
+  } else if ([3, 7].includes(status)) {
+    await admin.from("legal_word_documents").update({
+      status: "error",
+      last_callback_status: status,
+      updated_at: new Date().toISOString()
+    }).eq("id", record.id);
+  } else {
+    await admin.from("legal_word_documents").update({
+      last_callback_status: status,
+      updated_at: new Date().toISOString()
+    }).eq("id", record.id);
+  }
+  return json({ error: 0 });
+}
+
+async function wordEditorStatus(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const record = await ownedWordDocument(admin, caller, String(body.documentId || ""));
+  return json({
+    success: true,
+    documentId: record.id,
+    status: record.status,
+    lastCallbackStatus: record.last_callback_status,
+    lastSavedAt: record.last_saved_at,
+    updatedAt: record.updated_at
+  });
+}
+
+async function forceSaveWordDocument(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const { serverUrl, secret } = requireOnlyOfficeConfiguration();
+  const record = await ownedWordDocument(admin, caller, String(body.documentId || ""));
+  const command: any = { c: "forcesave", key: record.document_key, userdata: record.id };
+  command.token = await signOnlyOfficeJwt(command, secret);
+  const response = await fetch(`${serverUrl}/command?shardkey=${encodeURIComponent(record.document_key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(command)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || ![0, 4].includes(Number(result.error ?? -1))) {
+    throw new Error(`Word editor save request failed (code ${result.error ?? response.status}).`);
+  }
+  return json({ success: true, pending: Number(result.error) === 0, noChanges: Number(result.error) === 4 });
+}
+
+async function finalizeWordDraft(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const { serverUrl, secret } = requireOnlyOfficeConfiguration();
+  const record = await ownedWordDocument(admin, caller, String(body.documentId || ""));
+  const signed = await admin.storage.from(LEGAL_DOCUMENT_BUCKET).createSignedUrl(record.object_path, 3600);
+  if (signed.error || !signed.data?.signedUrl) throw signed.error || new Error("Could not read the Word document");
+  const conversion: any = {
+    async: false,
+    filetype: "docx",
+    key: `${record.document_key}-txt-${Date.now()}`.slice(0, 128),
+    outputtype: "txt",
+    title: record.title.replace(/\.docx$/i, ".txt"),
+    url: signed.data.signedUrl
+  };
+  conversion.token = await signOnlyOfficeJwt(conversion, secret);
+  const conversionResponse = await fetch(`${serverUrl}/converter?shardkey=${encodeURIComponent(conversion.key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(conversion)
+  });
+  const conversionResult = await conversionResponse.json().catch(() => ({}));
+  if (!conversionResponse.ok || !conversionResult.endConvert || !conversionResult.fileUrl) {
+    throw new Error(`Word document conversion failed (code ${conversionResult.error ?? conversionResponse.status}).`);
+  }
+  const textResponse = await fetch(conversionResult.fileUrl);
+  if (!textResponse.ok) throw new Error("The converted Word document could not be downloaded.");
+  const draftText = (await textResponse.text()).replace(/^\uFEFF/, "").trim();
+  if (!draftText) throw new Error("The Word document is empty.");
+  const savedResponse = await saveDraftAgreement(req, {
+    ...body,
+    title: body.title || record.title.replace(/\.docx$/i, ""),
+    draftText,
+    draftSource: "imported"
+  });
+  const saved = await savedResponse.clone().json();
+  if (!savedResponse.ok || saved.error) return savedResponse;
+  await admin.from("legal_word_documents").update({
+    agreement_id: saved.agreement?.id || null,
+    version_id: saved.version?.id || null,
+    status: "saved",
+    updated_at: new Date().toISOString()
+  }).eq("id", record.id);
+  return json({ ...saved, documentId: record.id, draftText });
 }
 
 async function ensureAgreement(admin: any, body: any, caller: any) {
@@ -3066,6 +3401,9 @@ Deno.serve(async (req) => {
     const contentType = req.headers.get("content-type") || "";
     const formBody = contentType.includes("application/x-www-form-urlencoded") ? new URLSearchParams(rawBody) : null;
     const body = formBody ? Object.fromEntries(formBody.entries()) : (rawBody ? JSON.parse(rawBody) : {});
+    if (new URL(req.url).searchParams.get("onlyoffice_callback") === "1") {
+      return await onlyOfficeCallback(req, body);
+    }
     const hasDiditSignature = req.headers.get("x-signature") ||
       req.headers.get("x-signature-v2") ||
       req.headers.get("x-didit-signature") ||
@@ -3079,6 +3417,10 @@ Deno.serve(async (req) => {
     if (action === "generate_draft") return await generateGeminiDraft(req, body);
     if (action === "revise_draft") return await reviseGeminiDraft(req, body);
     if (action === "save_draft") return await saveDraftAgreement(req, body);
+    if (action === "word_editor_start") return await createWordEditorSession(req, body);
+    if (action === "word_editor_status") return await wordEditorStatus(req, body);
+    if (action === "word_editor_force_save") return await forceSaveWordDocument(req, body);
+    if (action === "word_editor_finalize") return await finalizeWordDraft(req, body);
     if (action === "list_legal_data") return await listLegalData(req);
     if (action === "get_agreement") return await getLegalAgreement(req, body);
     if (action === "delete_agreement") return await deleteLegalAgreement(req, body);

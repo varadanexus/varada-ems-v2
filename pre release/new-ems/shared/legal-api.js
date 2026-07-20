@@ -42,6 +42,22 @@ export async function saveLegalDraft(payload) {
   return legalIntegration("save_draft", payload);
 }
 
+export async function startLegalWordEditor(payload) {
+  return legalIntegration("word_editor_start", payload);
+}
+
+export async function getLegalWordEditorStatus(documentId) {
+  return legalIntegration("word_editor_status", { documentId });
+}
+
+export async function forceSaveLegalWordDocument(documentId) {
+  return legalIntegration("word_editor_force_save", { documentId });
+}
+
+export async function finalizeLegalWordDraft(payload) {
+  return legalIntegration("word_editor_finalize", payload);
+}
+
 export async function getPublicSigningRequest(token) {
   return legalIntegration("public_get", { token });
 }
