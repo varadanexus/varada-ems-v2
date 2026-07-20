@@ -1,13 +1,14 @@
 import { MODULES, WORKSPACES } from "../config/constants.js";
 import { logUserRoleEvent } from "./audit.js";
-import { listDivisions, listRoles, listUsers, provisionUserViaEdge, provisionLocalUser, deleteAppUser, updateAppUserDetails, setLocalUserPassword, setSupabaseUserPassword, syncUserAccessMappings, updateUserStatus } from "./admin-api.js";
+import { listDivisions, listRoles, listUsers, provisionUserViaEdge, provisionLocalUser, deleteAppUser, updateAppUserDetails, revealLocalUserPassword, setLocalUserPassword, setSupabaseUserPassword, syncUserAccessMappings, updateUserStatus } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { qs, showToast } from "./utils.js";
 import { updateUserSecurity } from "./admin-api.js";
 import { getCurrentAppUser } from "./auth.js";
 import { requestUserPasswordReset } from "./admin-api.js";
-import { sendUserCredentialEmail } from "./email-api.js";
+import { sendModuleEmail, sendUserCredentialEmail } from "./email-api.js";
 import { notifyEmsUserCreated } from "./transport-integrations-api.js";
+import { sendWhatsAppWorkspaceMessage } from "./whatsapp-api.js";
 import { getSupabaseClient } from "../config/supabase.js";
 
 const client = getSupabaseClient();
@@ -18,8 +19,13 @@ let allDivisions = [];
 let currentPage = 1;
 const PAGE_SIZE = 10;
 let currentAppUserId = null;
+let currentAppUserEmail = "";
 let selectedUserId = null;
 let termsAcceptanceModal = null;
+let passwordRevealModal = null;
+let passwordRevealTimer = null;
+const PASSWORD_REVEAL_SECONDS = 20;
+const PASSWORD_REVEAL_ALLOWED_EMAILS = ["admin@varadanexus.com", "prudhvi@varadanexus.com"];
 
 async function init() {
   await bootstrapProtectedPage({
@@ -31,6 +37,7 @@ async function init() {
 
   const me = await getCurrentAppUser();
   currentAppUserId = me?.id || null;
+  currentAppUserEmail = String(me?.email || "").trim().toLowerCase();
 
   renderModuleContent(`
     <style>
@@ -173,6 +180,50 @@ async function deliverStaffCredentials(user, password, sourceEvent = "ems_user_c
   return warnings;
 }
 
+function canRevealStaffPassword() {
+  return PASSWORD_REVEAL_ALLOWED_EMAILS.includes(currentAppUserEmail);
+}
+
+async function deliverTermsAcceptanceRequest(user) {
+  const recipientEmail = String(user.email || "").trim().toLowerCase();
+  const recipientPhone = String(user.phone || "").trim();
+  const recipientName = String(user.display_name || user.username || recipientEmail || "Team Member").trim();
+  const loginUrl = "https://www.varadanexus.com/login";
+  const message = `Hello ${recipientName}, a new acceptance of the Varada Nexus EMS Terms and Conditions is required for your account. Please sign in at ${loginUrl}, review the current terms and complete the live-camera acceptance step before continuing.`;
+  const warnings = [];
+
+  if (/^\S+@\S+\.\S+$/.test(recipientEmail)) {
+    try {
+      const emailResult = await sendModuleEmail({
+        to: [{ address: recipientEmail, name: recipientName }],
+        subject: "Action required: accept the current EMS Terms and Conditions",
+        bodyHtml: `<p>Hello ${escAttr(recipientName)},</p><p>A new acceptance of the <strong>Varada Nexus EMS Terms and Conditions</strong> is required for your account.</p><p><a href="${loginUrl}">Sign in to EMS</a>, review the current terms and complete the live-camera acceptance step before continuing.</p><p>If you did not expect this request, contact <a href="mailto:connect@varadanexus.com">connect@varadanexus.com</a>.</p>`,
+        textBody: `${message}\n\nIf you did not expect this request, contact connect@varadanexus.com.`,
+        sourceModule: "users",
+        sourceEvent: "staff_terms_acceptance_requested"
+      });
+      if (!(emailResult?.sent > 0)) warnings.push("email was not delivered");
+    } catch (error) {
+      warnings.push(`email failed: ${error?.message || "Unknown error"}`);
+    }
+  } else {
+    warnings.push("user has no valid email address");
+  }
+
+  if (recipientPhone.replace(/\D/g, "").length >= 10) {
+    try {
+      const whatsappResult = await sendWhatsAppWorkspaceMessage({ phone: recipientPhone, message });
+      if (!whatsappResult?.sent) warnings.push(`WhatsApp was not delivered${whatsappResult?.reason ? `: ${whatsappResult.reason}` : ""}`);
+    } catch (error) {
+      warnings.push(`WhatsApp failed: ${error?.message || "Unknown error"}`);
+    }
+  } else {
+    warnings.push("user has no valid WhatsApp number");
+  }
+
+  return warnings;
+}
+
 function userInitials(user) {
   const source = String(user.display_name || user.username || user.email || "User").trim();
   return escAttr(source.split(/\s+/).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase() || "U");
@@ -218,7 +269,7 @@ function renderStaffTermsModal() {
         <div class="eu-modal-head">
           <div class="eu-modal-title"><span class="eu-user-avatar">${userInitials(user)}</span><div><h3 id="euTermsModalTitle">T&amp;C acceptance</h3><p class="muted">${escAttr(user.display_name || user.email)} · EMS staff account</p></div></div>
           <div class="eu-action-grid">
-            ${!modal.loading && !status?.reacceptance_pending ? `<button class="btn" type="button" data-request-terms-user-id="${escAttr(user.id)}">${status?.accepted ? "Request acceptance again" : "Require acceptance"}</button>` : ""}
+            ${!modal.loading ? `<button class="btn" type="button" data-request-terms-user-id="${escAttr(user.id)}">${status?.reacceptance_pending ? "Resend T&amp;C request" : status?.accepted ? "Request acceptance again" : "Send T&amp;C acceptance request"}</button>` : ""}
             <button class="btn" type="button" data-close-terms-modal>Close</button>
           </div>
         </div>
@@ -256,6 +307,64 @@ function renderStaffTermsModal() {
     </div>`;
 }
 
+function renderPasswordRevealModal() {
+  const modal = passwordRevealModal;
+  if (!modal) return "";
+  if (!modal.password) {
+    return `
+      <div class="eu-modal" data-password-reveal-backdrop role="dialog" aria-modal="true" aria-labelledby="euRevealPasswordTitle">
+        <div class="eu-modal-panel" style="width:min(620px,calc(100vw - 2rem))">
+          <div class="eu-modal-head">
+            <div><h3 id="euRevealPasswordTitle">Reveal staff password</h3><p class="muted">${escAttr(modal.user.display_name || modal.user.email)} · This action is permanently audited.</p></div>
+            <button class="btn" type="button" data-close-password-reveal>Close</button>
+          </div>
+          <div class="eu-modal-body">
+            <p class="muted">Your email, time, target account, outcome and reason are recorded whether the request is approved or denied.</p>
+            <label for="euRevealPasswordReason">Reason for reveal (required)</label>
+            <input id="euRevealPasswordReason" type="text" maxlength="500" style="width:100%" placeholder="Why do you need to view this password?" autocomplete="off" />
+            <div class="eu-action-grid" style="margin-top:1rem"><button class="btn" type="button" data-confirm-password-reveal style="border-color:#b45309;color:#e6c87e">I understand — Reveal password</button></div>
+          </div>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="eu-modal" data-password-reveal-backdrop role="dialog" aria-modal="true" aria-labelledby="euRevealedPasswordTitle">
+      <div class="eu-modal-panel" style="width:min(620px,calc(100vw - 2rem))">
+        <div class="eu-modal-head">
+          <div><h3 id="euRevealedPasswordTitle">Password revealed</h3><p class="muted">Automatically hidden in <span data-password-reveal-countdown>${PASSWORD_REVEAL_SECONDS}</span> seconds. This reveal is permanently logged.</p></div>
+          <button class="btn" type="button" data-close-password-reveal>Close now</button>
+        </div>
+        <div class="eu-modal-body">
+          <div style="display:flex;gap:.5rem;align-items:center"><input data-revealed-password type="text" readonly value="${escAttr(modal.password)}" style="flex:1;font-family:monospace;font-size:1.05rem" /><button class="btn" type="button" data-copy-revealed-password>Copy</button></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function closePasswordReveal() {
+  if (passwordRevealTimer) clearInterval(passwordRevealTimer);
+  passwordRevealTimer = null;
+  passwordRevealModal = null;
+  renderUsers();
+}
+
+function startPasswordRevealCountdown() {
+  if (passwordRevealTimer) clearInterval(passwordRevealTimer);
+  let remaining = PASSWORD_REVEAL_SECONDS;
+  passwordRevealTimer = window.setInterval(() => {
+    remaining -= 1;
+    const countdown = document.querySelector("[data-password-reveal-countdown]");
+    if (countdown) countdown.textContent = String(Math.max(remaining, 0));
+    if (remaining <= 0) {
+      clearInterval(passwordRevealTimer);
+      passwordRevealTimer = null;
+      passwordRevealModal = null;
+      renderUsers();
+      showToast("Revealed password hidden automatically", "success");
+    }
+  }, 1000);
+}
+
 function renderUserModal(user) {
   const role = (user.user_roles || []).map((x) => x.roles?.name || x.roles?.code).filter(Boolean).join(", ") || "Assigned role";
   const hasAllScope = (user.user_divisions || []).some((x) => String(x.scope || "").toLowerCase() === "all");
@@ -288,6 +397,7 @@ function renderUserModal(user) {
               <button class="btn" data-user-id="${escAttr(user.id)}" data-next-status="${nextStatus}">${nextStatus === "active" ? "Enable" : "Disable"}</button>
               <button class="btn" data-lock-user-id="${escAttr(user.id)}" data-next-lock="${user.is_locked ? "false" : "true"}">${user.is_locked ? "Unlock" : "Lock"}</button>
               <button class="btn" data-reset-user-id="${escAttr(user.id)}">${user.auth_provider === "supabase" ? "Reset Password" : "Set Password"}</button>
+              ${user.auth_provider !== "supabase" && canRevealStaffPassword() ? `<button class="btn" data-reveal-user-password="${escAttr(user.id)}" style="border-color:#b45309;color:#e6c87e">Reveal password</button>` : ""}
               <button class="btn" data-resend-user-id="${escAttr(user.id)}">Resend credentials</button>
               <button class="btn" data-terms-user-id="${escAttr(user.id)}">T&amp;C acceptance</button>
               <button class="btn" data-edit-user-id="${escAttr(user.id)}">Edit details</button>
@@ -362,7 +472,7 @@ function renderUsers() {
     `;
   }).join("");
   const selected = allUsers.find((u) => String(u.id) === String(selectedUserId));
-  body.innerHTML = cards + (selected ? renderUserModal(selected) : "") + renderStaffTermsModal();
+  body.innerHTML = cards + (selected ? renderUserModal(selected) : "") + renderStaffTermsModal() + renderPasswordRevealModal();
 
   body.querySelectorAll("button[data-open-user-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -384,6 +494,7 @@ function renderUsers() {
     btn.addEventListener("click", async () => {
       const user = allUsers.find((item) => String(item.id) === String(btn.getAttribute("data-terms-user-id")));
       if (!user) return showToast("User record not found", "error");
+      btn.disabled = true;
       selectedUserId = null;
       termsAcceptanceModal = { user, loading: true, status: null };
       renderUsers();
@@ -404,24 +515,82 @@ function renderUsers() {
     renderUsers();
   });
 
+  body.querySelectorAll("button[data-reveal-user-password]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const user = allUsers.find((item) => String(item.id) === String(btn.getAttribute("data-reveal-user-password")));
+      if (!user) return showToast("User record not found", "error");
+      selectedUserId = null;
+      passwordRevealModal = { user, password: "" };
+      renderUsers();
+    });
+  });
+
+  body.querySelector("[data-close-password-reveal]")?.addEventListener("click", closePasswordReveal);
+  body.querySelector("[data-password-reveal-backdrop]")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closePasswordReveal();
+  });
+  body.querySelector("[data-confirm-password-reveal]")?.addEventListener("click", async (event) => {
+    const modal = passwordRevealModal;
+    const reason = String(qs("#euRevealPasswordReason")?.value || "").trim();
+    if (!modal?.user) return;
+    if (!reason) return showToast("A reason is required before revealing a password", "error");
+    event.currentTarget.disabled = true;
+    try {
+      const password = await revealLocalUserPassword(modal.user.id, reason);
+      if (!password) throw new Error("No stored password for this user");
+      passwordRevealModal = { ...modal, password };
+      renderUsers();
+      startPasswordRevealCountdown();
+    } catch (error) {
+      passwordRevealModal = null;
+      renderUsers();
+      showToast(error?.message || "Failed to reveal password", "error");
+    }
+  });
+  body.querySelector("[data-copy-revealed-password]")?.addEventListener("click", async () => {
+    const input = body.querySelector("[data-revealed-password]");
+    if (!input) return;
+    input.select();
+    try {
+      await navigator.clipboard.writeText(input.value);
+      showToast("Password copied to clipboard", "success");
+    } catch {
+      showToast("Copy failed — select and copy manually", "error");
+    }
+  });
+
   body.querySelector("button[data-request-terms-user-id]")?.addEventListener("click", async (event) => {
     const modal = termsAcceptanceModal;
-    if (!modal?.user || modal.status?.reacceptance_pending) return;
+    if (!modal?.user) return;
     const identity = modal.user.display_name || modal.user.email || "this user";
-    if (!window.confirm(`Require a fresh live-camera Terms and Conditions acceptance from ${identity}? Existing evidence will be retained and local EMS sessions will be revoked.`)) return;
+    const alreadyPending = Boolean(modal.status?.reacceptance_pending);
+    const confirmation = alreadyPending
+      ? `Resend the pending Terms and Conditions acceptance request to ${identity} by email and WhatsApp?`
+      : `Require a fresh live-camera Terms and Conditions acceptance from ${identity}? Existing evidence will be retained, local EMS sessions will be revoked, and a request will be sent by email and WhatsApp.`;
+    if (!window.confirm(confirmation)) return;
     const button = event.currentTarget;
     button.disabled = true;
     button.textContent = "Requesting…";
     try {
-      const { error } = await client.rpc("admin_request_staff_terms_reacceptance", {
-        p_app_user_id: modal.user.id,
-        p_reason: "Fresh acceptance requested from EMS User Management"
+      if (!alreadyPending) {
+        const { error } = await client.rpc("admin_request_staff_terms_reacceptance", {
+          p_app_user_id: modal.user.id,
+          p_reason: "Fresh acceptance requested from EMS User Management"
+        });
+        if (error) throw error;
+      }
+      const warnings = await deliverTermsAcceptanceRequest(modal.user);
+      await logUserRoleEvent(alreadyPending ? "staff_terms_request_resent" : "staff_terms_acceptance_requested", {
+        entityType: "app_users",
+        entityId: modal.user.id,
+        email: modal.user.email || null,
+        deliveryWarnings: warnings
       });
-      if (error) throw error;
       const { data, error: statusError } = await client.rpc("admin_get_staff_terms_consent_status", { p_app_user_id: modal.user.id });
       if (statusError) throw statusError;
       termsAcceptanceModal = { user: modal.user, loading: false, status: data || {} };
-      showToast("Fresh T&C acceptance requested. The user must accept again with live-camera evidence.", "success");
+      if (warnings.length) showToast(`T&C request saved. ${warnings.join("; ")}`, "warning");
+      else showToast(alreadyPending ? "T&C acceptance request resent by email and WhatsApp" : "Fresh T&C acceptance requested and sent by email and WhatsApp", "success");
     } catch (error) {
       showToast(error?.message || "Failed to request fresh T&C acceptance", "error");
     }
