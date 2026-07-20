@@ -202,7 +202,7 @@ function participantsStep(meeting) {
     <tr>
       <td><div class="mws-person"><strong>${escapeHtml(row.name || "-")}</strong><span class="muted">${escapeHtml(row.company_name || "-")}</span></div></td>
       <td>${escapeHtml(row.phone || "-")}<div class="mws-mini">${escapeHtml(row.email || "-")}</div></td>
-      <td>${escapeHtml(row.designation || row.role || "-")}</td>
+      <td>${escapeHtml(row.role || "-")}<div class="mws-mini">${escapeHtml(row.designation || "")}</div></td>
       <td>${meetingStatusPill(row.is_active ? "active" : "disabled")}</td>
       <td class="mws-inline-actions">
         <button class="btn btn-ghost" type="button" data-toggle-active="${row.id}">${row.is_active ? "Disable" : "Enable"}</button>
@@ -217,7 +217,7 @@ function participantsStep(meeting) {
         <div class="mws-field"><label>Full Name</label><input name="name" type="text" placeholder="Prudhvi Althi" /></div>
         <div class="mws-field"><label>Mobile Number</label><input name="phone" type="text" placeholder="8125625629" /></div>
         <div class="mws-field"><label>Email Address</label><input name="email" type="email" placeholder="guest@example.com" /></div>
-        <div class="mws-field"><label>Role</label><select name="role"><option value="guest">Guest</option><option value="observer">Observer</option><option value="panelist">Panelist</option><option value="client">Client</option><option value="vendor">Vendor</option></select></div>
+        <div class="mws-field"><label>Role</label><input name="role" type="text" placeholder="Client / Vendor / Consultant" /></div>
         <div class="mws-field"><label>Company / Organization</label><input name="company_name" type="text" placeholder="Varada Nexus Client" /></div>
         <div class="mws-field"><label>Designation</label><input name="designation" type="text" placeholder="Director / Operations Lead" /></div>
         <div class="mws-field full"><label>Internal Notes</label><textarea name="notes" placeholder="Approval / speaking order / follow-up context."></textarea></div>
@@ -375,7 +375,6 @@ async function submitParticipant(event) {
     company_name: form.get("company_name"), designation: form.get("designation"), role: form.get("role"), notes: form.get("notes"), status: "invited"
   });
   showToast("Participant added", TOAST_TYPES.SUCCESS);
-  event.currentTarget.reset();
   await reloadAndRender();
 }
 

@@ -208,7 +208,7 @@ export async function saveParticipant(payload = {}) {
     email: String(payload.email || "").trim(),
     company_name: String(payload.company_name || "").trim(),
     designation: String(payload.designation || "").trim(),
-    role: payload.role || "guest",
+    role: String(payload.role || "guest").trim() || "guest",
     is_active: payload.is_active !== false,
     is_approved: payload.is_approved === true,
     status: payload.status || "invited",
