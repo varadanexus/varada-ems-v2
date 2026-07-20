@@ -33,10 +33,14 @@ const PAGE_STATE = {
   sectionSearch: {},
   designsViewMode: "cards",
   galleryProjectFilter: "",
-  sidebarCollapsed: false
+  sidebarCollapsed: false,
+  lastRefreshedAt: null,
+  isRefreshing: false
 };
 
 const NOTIFICATIONS_SEEN_KEY = "ems_client_portal_notifications_seen_at";
+let portalRefreshTimer = null;
+let clientDocumentObjectUrl = null;
 
 function getNotificationsSeenAt() {
   try { return localStorage.getItem(NOTIFICATIONS_SEEN_KEY) || null; } catch { return null; }
@@ -159,9 +163,15 @@ function designFiles(designId) {
 
 function renderDesignFileActions(row) {
   const files = designFiles(row.id);
-  const links = files.map((file) => `<a class="btn btn-sm" href="${escapeHtml(file.web_view_link)}" target="_blank" rel="noopener">${escapeHtml(file.file_name || "Open file")}</a>`).join("");
+  const links = files.map((file) => `<button class="btn btn-sm" data-client-document-id="${escapeHtml(file.id)}" data-client-document-name="${escapeHtml(file.file_name || "Design document")}" type="button">${escapeHtml(file.file_name || "Open file")}</button>`).join("");
   if (links) return links;
-  return row.file_url ? `<a class="btn btn-sm" href="${escapeHtml(row.file_url)}" target="_blank" rel="noopener">Open design</a>` : `<button class="btn btn-sm" disabled>No File</button>`;
+  return row.file_url ? `<button class="btn btn-sm" data-lightbox-src="${escapeHtml(row.file_url)}" data-document-name="${escapeHtml(row.design_title || "Design document")}" type="button">Open design</button>` : `<button class="btn btn-sm" disabled>No File</button>`;
+}
+
+function pendingApprovalForDesign(designId) {
+  return PAGE_STATE.approvals.find((row) => row.reference_table === "interior_designs"
+    && String(row.reference_id || "") === String(designId)
+    && String(row.decision || "pending") === "pending") || null;
 }
 
 function pendingApprovals() {
@@ -271,6 +281,14 @@ function notificationItems({ limit = 8, perSourceLimit = 5 } = {}) {
       tone: "info"
     });
   });
+  visibleDesigns().slice(0, perSourceLimit).forEach((row) => {
+    items.push({
+      title: `${row.design_title || "Design"} · ${normalizeStatus(row.status)}`,
+      detail: `${projectName(PAGE_STATE.projects.find((project) => String(project.shared_project_id) === String(row.project_id)))} · Version ${row.version_no || 1}`,
+      at: row.published_at || row.updated_at || row.uploaded_at,
+      tone: String(row.client_decision || row.status) === "approved" ? "success" : "warning"
+    });
+  });
   visibleBills().slice(0, perSourceLimit).forEach((row) => {
     items.push({
       title: `${row.bill_number || "Bill"} is available`,
@@ -301,7 +319,15 @@ function projectManagerName() {
   return "Varada Nexus Team";
 }
 
-function projectStageLabel(progress) {
+function projectStageLabel(project, progress = projectProgressValue(project)) {
+  const stage = String(project?.workflow_stage || "").toLowerCase();
+  const gate = String(project?.design_gate_status || "").toLowerCase();
+  if (stage === "client_review" || gate === "client_review") return "Client Review";
+  if (stage === "pre_execution" || gate === "client_approved") return "Pre-Execution";
+  if (stage === "design" || gate === "staff_review") return "Design Review";
+  if (stage === "execution") return "Execution";
+  if (stage === "finishing") return "Finishing";
+  if (stage === "completion" || stage === "completed") return "Completed";
   if (progress >= 100) return "Completed";
   if (progress >= 85) return "Finishing";
   if (progress >= 45) return "Execution";
@@ -311,7 +337,7 @@ function projectStageLabel(progress) {
 
 function projectStatusBadge(project) {
   const progress = projectProgressValue(project);
-  const label = projectStageLabel(progress);
+  const label = projectStageLabel(project, progress);
   const tone = progress >= 100 ? "success" : progress >= 45 ? "info" : "warning";
   return `<span class="client-notice tone-${tone}">${escapeHtml(label)}</span>`;
 }
@@ -319,11 +345,14 @@ function projectStatusBadge(project) {
 function activeDocuments() {
   const docs = [];
   activeProjectDesigns().forEach((row) => {
+    const storedFile = designFiles(row.id)[0] || null;
     docs.push({
       category: "Design Drawings",
       title: row.design_title || "Design File",
       subtitle: `Version ${row.version_no || 1} · ${normalizeStatus(row.status)}`,
       href: row.file_url || null,
+      documentId: storedFile?.id || null,
+      fileName: storedFile?.file_name || row.design_title || "Design document",
       at: row.updated_at || row.uploaded_at
     });
   });
@@ -459,12 +488,11 @@ function renderSidebar() {
   const currentProject = activeProject();
   const progress = currentProject ? projectProgressValue(currentProject) : overallProgressValue();
   const clientName = PAGE_STATE.clientRecord?.client_name || "Client Workspace";
-  const clientInitial = clientName.trim().charAt(0).toUpperCase() || "C";
   const unread = unreadNotificationCount();
   return `
     <aside class="app-sidebar client-sidebar" id="appSidebar">
       <div class="brand client-brand-row">
-        <span class="client-brand-mark">${escapeHtml(clientInitial)}</span>
+        <span class="client-brand-mark">VN</span>
         <div>
           <div>Varada Nexus Client Portal</div>
           <small class="muted" style="font-weight:400;display:block;">${escapeHtml(clientName)}</small>
@@ -488,14 +516,9 @@ function renderSidebar() {
         `).join("")}
       </nav>
       <div class="client-sidebar-foot">
-        <div class="client-support-card">
-          <strong>Need Help?</strong>
-          <a class="muted client-support-email" href="mailto:support@varadanexus.com">support@varadanexus.com</a>
-          <a class="btn btn-sm" href="mailto:support@varadanexus.com" style="width:100%;margin-top:.6rem;text-align:center;">Contact Support</a>
-        </div>
-        <div class="client-sidebar-foot-row" style="margin-top:.85rem;"><span class="muted">Progress</span><strong>${progress}%</strong></div>
+        <div class="client-sidebar-foot-row"><span class="muted">Progress</span><strong>${progress}%</strong></div>
         <div class="client-progress-bar" style="margin-top:.35rem;"><span style="width:${progress}%"></span></div>
-        <div class="client-sidebar-foot-row" style="margin-top:.6rem;"><span class="muted">Current Phase</span><strong>${escapeHtml(projectStageLabel(progress))}</strong></div>
+        <div class="client-sidebar-foot-row" style="margin-top:.6rem;"><span class="muted">Current Phase</span><strong>${escapeHtml(projectStageLabel(currentProject, progress))}</strong></div>
         <button class="btn btn-sm" id="switchPortalBtn" type="button" style="width:100%;margin-top:.75rem;">Return to Selector</button>
         <button class="btn btn-sm btn-ghost" id="logoutBtnSidebar" type="button" style="width:100%;margin-top:.5rem;">Logout</button>
       </div>
@@ -546,21 +569,17 @@ function renderDashboard() {
   const notifications = notificationItems();
   const timeline = buildTimeline().slice(0, 8);
   const latestDesign = activeProjectDesigns()[0] || null;
+  const latestDesignDocument = latestDesign ? designFiles(latestDesign.id)[0] || null : null;
   return `
     <section class="client-dashboard-stack">
-      <article class="client-surface client-welcome-card">
-        <p class="client-kicker">Welcome back</p>
-        <h2>${escapeHtml(PAGE_STATE.portalUser?.contact_name || PAGE_STATE.appUser?.display_name || "Client")}</h2>
-        <p class="muted">${project ? `Here's what's happening with ${escapeHtml(projectName(project))}.` : "Here's an overview of your assigned projects."}</p>
-      </article>
       ${renderMetricCards()}
       <section class="client-workspace-grid">
         <article class="client-surface client-surface-lg">
           <div class="client-surface-head"><h3>Current Project Summary</h3>${project ? projectStatusBadge(project) : ""}</div>
           <div class="client-summary-grid">
             <div><label>Progress</label><strong>${progress}%</strong></div>
-            <div><label>Current Phase</label><strong>${escapeHtml(projectStageLabel(progress))}</strong></div>
-            <div><label>Expected Completion</label><strong>${escapeHtml(formatDate(latestUpdate?.update_date || null))}</strong></div>
+            <div><label>Current Phase</label><strong>${escapeHtml(projectStageLabel(project, progress))}</strong></div>
+            <div><label>Expected Completion</label><strong>${escapeHtml(formatDate(project?.target_end_date || project?.expected_completion_date || null))}</strong></div>
             <div><label>Latest Site Update</label><strong>${escapeHtml(latestUpdate?.update_title || "No updates yet")}</strong></div>
             <div><label>Pending Approvals</label><strong>${pendingCount}</strong></div>
             <div><label>Outstanding Amount</label><strong>${formatMoney(outstanding)}</strong></div>
@@ -575,9 +594,9 @@ function renderDashboard() {
         <article class="client-surface"><div class="client-surface-head"><h3>Latest Site Update</h3><button class="btn btn-sm" data-section-tab="updates" type="button">View Updates</button></div>${latestUpdate ? `<div class="client-feed-card"><div class="client-feed-media">${activeProjectPhotos()[0]?.photo_url ? `<img src="${activeProjectPhotos()[0].photo_url}" alt="Site update" loading="lazy" data-lightbox-src="${activeProjectPhotos()[0].photo_url}" />` : `<div class="empty-illustration">🏗️</div>`}</div><div><span class="meta-pill">${numberValue(latestUpdate.progress_percent)}% Progress</span><h3>${escapeHtml(latestUpdate.update_title || "Site Update")}</h3><p class="muted">${escapeHtml(formatDate(latestUpdate.update_date || latestUpdate.created_at))}</p></div></div>` : `<div class="empty-state"><div class="empty-illustration">🏗️</div><strong>No site updates yet</strong><p class="muted">Your project team will share progress updates here.</p></div>`}</article>
         <article class="client-surface"><div class="client-surface-head"><h3>Outstanding Bills</h3><button class="btn btn-sm" data-section-tab="billing" type="button">Open Finance</button></div><div class="client-list compact" style="margin-top:1rem;">${activeProjectBills().slice(0, 3).map((row) => `<div class="client-list-item"><strong>${escapeHtml(row.bill_number || "Invoice")}</strong><div class="muted">${escapeHtml(formatDate(row.bill_date || row.created_at))} · ${formatMoney(row.total_amount || 0)}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">💳</div><strong>No outstanding invoices</strong><p class="muted">Visible invoices will appear here.</p></div>`}</div></article>
         <article class="client-surface"><div class="client-surface-head"><h3>Pending Approvals</h3><button class="btn btn-sm" data-section-tab="approvals" type="button">Review</button></div><div class="client-list compact" style="margin-top:1rem;">${activeProjectApprovals().filter((row) => String(row.decision || "pending") === "pending").slice(0, 3).map((row) => `<div class="client-list-item"><strong>${escapeHtml(normalizeStatus(row.approval_type, "Approval"))}</strong><div class="muted">${escapeHtml(formatDateTime(row.created_at))}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">✅</div><strong>Nothing pending</strong><p class="muted">Approval requests will appear here.</p></div>`}</div></article>
-        <article class="client-surface"><div class="client-surface-head"><h3>Quick Downloads</h3><button class="btn btn-sm" data-section-tab="documents" type="button">Documents</button></div><div class="client-list compact" style="margin-top:1rem;"><div class="client-list-item"><strong>Project Summary</strong><div class="muted">Current snapshot</div><button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download PDF</button></div>${latestDesign?.file_url ? `<div class="client-list-item"><strong>Latest Design</strong><div class="muted">Current shared package</div><a class="btn btn-sm" href="${latestDesign.file_url}" target="_blank" rel="noopener">Download</a></div>` : ""}</div></article>
+        <article class="client-surface"><div class="client-surface-head"><h3>Quick Downloads</h3><button class="btn btn-sm" data-section-tab="documents" type="button">Documents</button></div><div class="client-list compact" style="margin-top:1rem;"><div class="client-list-item"><strong>Project Summary</strong><div class="muted">Current snapshot</div><button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download PDF</button></div>${latestDesignDocument ? `<div class="client-list-item"><strong>Latest Design</strong><div class="muted">Current shared package</div><button class="btn btn-sm" data-client-document-id="${escapeHtml(latestDesignDocument.id)}" data-client-document-name="${escapeHtml(latestDesignDocument.file_name || "Design document")}" type="button">Open</button></div>` : ""}</div></article>
         <article class="client-surface"><div class="client-surface-head"><h3>Latest Documents</h3><button class="btn btn-sm" data-section-tab="documents" type="button">View All</button></div><div class="client-list compact" style="margin-top:1rem;">${activeDocuments().slice(0, 3).map((doc) => `<div class="client-list-item"><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(formatDate(doc.at))}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents yet</strong></div>`}</div></article>
-        <article class="client-surface"><div class="client-surface-head"><h3>Upcoming Milestones</h3><button class="btn btn-sm" data-section-tab="overview" type="button">View Progress</button></div>${renderMilestoneStepper(progress)}</article>
+        <article class="client-surface"><div class="client-surface-head"><h3>Project Milestones</h3><button class="btn btn-sm" data-section-tab="overview" type="button">View Progress</button></div>${renderMilestoneStepper(project, progress)}</article>
       </section>
       <article class="client-surface">
         <div class="client-surface-head"><h3>Portfolio Snapshot</h3><span class="meta-pill">${PAGE_STATE.projects.length} Project(s)</span></div>
@@ -639,20 +658,25 @@ function handlePdfAction(action, id) {
 }
 
 const PROJECT_STAGE_MILESTONES = [
-  { key: "planning", label: "Planning", threshold: 0 },
-  { key: "design", label: "Design Phase", threshold: 15 },
-  { key: "execution", label: "Execution", threshold: 45 },
-  { key: "finishing", label: "Finishing", threshold: 85 },
-  { key: "completed", label: "Completed", threshold: 100 }
+  { key: "design", label: "Design" },
+  { key: "client_review", label: "Client Review" },
+  { key: "pre_execution", label: "Pre-Execution" },
+  { key: "execution", label: "Execution" },
+  { key: "completion", label: "Completion" }
 ];
 
-function renderMilestoneStepper(progress) {
-  const value = numberValue(progress);
+function renderMilestoneStepper(project, progress = projectProgressValue(project)) {
+  const stageKey = String(project?.workflow_stage || "").toLowerCase();
+  let currentIndex = PROJECT_STAGE_MILESTONES.findIndex((stage) => stage.key === stageKey);
+  if (currentIndex < 0) {
+    const value = numberValue(progress);
+    currentIndex = value >= 100 ? 4 : value >= 45 ? 3 : value >= 15 ? 1 : 0;
+  }
   return `
     <div class="client-milestone-stepper">
       ${PROJECT_STAGE_MILESTONES.map((stage, idx) => {
-        const reached = value >= stage.threshold;
-        const isCurrent = reached && (idx === PROJECT_STAGE_MILESTONES.length - 1 || value < PROJECT_STAGE_MILESTONES[idx + 1].threshold);
+        const reached = idx <= currentIndex;
+        const isCurrent = idx === currentIndex;
         return `
           <div class="client-milestone-step ${reached ? "reached" : ""} ${isCurrent ? "current" : ""}">
             <span class="client-milestone-dot">${reached ? "✓" : ""}</span>
@@ -673,10 +697,10 @@ function renderOverviewSection(project) {
       <article class="client-surface client-surface-lg">
         <div class="client-surface-head"><h3>Project Summary</h3><span class="meta-pill">Completion ${progress}%</span></div>
         <div class="client-progress-bar" style="margin:.85rem 0;"><span style="width:${progress}%"></span></div>
-        ${renderMilestoneStepper(progress)}
+        ${renderMilestoneStepper(project, progress)}
         <div class="client-summary-grid" style="margin-top:1.1rem;">
           <div><label>Scope</label><strong>Interior design, execution coordination, client approvals, progress updates, and billing visibility.</strong></div>
-          <div><label>Current Stage</label><strong>${escapeHtml(projectStageLabel(progress))}</strong></div>
+          <div><label>Current Stage</label><strong>${escapeHtml(projectStageLabel(project, progress))}</strong></div>
           <div><label>Project Manager</label><strong>${escapeHtml(projectManagerName())}</strong></div>
           <div><label>Budget Summary</label><strong>${formatMoney(activeProjectBills().reduce((sum, row) => sum + numberValue(row.total_amount), 0))}</strong></div>
           <div><label>Milestones Logged</label><strong>${updates.length} updates shared</strong></div>
@@ -710,7 +734,10 @@ function renderDesignViewToggle() {
 
 function renderDesignCards(rows) {
   return `
-    <div class="client-gallery-grid" style="margin-top:1rem;">${rows.length ? rows.map((row) => `
+    <div class="client-gallery-grid" style="margin-top:1rem;">${rows.length ? rows.map((row) => {
+      const approval = pendingApprovalForDesign(row.id);
+      const canDecide = approval && canApproveProject(approval.interior_project_id);
+      return `
       <article class="client-gallery-card client-design-card">
         <div class="client-gallery-media client-design-preview"><div class="empty-illustration">📐</div></div>
         <div class="client-gallery-body">
@@ -719,11 +746,11 @@ function renderDesignCards(rows) {
           <div class="client-actions">
             ${renderDesignFileActions(row)}
             <button class="btn btn-sm" data-pdf-action="design" data-pdf-id="${row.id}" type="button">Details</button>
-            <button class="btn btn-sm" data-section-tab="approvals" type="button">Approve</button>
-            <button class="btn btn-sm" data-section-tab="approvals" type="button">Request Revision</button>
+            ${canDecide ? `<button class="btn btn-sm" data-approval-action="approve" data-approval-id="${approval.id}" type="button">Approve</button><button class="btn btn-sm" data-approval-action="revision_requested" data-approval-id="${approval.id}" type="button">Request Revision</button>` : approval ? `<button class="btn btn-sm" data-section-tab="approvals" type="button">View Approval</button>` : ""}
           </div>
         </div>
-      </article>`).join("") : `<div class="empty-state">No designs match your search.</div>`}</div>
+      </article>`;
+    }).join("") : `<div class="empty-state">No designs match your search.</div>`}</div>
   `;
 }
 
@@ -877,7 +904,7 @@ function renderDocumentsSection() {
       </article>
       <article class="client-surface client-surface-lg">
         <div class="client-surface-head"><h3>Downloads</h3><div class="client-inline-tools">${renderSearchInput("documents", "Search documents")}<button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register PDF</button></div></div>
-        <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((doc) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(doc.subtitle)}</div></div><div class="client-actions">${doc.href ? `<button class="btn btn-sm" data-lightbox-src="${doc.href}" type="button">Preview</button><a class="btn btn-sm" href="${doc.href}" target="_blank" rel="noopener" download>Download</a>` : `<button class="btn btn-sm" disabled>Unavailable</button>`}</div></div></div>`).join("") : `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents found</strong><p class="muted">Shared drawings, invoices, approvals, and reports will appear here.</p><button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register</button></div>`}</div>
+        <div class="client-list" style="margin-top:1rem;">${rows.length ? rows.map((doc) => `<div class="client-list-item"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(doc.subtitle)}</div></div><div class="client-actions">${doc.documentId ? `<button class="btn btn-sm" data-client-document-id="${escapeHtml(doc.documentId)}" data-client-document-name="${escapeHtml(doc.fileName || doc.title)}" type="button">Open document</button>` : doc.href ? `<button class="btn btn-sm" data-lightbox-src="${escapeHtml(doc.href)}" data-document-name="${escapeHtml(doc.title)}" type="button">Preview</button>` : `<button class="btn btn-sm" disabled>Unavailable</button>`}</div></div></div>`).join("") : `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents found</strong><p class="muted">Shared drawings, invoices, approvals, and reports will appear here.</p><button class="btn btn-sm" data-pdf-action="documents" type="button">Download Register</button></div>`}</div>
         ${renderPagination("documents", docs.length, 6)}
       </article>
     </section>
@@ -1055,23 +1082,26 @@ function renderWorkspaceSection() {
   if (!project) return `<section class="client-surface"><div class="empty-state">Select a project to continue.</div></section>`;
   const progress = projectProgressValue(project);
   const projectUpdates = activeProjectUpdates();
-  const startDate = projectUpdates[projectUpdates.length - 1]?.update_date || null;
-  const expectedCompletion = projectUpdates[0]?.update_date || null;
+  const projectDesignRows = activeProjectDesigns();
+  const latestDesign = [...projectDesignRows].sort((a, b) => new Date(b.published_at || b.updated_at || 0).getTime() - new Date(a.published_at || a.updated_at || 0).getTime())[0] || null;
+  const startDate = project.start_date || projectUpdates[projectUpdates.length - 1]?.update_date || null;
+  const expectedCompletion = project.target_end_date || project.expected_completion_date || null;
+  const progressLabel = projectUpdates.length ? `${progress}% Complete` : "Site progress not yet reported";
   const header = `
     <section class="client-surface client-surface-hero">
       <div class="client-project-hero">
-        <div class="client-project-hero-media">${activeProjectPhotos()[0]?.photo_url ? `<img src="${activeProjectPhotos()[0].photo_url}" alt="${escapeHtml(project.project_title || project.project_name || "Project")}" loading="lazy" />` : `<div class="client-project-hero-placeholder">${escapeHtml(project.project_code || "PROJECT")}</div>`}</div>
+        <div class="client-project-hero-media">${activeProjectPhotos()[0]?.photo_url ? `<img src="${activeProjectPhotos()[0].photo_url}" alt="${escapeHtml(project.project_title || project.project_name || "Project")}" loading="lazy" />` : `<div class="client-project-snapshot"><span class="client-kicker">Project snapshot</span><strong>${escapeHtml(projectStageLabel(project, progress))}</strong><div class="client-snapshot-row"><span>Designs shared</span><b>${projectDesignRows.length}</b></div><div class="client-snapshot-row"><span>Approvals pending</span><b>${activeProjectApprovals().filter((row) => String(row.decision || "pending") === "pending").length}</b></div><div class="client-snapshot-row"><span>Site updates</span><b>${projectUpdates.length}</b></div>${latestDesign ? `<div class="client-latest-item"><span>Latest design</span><strong>${escapeHtml(latestDesign.design_title || "Design package")}</strong><small>Version ${latestDesign.version_no || 1} · ${escapeHtml(normalizeStatus(latestDesign.client_decision || latestDesign.status))}</small></div>` : `<div class="client-latest-item"><small>No design package has been shared yet.</small></div>`}</div>`}</div>
         <div class="client-project-hero-copy">
           <div class="client-actions"><span class="meta-pill">${escapeHtml(project.project_code || "Project")}</span>${projectStatusBadge(project)}</div>
           <h2>${escapeHtml(project.project_title || project.project_name || "Project")}</h2>
           <p class="muted">Client: ${escapeHtml(PAGE_STATE.clientRecord?.client_name || "-")} · Project Manager: ${escapeHtml(projectManagerName())}</p>
-          <div class="client-actions" style="margin-bottom:.4rem;"><strong>${progress}% Complete</strong></div>
+          <div class="client-actions" style="margin-bottom:.4rem;"><strong>${escapeHtml(progressLabel)}</strong></div>
           <div class="client-progress-bar"><span style="width:${progress}%"></span></div>
           <div class="client-summary-grid compact-grid" style="margin-top:.85rem;">
             <div><label>Start Date</label><strong>${escapeHtml(formatDate(startDate))}</strong></div>
             <div><label>Expected Completion</label><strong>${escapeHtml(formatDate(expectedCompletion))}</strong></div>
             <div><label>Project Manager</label><strong>${escapeHtml(projectManagerName())}</strong></div>
-            <div><label>Current Phase</label><strong>${escapeHtml(projectStageLabel(progress))}</strong></div>
+            <div><label>Current Phase</label><strong>${escapeHtml(projectStageLabel(project, progress))}</strong></div>
           </div>
           <div class="client-actions" style="margin-top:.85rem;">
             <button class="btn btn-sm" data-section-tab="designs" type="button">View Designs</button>
@@ -1119,14 +1149,18 @@ function buildTimeline() {
 }
 
 const CLIENT_APP_STYLES = `
-  :root{--bg:#071426 !important;--surface:#0f213f !important;--surface-soft:#13284b !important;--primary:#f5c16c !important;--primary-strong:#f7cf8e !important;--border:rgba(255,255,255,.08) !important;--radius:16px !important;--shadow:0 24px 48px rgba(2,8,23,.45) !important;}
+  :root{--bg:#050609 !important;--surface:#0a0b0f !important;--surface-soft:#0e0f14 !important;--text:#f7f4ec !important;--muted:#9b9788 !important;--primary:#e6c87e !important;--primary-strong:#f7e7b0 !important;--border:rgba(230,200,126,.16) !important;--radius:18px !important;--shadow:0 28px 72px rgba(0,0,0,.48) !important;}
 
-  #appSidebar.client-sidebar{display:flex;flex-direction:column;gap:1rem;overflow-y:auto;background:linear-gradient(180deg,#08152a,#0b1b34 58%,#071426);border-right:1px solid rgba(255,255,255,.08);}
+  .app-shell>.app-main{min-width:0;background:radial-gradient(circle at 82% 8%,rgba(214,166,69,.055),transparent 25%),var(--bg);}
+  .app-navbar .navbar-left{min-width:0;flex:1;}
+  .app-navbar .navbar-title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .app-navbar .navbar-title strong{color:var(--text);}
+  #appSidebar.client-sidebar{display:flex;flex-direction:column;gap:1rem;overflow-y:auto;background:linear-gradient(180deg,#090a0d,#06070a 58%,#050609);border-right:1px solid rgba(230,200,126,.16);}
   #appSidebar.client-sidebar .nav-root{max-height:none;flex:1;overflow-y:visible;display:grid;gap:.95rem;}
   #appSidebar.client-sidebar .nav-section{padding:.2rem .15rem .9rem;border-bottom:1px solid rgba(255,255,255,.07);}
   #appSidebar.client-sidebar .nav-section-title{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#8ea3bd;margin:0 0 .55rem .25rem;}
   .client-brand-row{display:flex;align-items:center;gap:.6rem;}
-  .client-brand-mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--primary-strong));color:#111827;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;}
+  .client-brand-mark{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#f7df9a,var(--primary-strong));color:#111827;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:900;letter-spacing:-.04em;flex-shrink:0;box-shadow:0 8px 24px rgba(214,166,69,.16);}
   .client-sidebar-foot{margin-top:auto;padding-top:.85rem;border-top:1px solid var(--border);}
   .client-sidebar-foot-row{display:flex;justify-content:space-between;align-items:center;gap:.5rem;font-size:.85rem;}
   .client-sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(2,8,23,.55);z-index:55;}
@@ -1187,7 +1221,10 @@ const CLIENT_APP_STYLES = `
   .client-lightbox{display:none;position:fixed;inset:0;background:rgba(2,8,23,.85);z-index:80;align-items:center;justify-content:center;padding:2rem;}
   .client-lightbox.visible{display:flex;}
   .client-lightbox img{max-width:92vw;max-height:88vh;border-radius:12px;box-shadow:var(--shadow);}
-  .client-lightbox-close{position:absolute;top:1.25rem;right:1.5rem;}
+  .client-lightbox-toolbar{position:absolute;top:1rem;left:1.5rem;right:1.5rem;display:flex;justify-content:flex-end;align-items:center;gap:.6rem;padding:.65rem .8rem;border:1px solid var(--border);border-radius:14px;background:rgba(5,6,9,.92);box-shadow:var(--shadow);}
+  .client-lightbox-toolbar strong{margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .client-lightbox-loading{min-width:280px;min-height:120px;place-items:center;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--primary);font-weight:700;}
+  .client-lightbox iframe{margin-top:3.5rem;max-height:calc(100vh - 7rem) !important;}
 
   .client-actions{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
   .client-inline-tools{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;}
@@ -1204,11 +1241,17 @@ const CLIENT_APP_STYLES = `
   .client-surface-head h3{margin:0;font-weight:700;}
   .page-content h1,.page-content h2,.page-content h3{font-weight:700;}
 
-  .client-surface-hero{padding:1.55rem;background:radial-gradient(circle at top right,rgba(245,193,108,.18),transparent 34%),linear-gradient(145deg,#11294e,#0d1e39);}
-  .client-project-hero{display:grid;grid-template-columns:minmax(220px,340px) 1fr;gap:1.45rem;align-items:stretch;}
-  .client-project-hero-media{min-height:230px;border-radius:calc(var(--radius) + 4px);overflow:hidden;background:var(--surface-soft);display:flex;align-items:center;justify-content:center;}
+  .client-surface-hero{padding:1.4rem;background:radial-gradient(circle at top right,rgba(245,193,108,.12),transparent 34%),linear-gradient(145deg,#10151d,#0b1017);border-color:rgba(245,193,108,.22);}
+  .client-project-hero{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:1.45rem;align-items:stretch;}
+  .client-project-hero-media{min-height:220px;border-radius:calc(var(--radius) + 2px);overflow:hidden;background:linear-gradient(160deg,rgba(245,193,108,.1),rgba(255,255,255,.025));border:1px solid rgba(245,193,108,.15);display:flex;align-items:center;justify-content:center;}
   .client-project-hero-media img{width:100%;height:100%;object-fit:cover;}
   .client-project-hero-placeholder{color:var(--muted);font-weight:700;letter-spacing:.05em;}
+  .client-project-snapshot{width:100%;align-self:stretch;padding:1.25rem;display:flex;flex-direction:column;gap:.72rem;justify-content:center;}
+  .client-project-snapshot>strong{font-size:1.35rem;color:var(--primary);margin-bottom:.15rem;}
+  .client-snapshot-row{display:flex;justify-content:space-between;gap:1rem;padding:.58rem 0;border-bottom:1px solid rgba(255,255,255,.07);color:var(--muted);font-size:.86rem;}
+  .client-snapshot-row b{color:var(--text);}
+  .client-latest-item{display:grid;gap:.18rem;margin-top:.3rem;padding:.75rem;border-radius:12px;background:rgba(0,0,0,.2);}
+  .client-latest-item span,.client-latest-item small{color:var(--muted);font-size:.76rem;}
   .client-project-hero-copy{flex:1;min-width:200px;}
   .client-project-hero-copy h2{margin:.5rem 0;font-weight:700;}
   .client-project-hero-copy .client-progress-bar{height:14px;margin:.75rem 0;}
@@ -1244,7 +1287,7 @@ const CLIENT_APP_STYLES = `
   .client-notice.tone-warning{background:rgba(250,204,21,.14);color:#facc15;}
   .client-notice.tone-success{background:rgba(34,197,94,.14);color:var(--success);}
   .client-notice.tone-danger{background:rgba(248,113,113,.14);color:var(--danger);}
-  .client-notice.tone-info{background:rgba(96,165,250,.14);color:#60a5fa;}
+  .client-notice.tone-info{background:rgba(230,200,126,.12);color:var(--primary);}
   .client-notice.tone-neutral{background:rgba(148,163,184,.14);color:#cbd5e1;}
 
   .client-progress-bar{width:100%;height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.25);}
@@ -1325,6 +1368,7 @@ function render() {
   const clientName = PAGE_STATE.clientRecord?.client_name || "-";
   const progress = project ? projectProgressValue(project) : overallProgressValue();
   const latestDesign = activeProjectDesigns()[0] || null;
+  const latestDesignDocument = latestDesign ? designFiles(latestDesign.id)[0] || null : null;
   const unread = unreadNotificationCount();
   const html = `
     <style>${CLIENT_APP_STYLES}</style>
@@ -1336,7 +1380,7 @@ function render() {
             <button class="icon-btn" id="menuToggle" aria-label="Toggle menu" type="button">☰</button>
             <div class="navbar-title">
               <strong>${escapeHtml(clientName)}</strong>
-              ${project ? `<span class="muted"> · ${escapeHtml(projectName(project))}</span>` : ""}
+              ${project ? `<span class="muted"> · ${escapeHtml(project.project_code || projectName(project))}</span>` : ""}
             </div>
           </div>
           <div class="navbar-actions">
@@ -1346,14 +1390,16 @@ function render() {
         </header>
         <section class="page-head">
           ${renderClientBreadcrumbs()}
+          <span class="client-kicker">Secure project workspace</span>
           <h1>${escapeHtml(sectionKeyToTitle(PAGE_STATE.activeSection))}</h1>
-          <p>Welcome ${escapeHtml(displayName)}. Track project progress, review deliverables, and download shared files.</p>
+          <p>Welcome ${escapeHtml(displayName)}. Review the latest project information and take action when required.</p>
           <div class="client-actions" style="margin-top:.6rem;">
-            <span class="meta-pill">Client: ${escapeHtml(clientName)}</span>
-            <span class="meta-pill">${project ? `Project: ${escapeHtml(projectName(project))}` : `Assigned Projects: ${PAGE_STATE.projects.length}`}</span>
-            <span class="meta-pill">Progress: ${progress}%</span>
+            <span class="meta-pill">${project ? escapeHtml(project.project_code || projectName(project)) : `${PAGE_STATE.projects.length} assigned projects`}</span>
+            <span class="meta-pill">${project ? escapeHtml(projectStageLabel(project, progress)) : `Progress ${progress}%`}</span>
+            <button class="btn btn-sm btn-ghost" id="refreshPortalBtn" type="button" ${PAGE_STATE.isRefreshing ? "disabled" : ""}>${PAGE_STATE.isRefreshing ? "Refreshing…" : "↻ Refresh updates"}</button>
             <button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download Summary PDF</button>
-            ${latestDesign?.file_url ? `<a class="btn btn-sm client-download" href="${latestDesign.file_url}" target="_blank" rel="noopener">⬇ Latest Design</a>` : ""}
+            ${latestDesignDocument ? `<button class="btn btn-sm client-download" data-client-document-id="${escapeHtml(latestDesignDocument.id)}" data-client-document-name="${escapeHtml(latestDesignDocument.file_name || "Design document")}" type="button">▣ Latest Design</button>` : latestDesign?.file_url ? `<button class="btn btn-sm client-download" data-lightbox-src="${escapeHtml(latestDesign.file_url)}" data-document-name="${escapeHtml(latestDesign.design_title || "Design document")}" type="button">▣ Latest Design</button>` : ""}
+            ${PAGE_STATE.lastRefreshedAt ? `<small class="muted">Updated ${escapeHtml(new Date(PAGE_STATE.lastRefreshedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</small>` : ""}
           </div>
         </section>
         <section class="page-content">
@@ -1364,7 +1410,12 @@ function render() {
     </div>
     <div class="client-sidebar-backdrop" id="clientSidebarBackdrop"></div>
     <div class="client-lightbox" id="clientLightbox">
-      <button class="btn btn-sm client-lightbox-close" id="clientLightboxClose" type="button">✕ Close</button>
+      <div class="client-lightbox-toolbar">
+        <strong id="clientLightboxTitle">Document preview</strong>
+        <a class="btn btn-sm" id="clientLightboxDownload" href="#" download style="display:none;">Download</a>
+        <button class="btn btn-sm" id="clientLightboxClose" type="button">✕ Close</button>
+      </div>
+      <div class="client-lightbox-loading" id="clientLightboxLoading" style="display:none;">Loading secure document…</div>
       <img id="clientLightboxImg" src="" alt="Preview" />
       <iframe id="clientLightboxFrame" src="" title="Document preview" style="display:none;width:90vw;height:88vh;border:0;border-radius:12px;background:#fff;"></iframe>
     </div>
@@ -1397,10 +1448,19 @@ function bindClientAppEvents(app) {
   const lightbox = qs("#clientLightbox");
   const lightboxImg = qs("#clientLightboxImg");
   const lightboxFrame = qs("#clientLightboxFrame");
+  const lightboxTitle = qs("#clientLightboxTitle");
+  const lightboxDownload = qs("#clientLightboxDownload");
+  const lightboxLoading = qs("#clientLightboxLoading");
   const closeLightbox = () => {
     lightbox?.classList.remove("visible");
-    if (lightboxFrame) lightboxFrame.style.display = "none";
+    if (lightboxFrame) { lightboxFrame.style.display = "none"; lightboxFrame.src = ""; }
     if (lightboxImg) lightboxImg.style.display = "none";
+    if (lightboxDownload) lightboxDownload.style.display = "none";
+    if (lightboxLoading) lightboxLoading.style.display = "none";
+    if (clientDocumentObjectUrl) {
+      URL.revokeObjectURL(clientDocumentObjectUrl);
+      clientDocumentObjectUrl = null;
+    }
   };
   app.querySelectorAll("[data-lightbox-src]").forEach((el) => el.addEventListener("click", () => {
     if (!lightbox) return;
@@ -1416,6 +1476,41 @@ function bindClientAppEvents(app) {
       if (lightboxFrame) lightboxFrame.style.display = "none";
     }
     lightbox.classList.add("visible");
+  }));
+  app.querySelectorAll("[data-client-document-id]").forEach((button) => button.addEventListener("click", async () => {
+    if (!lightbox || !lightboxFrame) return;
+    const documentId = button.dataset.clientDocumentId || "";
+    const fileName = button.dataset.clientDocumentName || "Design document";
+    if (lightboxTitle) lightboxTitle.textContent = fileName;
+    if (lightboxImg) lightboxImg.style.display = "none";
+    lightboxFrame.style.display = "none";
+    if (lightboxDownload) lightboxDownload.style.display = "none";
+    if (lightboxLoading) lightboxLoading.style.display = "grid";
+    lightbox.classList.add("visible");
+    try {
+      const storedSession = getStoredInteriorsPortalSession();
+      const { data, error } = await getClient().functions.invoke("drive-integrations", {
+        body: {
+          action: "preview_interiors_client_document",
+          sessionToken: storedSession?.sessionToken,
+          documentId
+        }
+      });
+      if (error) throw error;
+      const blob = data instanceof Blob ? data : new Blob([data], { type: "application/octet-stream" });
+      clientDocumentObjectUrl = URL.createObjectURL(blob);
+      lightboxFrame.src = clientDocumentObjectUrl;
+      lightboxFrame.style.display = "block";
+      if (lightboxDownload) {
+        lightboxDownload.href = clientDocumentObjectUrl;
+        lightboxDownload.download = fileName;
+        lightboxDownload.style.display = "inline-flex";
+      }
+      if (lightboxLoading) lightboxLoading.style.display = "none";
+    } catch (error) {
+      closeLightbox();
+      showToast(error?.message || "The document could not be opened.", TOAST_TYPES.ERROR);
+    }
   }));
   lightbox?.addEventListener("click", (event) => {
     if (event.target === lightbox) closeLightbox();
@@ -1500,6 +1595,7 @@ function bindClientAppEvents(app) {
   qs("#logoutBtn")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.LOGIN)));
   qs("#logoutBtnSidebar")?.addEventListener("click", async () => interiorsPortalLogout().then(() => window.location.assign(ROUTES.LOGIN)));
   qs("#markNotificationsReadBtn")?.addEventListener("click", () => { markNotificationsSeenNow(); render(); });
+  qs("#refreshPortalBtn")?.addEventListener("click", () => refreshPortalData());
   qs("#switchPortalBtn")?.addEventListener("click", async () => {
     const current = getStoredInteriorsPortalSession();
     if (current?.sessionToken) {
@@ -1515,8 +1611,9 @@ async function updateApprovalDecision(approvalId, decision) {
   if (!row) return;
   try {
     const normalizedDecision = decision === "approve" ? "approved" : decision;
+    if (normalizedDecision === "approved" && !window.confirm("Approve this design for the project?")) return;
     const remarks = normalizedDecision === "approved"
-      ? (window.prompt("Optional approval note:", "") || "").trim()
+      ? ""
       : (window.prompt("Please describe the required revision or reason:", "") || "").trim();
     if (normalizedDecision !== "approved" && !remarks) {
       showToast("Remarks are required for a rejection or revision request.", TOAST_TYPES.ERROR);
@@ -1580,6 +1677,7 @@ async function loadData() {
   PAGE_STATE.siteUpdates = data?.siteUpdates || [];
   PAGE_STATE.photos = data?.photos || [];
   PAGE_STATE.billingHeaders = data?.billingHeaders || [];
+  PAGE_STATE.lastRefreshedAt = new Date().toISOString();
   if (!PAGE_STATE.activeProjectId && PAGE_STATE.projects[0]?.id) PAGE_STATE.activeProjectId = PAGE_STATE.projects[0].id;
   console.log("CLIENT_APP_DATA_LOADED", {
     clientName: PAGE_STATE.clientRecord?.client_name || null,
@@ -1587,6 +1685,22 @@ async function loadData() {
     projectCount: PAGE_STATE.projects.length,
     accessCount: PAGE_STATE.access.length
   });
+}
+
+async function refreshPortalData({ silent = false } = {}) {
+  if (PAGE_STATE.isRefreshing) return;
+  PAGE_STATE.isRefreshing = true;
+  if (!silent) render();
+  try {
+    await loadData();
+    PAGE_STATE.isRefreshing = false;
+    render();
+    if (!silent) showToast("Project updates refreshed.", TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    PAGE_STATE.isRefreshing = false;
+    render();
+    if (!silent) showToast(error?.message || "Could not refresh project updates.", TOAST_TYPES.ERROR);
+  }
 }
 
 async function init() {
@@ -1611,6 +1725,10 @@ async function init() {
     return;
   }
   render();
+  if (portalRefreshTimer) window.clearInterval(portalRefreshTimer);
+  portalRefreshTimer = window.setInterval(() => {
+    if (document.visibilityState === "visible" && !document.querySelector("#clientLightbox.visible")) refreshPortalData({ silent: true });
+  }, 30000);
 }
 
 init().catch((error) => {

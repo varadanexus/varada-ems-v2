@@ -277,6 +277,110 @@ function buildWhatsAppOtpBody({ invite, otp }: any) {
   ].join("\n");
 }
 
+async function ensureWhatsAppChat(admin: any, phone: string, name: string) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) throw new Error("Valid WhatsApp phone number is required");
+  const { data: existing, error: findError } = await admin
+    .from("whatsapp_chats")
+    .select("*")
+    .eq("phone", normalized)
+    .maybeSingle();
+  if (findError) throw findError;
+  if (existing?.id) return existing;
+
+  const { data, error } = await admin
+    .from("whatsapp_chats")
+    .insert({
+      phone: normalized,
+      name: trimText(name) || normalized,
+      last_message: "",
+      unread_count: 0
+    })
+    .select("*")
+    .single();
+  if (!error) return data;
+  if (error.code === "23505") {
+    const { data: concurrent, error: concurrentError } = await admin
+      .from("whatsapp_chats")
+      .select("*")
+      .eq("phone", normalized)
+      .single();
+    if (concurrentError) throw concurrentError;
+    return concurrent;
+  }
+  throw error;
+}
+
+async function recordMeetingWhatsApp(admin: any, args: any) {
+  const chat = await ensureWhatsAppChat(admin, args.phone, args.name);
+  const sentAt = args.sentAt || new Date().toISOString();
+  const sid = trimText(args.sid) || null;
+  let messageExists = false;
+
+  if (sid) {
+    const { data: existingMessage, error: existingError } = await admin
+      .from("whatsapp_messages")
+      .select("id")
+      .eq("message_sid", sid)
+      .limit(1)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    messageExists = Boolean(existingMessage?.id);
+  }
+
+  if (!messageExists) {
+    const { error: messageError } = await admin.from("whatsapp_messages").insert({
+      chat_id: chat.id,
+      phone: chat.phone,
+      name: trimText(args.name) || chat.name,
+      direction: "outbound",
+      message: args.messageText,
+      message_sid: sid,
+      status: args.status || "queued",
+      media_url: null,
+      template_alias: args.templateAlias || null,
+      source_module: "meetings-scheduler",
+      source_event: args.sourceEvent,
+      rendered_payload: args.renderedPayload || {},
+      created_at: sentAt
+    });
+    if (messageError) throw messageError;
+  }
+
+  const { error: chatError } = await admin.from("whatsapp_chats").update({
+    name: trimText(args.name) || chat.name,
+    last_message: args.messageText,
+    last_message_at: sentAt
+  }).eq("id", chat.id);
+  if (chatError) throw chatError;
+
+  if (!messageExists) {
+    const { error: logError } = await admin.from("whatsapp_logs").insert({
+      phone: chat.phone,
+      template: args.templateAlias || args.sourceEvent,
+      template_alias: args.templateAlias || null,
+      status: args.status || "queued",
+      message_sid: sid,
+      message_text: args.messageText,
+      source_module: "meetings-scheduler",
+      source_event: args.sourceEvent,
+      rendered_payload: args.renderedPayload || {},
+      created_at: sentAt
+    });
+    if (logError) throw logError;
+  }
+}
+
+async function safelyRecordMeetingWhatsApp(admin: any, args: any) {
+  try {
+    await recordMeetingWhatsApp(admin, args);
+    return { logged: true, error: null };
+  } catch (error: any) {
+    console.error("Unable to record meeting WhatsApp message", error);
+    return { logged: false, error: error?.message || "Inbox logging failed" };
+  }
+}
+
 function escapeHtml(value = "") {
   return String(value || "")
     .replace(/&/g, "&amp;")
@@ -644,14 +748,30 @@ async function sendInviteBundle(req: Request, admin: any, body: any) {
   const inviteUrl = buildPublicInviteUrl(invite.invite_token, trimText(body.publicOrigin));
 
   const result = {
-    whatsapp: { sent: false, sid: null as string | null, error: null as string | null },
+    whatsapp: { sent: false, sid: null as string | null, error: null as string | null, inboxLogged: false, inboxError: null as string | null },
     email: { sent: false, requestId: null as string | null, error: null as string | null },
     inviteUrl
   };
 
   try {
     const wa = await sendTwilioWhatsAppInvite({ invite, meeting, inviteUrl });
-    result.whatsapp = { sent: true, sid: wa.sid || null, error: null };
+    const inbox = await safelyRecordMeetingWhatsApp(admin, {
+      phone: invite.phone,
+      name: invite.name,
+      sid: wa.sid,
+      status: wa.status,
+      messageText: buildWhatsAppInviteBody({ invite, meeting, inviteUrl }),
+      templateAlias: getMeetingInviteConfig().twilioTemplateSid ? "meeting_invite_details_v1" : null,
+      sourceEvent: "meeting_invite",
+      renderedPayload: {
+        participant_id: invite.id,
+        meeting_id: meeting.id,
+        meeting_title: meeting.title,
+        scheduled_local: meeting.scheduled_local || null,
+        invite_url: inviteUrl
+      }
+    });
+    result.whatsapp = { sent: true, sid: wa.sid || null, error: null, inboxLogged: inbox.logged, inboxError: inbox.error };
   } catch (error: any) {
     result.whatsapp.error = error?.message || "WhatsApp invite failed";
   }
@@ -681,6 +801,8 @@ async function sendInviteBundle(req: Request, admin: any, body: any) {
     whatsapp_sid: result.whatsapp.sid,
     whatsapp_sent: result.whatsapp.sent,
     whatsapp_error: result.whatsapp.error,
+    whatsapp_inbox_logged: result.whatsapp.inboxLogged,
+    whatsapp_inbox_error: result.whatsapp.inboxError,
     email_request_id: result.email.requestId,
     email_sent: result.email.sent,
     email_error: result.email.error,
@@ -715,9 +837,21 @@ async function requestJoinOtp(admin: any, body: any) {
   const meeting = invite.meetings || {};
   const { otp, otpExpiresAt } = await issueOtp(admin, invite);
   const wa = await sendTwilioWhatsAppOtp({ invite, otp });
+  const inbox = await safelyRecordMeetingWhatsApp(admin, {
+    phone: invite.phone,
+    name: invite.name,
+    sid: wa.sid,
+    status: wa.status,
+    messageText: `Secure meeting OTP sent to ${invite.name || "Guest"}.`,
+    templateAlias: getMeetingInviteConfig().twilioOtpTemplateSid ? "meeting_otp" : null,
+    sourceEvent: "meeting_otp",
+    renderedPayload: { participant_id: invite.id, meeting_id: meeting.id, otp_redacted: true }
+  });
   await persistInviteMeta(admin, invite.id, {
     otp_resend_sid: wa.sid || null,
-    otp_resend_at: new Date().toISOString()
+    otp_resend_at: new Date().toISOString(),
+    otp_inbox_logged: inbox.logged,
+    otp_inbox_error: inbox.error
   });
 
   return json({
@@ -786,9 +920,21 @@ async function requestPhoneJoinOtp(admin: any, body: any) {
   const invite = await loadInviteByParticipant(admin, issued.credential_id);
   try {
     const wa = await sendTwilioWhatsAppOtp({ invite, otp: issued.otp });
+    const inbox = await safelyRecordMeetingWhatsApp(admin, {
+      phone: invite.phone,
+      name: invite.name,
+      sid: wa.sid,
+      status: wa.status,
+      messageText: `Secure meeting OTP sent to ${invite.name || "Guest"}.`,
+      templateAlias: getMeetingInviteConfig().twilioOtpTemplateSid ? "meeting_otp" : null,
+      sourceEvent: "meeting_phone_otp",
+      renderedPayload: { participant_id: invite.id, meeting_id: invite.meeting_id, otp_redacted: true }
+    });
     await persistInviteMeta(admin, invite.id, {
       phone_otp_sid: wa.sid || null,
-      phone_otp_sent_at: new Date().toISOString()
+      phone_otp_sent_at: new Date().toISOString(),
+      phone_otp_inbox_logged: inbox.logged,
+      phone_otp_inbox_error: inbox.error
     });
   } catch (deliveryError: any) {
     await admin

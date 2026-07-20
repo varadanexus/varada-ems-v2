@@ -7,6 +7,16 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
+const WHATSAPP_ATTACHMENT_BUCKET = "whatsapp-attachments";
+const WHATSAPP_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const WHATSAPP_ATTACHMENT_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+]);
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -488,8 +498,9 @@ async function listWorkspaceData() {
   });
 }
 
-async function listMessages(body: any) {
+async function listMessages(req: Request, body: any) {
   const admin = adminClient();
+  await requireWhatsAppCaller(req, admin);
   const chat = await ensureChat(admin, body || {});
   const { data, error } = await admin
     .from("whatsapp_messages")
@@ -498,7 +509,8 @@ async function listMessages(body: any) {
     .order("created_at", { ascending: true })
     .limit(500);
   if (error) throw error;
-  return json({ chat, messages: data || [] });
+  const messages = await Promise.all((data || []).map((message) => refreshAttachmentUrl(admin, message)));
+  return json({ chat, messages });
 }
 
 async function listTemplates() {
@@ -752,7 +764,7 @@ async function listHistory(req: Request) {
   return json({ messages: messagesRes.data || [], logs: logsRes.data || [] });
 }
 
-async function sendTwilioMessage({ toPhone, message = "", templateAlias = "", variables = {} }: any) {
+async function sendTwilioMessage({ toPhone, message = "", templateAlias = "", variables = {}, mediaUrl = "" }: any) {
   const accountSid = env("TWILIO_ACCOUNT_SID");
   const authToken = env("TWILIO_AUTH_TOKEN");
   const from = env("TWILIO_WHATSAPP_FROM");
@@ -775,8 +787,10 @@ async function sendTwilioMessage({ toPhone, message = "", templateAlias = "", va
     params.set("ContentSid", template.contentSid);
     params.set("ContentVariables", JSON.stringify(variables || {}));
   } else {
-    params.set("Body", message || template?.defaultBody || "");
+    const resolvedBody = message || template?.defaultBody || "";
+    if (resolvedBody) params.set("Body", resolvedBody);
   }
+  if (mediaUrl) params.set("MediaUrl", mediaUrl);
 
   const callback = env("TWILIO_STATUS_CALLBACK_URL");
   if (callback) params.set("StatusCallback", callback);
@@ -792,6 +806,72 @@ async function sendTwilioMessage({ toPhone, message = "", templateAlias = "", va
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload?.message || "Twilio WhatsApp send failed");
   return payload;
+}
+
+function safeAttachmentName(value = "document") {
+  const cleaned = String(value || "document")
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+  return cleaned || "document";
+}
+
+function decodeBase64(value = "") {
+  const normalized = String(value || "").replace(/^data:[^;]+;base64,/, "");
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+async function uploadWhatsAppAttachment(admin: any, caller: any, chat: any, attachment: any) {
+  const fileName = safeAttachmentName(attachment?.fileName || attachment?.name || "document");
+  const extension = fileName.toLowerCase().split(".").pop();
+  const inferredMimeType = ({
+    pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  } as Record<string, string>)[extension || ""] || "";
+  const mimeType = String(attachment?.mimeType || attachment?.type || inferredMimeType).toLowerCase().trim();
+  if (!WHATSAPP_ATTACHMENT_MIME_TYPES.has(mimeType)) {
+    throw new Error("Unsupported document type. Use PDF, DOC, DOCX, PPTX or XLSX files.");
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = decodeBase64(attachment?.base64 || "");
+  } catch {
+    throw new Error("The selected document could not be read.");
+  }
+  if (!bytes.length) throw new Error("The selected document is empty.");
+  if (bytes.length > WHATSAPP_ATTACHMENT_MAX_BYTES) throw new Error("Documents must be 10 MB or smaller.");
+
+  const storagePath = `${caller.id}/${chat.id}/${Date.now()}-${crypto.randomUUID()}-${fileName}`;
+  const { error: uploadError } = await admin.storage
+    .from(WHATSAPP_ATTACHMENT_BUCKET)
+    .upload(storagePath, bytes, { contentType: mimeType, upsert: false });
+  if (uploadError) throw uploadError;
+
+  const { data: signed, error: signedError } = await admin.storage
+    .from(WHATSAPP_ATTACHMENT_BUCKET)
+    .createSignedUrl(storagePath, 60 * 60);
+  if (signedError || !signed?.signedUrl) {
+    await admin.storage.from(WHATSAPP_ATTACHMENT_BUCKET).remove([storagePath]);
+    throw signedError || new Error("The document delivery link could not be created.");
+  }
+  return { storagePath, fileName, mimeType, size: bytes.length, signedUrl: signed.signedUrl };
+}
+
+async function refreshAttachmentUrl(admin: any, message: any) {
+  const attachment = message?.rendered_payload?.attachment;
+  if (!attachment?.storagePath) return message;
+  const { data, error } = await admin.storage
+    .from(WHATSAPP_ATTACHMENT_BUCKET)
+    .createSignedUrl(attachment.storagePath, 60 * 60);
+  return {
+    ...message,
+    media_url: error ? null : data?.signedUrl || null
+  };
 }
 
 function marketingMoney(value: any) {
@@ -1162,9 +1242,12 @@ async function sendMessage(req: Request, body: any) {
   const caller = await requireWhatsAppCaller(req, admin);
   const chat = await ensureChat(admin, body || {});
   const outboundText = String(body.message || "").trim();
-  if (!outboundText && !body.templateAlias) {
-    throw new Error("Message text or template alias is required.");
+  const hasAttachment = Boolean(body.attachment?.base64);
+  if (!outboundText && !body.templateAlias && !hasAttachment) {
+    throw new Error("Message text, template alias or document is required.");
   }
+  if (body.templateAlias && hasAttachment) throw new Error("Send documents separately from saved templates.");
+  if (outboundText && hasAttachment) throw new Error("Send the document and accompanying text as separate WhatsApp messages.");
 
   const template = body.templateAlias ? await templateByAlias(admin, body.templateAlias) : null;
   const renderedTemplateText = body.templateAlias
@@ -1176,16 +1259,38 @@ async function sendMessage(req: Request, body: any) {
         .join("\n")
     : outboundText;
 
-  const twilioPayload = await sendTwilioMessage({
-    toPhone: chat.phone,
-    message: outboundText,
-    templateAlias: body.templateAlias || "",
-    variables: body.variables || {}
-  });
+  let attachment: any = null;
+  let twilioPayload: any;
+  try {
+    attachment = hasAttachment ? await uploadWhatsAppAttachment(admin, caller, chat, body.attachment) : null;
+    twilioPayload = await sendTwilioMessage({
+      toPhone: chat.phone,
+      message: outboundText,
+      templateAlias: body.templateAlias || "",
+      variables: body.variables || {},
+      mediaUrl: attachment?.signedUrl || ""
+    });
+  } catch (error) {
+    if (attachment?.storagePath) {
+      await admin.storage.from(WHATSAPP_ATTACHMENT_BUCKET).remove([attachment.storagePath]).catch(() => null);
+    }
+    throw error;
+  }
 
   const storedMessage = body.templateAlias
     ? fullRenderedMessage || `[Template] ${body.templateAlias}`
-    : outboundText;
+    : outboundText || `Document: ${attachment?.fileName || "attachment"}`;
+  const renderedPayload = {
+    ...(body.variables || {}),
+    ...(attachment ? {
+      attachment: {
+        storagePath: attachment.storagePath,
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        size: attachment.size
+      }
+    } : {})
+  };
 
   const { data: msg, error: msgError } = await admin
     .from("whatsapp_messages")
@@ -1197,11 +1302,11 @@ async function sendMessage(req: Request, body: any) {
       message: storedMessage,
       message_sid: twilioPayload.sid || null,
       status: twilioPayload.status || "queued",
-      media_url: null,
+      media_url: attachment?.signedUrl || null,
       template_alias: body.templateAlias || null,
       source_module: "whatsapp",
       source_event: "manual_send",
-      rendered_payload: body.variables || {}
+      rendered_payload: renderedPayload
     })
     .select("*")
     .single();
@@ -1226,7 +1331,7 @@ async function sendMessage(req: Request, body: any) {
     message_text: storedMessage,
     source_module: "whatsapp",
     source_event: "manual_send",
-    rendered_payload: body.variables || {}
+    rendered_payload: renderedPayload
   });
 
   await admin.from("audit_logs").insert({
@@ -1239,7 +1344,9 @@ async function sendMessage(req: Request, body: any) {
       phone: chat.phone,
       chat_id: chat.id,
       message_sid: twilioPayload.sid || null,
-      template_alias: body.templateAlias || null
+      template_alias: body.templateAlias || null,
+      attachment_name: attachment?.fileName || null,
+      attachment_type: attachment?.mimeType || null
     }
   });
 
@@ -1251,7 +1358,9 @@ async function sendMessage(req: Request, body: any) {
       title: `WhatsApp sent to ${chat.name || chat.phone}`,
       message: body.templateAlias
         ? `Template ${body.templateAlias} was sent to ${chat.phone}.`
-        : `A custom WhatsApp message was sent to ${chat.phone}.`,
+        : attachment
+          ? `${attachment.fileName} was sent to ${chat.phone}.`
+          : `A custom WhatsApp message was sent to ${chat.phone}.`,
       severity: "success",
       actionLabel: "Open WhatsApp Inbox",
       actionUrl: "/new-ems/modules/whatsapp-inbox/index.html",
@@ -1263,7 +1372,8 @@ async function sendMessage(req: Request, body: any) {
         chat_id: chat.id,
         phone: chat.phone,
         message_sid: twilioPayload.sid || null,
-        template_alias: body.templateAlias || null
+        template_alias: body.templateAlias || null,
+        attachment_name: attachment?.fileName || null
       }
     });
   } catch (notificationError) {
@@ -1320,15 +1430,18 @@ async function recordInboundWhatsApp(admin: any, payload: Record<string, any>, f
   const toPhone = normalizePhone(String(payload.To || payload.toPhone || "").replace(/^whatsapp:/i, ""));
   const messageSid = String(payload.MessageSid || payload.SmsSid || payload.SmsMessageSid || payload.messageSid || "").trim() || null;
   const messageText = String(payload.Body || payload.MessageBody || payload.message || "").trim();
+  const mediaUrl = String(payload.MediaUrl0 || payload.mediaUrl0 || "").trim();
+  const mediaType = String(payload.MediaContentType0 || payload.mediaContentType0 || "").trim();
   const contactName = String(payload.ProfileName || payload.PushName || payload.ContactName || payload.name || fromPhone || "WhatsApp Contact").trim();
   const status = String(payload.MessageStatus || payload.SmsStatus || payload.EventType || payload.status || "received").toLowerCase();
 
-  if (!fromPhone || !messageText) {
-    return json({ received: true, skipped: true, reason: "Missing sender phone or message body" });
+  if (!fromPhone || (!messageText && !mediaUrl)) {
+    return json({ received: true, skipped: true, reason: "Missing sender phone or message content" });
   }
 
   const chat = await ensureChat(admin, { phone: fromPhone, name: contactName });
   const nowIso = new Date().toISOString();
+  const storedMessageText = messageText || "WhatsApp attachment";
   const { data: msg, error: msgError } = await admin
     .from("whatsapp_messages")
     .insert({
@@ -1336,14 +1449,14 @@ async function recordInboundWhatsApp(admin: any, payload: Record<string, any>, f
       phone: chat.phone,
       name: contactName,
       direction: "inbound",
-      message: messageText,
+      message: storedMessageText,
       message_sid: messageSid,
       status,
-      media_url: payload.MediaUrl0 || payload.mediaUrl0 || null,
+      media_url: mediaUrl || null,
       template_alias: null,
       source_module: "whatsapp",
       source_event: fromWebhook ? "twilio_inbound_message" : "manual_inbound_test",
-      rendered_payload: payload
+      rendered_payload: { ...payload, inboundMedia: mediaUrl ? { mimeType: mediaType || null } : null }
     })
     .select("*")
     .single();
@@ -1353,7 +1466,7 @@ async function recordInboundWhatsApp(admin: any, payload: Record<string, any>, f
     .from("whatsapp_chats")
     .update({
       name: contactName || chat.name,
-      last_message: messageText,
+      last_message: storedMessageText,
       last_message_at: nowIso,
       unread_count: (Number(chat.unread_count || 0) || 0) + 1
     })
@@ -1365,7 +1478,7 @@ async function recordInboundWhatsApp(admin: any, payload: Record<string, any>, f
     template_alias: null,
     status,
     message_sid: messageSid,
-    message_text: messageText,
+    message_text: storedMessageText,
     source_module: "whatsapp",
     source_event: fromWebhook ? "twilio_inbound_message" : "manual_inbound_test",
     rendered_payload: payload
@@ -1391,7 +1504,7 @@ async function recordInboundWhatsApp(admin: any, payload: Record<string, any>, f
       eventCode: fromWebhook ? "whatsapp_inbound_received" : "whatsapp_inbound_test",
       category: "whatsapp",
       title: `New WhatsApp message from ${contactName || chat.phone}`,
-      message: messageText.length > 140 ? `${messageText.slice(0, 137)}...` : messageText,
+      message: storedMessageText.length > 140 ? `${storedMessageText.slice(0, 137)}...` : storedMessageText,
       severity: "info",
       actionLabel: "Open WhatsApp Inbox",
       actionUrl: "/new-ems/modules/whatsapp-inbox/index.html",
@@ -1430,7 +1543,7 @@ Deno.serve(async (req) => {
    if (action === "config_status") return await configStatus();
    if (action === "provider_health") return await providerHealth();
    if (action === "list_workspace_data") return await listWorkspaceData();
-  if (action === "list_messages") return await listMessages(body);
+  if (action === "list_messages") return await listMessages(req, body);
   if (action === "list_templates") return await listTemplates();
   if (action === "list_contacts") return await listContacts(req);
   if (action === "save_contact") return await saveContact(req, body);

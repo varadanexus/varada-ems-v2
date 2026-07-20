@@ -1,15 +1,18 @@
 // @ts-nocheck
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import JSZip from "https://esm.sh/jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-didit-signature, x-signature, x-signature-v2, x-signature-simple, x-timestamp, x-twilio-signature",
-  "Access-Control-Allow-Methods": "POST, OPTIONS"
+  "Access-Control-Allow-Headers": "authorization, authorizationjwt, x-client-info, apikey, content-type, x-didit-signature, x-signature, x-signature-v2, x-signature-simple, x-timestamp, x-twilio-signature",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Expose-Headers": "x-file-name, content-disposition"
 };
 
 const PUBLIC_WEBSITE_ORIGIN = "https://www.varadanexus.com";
 const PUBLIC_SIGNING_BASE_URL = `${PUBLIC_WEBSITE_ORIGIN}/new-ems/modules/legal-public-sign/index.html`;
+const LEGAL_DOCUMENT_BUCKET = "legal-documents";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -119,6 +122,339 @@ async function requireLegalCaller(req: Request, admin: any) {
     throw new Error("Legal permission required");
   }
   return caller;
+}
+
+function onlyOfficeServerUrl() {
+  return env("ONLYOFFICE_DOCUMENT_SERVER_URL").replace(/\/+$/, "");
+}
+
+function onlyOfficeSecret() {
+  return env("ONLYOFFICE_JWT_SECRET");
+}
+
+function requireOnlyOfficeConfiguration() {
+  const serverUrl = onlyOfficeServerUrl();
+  const secret = onlyOfficeSecret();
+  if (!serverUrl || !secret) {
+    throw new Error("Word editor is not configured. Set ONLYOFFICE_DOCUMENT_SERVER_URL and ONLYOFFICE_JWT_SECRET.");
+  }
+  if (!/^https:\/\//i.test(serverUrl) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(serverUrl)) {
+    throw new Error("ONLYOFFICE_DOCUMENT_SERVER_URL must use HTTPS outside local development.");
+  }
+  return { serverUrl, secret };
+}
+
+function utf8Base64Url(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => binary += String.fromCharCode(byte));
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function signOnlyOfficeJwt(payload: any, secret = onlyOfficeSecret()) {
+  if (!secret) throw new Error("ONLYOFFICE_JWT_SECRET is missing");
+  const header = utf8Base64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = utf8Base64Url(JSON.stringify(payload));
+  const signingInput = `${header}.${body}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signingInput));
+  return `${signingInput}.${base64Url(signature)}`;
+}
+
+function decodeBase64Url(value: string) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+}
+
+async function verifyOnlyOfficeJwt(token = "") {
+  const secret = onlyOfficeSecret();
+  const parts = String(token).split(".");
+  if (!secret || parts.length !== 3) return false;
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+    return await crypto.subtle.verify(
+      "HMAC",
+      key,
+      decodeBase64Url(parts[2]),
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function xmlEscape(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+async function createBlankLegalDocx(text = "") {
+  const zip = new JSZip();
+  const paragraphs = String(text || "")
+    .replace(/\r/g, "")
+    .split(/\n/)
+    .map((line) => `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(line || " ")}</w:t></w:r></w:p>`)
+    .join("");
+  zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>`);
+  zip.folder("_rels")?.file(".rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+  zip.folder("word")?.file("document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>${paragraphs || "<w:p/>"}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body>
+</w:document>`);
+  zip.folder("word")?.file("styles.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:sz w:val="22"/></w:rPr></w:rPrDefault></w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+</w:styles>`);
+  zip.folder("word")?.folder("_rels")?.file("document.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
+  return await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+}
+
+function safeDocxTitle(value = "Legal Draft") {
+  const base = String(value || "Legal Draft")
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120) || "Legal Draft";
+  return base.toLowerCase().endsWith(".docx") ? base : `${base}.docx`;
+}
+
+async function ownedWordDocument(admin: any, caller: any, documentId: string) {
+  const { data, error } = await admin
+    .from("legal_word_documents")
+    .select("*")
+    .eq("id", documentId)
+    .eq("owner_user_id", caller.id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data?.id) throw new Error("Word document was not found or is not available to this user.");
+  return data;
+}
+
+async function createWordEditorSession(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const { serverUrl, secret } = requireOnlyOfficeConfiguration();
+  const documentId = crypto.randomUUID();
+  const title = safeDocxTitle(body.title || body.agreementTitle || "Legal Draft");
+  const objectPath = `${caller.id}/${documentId}.docx`;
+  const documentKey = (await sha256(`${documentId}:${Date.now()}:${randomToken()}`)).slice(0, 48);
+  const file = await createBlankLegalDocx(body.draftText || "");
+  const upload = await admin.storage.from(LEGAL_DOCUMENT_BUCKET).upload(objectPath, file, {
+    contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    upsert: false
+  });
+  if (upload.error) throw upload.error;
+
+  const inserted = await admin.from("legal_word_documents").insert({
+    id: documentId,
+    owner_user_id: caller.id,
+    object_path: objectPath,
+    document_key: documentKey,
+    title,
+    status: "editing"
+  }).select("*").single();
+  if (inserted.error) {
+    await admin.storage.from(LEGAL_DOCUMENT_BUCKET).remove([objectPath]);
+    throw inserted.error;
+  }
+
+  const signed = await admin.storage.from(LEGAL_DOCUMENT_BUCKET).createSignedUrl(objectPath, 86400);
+  if (signed.error || !signed.data?.signedUrl) throw signed.error || new Error("Could not create document URL");
+  const callbackUrl = `${env("SUPABASE_URL")}/functions/v1/legal-integrations?onlyoffice_callback=1&document_id=${documentId}`;
+  const config: any = {
+    documentType: "word",
+    type: "desktop",
+    width: "100%",
+    height: "100%",
+    document: {
+      fileType: "docx",
+      key: documentKey,
+      title,
+      url: signed.data.signedUrl,
+      permissions: {
+        edit: true,
+        download: true,
+        print: true,
+        comment: true,
+        review: true,
+        copy: true
+      }
+    },
+    editorConfig: {
+      mode: "edit",
+      lang: "en",
+      region: "en-IN",
+      callbackUrl,
+      user: {
+        id: caller.id,
+        name: caller.display_name || caller.email || "Varada Nexus User"
+      },
+      customization: {
+        autosave: true,
+        forcesave: true,
+        compactToolbar: false,
+        feedback: false,
+        help: true,
+        hideRightMenu: false,
+        toolbarNoTabs: false,
+        unit: "cm"
+      }
+    }
+  };
+  config.token = await signOnlyOfficeJwt(config, secret);
+  return json({
+    success: true,
+    documentId,
+    documentServerUrl: serverUrl,
+    config,
+    updatedAt: inserted.data.updated_at
+  });
+}
+
+async function onlyOfficeCallback(req: Request, body: any) {
+  const admin = adminClient();
+  const documentId = new URL(req.url).searchParams.get("document_id") || "";
+  const headerToken = req.headers.get("authorizationjwt") || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || "";
+  if (!documentId || !await verifyOnlyOfficeJwt(body.token || headerToken)) return json({ error: 1 }, 403);
+  const recordResult = await admin.from("legal_word_documents").select("*").eq("id", documentId).maybeSingle();
+  const record = recordResult.data;
+  if (!record?.id || String(body.key || "") !== String(record.document_key)) return json({ error: 1 }, 403);
+  const status = Number(body.status || 0);
+  if ([2, 6].includes(status) && body.url) {
+    const response = await fetch(body.url);
+    if (!response.ok) return json({ error: 1 }, 502);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const upload = await admin.storage.from(LEGAL_DOCUMENT_BUCKET).upload(record.object_path, bytes, {
+      contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      upsert: true
+    });
+    if (upload.error) return json({ error: 1 }, 500);
+    await admin.from("legal_word_documents").update({
+      status: "saved",
+      last_callback_status: status,
+      last_saved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq("id", record.id);
+  } else if ([3, 7].includes(status)) {
+    await admin.from("legal_word_documents").update({
+      status: "error",
+      last_callback_status: status,
+      updated_at: new Date().toISOString()
+    }).eq("id", record.id);
+  } else {
+    await admin.from("legal_word_documents").update({
+      last_callback_status: status,
+      updated_at: new Date().toISOString()
+    }).eq("id", record.id);
+  }
+  return json({ error: 0 });
+}
+
+async function wordEditorStatus(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const record = await ownedWordDocument(admin, caller, String(body.documentId || ""));
+  return json({
+    success: true,
+    documentId: record.id,
+    status: record.status,
+    lastCallbackStatus: record.last_callback_status,
+    lastSavedAt: record.last_saved_at,
+    updatedAt: record.updated_at
+  });
+}
+
+async function forceSaveWordDocument(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const { serverUrl, secret } = requireOnlyOfficeConfiguration();
+  const record = await ownedWordDocument(admin, caller, String(body.documentId || ""));
+  const command: any = { c: "forcesave", key: record.document_key, userdata: record.id };
+  command.token = await signOnlyOfficeJwt(command, secret);
+  const response = await fetch(`${serverUrl}/command?shardkey=${encodeURIComponent(record.document_key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(command)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || ![0, 4].includes(Number(result.error ?? -1))) {
+    throw new Error(`Word editor save request failed (code ${result.error ?? response.status}).`);
+  }
+  return json({ success: true, pending: Number(result.error) === 0, noChanges: Number(result.error) === 4 });
+}
+
+async function finalizeWordDraft(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const { serverUrl, secret } = requireOnlyOfficeConfiguration();
+  const record = await ownedWordDocument(admin, caller, String(body.documentId || ""));
+  const signed = await admin.storage.from(LEGAL_DOCUMENT_BUCKET).createSignedUrl(record.object_path, 3600);
+  if (signed.error || !signed.data?.signedUrl) throw signed.error || new Error("Could not read the Word document");
+  const conversion: any = {
+    async: false,
+    filetype: "docx",
+    key: `${record.document_key}-txt-${Date.now()}`.slice(0, 128),
+    outputtype: "txt",
+    title: record.title.replace(/\.docx$/i, ".txt"),
+    url: signed.data.signedUrl
+  };
+  conversion.token = await signOnlyOfficeJwt(conversion, secret);
+  const conversionResponse = await fetch(`${serverUrl}/converter?shardkey=${encodeURIComponent(conversion.key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify(conversion)
+  });
+  const conversionResult = await conversionResponse.json().catch(() => ({}));
+  if (!conversionResponse.ok || !conversionResult.endConvert || !conversionResult.fileUrl) {
+    throw new Error(`Word document conversion failed (code ${conversionResult.error ?? conversionResponse.status}).`);
+  }
+  const textResponse = await fetch(conversionResult.fileUrl);
+  if (!textResponse.ok) throw new Error("The converted Word document could not be downloaded.");
+  const draftText = (await textResponse.text()).replace(/^\uFEFF/, "").trim();
+  if (!draftText) throw new Error("The Word document is empty.");
+  const savedResponse = await saveDraftAgreement(req, {
+    ...body,
+    title: body.title || record.title.replace(/\.docx$/i, ""),
+    draftText,
+    draftSource: "imported"
+  });
+  const saved = await savedResponse.clone().json();
+  if (!savedResponse.ok || saved.error) return savedResponse;
+  await admin.from("legal_word_documents").update({
+    agreement_id: saved.agreement?.id || null,
+    version_id: saved.version?.id || null,
+    status: "saved",
+    updated_at: new Date().toISOString()
+  }).eq("id", record.id);
+  return json({ ...saved, documentId: record.id, draftText });
 }
 
 async function ensureAgreement(admin: any, body: any, caller: any) {
@@ -594,6 +930,27 @@ async function saveDraftAgreement(req: Request, body: any) {
     updated_at: new Date().toISOString()
   }).eq("id", agreement.id);
 
+  const driveDraftSeriesId = String(body.driveDraftSeriesId || "").trim();
+  if (isUuid(driveDraftSeriesId)) {
+    const draftDocuments = await admin.from("drive_documents")
+      .select("id,error_detail")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .eq("entity_id", driveDraftSeriesId)
+      .eq("uploaded_by", caller.id)
+      .is("deleted_at", null);
+    if (draftDocuments.error) throw draftDocuments.error;
+    for (const document of draftDocuments.data || []) {
+      const metadata = String(document.error_detail || "")
+        .replace(/agreement-id:[0-9a-f-]+;/ig, "")
+        .replace(/series:[0-9a-f-]+;/ig, "");
+      const linkResult = await admin.from("drive_documents").update({
+        error_detail: `series:${driveDraftSeriesId};agreement-id:${agreement.id};${metadata}`.slice(0, 500)
+      }).eq("id", document.id);
+      if (linkResult.error) throw linkResult.error;
+    }
+  }
+
   await admin.from("legal_provider_events").insert({
     agreement_id: agreement.id,
     signing_request_id: null,
@@ -942,6 +1299,308 @@ function base64ToBytes(base64: string) {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
+}
+
+const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+function cleanDocxName(value = "") {
+  const cleaned = String(value || "legal-draft.docx")
+    .replace(/[\\/\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 170) || "legal-draft.docx";
+  return /\.docx$/i.test(cleaned) ? cleaned : `${cleaned}.docx`;
+}
+
+function isUuid(value = "") {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value));
+}
+
+async function uploadOfflineDraftVersion(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const originalFileName = cleanDocxName(body.fileName);
+  if (!/\.docx$/i.test(originalFileName)) return json({ error: "Only .docx files can be archived as editable legal drafts." }, 400);
+  const encoded = String(body.base64 || "").replace(/^data:[^;]+;base64,/, "");
+  if (!encoded) return json({ error: "Word file content is required." }, 400);
+  const bytes = base64ToBytes(encoded);
+  if (!bytes.length) return json({ error: "The selected Word file is empty." }, 400);
+  if (bytes.length > 10 * 1024 * 1024) return json({ error: "The Word file must be 10 MB or smaller." }, 400);
+  // DOCX is a ZIP package. Checking the signature catches accidental .doc/.pdf uploads.
+  if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) return json({ error: "The selected file is not a valid modern Word .docx package." }, 400);
+
+  const requestedSeriesId = String(body.seriesId || "").trim();
+  const seriesId = requestedSeriesId ? requestedSeriesId : crypto.randomUUID();
+  const agreementId = String(body.agreementId || "").trim();
+  if (!isUuid(seriesId)) return json({ error: "Invalid draft series identifier." }, 400);
+  if (agreementId && !isUuid(agreementId)) return json({ error: "Invalid agreement identifier." }, 400);
+  if (agreementId) {
+    const agreementCheck = await admin.from("legal_agreements").select("id").eq("id", agreementId).is("deleted_at", null).maybeSingle();
+    if (agreementCheck.error) throw agreementCheck.error;
+    if (!agreementCheck.data?.id) return json({ error: "Agreement not found." }, 404);
+  }
+  if (requestedSeriesId) {
+    const ownership = await admin.from("drive_documents")
+      .select("id,uploaded_by,error_detail")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .eq("entity_id", seriesId)
+      .limit(1)
+      .maybeSingle();
+    if (ownership.error) throw ownership.error;
+    const linkedToAgreement = agreementId && String(ownership.data?.error_detail || "").includes(`agreement-id:${agreementId};`);
+    const ownedByCaller = ownership.data?.uploaded_by === caller.id;
+    if (ownership.data?.id && !ownedByCaller && !linkedToAgreement) {
+      return json({ error: "This draft series belongs to another agreement or user." }, 403);
+    }
+    if (!ownership.data?.id && !(agreementId && seriesId === agreementId)) {
+      return json({ error: "This draft series is unavailable or belongs to another user." }, 404);
+    }
+  }
+
+  const latestResult = await admin.from("drive_documents")
+    .select("document_no")
+    .eq("category", "LEGAL_DRAFT")
+    .eq("entity_type", "legal_draft_series")
+    .eq("entity_id", seriesId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestResult.error) throw latestResult.error;
+  const versionNo = Number(latestResult.data?.document_no || 0) + 1;
+  const title = String(body.title || originalFileName.replace(/\.docx$/i, "")).trim().slice(0, 180) || "Legal Draft";
+  const agreementNo = String(body.agreementNo || "").trim().slice(0, 100) || null;
+  const baseName = originalFileName.replace(/\.docx$/i, "").replace(/[^a-z0-9 _.-]+/gi, "-").trim() || "legal-draft";
+  const driveFileName = `${baseName}-V${String(versionNo).padStart(2, "0")}.docx`;
+  const token = await googleAccessToken();
+  const legalRoot = env("GOOGLE_DRIVE_LEGAL_FOLDER_ID");
+  if (!token || !legalRoot) throw new Error("Google Drive Legal archive is not configured.");
+  const draftsFolder = await ensureDriveFolder("Draft Versions", legalRoot, token);
+  const seriesFolder = await ensureDriveFolder(
+    driveFolderName(`${agreementNo || "Unnumbered"} - ${title} - ${seriesId.slice(0, 8)}`, "Legal Draft"),
+    draftsFolder.id,
+    token
+  );
+  const uploaded = await uploadDriveFile(driveFileName, DOCX_MIME_TYPE, bytes, seriesFolder.id);
+  if (!uploaded?.id) throw new Error(uploaded?.payload?.error || "Google Drive upload failed.");
+  const fileHash = await sha256(bytes);
+  const insertResult = await admin.from("drive_documents").insert({
+    category: "LEGAL_DRAFT",
+    document_type: "OFFLINE_DOCX_VERSION",
+    entity_type: "legal_draft_series",
+    entity_id: seriesId,
+    document_no: String(versionNo),
+    mime_type: DOCX_MIME_TYPE,
+    file_name: driveFileName,
+    file_size: bytes.length,
+    drive_file_id: uploaded.id,
+    drive_folder_id: seriesFolder.id,
+    web_view_link: uploaded.webViewLink || null,
+    upload_status: "stored",
+    uploaded_by: caller.id,
+    error_detail: `series:${seriesId};${agreementId ? `agreement-id:${agreementId};` : ""}sha256:${fileHash};original:${originalFileName};agreement:${agreementNo || ""};title:${title}`.slice(0, 500)
+  }).select("*").single();
+  if (insertResult.error) {
+    await deleteDriveFile(uploaded.id).catch(() => null);
+    throw insertResult.error;
+  }
+  return json({ success: true, seriesId, version: {
+    id: insertResult.data.id,
+    series_id: seriesId,
+    version_no: versionNo,
+    title,
+    agreement_no: agreementNo,
+    original_file_name: originalFileName,
+    drive_file_name: insertResult.data.file_name,
+    file_size: insertResult.data.file_size,
+    file_sha256: fileHash,
+    created_at: insertResult.data.created_at
+  } });
+}
+
+async function listOfflineDraftVersions(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  let seriesId = String(body.seriesId || "").trim();
+  const agreementId = String(body.agreementId || "").trim();
+  if (seriesId && !isUuid(seriesId)) return json({ error: "Invalid draft series identifier." }, 400);
+  if (agreementId && !isUuid(agreementId)) return json({ error: "Invalid agreement identifier." }, 400);
+  if (agreementId) {
+    const linked = await admin.from("drive_documents")
+      .select("id,entity_id,document_no,file_name,file_size,error_detail,created_at")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .like("error_detail", `%agreement-id:${agreementId};%`)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
+    if (linked.error) throw linked.error;
+    const versions = (linked.data || []).map((row: any) => ({
+      id: row.id,
+      series_id: String(row.error_detail || "").match(/series:([0-9a-f-]{36});/i)?.[1] || row.entity_id,
+      agreement_id: agreementId,
+      version_no: Number(row.document_no || 0),
+      original_file_name: row.file_name,
+      drive_file_name: row.file_name,
+      file_size: row.file_size,
+      file_sha256: String(row.error_detail || "").match(/sha256:([0-9a-f]{64})/i)?.[1] || null,
+      created_at: row.created_at
+    }));
+    return json({ success: true, seriesId: versions[0]?.series_id || agreementId, versions });
+  }
+  if (!seriesId) {
+    const latest = await admin.from("drive_documents")
+      .select("entity_id")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .eq("uploaded_by", caller.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latest.error) throw latest.error;
+    seriesId = latest.data?.entity_id || "";
+  }
+  if (!seriesId) return json({ success: true, seriesId: null, versions: [] });
+  const result = await admin.from("drive_documents")
+    .select("id,entity_id,document_no,file_name,file_size,error_detail,created_at")
+    .eq("category", "LEGAL_DRAFT")
+    .eq("entity_type", "legal_draft_series")
+    .eq("entity_id", seriesId)
+    .eq("uploaded_by", caller.id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  if (result.error) throw result.error;
+  const versions = (result.data || []).map((row: any) => ({
+    id: row.id,
+    series_id: row.entity_id,
+    version_no: Number(row.document_no || 0),
+    original_file_name: row.file_name,
+    drive_file_name: row.file_name,
+    file_size: row.file_size,
+    file_sha256: String(row.error_detail || "").match(/sha256:([0-9a-f]{64})/i)?.[1] || null,
+    created_at: row.created_at
+  }));
+  return json({ success: true, seriesId, versions });
+}
+
+async function listOfflineDraftSeries(req: Request) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const result = await admin.from("drive_documents")
+    .select("id,entity_id,document_no,file_name,file_size,error_detail,created_at")
+    .eq("category", "LEGAL_DRAFT")
+    .eq("entity_type", "legal_draft_series")
+    .eq("uploaded_by", caller.id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (result.error) throw result.error;
+  const grouped = new Map<string, any>();
+  for (const row of result.data || []) {
+    const metadata = String(row.error_detail || "");
+    const seriesId = metadata.match(/series:([0-9a-f-]{36});/i)?.[1] || row.entity_id;
+    if (!seriesId) continue;
+    const current = grouped.get(seriesId) || {
+      seriesId,
+      title: metadata.match(/(?:^|;)title:([^;]*)/i)?.[1] || row.file_name?.replace(/-V\d+\.docx$/i, "") || "Legal Draft",
+      agreementNo: metadata.match(/(?:^|;)agreement:([^;]*)/i)?.[1] || "",
+      agreementId: metadata.match(/agreement-id:([0-9a-f-]{36});/i)?.[1] || null,
+      versionCount: 0,
+      latestVersion: 0,
+      latestFileName: row.file_name,
+      latestAt: row.created_at
+    };
+    current.versionCount += 1;
+    current.latestVersion = Math.max(current.latestVersion, Number(row.document_no || 0));
+    grouped.set(seriesId, current);
+  }
+  return json({ success: true, series: Array.from(grouped.values()) });
+}
+
+async function offlineDraftVersionProxy(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const versionId = String(body.versionId || "").trim();
+  if (!isUuid(versionId)) return json({ error: "A valid draft version is required." }, 400);
+  const result = await admin.from("drive_documents")
+    .select("drive_file_id,file_name,mime_type")
+    .eq("id", versionId)
+    .eq("category", "LEGAL_DRAFT")
+    .eq("entity_type", "legal_draft_series")
+    .maybeSingle();
+  if (result.error) throw result.error;
+  if (!result.data?.drive_file_id) return json({ error: "Draft version not found." }, 404);
+  const bytes = await downloadDriveFile(result.data.drive_file_id);
+  if (!bytes) return json({ error: "The archived Word file could not be downloaded." }, 404);
+  const fileName = cleanDocxName(result.data.file_name);
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": result.data.mime_type || DOCX_MIME_TYPE,
+      "Content-Disposition": `attachment; filename="${fileName.replace(/"/g, "")}"`,
+      "X-File-Name": encodeURIComponent(fileName),
+      "Cache-Control": "private, no-store"
+    }
+  });
+}
+
+async function uploadManualSigningArtifact(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const agreementId = String(body.agreementId || "").trim();
+  const fileKind = String(body.fileKind || "").trim();
+  const allowedKinds = new Set(["signed_pdf", "acceptance_certificate_pdf", "evidence_pdf"]);
+  if (!isUuid(agreementId)) return json({ error: "A valid agreement is required." }, 400);
+  if (!allowedKinds.has(fileKind)) return json({ error: "Choose a signed agreement, certificate, or evidence PDF." }, 400);
+  const encoded = String(body.base64 || "").replace(/^data:[^;]+;base64,/, "");
+  if (!encoded) return json({ error: "PDF content is required." }, 400);
+  const bytes = base64ToBytes(encoded);
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) return json({ error: "The PDF must be 10 MB or smaller." }, 400);
+  if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-") return json({ error: "The selected file is not a valid PDF." }, 400);
+
+  const agreementResult = await admin.from("legal_agreements").select("*").eq("id", agreementId).is("deleted_at", null).maybeSingle();
+  if (agreementResult.error) throw agreementResult.error;
+  if (!agreementResult.data?.id) return json({ error: "Agreement not found." }, 404);
+  const agreement = agreementResult.data;
+  const [requestResult, versionResult] = await Promise.all([
+    admin.from("legal_signing_requests").select("id,recipient_name").eq("agreement_id", agreementId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    agreement.current_version_id
+      ? admin.from("legal_agreement_versions").select("version_no").eq("id", agreement.current_version_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null })
+  ]);
+  if (requestResult.error) throw requestResult.error;
+  if (versionResult.error) throw versionResult.error;
+  const request = { agreement_id: agreementId, id: requestResult.data?.id || null, recipient_name: requestResult.data?.recipient_name || agreement.signer_name || agreement.party_name };
+  const drivePath = await ensureLegalDrivePath(agreement, request);
+  const targetFolder = driveFolderForFileKind(drivePath, fileKind);
+  const labels: Record<string, string> = {
+    signed_pdf: "signed-agreement",
+    acceptance_certificate_pdf: "signing-certificate",
+    evidence_pdf: "signing-evidence"
+  };
+  const versionNo = Number(versionResult.data?.version_no || 1);
+  const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+  const fileName = archiveFileName(agreement.agreement_no, `${versionTag(versionNo)}-${labels[fileKind]}-${timestamp}.pdf`);
+  const uploaded = await uploadDriveFile(fileName, "application/pdf", bytes, targetFolder.id);
+  if (!uploaded?.id) throw new Error(uploaded?.payload?.error || "Google Drive upload failed.");
+  const fileHash = await sha256(bytes);
+  let archive;
+  try {
+    archive = await recordArchiveFile(admin, request, fileKind, uploaded, fileName, "application/pdf", fileHash, targetFolder.id);
+  } catch (error) {
+    await deleteDriveFile(uploaded.id).catch(() => null);
+    throw error;
+  }
+  await admin.from("legal_provider_events").insert({
+    agreement_id: agreementId,
+    signing_request_id: request.id,
+    provider: "google_drive",
+    provider_event_id: uploaded.id,
+    event_type: `manual.${fileKind}.upload`,
+    status: "archived",
+    payload: { uploadedBy: caller.id, fileName, fileHash, fileKind }
+  });
+  return json({ success: true, archive, fileName, fileHash, driveFolder: targetFolder.name });
 }
 
 function escapeHtml(value = "") {
@@ -1650,17 +2309,37 @@ async function getLegalAgreement(req: Request, body: any) {
     .order("version_no", { ascending: false });
   if (versionsResult.error) throw versionsResult.error;
 
-  const signaturesResult = await admin
-    .from("legal_execution_signatures")
-    .select("*")
-    .eq("agreement_id", agreementId)
-    .order("signed_at", { ascending: true });
+  const [signaturesResult, documentsResult, archiveFilesResult] = await Promise.all([
+    admin.from("legal_execution_signatures").select("*").eq("agreement_id", agreementId).order("signed_at", { ascending: true }),
+    admin.from("drive_documents")
+      .select("id,entity_id,document_no,file_name,file_size,error_detail,created_at")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .like("error_detail", `%agreement-id:${agreementId};%`)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
+    admin.from("legal_archive_files").select("*").eq("agreement_id", agreementId).order("uploaded_at", { ascending: false })
+  ]);
   if (signaturesResult.error) throw signaturesResult.error;
+  if (documentsResult.error) throw documentsResult.error;
+  if (archiveFilesResult.error) throw archiveFilesResult.error;
+  const documentVersions = (documentsResult.data || []).map((row: any) => ({
+    id: row.id,
+    series_id: String(row.error_detail || "").match(/series:([0-9a-f-]{36});/i)?.[1] || row.entity_id,
+    agreement_id: agreementId,
+    version_no: Number(row.document_no || 0),
+    drive_file_name: row.file_name,
+    file_size: row.file_size,
+    file_sha256: String(row.error_detail || "").match(/sha256:([0-9a-f]{64})/i)?.[1] || null,
+    created_at: row.created_at
+  }));
 
   return json({
     agreement: agreementResult.data,
     versions: versionsResult.data || [],
-    signatures: signaturesResult.data || []
+    signatures: signaturesResult.data || [],
+    documentVersions,
+    archiveFiles: archiveFilesResult.data || []
   });
 }
 
@@ -1680,12 +2359,14 @@ async function deleteLegalAgreement(req: Request, body: any) {
   const agreement = agreementResult.data;
   if (!agreement) throw new Error("Agreement not found");
 
-  const [archiveFilesResult, requestsResult] = await Promise.all([
+  const [archiveFilesResult, requestsResult, draftDocumentsResult] = await Promise.all([
     admin.from("legal_archive_files").select("id,drive_file_id,drive_folder_id,file_name,file_kind").eq("agreement_id", agreementId),
-    admin.from("legal_signing_requests").select("id,evidence_drive_file_id,live_photo_drive_file_id").eq("agreement_id", agreementId)
+    admin.from("legal_signing_requests").select("id,evidence_drive_file_id,live_photo_drive_file_id").eq("agreement_id", agreementId),
+    admin.from("drive_documents").select("id,drive_file_id,drive_folder_id").eq("category", "LEGAL_DRAFT").like("error_detail", `%agreement-id:${agreementId};%`).is("deleted_at", null)
   ]);
   if (archiveFilesResult.error) throw archiveFilesResult.error;
   if (requestsResult.error) throw requestsResult.error;
+  if (draftDocumentsResult.error) throw draftDocumentsResult.error;
   const requestIds = (requestsResult.data || []).map((row: any) => row.id).filter(Boolean);
   const evidenceResult = requestIds.length
     ? await admin.from("legal_signing_evidence").select("id,live_photo_drive_file_id").in("signing_request_id", requestIds)
@@ -1695,14 +2376,17 @@ async function deleteLegalAgreement(req: Request, body: any) {
   const archiveFiles = archiveFilesResult.data || [];
   const requests = requestsResult.data || [];
   const evidences = evidenceResult.data || [];
+  const draftDocuments = draftDocumentsResult.data || [];
   const driveFileIds = Array.from(new Set([
     ...archiveFiles.map((row: any) => row.drive_file_id),
+    ...draftDocuments.map((row: any) => row.drive_file_id),
     ...requests.map((row: any) => row.evidence_drive_file_id),
     ...requests.map((row: any) => row.live_photo_drive_file_id),
     ...evidences.map((row: any) => row.live_photo_drive_file_id)
   ].filter(Boolean)));
   const folderIds = Array.from(new Set([
     ...archiveFiles.map((row: any) => row.drive_folder_id),
+    ...draftDocuments.map((row: any) => row.drive_folder_id),
     agreement.google_drive_folder_id
   ].filter(Boolean)));
 
@@ -1715,6 +2399,11 @@ async function deleteLegalAgreement(req: Request, body: any) {
     } catch (error) {
       failedDriveFiles.push({ fileId, error: error?.message || "Drive delete failed" });
     }
+  }
+
+  if (draftDocuments.length) {
+    const draftDelete = await admin.from("drive_documents").delete().in("id", draftDocuments.map((row: any) => row.id));
+    if (draftDelete.error) throw draftDelete.error;
   }
 
   const deleteAgreementResult = await admin.from("legal_agreements").delete().eq("id", agreementId);
@@ -3066,6 +3755,9 @@ Deno.serve(async (req) => {
     const contentType = req.headers.get("content-type") || "";
     const formBody = contentType.includes("application/x-www-form-urlencoded") ? new URLSearchParams(rawBody) : null;
     const body = formBody ? Object.fromEntries(formBody.entries()) : (rawBody ? JSON.parse(rawBody) : {});
+    if (new URL(req.url).searchParams.get("onlyoffice_callback") === "1") {
+      return await onlyOfficeCallback(req, body);
+    }
     const hasDiditSignature = req.headers.get("x-signature") ||
       req.headers.get("x-signature-v2") ||
       req.headers.get("x-didit-signature") ||
@@ -3079,6 +3771,15 @@ Deno.serve(async (req) => {
     if (action === "generate_draft") return await generateGeminiDraft(req, body);
     if (action === "revise_draft") return await reviseGeminiDraft(req, body);
     if (action === "save_draft") return await saveDraftAgreement(req, body);
+    if (action === "word_editor_start") return await createWordEditorSession(req, body);
+    if (action === "word_editor_status") return await wordEditorStatus(req, body);
+    if (action === "word_editor_force_save") return await forceSaveWordDocument(req, body);
+    if (action === "word_editor_finalize") return await finalizeWordDraft(req, body);
+    if (action === "offline_draft_upload") return await uploadOfflineDraftVersion(req, body);
+    if (action === "offline_draft_list") return await listOfflineDraftVersions(req, body);
+    if (action === "offline_draft_series_list") return await listOfflineDraftSeries(req);
+    if (action === "offline_draft_download") return await offlineDraftVersionProxy(req, body);
+    if (action === "manual_signing_artifact_upload") return await uploadManualSigningArtifact(req, body);
     if (action === "list_legal_data") return await listLegalData(req);
     if (action === "get_agreement") return await getLegalAgreement(req, body);
     if (action === "delete_agreement") return await deleteLegalAgreement(req, body);

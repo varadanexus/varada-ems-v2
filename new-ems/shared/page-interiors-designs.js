@@ -14,8 +14,11 @@ const PAGE_STATE = {
   documents: [],
   selectedProjectId: "",
   isSaving: false,
-  isUploadingLibrary: false
+  isUploadingLibrary: false,
+  isPreviewingDocument: false
 };
+
+let documentPreviewObjectUrl = null;
 
 async function init() {
   const boot = await bootstrapProtectedPage({
@@ -81,7 +84,12 @@ function render() {
         .ds-grid label{display:block;font-weight:600;margin-bottom:.35rem}.ds-grid input,.ds-grid select,.ds-grid textarea{width:100%}
         .interior-upload{border:1px dashed rgba(213,176,92,.48);border-radius:14px;padding:1rem;background:linear-gradient(135deg,rgba(213,176,92,.08),rgba(255,255,255,.015))}
         .interior-upload input[type=file]{padding:.72rem;background:rgba(0,0,0,.22)}.interior-upload small{display:block;margin-top:.45rem;color:var(--muted)}
-        .file-links{display:flex;flex-wrap:wrap;gap:.35rem}.file-links a{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .file-links{display:flex;flex-wrap:wrap;gap:.35rem}.file-links a,.file-links button{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .interiors-doc-modal{position:fixed;inset:0;z-index:10050;display:none;place-items:center;padding:1.25rem;background:rgba(0,0,0,.86);backdrop-filter:blur(7px)}
+        .interiors-doc-modal.visible{display:grid}.interiors-doc-dialog{width:min(1180px,96vw);height:min(900px,92vh);display:flex;flex-direction:column;border:1px solid rgba(213,176,92,.42);border-radius:18px;background:#090b0f;box-shadow:0 28px 90px rgba(0,0,0,.65);overflow:hidden}
+        .interiors-doc-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.8rem 1rem;border-bottom:1px solid rgba(213,176,92,.22)}
+        .interiors-doc-toolbar strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.interiors-doc-actions{display:flex;gap:.5rem;flex-shrink:0}
+        .interiors-doc-stage{position:relative;flex:1;min-height:0;background:#15171c}.interiors-doc-stage iframe{width:100%;height:100%;border:0;background:#fff}.interiors-doc-loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);font-weight:700;letter-spacing:.02em}
         @media (max-width:980px){.ds-grid{grid-template-columns:1fr}}
       </style>
       <h3>Designs</h3>
@@ -90,7 +98,7 @@ function render() {
         <div><label for="designProjectId">Project *</label><select id="designProjectId"><option value="">All Projects</option>${PAGE_STATE.projects.map((row) => `<option value="${row.interior_project_id}" ${String(PAGE_STATE.selectedProjectId) === String(row.interior_project_id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
         <div><label for="designVersionNo">Design Version *</label><input id="designVersionNo" type="number" min="1" step="1" value="1" /></div>
         <div><label for="designTitle">Title *</label><input id="designTitle" type="text" maxlength="200" /></div>
-        <div><label for="designStatus">Status *</label><select id="designStatus">${renderOptions(["draft", "submitted", "approved", "rejected", "revision_requested"], "draft")}</select></div>
+        <div><label for="designStatus">Status *</label><select id="designStatus">${renderOptions(["draft", "submitted"], "draft")}</select><small>Staff review decisions are recorded after submission.</small></div>
         <div class="full"><label for="designDescription">Description</label><textarea id="designDescription" rows="3"></textarea></div>
         <div class="full interior-upload"><label for="designFiles">Design Files</label><input id="designFiles" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.dwg,.dxf,.skp,.rvt,.rfa,.ifc,.3ds,.obj,.stl,.step,.stp,.zip" /><small>Select multiple drawings, renders, CAD/BIM models, PDFs, images, or a ZIP package. Each file can be up to 10 MB.</small></div>
         <div class="full"><label for="designFileUrl">External Reference URL <span class="muted">(optional)</span></label><input id="designFileUrl" type="url" placeholder="https://..." /></div>
@@ -127,6 +135,21 @@ function render() {
       <div style="margin-top:1rem;"><button class="btn" id="uploadLibraryBtn" type="button">Upload Project Documents</button></div>
       <div class="table-container" style="margin-top:1rem;"><table><thead><tr><th>Project</th><th>Type</th><th>File</th><th>Uploaded</th></tr></thead><tbody>${renderLibraryRows()}</tbody></table></div>
     </section>
+    <div class="interiors-doc-modal" id="interiorsDocumentModal" role="dialog" aria-modal="true" aria-labelledby="interiorsDocumentTitle" aria-hidden="true">
+      <div class="interiors-doc-dialog">
+        <div class="interiors-doc-toolbar">
+          <strong id="interiorsDocumentTitle">Document preview</strong>
+          <div class="interiors-doc-actions">
+            <a class="btn btn-sm" id="interiorsDocumentDownload" href="#" download style="display:none;">Download</a>
+            <button class="btn btn-sm" id="interiorsDocumentClose" type="button">✕ Close</button>
+          </div>
+        </div>
+        <div class="interiors-doc-stage">
+          <div class="interiors-doc-loading" id="interiorsDocumentLoading">Loading secure document…</div>
+          <iframe id="interiorsDocumentFrame" src="" title="Document preview" style="display:none;"></iframe>
+        </div>
+      </div>
+    </div>
   `);
 }
 
@@ -143,6 +166,69 @@ function bindEvents() {
   document.querySelectorAll("[data-design-approve]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designApprove, "approved")));
   document.querySelectorAll("[data-design-revision]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designRevision, "revision_requested")));
   document.querySelectorAll("[data-design-reject]").forEach((btn) => btn.addEventListener("click", () => updateDesignStatus(btn.dataset.designReject, "rejected")));
+  document.querySelectorAll("[data-drive-document-id]").forEach((btn) => btn.addEventListener("click", () => openStoredDocument(btn.dataset.driveDocumentId, btn.dataset.driveDocumentName)));
+  document.getElementById("interiorsDocumentClose")?.addEventListener("click", closeStoredDocument);
+  document.getElementById("interiorsDocumentModal")?.addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeStoredDocument();
+  });
+}
+
+function closeStoredDocument() {
+  const modal = document.getElementById("interiorsDocumentModal");
+  const frame = document.getElementById("interiorsDocumentFrame");
+  const download = document.getElementById("interiorsDocumentDownload");
+  modal?.classList.remove("visible");
+  modal?.setAttribute("aria-hidden", "true");
+  if (frame) { frame.src = ""; frame.style.display = "none"; }
+  if (download) { download.href = "#"; download.style.display = "none"; }
+  if (documentPreviewObjectUrl) {
+    URL.revokeObjectURL(documentPreviewObjectUrl);
+    documentPreviewObjectUrl = null;
+  }
+}
+
+async function openStoredDocument(documentId, fileName = "Interiors document") {
+  if (!documentId || PAGE_STATE.isPreviewingDocument) return;
+  const modal = document.getElementById("interiorsDocumentModal");
+  const frame = document.getElementById("interiorsDocumentFrame");
+  const title = document.getElementById("interiorsDocumentTitle");
+  const loading = document.getElementById("interiorsDocumentLoading");
+  const download = document.getElementById("interiorsDocumentDownload");
+  if (!modal || !frame) return;
+  closeStoredDocument();
+  PAGE_STATE.isPreviewingDocument = true;
+  if (title) title.textContent = fileName || "Interiors document";
+  if (loading) loading.style.display = "grid";
+  modal.classList.add("visible");
+  modal.setAttribute("aria-hidden", "false");
+  try {
+    const { data, error } = await client.functions.invoke("drive-integrations", {
+      body: { action: "preview_interiors_staff_document", documentId }
+    });
+    if (error) {
+      let message = error.message || "The document could not be opened.";
+      if (error.context && typeof error.context.json === "function") {
+        const details = await error.context.json().catch(() => null);
+        if (details?.error) message = details.error;
+      }
+      throw new Error(message);
+    }
+    const blob = data instanceof Blob ? data : new Blob([data], { type: "application/octet-stream" });
+    documentPreviewObjectUrl = URL.createObjectURL(blob);
+    frame.src = documentPreviewObjectUrl;
+    frame.style.display = "block";
+    if (download) {
+      download.href = documentPreviewObjectUrl;
+      download.download = fileName || "interiors-document";
+      download.style.display = "inline-flex";
+    }
+    if (loading) loading.style.display = "none";
+  } catch (error) {
+    closeStoredDocument();
+    showToast(error?.message || "The document could not be opened.", TOAST_TYPES.ERROR);
+  } finally {
+    PAGE_STATE.isPreviewingDocument = false;
+  }
 }
 
 function syncSuggestedVersion() {
@@ -277,7 +363,25 @@ async function uploadProjectDocuments() {
 async function updateDesignStatus(id, status) {
   if (!id) return;
   try {
-    const { error } = await client.from("interior_designs").update({ status, updated_by: PAGE_STATE.boot?.appUser?.id || null }).eq("id", id);
+    let response;
+    if (["approved", "rejected", "revision_requested"].includes(status)) {
+      const action = status === "approved" ? "approve" : status === "rejected" ? "reject" : "revision_requested";
+      const remarks = status === "approved"
+        ? (window.prompt("Optional review note:", "") || "").trim()
+        : (window.prompt("Add the reason or required changes:", "") || "").trim();
+      if (status !== "approved" && !remarks) {
+        showToast("A review note is required for rejection or revision.", TOAST_TYPES.ERROR);
+        return;
+      }
+      response = await client.rpc("interiors_staff_review_design", {
+        p_design_id: id,
+        p_action: action,
+        p_remarks: remarks || null
+      });
+    } else {
+      response = await client.from("interior_designs").update({ status, updated_by: PAGE_STATE.boot?.appUser?.id || null }).eq("id", id);
+    }
+    const { error } = response;
     if (error) throw error;
     await notifyInteriorsWhatsAppSafely(status === "submitted" ? "design_approval" : "design_status", id);
     showToast(`Design marked ${status}.`, TOAST_TYPES.SUCCESS);
@@ -291,7 +395,7 @@ async function updateDesignStatus(id, status) {
 
 function renderDesignFiles(design) {
   const stored = PAGE_STATE.documents.filter((row) => row.category === "INTERIORS_DESIGN" && String(row.entity_id) === String(design.id) && row.upload_status === "stored" && row.web_view_link);
-  const links = stored.map((row) => `<a class="btn btn-sm" href="${escapeHtml(row.web_view_link)}" target="_blank" rel="noopener" title="${escapeHtml(row.file_name || "Design file")}">${escapeHtml(row.file_name || "View file")}</a>`);
+  const links = stored.map((row) => `<button class="btn btn-sm" data-drive-document-id="${escapeHtml(row.id)}" data-drive-document-name="${escapeHtml(row.file_name || "Design file")}" type="button" title="${escapeHtml(row.file_name || "Design file")}">${escapeHtml(row.file_name || "Open file")}</button>`);
   if (design.file_url && !stored.some((row) => row.web_view_link === design.file_url)) {
     links.push(`<a class="btn btn-sm" href="${escapeHtml(design.file_url)}" target="_blank" rel="noopener">External reference</a>`);
   }
@@ -305,7 +409,7 @@ function renderLibraryRows() {
   return documents.map((row) => `<tr>
     <td>${escapeHtml(projectName(row.entity_id))}</td>
     <td>${escapeHtml(row.document_type || "General")}</td>
-    <td>${row.web_view_link ? `<a href="${escapeHtml(row.web_view_link)}" target="_blank" rel="noopener">${escapeHtml(row.file_name || "View file")}</a>` : escapeHtml(row.file_name || "-")}<br/><span class="muted">${formatFileSize(row.file_size)}</span></td>
+    <td>${row.web_view_link ? `<button class="btn btn-sm" data-drive-document-id="${escapeHtml(row.id)}" data-drive-document-name="${escapeHtml(row.file_name || "Project document")}" type="button">${escapeHtml(row.file_name || "Open file")}</button>` : escapeHtml(row.file_name || "-")}<br/><span class="muted">${formatFileSize(row.file_size)}</span></td>
     <td>${formatDateTime(row.created_at)}</td>
   </tr>`).join("");
 }
