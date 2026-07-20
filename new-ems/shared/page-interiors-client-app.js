@@ -327,7 +327,7 @@ function projectStageLabel(project, progress = projectProgressValue(project)) {
   if (stage === "design" || gate === "staff_review") return "Design Review";
   if (stage === "execution") return "Execution";
   if (stage === "finishing") return "Finishing";
-  if (stage === "completed") return "Completed";
+  if (stage === "completion" || stage === "completed") return "Completed";
   if (progress >= 100) return "Completed";
   if (progress >= 85) return "Finishing";
   if (progress >= 45) return "Execution";
@@ -596,7 +596,7 @@ function renderDashboard() {
         <article class="client-surface"><div class="client-surface-head"><h3>Pending Approvals</h3><button class="btn btn-sm" data-section-tab="approvals" type="button">Review</button></div><div class="client-list compact" style="margin-top:1rem;">${activeProjectApprovals().filter((row) => String(row.decision || "pending") === "pending").slice(0, 3).map((row) => `<div class="client-list-item"><strong>${escapeHtml(normalizeStatus(row.approval_type, "Approval"))}</strong><div class="muted">${escapeHtml(formatDateTime(row.created_at))}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">✅</div><strong>Nothing pending</strong><p class="muted">Approval requests will appear here.</p></div>`}</div></article>
         <article class="client-surface"><div class="client-surface-head"><h3>Quick Downloads</h3><button class="btn btn-sm" data-section-tab="documents" type="button">Documents</button></div><div class="client-list compact" style="margin-top:1rem;"><div class="client-list-item"><strong>Project Summary</strong><div class="muted">Current snapshot</div><button class="btn btn-sm" data-pdf-action="project-summary" type="button">Download PDF</button></div>${latestDesignDocument ? `<div class="client-list-item"><strong>Latest Design</strong><div class="muted">Current shared package</div><button class="btn btn-sm" data-client-document-id="${escapeHtml(latestDesignDocument.id)}" data-client-document-name="${escapeHtml(latestDesignDocument.file_name || "Design document")}" type="button">Open</button></div>` : ""}</div></article>
         <article class="client-surface"><div class="client-surface-head"><h3>Latest Documents</h3><button class="btn btn-sm" data-section-tab="documents" type="button">View All</button></div><div class="client-list compact" style="margin-top:1rem;">${activeDocuments().slice(0, 3).map((doc) => `<div class="client-list-item"><strong>${escapeHtml(doc.title)}</strong><div class="muted">${escapeHtml(doc.category)} · ${escapeHtml(formatDate(doc.at))}</div></div>`).join("") || `<div class="empty-state"><div class="empty-illustration">📁</div><strong>No documents yet</strong></div>`}</div></article>
-        <article class="client-surface"><div class="client-surface-head"><h3>Upcoming Milestones</h3><button class="btn btn-sm" data-section-tab="overview" type="button">View Progress</button></div>${renderMilestoneStepper(progress)}</article>
+        <article class="client-surface"><div class="client-surface-head"><h3>Project Milestones</h3><button class="btn btn-sm" data-section-tab="overview" type="button">View Progress</button></div>${renderMilestoneStepper(currentProject, progress)}</article>
       </section>
       <article class="client-surface">
         <div class="client-surface-head"><h3>Portfolio Snapshot</h3><span class="meta-pill">${PAGE_STATE.projects.length} Project(s)</span></div>
@@ -658,20 +658,25 @@ function handlePdfAction(action, id) {
 }
 
 const PROJECT_STAGE_MILESTONES = [
-  { key: "planning", label: "Planning", threshold: 0 },
-  { key: "design", label: "Design Phase", threshold: 15 },
-  { key: "execution", label: "Execution", threshold: 45 },
-  { key: "finishing", label: "Finishing", threshold: 85 },
-  { key: "completed", label: "Completed", threshold: 100 }
+  { key: "design", label: "Design" },
+  { key: "client_review", label: "Client Review" },
+  { key: "pre_execution", label: "Pre-Execution" },
+  { key: "execution", label: "Execution" },
+  { key: "completion", label: "Completion" }
 ];
 
-function renderMilestoneStepper(progress) {
-  const value = numberValue(progress);
+function renderMilestoneStepper(project, progress = projectProgressValue(project)) {
+  const stageKey = String(project?.workflow_stage || "").toLowerCase();
+  let currentIndex = PROJECT_STAGE_MILESTONES.findIndex((stage) => stage.key === stageKey);
+  if (currentIndex < 0) {
+    const value = numberValue(progress);
+    currentIndex = value >= 100 ? 4 : value >= 45 ? 3 : value >= 15 ? 1 : 0;
+  }
   return `
     <div class="client-milestone-stepper">
       ${PROJECT_STAGE_MILESTONES.map((stage, idx) => {
-        const reached = value >= stage.threshold;
-        const isCurrent = reached && (idx === PROJECT_STAGE_MILESTONES.length - 1 || value < PROJECT_STAGE_MILESTONES[idx + 1].threshold);
+        const reached = idx <= currentIndex;
+        const isCurrent = idx === currentIndex;
         return `
           <div class="client-milestone-step ${reached ? "reached" : ""} ${isCurrent ? "current" : ""}">
             <span class="client-milestone-dot">${reached ? "✓" : ""}</span>
@@ -692,7 +697,7 @@ function renderOverviewSection(project) {
       <article class="client-surface client-surface-lg">
         <div class="client-surface-head"><h3>Project Summary</h3><span class="meta-pill">Completion ${progress}%</span></div>
         <div class="client-progress-bar" style="margin:.85rem 0;"><span style="width:${progress}%"></span></div>
-        ${renderMilestoneStepper(progress)}
+        ${renderMilestoneStepper(project, progress)}
         <div class="client-summary-grid" style="margin-top:1.1rem;">
           <div><label>Scope</label><strong>Interior design, execution coordination, client approvals, progress updates, and billing visibility.</strong></div>
           <div><label>Current Stage</label><strong>${escapeHtml(projectStageLabel(project, progress))}</strong></div>

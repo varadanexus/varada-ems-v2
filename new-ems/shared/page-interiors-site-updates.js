@@ -6,7 +6,15 @@ import { notifyInteriorsWhatsAppSafely } from "./interiors-whatsapp-api.js";
 
 const client = getSupabaseClient();
 
-const PAGE_STATE = { boot: null, projects: [], updates: [], photos: [], selectedProjectId: "", isSavingUpdate: false, isSavingPhoto: false };
+const PAGE_STATE = { boot: null, projects: [], updates: [], photos: [], selectedProjectId: "", isSavingUpdate: false, isSavingMilestone: false, isSavingPhoto: false };
+
+const PROJECT_MILESTONES = [
+  ["design", "Design"],
+  ["client_review", "Client Review"],
+  ["pre_execution", "Pre-Execution"],
+  ["execution", "Execution"],
+  ["completion", "Completion"]
+];
 
 async function init() {
   const boot = await bootstrapProtectedPage({ moduleCode: MODULES.INTERIORS_SITE_UPDATES, pageTitle: "Site Updates", pageDescription: "Capture progress updates and project photos for Interiors projects.", workspace: WORKSPACES.INTERIORS });
@@ -20,7 +28,7 @@ async function init() {
 
 async function loadData() {
   const [projectsRes, updatesRes, photosRes] = await Promise.all([
-    client.from("interior_projects").select("id, shared_project_id, project_code, project_name, project_title").order("project_name"),
+    client.from("interior_projects").select("id, shared_project_id, project_code, project_name, project_title, workflow_stage").order("project_name"),
     client.from("interior_site_updates").select("*, app_users:reported_by(display_name,email)").order("update_date", { ascending: false }),
     client.from("interior_project_photos").select("*, interior_site_updates(update_title)").order("uploaded_at", { ascending: false })
   ]);
@@ -40,6 +48,14 @@ function resolveSelectedSharedProjectId() {
   return resolveProjectByAnyId(PAGE_STATE.selectedProjectId)?.shared_project_id || "";
 }
 
+function selectedProject() {
+  return resolveProjectByAnyId(PAGE_STATE.selectedProjectId);
+}
+
+function milestoneLabel(value) {
+  return PROJECT_MILESTONES.find(([key]) => key === value)?.[1] || "Not set";
+}
+
 function render() {
   const selectedSharedProjectId = resolveSelectedSharedProjectId();
   const updates = PAGE_STATE.updates.filter((row) => !selectedSharedProjectId || String(row.project_id) === String(selectedSharedProjectId));
@@ -57,6 +73,23 @@ function render() {
         <div class="full"><label for="suDescription">Update Description</label><textarea id="suDescription" rows="3"></textarea></div>
       </div>
       <div style="margin-top:1rem;"><button class="btn" id="addSiteUpdateBtn" type="button">Add Site Update</button></div>
+    </section>
+    <section class="card" style="margin-top:1rem;">
+      <h3>Project Milestone</h3>
+      <p class="muted">Update the project milestone independently. This does not change the project progress percentage.</p>
+      <div class="su-grid" style="margin-top:1rem;">
+        <div>
+          <label for="suMilestone">Current Milestone *</label>
+          <select id="suMilestone" ${selectedSharedProjectId ? "" : "disabled"}>
+            ${PROJECT_MILESTONES.map(([value, label]) => `<option value="${value}" ${selectedProject()?.workflow_stage === value ? "selected" : ""}>${label}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label>Saved Milestone</label>
+          <div class="meta-pill" style="margin-top:.45rem;">${escapeHtml(milestoneLabel(selectedProject()?.workflow_stage))}</div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;"><button class="btn" id="updateMilestoneBtn" type="button" ${selectedSharedProjectId ? "" : "disabled"}>Update Milestone</button></div>
     </section>
     <section class="card" style="margin-top:1rem;">
       <h4>Project Photos</h4>
@@ -87,8 +120,31 @@ function render() {
 function bindEvents() {
   document.getElementById("suProjectId")?.addEventListener("change", async (event) => { PAGE_STATE.selectedProjectId = event.target.value || ""; await loadData(); render(); bindEvents(); });
   document.getElementById("addSiteUpdateBtn")?.addEventListener("click", addSiteUpdate);
+  document.getElementById("updateMilestoneBtn")?.addEventListener("click", updateMilestone);
   document.getElementById("uploadPhotoBtn")?.addEventListener("click", uploadPhoto);
   document.querySelectorAll("[data-photo-visible]").forEach((btn) => btn.addEventListener("click", () => togglePhotoVisibility(btn.dataset.photoVisible)));
+}
+
+async function updateMilestone() {
+  const project = selectedProject();
+  const workflowStage = String(document.getElementById("suMilestone")?.value || "");
+  if (PAGE_STATE.isSavingMilestone || !project?.id) return;
+  if (!PROJECT_MILESTONES.some(([value]) => value === workflowStage)) return showToast("Select a valid project milestone.", TOAST_TYPES.ERROR);
+  PAGE_STATE.isSavingMilestone = true;
+  try {
+    const payload = {
+      workflow_stage: workflowStage,
+      updated_by: PAGE_STATE.boot?.appUser?.id || null,
+      updated_at: new Date().toISOString()
+    };
+    const { data, error } = await client.from("interior_projects").update(payload).eq("id", project.id).select("id, workflow_stage").single();
+    if (error) throw error;
+    if (!data?.id) throw new Error("The milestone could not be updated.");
+    showToast(`Project milestone updated to ${milestoneLabel(data.workflow_stage)}.`, TOAST_TYPES.SUCCESS);
+    await loadData(); render(); bindEvents();
+  } catch (error) {
+    showToast(error?.message || "Failed to update the project milestone.", TOAST_TYPES.ERROR);
+  } finally { PAGE_STATE.isSavingMilestone = false; }
 }
 
 async function addSiteUpdate() {
