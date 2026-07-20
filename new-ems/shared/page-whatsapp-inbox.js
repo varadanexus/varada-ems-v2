@@ -16,9 +16,37 @@ const state = {
 };
 
 let refreshTimer = null;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const DOCUMENT_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+]);
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+}
+
+function safeHttpsUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function documentMimeType(file) {
+  const declared = String(file?.type || "").toLowerCase();
+  if (DOCUMENT_MIME_TYPES.has(declared)) return declared;
+  const extension = String(file?.name || "").toLowerCase().split(".").pop();
+  return ({
+    pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  })[extension] || declared;
 }
 
 function filteredChats() {
@@ -44,13 +72,29 @@ function chatRow(chat) {
 function messageBubble(msg) {
   const mine = String(msg.direction || "").toLowerCase() === "outbound";
   const renderedText = renderedMessageText(msg);
+  const attachment = msg.rendered_payload?.attachment || msg.rendered_payload?.inboundMedia || {};
+  const attachmentName = attachment.fileName || "Open attachment";
+  const attachmentUrl = safeHttpsUrl(msg.media_url);
+  const attachmentMarkup = attachmentUrl
+    ? `<a class="wa-attachment" href="${escapeHtml(attachmentUrl)}" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">&#128196;</span><span><strong>${escapeHtml(attachmentName)}</strong><small>${escapeHtml(attachment.mimeType || "WhatsApp document")}</small></span></a>`
+    : "";
   return `
     <article class="wa-bubble ${mine ? "mine" : ""}">
       <div class="wa-bubble-meta">${escapeHtml(mine ? "EMS" : msg.name || msg.phone || "External")} · ${escapeHtml(msg.status || "-")}</div>
       <div class="wa-bubble-body">${escapeHtml(renderedText || msg.message || "")}</div>
+      ${attachmentMarkup}
       <div class="wa-bubble-time">${escapeHtml(msg.created_at || "-")}</div>
     </article>
   `;
+}
+
+function fileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",").pop() || "");
+    reader.onerror = () => reject(new Error("The selected document could not be read."));
+    reader.readAsDataURL(file);
+  });
 }
 
 function templateByAlias(alias = "") {
@@ -182,6 +226,9 @@ function render() {
       .wa-bubble.mine{align-self:flex-end;background:linear-gradient(145deg,#292114,#17140e);border-color:rgba(225,189,104,.3)}
       .wa-bubble-meta,.wa-bubble-time{font-size:.74rem;color:#9e998e}
       .wa-bubble-body{white-space:pre-wrap;word-break:break-word;margin:.3rem 0}
+      .wa-attachment{display:flex;align-items:center;gap:.7rem;margin:.55rem 0;padding:.7rem .8rem;border:1px solid rgba(225,189,104,.28);border-radius:10px;background:rgba(0,0,0,.28);color:#f1d27c;text-decoration:none;word-break:break-word}
+      .wa-attachment:hover{border-color:rgba(225,189,104,.55);background:rgba(212,178,106,.08)}
+      .wa-attachment>span:first-child{font-size:1.35rem}.wa-attachment span:last-child{display:grid;gap:.15rem}.wa-attachment small{color:#9e998e;font-size:.72rem;font-weight:400}
       .wa-compose{max-height:min(38vh,340px);padding:1rem;border-top:1px solid rgba(225,189,104,.16);display:grid;gap:.75rem;overflow-y:auto;overscroll-behavior:contain;background:#0d0e0e}
       .wa-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
       .wa-compose input,.wa-compose select,.wa-compose textarea{width:100%;border:1px solid rgba(225,189,104,.22);background:#080909;color:#f3efe6;border-radius:10px;padding:.7rem .8rem}
@@ -191,6 +238,8 @@ function render() {
       .wa-template-var{display:grid;gap:.35rem}
       .wa-label{font-size:.73rem;letter-spacing:.08em;text-transform:uppercase;color:#9d988d}
       .wa-actions{display:flex;gap:.65rem;flex-wrap:wrap}
+      .wa-document-picker{display:grid;gap:.35rem;padding:.8rem;border:1px dashed rgba(225,189,104,.3);border-radius:10px;background:#0a0b0b}
+      .wa-document-picker input{padding:.55rem}.wa-document-picker small{color:#9e998e}
       .wa-preview-card{display:grid;gap:.75rem;padding:.95rem;border:1px solid rgba(225,189,104,.28);border-radius:12px;background:linear-gradient(180deg,#15130f 0%,#0a0b0c 100%)}
       .wa-preview-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.8rem;flex-wrap:wrap}
       .wa-preview-body{white-space:pre-wrap;word-break:break-word;color:#f1ede4;background:#080909;border:1px solid rgba(225,189,104,.16);border-radius:10px;padding:.9rem;line-height:1.6}
@@ -253,6 +302,11 @@ function render() {
           </div>
           <div id="waTemplateFields">${templateVariableFieldsMarkup(selectedTemplateAlias)}</div>
           <textarea id="waMessageBody" placeholder="Type the message body. Keep this empty if you are sending only a template.">${escapeHtml(state.composeMessageBody || "")}</textarea>
+          <label class="wa-document-picker">
+            <strong>Attach a document</strong>
+            <input id="waDocument" type="file" accept=".pdf,.doc,.docx,.pptx,.xlsx" ${state.activeChat ? "" : "disabled"} />
+            <small id="waDocumentStatus">PDF, DOC, DOCX, PPTX or XLSX · maximum 10 MB</small>
+          </label>
           <div id="waComposePreview">${renderInboxPreviewMarkup()}</div>
           <div class="wa-actions">
             <button class="btn" id="waSendBtn" type="button" ${state.activeChat ? "" : "disabled"}>Send Message</button>
@@ -292,6 +346,24 @@ async function handleSend() {
   if (!state.activeChat?.id) return;
   const message = document.querySelector("#waMessageBody")?.value?.trim() || "";
   const templateAlias = document.querySelector("#waTemplateAlias")?.value || "";
+  const file = document.querySelector("#waDocument")?.files?.[0] || null;
+  if (file && templateAlias) {
+    showToast("Send documents separately from saved templates.", TOAST_TYPES.ERROR);
+    return;
+  }
+  if (file && message) {
+    showToast("Send the document and accompanying text as separate WhatsApp messages.", TOAST_TYPES.ERROR);
+    return;
+  }
+  const fileMimeType = file ? documentMimeType(file) : "";
+  if (file && !DOCUMENT_MIME_TYPES.has(fileMimeType)) {
+    showToast("Use a PDF, DOC, DOCX, PPTX or XLSX document.", TOAST_TYPES.ERROR);
+    return;
+  }
+  if (file && file.size > MAX_ATTACHMENT_BYTES) {
+    showToast("Documents must be 10 MB or smaller.", TOAST_TYPES.ERROR);
+    return;
+  }
   state.selectedTemplateAlias = templateAlias;
   const template = templateByAlias(templateAlias);
   let variables = {};
@@ -312,15 +384,22 @@ async function handleSend() {
   button.disabled = true;
   button.textContent = "Sending...";
   try {
+    const attachment = file ? {
+      fileName: file.name,
+      mimeType: fileMimeType,
+      size: file.size,
+      base64: await fileAsBase64(file)
+    } : null;
     await sendWhatsAppWorkspaceMessage({
       chatId: state.activeChat.id,
       name: state.activeChat.name,
       phone: state.activeChat.phone,
       message,
       templateAlias,
-      variables
+      variables,
+      attachment
     });
-    showToast("WhatsApp message queued.", TOAST_TYPES.SUCCESS);
+    showToast(file ? "WhatsApp document queued." : "WhatsApp message queued.", TOAST_TYPES.SUCCESS);
     await loadWorkspace();
     await loadChat(state.activeChat.id);
     state.selectedTemplateAlias = "";
@@ -369,6 +448,11 @@ function bind() {
   document.querySelector("#waMessageBody")?.addEventListener("input", (event) => {
     state.composeMessageBody = event.target.value || "";
     refreshInboxPreview();
+  });
+  document.querySelector("#waDocument")?.addEventListener("change", (event) => {
+    const file = event.target.files?.[0] || null;
+    const status = document.querySelector("#waDocumentStatus");
+    if (status) status.textContent = file ? `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB` : "PDF, DOC, DOCX, PPTX or XLSX · maximum 10 MB";
   });
   document.querySelector("#waOpenNewChatBtn")?.addEventListener("click", async () => {
     const name = document.querySelector("#waNewChatName")?.value?.trim() || "";
