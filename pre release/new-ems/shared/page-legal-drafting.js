@@ -5,10 +5,13 @@ import {
   forceSaveLegalWordDocument,
   generateLegalDraft,
   getLegalWordEditorStatus,
+  downloadOfflineLegalDraftVersion,
+  listOfflineLegalDraftVersions,
   reviseLegalDraft,
   saveLegalDraft,
-  startLegalWordEditor
-} from "./legal-api.js?v=ems-editor-1";
+  startLegalWordEditor,
+  uploadOfflineLegalDraftVersion
+} from "./legal-api.js?v=ems-editor-5";
 import { showToast } from "./utils.js";
 
 let currentDraftMode = "ai";
@@ -19,6 +22,8 @@ let wordEditorLastSavedAt = "";
 let wordEditorScriptUrl = "";
 let wordEditorExtractedText = "";
 let manualDocxResizeObserver = null;
+let manualDriveSeriesId = sessionStorage.getItem("emsLegalDraftSeriesId") || "";
+let manualDriveVersions = [];
 
 function buildGeminiPrompt() {
   const value = (key) => document.querySelector(`[data-draft="${key}"]`)?.value || "";
@@ -261,7 +266,8 @@ function draftSavePayload() {
     signerEmail: extractEmail(counterpartyContact),
     riskLevel: isManual ? manualValue("riskLevel") : value("riskLevel"),
     draftText,
-    draftSource: isManual ? "manual" : "gemini_ai"
+    draftSource: isManual ? "manual" : "gemini_ai",
+    driveDraftSeriesId: isManual ? manualDriveSeriesId : ""
   };
 }
 
@@ -583,18 +589,127 @@ function fitImportedDocxPages(editor) {
   });
 }
 
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function formatDriveDraftSize(bytes) {
+  const value = Number(bytes || 0);
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.ceil(value / 1024))} KB`;
+}
+
+function renderDriveDraftVersions() {
+  const list = document.querySelector("#manualDriveVersionList");
+  const empty = document.querySelector("#manualDriveEmpty");
+  const uploadButton = document.querySelector("#manualUploadWordBtn");
+  const originalButton = document.querySelector("#manualDownloadOriginalBtn");
+  const latestButton = document.querySelector("#manualDownloadLatestBtn");
+  if (uploadButton) uploadButton.textContent = manualDriveVersions.length ? "Upload Revised DOCX" : "Upload Original DOCX";
+  if (empty) empty.hidden = manualDriveVersions.length > 0;
+  if (originalButton) originalButton.disabled = !manualDriveVersions.length;
+  if (latestButton) latestButton.disabled = !manualDriveVersions.length;
+  if (!list) return;
+  list.innerHTML = manualDriveVersions.map((version) => `
+    <div class="manual-drive-version-row">
+      <div><strong>Version ${version.version_no}</strong><span>${escapeEditorHtml(version.drive_file_name || version.original_file_name || "Legal draft.docx")}</span></div>
+      <div><span>${formatDriveDraftSize(version.file_size)} · ${new Date(version.created_at).toLocaleString("en-IN")}</span><button type="button" class="btn btn-sm btn-ghost" data-download-drive-version="${version.id}">Download</button></div>
+    </div>
+  `).join("");
+  list.querySelectorAll("[data-download-drive-version]").forEach((button) => {
+    button.addEventListener("click", () => downloadDriveDraftVersion(button.dataset.downloadDriveVersion));
+  });
+}
+
+async function refreshDriveDraftVersions() {
+  if (!manualDriveSeriesId) {
+    manualDriveVersions = [];
+    renderDriveDraftVersions();
+    return;
+  }
+  try {
+    const result = await listOfflineLegalDraftVersions(manualDriveSeriesId);
+    manualDriveSeriesId = result.seriesId || "";
+    manualDriveVersions = result.versions || [];
+    renderDriveDraftVersions();
+  } catch (error) {
+    manualDriveSeriesId = "";
+    manualDriveVersions = [];
+    sessionStorage.removeItem("emsLegalDraftSeriesId");
+    renderDriveDraftVersions();
+  }
+}
+
+async function archiveOfflineDocx(file, arrayBuffer) {
+  const title = document.querySelector('[data-manual="title"]')?.value?.trim() || file.name.replace(/\.docx$/i, "");
+  const agreementNo = document.querySelector('[data-manual="agreementNo"]')?.value?.trim() || "";
+  const status = document.querySelector("#manualDriveArchiveStatus");
+  if (status) status.textContent = "Uploading the unchanged DOCX to the private Google Drive archive…";
+  const result = await uploadOfflineLegalDraftVersion({
+    seriesId: manualDriveSeriesId,
+    title,
+    agreementNo,
+    fileName: file.name,
+    mimeType: file.type || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    base64: arrayBufferToBase64(arrayBuffer)
+  });
+  manualDriveSeriesId = result.seriesId;
+  sessionStorage.setItem("emsLegalDraftSeriesId", manualDriveSeriesId);
+  await refreshDriveDraftVersions();
+  if (status) status.textContent = `Version ${result.version.version_no} is safely archived in Drive. The uploaded DOCX bytes were not converted or reformatted.`;
+  return result.version;
+}
+
+async function downloadDriveDraftVersion(versionId) {
+  if (!versionId) return;
+  try {
+    const result = await downloadOfflineLegalDraftVersion(versionId);
+    const url = URL.createObjectURL(result.blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = result.fileName || "legal-draft.docx";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    showToast(error?.message || "The archived version could not be downloaded.", TOAST_TYPES.ERROR);
+  }
+}
+
+function startNewDriveDraftSeries() {
+  if (manualDriveVersions.length && !window.confirm("Start a separate document series? Your existing Drive versions will remain safely archived.")) return;
+  manualDriveSeriesId = "";
+  manualDriveVersions = [];
+  sessionStorage.removeItem("emsLegalDraftSeriesId");
+  const status = document.querySelector("#manualDriveArchiveStatus");
+  if (status) status.textContent = "Choose a DOCX to create Version 1 in the private legal Drive archive.";
+  renderDriveDraftVersions();
+}
+
 async function importManualWordFile(event) {
   const input = event.currentTarget;
   const file = input.files?.[0];
   if (!file) return;
   try {
     if (!/\.docx$/i.test(file.name)) throw new Error("Only modern Word .docx files are supported. Open a legacy .doc file in Word and save it as .docx first.");
-    if (file.size > 25 * 1024 * 1024) throw new Error("The Word file must be 25 MB or smaller.");
-    if (!window.docx?.renderAsync && !window.mammoth?.convertToHtml) throw new Error("The Word importer did not load. Refresh the page and try again.");
+    if (file.size > 10 * 1024 * 1024) throw new Error("The Word file must be 10 MB or smaller.");
     const editor = document.querySelector("#manualRichEditor");
     if (!editor) throw new Error("The EMS document editor is unavailable.");
-    if (editor.innerText.trim() && !window.confirm("Replace the current editor content with this Word document?")) return;
     const arrayBuffer = await file.arrayBuffer();
+    const archivedVersion = await archiveOfflineDocx(file, arrayBuffer);
+    if (editor.innerText.trim() && !window.confirm(`Drive Version ${archivedVersion.version_no} is saved. Also replace the current browser-editor preview with this document?`)) {
+      showToast(`Drive Version ${archivedVersion.version_no} saved unchanged.`, TOAST_TYPES.SUCCESS);
+      return;
+    }
+    if (!window.docx?.renderAsync && !window.mammoth?.convertToHtml) {
+      showToast(`Drive Version ${archivedVersion.version_no} saved unchanged. The optional browser preview is unavailable.`, TOAST_TYPES.WARNING);
+      return;
+    }
     let safeHtml = "";
     let warnings = 0;
     if (window.docx?.renderAsync) {
@@ -637,8 +752,8 @@ async function importManualWordFile(event) {
     editor.focus();
     updateManualEditorStatus();
     showToast(warnings
-      ? `Word document imported with ${warnings} formatting notice${warnings === 1 ? "" : "s"}. Review it before saving.`
-      : "Word document imported. Review it before saving to EMS.", warnings ? TOAST_TYPES.WARNING : TOAST_TYPES.SUCCESS);
+      ? `Drive Version ${archivedVersion.version_no} saved unchanged. The browser preview has ${warnings} formatting notice${warnings === 1 ? "" : "s"}.`
+      : `Drive Version ${archivedVersion.version_no} saved unchanged. Browser preview loaded for convenience.`, warnings ? TOAST_TYPES.WARNING : TOAST_TYPES.SUCCESS);
   } catch (error) {
     showToast(error?.message || "The Word document could not be imported.", TOAST_TYPES.ERROR);
   } finally {
@@ -678,11 +793,18 @@ function bindManualRichEditor() {
   document.querySelector("#manualPrintBtn")?.addEventListener("click", printManualDraft);
   document.querySelector("#manualUploadWordBtn")?.addEventListener("click", () => document.querySelector("#manualWordFileInput")?.click());
   document.querySelector("#manualWordFileInput")?.addEventListener("change", importManualWordFile);
+  document.querySelector("#manualDownloadOriginalBtn")?.addEventListener("click", () => {
+    const original = [...manualDriveVersions].sort((a, b) => a.version_no - b.version_no)[0];
+    downloadDriveDraftVersion(original?.id);
+  });
+  document.querySelector("#manualDownloadLatestBtn")?.addEventListener("click", () => downloadDriveDraftVersion(manualDriveVersions[0]?.id));
+  document.querySelector("#manualNewDriveSeriesBtn")?.addEventListener("click", startNewDriveDraftSeries);
   editor.addEventListener("input", updateManualEditorStatus);
   editor.addEventListener("paste", () => window.setTimeout(updateManualEditorStatus, 0));
   document.querySelector("#manualPageHeader")?.addEventListener("input", updateManualEditorStatus);
   document.querySelector("#manualPageFooter")?.addEventListener("input", updateManualEditorStatus);
   updateManualEditorStatus();
+  refreshDriveDraftVersions();
 }
 
 function copyIntakeToManualDetails() {
@@ -787,6 +909,13 @@ function renderPage() {
       .word-editor-footer{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.55rem .75rem;background:#17191e;border-top:1px solid rgba(230,200,126,.18);color:#a9a69d;font-size:.78rem}
       #wordEditorStatus[data-tone="success"]{color:#77d89a}#wordEditorStatus[data-tone="warning"]{color:#f0cd71}#wordEditorStatus[data-tone="error"]{color:#ff918a}
       .manual-editor-shell{margin-top:.75rem;border:1px solid rgba(230,200,126,.28);border-radius:14px;overflow:hidden;background:#202124;box-shadow:0 18px 50px rgba(0,0,0,.28)}
+      .manual-drive-archive{padding:.85rem;background:linear-gradient(135deg,#111318,#08090d);border-bottom:1px solid rgba(230,200,126,.25);color:#d7d3c7}
+      .manual-drive-archive-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+      .manual-drive-archive h4,.manual-drive-archive p{margin:0}.manual-drive-archive p{color:#aaa79d;font-size:.83rem;line-height:1.5}
+      .manual-drive-actions{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.65rem}
+      .manual-drive-version-list{display:grid;gap:.35rem;margin-top:.65rem;max-height:190px;overflow:auto}
+      .manual-drive-version-row{display:flex;align-items:center;justify-content:space-between;gap:.65rem;padding:.5rem .6rem;border:1px solid rgba(230,200,126,.14);border-radius:10px;background:rgba(255,255,255,.025);font-size:.78rem}
+      .manual-drive-version-row>div{display:flex;align-items:center;gap:.55rem;min-width:0}.manual-drive-version-row span{color:#aaa79d;overflow-wrap:anywhere}
       .manual-editor-toolbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;padding:.55rem;background:linear-gradient(180deg,#f7f7f7,#e9e9e9);border-bottom:1px solid #c9c9c9;color:#202124}
       .manual-editor-toolbar .toolbar-group{display:flex;align-items:center;gap:.2rem;padding-right:.35rem;margin-right:.1rem;border-right:1px solid #c7c7c7}
       .manual-editor-toolbar .toolbar-group:last-child{border-right:0}
@@ -986,7 +1115,7 @@ function renderPage() {
         <h3 id="draftEditorTitle">Draft Editor</h3>
         <p class="muted" id="draftEditorDescription">The generated or edited draft appears here. The AI prompt is kept separately below.</p>
         <div class="document-editor-choice" id="documentEditorChoice" hidden>
-          <p><strong>EMS Document Editor</strong> · Create a draft or upload a <code>.docx</code>. Import happens privately in your browser; review complex layouts, headers and footers before saving.</p>
+          <p><strong>Professional Document Editor + Offline Word</strong> · Continue drafting in the built-in EMS editor, or work in Word/free ONLYOFFICE Desktop and upload each <code>.docx</code> as a numbered Drive version. Drive preserves the uploaded file exactly; the browser rendering is a convenience preview.</p>
         </div>
         <textarea id="draftOutput" class="legal-output" placeholder="Generated draft will appear here. You can edit it before saving."></textarea>
         <div class="word-editor-shell" id="wordEditorShell" hidden>
@@ -1009,6 +1138,24 @@ function renderPage() {
           </div>
         </div>
         <div class="manual-editor-shell" id="manualEditorShell" hidden>
+          <section class="manual-drive-archive" aria-label="Google Drive document versions">
+            <div class="manual-drive-archive-head">
+              <div>
+                <h4>Offline Word Draft · Private Drive Versions</h4>
+                <p id="manualDriveArchiveStatus">Upload the DOCX drafted on your computer. EMS stores the unchanged file as Version 1; upload the edited file later to create Version 2, Version 3, and so on.</p>
+              </div>
+              <button class="btn btn-sm btn-ghost" id="manualNewDriveSeriesBtn" type="button">Start New Document</button>
+            </div>
+            <div class="manual-drive-actions">
+              <button class="btn btn-sm" id="manualUploadWordBtn" type="button">Upload Original DOCX</button>
+              <input id="manualWordFileInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
+              <button class="btn btn-sm btn-ghost" id="manualDownloadLatestBtn" type="button" disabled>Download Latest for Editing</button>
+              <button class="btn btn-sm btn-ghost" id="manualDownloadOriginalBtn" type="button" disabled>Download Original</button>
+              <a class="btn btn-sm btn-ghost" href="https://www.onlyoffice.com/download-desktop.aspx" target="_blank" rel="noreferrer">Get Free ONLYOFFICE Desktop</a>
+            </div>
+            <p id="manualDriveEmpty" style="margin-top:.65rem;">No Drive versions in this document series yet.</p>
+            <div class="manual-drive-version-list" id="manualDriveVersionList"></div>
+          </section>
           <div class="manual-editor-toolbar" id="manualEditorToolbar" role="toolbar" aria-label="Manual document formatting">
             <div class="toolbar-group">
               <button type="button" data-command="undo" title="Undo" aria-label="Undo">↶</button>
@@ -1046,8 +1193,6 @@ function renderPage() {
               <button type="button" data-command="indent" title="Increase indent" aria-label="Increase indent">⇥</button>
             </div>
             <div class="toolbar-group">
-              <button type="button" id="manualUploadWordBtn" title="Upload and edit an existing Word document" aria-label="Upload and edit an existing Word document">Upload Word</button>
-              <input id="manualWordFileInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
               <button type="button" data-command="createLink" title="Insert link" aria-label="Insert link">Link</button>
               <button type="button" id="manualInsertTableBtn" title="Insert table" aria-label="Insert table">Table</button>
               <button type="button" id="manualPageBreakBtn" title="Insert page break" aria-label="Insert page break">Page break</button>

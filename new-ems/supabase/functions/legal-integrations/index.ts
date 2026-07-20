@@ -6,7 +6,8 @@ import JSZip from "https://esm.sh/jszip@3.10.1";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, authorizationjwt, x-client-info, apikey, content-type, x-didit-signature, x-signature, x-signature-v2, x-signature-simple, x-timestamp, x-twilio-signature",
-  "Access-Control-Allow-Methods": "POST, OPTIONS"
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Expose-Headers": "x-file-name, content-disposition"
 };
 
 const PUBLIC_WEBSITE_ORIGIN = "https://www.varadanexus.com";
@@ -1277,6 +1278,180 @@ function base64ToBytes(base64: string) {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
+}
+
+const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+function cleanDocxName(value = "") {
+  const cleaned = String(value || "legal-draft.docx")
+    .replace(/[\\/\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 170) || "legal-draft.docx";
+  return /\.docx$/i.test(cleaned) ? cleaned : `${cleaned}.docx`;
+}
+
+function isUuid(value = "") {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value));
+}
+
+async function uploadOfflineDraftVersion(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const originalFileName = cleanDocxName(body.fileName);
+  if (!/\.docx$/i.test(originalFileName)) return json({ error: "Only .docx files can be archived as editable legal drafts." }, 400);
+  const encoded = String(body.base64 || "").replace(/^data:[^;]+;base64,/, "");
+  if (!encoded) return json({ error: "Word file content is required." }, 400);
+  const bytes = base64ToBytes(encoded);
+  if (!bytes.length) return json({ error: "The selected Word file is empty." }, 400);
+  if (bytes.length > 10 * 1024 * 1024) return json({ error: "The Word file must be 10 MB or smaller." }, 400);
+  // DOCX is a ZIP package. Checking the signature catches accidental .doc/.pdf uploads.
+  if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) return json({ error: "The selected file is not a valid modern Word .docx package." }, 400);
+
+  const requestedSeriesId = String(body.seriesId || "").trim();
+  const seriesId = requestedSeriesId ? requestedSeriesId : crypto.randomUUID();
+  if (!isUuid(seriesId)) return json({ error: "Invalid draft series identifier." }, 400);
+  if (requestedSeriesId) {
+    const ownership = await admin.from("drive_documents")
+      .select("id")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .eq("entity_id", seriesId)
+      .eq("uploaded_by", caller.id)
+      .limit(1)
+      .maybeSingle();
+    if (ownership.error) throw ownership.error;
+    if (!ownership.data?.id) return json({ error: "This draft series is unavailable or belongs to another user." }, 404);
+  }
+
+  const latestResult = await admin.from("drive_documents")
+    .select("document_no")
+    .eq("category", "LEGAL_DRAFT")
+    .eq("entity_type", "legal_draft_series")
+    .eq("entity_id", seriesId)
+    .eq("uploaded_by", caller.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestResult.error) throw latestResult.error;
+  const versionNo = Number(latestResult.data?.document_no || 0) + 1;
+  const title = String(body.title || originalFileName.replace(/\.docx$/i, "")).trim().slice(0, 180) || "Legal Draft";
+  const agreementNo = String(body.agreementNo || "").trim().slice(0, 100) || null;
+  const baseName = originalFileName.replace(/\.docx$/i, "").replace(/[^a-z0-9 _.-]+/gi, "-").trim() || "legal-draft";
+  const driveFileName = `${baseName}-V${String(versionNo).padStart(2, "0")}.docx`;
+  const token = await googleAccessToken();
+  const legalRoot = env("GOOGLE_DRIVE_LEGAL_FOLDER_ID");
+  if (!token || !legalRoot) throw new Error("Google Drive Legal archive is not configured.");
+  const draftsFolder = await ensureDriveFolder("Draft Versions", legalRoot, token);
+  const seriesFolder = await ensureDriveFolder(
+    driveFolderName(`${agreementNo || "Unnumbered"} - ${title} - ${seriesId.slice(0, 8)}`, "Legal Draft"),
+    draftsFolder.id,
+    token
+  );
+  const uploaded = await uploadDriveFile(driveFileName, DOCX_MIME_TYPE, bytes, seriesFolder.id);
+  if (!uploaded?.id) throw new Error(uploaded?.payload?.error || "Google Drive upload failed.");
+  const fileHash = await sha256(bytes);
+  const insertResult = await admin.from("drive_documents").insert({
+    category: "LEGAL_DRAFT",
+    document_type: "OFFLINE_DOCX_VERSION",
+    entity_type: "legal_draft_series",
+    entity_id: seriesId,
+    document_no: String(versionNo),
+    mime_type: DOCX_MIME_TYPE,
+    file_name: driveFileName,
+    file_size: bytes.length,
+    drive_file_id: uploaded.id,
+    drive_folder_id: seriesFolder.id,
+    web_view_link: uploaded.webViewLink || null,
+    upload_status: "stored",
+    uploaded_by: caller.id,
+    error_detail: `sha256:${fileHash};original:${originalFileName};agreement:${agreementNo || ""};title:${title}`.slice(0, 500)
+  }).select("*").single();
+  if (insertResult.error) {
+    await deleteDriveFile(uploaded.id).catch(() => null);
+    throw insertResult.error;
+  }
+  return json({ success: true, seriesId, version: {
+    id: insertResult.data.id,
+    series_id: seriesId,
+    version_no: versionNo,
+    title,
+    agreement_no: agreementNo,
+    original_file_name: originalFileName,
+    drive_file_name: insertResult.data.file_name,
+    file_size: insertResult.data.file_size,
+    file_sha256: fileHash,
+    created_at: insertResult.data.created_at
+  } });
+}
+
+async function listOfflineDraftVersions(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  let seriesId = String(body.seriesId || "").trim();
+  if (seriesId && !isUuid(seriesId)) return json({ error: "Invalid draft series identifier." }, 400);
+  if (!seriesId) {
+    const latest = await admin.from("drive_documents")
+      .select("entity_id")
+      .eq("category", "LEGAL_DRAFT")
+      .eq("entity_type", "legal_draft_series")
+      .eq("uploaded_by", caller.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (latest.error) throw latest.error;
+    seriesId = latest.data?.entity_id || "";
+  }
+  if (!seriesId) return json({ success: true, seriesId: null, versions: [] });
+  const result = await admin.from("drive_documents")
+    .select("id,entity_id,document_no,file_name,file_size,error_detail,created_at")
+    .eq("category", "LEGAL_DRAFT")
+    .eq("entity_type", "legal_draft_series")
+    .eq("entity_id", seriesId)
+    .eq("uploaded_by", caller.id)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  if (result.error) throw result.error;
+  const versions = (result.data || []).map((row: any) => ({
+    id: row.id,
+    series_id: row.entity_id,
+    version_no: Number(row.document_no || 0),
+    original_file_name: row.file_name,
+    drive_file_name: row.file_name,
+    file_size: row.file_size,
+    file_sha256: String(row.error_detail || "").match(/sha256:([0-9a-f]{64})/i)?.[1] || null,
+    created_at: row.created_at
+  }));
+  return json({ success: true, seriesId, versions });
+}
+
+async function offlineDraftVersionProxy(req: Request, body: any) {
+  const admin = adminClient();
+  const caller = await requireLegalCaller(req, admin);
+  const versionId = String(body.versionId || "").trim();
+  if (!isUuid(versionId)) return json({ error: "A valid draft version is required." }, 400);
+  const result = await admin.from("drive_documents")
+    .select("drive_file_id,file_name,mime_type")
+      .eq("id", versionId)
+    .eq("category", "LEGAL_DRAFT")
+    .eq("entity_type", "legal_draft_series")
+    .eq("uploaded_by", caller.id)
+    .maybeSingle();
+  if (result.error) throw result.error;
+  if (!result.data?.drive_file_id) return json({ error: "Draft version not found." }, 404);
+  const bytes = await downloadDriveFile(result.data.drive_file_id);
+  if (!bytes) return json({ error: "The archived Word file could not be downloaded." }, 404);
+  const fileName = cleanDocxName(result.data.file_name);
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": result.data.mime_type || DOCX_MIME_TYPE,
+      "Content-Disposition": `attachment; filename="${fileName.replace(/"/g, "")}"`,
+      "X-File-Name": encodeURIComponent(fileName),
+      "Cache-Control": "private, no-store"
+    }
+  });
 }
 
 function escapeHtml(value = "") {
@@ -3421,6 +3596,9 @@ Deno.serve(async (req) => {
     if (action === "word_editor_status") return await wordEditorStatus(req, body);
     if (action === "word_editor_force_save") return await forceSaveWordDocument(req, body);
     if (action === "word_editor_finalize") return await finalizeWordDraft(req, body);
+    if (action === "offline_draft_upload") return await uploadOfflineDraftVersion(req, body);
+    if (action === "offline_draft_list") return await listOfflineDraftVersions(req, body);
+    if (action === "offline_draft_download") return await offlineDraftVersionProxy(req, body);
     if (action === "list_legal_data") return await listLegalData(req);
     if (action === "get_agreement") return await getLegalAgreement(req, body);
     if (action === "delete_agreement") return await deleteLegalAgreement(req, body);

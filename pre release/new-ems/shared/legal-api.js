@@ -58,6 +58,39 @@ export async function finalizeLegalWordDraft(payload) {
   return legalIntegration("word_editor_finalize", payload);
 }
 
+export async function uploadOfflineLegalDraftVersion(payload) {
+  return legalIntegration("offline_draft_upload", payload);
+}
+
+export async function listOfflineLegalDraftVersions(seriesId = "") {
+  return legalIntegration("offline_draft_list", { seriesId });
+}
+
+export async function downloadOfflineLegalDraftVersion(versionId) {
+  const token = await getSupabaseAccessToken();
+  const runtime = window.EMS_RUNTIME_CONFIG || {};
+  const supabaseUrl = runtime.supabaseUrl || "";
+  const supabaseAnonKey = runtime.supabaseAnonKey || "";
+  if (!supabaseUrl || !token) throw new Error("An authenticated EMS session is required.");
+  const response = await fetch(`${supabaseUrl}/functions/v1/legal-integrations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+      "apikey": supabaseAnonKey
+    },
+    body: JSON.stringify({ action: "offline_draft_download", versionId })
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.error || "The archived Word version could not be downloaded.");
+  }
+  return {
+    blob: await response.blob(),
+    fileName: decodeURIComponent(response.headers.get("x-file-name") || "legal-draft.docx")
+  };
+}
+
 export async function getPublicSigningRequest(token) {
   return legalIntegration("public_get", { token });
 }
