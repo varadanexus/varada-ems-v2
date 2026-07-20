@@ -408,7 +408,19 @@ function bindEvents() {
 async function updateDesignStatus(id, status) {
   if (!id) return;
   try {
-    const { error } = await client.from("interior_designs").update({ status, updated_by: PAGE_STATE.boot?.appUser?.id || null }).eq("id", id);
+    const action = status === "approved" ? "approve" : status === "rejected" ? "reject" : "revision_requested";
+    const remarks = status === "approved"
+      ? (window.prompt("Optional review note:", "") || "").trim()
+      : (window.prompt("Add the reason or required changes:", "") || "").trim();
+    if (status !== "approved" && !remarks) {
+      showToast("A review note is required for rejection or revision.", TOAST_TYPES.ERROR);
+      return;
+    }
+    const { error } = await client.rpc("interiors_staff_review_design", {
+      p_design_id: id,
+      p_action: action,
+      p_remarks: remarks || null
+    });
     if (error) throw error;
     showToast(`Design marked ${status}.`, TOAST_TYPES.SUCCESS);
     await loadProject(PAGE_STATE.interiorProject.id);

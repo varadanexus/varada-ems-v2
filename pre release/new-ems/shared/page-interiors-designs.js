@@ -90,7 +90,7 @@ function render() {
         <div><label for="designProjectId">Project *</label><select id="designProjectId"><option value="">All Projects</option>${PAGE_STATE.projects.map((row) => `<option value="${row.interior_project_id}" ${String(PAGE_STATE.selectedProjectId) === String(row.interior_project_id) ? "selected" : ""}>${escapeHtml(row.project_code || "")} - ${escapeHtml(row.project_title || row.project_name || "")}</option>`).join("")}</select></div>
         <div><label for="designVersionNo">Design Version *</label><input id="designVersionNo" type="number" min="1" step="1" value="1" /></div>
         <div><label for="designTitle">Title *</label><input id="designTitle" type="text" maxlength="200" /></div>
-        <div><label for="designStatus">Status *</label><select id="designStatus">${renderOptions(["draft", "submitted", "approved", "rejected", "revision_requested"], "draft")}</select></div>
+        <div><label for="designStatus">Status *</label><select id="designStatus">${renderOptions(["draft", "submitted"], "draft")}</select><small>Staff review decisions are recorded after submission.</small></div>
         <div class="full"><label for="designDescription">Description</label><textarea id="designDescription" rows="3"></textarea></div>
         <div class="full interior-upload"><label for="designFiles">Design Files</label><input id="designFiles" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.dwg,.dxf,.skp,.rvt,.rfa,.ifc,.3ds,.obj,.stl,.step,.stp,.zip" /><small>Select multiple drawings, renders, CAD/BIM models, PDFs, images, or a ZIP package. Each file can be up to 10 MB.</small></div>
         <div class="full"><label for="designFileUrl">External Reference URL <span class="muted">(optional)</span></label><input id="designFileUrl" type="url" placeholder="https://..." /></div>
@@ -277,7 +277,25 @@ async function uploadProjectDocuments() {
 async function updateDesignStatus(id, status) {
   if (!id) return;
   try {
-    const { error } = await client.from("interior_designs").update({ status, updated_by: PAGE_STATE.boot?.appUser?.id || null }).eq("id", id);
+    let response;
+    if (["approved", "rejected", "revision_requested"].includes(status)) {
+      const action = status === "approved" ? "approve" : status === "rejected" ? "reject" : "revision_requested";
+      const remarks = status === "approved"
+        ? (window.prompt("Optional review note:", "") || "").trim()
+        : (window.prompt("Add the reason or required changes:", "") || "").trim();
+      if (status !== "approved" && !remarks) {
+        showToast("A review note is required for rejection or revision.", TOAST_TYPES.ERROR);
+        return;
+      }
+      response = await client.rpc("interiors_staff_review_design", {
+        p_design_id: id,
+        p_action: action,
+        p_remarks: remarks || null
+      });
+    } else {
+      response = await client.from("interior_designs").update({ status, updated_by: PAGE_STATE.boot?.appUser?.id || null }).eq("id", id);
+    }
+    const { error } = response;
     if (error) throw error;
     await notifyInteriorsWhatsAppSafely(status === "submitted" ? "design_approval" : "design_status", id);
     showToast(`Design marked ${status}.`, TOAST_TYPES.SUCCESS);
