@@ -541,6 +541,52 @@ function downloadManualWordDocument() {
   showToast("Word-compatible document downloaded.", TOAST_TYPES.SUCCESS);
 }
 
+function sanitizeImportedWordHtml(value = "") {
+  const template = document.createElement("template");
+  template.innerHTML = String(value);
+  template.content.querySelectorAll("script,style,iframe,object,embed,form,input,button,meta,link,base").forEach((node) => node.remove());
+  template.content.querySelectorAll("*").forEach((node) => {
+    Array.from(node.attributes).forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const content = String(attribute.value || "").trim();
+      if (name.startsWith("on") || name === "srcdoc") node.removeAttribute(attribute.name);
+      if ((name === "href" || name === "src") && /^(?:javascript|vbscript):/i.test(content)) node.removeAttribute(attribute.name);
+      if (name === "style" && /(?:url\s*\(|expression\s*\(|javascript:)/i.test(content)) node.removeAttribute("style");
+    });
+  });
+  return template.innerHTML;
+}
+
+async function importManualWordFile(event) {
+  const input = event.currentTarget;
+  const file = input.files?.[0];
+  if (!file) return;
+  try {
+    if (!/\.docx$/i.test(file.name)) throw new Error("Only modern Word .docx files are supported. Open a legacy .doc file in Word and save it as .docx first.");
+    if (file.size > 25 * 1024 * 1024) throw new Error("The Word file must be 25 MB or smaller.");
+    if (!window.mammoth?.convertToHtml) throw new Error("The Word importer did not load. Refresh the page and try again.");
+    const editor = document.querySelector("#manualRichEditor");
+    if (!editor) throw new Error("The EMS document editor is unavailable.");
+    if (editor.innerText.trim() && !window.confirm("Replace the current editor content with this Word document?")) return;
+    const result = await window.mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+    const safeHtml = sanitizeImportedWordHtml(result.value || "");
+    if (!safeHtml.trim()) throw new Error("No editable text could be extracted from this Word file.");
+    editor.innerHTML = safeHtml;
+    const titleInput = document.querySelector('[data-manual="title"]');
+    if (titleInput && !titleInput.value.trim()) titleInput.value = file.name.replace(/\.docx$/i, "");
+    editor.focus();
+    updateManualEditorStatus();
+    const warnings = Array.isArray(result.messages) ? result.messages.length : 0;
+    showToast(warnings
+      ? `Word document imported with ${warnings} formatting notice${warnings === 1 ? "" : "s"}. Review it before saving.`
+      : "Word document imported. Review it before saving to EMS.", warnings ? TOAST_TYPES.WARNING : TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    showToast(error?.message || "The Word document could not be imported.", TOAST_TYPES.ERROR);
+  } finally {
+    input.value = "";
+  }
+}
+
 function bindManualRichEditor() {
   const editor = document.querySelector("#manualRichEditor");
   const toolbar = document.querySelector("#manualEditorToolbar");
@@ -571,6 +617,8 @@ function bindManualRichEditor() {
   document.querySelector("#manualFindReplaceBtn")?.addEventListener("click", findAndReplaceManualText);
   document.querySelector("#manualDownloadWordBtn")?.addEventListener("click", downloadManualWordDocument);
   document.querySelector("#manualPrintBtn")?.addEventListener("click", printManualDraft);
+  document.querySelector("#manualUploadWordBtn")?.addEventListener("click", () => document.querySelector("#manualWordFileInput")?.click());
+  document.querySelector("#manualWordFileInput")?.addEventListener("change", importManualWordFile);
   editor.addEventListener("input", updateManualEditorStatus);
   editor.addEventListener("paste", () => window.setTimeout(updateManualEditorStatus, 0));
   document.querySelector("#manualPageHeader")?.addEventListener("input", updateManualEditorStatus);
@@ -698,6 +746,7 @@ function renderPage() {
       .manual-document-body blockquote{margin:10pt 0;padding:8pt 12pt;border-left:3px solid #b59140;background:#faf6ea}
       .manual-document-body table{width:100%;border-collapse:collapse;margin:12pt 0;table-layout:auto}
       .manual-document-body th,.manual-document-body td{position:relative;min-width:42px;border:1px solid #777;padding:6pt;vertical-align:top;resize:horizontal;overflow:auto}
+      .manual-document-body img{display:block;max-width:100%;height:auto;margin:10pt auto}
       .manual-document-page th{background:#eee;font-weight:700}
       .manual-page-break{height:18px;margin:14pt -22mm;border-top:2px dashed #9aa0a6;border-bottom:2px dashed #9aa0a6;background:#eef1f4;color:#666;text-align:center;font:8pt/14px Arial,sans-serif;break-after:page;page-break-after:always;user-select:none}
       .manual-editor-status{display:flex;justify-content:space-between;gap:.75rem;padding:.42rem .75rem;background:#f3f3f3;border-top:1px solid #c9c9c9;color:#555;font:600 .72rem Arial,sans-serif}
@@ -864,7 +913,7 @@ function renderPage() {
         <h3 id="draftEditorTitle">Draft Editor</h3>
         <p class="muted" id="draftEditorDescription">The generated or edited draft appears here. The AI prompt is kept separately below.</p>
         <div class="document-editor-choice" id="documentEditorChoice" hidden>
-          <p><strong>EMS Document Editor</strong> · Private manual drafting with Word-style formatting, A4 layout and EMS version saving.</p>
+          <p><strong>EMS Document Editor</strong> · Create a draft or upload a `.docx`. Import happens privately in your browser; review complex layouts, headers and footers before saving.</p>
         </div>
         <textarea id="draftOutput" class="legal-output" placeholder="Generated draft will appear here. You can edit it before saving."></textarea>
         <div class="word-editor-shell" id="wordEditorShell" hidden>
@@ -924,6 +973,8 @@ function renderPage() {
               <button type="button" data-command="indent" title="Increase indent" aria-label="Increase indent">⇥</button>
             </div>
             <div class="toolbar-group">
+              <button type="button" id="manualUploadWordBtn" title="Upload and edit an existing Word document" aria-label="Upload and edit an existing Word document">Upload Word</button>
+              <input id="manualWordFileInput" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden />
               <button type="button" data-command="createLink" title="Insert link" aria-label="Insert link">Link</button>
               <button type="button" id="manualInsertTableBtn" title="Insert table" aria-label="Insert table">Table</button>
               <button type="button" id="manualPageBreakBtn" title="Insert page break" aria-label="Insert page break">Page break</button>
@@ -943,7 +994,7 @@ function renderPage() {
           </div>
           <div class="manual-editor-status">
             <span id="manualEditorStatus">0 words · 0 characters</span>
-            <span>A4 · Header/footer · Resizable tables · Spellcheck · EMS versions</span>
+            <span>A4 · DOCX import · Header/footer · Resizable tables · Spellcheck · EMS versions</span>
           </div>
         </div>
         <div id="aiToolsPanel">
