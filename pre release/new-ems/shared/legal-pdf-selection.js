@@ -109,7 +109,8 @@ export async function mountSelectablePdf({ blob, pageNumber = 1, zoom = 1, highl
     const firstPage = await pdfDocument.getPage(1);
     const baseViewport = firstPage.getViewport({ scale: 1 });
     const availableWidth = Math.max(320, scroll.clientWidth - 40);
-    const fitScale = Math.min(2.25, Math.max(.55, availableWidth / baseViewport.width));
+    const availableHeight = Math.max(320, scroll.clientHeight - 40);
+    const fitScale = Math.min(2.25, Math.max(.35, Math.min(availableWidth / baseViewport.width, availableHeight / baseViewport.height)));
     const scale = fitScale * Math.min(2.5, Math.max(.65, Number(zoom || 1)));
     const shellViewport = firstPage.getViewport({ scale });
     const shellWidth = Math.floor(shellViewport.width);
