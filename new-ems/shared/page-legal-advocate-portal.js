@@ -5,6 +5,10 @@ import { addAdvocateComment, fetchAdvocateSharedFile, getAdvocatePortalContext }
 
 const state = { session: null, context: { profile: {}, shares: [] }, selectedShareId: "", previewUrl: "", preview: null, query: "", status: "all" };
 
+// This is a standalone external portal, so the authenticated EMS layout does
+// not run here to clear the global page-transition hiding state.
+document.getElementById("app")?.classList.add("page-enter-active");
+
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
