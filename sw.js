@@ -1,4 +1,4 @@
-const VERSION = "varada-ems-v8";
+const VERSION = "varada-ems-v9";
 const STATIC_CACHE = `${VERSION}-static`;
 
 // Only public application-shell files belong here. Authenticated API responses,
@@ -10,6 +10,8 @@ const APP_SHELL = [
   "/new-ems/assets/css/premium.css",
   "/new-ems/assets/css/pwa.css",
   "/new-ems/assets/icons/ems-192.png",
+  "/new-ems/assets/icons/ems-notification-badge.png",
+  "/images/logo.png",
   "/new-ems/assets/icons/ems-512.png",
   "/new-ems/assets/icons/ems-maskable-512.png",
   "/new-ems/shared/pwa.js"
@@ -21,8 +23,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Varada Nexus EMS";
   event.waitUntil(self.registration.showNotification(title, {
     body: payload.body || "You have a new EMS notification.",
-    icon: payload.icon || "/new-ems/assets/icons/ems-192.png",
-    badge: payload.badge || "/new-ems/assets/icons/ems-192.png",
+    icon: payload.icon || "/images/logo.png",
+    badge: payload.badge || "/new-ems/assets/icons/ems-notification-badge.png",
     tag: payload.tag || "varada-ems-notification",
     renotify: true,
     data: payload.data || { url: "/new-ems/modules/notifications-center/index.html" }

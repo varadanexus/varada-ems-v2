@@ -25,6 +25,7 @@ if (manifest) {
 const expectedIcons = [
   ["new-ems/assets/icons/ems-180.png", 180],
   ["new-ems/assets/icons/ems-192.png", 192],
+  ["new-ems/assets/icons/ems-notification-badge.png", 96],
   ["new-ems/assets/icons/ems-512.png", 512],
   ["new-ems/assets/icons/ems-maskable-512.png", 512]
 ];
@@ -38,6 +39,9 @@ for (const [file, expectedSize] of expectedIcons) {
   const png = fs.readFileSync(absolute);
   assert(png.toString("ascii", 1, 4) === "PNG", `${file} is not a PNG.`);
   assert(png.readUInt32BE(16) === expectedSize && png.readUInt32BE(20) === expectedSize, `${file} must be ${expectedSize}x${expectedSize}.`);
+  if (file.includes("notification-badge")) {
+    assert(png[25] === 6, `${file} must retain an RGBA transparency channel for Android status-bar masking.`);
+  }
 }
 
 const login = read("login.html");

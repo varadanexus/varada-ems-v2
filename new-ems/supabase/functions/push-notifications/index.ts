@@ -95,8 +95,8 @@ Deno.serve(async (req) => {
     const payload = JSON.stringify({
       title: "Varada Nexus EMS",
       body: "You have a new EMS notification. Unlock the app to view it.",
-      icon: "/new-ems/assets/icons/ems-192.png",
-      badge: "/new-ems/assets/icons/ems-192.png",
+      icon: "/images/logo.png",
+      badge: "/new-ems/assets/icons/ems-notification-badge.png",
       tag: `ems-${event.id}`,
       data: { url: event.action_url || "/new-ems/modules/notifications-center/index.html", notificationId: event.id },
       severity: event.severity,
