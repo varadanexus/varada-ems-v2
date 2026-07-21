@@ -5,8 +5,15 @@ import { showToast } from "./utils.js";
 
 const SESSION_KEY = "ems_external_portal_session";
 const state = { session: null, portals: [] };
+const appRoot = document.getElementById("app");
 
-document.getElementById("app").innerHTML = `
+// Standalone portal pages do not initialise the authenticated EMS layout,
+// which normally reveals #app after the global page-transition styles hide it.
+// Reveal this selector immediately so its loading, success and error states
+// always remain visible.
+appRoot?.classList.add("page-enter-active");
+
+appRoot.innerHTML = `
   <main style="min-height:100vh;display:grid;place-items:center;background:#050609;color:#f6f2e8;text-align:center;padding:2rem">
     <div><strong style="display:block;letter-spacing:.18em;color:#e0bd69">VARADA NEXUS</strong><h1 style="font-family:Georgia,serif;margin:.8rem 0 .35rem">Preparing your portals</h1><p style="color:#9b988f">Validating your secure session and assigned access…</p></div>
   </main>`;
