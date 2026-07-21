@@ -61,6 +61,8 @@ assert(serviceWorker.includes('new Response(html'), "Service worker must neutral
 assert(serviceWorker.includes("self.skipWaiting()"), "Security service-worker releases must activate without a stale-worker grace period.");
 assert(serviceWorker.includes('addEventListener("push"'), "Service worker is missing its Web Push handler.");
 assert(serviceWorker.includes('showNotification('), "Push events must display a user-visible notification.");
+assert(!serviceWorker.includes('icon: payload.icon'), "Expanded notifications must not duplicate the installed app logo.");
+assert(serviceWorker.includes('action: "open"'), "Push notifications should expose an Open EMS action.");
 assert(pushClient.includes("userVisibleOnly: true"), "Push subscriptions must require user-visible notifications.");
 assert(pushClient.includes("upsert_my_push_subscription"), "Push subscriptions must be bound to the signed-in EMS user.");
 assert(deviceSecurity.includes('authenticatorAttachment: "platform"'), "Device lock must use the device platform authenticator.");

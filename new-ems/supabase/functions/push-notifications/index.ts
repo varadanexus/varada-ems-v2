@@ -12,6 +12,11 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   headers: { ...corsHeaders, "Content-Type": "application/json" }
 });
 
+function compactNotificationText(value: unknown, limit: number) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length <= limit ? text : `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+}
+
 function bearer(req: Request) {
   const value = req.headers.get("authorization") || "";
   return value.toLowerCase().startsWith("bearer ") ? value.slice(7).trim() : "";
@@ -91,12 +96,12 @@ Deno.serve(async (req) => {
 
     webpush.setVapidDetails("mailto:security@varadanexus.com", vapidPublicKey, vapidPrivateKey);
     const payload = JSON.stringify({
-      title: event.title,
-      body: event.message,
-      icon: "/images/logo.png",
+      title: compactNotificationText(event.title, 72),
+      body: compactNotificationText(event.message, 150),
       badge: "/new-ems/assets/icons/ems-notification-badge.png",
       tag: `ems-${event.id}`,
       data: { url: event.action_url || "/new-ems/modules/notifications-center/index.html", notificationId: event.id },
+      actionLabel: compactNotificationText(event.action_label || "Open EMS", 24),
       severity: event.severity,
       moduleCode: event.module_code
     });
