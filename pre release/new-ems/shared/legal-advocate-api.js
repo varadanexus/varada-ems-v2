@@ -65,6 +65,28 @@ export async function getAdvocatePortalContext(sessionToken) {
   return data || {};
 }
 
+export async function getAdvocateTermsStatus(sessionToken) {
+  const { data, error } = await client.rpc("legal_advocate_terms_status", { p_session_token: sessionToken });
+  if (error) throw error;
+  return data || {};
+}
+
+export async function acceptAdvocateTerms(sessionToken, payload) {
+  const { data, error } = await client.rpc("legal_advocate_accept_terms", {
+    p_session_token: sessionToken,
+    p_terms_version: payload.version,
+    p_confirmation_name: payload.confirmationName,
+    p_bar_council_number: payload.barCouncilNumber,
+    p_user_agent: navigator.userAgent,
+    p_device_id: payload.deviceId,
+    p_identity_confirmed: payload.identityConfirmed,
+    p_confidentiality_confirmed: payload.confidentialityConfirmed,
+    p_professional_duties_confirmed: payload.professionalDutiesConfirmed
+  });
+  if (error) throw error;
+  return one(data);
+}
+
 export async function addAdvocateComment(sessionToken, shareId, commentType, body) {
   const { data, error } = await client.rpc("legal_advocate_portal_add_comment", {
     p_session_token: sessionToken,

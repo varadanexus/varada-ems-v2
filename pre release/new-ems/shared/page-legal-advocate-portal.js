@@ -3,6 +3,7 @@ import { showToast } from "./utils.js";
 import { advocatePortalLogout, requireAdvocatePortalSession } from "./legal-advocate-portal-auth.js";
 import { addAdvocateComment, deleteAdvocateAnnotation, deleteAdvocateBookmark, fetchAdvocateSharedFile, getAdvocateDocumentMarks, getAdvocatePortalContext, getAdvocatePreviewOtpStatus, requestAdvocatePreviewOtp, saveAdvocateAnnotation, saveAdvocateBookmark, verifyAdvocatePreviewOtp } from "./legal-advocate-api.js";
 import { mountSelectablePdf } from "./legal-pdf-selection.js?v=advocate-portal-16";
+import { ensureAdvocateTermsAccepted } from "./legal-advocate-terms-gate.js?v=advocate-terms-1";
 
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
 const ACTIVITY_WRITE_INTERVAL_MS = 10 * 1000;
@@ -650,8 +651,11 @@ function handleFullscreenChange() {
 async function init() {
   state.session = await requireAdvocatePortalSession();
   if (!state.session) return;
-  startInactivityGuard();
-  try { await load(); } catch (error) { document.getElementById("app").innerHTML = `<div class="card" style="margin:2rem"><h2>Advocate Portal Error</h2><p>${esc(error.message || "The portal could not be loaded.")}</p><button class="btn" id="advocateLogout">Return to Login</button></div>`; document.getElementById("advocateLogout")?.addEventListener("click", advocatePortalLogout); }
+  try {
+    await ensureAdvocateTermsAccepted(state.session.sessionToken);
+    startInactivityGuard();
+    await load();
+  } catch (error) { document.getElementById("app").innerHTML = `<div class="card" style="margin:2rem"><h2>Advocate Portal Error</h2><p>${esc(error.message || "The portal could not be loaded.")}</p><button class="btn" id="advocateLogout">Return to Login</button></div>`; document.getElementById("advocateLogout")?.addEventListener("click", advocatePortalLogout); }
 }
 
 document.addEventListener("fullscreenchange", handleFullscreenChange);
