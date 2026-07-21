@@ -463,12 +463,15 @@ async function handleExternalLogin(username, password) {
   });
   showToast("Login successful.", TOAST_TYPES.SUCCESS);
 
-  if (row.user_type === "architect") {
-    window.location.assign(ROUTES.INTERIORS_ARCHITECT_PORTAL);
+  const { data: accessData, error: accessError } = await client.rpc("external_portal_list_my_access", { p_session_token: row.session_token });
+  if (accessError) throw accessError;
+  const accessRows = Array.isArray(accessData) ? accessData : [];
+  if (accessRows.some((item) => item.source_module === "legal" && item.access_scope === "legal_advocate_portal")) {
+    window.location.assign(ROUTES.LEGAL_ADVOCATE_PORTAL);
     return;
   }
-  if (row.user_type === "advocate") {
-    window.location.assign(ROUTES.LEGAL_ADVOCATE_PORTAL);
+  if (accessRows.some((item) => item.source_module === "interiors" && item.access_scope === "interiors_architect_portal")) {
+    window.location.assign(ROUTES.INTERIORS_ARCHITECT_PORTAL);
     return;
   }
 
@@ -527,8 +530,15 @@ async function checkExistingSession() {
       const { data, error } = await client.rpc("external_portal_validate_session", { p_session_token: externalStored.sessionToken });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
-      if (row?.user_type === "architect" || row?.user_type === "advocate") {
-        window.location.assign(row.user_type === "advocate" ? ROUTES.LEGAL_ADVOCATE_PORTAL : ROUTES.INTERIORS_ARCHITECT_PORTAL);
+      const { data: accessData, error: accessError } = await client.rpc("external_portal_list_my_access", { p_session_token: externalStored.sessionToken });
+      if (accessError) throw accessError;
+      const accessRows = Array.isArray(accessData) ? accessData : [];
+      if (accessRows.some((item) => item.source_module === "legal" && item.access_scope === "legal_advocate_portal")) {
+        window.location.assign(ROUTES.LEGAL_ADVOCATE_PORTAL);
+        return;
+      }
+      if (accessRows.some((item) => item.source_module === "interiors" && item.access_scope === "interiors_architect_portal")) {
+        window.location.assign(ROUTES.INTERIORS_ARCHITECT_PORTAL);
         return;
       }
     } catch {}

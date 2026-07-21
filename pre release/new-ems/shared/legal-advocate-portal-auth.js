@@ -15,7 +15,7 @@ export async function requireAdvocatePortalSession() {
   }
   const { data, error } = await getSupabaseClient().rpc("external_portal_validate_session", { p_session_token: stored.sessionToken });
   const row = Array.isArray(data) ? data[0] : data;
-  if (error || row?.user_type !== "advocate") {
+  if (error || !row?.portal_user_id) {
     localStorage.removeItem(SESSION_KEY);
     window.location.assign(ROUTES.LOGIN);
     return null;
