@@ -95,7 +95,7 @@ function renderStoredHighlights(highlightLayer, highlights, textLayerElement, st
   });
 }
 
-export async function mountSelectablePdf({ blob, pageNumber = 1, zoom = 1, highlights = [], onPageReady, onTextSelected }) {
+export async function mountSelectablePdf({ blob, pageNumber = 1, zoom = 1, highlights = [], watermarkText = "", onPageReady, onTextSelected }) {
   const root = document.getElementById("legalPdfViewer");
   const scroll = document.getElementById("legalPdfScroll");
   const pages = document.getElementById("legalPdfPages");
@@ -124,7 +124,15 @@ export async function mountSelectablePdf({ blob, pageNumber = 1, zoom = 1, highl
       stage.dataset.pageNumber = String(number);
       stage.style.width = `${shellWidth}px`;
       stage.style.height = `${shellHeight}px`;
-      stage.innerHTML = `<canvas></canvas><div class="lap-pdf-highlight-layer" aria-hidden="true"></div><div class="lap-pdf-text-layer"></div><div class="lap-pdf-page-loading"><strong>Page ${number}</strong><span>Loading…</span></div>`;
+      stage.innerHTML = `<canvas></canvas><div class="lap-pdf-page-watermark" aria-hidden="true"></div><div class="lap-pdf-highlight-layer" aria-hidden="true"></div><div class="lap-pdf-text-layer"></div><div class="lap-pdf-page-loading"><strong>Page ${number}</strong><span>Loading…</span></div>`;
+      const watermarkLayer = stage.querySelector(".lap-pdf-page-watermark");
+      if (watermarkText) {
+        Array.from({ length: 8 }, () => {
+          const mark = document.createElement("span");
+          mark.textContent = watermarkText;
+          watermarkLayer.append(mark);
+        });
+      }
       fragment.append(stage);
     }
     pages.replaceChildren(fragment);

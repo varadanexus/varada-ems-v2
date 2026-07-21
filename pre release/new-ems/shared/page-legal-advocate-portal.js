@@ -2,7 +2,7 @@ import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { showToast } from "./utils.js";
 import { advocatePortalLogout, requireAdvocatePortalSession } from "./legal-advocate-portal-auth.js";
 import { addAdvocateComment, deleteAdvocateAnnotation, deleteAdvocateBookmark, fetchAdvocateSharedFile, getAdvocateDocumentMarks, getAdvocatePortalContext, getAdvocatePreviewOtpStatus, requestAdvocatePreviewOtp, saveAdvocateAnnotation, saveAdvocateBookmark, verifyAdvocatePreviewOtp } from "./legal-advocate-api.js";
-import { mountSelectablePdf } from "./legal-pdf-selection.js?v=advocate-portal-15";
+import { mountSelectablePdf } from "./legal-pdf-selection.js?v=advocate-portal-16";
 
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
 const ACTIVITY_WRITE_INTERVAL_MS = 10 * 1000;
@@ -55,6 +55,11 @@ function rememberDocumentPage(pageNumber = state.activePage, shareId = state.sel
 
 function previewIsFullscreen() {
   return Boolean(document.fullscreenElement?.classList?.contains("lap-preview-wrap"));
+}
+
+function reviewerWatermarkText() {
+  const profile = state.context.profile || {};
+  return `${profile.name || profile.email || "Authorized reviewer"} • ${dateTime(new Date())}`;
 }
 
 function documentHighlights() {
@@ -183,8 +188,9 @@ function render() {
   const share = filteredShares().find((row) => row.id === state.selectedShareId) || null;
   const metrics = portalMetrics();
   const updated = state.updatedAt ? new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(state.updatedAt) : "Now";
-  const watermarkText = `${profile.name || profile.email || "Authorized reviewer"} • ${dateTime(new Date())}`;
-  const previewWatermark = state.previewUrl ? `<div class="lap-watermark" aria-hidden="true">${Array.from({ length: 10 }, () => `<span>${esc(watermarkText)}</span>`).join("")}</div>` : "";
+  const watermarkText = reviewerWatermarkText();
+  const previewIsPdf = String(state.preview?.contentType || "").includes("pdf");
+  const previewWatermark = state.previewUrl && !previewIsPdf ? `<div class="lap-watermark" aria-hidden="true">${Array.from({ length: 10 }, () => `<span>${esc(watermarkText)}</span>`).join("")}</div>` : "";
   const annotations = documentAnnotations();
   const highlights = documentHighlights();
   document.getElementById("app").innerHTML = `
@@ -300,6 +306,7 @@ function mountPdfIfNeeded() {
     pageNumber: state.activePage,
     zoom: state.pdfZoom,
     highlights: documentHighlights(),
+    watermarkText: reviewerWatermarkText(),
     onPageReady: ({ pageNumber, pageCount }) => {
       state.activePage = pageNumber;
       state.pdfPageCount = pageCount;
