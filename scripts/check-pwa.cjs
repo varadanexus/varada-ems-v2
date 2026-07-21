@@ -54,6 +54,7 @@ assert(serviceWorker.includes('request.method !== "GET"'), "Service worker must 
 assert(serviceWorker.includes('url.origin !== self.location.origin'), "Service worker must ignore cross-origin API traffic.");
 assert(serviceWorker.includes('url.search === ""'), "Service worker must not cache query-string assets.");
 assert(serviceWorker.includes('new Response(html'), "Service worker must neutralize clean-URL redirects for the offline fallback.");
+assert(serviceWorker.includes("self.skipWaiting()"), "Security service-worker releases must activate without a stale-worker grace period.");
 assert(serviceWorker.includes('addEventListener("push"'), "Service worker is missing its Web Push handler.");
 assert(serviceWorker.includes('showNotification('), "Push events must display a user-visible notification.");
 assert(pushClient.includes("userVisibleOnly: true"), "Push subscriptions must require user-visible notifications.");

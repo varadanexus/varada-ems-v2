@@ -44,7 +44,8 @@ export async function getPushNotificationStatus() {
   if (!support.supported) return { ...support, enabled: false, permission: "Notification" in window ? Notification.permission : "unsupported", deviceCount: 0 };
   const reg = await registration();
   const subscription = await reg.pushManager.getSubscription();
-  if (subscription) await saveSubscription(subscription).catch(() => {});
+  const permissionGranted = Notification.permission === "granted";
+  if (subscription && permissionGranted) await saveSubscription(subscription).catch(() => {});
   const { data, error } = await getSupabaseClient().rpc("get_my_push_subscription_status", {
     p_endpoint: subscription?.endpoint || null
   });
@@ -52,9 +53,14 @@ export async function getPushNotificationStatus() {
   const row = Array.isArray(data) ? data[0] : data;
   return {
     ...support,
-    enabled: Boolean(subscription && row?.enabled),
+    enabled: Boolean(permissionGranted && subscription && row?.enabled),
     permission: Notification.permission,
-    deviceCount: Number(row?.device_count || 0)
+    deviceCount: Number(row?.device_count || 0),
+    reason: permissionGranted
+      ? ""
+      : Notification.permission === "denied"
+        ? "Notifications are blocked. Allow them in this device's app or browser settings, then return to EMS."
+        : "Notification permission is required on this device."
   };
 }
 

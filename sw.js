@@ -1,4 +1,4 @@
-const VERSION = "varada-ems-v7";
+const VERSION = "varada-ems-v8";
 const STATIC_CACHE = `${VERSION}-static`;
 
 // Only public application-shell files belong here. Authenticated API responses,
@@ -59,6 +59,9 @@ self.addEventListener("install", (event) => {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8" }
     }));
+    // Security releases must not remain waiting behind an older installed PWA.
+    // Activation triggers the existing controllerchange reload in pwa.js.
+    await self.skipWaiting();
   })());
 });
 
