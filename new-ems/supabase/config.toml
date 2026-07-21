@@ -409,6 +409,11 @@ verify_jwt = false
 [functions.meetings-integrations]
 verify_jwt = false
 
+# Authentication is resolved through the database so this also supports the
+# EMS local-staff JWT flow in addition to Supabase Auth sessions.
+[functions.push-notifications]
+verify_jwt = false
+
   # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

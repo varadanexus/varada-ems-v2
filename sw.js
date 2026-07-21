@@ -1,4 +1,4 @@
-const VERSION = "varada-ems-v4";
+const VERSION = "varada-ems-v5";
 const STATIC_CACHE = `${VERSION}-static`;
 
 // Only public application-shell files belong here. Authenticated API responses,
@@ -14,6 +14,35 @@ const APP_SHELL = [
   "/new-ems/assets/icons/ems-maskable-512.png",
   "/new-ems/shared/pwa.js"
 ];
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try { payload = event.data?.json() || {}; } catch { payload = { body: event.data?.text() || "" }; }
+  const title = payload.title || "Varada Nexus EMS";
+  event.waitUntil(self.registration.showNotification(title, {
+    body: payload.body || "You have a new EMS notification.",
+    icon: payload.icon || "/new-ems/assets/icons/ems-192.png",
+    badge: payload.badge || "/new-ems/assets/icons/ems-192.png",
+    tag: payload.tag || "varada-ems-notification",
+    renotify: true,
+    data: payload.data || { url: "/new-ems/modules/notifications-center/index.html" }
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/new-ems/modules/notifications-center/index.html", self.location.origin).href;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
+    if (existing) {
+      await existing.focus();
+      if ("navigate" in existing) await existing.navigate(target);
+      return;
+    }
+    await self.clients.openWindow(target);
+  })());
+});
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {

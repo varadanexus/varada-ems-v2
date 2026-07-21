@@ -44,6 +44,8 @@ const login = read("login.html");
 const runtime = read("new-ems/config/runtime.js");
 const serviceWorker = read("sw.js");
 const layout = read("new-ems/shared/layout.js");
+const pushClient = read("new-ems/shared/push-notifications.js");
+const deviceSecurity = read("new-ems/shared/device-security.js");
 assert(login.includes('rel="manifest" href="/new-ems/manifest.webmanifest"'), "Canonical login page is missing the manifest link.");
 assert(login.includes('name="mobile-web-app-capable" content="yes"'), "Canonical login page is missing the standard mobile web app capability meta tag.");
 assert(runtime.includes('navigator.serviceWorker') === false, "Service worker registration should remain isolated in pwa.js.");
@@ -52,6 +54,12 @@ assert(serviceWorker.includes('request.method !== "GET"'), "Service worker must 
 assert(serviceWorker.includes('url.origin !== self.location.origin'), "Service worker must ignore cross-origin API traffic.");
 assert(serviceWorker.includes('url.search === ""'), "Service worker must not cache query-string assets.");
 assert(serviceWorker.includes('new Response(html'), "Service worker must neutralize clean-URL redirects for the offline fallback.");
+assert(serviceWorker.includes('addEventListener("push"'), "Service worker is missing its Web Push handler.");
+assert(serviceWorker.includes('showNotification('), "Push events must display a user-visible notification.");
+assert(pushClient.includes("userVisibleOnly: true"), "Push subscriptions must require user-visible notifications.");
+assert(pushClient.includes("upsert_my_push_subscription"), "Push subscriptions must be bound to the signed-in EMS user.");
+assert(deviceSecurity.includes('authenticatorAttachment: "platform"'), "Device lock must use the device platform authenticator.");
+assert(deviceSecurity.includes('userVerification: "required"'), "Device lock must require biometric/PIN user verification.");
 assert(!layout.includes('label.closest(".form-group,.form-field,.field,.input-group,[data-field]") || label.parentElement'), "Financial redaction must never fall back to removing an entire flat form.");
 
 if (errors.length) {
@@ -59,4 +67,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log("PWA validation passed: manifest, icons, registration, and safe-cache guards are present.");
+console.log("PWA validation passed: install, push, device lock, and safe-cache guards are present.");

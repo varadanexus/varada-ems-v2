@@ -3,6 +3,8 @@ import { listRoles, listUsers } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { dispatchNotification, dismissNotification, getMyNotificationPreferences, listMyNotifications, listNotificationAdminFeed, markAllNotificationsRead, markNotificationRead, saveMyNotificationPreferences } from "./notification-api.js";
 import { showToast } from "./utils.js";
+import { disablePushNotifications, enablePushNotifications, getPushNotificationStatus, pushSupport } from "./push-notifications.js";
+import { deviceLockSupport, disableDeviceLock, enableDeviceLock, getDeviceLockStatus, verifyDeviceLockNow } from "./device-security.js";
 
 const state = {
   boot: null,
@@ -11,6 +13,8 @@ const state = {
   roles: [],
   users: [],
   preferences: null,
+  pushStatus: { enabled: false, deviceCount: 0 },
+  deviceLockStatus: { enabled: false },
   status: "active",
   search: ""
 };
@@ -94,6 +98,8 @@ function renderAdminFeedRows() {
 
 function renderPage() {
   const pref = state.preferences || {};
+  const push = state.pushStatus || {};
+  const deviceLock = state.deviceLockStatus || {};
   const unread = state.inbox.filter((item) => !item.is_read && !item.is_dismissed && !item.is_archived).length;
   renderModuleContent(`
     <section class="card notification-overview-card">
@@ -132,6 +138,18 @@ function renderPage() {
       <section class="card">
         <h3>Preferences</h3>
         <p class="muted">Choose how you receive alerts and which modules should stay quiet.</p>
+        <div class="notification-device-controls">
+          <div>
+            <strong>Push notifications on this device</strong>
+            <p class="muted">${escapeHtml(push.enabled ? `Enabled · ${push.deviceCount || 1} registered device(s)` : (push.reason || "Receive alerts even while EMS is closed."))}</p>
+          </div>
+          <button class="btn ${push.enabled ? "btn-ghost" : "primary"}" id="pushNotificationToggle" type="button" ${push.supported === false ? "disabled" : ""}>${push.enabled ? "Disable on This Device" : "Enable Notifications"}</button>
+          <div>
+            <strong>Device biometric/PIN app lock</strong>
+            <p class="muted">${escapeHtml(deviceLock.enabled ? "Enabled · EMS locks after being in the background for one minute." : (deviceLock.reason || "Keep the session signed in and unlock EMS using this device."))}</p>
+          </div>
+          <button class="btn ${deviceLock.enabled ? "btn-ghost" : "primary"}" id="deviceLockToggle" type="button" ${deviceLock.supported === false ? "disabled" : ""}>${deviceLock.enabled ? "Disable Device Lock" : "Enable Device Lock"}</button>
+        </div>
         <form id="notificationPreferencesForm" class="notification-preferences-grid">
           <label class="notification-checkbox"><input type="checkbox" name="in_app_enabled" ${pref.in_app_enabled !== false ? "checked" : ""} /> <span>Enable in-app notifications</span></label>
           <label class="notification-checkbox"><input type="checkbox" name="email_enabled" ${pref.email_enabled ? "checked" : ""} /> <span>Enable email delivery</span></label>
@@ -256,6 +274,8 @@ async function loadData() {
     state.roles = [];
     state.users = [];
   }
+  state.pushStatus = await getPushNotificationStatus().catch((error) => ({ ...pushSupport(), enabled: false, deviceCount: 0, reason: error?.message || "Could not read push status." }));
+  state.deviceLockStatus = { ...deviceLockSupport(), ...getDeviceLockStatus(state.boot?.appUser) };
 }
 
 async function reloadAndRender() {
@@ -264,6 +284,40 @@ async function reloadAndRender() {
 }
 
 function bindPage() {
+  document.querySelector("#pushNotificationToggle")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      state.pushStatus = state.pushStatus?.enabled
+        ? await disablePushNotifications()
+        : await enablePushNotifications();
+      renderPage();
+      showToast(state.pushStatus.enabled ? "Push notifications enabled on this device." : "Push notifications disabled on this device.", TOAST_TYPES.SUCCESS);
+    } catch (error) {
+      button.disabled = false;
+      showToast(error?.message || "Could not update push notifications.", TOAST_TYPES.ERROR);
+    }
+  });
+
+  document.querySelector("#deviceLockToggle")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      if (state.deviceLockStatus?.enabled) {
+        await verifyDeviceLockNow(state.boot.appUser);
+        disableDeviceLock(state.boot.appUser);
+      } else {
+        await enableDeviceLock(state.boot.appUser);
+      }
+      state.deviceLockStatus = getDeviceLockStatus(state.boot.appUser);
+      renderPage();
+      showToast(state.deviceLockStatus.enabled ? "Device lock enabled." : "Device lock disabled.", TOAST_TYPES.SUCCESS);
+    } catch (error) {
+      button.disabled = false;
+      showToast(error?.name === "NotAllowedError" ? "Device verification was cancelled or timed out." : (error?.message || "Could not update device lock."), TOAST_TYPES.ERROR);
+    }
+  });
+
   document.querySelector("#notificationStatus")?.addEventListener("change", async (event) => {
     state.status = event.target.value || "active";
     await reloadAndRender();

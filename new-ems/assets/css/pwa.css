@@ -55,3 +55,55 @@
 @media (display-mode: standalone) {
   .ems-pwa-install { display: none !important; }
 }
+
+.ems-device-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #eef3f8;
+  background: radial-gradient(circle at 50% 20%, #132947 0, #07111f 46%, #03070d 100%);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.ems-device-lock-card {
+  display: grid;
+  justify-items: center;
+  width: min(420px, 100%);
+  padding: 34px 28px;
+  border: 1px solid rgba(211, 178, 104, .4);
+  border-radius: 24px;
+  text-align: center;
+  background: rgba(7, 17, 31, .94);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, .55);
+}
+
+.ems-device-lock-card img { width: 72px; height: 72px; border-radius: 18px; margin-bottom: 16px; }
+.ems-device-lock-kicker { color: #d3b268; font-size: 11px; font-weight: 800; letter-spacing: .16em; }
+.ems-device-lock-card h1 { margin: 8px 0 4px; font-size: 28px; }
+.ems-device-lock-card p { max-width: 330px; margin: 0 0 22px; color: #afbdcc; line-height: 1.55; }
+.ems-device-lock-card button { width: 100%; min-height: 46px; border: 0; border-radius: 12px; font-weight: 800; cursor: pointer; }
+.ems-device-unlock { color: #07111f; background: linear-gradient(135deg, #f0d493, #cba553); }
+.ems-device-signout { margin-top: 8px; color: #c8d2dd; background: transparent; }
+.ems-device-lock-error { min-height: 20px; margin-top: 10px; color: #ff9f9f; }
+
+.notification-device-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: center;
+  gap: 12px 20px;
+  margin: 16px 0 20px;
+  padding: 16px;
+  border: 1px solid rgba(211, 178, 104, .24);
+  border-radius: 14px;
+  background: rgba(7, 17, 31, .35);
+}
+
+.notification-device-controls p { margin: 4px 0 0; }
+
+@media (max-width: 640px) {
+  .notification-device-controls { grid-template-columns: 1fr; }
+  .notification-device-controls button { width: 100%; }
+}

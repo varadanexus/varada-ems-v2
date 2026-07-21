@@ -10,6 +10,7 @@ import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 import { initNotificationShell } from "./notification-ui.js?v=notifications-1";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
+import { enforceDeviceUnlock, installDeviceRelock } from "./device-security.js";
 
 const NAV_TRANSITION_KEY = "ems_nav_pending";
 const FINANCIAL_TEXT_PATTERN = /\b(amount|rate|billing|bill(?:s|ing)?|invoice|payment|receipt|credit\s*note|receivable|payable|revenue|cost|margin|gst|tax|debit|credit|balance|outstanding|price|budget|expense|freight\s*charge|commission|penalty|settlement|quotation|quote|estimate|boq)\b/i;
@@ -291,6 +292,10 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
     await logout();
     return;
   }
+
+  const deviceUnlocked = await enforceDeviceUnlock(appUser, logout);
+  if (!deviceUnlocked) return;
+  installDeviceRelock(appUser);
 
   try {
     await enforceTermsAcceptance();
