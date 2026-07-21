@@ -1,9 +1,12 @@
+import { enablePushNotifications, getPushNotificationStatus, pushSupport } from "./push-notifications.js";
+
 const LOCK_PREFIX = "ems_device_lock_v1:";
 const UNLOCK_PREFIX = "ems_device_unlock_v1:";
 const UNLOCK_WINDOW_MS = 15 * 60 * 1000;
 let hiddenAt = 0;
 let authenticatorActive = false;
 let internalNavigationUntil = 0;
+let securitySetupActive = false;
 
 function bytesToBase64Url(bytes) {
   let value = "";
@@ -169,6 +172,103 @@ export async function verifyDeviceLockNow(appUser) {
   return verifyDevice(appUser);
 }
 
+export async function enforceMandatorySecuritySetup(appUser, onSignOut) {
+  if (!appUser?.id) return false;
+  let lockStatus = getDeviceLockStatus(appUser);
+  let pushStatus;
+  try {
+    pushStatus = await getPushNotificationStatus();
+  } catch (error) {
+    pushStatus = { ...pushSupport(), enabled: false, reason: error?.message || "Could not verify notification status." };
+  }
+  if (lockStatus.enabled && pushStatus.enabled) return true;
+
+  securitySetupActive = true;
+  document.querySelector(".ems-security-setup")?.remove();
+  const overlay = document.createElement("section");
+  overlay.className = "ems-security-setup";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.innerHTML = `
+    <div class="ems-security-setup-card">
+      <img src="/new-ems/assets/icons/ems-192.png" alt="" />
+      <span class="ems-device-lock-kicker">REQUIRED SECURITY SETUP</span>
+      <h1>Secure this device</h1>
+      <p class="ems-security-intro">Biometric/PIN unlock and notifications are mandatory for every EMS user on each device.</p>
+      <div class="ems-security-requirement" data-security-lock>
+        <div><strong>Device biometric/PIN</strong><span></span></div>
+        <button type="button">Turn On</button>
+      </div>
+      <div class="ems-security-requirement" data-security-push>
+        <div><strong>Push notifications</strong><span></span></div>
+        <button type="button">Turn On</button>
+      </div>
+      <div class="ems-security-error" role="alert"></div>
+      <button class="ems-device-signout" type="button">Sign out instead</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const lockRow = overlay.querySelector("[data-security-lock]");
+  const pushRow = overlay.querySelector("[data-security-push]");
+  const lockButton = lockRow.querySelector("button");
+  const pushButton = pushRow.querySelector("button");
+  const errorBox = overlay.querySelector(".ems-security-error");
+
+  const render = () => {
+    lockRow.classList.toggle("is-complete", Boolean(lockStatus.enabled));
+    lockRow.querySelector("span").textContent = lockStatus.enabled ? "Enabled on this device" : (lockStatus.reason || "Use fingerprint, face recognition, or device PIN.");
+    lockButton.textContent = lockStatus.enabled ? "Enabled" : "Turn On";
+    lockButton.disabled = Boolean(lockStatus.enabled) || lockStatus.supported === false;
+
+    pushRow.classList.toggle("is-complete", Boolean(pushStatus.enabled));
+    pushRow.querySelector("span").textContent = pushStatus.enabled ? "Enabled on this device" : (pushStatus.reason || "Required for operational and security alerts.");
+    pushButton.textContent = pushStatus.enabled ? "Enabled" : "Turn On";
+    pushButton.disabled = Boolean(pushStatus.enabled) || pushStatus.supported === false;
+  };
+  render();
+
+  return new Promise((resolve) => {
+    const finishIfComplete = () => {
+      render();
+      if (!lockStatus.enabled || !pushStatus.enabled) return false;
+      securitySetupActive = false;
+      overlay.remove();
+      resolve(true);
+      return true;
+    };
+
+    lockButton.addEventListener("click", async () => {
+      lockButton.disabled = true;
+      errorBox.textContent = "";
+      try {
+        lockStatus = await enableDeviceLock(appUser);
+        finishIfComplete();
+      } catch (error) {
+        errorBox.textContent = error?.name === "NotAllowedError" ? "Biometric/PIN setup was cancelled or timed out." : (error?.message || "Could not enable device unlock.");
+        render();
+      }
+    });
+
+    pushButton.addEventListener("click", async () => {
+      pushButton.disabled = true;
+      errorBox.textContent = "";
+      try {
+        pushStatus = await enablePushNotifications();
+        finishIfComplete();
+      } catch (error) {
+        errorBox.textContent = error?.message || "Could not enable notifications. Allow notifications in this device's browser settings, then try again.";
+        render();
+      }
+    });
+
+    overlay.querySelector(".ems-device-signout").addEventListener("click", async () => {
+      securitySetupActive = false;
+      await onSignOut?.();
+      resolve(false);
+    });
+  });
+}
+
 export function allowDeviceInternalNavigation() {
   internalNavigationUntil = Date.now() + 10_000;
 }
@@ -179,6 +279,7 @@ export function installDeviceRelock(appUser) {
   document.addEventListener("visibilitychange", () => {
     if (!readEnrollment(appUser)) return;
     if (document.hidden) {
+      if (securitySetupActive) return;
       if (internalNavigationUntil > Date.now()) {
         internalNavigationUntil = 0;
         hiddenAt = 0;

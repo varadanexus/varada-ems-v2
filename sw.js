@@ -1,4 +1,4 @@
-const VERSION = "varada-ems-v6";
+const VERSION = "varada-ems-v7";
 const STATIC_CACHE = `${VERSION}-static`;
 
 // Only public application-shell files belong here. Authenticated API responses,

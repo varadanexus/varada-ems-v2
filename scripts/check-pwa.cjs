@@ -60,6 +60,7 @@ assert(pushClient.includes("userVisibleOnly: true"), "Push subscriptions must re
 assert(pushClient.includes("upsert_my_push_subscription"), "Push subscriptions must be bound to the signed-in EMS user.");
 assert(deviceSecurity.includes('authenticatorAttachment: "platform"'), "Device lock must use the device platform authenticator.");
 assert(deviceSecurity.includes('userVerification: "required"'), "Device lock must require biometric/PIN user verification.");
+assert(deviceSecurity.includes("enforceMandatorySecuritySetup"), "Protected EMS users must be gated until device lock and push are enabled.");
 assert(!layout.includes('label.closest(".form-group,.form-field,.field,.input-group,[data-field]") || label.parentElement'), "Financial redaction must never fall back to removing an entire flat form.");
 
 if (errors.length) {

@@ -89,6 +89,58 @@
 .ems-device-signout { margin-top: 8px; color: #c8d2dd; background: transparent; }
 .ems-device-lock-error { min-height: 20px; margin-top: 10px; color: #ff9f9f; }
 
+.ems-security-setup {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  color: #eef3f8;
+  background: radial-gradient(circle at 50% 15%, #173154 0, #07111f 48%, #03070d 100%);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.ems-security-setup-card {
+  width: min(520px, 100%);
+  padding: 30px;
+  border: 1px solid rgba(211, 178, 104, .44);
+  border-radius: 24px;
+  background: rgba(7, 17, 31, .97);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, .58);
+}
+
+.ems-security-setup-card > img { display: block; width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 16px; }
+.ems-security-setup-card > .ems-device-lock-kicker { display: block; text-align: center; }
+.ems-security-setup-card h1 { margin: 8px 0 5px; text-align: center; font-size: 28px; }
+.ems-security-intro { margin: 0 auto 20px; color: #afbdcc; text-align: center; line-height: 1.5; }
+
+.ems-security-requirement {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 15px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 14px;
+  background: rgba(15, 28, 47, .8);
+}
+
+.ems-security-requirement div { display: grid; gap: 4px; }
+.ems-security-requirement span { color: #afbdcc; font-size: 13px; line-height: 1.35; }
+.ems-security-requirement button { min-width: 92px; min-height: 42px; border: 0; border-radius: 10px; color: #07111f; background: #d3b268; font-weight: 800; cursor: pointer; }
+.ems-security-requirement.is-complete { border-color: rgba(74, 222, 128, .4); background: rgba(22, 101, 52, .16); }
+.ems-security-requirement.is-complete button { color: #bbf7d0; background: rgba(34, 197, 94, .18); }
+.ems-security-error { min-height: 22px; margin-top: 12px; color: #ffaaaa; font-size: 13px; text-align: center; }
+.ems-security-setup-card > .ems-device-signout { width: 100%; min-height: 42px; border: 0; color: #c8d2dd; background: transparent; font-weight: 700; cursor: pointer; }
+
+@media (max-width: 520px) {
+  .ems-security-setup-card { padding: 24px 18px; }
+  .ems-security-requirement { grid-template-columns: 1fr; }
+  .ems-security-requirement button { width: 100%; }
+}
+
 .notification-device-controls {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto;

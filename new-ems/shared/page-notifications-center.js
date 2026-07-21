@@ -3,8 +3,8 @@ import { listRoles, listUsers } from "./admin-api.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { dispatchNotification, dismissNotification, getMyNotificationPreferences, listMyNotifications, listNotificationAdminFeed, markAllNotificationsRead, markNotificationRead, saveMyNotificationPreferences } from "./notification-api.js";
 import { showToast } from "./utils.js";
-import { disablePushNotifications, enablePushNotifications, getPushNotificationStatus, pushSupport } from "./push-notifications.js";
-import { deviceLockSupport, disableDeviceLock, enableDeviceLock, getDeviceLockStatus, verifyDeviceLockNow } from "./device-security.js";
+import { enablePushNotifications, getPushNotificationStatus, pushSupport } from "./push-notifications.js";
+import { deviceLockSupport, enableDeviceLock, getDeviceLockStatus } from "./device-security.js";
 
 const state = {
   boot: null,
@@ -143,12 +143,12 @@ function renderPage() {
             <strong>Push notifications on this device</strong>
             <p class="muted">${escapeHtml(push.enabled ? `Enabled · ${push.deviceCount || 1} registered device(s)` : (push.reason || "Receive alerts even while EMS is closed."))}</p>
           </div>
-          <button class="btn ${push.enabled ? "btn-ghost" : "primary"}" id="pushNotificationToggle" type="button" ${push.supported === false ? "disabled" : ""}>${push.enabled ? "Disable on This Device" : "Enable Notifications"}</button>
+          <button class="btn ${push.enabled ? "btn-ghost" : "primary"}" id="pushNotificationToggle" type="button" ${push.enabled || push.supported === false ? "disabled" : ""}>${push.enabled ? "Required & Enabled" : "Enable Notifications"}</button>
           <div>
             <strong>Device biometric/PIN app lock</strong>
             <p class="muted">${escapeHtml(deviceLock.enabled ? "Enabled · EMS locks whenever the app is closed or sent to the background." : (deviceLock.reason || "Keep the session signed in and unlock EMS using this device."))}</p>
           </div>
-          <button class="btn ${deviceLock.enabled ? "btn-ghost" : "primary"}" id="deviceLockToggle" type="button" ${deviceLock.supported === false ? "disabled" : ""}>${deviceLock.enabled ? "Disable Device Lock" : "Enable Device Lock"}</button>
+          <button class="btn ${deviceLock.enabled ? "btn-ghost" : "primary"}" id="deviceLockToggle" type="button" ${deviceLock.enabled || deviceLock.supported === false ? "disabled" : ""}>${deviceLock.enabled ? "Required & Enabled" : "Enable Device Lock"}</button>
         </div>
         <form id="notificationPreferencesForm" class="notification-preferences-grid">
           <label class="notification-checkbox"><input type="checkbox" name="in_app_enabled" ${pref.in_app_enabled !== false ? "checked" : ""} /> <span>Enable in-app notifications</span></label>
@@ -288,11 +288,9 @@ function bindPage() {
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      state.pushStatus = state.pushStatus?.enabled
-        ? await disablePushNotifications()
-        : await enablePushNotifications();
+      state.pushStatus = await enablePushNotifications();
       renderPage();
-      showToast(state.pushStatus.enabled ? "Push notifications enabled on this device." : "Push notifications disabled on this device.", TOAST_TYPES.SUCCESS);
+      showToast("Push notifications enabled on this device.", TOAST_TYPES.SUCCESS);
     } catch (error) {
       button.disabled = false;
       showToast(error?.message || "Could not update push notifications.", TOAST_TYPES.ERROR);
@@ -303,15 +301,10 @@ function bindPage() {
     const button = event.currentTarget;
     button.disabled = true;
     try {
-      if (state.deviceLockStatus?.enabled) {
-        await verifyDeviceLockNow(state.boot.appUser);
-        disableDeviceLock(state.boot.appUser);
-      } else {
-        await enableDeviceLock(state.boot.appUser);
-      }
+      await enableDeviceLock(state.boot.appUser);
       state.deviceLockStatus = getDeviceLockStatus(state.boot.appUser);
       renderPage();
-      showToast(state.deviceLockStatus.enabled ? "Device lock enabled." : "Device lock disabled.", TOAST_TYPES.SUCCESS);
+      showToast("Device lock enabled.", TOAST_TYPES.SUCCESS);
     } catch (error) {
       button.disabled = false;
       showToast(error?.name === "NotAllowedError" ? "Device verification was cancelled or timed out." : (error?.message || "Could not update device lock."), TOAST_TYPES.ERROR);
