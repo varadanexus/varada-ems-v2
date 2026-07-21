@@ -12,6 +12,12 @@ export async function getAdvocateAdminContext() {
   return data || {};
 }
 
+export async function getAdvocateAdminMarks() {
+  const { data, error } = await client.rpc("legal_advocate_admin_marks");
+  if (error) throw error;
+  return data || { annotations: [], bookmarks: [] };
+}
+
 export async function saveAdvocate(payload) {
   const { data, error } = await client.rpc("legal_advocate_admin_save_advocate", {
     p_advocate_id: payload.id || null,
@@ -113,4 +119,50 @@ export function requestAdvocatePreviewOtp(sessionToken) {
 
 export function verifyAdvocatePreviewOtp(sessionToken, otp) {
   return callAdvocatePreviewSecurity("advocate_preview_otp_verify", sessionToken, { otp });
+}
+
+export async function getAdvocateDocumentMarks(sessionToken, shareId) {
+  const { data, error } = await client.rpc("legal_advocate_portal_document_marks", { p_session_token: sessionToken, p_share_id: shareId });
+  if (error) throw error;
+  return data || { annotations: [], bookmarks: [] };
+}
+
+export async function saveAdvocateAnnotation(sessionToken, shareId, payload) {
+  const { data, error } = await client.rpc("legal_advocate_portal_save_annotation", {
+    p_session_token: sessionToken,
+    p_share_id: shareId,
+    p_annotation_id: payload.id || null,
+    p_page_number: Number(payload.pageNumber || 1),
+    p_annotation_type: payload.annotationType || "note",
+    p_body: payload.body,
+    p_quoted_text: payload.quotedText || null,
+    p_color: payload.color || "#ddb85a"
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteAdvocateAnnotation(sessionToken, shareId, annotationId) {
+  const { data, error } = await client.rpc("legal_advocate_portal_delete_annotation", { p_session_token: sessionToken, p_share_id: shareId, p_annotation_id: annotationId });
+  if (error) throw error;
+  return data;
+}
+
+export async function saveAdvocateBookmark(sessionToken, shareId, payload) {
+  const { data, error } = await client.rpc("legal_advocate_portal_save_bookmark", {
+    p_session_token: sessionToken,
+    p_share_id: shareId,
+    p_bookmark_id: payload.id || null,
+    p_page_number: Number(payload.pageNumber || 1),
+    p_label: payload.label,
+    p_note: payload.note || null
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteAdvocateBookmark(sessionToken, shareId, bookmarkId) {
+  const { data, error } = await client.rpc("legal_advocate_portal_delete_bookmark", { p_session_token: sessionToken, p_share_id: shareId, p_bookmark_id: bookmarkId });
+  if (error) throw error;
+  return data;
 }

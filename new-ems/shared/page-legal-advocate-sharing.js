@@ -3,13 +3,14 @@ import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 import {
   getAdvocateAdminContext,
+  getAdvocateAdminMarks,
   replyToAdvocate,
   revokeAdvocateShare,
   saveAdvocate,
   shareAdvocateDocument
 } from "./legal-advocate-api.js";
 
-const state = { data: { advocates: [], agreements: [], files: [], shares: [], comments: [] }, agreementId: "" };
+const state = { data: { advocates: [], agreements: [], files: [], shares: [], comments: [] }, marks: { annotations: [], bookmarks: [] }, agreementId: "" };
 
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -41,7 +42,7 @@ function render() {
   const pendingComments = comments.filter((row) => !row.staff_reply);
   renderModuleContent(`
     <style>
-      .adv-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.adv-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.adv-form .wide{grid-column:1/-1}.adv-form label{display:grid;gap:.35rem;font-weight:700}.adv-form input,.adv-form select,.adv-form textarea{width:100%}.adv-actions{display:flex;gap:.55rem;flex-wrap:wrap;margin-top:.85rem}.adv-note{padding:.8rem;border:1px solid rgba(212,178,106,.24);border-radius:12px;background:rgba(212,178,106,.05)}.adv-comment{padding:.9rem;border:1px solid rgba(212,178,106,.16);border-radius:12px;margin-top:.65rem}.adv-comment blockquote{margin:.55rem 0;padding:.65rem;border-left:3px solid #d4b26a;background:#090a0e}.adv-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.65rem}.adv-kpi{padding:.85rem;border:1px solid rgba(212,178,106,.16);border-radius:12px}.adv-kpi strong{display:block;font-size:1.45rem}@media(max-width:980px){.adv-grid,.adv-form,.adv-kpis{grid-template-columns:1fr}.adv-form .wide{grid-column:auto}}
+      .adv-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.adv-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.adv-form .wide{grid-column:1/-1}.adv-form label{display:grid;gap:.35rem;font-weight:700}.adv-form input,.adv-form select,.adv-form textarea{width:100%}.adv-actions{display:flex;gap:.55rem;flex-wrap:wrap;margin-top:.85rem}.adv-note{padding:.8rem;border:1px solid rgba(212,178,106,.24);border-radius:12px;background:rgba(212,178,106,.05)}.adv-comment{padding:.9rem;border:1px solid rgba(212,178,106,.16);border-radius:12px;margin-top:.65rem}.adv-comment blockquote{margin:.55rem 0;padding:.65rem;border-left:3px solid #d4b26a;background:#090a0e}.adv-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.65rem}.adv-kpi{padding:.85rem;border:1px solid rgba(212,178,106,.16);border-radius:12px}.adv-kpi strong{display:block;font-size:1.45rem}.adv-collab-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.adv-collab-list{display:grid;gap:.55rem;align-content:start}.adv-collab-item{padding:.75rem;border:1px solid rgba(212,178,106,.16);border-radius:10px;background:rgba(255,255,255,.015)}.adv-collab-item header{display:flex;justify-content:space-between;gap:.75rem}.adv-collab-item p{margin:.45rem 0 0;white-space:pre-wrap}.adv-collab-item blockquote{margin:.5rem 0 0;padding:.5rem;border-left:2px solid #d4b26a;background:#090a0e}@media(max-width:980px){.adv-grid,.adv-form,.adv-kpis,.adv-collab-grid{grid-template-columns:1fr}.adv-form .wide{grid-column:auto}}
     </style>
     <section class="card">
       <h3>Advocate Document Sharing</h3>
@@ -88,6 +89,11 @@ function render() {
     <section class="card" style="margin-top:1rem;">
       <h3>Advocate Review Inbox</h3>
       ${comments.length ? comments.map((row) => `<article class="adv-comment"><div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;"><div><strong>${esc(row.advocate_name)}</strong> ${status(row.comment_type)}</div><span class="muted">${esc(dateTime(row.created_at))}</span></div><blockquote>${esc(row.body)}</blockquote>${row.staff_reply ? `<div class="adv-note"><strong>Staff reply</strong><br>${esc(row.staff_reply)}<br><span class="muted">${esc(dateTime(row.replied_at))}</span></div>` : `<form data-reply-form="${esc(row.id)}" class="adv-actions"><input name="reply" required maxlength="2000" placeholder="Write a reply for the advocate" style="flex:1;min-width:240px;" /><button class="btn btn-sm" type="submit">Send Reply</button></form>`}</article>`).join("") : `<p class="muted">No advocate comments yet.</p>`}
+    </section>
+
+    <section class="card" style="margin-top:1rem;">
+      <h3>Collaborative Document Marks</h3><p class="muted">Shared annotations and bookmarks from every authorised advocate. These references do not alter the original legal file.</p>
+      <div class="adv-collab-grid"><div><h4>Annotations (${state.marks.annotations.length})</h4><div class="adv-collab-list">${state.marks.annotations.length ? state.marks.annotations.map((row) => `<article class="adv-collab-item"><header><strong>${esc(row.agreement_no)} · Page ${esc(row.page_number)} · ${esc(String(row.annotation_type || "note").replace(/_/g," "))}</strong><span class="muted">${esc(row.author_name)}</span></header><small class="muted">${esc(row.document_title)} · ${esc(dateTime(row.updated_at || row.created_at))}</small>${row.quoted_text ? `<blockquote>${esc(row.quoted_text)}</blockquote>` : ""}<p>${esc(row.body)}</p></article>`).join("") : `<p class="muted">No annotations yet.</p>`}</div></div><div><h4>Bookmarks (${state.marks.bookmarks.length})</h4><div class="adv-collab-list">${state.marks.bookmarks.length ? state.marks.bookmarks.map((row) => `<article class="adv-collab-item"><header><strong>${esc(row.agreement_no)} · Page ${esc(row.page_number)} · ${esc(row.label)}</strong><span class="muted">${esc(row.author_name)}</span></header><small class="muted">${esc(row.document_title)} · ${esc(dateTime(row.updated_at || row.created_at))}</small>${row.note ? `<p>${esc(row.note)}</p>` : ""}</article>`).join("") : `<p class="muted">No bookmarks yet.</p>`}</div></div></div>
     </section>
   `);
   bind();
@@ -138,7 +144,9 @@ function bind() {
 }
 
 async function load() {
-  state.data = await getAdvocateAdminContext();
+  const [data, marks] = await Promise.all([getAdvocateAdminContext(), getAdvocateAdminMarks()]);
+  state.data = data;
+  state.marks = marks;
   render();
 }
 
