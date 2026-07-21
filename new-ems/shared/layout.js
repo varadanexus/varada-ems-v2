@@ -36,8 +36,22 @@ function removeFinancialTableColumns(root) {
 function removeFinancialFormFields(root) {
   root.querySelectorAll("label").forEach((label) => {
     if (!containsFinancialText(label.textContent)) return;
-    const field = label.closest(".form-group,.form-field,.field,.input-group,[data-field]") || label.parentElement;
-    field?.remove();
+    const field = label.closest(".form-group,.form-field,.field,.input-group,[data-field]");
+    if (field && field !== root && !field.matches("form")) {
+      field.remove();
+      return;
+    }
+
+    // Several operational forms use a flat `label + input` grid. Falling back
+    // to label.parentElement in that layout removes the entire form, which hid
+    // Create Trip from finance-restricted operational users such as the COO.
+    const siblingControl = label.nextElementSibling?.matches?.("input,select,textarea,button")
+      ? label.nextElementSibling
+      : null;
+    const labelledControl = label.control || null;
+    if (labelledControl && !label.contains(labelledControl)) labelledControl.remove();
+    if (siblingControl && siblingControl !== labelledControl) siblingControl.remove();
+    label.remove();
   });
 }
 

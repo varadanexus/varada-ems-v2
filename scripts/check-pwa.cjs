@@ -43,6 +43,7 @@ for (const [file, expectedSize] of expectedIcons) {
 const login = read("login.html");
 const runtime = read("new-ems/config/runtime.js");
 const serviceWorker = read("sw.js");
+const layout = read("new-ems/shared/layout.js");
 assert(login.includes('rel="manifest" href="/new-ems/manifest.webmanifest"'), "Canonical login page is missing the manifest link.");
 assert(runtime.includes('navigator.serviceWorker') === false, "Service worker registration should remain isolated in pwa.js.");
 assert(read("new-ems/shared/pwa.js").includes('navigator.serviceWorker.register("/sw.js", { scope: "/" })'), "PWA client does not register the root service worker.");
@@ -50,6 +51,7 @@ assert(serviceWorker.includes('request.method !== "GET"'), "Service worker must 
 assert(serviceWorker.includes('url.origin !== self.location.origin'), "Service worker must ignore cross-origin API traffic.");
 assert(serviceWorker.includes('url.search === ""'), "Service worker must not cache query-string assets.");
 assert(serviceWorker.includes('new Response(html'), "Service worker must neutralize clean-URL redirects for the offline fallback.");
+assert(!layout.includes('label.closest(".form-group,.form-field,.field,.input-group,[data-field]") || label.parentElement'), "Financial redaction must never fall back to removing an entire flat form.");
 
 if (errors.length) {
   console.error(`PWA validation failed:\n- ${errors.join("\n- ")}`);
