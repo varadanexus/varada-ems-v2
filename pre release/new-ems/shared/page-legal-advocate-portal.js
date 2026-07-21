@@ -2,7 +2,7 @@ import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { showToast } from "./utils.js";
 import { advocatePortalLogout, requireAdvocatePortalSession } from "./legal-advocate-portal-auth.js";
 import { addAdvocateComment, deleteAdvocateAnnotation, deleteAdvocateBookmark, fetchAdvocateSharedFile, getAdvocateDocumentMarks, getAdvocatePortalContext, getAdvocatePreviewOtpStatus, requestAdvocatePreviewOtp, saveAdvocateAnnotation, saveAdvocateBookmark, verifyAdvocatePreviewOtp } from "./legal-advocate-api.js";
-import { mountSelectablePdf } from "./legal-pdf-selection.js";
+import { mountSelectablePdf } from "./legal-pdf-selection.js?v=advocate-portal-12";
 
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
 const ACTIVITY_WRITE_INTERVAL_MS = 10 * 1000;
@@ -29,6 +29,14 @@ function badge(value) {
 
 function statusLabel(value) {
   return String(value || "shared").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function documentHighlights() {
+  return (state.marks.annotations || []).filter((row) => row.annotation_type === "highlight");
+}
+
+function documentAnnotations() {
+  return (state.marks.annotations || []).filter((row) => row.annotation_type !== "highlight");
 }
 
 function portalMetrics() {
@@ -74,7 +82,7 @@ function previewContent(share) {
   if (!share) return `<div class="lap-preview-empty"><div>VN</div><h2>Select a document</h2><p>Choose a shared legal document to preview it securely.</p></div>`;
   if (!state.previewUrl) return `<div class="lap-preview-empty"><div>${state.previewUnlocked ? "OPEN" : "OTP"}</div><h2>${esc(share.display_title || share.file_name)}</h2><p>${state.previewUnlocked ? "Your secure preview session is unlocked." : "Verify once with the OTP sent to your registered WhatsApp number. Access remains unlocked until you sign out."}</p><button class="lap-primary" id="openPreviewBtn" type="button">${state.previewUnlocked ? "Open Secure Preview" : "Send OTP & Unlock"}</button></div>`;
   const type = state.preview?.contentType || share.mime_type || "";
-  if (type.includes("pdf")) return `<section class="lap-pdf-viewer" id="legalPdfViewer" aria-label="Selectable PDF preview"><nav class="lap-pdf-toolbar" aria-label="PDF page controls"><div class="lap-pdf-toolbar-group"><button id="pdfPreviousPage" type="button" ${state.activePage <= 1 ? "disabled" : ""} aria-label="Previous page">←</button><span>Page <strong id="pdfCurrentPage">${esc(state.activePage)}</strong> of <strong id="pdfPageCount">${esc(state.pdfPageCount || "—")}</strong></span><button id="pdfNextPage" type="button" ${state.pdfPageCount && state.activePage >= state.pdfPageCount ? "disabled" : ""} aria-label="Next page">→</button></div><div class="lap-pdf-toolbar-group"><span>Select any clause to annotate or bookmark it</span><button id="pdfZoomOut" type="button" aria-label="Zoom out">−</button><button id="pdfZoomReset" type="button" aria-label="Fit page width">Fit</button><button id="pdfZoomIn" type="button" aria-label="Zoom in">+</button></div></nav><div class="lap-pdf-scroll" id="legalPdfScroll"><div class="lap-pdf-page" id="legalPdfPage"><canvas id="legalPdfCanvas"></canvas><div class="lap-pdf-text-layer" id="legalPdfTextLayer"></div><div class="lap-pdf-loading" id="legalPdfLoading"><strong>Preparing selectable document</strong><span>Rendering the secure PDF text layer…</span></div></div></div>${inlineMarkComposer()}${inlineMarksPanel()}</section>`;
+  if (type.includes("pdf")) return `<section class="lap-pdf-viewer" id="legalPdfViewer" aria-label="Selectable PDF preview"><nav class="lap-pdf-toolbar" aria-label="PDF viewing controls"><div class="lap-pdf-toolbar-group"><span>Page <strong id="pdfCurrentPage">${esc(state.activePage)}</strong> of <strong id="pdfPageCount">${esc(state.pdfPageCount || "—")}</strong></span><span class="lap-pdf-scroll-hint">Scroll continuously to review every page</span></div><div class="lap-pdf-toolbar-group"><span>Select text to highlight, annotate or bookmark</span><button id="pdfZoomOut" type="button" aria-label="Zoom out">−</button><button id="pdfZoomReset" type="button" aria-label="Fit page width">Fit</button><button id="pdfZoomIn" type="button" aria-label="Zoom in">+</button></div></nav><div class="lap-pdf-scroll" id="legalPdfScroll"><div class="lap-pdf-pages" id="legalPdfPages"><div class="lap-pdf-loading" id="legalPdfLoading"><strong>Preparing continuous document</strong><span>Pages will load securely as you scroll…</span></div></div></div>${inlineMarkComposer()}${inlineMarksPanel()}</section>`;
   if (type.includes("html") || type.startsWith("text/")) return `<iframe class="lap-frame" sandbox="" src="${esc(state.previewUrl)}" title="${esc(share.display_title || share.file_name)}"></iframe>`;
   if (type.startsWith("image/")) return `<div class="lap-image-wrap"><img src="${esc(state.previewUrl)}" alt="${esc(share.display_title || share.file_name)}" /></div>`;
   return `<div class="lap-preview-empty"><div>DOC</div><h2>Preview is not available for this file type</h2><p>Use Download if the document owner enabled it.</p></div>`;
@@ -84,18 +92,22 @@ function inlineMarkComposer() {
   const composer = state.inlineComposer;
   if (!composer) return "";
   const quote = String(composer.quotedText || "");
-  if (composer.kind === "annotation") return `<section class="lap-inline-composer" aria-label="Add annotation"><header><div><span>SELECTED TEXT · PAGE ${esc(composer.pageNumber)}</span><strong>${composer.id ? "Edit annotation" : "Annotate selection"}</strong></div><button id="closeInlineComposer" type="button" aria-label="Close">✕</button></header>${quote ? `<blockquote class="lap-selection-quote">${esc(quote)}</blockquote>` : ""}<form id="annotationForm" class="lap-mark-form"><input type="hidden" name="id" value="${esc(composer.id || "")}"/><input type="hidden" name="pageNumber" value="${esc(composer.pageNumber)}"/><input type="hidden" name="quotedText" value="${esc(quote)}"/><div class="lap-mark-grid"><label>Type<select name="annotationType"><option value="note">Note</option><option value="question">Question</option><option value="important">Important</option><option value="highlight">Highlight reference</option></select></label><label>Colour<input name="color" type="color" value="${esc(composer.color || "#ddb85a")}" /></label></div><label>Annotation<textarea name="body" rows="3" maxlength="4000" required autofocus placeholder="Write your note about the selected text…">${esc(composer.body || "")}</textarea></label><div class="lap-mark-form-actions"><button class="lap-primary" type="submit" ${state.markBusy ? "disabled" : ""}>${state.markBusy ? "Saving…" : "Save annotation"}</button><button class="lap-secondary" id="cancelInlineComposer" type="button">Cancel</button></div></form></section>`;
+  if (composer.kind === "annotation") return `<section class="lap-inline-composer" aria-label="Add annotation"><header><div><span>SELECTED TEXT · PAGE ${esc(composer.pageNumber)}</span><strong>${composer.id ? "Edit annotation" : "Annotate selection"}</strong></div><button id="closeInlineComposer" type="button" aria-label="Close">✕</button></header>${quote ? `<blockquote class="lap-selection-quote">${esc(quote)}</blockquote>` : ""}<form id="annotationForm" class="lap-mark-form"><input type="hidden" name="id" value="${esc(composer.id || "")}"/><input type="hidden" name="pageNumber" value="${esc(composer.pageNumber)}"/><input type="hidden" name="quotedText" value="${esc(quote)}"/><div class="lap-mark-grid"><label>Type<select name="annotationType"><option value="note">Note</option><option value="question">Question</option><option value="important">Important</option></select></label><label>Colour<input name="color" type="color" value="${esc(composer.color || "#ddb85a")}" /></label></div><label>Annotation<textarea name="body" rows="3" maxlength="4000" required autofocus placeholder="Write your note about the selected text…">${esc(composer.body || "")}</textarea></label><div class="lap-mark-form-actions"><button class="lap-primary" type="submit" ${state.markBusy ? "disabled" : ""}>${state.markBusy ? "Saving…" : "Save annotation"}</button><button class="lap-secondary" id="cancelInlineComposer" type="button">Cancel</button></div></form></section>`;
   const suggestedLabel = String(composer.label || quote || `Page ${composer.pageNumber}`).slice(0, 160);
   return `<section class="lap-inline-composer" aria-label="Add bookmark"><header><div><span>SELECTED TEXT · PAGE ${esc(composer.pageNumber)}</span><strong>${composer.id ? "Edit bookmark" : "Bookmark selection"}</strong></div><button id="closeInlineComposer" type="button" aria-label="Close">✕</button></header>${quote ? `<blockquote class="lap-selection-quote">${esc(quote)}</blockquote>` : ""}<form id="bookmarkForm" class="lap-mark-form"><input type="hidden" name="id" value="${esc(composer.id || "")}"/><input type="hidden" name="pageNumber" value="${esc(composer.pageNumber)}"/><label>Bookmark label<input name="label" maxlength="160" value="${esc(suggestedLabel)}" required /></label><label>Optional note<textarea name="note" rows="2" maxlength="1000" placeholder="Add context for other authorised reviewers…">${esc(composer.note || "")}</textarea></label><div class="lap-mark-form-actions"><button class="lap-primary" type="submit" ${state.markBusy ? "disabled" : ""}>${state.markBusy ? "Saving…" : "Save bookmark"}</button><button class="lap-secondary" id="cancelInlineComposer" type="button">Cancel</button></div></form></section>`;
 }
 
 function inlineMarksPanel() {
   if (!state.marksPanel) return "";
-  const annotations = state.marks.annotations || [];
+  const annotations = documentAnnotations();
+  const highlights = documentHighlights();
   const bookmarks = state.marks.bookmarks || [];
   const isAnnotations = state.marksPanel === "annotations";
-  const rows = isAnnotations ? annotations : bookmarks;
-  return `<aside class="lap-inline-marks" aria-label="Shared ${isAnnotations ? "annotations" : "bookmarks"}"><header><div><span>VISIBLE TO ALL AUTHORISED REVIEWERS</span><strong>${isAnnotations ? "Document annotations" : "Document bookmarks"} (${rows.length})</strong></div><button id="closeInlineMarks" type="button" aria-label="Close">✕</button></header><div class="lap-inline-marks-body"><p class="lap-inline-marks-hint">${isAnnotations ? "Select text directly in the PDF, then choose Annotate selection." : "Select text directly in the PDF, then choose Bookmark selection."}</p><div class="lap-mark-list">${rows.length ? rows.map((row) => isAnnotations ? `<article class="lap-mark-card" style="--mark-color:${esc(row.color || "#ddb85a")}"><div class="lap-mark-card-head"><span>${esc(statusLabel(row.annotation_type))} · Page ${esc(row.page_number)}</span><small>${esc(row.author_name || "Reviewer")} · ${esc(dateTime(row.updated_at || row.created_at))}</small></div>${row.quoted_text ? `<blockquote>${esc(row.quoted_text)}</blockquote>` : ""}<p>${esc(row.body)}</p><div class="lap-mark-card-actions"><button type="button" data-mark-page="${esc(row.page_number)}">Go to page</button>${row.can_edit ? `<button type="button" data-edit-annotation="${esc(row.id)}">Edit</button><button class="danger" type="button" data-delete-annotation="${esc(row.id)}">Delete</button>` : ""}</div></article>` : `<article class="lap-mark-card lap-bookmark-card"><div class="lap-mark-card-head"><span>Page ${esc(row.page_number)} · ${esc(row.label)}</span><small>${esc(row.author_name || "Reviewer")} · ${esc(dateTime(row.updated_at || row.created_at))}</small></div>${row.note ? `<p>${esc(row.note)}</p>` : ""}<div class="lap-mark-card-actions"><button type="button" data-mark-page="${esc(row.page_number)}">Go to page</button>${row.can_edit ? `<button type="button" data-edit-bookmark="${esc(row.id)}">Edit</button><button class="danger" type="button" data-delete-bookmark="${esc(row.id)}">Delete</button>` : ""}</div></article>`).join("") : `<div class="lap-mark-empty">No ${isAnnotations ? "annotations" : "bookmarks"} yet. Select text in the PDF to add the first one.</div>`}</div></div></aside>`;
+  const isHighlights = state.marksPanel === "highlights";
+  const rows = isAnnotations ? annotations : isHighlights ? highlights : bookmarks;
+  const label = isAnnotations ? "annotations" : isHighlights ? "highlights" : "bookmarks";
+  const hint = isAnnotations ? "Select text in the PDF, then choose Annotate to add a comment." : isHighlights ? "Highlights appear directly over the selected PDF text. No annotation note is required." : "Select text in the PDF, then choose Bookmark.";
+  return `<aside class="lap-inline-marks" aria-label="Shared ${label}"><header><div><span>VISIBLE TO ALL AUTHORISED REVIEWERS</span><strong>Document ${label} (${rows.length})</strong></div><button id="closeInlineMarks" type="button" aria-label="Close">✕</button></header><div class="lap-inline-marks-body"><p class="lap-inline-marks-hint">${hint}</p><div class="lap-mark-list">${rows.length ? rows.map((row) => isAnnotations ? `<article class="lap-mark-card" style="--mark-color:${esc(row.color || "#ddb85a")}"><div class="lap-mark-card-head"><span>${esc(statusLabel(row.annotation_type))} · Page ${esc(row.page_number)}</span><small>${esc(row.author_name || "Reviewer")} · ${esc(dateTime(row.updated_at || row.created_at))}</small></div>${row.quoted_text ? `<blockquote>${esc(row.quoted_text)}</blockquote>` : ""}<p>${esc(row.body)}</p><div class="lap-mark-card-actions"><button type="button" data-mark-page="${esc(row.page_number)}">Go to page</button>${row.can_edit ? `<button type="button" data-edit-annotation="${esc(row.id)}">Edit</button><button class="danger" type="button" data-delete-annotation="${esc(row.id)}">Delete</button>` : ""}</div></article>` : isHighlights ? `<article class="lap-mark-card lap-highlight-card" style="--mark-color:${esc(row.color || "#ffe45c")}"><div class="lap-mark-card-head"><span>Highlight · Page ${esc(row.page_number)}</span><small>${esc(row.author_name || "Reviewer")} · ${esc(dateTime(row.updated_at || row.created_at))}</small></div>${row.quoted_text ? `<blockquote>${esc(row.quoted_text)}</blockquote>` : ""}<div class="lap-mark-card-actions"><button type="button" data-mark-page="${esc(row.page_number)}">Go to page</button>${row.can_edit ? `<button class="danger" type="button" data-delete-annotation="${esc(row.id)}">Remove highlight</button>` : ""}</div></article>` : `<article class="lap-mark-card lap-bookmark-card"><div class="lap-mark-card-head"><span>Page ${esc(row.page_number)} · ${esc(row.label)}</span><small>${esc(row.author_name || "Reviewer")} · ${esc(dateTime(row.updated_at || row.created_at))}</small></div>${row.note ? `<p>${esc(row.note)}</p>` : ""}<div class="lap-mark-card-actions"><button type="button" data-mark-page="${esc(row.page_number)}">Go to page</button>${row.can_edit ? `<button type="button" data-edit-bookmark="${esc(row.id)}">Edit</button><button class="danger" type="button" data-delete-bookmark="${esc(row.id)}">Delete</button>` : ""}</div></article>`).join("") : `<div class="lap-mark-empty">No ${label} yet. Select text in the PDF to add the first one.</div>`}</div></div></aside>`;
 }
 
 function annotationDrawer(share) {
@@ -138,6 +150,8 @@ function render() {
   const updated = state.updatedAt ? new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(state.updatedAt) : "Now";
   const watermarkText = `${profile.name || profile.email || "Authorized reviewer"} • ${dateTime(new Date())}`;
   const previewWatermark = state.previewUrl ? `<div class="lap-watermark" aria-hidden="true">${Array.from({ length: 10 }, () => `<span>${esc(watermarkText)}</span>`).join("")}</div>` : "";
+  const annotations = documentAnnotations();
+  const highlights = documentHighlights();
   document.getElementById("app").innerHTML = `
     <style>
       :root{--lap-gold:#ddb85a;--lap-gold-soft:#f0d58a;--lap-bg:#050609;--lap-panel:#0b0d12;--lap-panel-2:#10131a;--lap-line:rgba(221,184,90,.2);--lap-line-soft:rgba(255,255,255,.07);--lap-text:#f4f1e8;--lap-muted:#979b9f;--lap-success:#6ed7a5;--lap-danger:#f09a92}
@@ -176,7 +190,7 @@ function render() {
           <div class="lap-controls"><label class="lap-search"><span>⌕</span><input id="advocateSearch" value="${esc(state.query)}" placeholder="Search agreement, party or file" aria-label="Search shared legal documents"/></label><select id="advocateStatus" aria-label="Filter by review status"><option value="all">All review states</option><option value="pending" ${state.status === "pending" ? "selected" : ""}>Awaiting action</option>${["shared","opened","under_review","revision_required","reviewed"].map((value) => `<option value="${value}" ${state.status === value ? "selected" : ""}>${esc(statusLabel(value))}</option>`).join("")}</select><button class="lap-secondary" id="clearAdvocateFilters" type="button">Clear filters</button></div>
           <section class="lap-workspace">
             <div class="lap-list-panel"><header class="lap-pane-head"><strong>Document library</strong><small>${filteredShares().length} visible</small></header><div class="lap-list">${renderDocumentList()}</div></div>
-            <section class="lap-preview-panel"><header class="lap-document-head"><div><span>${share ? esc(share.agreement_no) : "SECURE DOCUMENT PREVIEW"}</span><strong>${share ? esc(share.display_title || share.file_name) : "Select a document"}</strong></div><div class="lap-document-tools">${share ? `<button class="lap-tool" id="openPreviewToolbar" type="button">${state.previewUrl ? "Reload" : "Open"}</button>` : ""}${share && state.previewUnlocked ? `<button class="lap-tool" id="openAnnotations" type="button">Annotate ${state.marks.annotations.length ? `(${state.marks.annotations.length})` : ""}</button><button class="lap-tool" id="openBookmarks" type="button">Bookmarks ${state.marks.bookmarks.length ? `(${state.marks.bookmarks.length})` : ""}</button>` : ""}${state.previewUrl ? `<button class="lap-tool" id="fullscreenPreview" type="button">Full screen</button>` : ""}${share && state.previewUrl && share.permission_level === "download" ? `<button class="lap-tool" id="downloadSharedFile" type="button">Download</button>` : ""}</div></header>${share ? reviewProgress(share.review_status) : `<div></div>`}<div class="lap-preview"><div class="lap-preview-wrap">${previewContent(share)}${previewWatermark}${state.previewUrl ? `<div class="lap-page-marks"><span>Page ${esc(state.activePage)}</span>${state.marks.annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${state.marks.annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length} annotation(s)</span>` : ""}${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length} bookmark(s)</span>` : ""}</div><button class="lap-exit-fullscreen" id="exitFullscreenPreview" type="button"><span>✕</span> Exit full screen</button>` : ""}</div></div></section>
+            <section class="lap-preview-panel"><header class="lap-document-head"><div><span>${share ? esc(share.agreement_no) : "SECURE DOCUMENT PREVIEW"}</span><strong>${share ? esc(share.display_title || share.file_name) : "Select a document"}</strong></div><div class="lap-document-tools">${share ? `<button class="lap-tool" id="openPreviewToolbar" type="button">${state.previewUrl ? "Reload" : "Open"}</button>` : ""}${share && state.previewUnlocked ? `<button class="lap-tool" id="openHighlights" type="button">Highlights ${highlights.length ? `(${highlights.length})` : ""}</button><button class="lap-tool" id="openAnnotations" type="button">Annotations ${annotations.length ? `(${annotations.length})` : ""}</button><button class="lap-tool" id="openBookmarks" type="button">Bookmarks ${state.marks.bookmarks.length ? `(${state.marks.bookmarks.length})` : ""}</button>` : ""}${state.previewUrl ? `<button class="lap-tool" id="fullscreenPreview" type="button">Full screen</button>` : ""}${share && state.previewUrl && share.permission_level === "download" ? `<button class="lap-tool" id="downloadSharedFile" type="button">Download</button>` : ""}</div></header>${share ? reviewProgress(share.review_status) : `<div></div>`}<div class="lap-preview"><div class="lap-preview-wrap">${previewContent(share)}${previewWatermark}${state.previewUrl ? `<div class="lap-page-marks"><span>Page ${esc(state.activePage)}</span>${highlights.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${highlights.filter((row) => Number(row.page_number) === Number(state.activePage)).length} highlight(s)</span>` : ""}${annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length} annotation(s)</span>` : ""}${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length} bookmark(s)</span>` : ""}</div><button class="lap-exit-fullscreen" id="exitFullscreenPreview" type="button"><span>✕</span> Exit full screen</button>` : ""}</div></div></section>
             ${renderReview(share)}
           </section>
         </div>
@@ -197,6 +211,30 @@ function clearPreview() {
   state.marksPanel = "";
 }
 
+async function savePdfHighlight(selection) {
+  if (state.markBusy || !selection?.rects?.length) return;
+  try {
+    state.markBusy = true;
+    document.querySelector(".lap-selection-actions")?.remove();
+    await saveAdvocateAnnotation(state.session.sessionToken, state.selectedShareId, {
+      pageNumber: selection.pageNumber,
+      annotationType: "highlight",
+      quotedText: selection.text,
+      color: "#ffe45c",
+      body: JSON.stringify({ version: 1, rects: selection.rects })
+    });
+    state.markBusy = false;
+    state.selectedText = null;
+    window.getSelection()?.removeAllRanges();
+    await loadDocumentMarks();
+    render();
+    showToast("Text highlighted for all authorised reviewers.", TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    state.markBusy = false;
+    showToast(error.message || "The text could not be highlighted.", TOAST_TYPES.ERROR);
+  }
+}
+
 function showPdfSelectionActions(selection) {
   const root = document.getElementById("legalPdfViewer");
   if (!root) return;
@@ -206,8 +244,12 @@ function showPdfSelectionActions(selection) {
   actions.className = "lap-selection-actions";
   actions.style.left = `${selection.left}px`;
   actions.style.top = `${selection.top}px`;
-  actions.innerHTML = `<button type="button" data-selection-kind="annotation">Annotate selection</button><button type="button" data-selection-kind="bookmark">Bookmark selection</button>`;
+  actions.innerHTML = `<button type="button" data-selection-kind="highlight">Highlight</button><button type="button" data-selection-kind="annotation">Annotate</button><button type="button" data-selection-kind="bookmark">Bookmark</button>`;
   actions.querySelectorAll("[data-selection-kind]").forEach((button) => button.addEventListener("click", () => {
+    if (button.dataset.selectionKind === "highlight") {
+      savePdfHighlight(selection);
+      return;
+    }
     state.inlineComposer = { kind: button.dataset.selectionKind, pageNumber: selection.pageNumber, quotedText: selection.text };
     state.marksPanel = "";
     render();
@@ -222,6 +264,7 @@ function mountPdfIfNeeded() {
     blob: state.preview.blob,
     pageNumber: state.activePage,
     zoom: state.pdfZoom,
+    highlights: documentHighlights(),
     onPageReady: ({ pageNumber, pageCount }) => {
       state.activePage = pageNumber;
       state.pdfPageCount = pageCount;
@@ -229,10 +272,6 @@ function mountPdfIfNeeded() {
       const total = document.getElementById("pdfPageCount");
       if (current) current.textContent = String(pageNumber);
       if (total) total.textContent = String(pageCount);
-      const previous = document.getElementById("pdfPreviousPage");
-      const next = document.getElementById("pdfNextPage");
-      if (previous) previous.disabled = pageNumber <= 1;
-      if (next) next.disabled = pageNumber >= pageCount;
     },
     onTextSelected: showPdfSelectionActions
   }).catch((error) => showToast(error.message || "Selectable PDF preview could not be loaded.", TOAST_TYPES.ERROR));
@@ -315,14 +354,13 @@ function bind() {
   document.getElementById("openPreviewToolbar")?.addEventListener("click", openPreview);
   document.getElementById("fullscreenPreview")?.addEventListener("click", () => document.querySelector(".lap-preview-wrap")?.requestFullscreen?.());
   document.getElementById("exitFullscreenPreview")?.addEventListener("click", () => document.fullscreenElement && document.exitFullscreen?.());
+  document.getElementById("openHighlights")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.marksPanel = state.marksPanel === "highlights" ? "" : "highlights"; state.inlineComposer = null; render(); } catch (error) { showToast(error.message || "Highlights could not be loaded.", TOAST_TYPES.ERROR); } });
   document.getElementById("openAnnotations")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.marksPanel = state.marksPanel === "annotations" ? "" : "annotations"; state.inlineComposer = null; render(); } catch (error) { showToast(error.message || "Annotations could not be loaded.", TOAST_TYPES.ERROR); } });
   document.getElementById("openBookmarks")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.marksPanel = state.marksPanel === "bookmarks" ? "" : "bookmarks"; state.inlineComposer = null; render(); } catch (error) { showToast(error.message || "Bookmarks could not be loaded.", TOAST_TYPES.ERROR); } });
   document.getElementById("closeInlineMarks")?.addEventListener("click", () => { state.marksPanel = ""; render(); });
   const closeInlineComposer = () => { state.inlineComposer = null; state.selectedText = null; render(); };
   document.getElementById("closeInlineComposer")?.addEventListener("click", closeInlineComposer);
   document.getElementById("cancelInlineComposer")?.addEventListener("click", closeInlineComposer);
-  document.getElementById("pdfPreviousPage")?.addEventListener("click", () => goToDocumentPage(state.activePage - 1));
-  document.getElementById("pdfNextPage")?.addEventListener("click", () => goToDocumentPage(state.activePage + 1));
   document.getElementById("pdfZoomOut")?.addEventListener("click", () => { state.pdfZoom = Math.max(.65, state.pdfZoom - .15); render(); });
   document.getElementById("pdfZoomReset")?.addEventListener("click", () => { state.pdfZoom = 1; render(); });
   document.getElementById("pdfZoomIn")?.addEventListener("click", () => { state.pdfZoom = Math.min(2.5, state.pdfZoom + .15); render(); });
@@ -334,9 +372,11 @@ function bind() {
   document.querySelectorAll("[data-edit-annotation]").forEach((button) => button.addEventListener("click", () => { const row = state.marks.annotations.find((item) => item.id === button.dataset.editAnnotation); if (!row) return; state.inlineComposer = { kind: "annotation", id: row.id, pageNumber: row.page_number, quotedText: row.quoted_text || "", body: row.body, color: row.color }; state.marksPanel = ""; render(); }));
   document.querySelectorAll("[data-edit-bookmark]").forEach((button) => button.addEventListener("click", () => { const row = state.marks.bookmarks.find((item) => item.id === button.dataset.editBookmark); if (!row) return; state.inlineComposer = { kind: "bookmark", id: row.id, pageNumber: row.page_number, label: row.label, note: row.note || "", quotedText: row.label }; state.marksPanel = ""; render(); }));
   document.querySelectorAll("[data-delete-annotation]").forEach((button) => button.addEventListener("click", async () => {
-    if (!window.confirm("Delete this annotation for all authorised reviewers?")) return;
-    try { await deleteAdvocateAnnotation(state.session.sessionToken, state.selectedShareId, button.dataset.deleteAnnotation); await loadDocumentMarks(); render(); showToast("Annotation deleted.", TOAST_TYPES.SUCCESS); }
-    catch (error) { showToast(error.message || "Annotation could not be deleted.", TOAST_TYPES.ERROR); }
+    const target = state.marks.annotations.find((row) => row.id === button.dataset.deleteAnnotation);
+    const isHighlight = target?.annotation_type === "highlight";
+    if (!window.confirm(isHighlight ? "Remove this highlight for all authorised reviewers?" : "Delete this annotation for all authorised reviewers?")) return;
+    try { await deleteAdvocateAnnotation(state.session.sessionToken, state.selectedShareId, button.dataset.deleteAnnotation); await loadDocumentMarks(); render(); showToast(isHighlight ? "Highlight removed." : "Annotation deleted.", TOAST_TYPES.SUCCESS); }
+    catch (error) { showToast(error.message || (isHighlight ? "Highlight could not be removed." : "Annotation could not be deleted."), TOAST_TYPES.ERROR); }
   }));
   document.querySelectorAll("[data-delete-bookmark]").forEach((button) => button.addEventListener("click", async () => {
     if (!window.confirm("Delete this shared bookmark?")) return;
