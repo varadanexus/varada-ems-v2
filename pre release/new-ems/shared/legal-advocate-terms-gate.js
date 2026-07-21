@@ -28,14 +28,25 @@ function advocatePracticeLabel(profile) {
 function renderGate(status) {
   const profile = status.profile || {};
   const sections = Array.isArray(status.sections) ? status.sections : [];
-  document.getElementById("app").innerHTML = `
-    <main class="adv-terms-shell">
-      <header class="adv-terms-brand"><div class="adv-terms-mark">VN</div><div><strong>VARADA NEXUS</strong><span>ADVOCATE PORTAL · RESTRICTED ACCESS</span></div><button id="advTermsDecline" type="button">Decline & sign out</button></header>
+  const app = document.getElementById("app");
+  app.classList.remove("page-enter-active");
+  app.style.animation = "none";
+  app.style.transition = "none";
+  app.style.opacity = "1";
+  app.style.transform = "none";
+  app.innerHTML = `
+    <main class="adv-terms-shell" role="dialog" aria-modal="true" aria-labelledby="advTermsTitle">
       <section class="adv-terms-card">
-        <div class="adv-terms-heading"><span>MANDATORY ADVOCATE UNDERTAKING</span><h1>${esc(status.title)}</h1><p>This is a separate legal-access undertaking for advocates. It does not use or replace the regular portal terms.</p><div><b>Version ${esc(status.version)}</b><b>Effective ${esc(new Date(status.effective_at).toLocaleDateString("en-IN", { dateStyle: "long" }))}</b></div></div>
-        <div class="adv-terms-party"><span>ACCESS ASSIGNED TO</span><strong>${esc(profile.name)}</strong><p>${esc(advocatePracticeLabel(profile))} · ${esc(profile.email || "No email recorded")}</p>${profile.bar_council_number ? `<small>Enrolment: ${esc(profile.bar_council_number)}</small>` : ""}</div>
+        <header class="adv-terms-heading">
+          <div class="adv-terms-title-row">
+            <img src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus" />
+            <div><span>VARADA NEXUS · ADVOCATE PORTAL</span><h1 id="advTermsTitle">${esc(status.title)}</h1><p>Version ${esc(status.version)} · Effective ${esc(new Date(status.effective_at).toLocaleDateString("en-IN", { dateStyle: "long" }))} · Read the complete undertaking to continue.</p></div>
+          </div>
+          <button class="adv-terms-decline" id="advTermsDecline" type="button">Decline and Logout</button>
+          <div class="adv-terms-party"><span>ACCESS ASSIGNED TO</span><strong>${esc(profile.name)}</strong><p>${esc(advocatePracticeLabel(profile))} · ${esc(profile.email || "No email recorded")}${profile.bar_council_number ? ` · Enrolment ${esc(profile.bar_council_number)}` : ""}</p></div>
+        </header>
         <div class="adv-terms-document" id="advTermsDocument" tabindex="0" aria-label="Advocate undertaking; scroll to the end">
-          <div class="adv-terms-warning"><strong>Confidential legal workspace</strong><span>Read every clause. Access to documents remains locked until this version is accepted.</span></div>
+          <div class="adv-terms-warning"><strong>Mandatory advocate undertaking</strong><span>This is separate from the regular EMS terms. Legal documents remain locked until this version is accepted.</span></div>
           ${sections.map((section) => `<article><h2>${esc(section.heading)}</h2><p>${esc(section.body)}</p></article>`).join("")}
           <div class="adv-terms-end" id="advTermsEnd">END OF UNDERTAKING · REVIEW THE DECLARATIONS BELOW</div>
         </div>
@@ -46,7 +57,7 @@ function renderGate(status) {
           <label class="adv-terms-check"><input name="professionalDutiesConfirmed" type="checkbox" disabled><span>I will comply with applicable law and Bar Council duties, conduct conflict checks and preserve independent professional judgment.</span></label>
           <div class="adv-terms-fields"><label>Type full name exactly as shown<input name="confirmationName" autocomplete="off" placeholder="${esc(profile.name)}" disabled required></label><label>Advocate enrolment / Bar Council number<input name="barCouncilNumber" autocomplete="off" placeholder="Enter current enrolment number" disabled required></label></div>
           <label class="adv-terms-final"><input name="finalAcceptance" type="checkbox" disabled><span>${esc(status.acceptance_label)}</span></label>
-          <div class="adv-terms-actions"><p>Your acceptance records the current terms, timestamp, account, session, browser identifier and server-observed network information.</p><button id="advTermsAccept" type="submit" disabled>Accept & enter secure portal</button></div>
+          <div class="adv-terms-actions"><p>Your acceptance records the current terms, timestamp, account, session, browser identifier and server-observed network information.</p><button id="advTermsAccept" type="submit" disabled>Accept and Continue</button></div>
           <p class="adv-terms-error" id="advTermsError" role="alert"></p>
         </form>
       </section>
@@ -110,7 +121,7 @@ export async function ensureAdvocateTermsAccepted(sessionToken) {
         resolve(true);
       } catch (error) {
         errorBox.textContent = error.message || "The undertaking could not be accepted.";
-        submit.textContent = "Accept & enter secure portal";
+        submit.textContent = "Accept and Continue";
         validate();
       }
     });
