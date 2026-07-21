@@ -10,6 +10,7 @@ export const ROUTES = {
   INTERIORS_PORTAL_LOGIN: "/new-ems/modules/interiors-portal-login/index.html",
   INTERIORS_CLIENT_APP: "/new-ems/modules/interiors-client-app/index.html",
   INTERIORS_ARCHITECT_PORTAL: "/new-ems/modules/interiors-architect-portal/index.html",
+  EXTERNAL_PORTAL_SELECTOR: "/new-ems/modules/external-portal-selector/index.html",
   PORTAL_MANAGEMENT: "/new-ems/modules/portal-management/index.html"
   ,PORTAL_ACCESS: "/new-ems/modules/portal-access/index.html"
   ,TRANSPORT_PORTAL_LOGIN: "/new-ems/modules/transport-portal-login/index.html",

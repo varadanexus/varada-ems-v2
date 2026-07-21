@@ -107,7 +107,7 @@
 // Unified login: keep this page's look, but auto-detect the account type
 // (EMS staff, transport/interiors/external portal) and route to the right auth
 // system. If one identifier maps to multiple portals, show a portal picker.
-import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js?v=interiors-local-client-1";
+import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js?v=external-selector-1";
 
 function el(id) { return document.getElementById(id); }
 function setError(message = "") { const node = el("error"); if (node) node.innerText = message; }

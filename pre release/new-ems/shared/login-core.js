@@ -34,6 +34,7 @@ import {
   getLocalSession,
   restoreLocalSession
 } from "./ems-local-auth.js";
+import { redirectExternalPortalSession } from "./external-portal-routing.js";
 
 const EXTERNAL_SESSION_KEY = "ems_external_portal_session";
 function storeExternalSession(s) {
@@ -160,36 +161,10 @@ async function handleExternalLogin(username, password) {
     displayName: row.display_name,
     userType: row.user_type
   });
-  const dashboardRoute = await resolveExternalDashboard(row.session_token);
-  if (dashboardRoute) {
-    window.location.assign(dashboardRoute);
+  if (await redirectExternalPortalSession(row.session_token)) {
     return { status: "redirecting" };
   }
   return { status: "external_no_dashboard", displayName: row.display_name, userType: row.user_type };
-}
-
-async function resolveExternalDashboard(sessionToken) {
-  const { data, error } = await getSupabaseClient().rpc("external_portal_list_my_access", {
-    p_session_token: sessionToken
-  });
-  if (error) throw error;
-  const access = Array.isArray(data) ? data : [];
-  if (access.some((item) => item.source_module === "interiors" && item.access_scope === "interiors_architect_portal")) {
-    return ROUTES.INTERIORS_ARCHITECT_PORTAL;
-  }
-  if (access.some((item) => item.source_module === "legal" && item.access_scope === "legal_advocate_portal")) {
-    return ROUTES.LEGAL_ADVOCATE_PORTAL;
-  }
-  if (access.some((item) => item.source_module === "interiors" && item.access_scope === "interiors_client_portal")) {
-    return ROUTES.INTERIORS_CLIENT_APP;
-  }
-  if (access.some((item) => item.source_module === "digital-services" && item.access_scope === "marketing_client_portal")) {
-    return ROUTES.MARKETING_CLIENT_PORTAL;
-  }
-  if (access.some((item) => item.source_module === "digital-services" && item.access_scope === "marketing_vendor_portal")) {
-    return ROUTES.MARKETING_VENDOR_PORTAL;
-  }
-  return ROUTES.EXTERNAL_PORTAL_DASHBOARD ?? null;
 }
 
 // Silent pre-check for an existing session; redirects if one is valid.
@@ -215,8 +190,7 @@ export async function checkExistingSession() {
   const externalStored = getStoredExternalSession();
   if (externalStored?.sessionToken) {
     try {
-      const route = await resolveExternalDashboard(externalStored.sessionToken);
-      if (route) { window.location.assign(route); return true; }
+      if (await redirectExternalPortalSession(externalStored.sessionToken)) return true;
     } catch {}
     clearStoredExternalSession();
   }
