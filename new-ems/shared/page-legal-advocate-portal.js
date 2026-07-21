@@ -2,10 +2,11 @@ import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { showToast } from "./utils.js";
 import { advocatePortalLogout, requireAdvocatePortalSession } from "./legal-advocate-portal-auth.js";
 import { addAdvocateComment, deleteAdvocateAnnotation, deleteAdvocateBookmark, fetchAdvocateSharedFile, getAdvocateDocumentMarks, getAdvocatePortalContext, getAdvocatePreviewOtpStatus, requestAdvocatePreviewOtp, saveAdvocateAnnotation, saveAdvocateBookmark, verifyAdvocatePreviewOtp } from "./legal-advocate-api.js";
-import { mountSelectablePdf } from "./legal-pdf-selection.js?v=advocate-portal-13";
+import { mountSelectablePdf } from "./legal-pdf-selection.js?v=advocate-portal-14";
 
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
 const ACTIVITY_WRITE_INTERVAL_MS = 10 * 1000;
+const PAGE_MEMORY_PREFIX = "ems_legal_advocate_last_page_v1";
 const state = { session: null, context: { profile: {}, shares: [] }, selectedShareId: "", previewUrl: "", preview: null, query: "", status: "all", updatedAt: null, previewUnlocked: false, otpPrompt: null, otpBusy: false, activityTimer: null, inactivityCountdownTimer: null, inactivityPrompt: null, lastActivityWrite: 0, activePage: 1, pdfPageCount: 0, pdfZoom: 1, selectedText: null, inlineComposer: null, marksPanel: "", marks: { annotations: [], bookmarks: [] }, marksShareId: "", markDrawer: "", editingAnnotationId: "", editingBookmarkId: "", markBusy: false };
 
 // This is a standalone external portal, so the authenticated EMS layout does
@@ -29,6 +30,31 @@ function badge(value) {
 
 function statusLabel(value) {
   return String(value || "shared").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function pageMemoryKey(shareId = state.selectedShareId) {
+  const reviewerId = state.session?.portal_user_id || state.context.profile?.id || state.context.profile?.email || "reviewer";
+  return `${PAGE_MEMORY_PREFIX}:${encodeURIComponent(String(reviewerId))}:${encodeURIComponent(String(shareId || "document"))}`;
+}
+
+function rememberedDocumentPage(shareId) {
+  try {
+    return Math.max(1, Number.parseInt(localStorage.getItem(pageMemoryKey(shareId)) || "1", 10) || 1);
+  } catch {
+    return 1;
+  }
+}
+
+function rememberDocumentPage(pageNumber = state.activePage, shareId = state.selectedShareId) {
+  if (!shareId) return;
+  const page = Math.max(1, Number.parseInt(pageNumber, 10) || 1);
+  try {
+    if (localStorage.getItem(pageMemoryKey(shareId)) !== String(page)) localStorage.setItem(pageMemoryKey(shareId), String(page));
+  } catch {}
+}
+
+function previewIsFullscreen() {
+  return Boolean(document.fullscreenElement?.classList?.contains("lap-preview-wrap"));
 }
 
 function documentHighlights() {
@@ -68,6 +94,7 @@ function filteredShares() {
 function clearSelectionIfHidden() {
   if (!state.selectedShareId) return;
   if (filteredShares().some((row) => row.id === state.selectedShareId)) return;
+  rememberDocumentPage();
   clearPreview();
   state.selectedShareId = "";
 }
@@ -166,7 +193,7 @@ function render() {
       .lap-workspace{height:calc(100vh - 276px);min-height:620px;display:grid;grid-template-columns:minmax(250px,300px) minmax(390px,1fr) minmax(290px,330px);border:1px solid var(--lap-line);border-radius:16px;overflow:hidden;background:var(--lap-panel);box-shadow:0 24px 70px rgba(0,0,0,.24)}.lap-list-panel{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;border-right:1px solid var(--lap-line)}.lap-pane-head{padding:.82rem .9rem;border-bottom:1px solid var(--lap-line-soft);display:flex;align-items:center;justify-content:space-between}.lap-pane-head strong{font-size:.75rem}.lap-pane-head small{color:var(--lap-muted);font-size:.61rem}.lap-list{padding:.62rem;overflow:auto}.lap-doc{width:100%;display:grid;grid-template-columns:38px minmax(0,1fr);gap:.65rem;position:relative;text-align:left;padding:.78rem;border:1px solid transparent;border-radius:11px;background:transparent;color:#fff;margin-bottom:.42rem;cursor:pointer}.lap-doc:hover,.lap-doc.active{border-color:rgba(221,184,90,.48);background:linear-gradient(145deg,rgba(221,184,90,.075),rgba(255,255,255,.012))}.lap-doc.active:before{content:"";position:absolute;left:-1px;top:17%;height:66%;width:2px;background:var(--lap-gold)}.lap-doc-icon{display:grid;place-items:center;width:38px;height:42px;border-radius:9px;background:#17140d;color:var(--lap-gold);font-size:.55rem;font-weight:900}.lap-doc-copy{min-width:0}.lap-doc strong,.lap-doc small{display:block}.lap-doc strong{font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lap-doc small{color:var(--lap-muted);margin-top:.17rem;font-size:.59rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lap-doc .lap-doc-number{color:#cfc9ba}.lap-doc>.lap-badge{grid-column:2;justify-self:start;margin-top:.15rem}
       .lap-badge{display:inline-flex;padding:.2rem .43rem;border:1px solid var(--lap-line);border-radius:999px;color:var(--lap-gold);font-size:.56rem;text-transform:capitalize;white-space:nowrap}.lap-badge--reviewed{border-color:rgba(110,215,165,.28);color:var(--lap-success);background:rgba(110,215,165,.055)}.lap-badge--revision-required{border-color:rgba(240,154,146,.3);color:var(--lap-danger);background:rgba(240,154,146,.055)}
       .lap-preview-panel{height:100%;min-height:0;overflow:hidden;display:grid;grid-template-rows:auto auto minmax(0,1fr);min-width:0;background:#11141b}.lap-document-head{padding:.8rem .9rem;border-bottom:1px solid var(--lap-line-soft);display:flex;align-items:center;justify-content:space-between;gap:.75rem}.lap-document-head>div{min-width:0}.lap-document-head span{display:block;color:var(--lap-gold);font-size:.52rem;font-weight:800;letter-spacing:.12em}.lap-document-head strong{display:block;font-size:.78rem;margin-top:.18rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lap-document-tools{display:flex;gap:.35rem;flex-shrink:0}.lap-tool{min-height:30px;padding:.38rem .55rem;border:1px solid var(--lap-line);border-radius:8px;background:#090b10;color:#d7d3c8;cursor:pointer;font-size:.6rem;font-weight:700}.lap-tool:hover{border-color:var(--lap-gold);color:var(--lap-gold-soft)}.lap-progress{padding:.75rem 1rem;border-bottom:1px solid var(--lap-line-soft);display:grid;grid-template-columns:repeat(4,1fr)}.lap-progress span{position:relative;display:grid;justify-items:center;gap:.3rem;color:#666b73}.lap-progress span:not(:last-child):after{content:"";position:absolute;top:10px;left:58%;width:84%;height:1px;background:#30343b}.lap-progress span.complete:not(:last-child):after{background:rgba(221,184,90,.55)}.lap-progress i{position:relative;z-index:1;width:21px;height:21px;border:1px solid #343840;border-radius:50%;background:#11141b;display:grid;place-items:center;font-size:.52rem;font-style:normal}.lap-progress small{font-size:.52rem}.lap-progress .complete{color:var(--lap-gold-soft)}.lap-progress .complete i{border-color:var(--lap-gold);background:rgba(221,184,90,.08)}.lap-progress .current i{box-shadow:0 0 0 4px rgba(221,184,90,.08)}
-      .lap-preview{width:100%;height:100%;min-width:0;min-height:0;display:flex;overflow:hidden}.lap-preview-wrap{position:relative;display:flex;width:100%;height:100%;min-height:0;background:#141820}.lap-frame{width:100%;height:100%;min-height:0;border:0;background:#fff}.lap-image-wrap{display:grid;place-items:center;width:100%;padding:1rem;overflow:auto}.lap-image-wrap img{max-width:100%;max-height:100%}.lap-watermark{position:absolute;inset:-12%;z-index:8;pointer-events:none;display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));grid-template-rows:repeat(5,1fr);align-items:center;justify-items:center;overflow:hidden;user-select:none}.lap-watermark span{max-width:330px;transform:rotate(-24deg);color:rgba(87,63,16,.32);font-size:clamp(.62rem,.85vw,.88rem);font-weight:900;letter-spacing:.08em;text-align:center;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px rgba(255,255,255,.16);mix-blend-mode:multiply}.lap-exit-fullscreen{display:none;position:absolute;top:18px;right:18px;z-index:20;align-items:center;gap:.45rem;padding:.7rem .9rem;border:1px solid rgba(240,213,138,.55);border-radius:10px;background:rgba(7,9,13,.92);color:#f0d58a;box-shadow:0 12px 34px rgba(0,0,0,.34);backdrop-filter:blur(10px);cursor:pointer;font-size:.72rem;font-weight:900}.lap-exit-fullscreen:hover{background:#15120b;border-color:#f0d58a}.lap-preview-empty,.lap-empty{margin:auto;text-align:center;color:var(--lap-muted);padding:2rem}.lap-preview-empty{width:min(440px,100%);min-height:100%;display:grid;justify-items:center;align-content:center}.lap-preview-empty>div,.lap-empty>span{width:58px;height:58px;border:1px solid var(--lap-line);border-radius:17px;display:grid;place-items:center;margin:0 auto 1rem;color:var(--lap-gold);font-weight:900}.lap-preview-empty h2{color:#ece8df;font:700 1.25rem Georgia,serif;margin:.4rem 0}.lap-preview-empty p,.lap-empty p{max-width:360px;line-height:1.6;font-size:.72rem}.lap-preview-empty p{margin:.35rem auto 1rem}.lap-primary{border:0;border-radius:10px;padding:.72rem 1rem;background:linear-gradient(135deg,#f2d88d,#c99532);color:#151005;font-weight:900;cursor:pointer;font-size:.68rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}.lap-primary:hover{filter:brightness(1.04);box-shadow:0 10px 28px rgba(201,149,50,.16)}.lap-primary:disabled{opacity:.58;cursor:wait}.lap-preview-wrap:fullscreen{background:#11141b}.lap-preview-wrap:fullscreen .lap-frame{height:100vh}.lap-preview-wrap:fullscreen .lap-exit-fullscreen{display:flex}
+      .lap-preview{width:100%;height:100%;min-width:0;min-height:0;display:flex;overflow:hidden}.lap-preview-wrap{position:relative;display:flex;width:100%;height:100%;min-height:0;background:#141820}.lap-frame{width:100%;height:100%;min-height:0;border:0;background:#fff}.lap-image-wrap{display:grid;place-items:center;width:100%;padding:1rem;overflow:auto}.lap-image-wrap img{max-width:100%;max-height:100%}.lap-watermark{position:absolute;inset:-12%;z-index:8;pointer-events:none;display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));grid-template-rows:repeat(5,1fr);align-items:center;justify-items:center;overflow:hidden;user-select:none}.lap-watermark span{max-width:330px;transform:rotate(-24deg);color:rgba(87,63,16,.32);font-size:clamp(.62rem,.85vw,.88rem);font-weight:900;letter-spacing:.08em;text-align:center;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px rgba(255,255,255,.16);mix-blend-mode:multiply}.lap-fullscreen-tools{display:none;position:absolute;top:9px;left:12px;right:12px;z-index:50;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:.38rem;padding:.42rem;border:1px solid rgba(240,213,138,.35);border-radius:11px;background:rgba(7,9,13,.94);box-shadow:0 12px 34px rgba(0,0,0,.38);backdrop-filter:blur(12px)}.lap-fullscreen-tools button{min-height:32px;padding:.42rem .66rem;border:1px solid rgba(221,184,90,.28);border-radius:8px;background:#0d1016;color:#e8e3d8;cursor:pointer;font-size:.62rem;font-weight:800}.lap-fullscreen-tools button:hover{border-color:var(--lap-gold);color:var(--lap-gold-soft)}.lap-fullscreen-tools .lap-fullscreen-exit{background:linear-gradient(135deg,#f2d88d,#c99532);color:#171106}.lap-fullscreen-divider{width:1px;height:24px;background:rgba(221,184,90,.28)}.lap-preview-empty,.lap-empty{margin:auto;text-align:center;color:var(--lap-muted);padding:2rem}.lap-preview-empty{width:min(440px,100%);min-height:100%;display:grid;justify-items:center;align-content:center}.lap-preview-empty>div,.lap-empty>span{width:58px;height:58px;border:1px solid var(--lap-line);border-radius:17px;display:grid;place-items:center;margin:0 auto 1rem;color:var(--lap-gold);font-weight:900}.lap-preview-empty h2{color:#ece8df;font:700 1.25rem Georgia,serif;margin:.4rem 0}.lap-preview-empty p,.lap-empty p{max-width:360px;line-height:1.6;font-size:.72rem}.lap-preview-empty p{margin:.35rem auto 1rem}.lap-primary{border:0;border-radius:10px;padding:.72rem 1rem;background:linear-gradient(135deg,#f2d88d,#c99532);color:#151005;font-weight:900;cursor:pointer;font-size:.68rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}.lap-primary:hover{filter:brightness(1.04);box-shadow:0 10px 28px rgba(201,149,50,.16)}.lap-primary:disabled{opacity:.58;cursor:wait}.lap-preview-wrap:fullscreen{background:#11141b}.lap-preview-wrap:fullscreen .lap-frame{height:100vh}.lap-preview-wrap:fullscreen .lap-fullscreen-tools{display:flex}
       .lap-modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:1rem;background:rgba(1,2,4,.82);backdrop-filter:blur(12px)}.lap-otp-modal{width:min(430px,100%);border:1px solid rgba(221,184,90,.42);border-radius:18px;padding:1.35rem;background:linear-gradient(145deg,#11141a,#080a0e);box-shadow:0 30px 100px rgba(0,0,0,.65);color:var(--lap-text)}.lap-otp-mark{width:48px;height:48px;border:1px solid var(--lap-line);border-radius:14px;display:grid;place-items:center;color:var(--lap-gold);font-weight:900}.lap-otp-modal h2{font:700 1.35rem Georgia,serif;margin:.9rem 0 .35rem}.lap-otp-modal>p{color:var(--lap-muted);font-size:.72rem;line-height:1.55;margin:.25rem 0}.lap-otp-phone{display:block;color:var(--lap-gold-soft);font-weight:800;margin-top:.35rem}.lap-otp-form{display:grid;gap:.75rem;margin-top:1rem}.lap-otp-form label{display:grid;gap:.35rem;color:#cbc7bd;font-size:.66rem}.lap-otp-form input{width:100%;padding:.85rem;border:1px solid var(--lap-line);border-radius:10px;background:#05070a;color:#fff;text-align:center;font-size:1.3rem;font-weight:900;letter-spacing:.55em;outline:none}.lap-otp-form input:focus{border-color:var(--lap-gold);box-shadow:0 0 0 4px rgba(221,184,90,.08)}.lap-otp-actions{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}.lap-otp-actions .lap-primary{grid-column:1/-1}.lap-otp-note{padding-top:.8rem!important;margin-top:.8rem!important;border-top:1px solid var(--lap-line-soft)}
       .lap-timeout-modal{text-align:center}.lap-timeout-modal .lap-otp-mark{margin:0 auto}.lap-timeout-count{width:82px;height:82px;margin:1rem auto;border:2px solid var(--lap-gold);border-radius:50%;display:grid;place-items:center;color:var(--lap-gold-soft);font:700 1.65rem Georgia,serif;box-shadow:0 0 0 7px rgba(221,184,90,.06)}.lap-timeout-modal .lap-primary{width:100%;margin-top:1rem;justify-content:center}
       .lap-page-marks{position:absolute;left:12px;bottom:12px;z-index:12;display:flex;gap:.4rem;pointer-events:none}.lap-page-marks span{padding:.38rem .55rem;border:1px solid rgba(221,184,90,.45);border-radius:999px;background:rgba(7,9,13,.88);color:var(--lap-gold-soft);font-size:.58rem;font-weight:800;backdrop-filter:blur(8px)}.lap-mark-backdrop{position:fixed;inset:0;z-index:950;background:rgba(0,0,0,.58);backdrop-filter:blur(5px)}.lap-mark-drawer{position:absolute;top:0;right:0;width:min(480px,100%);height:100%;display:flex;flex-direction:column;padding:1.15rem;background:linear-gradient(180deg,#11141a,#080a0e);border-left:1px solid rgba(221,184,90,.35);box-shadow:-25px 0 70px rgba(0,0,0,.5);color:var(--lap-text);overflow:hidden}.lap-mark-drawer>header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding-bottom:.9rem;border-bottom:1px solid var(--lap-line)}.lap-mark-drawer>header span{color:var(--lap-gold);font-size:.55rem;font-weight:900;letter-spacing:.14em}.lap-mark-drawer h2{font:700 1.35rem Georgia,serif;margin:.2rem 0 0}.lap-mark-drawer>header button{width:34px;height:34px;border:1px solid var(--lap-line);border-radius:9px;background:transparent;color:#fff;cursor:pointer}.lap-mark-visibility{margin:.8rem 0;padding:.7rem;border-left:2px solid var(--lap-gold);background:rgba(221,184,90,.045);color:var(--lap-muted);font-size:.65rem;line-height:1.5}.lap-mark-form{display:grid;gap:.65rem;padding-bottom:.9rem;border-bottom:1px solid var(--lap-line)}.lap-mark-form label{display:grid;gap:.3rem;color:#c9c5bb;font-size:.62rem}.lap-mark-form input,.lap-mark-form select,.lap-mark-form textarea{width:100%;padding:.62rem;border:1px solid var(--lap-line-soft);border-radius:9px;background:#06080c;color:#fff;outline:none;resize:vertical}.lap-mark-form input:focus,.lap-mark-form select:focus,.lap-mark-form textarea:focus{border-color:var(--lap-gold);box-shadow:0 0 0 3px rgba(221,184,90,.07)}.lap-mark-form input[type="color"]{height:39px;padding:.2rem}.lap-mark-grid{display:grid;grid-template-columns:80px 1fr 72px;gap:.5rem}.lap-bookmark-grid{grid-template-columns:90px 1fr}.lap-mark-form-actions{display:flex;gap:.5rem}.lap-mark-form-actions .lap-primary{flex:1;justify-content:center}.lap-mark-list-head{display:flex;justify-content:space-between;align-items:center;padding:.85rem 0 .55rem}.lap-mark-list-head strong{font-size:.72rem}.lap-mark-list-head small{font-size:.58rem;color:var(--lap-muted)}.lap-mark-list{min-height:0;overflow:auto;display:grid;align-content:start;gap:.55rem;padding-right:.15rem}.lap-mark-card{position:relative;border:1px solid var(--lap-line-soft);border-left:3px solid var(--mark-color,#ddb85a);border-radius:10px;padding:.75rem;background:rgba(255,255,255,.018)}.lap-bookmark-card{border-left-color:var(--lap-gold)}.lap-mark-card-head{display:flex;justify-content:space-between;gap:.5rem;align-items:flex-start}.lap-mark-card-head span{color:#eee9dd;font-size:.66rem;font-weight:800}.lap-mark-card-head small{color:var(--lap-muted);font-size:.52rem;text-align:right}.lap-mark-card blockquote{margin:.55rem 0 0;padding:.55rem;border-left:2px solid var(--mark-color,#ddb85a);background:#07090d;color:#aaa69c;font-size:.6rem;line-height:1.45}.lap-mark-card p{margin:.55rem 0;color:#d3cfc5;font-size:.65rem;line-height:1.55;white-space:pre-wrap}.lap-mark-card-actions{display:flex;gap:.35rem;margin-top:.55rem}.lap-mark-card-actions button{padding:.38rem .55rem;border:1px solid var(--lap-line);border-radius:7px;background:transparent;color:#d8d4ca;cursor:pointer;font-size:.56rem}.lap-mark-card-actions button:hover{border-color:var(--lap-gold);color:var(--lap-gold-soft)}.lap-mark-card-actions button.danger{color:var(--lap-danger)}.lap-mark-empty{padding:1.2rem;border:1px dashed var(--lap-line);border-radius:10px;color:var(--lap-muted);font-size:.65rem;line-height:1.5;text-align:center}
@@ -190,7 +217,7 @@ function render() {
           <div class="lap-controls"><label class="lap-search"><span>⌕</span><input id="advocateSearch" value="${esc(state.query)}" placeholder="Search agreement, party or file" aria-label="Search shared legal documents"/></label><select id="advocateStatus" aria-label="Filter by review status"><option value="all">All review states</option><option value="pending" ${state.status === "pending" ? "selected" : ""}>Awaiting action</option>${["shared","opened","under_review","revision_required","reviewed"].map((value) => `<option value="${value}" ${state.status === value ? "selected" : ""}>${esc(statusLabel(value))}</option>`).join("")}</select><button class="lap-secondary" id="clearAdvocateFilters" type="button">Clear filters</button></div>
           <section class="lap-workspace">
             <div class="lap-list-panel"><header class="lap-pane-head"><strong>Document library</strong><small>${filteredShares().length} visible</small></header><div class="lap-list">${renderDocumentList()}</div></div>
-            <section class="lap-preview-panel"><header class="lap-document-head"><div><span>${share ? esc(share.agreement_no) : "SECURE DOCUMENT PREVIEW"}</span><strong>${share ? esc(share.display_title || share.file_name) : "Select a document"}</strong></div><div class="lap-document-tools">${share ? `<button class="lap-tool" id="openPreviewToolbar" type="button">${state.previewUrl ? "Reload" : "Open"}</button>` : ""}${share && state.previewUnlocked ? `<button class="lap-tool" id="openHighlights" type="button">Highlights ${highlights.length ? `(${highlights.length})` : ""}</button><button class="lap-tool" id="openAnnotations" type="button">Annotations ${annotations.length ? `(${annotations.length})` : ""}</button><button class="lap-tool" id="openBookmarks" type="button">Bookmarks ${state.marks.bookmarks.length ? `(${state.marks.bookmarks.length})` : ""}</button>` : ""}${state.previewUrl ? `<button class="lap-tool" id="fullscreenPreview" type="button">Full screen</button>` : ""}${share && state.previewUrl && share.permission_level === "download" ? `<button class="lap-tool" id="downloadSharedFile" type="button">Download</button>` : ""}</div></header>${share ? reviewProgress(share.review_status) : `<div></div>`}<div class="lap-preview"><div class="lap-preview-wrap">${previewContent(share)}${previewWatermark}${state.previewUrl ? `<div class="lap-page-marks"><span>Page ${esc(state.activePage)}</span>${highlights.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${highlights.filter((row) => Number(row.page_number) === Number(state.activePage)).length} highlight(s)</span>` : ""}${annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length} annotation(s)</span>` : ""}${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length} bookmark(s)</span>` : ""}</div><button class="lap-exit-fullscreen" id="exitFullscreenPreview" type="button"><span>✕</span> Exit full screen</button>` : ""}</div></div></section>
+            <section class="lap-preview-panel"><header class="lap-document-head"><div><span>${share ? esc(share.agreement_no) : "SECURE DOCUMENT PREVIEW"}</span><strong>${share ? esc(share.display_title || share.file_name) : "Select a document"}</strong></div><div class="lap-document-tools">${share ? `<button class="lap-tool" id="openPreviewToolbar" type="button">${state.previewUrl ? "Reload" : "Open"}</button>` : ""}${share && state.previewUnlocked ? `<button class="lap-tool" data-marks-panel="highlights" type="button">Highlights ${highlights.length ? `(${highlights.length})` : ""}</button><button class="lap-tool" data-marks-panel="annotations" type="button">Annotations ${annotations.length ? `(${annotations.length})` : ""}</button><button class="lap-tool" data-marks-panel="bookmarks" type="button">Bookmarks ${state.marks.bookmarks.length ? `(${state.marks.bookmarks.length})` : ""}</button>` : ""}${state.previewUrl ? `<button class="lap-tool" id="fullscreenPreview" type="button">Full screen</button>` : ""}${share && state.previewUrl && share.permission_level === "download" ? `<button class="lap-tool" id="downloadSharedFile" type="button">Download</button>` : ""}</div></header>${share ? reviewProgress(share.review_status) : `<div></div>`}<div class="lap-preview"><div class="lap-preview-wrap">${previewContent(share)}${previewWatermark}${state.previewUrl ? `<div class="lap-page-marks"><span id="pdfPageBadge">Page ${esc(state.activePage)}</span>${highlights.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${highlights.filter((row) => Number(row.page_number) === Number(state.activePage)).length} highlight(s)</span>` : ""}${annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length} annotation(s)</span>` : ""}${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length} bookmark(s)</span>` : ""}</div><div class="lap-fullscreen-tools" role="toolbar" aria-label="Full-screen document tools"><button type="button" data-marks-panel="highlights">Highlights ${highlights.length ? `(${highlights.length})` : ""}</button><button type="button" data-marks-panel="annotations">Annotations ${annotations.length ? `(${annotations.length})` : ""}</button><button type="button" data-marks-panel="bookmarks">Bookmarks ${state.marks.bookmarks.length ? `(${state.marks.bookmarks.length})` : ""}</button><span class="lap-fullscreen-divider"></span><button type="button" data-pdf-zoom="out" aria-label="Zoom out">−</button><button type="button" data-pdf-zoom="fit">Fit</button><button type="button" data-pdf-zoom="in" aria-label="Zoom in">+</button><span class="lap-fullscreen-divider"></span><button class="lap-fullscreen-exit" type="button" data-exit-fullscreen>✕ Exit Full Screen</button></div>` : ""}</div></div></section>
             ${renderReview(share)}
           </section>
         </div>
@@ -227,7 +254,7 @@ async function savePdfHighlight(selection) {
     state.selectedText = null;
     window.getSelection()?.removeAllRanges();
     await loadDocumentMarks();
-    render();
+    refreshPdfReview({ remountPdf: true });
     showToast("Text highlighted for all authorised reviewers.", TOAST_TYPES.SUCCESS);
   } catch (error) {
     state.markBusy = false;
@@ -252,7 +279,7 @@ function showPdfSelectionActions(selection) {
     }
     state.inlineComposer = { kind: button.dataset.selectionKind, pageNumber: selection.pageNumber, quotedText: selection.text };
     state.marksPanel = "";
-    render();
+    refreshPdfReview();
   }));
   root.append(actions);
 }
@@ -268,10 +295,13 @@ function mountPdfIfNeeded() {
     onPageReady: ({ pageNumber, pageCount }) => {
       state.activePage = pageNumber;
       state.pdfPageCount = pageCount;
+      rememberDocumentPage(pageNumber);
       const current = document.getElementById("pdfCurrentPage");
       const total = document.getElementById("pdfPageCount");
+      const badge = document.getElementById("pdfPageBadge");
       if (current) current.textContent = String(pageNumber);
       if (total) total.textContent = String(pageCount);
+      if (badge) badge.textContent = `Page ${pageNumber}`;
     },
     onTextSelected: showPdfSelectionActions
   }).catch((error) => showToast(error.message || "Selectable PDF preview could not be loaded.", TOAST_TYPES.ERROR));
@@ -288,14 +318,60 @@ async function loadDocumentMarks(shareId = state.selectedShareId) {
   state.marksShareId = shareId;
 }
 
+function syncPdfOverlays({ remountPdf = false } = {}) {
+  const root = document.getElementById("legalPdfViewer");
+  if (!root) return;
+  root.querySelector(".lap-selection-actions")?.remove();
+  root.querySelectorAll(":scope > .lap-inline-composer, :scope > .lap-inline-marks").forEach((element) => element.remove());
+  root.insertAdjacentHTML("beforeend", `${inlineMarkComposer()}${inlineMarksPanel()}`);
+  const counts = { highlights: documentHighlights().length, annotations: documentAnnotations().length, bookmarks: state.marks.bookmarks.length };
+  document.querySelectorAll("[data-marks-panel]").forEach((button) => {
+    const panel = button.dataset.marksPanel;
+    const label = statusLabel(panel);
+    button.textContent = `${label}${counts[panel] ? ` (${counts[panel]})` : ""}`;
+  });
+  bindInlinePdfControls();
+  if (remountPdf) mountPdfIfNeeded();
+}
+
+function refreshPdfReview(options = {}) {
+  if (previewIsFullscreen()) syncPdfOverlays(options);
+  else render();
+}
+
+async function openMarksPanel(panel) {
+  try {
+    await loadDocumentMarks();
+    state.marksPanel = state.marksPanel === panel ? "" : panel;
+    state.inlineComposer = null;
+    refreshPdfReview();
+  } catch (error) {
+    showToast(error.message || `${statusLabel(panel)} could not be loaded.`, TOAST_TYPES.ERROR);
+  }
+}
+
+function changePdfZoom(action) {
+  if (action === "out") state.pdfZoom = Math.max(.65, state.pdfZoom - .15);
+  else if (action === "in") state.pdfZoom = Math.min(2.5, state.pdfZoom + .15);
+  else state.pdfZoom = 1;
+  mountPdfIfNeeded();
+}
+
 function goToDocumentPage(pageNumber) {
   state.activePage = Math.min(state.pdfPageCount || Number.MAX_SAFE_INTEGER, Math.max(1, Number(pageNumber || 1)));
+  rememberDocumentPage();
   state.markDrawer = "";
   state.inlineComposer = null;
   state.selectedText = null;
   state.editingAnnotationId = "";
   state.editingBookmarkId = "";
-  render();
+  if (previewIsFullscreen()) {
+    state.marksPanel = "";
+    syncPdfOverlays();
+    const scroll = document.getElementById("legalPdfScroll");
+    const target = document.querySelector(`#legalPdfPages [data-page-number="${state.activePage}"]`);
+    if (scroll && target) scroll.scrollTo({ top: Math.max(0, target.offsetTop - 12), behavior: "smooth" });
+  } else render();
 }
 
 async function openPreview() {
@@ -340,69 +416,96 @@ async function requestPreviewUnlock() {
   }
 }
 
+function bindInlinePdfControls() {
+  document.getElementById("closeInlineMarks")?.addEventListener("click", () => { state.marksPanel = ""; refreshPdfReview(); });
+  const closeInlineComposer = () => { state.inlineComposer = null; state.selectedText = null; refreshPdfReview(); };
+  document.getElementById("closeInlineComposer")?.addEventListener("click", closeInlineComposer);
+  document.getElementById("cancelInlineComposer")?.addEventListener("click", closeInlineComposer);
+  document.querySelectorAll("[data-mark-page]").forEach((button) => button.addEventListener("click", () => goToDocumentPage(button.dataset.markPage)));
+  document.querySelectorAll("[data-edit-annotation]").forEach((button) => button.addEventListener("click", () => {
+    const row = state.marks.annotations.find((item) => item.id === button.dataset.editAnnotation);
+    if (!row) return;
+    state.inlineComposer = { kind: "annotation", id: row.id, pageNumber: row.page_number, quotedText: row.quoted_text || "", body: row.body, color: row.color };
+    state.marksPanel = "";
+    refreshPdfReview();
+  }));
+  document.querySelectorAll("[data-edit-bookmark]").forEach((button) => button.addEventListener("click", () => {
+    const row = state.marks.bookmarks.find((item) => item.id === button.dataset.editBookmark);
+    if (!row) return;
+    state.inlineComposer = { kind: "bookmark", id: row.id, pageNumber: row.page_number, label: row.label, note: row.note || "", quotedText: row.label };
+    state.marksPanel = "";
+    refreshPdfReview();
+  }));
+  document.querySelectorAll("[data-delete-annotation]").forEach((button) => button.addEventListener("click", async () => {
+    const target = state.marks.annotations.find((row) => row.id === button.dataset.deleteAnnotation);
+    const isHighlight = target?.annotation_type === "highlight";
+    if (!window.confirm(isHighlight ? "Remove this highlight for all authorised reviewers?" : "Delete this annotation for all authorised reviewers?")) return;
+    try {
+      await deleteAdvocateAnnotation(state.session.sessionToken, state.selectedShareId, button.dataset.deleteAnnotation);
+      await loadDocumentMarks();
+      refreshPdfReview({ remountPdf: isHighlight });
+      showToast(isHighlight ? "Highlight removed." : "Annotation deleted.", TOAST_TYPES.SUCCESS);
+    } catch (error) { showToast(error.message || (isHighlight ? "Highlight could not be removed." : "Annotation could not be deleted."), TOAST_TYPES.ERROR); }
+  }));
+  document.querySelectorAll("[data-delete-bookmark]").forEach((button) => button.addEventListener("click", async () => {
+    if (!window.confirm("Delete this shared bookmark?")) return;
+    try {
+      await deleteAdvocateBookmark(state.session.sessionToken, state.selectedShareId, button.dataset.deleteBookmark);
+      await loadDocumentMarks();
+      refreshPdfReview();
+      showToast("Bookmark deleted.", TOAST_TYPES.SUCCESS);
+    } catch (error) { showToast(error.message || "Bookmark could not be deleted.", TOAST_TYPES.ERROR); }
+  }));
+  document.getElementById("annotationForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      state.markBusy = true; refreshPdfReview();
+      await saveAdvocateAnnotation(state.session.sessionToken, state.selectedShareId, values);
+      state.markBusy = false; state.editingAnnotationId = ""; state.inlineComposer = null; state.selectedText = null;
+      await loadDocumentMarks();
+      refreshPdfReview();
+      showToast("Collaborative annotation saved.", TOAST_TYPES.SUCCESS);
+    } catch (error) { state.markBusy = false; refreshPdfReview(); showToast(error.message || "Annotation could not be saved.", TOAST_TYPES.ERROR); }
+  });
+  document.getElementById("bookmarkForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      state.markBusy = true; refreshPdfReview();
+      await saveAdvocateBookmark(state.session.sessionToken, state.selectedShareId, values);
+      state.markBusy = false; state.editingBookmarkId = ""; state.inlineComposer = null; state.selectedText = null;
+      await loadDocumentMarks();
+      refreshPdfReview();
+      showToast("Shared bookmark saved.", TOAST_TYPES.SUCCESS);
+    } catch (error) { state.markBusy = false; refreshPdfReview(); showToast(error.message || "Bookmark could not be saved.", TOAST_TYPES.ERROR); }
+  });
+}
+
 function bind() {
-  document.getElementById("advocateLogout")?.addEventListener("click", advocatePortalLogout);
-  document.getElementById("switchPortalBtn")?.addEventListener("click", () => window.location.assign(ROUTES.EXTERNAL_PORTAL_SELECTOR));
+  document.getElementById("advocateLogout")?.addEventListener("click", () => { rememberDocumentPage(); advocatePortalLogout(); });
+  document.getElementById("switchPortalBtn")?.addEventListener("click", () => { rememberDocumentPage(); window.location.assign(ROUTES.EXTERNAL_PORTAL_SELECTOR); });
   document.getElementById("advocateSearch")?.addEventListener("input", (event) => { state.query = event.target.value; clearSelectionIfHidden(); render(); document.getElementById("advocateSearch")?.focus(); });
   document.getElementById("advocateStatus")?.addEventListener("change", (event) => { state.status = event.target.value; clearSelectionIfHidden(); render(); });
   document.querySelectorAll("[data-status-shortcut]").forEach((button) => button.addEventListener("click", () => { state.status = button.dataset.statusShortcut; clearSelectionIfHidden(); render(); }));
   const clearFilters = () => { state.query = ""; state.status = "all"; render(); };
   document.getElementById("clearAdvocateFilters")?.addEventListener("click", clearFilters);
   document.getElementById("clearFiltersEmpty")?.addEventListener("click", clearFilters);
-  document.querySelectorAll("[data-share-id]").forEach((button) => button.addEventListener("click", async () => { clearPreview(); state.selectedShareId = button.dataset.shareId; state.activePage = 1; state.markDrawer = ""; state.marks = { annotations: [], bookmarks: [] }; render(); try { await loadDocumentMarks(); render(); } catch (error) { showToast(error.message || "Document collaboration details could not be loaded.", TOAST_TYPES.ERROR); } }));
+  document.querySelectorAll("[data-share-id]").forEach((button) => button.addEventListener("click", async () => { rememberDocumentPage(); clearPreview(); state.selectedShareId = button.dataset.shareId; state.activePage = rememberedDocumentPage(state.selectedShareId); state.markDrawer = ""; state.marks = { annotations: [], bookmarks: [] }; render(); try { await loadDocumentMarks(); render(); } catch (error) { showToast(error.message || "Document collaboration details could not be loaded.", TOAST_TYPES.ERROR); } }));
   document.getElementById("openPreviewBtn")?.addEventListener("click", openPreview);
   document.getElementById("openPreviewToolbar")?.addEventListener("click", openPreview);
   document.getElementById("fullscreenPreview")?.addEventListener("click", () => document.querySelector(".lap-preview-wrap")?.requestFullscreen?.());
-  document.getElementById("exitFullscreenPreview")?.addEventListener("click", () => document.fullscreenElement && document.exitFullscreen?.());
-  document.getElementById("openHighlights")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.marksPanel = state.marksPanel === "highlights" ? "" : "highlights"; state.inlineComposer = null; render(); } catch (error) { showToast(error.message || "Highlights could not be loaded.", TOAST_TYPES.ERROR); } });
-  document.getElementById("openAnnotations")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.marksPanel = state.marksPanel === "annotations" ? "" : "annotations"; state.inlineComposer = null; render(); } catch (error) { showToast(error.message || "Annotations could not be loaded.", TOAST_TYPES.ERROR); } });
-  document.getElementById("openBookmarks")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.marksPanel = state.marksPanel === "bookmarks" ? "" : "bookmarks"; state.inlineComposer = null; render(); } catch (error) { showToast(error.message || "Bookmarks could not be loaded.", TOAST_TYPES.ERROR); } });
-  document.getElementById("closeInlineMarks")?.addEventListener("click", () => { state.marksPanel = ""; render(); });
-  const closeInlineComposer = () => { state.inlineComposer = null; state.selectedText = null; render(); };
-  document.getElementById("closeInlineComposer")?.addEventListener("click", closeInlineComposer);
-  document.getElementById("cancelInlineComposer")?.addEventListener("click", closeInlineComposer);
-  document.getElementById("pdfZoomOut")?.addEventListener("click", () => { state.pdfZoom = Math.max(.65, state.pdfZoom - .15); render(); });
-  document.getElementById("pdfZoomReset")?.addEventListener("click", () => { state.pdfZoom = 1; render(); });
-  document.getElementById("pdfZoomIn")?.addEventListener("click", () => { state.pdfZoom = Math.min(2.5, state.pdfZoom + .15); render(); });
+  document.querySelectorAll("[data-exit-fullscreen]").forEach((button) => button.addEventListener("click", () => document.fullscreenElement && document.exitFullscreen?.()));
+  document.querySelectorAll("[data-marks-panel]").forEach((button) => button.addEventListener("click", () => openMarksPanel(button.dataset.marksPanel)));
+  document.getElementById("pdfZoomOut")?.addEventListener("click", () => changePdfZoom("out"));
+  document.getElementById("pdfZoomReset")?.addEventListener("click", () => changePdfZoom("fit"));
+  document.getElementById("pdfZoomIn")?.addEventListener("click", () => changePdfZoom("in"));
+  document.querySelectorAll("[data-pdf-zoom]").forEach((button) => button.addEventListener("click", () => changePdfZoom(button.dataset.pdfZoom)));
   document.getElementById("closeMarkDrawer")?.addEventListener("click", () => { state.markDrawer = ""; state.editingAnnotationId = ""; state.editingBookmarkId = ""; render(); });
   document.getElementById("closeMarkBackdrop")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) { state.markDrawer = ""; state.editingAnnotationId = ""; state.editingBookmarkId = ""; render(); } });
   document.getElementById("cancelEditAnnotation")?.addEventListener("click", () => { state.editingAnnotationId = ""; render(); });
   document.getElementById("cancelEditBookmark")?.addEventListener("click", () => { state.editingBookmarkId = ""; render(); });
-  document.querySelectorAll("[data-mark-page]").forEach((button) => button.addEventListener("click", () => goToDocumentPage(button.dataset.markPage)));
-  document.querySelectorAll("[data-edit-annotation]").forEach((button) => button.addEventListener("click", () => { const row = state.marks.annotations.find((item) => item.id === button.dataset.editAnnotation); if (!row) return; state.inlineComposer = { kind: "annotation", id: row.id, pageNumber: row.page_number, quotedText: row.quoted_text || "", body: row.body, color: row.color }; state.marksPanel = ""; render(); }));
-  document.querySelectorAll("[data-edit-bookmark]").forEach((button) => button.addEventListener("click", () => { const row = state.marks.bookmarks.find((item) => item.id === button.dataset.editBookmark); if (!row) return; state.inlineComposer = { kind: "bookmark", id: row.id, pageNumber: row.page_number, label: row.label, note: row.note || "", quotedText: row.label }; state.marksPanel = ""; render(); }));
-  document.querySelectorAll("[data-delete-annotation]").forEach((button) => button.addEventListener("click", async () => {
-    const target = state.marks.annotations.find((row) => row.id === button.dataset.deleteAnnotation);
-    const isHighlight = target?.annotation_type === "highlight";
-    if (!window.confirm(isHighlight ? "Remove this highlight for all authorised reviewers?" : "Delete this annotation for all authorised reviewers?")) return;
-    try { await deleteAdvocateAnnotation(state.session.sessionToken, state.selectedShareId, button.dataset.deleteAnnotation); await loadDocumentMarks(); render(); showToast(isHighlight ? "Highlight removed." : "Annotation deleted.", TOAST_TYPES.SUCCESS); }
-    catch (error) { showToast(error.message || (isHighlight ? "Highlight could not be removed." : "Annotation could not be deleted."), TOAST_TYPES.ERROR); }
-  }));
-  document.querySelectorAll("[data-delete-bookmark]").forEach((button) => button.addEventListener("click", async () => {
-    if (!window.confirm("Delete this shared bookmark?")) return;
-    try { await deleteAdvocateBookmark(state.session.sessionToken, state.selectedShareId, button.dataset.deleteBookmark); await loadDocumentMarks(); render(); showToast("Bookmark deleted.", TOAST_TYPES.SUCCESS); }
-    catch (error) { showToast(error.message || "Bookmark could not be deleted.", TOAST_TYPES.ERROR); }
-  }));
-  document.getElementById("annotationForm")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    try {
-      state.markBusy = true; render();
-      await saveAdvocateAnnotation(state.session.sessionToken, state.selectedShareId, values);
-      state.markBusy = false; state.editingAnnotationId = ""; state.inlineComposer = null; state.selectedText = null; await loadDocumentMarks(); render();
-      showToast("Collaborative annotation saved.", TOAST_TYPES.SUCCESS);
-    } catch (error) { state.markBusy = false; render(); showToast(error.message || "Annotation could not be saved.", TOAST_TYPES.ERROR); }
-  });
-  document.getElementById("bookmarkForm")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    try {
-      state.markBusy = true; render();
-      await saveAdvocateBookmark(state.session.sessionToken, state.selectedShareId, values);
-      state.markBusy = false; state.editingBookmarkId = ""; state.inlineComposer = null; state.selectedText = null; await loadDocumentMarks(); render();
-      showToast("Shared bookmark saved.", TOAST_TYPES.SUCCESS);
-    } catch (error) { state.markBusy = false; render(); showToast(error.message || "Bookmark could not be saved.", TOAST_TYPES.ERROR); }
-  });
+  bindInlinePdfControls();
   document.getElementById("stayActiveBtn")?.addEventListener("click", keepSessionActive);
   document.getElementById("cancelPreviewOtp")?.addEventListener("click", () => { state.otpPrompt = null; state.otpBusy = false; render(); });
   document.getElementById("resendPreviewOtp")?.addEventListener("click", requestPreviewUnlock);
@@ -451,6 +554,7 @@ function bind() {
 }
 
 async function load() {
+  const previousShareId = state.selectedShareId;
   const [context, security] = await Promise.all([
     getAdvocatePortalContext(state.session.sessionToken),
     getAdvocatePreviewOtpStatus(state.session.sessionToken)
@@ -460,6 +564,7 @@ async function load() {
   state.updatedAt = new Date();
   if (!state.selectedShareId && state.context.shares?.[0]?.id) state.selectedShareId = state.context.shares[0].id;
   if (state.selectedShareId && !state.context.shares.some((row) => row.id === state.selectedShareId)) { clearPreview(); state.selectedShareId = state.context.shares?.[0]?.id || ""; }
+  if (state.selectedShareId && state.selectedShareId !== previousShareId) state.activePage = rememberedDocumentPage(state.selectedShareId);
   if (state.previewUnlocked && state.selectedShareId) await loadDocumentMarks(state.selectedShareId);
   else state.marks = { annotations: [], bookmarks: [] };
   render();
@@ -522,6 +627,11 @@ function startInactivityGuard() {
   state.activityTimer = setInterval(enforceInactivityTimeout, 1000);
 }
 
+function handleFullscreenChange() {
+  if (!state.preview?.blob || !document.getElementById("legalPdfViewer")) return;
+  window.setTimeout(mountPdfIfNeeded, 0);
+}
+
 async function init() {
   state.session = await requireAdvocatePortalSession();
   if (!state.session) return;
@@ -529,5 +639,6 @@ async function init() {
   try { await load(); } catch (error) { document.getElementById("app").innerHTML = `<div class="card" style="margin:2rem"><h2>Advocate Portal Error</h2><p>${esc(error.message || "The portal could not be loaded.")}</p><button class="btn" id="advocateLogout">Return to Login</button></div>`; document.getElementById("advocateLogout")?.addEventListener("click", advocatePortalLogout); }
 }
 
-window.addEventListener("beforeunload", () => { clearPreview(); if (state.activityTimer) clearInterval(state.activityTimer); if (state.inactivityCountdownTimer) clearInterval(state.inactivityCountdownTimer); });
+document.addEventListener("fullscreenchange", handleFullscreenChange);
+window.addEventListener("beforeunload", () => { rememberDocumentPage(); clearPreview(); if (state.activityTimer) clearInterval(state.activityTimer); if (state.inactivityCountdownTimer) clearInterval(state.inactivityCountdownTimer); });
 init();

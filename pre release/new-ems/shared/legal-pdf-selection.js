@@ -101,6 +101,7 @@ export async function mountSelectablePdf({ blob, pageNumber = 1, zoom = 1, highl
   const pages = document.getElementById("legalPdfPages");
   const loading = document.getElementById("legalPdfLoading");
   if (!root || !scroll || !pages || !blob) return;
+  root.__lapPdfCleanup?.();
 
   try {
     const [library, pdfDocument] = await Promise.all([getPdfLibrary(), getPdfDocument(blob)]);
@@ -237,10 +238,16 @@ export async function mountSelectablePdf({ blob, pageNumber = 1, zoom = 1, highl
       });
       onPageReady?.({ pageNumber: closestPage, pageCount: pdfDocument.numPages });
     };
-    scroll.addEventListener("scroll", () => {
+    const handleScroll = () => {
       if (scrollFrame) return;
       scrollFrame = window.requestAnimationFrame(updateCurrentPage);
-    }, { passive: true });
+    };
+    scroll.addEventListener("scroll", handleScroll, { passive: true });
+    root.__lapPdfCleanup = () => {
+      observer.disconnect();
+      scroll.removeEventListener("scroll", handleScroll);
+      if (scrollFrame) window.cancelAnimationFrame(scrollFrame);
+    };
 
     window.requestAnimationFrame(() => {
       const target = pages.querySelector(`[data-page-number="${safePage}"]`);
