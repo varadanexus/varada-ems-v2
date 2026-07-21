@@ -2,10 +2,11 @@ import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { showToast } from "./utils.js";
 import { advocatePortalLogout, requireAdvocatePortalSession } from "./legal-advocate-portal-auth.js";
 import { addAdvocateComment, deleteAdvocateAnnotation, deleteAdvocateBookmark, fetchAdvocateSharedFile, getAdvocateDocumentMarks, getAdvocatePortalContext, getAdvocatePreviewOtpStatus, requestAdvocatePreviewOtp, saveAdvocateAnnotation, saveAdvocateBookmark, verifyAdvocatePreviewOtp } from "./legal-advocate-api.js";
+import { mountSelectablePdf } from "./legal-pdf-selection.js";
 
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
 const ACTIVITY_WRITE_INTERVAL_MS = 10 * 1000;
-const state = { session: null, context: { profile: {}, shares: [] }, selectedShareId: "", previewUrl: "", preview: null, query: "", status: "all", updatedAt: null, previewUnlocked: false, otpPrompt: null, otpBusy: false, activityTimer: null, inactivityCountdownTimer: null, inactivityPrompt: null, lastActivityWrite: 0, activePage: 1, marks: { annotations: [], bookmarks: [] }, marksShareId: "", markDrawer: "", editingAnnotationId: "", editingBookmarkId: "", markBusy: false };
+const state = { session: null, context: { profile: {}, shares: [] }, selectedShareId: "", previewUrl: "", preview: null, query: "", status: "all", updatedAt: null, previewUnlocked: false, otpPrompt: null, otpBusy: false, activityTimer: null, inactivityCountdownTimer: null, inactivityPrompt: null, lastActivityWrite: 0, activePage: 1, pdfPageCount: 0, pdfZoom: 1, selectedText: null, inlineComposer: null, marksPanel: "", marks: { annotations: [], bookmarks: [] }, marksShareId: "", markDrawer: "", editingAnnotationId: "", editingBookmarkId: "", markBusy: false };
 
 // This is a standalone external portal, so the authenticated EMS layout does
 // not run here to clear the global page-transition hiding state.
@@ -73,10 +74,28 @@ function previewContent(share) {
   if (!share) return `<div class="lap-preview-empty"><div>VN</div><h2>Select a document</h2><p>Choose a shared legal document to preview it securely.</p></div>`;
   if (!state.previewUrl) return `<div class="lap-preview-empty"><div>${state.previewUnlocked ? "OPEN" : "OTP"}</div><h2>${esc(share.display_title || share.file_name)}</h2><p>${state.previewUnlocked ? "Your secure preview session is unlocked." : "Verify once with the OTP sent to your registered WhatsApp number. Access remains unlocked until you sign out."}</p><button class="lap-primary" id="openPreviewBtn" type="button">${state.previewUnlocked ? "Open Secure Preview" : "Send OTP & Unlock"}</button></div>`;
   const type = state.preview?.contentType || share.mime_type || "";
-  if (type.includes("pdf")) return `<iframe class="lap-frame" src="${esc(state.previewUrl)}#page=${Math.max(1, Number(state.activePage || 1))}&toolbar=1&navpanes=0" title="${esc(share.display_title || share.file_name)}"></iframe>`;
+  if (type.includes("pdf")) return `<section class="lap-pdf-viewer" id="legalPdfViewer" aria-label="Selectable PDF preview"><nav class="lap-pdf-toolbar" aria-label="PDF page controls"><div class="lap-pdf-toolbar-group"><button id="pdfPreviousPage" type="button" ${state.activePage <= 1 ? "disabled" : ""} aria-label="Previous page">←</button><span>Page <strong id="pdfCurrentPage">${esc(state.activePage)}</strong> of <strong id="pdfPageCount">${esc(state.pdfPageCount || "—")}</strong></span><button id="pdfNextPage" type="button" ${state.pdfPageCount && state.activePage >= state.pdfPageCount ? "disabled" : ""} aria-label="Next page">→</button></div><div class="lap-pdf-toolbar-group"><span>Select any clause to annotate or bookmark it</span><button id="pdfZoomOut" type="button" aria-label="Zoom out">−</button><button id="pdfZoomReset" type="button" aria-label="Fit page width">Fit</button><button id="pdfZoomIn" type="button" aria-label="Zoom in">+</button></div></nav><div class="lap-pdf-scroll" id="legalPdfScroll"><div class="lap-pdf-page" id="legalPdfPage"><canvas id="legalPdfCanvas"></canvas><div class="lap-pdf-text-layer" id="legalPdfTextLayer"></div><div class="lap-pdf-loading" id="legalPdfLoading"><strong>Preparing selectable document</strong><span>Rendering the secure PDF text layer…</span></div></div></div>${inlineMarkComposer()}${inlineMarksPanel()}</section>`;
   if (type.includes("html") || type.startsWith("text/")) return `<iframe class="lap-frame" sandbox="" src="${esc(state.previewUrl)}" title="${esc(share.display_title || share.file_name)}"></iframe>`;
   if (type.startsWith("image/")) return `<div class="lap-image-wrap"><img src="${esc(state.previewUrl)}" alt="${esc(share.display_title || share.file_name)}" /></div>`;
   return `<div class="lap-preview-empty"><div>DOC</div><h2>Preview is not available for this file type</h2><p>Use Download if the document owner enabled it.</p></div>`;
+}
+
+function inlineMarkComposer() {
+  const composer = state.inlineComposer;
+  if (!composer) return "";
+  const quote = String(composer.quotedText || "");
+  if (composer.kind === "annotation") return `<section class="lap-inline-composer" aria-label="Add annotation"><header><div><span>SELECTED TEXT · PAGE ${esc(composer.pageNumber)}</span><strong>${composer.id ? "Edit annotation" : "Annotate selection"}</strong></div><button id="closeInlineComposer" type="button" aria-label="Close">✕</button></header>${quote ? `<blockquote class="lap-selection-quote">${esc(quote)}</blockquote>` : ""}<form id="annotationForm" class="lap-mark-form"><input type="hidden" name="id" value="${esc(composer.id || "")}"/><input type="hidden" name="pageNumber" value="${esc(composer.pageNumber)}"/><input type="hidden" name="quotedText" value="${esc(quote)}"/><div class="lap-mark-grid"><label>Type<select name="annotationType"><option value="note">Note</option><option value="question">Question</option><option value="important">Important</option><option value="highlight">Highlight reference</option></select></label><label>Colour<input name="color" type="color" value="${esc(composer.color || "#ddb85a")}" /></label></div><label>Annotation<textarea name="body" rows="3" maxlength="4000" required autofocus placeholder="Write your note about the selected text…">${esc(composer.body || "")}</textarea></label><div class="lap-mark-form-actions"><button class="lap-primary" type="submit" ${state.markBusy ? "disabled" : ""}>${state.markBusy ? "Saving…" : "Save annotation"}</button><button class="lap-secondary" id="cancelInlineComposer" type="button">Cancel</button></div></form></section>`;
+  const suggestedLabel = String(composer.label || quote || `Page ${composer.pageNumber}`).slice(0, 160);
+  return `<section class="lap-inline-composer" aria-label="Add bookmark"><header><div><span>SELECTED TEXT · PAGE ${esc(composer.pageNumber)}</span><strong>${composer.id ? "Edit bookmark" : "Bookmark selection"}</strong></div><button id="closeInlineComposer" type="button" aria-label="Close">✕</button></header>${quote ? `<blockquote class="lap-selection-quote">${esc(quote)}</blockquote>` : ""}<form id="bookmarkForm" class="lap-mark-form"><input type="hidden" name="id" value="${esc(composer.id || "")}"/><input type="hidden" name="pageNumber" value="${esc(composer.pageNumber)}"/><label>Bookmark label<input name="label" maxlength="160" value="${esc(suggestedLabel)}" required /></label><label>Optional note<textarea name="note" rows="2" maxlength="1000" placeholder="Add context for other authorised reviewers…">${esc(composer.note || "")}</textarea></label><div class="lap-mark-form-actions"><button class="lap-primary" type="submit" ${state.markBusy ? "disabled" : ""}>${state.markBusy ? "Saving…" : "Save bookmark"}</button><button class="lap-secondary" id="cancelInlineComposer" type="button">Cancel</button></div></form></section>`;
+}
+
+function inlineMarksPanel() {
+  if (!state.marksPanel) return "";
+  const annotations = state.marks.annotations || [];
+  const bookmarks = state.marks.bookmarks || [];
+  const isAnnotations = state.marksPanel === "annotations";
+  const rows = isAnnotations ? annotations : bookmarks;
+  return `<aside class="lap-inline-marks" aria-label="Shared ${isAnnotations ? "annotations" : "bookmarks"}"><header><div><span>VISIBLE TO ALL AUTHORISED REVIEWERS</span><strong>${isAnnotations ? "Document annotations" : "Document bookmarks"} (${rows.length})</strong></div><button id="closeInlineMarks" type="button" aria-label="Close">✕</button></header><div class="lap-inline-marks-body"><p class="lap-inline-marks-hint">${isAnnotations ? "Select text directly in the PDF, then choose Annotate selection." : "Select text directly in the PDF, then choose Bookmark selection."}</p><div class="lap-mark-list">${rows.length ? rows.map((row) => isAnnotations ? `<article class="lap-mark-card" style="--mark-color:${esc(row.color || "#ddb85a")}"><div class="lap-mark-card-head"><span>${esc(statusLabel(row.annotation_type))} · Page ${esc(row.page_number)}</span><small>${esc(row.author_name || "Reviewer")} · ${esc(dateTime(row.updated_at || row.created_at))}</small></div>${row.quoted_text ? `<blockquote>${esc(row.quoted_text)}</blockquote>` : ""}<p>${esc(row.body)}</p><div class="lap-mark-card-actions"><button type="button" data-mark-page="${esc(row.page_number)}">Go to page</button>${row.can_edit ? `<button type="button" data-edit-annotation="${esc(row.id)}">Edit</button><button class="danger" type="button" data-delete-annotation="${esc(row.id)}">Delete</button>` : ""}</div></article>` : `<article class="lap-mark-card lap-bookmark-card"><div class="lap-mark-card-head"><span>Page ${esc(row.page_number)} · ${esc(row.label)}</span><small>${esc(row.author_name || "Reviewer")} · ${esc(dateTime(row.updated_at || row.created_at))}</small></div>${row.note ? `<p>${esc(row.note)}</p>` : ""}<div class="lap-mark-card-actions"><button type="button" data-mark-page="${esc(row.page_number)}">Go to page</button>${row.can_edit ? `<button type="button" data-edit-bookmark="${esc(row.id)}">Edit</button><button class="danger" type="button" data-delete-bookmark="${esc(row.id)}">Delete</button>` : ""}</div></article>`).join("") : `<div class="lap-mark-empty">No ${isAnnotations ? "annotations" : "bookmarks"} yet. Select text in the PDF to add the first one.</div>`}</div></div></aside>`;
 }
 
 function annotationDrawer(share) {
@@ -162,14 +181,61 @@ function render() {
           </section>
         </div>
       </main>
-    </div>${annotationDrawer(share)}${bookmarkDrawer(share)}${state.inactivityPrompt ? `<div class="lap-modal-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="inactivityTitle"><section class="lap-otp-modal lap-timeout-modal"><div class="lap-otp-mark">IDLE</div><h2 id="inactivityTitle">Are you still active?</h2><p>No activity was detected for 30 minutes. Confirm below to keep this secure portal session open.</p><div class="lap-timeout-count" aria-label="${state.inactivityPrompt.seconds} seconds remaining">${state.inactivityPrompt.seconds}</div><button class="lap-primary" id="stayActiveBtn" type="button">I’m Active — Keep Me Signed In</button><p class="lap-otp-note">For your security, you will be signed out automatically when the countdown reaches zero.</p></section></div>` : state.otpPrompt ? `<div class="lap-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="previewOtpTitle"><section class="lap-otp-modal"><div class="lap-otp-mark">OTP</div><h2 id="previewOtpTitle">Unlock legal document preview</h2><p>A six-digit verification code was sent to the registered WhatsApp number.</p><span class="lap-otp-phone">${esc(state.otpPrompt.maskedPhone || "Registered mobile")}</span><form class="lap-otp-form" id="previewOtpForm"><label>Verification code<input id="previewOtpInput" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" required /></label><div class="lap-otp-actions"><button class="lap-primary" type="submit" ${state.otpBusy ? "disabled" : ""}>${state.otpBusy ? "Verifying..." : "Verify & Open"}</button><button class="lap-secondary" id="resendPreviewOtp" type="button" ${state.otpBusy ? "disabled" : ""}>Resend OTP</button><button class="lap-secondary" id="cancelPreviewOtp" type="button">Cancel</button></div></form><p class="lap-otp-note">After verification, document previews remain unlocked until you sign out or the portal logs you out after 30 minutes of inactivity.</p></section></div>` : ""}<div id="toastHost" class="toast-host" aria-live="polite"></div>`;
+    </div>${state.inactivityPrompt ? `<div class="lap-modal-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="inactivityTitle"><section class="lap-otp-modal lap-timeout-modal"><div class="lap-otp-mark">IDLE</div><h2 id="inactivityTitle">Are you still active?</h2><p>No activity was detected for 30 minutes. Confirm below to keep this secure portal session open.</p><div class="lap-timeout-count" aria-label="${state.inactivityPrompt.seconds} seconds remaining">${state.inactivityPrompt.seconds}</div><button class="lap-primary" id="stayActiveBtn" type="button">I’m Active — Keep Me Signed In</button><p class="lap-otp-note">For your security, you will be signed out automatically when the countdown reaches zero.</p></section></div>` : state.otpPrompt ? `<div class="lap-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="previewOtpTitle"><section class="lap-otp-modal"><div class="lap-otp-mark">OTP</div><h2 id="previewOtpTitle">Unlock legal document preview</h2><p>A six-digit verification code was sent to the registered WhatsApp number.</p><span class="lap-otp-phone">${esc(state.otpPrompt.maskedPhone || "Registered mobile")}</span><form class="lap-otp-form" id="previewOtpForm"><label>Verification code<input id="previewOtpInput" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" required /></label><div class="lap-otp-actions"><button class="lap-primary" type="submit" ${state.otpBusy ? "disabled" : ""}>${state.otpBusy ? "Verifying..." : "Verify & Open"}</button><button class="lap-secondary" id="resendPreviewOtp" type="button" ${state.otpBusy ? "disabled" : ""}>Resend OTP</button><button class="lap-secondary" id="cancelPreviewOtp" type="button">Cancel</button></div></form><p class="lap-otp-note">After verification, document previews remain unlocked until you sign out or the portal logs you out after 30 minutes of inactivity.</p></section></div>` : ""}<div id="toastHost" class="toast-host" aria-live="polite"></div>`;
   bind();
+  mountPdfIfNeeded();
 }
 
 function clearPreview() {
   if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
   state.previewUrl = "";
   state.preview = null;
+  state.pdfPageCount = 0;
+  state.pdfZoom = 1;
+  state.selectedText = null;
+  state.inlineComposer = null;
+  state.marksPanel = "";
+}
+
+function showPdfSelectionActions(selection) {
+  const root = document.getElementById("legalPdfViewer");
+  if (!root) return;
+  root.querySelector(".lap-selection-actions")?.remove();
+  state.selectedText = selection;
+  const actions = document.createElement("div");
+  actions.className = "lap-selection-actions";
+  actions.style.left = `${selection.left}px`;
+  actions.style.top = `${selection.top}px`;
+  actions.innerHTML = `<button type="button" data-selection-kind="annotation">Annotate selection</button><button type="button" data-selection-kind="bookmark">Bookmark selection</button>`;
+  actions.querySelectorAll("[data-selection-kind]").forEach((button) => button.addEventListener("click", () => {
+    state.inlineComposer = { kind: button.dataset.selectionKind, pageNumber: selection.pageNumber, quotedText: selection.text };
+    state.marksPanel = "";
+    render();
+  }));
+  root.append(actions);
+}
+
+function mountPdfIfNeeded() {
+  const type = state.preview?.contentType || "";
+  if (!state.preview?.blob || !type.includes("pdf") || !document.getElementById("legalPdfViewer")) return;
+  mountSelectablePdf({
+    blob: state.preview.blob,
+    pageNumber: state.activePage,
+    zoom: state.pdfZoom,
+    onPageReady: ({ pageNumber, pageCount }) => {
+      state.activePage = pageNumber;
+      state.pdfPageCount = pageCount;
+      const current = document.getElementById("pdfCurrentPage");
+      const total = document.getElementById("pdfPageCount");
+      if (current) current.textContent = String(pageNumber);
+      if (total) total.textContent = String(pageCount);
+      const previous = document.getElementById("pdfPreviousPage");
+      const next = document.getElementById("pdfNextPage");
+      if (previous) previous.disabled = pageNumber <= 1;
+      if (next) next.disabled = pageNumber >= pageCount;
+    },
+    onTextSelected: showPdfSelectionActions
+  }).catch((error) => showToast(error.message || "Selectable PDF preview could not be loaded.", TOAST_TYPES.ERROR));
 }
 
 async function loadDocumentMarks(shareId = state.selectedShareId) {
@@ -184,8 +250,10 @@ async function loadDocumentMarks(shareId = state.selectedShareId) {
 }
 
 function goToDocumentPage(pageNumber) {
-  state.activePage = Math.max(1, Number(pageNumber || 1));
+  state.activePage = Math.min(state.pdfPageCount || Number.MAX_SAFE_INTEGER, Math.max(1, Number(pageNumber || 1)));
   state.markDrawer = "";
+  state.inlineComposer = null;
+  state.selectedText = null;
   state.editingAnnotationId = "";
   state.editingBookmarkId = "";
   render();
@@ -247,15 +315,24 @@ function bind() {
   document.getElementById("openPreviewToolbar")?.addEventListener("click", openPreview);
   document.getElementById("fullscreenPreview")?.addEventListener("click", () => document.querySelector(".lap-preview-wrap")?.requestFullscreen?.());
   document.getElementById("exitFullscreenPreview")?.addEventListener("click", () => document.fullscreenElement && document.exitFullscreen?.());
-  document.getElementById("openAnnotations")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.markDrawer = "annotations"; state.editingAnnotationId = ""; render(); } catch (error) { showToast(error.message || "Annotations could not be loaded.", TOAST_TYPES.ERROR); } });
-  document.getElementById("openBookmarks")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.markDrawer = "bookmarks"; state.editingBookmarkId = ""; render(); } catch (error) { showToast(error.message || "Bookmarks could not be loaded.", TOAST_TYPES.ERROR); } });
+  document.getElementById("openAnnotations")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.marksPanel = state.marksPanel === "annotations" ? "" : "annotations"; state.inlineComposer = null; render(); } catch (error) { showToast(error.message || "Annotations could not be loaded.", TOAST_TYPES.ERROR); } });
+  document.getElementById("openBookmarks")?.addEventListener("click", async () => { try { await loadDocumentMarks(); state.marksPanel = state.marksPanel === "bookmarks" ? "" : "bookmarks"; state.inlineComposer = null; render(); } catch (error) { showToast(error.message || "Bookmarks could not be loaded.", TOAST_TYPES.ERROR); } });
+  document.getElementById("closeInlineMarks")?.addEventListener("click", () => { state.marksPanel = ""; render(); });
+  const closeInlineComposer = () => { state.inlineComposer = null; state.selectedText = null; render(); };
+  document.getElementById("closeInlineComposer")?.addEventListener("click", closeInlineComposer);
+  document.getElementById("cancelInlineComposer")?.addEventListener("click", closeInlineComposer);
+  document.getElementById("pdfPreviousPage")?.addEventListener("click", () => goToDocumentPage(state.activePage - 1));
+  document.getElementById("pdfNextPage")?.addEventListener("click", () => goToDocumentPage(state.activePage + 1));
+  document.getElementById("pdfZoomOut")?.addEventListener("click", () => { state.pdfZoom = Math.max(.65, state.pdfZoom - .15); render(); });
+  document.getElementById("pdfZoomReset")?.addEventListener("click", () => { state.pdfZoom = 1; render(); });
+  document.getElementById("pdfZoomIn")?.addEventListener("click", () => { state.pdfZoom = Math.min(2.5, state.pdfZoom + .15); render(); });
   document.getElementById("closeMarkDrawer")?.addEventListener("click", () => { state.markDrawer = ""; state.editingAnnotationId = ""; state.editingBookmarkId = ""; render(); });
   document.getElementById("closeMarkBackdrop")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) { state.markDrawer = ""; state.editingAnnotationId = ""; state.editingBookmarkId = ""; render(); } });
   document.getElementById("cancelEditAnnotation")?.addEventListener("click", () => { state.editingAnnotationId = ""; render(); });
   document.getElementById("cancelEditBookmark")?.addEventListener("click", () => { state.editingBookmarkId = ""; render(); });
   document.querySelectorAll("[data-mark-page]").forEach((button) => button.addEventListener("click", () => goToDocumentPage(button.dataset.markPage)));
-  document.querySelectorAll("[data-edit-annotation]").forEach((button) => button.addEventListener("click", () => { state.editingAnnotationId = button.dataset.editAnnotation; render(); }));
-  document.querySelectorAll("[data-edit-bookmark]").forEach((button) => button.addEventListener("click", () => { state.editingBookmarkId = button.dataset.editBookmark; render(); }));
+  document.querySelectorAll("[data-edit-annotation]").forEach((button) => button.addEventListener("click", () => { const row = state.marks.annotations.find((item) => item.id === button.dataset.editAnnotation); if (!row) return; state.inlineComposer = { kind: "annotation", id: row.id, pageNumber: row.page_number, quotedText: row.quoted_text || "", body: row.body, color: row.color }; state.marksPanel = ""; render(); }));
+  document.querySelectorAll("[data-edit-bookmark]").forEach((button) => button.addEventListener("click", () => { const row = state.marks.bookmarks.find((item) => item.id === button.dataset.editBookmark); if (!row) return; state.inlineComposer = { kind: "bookmark", id: row.id, pageNumber: row.page_number, label: row.label, note: row.note || "", quotedText: row.label }; state.marksPanel = ""; render(); }));
   document.querySelectorAll("[data-delete-annotation]").forEach((button) => button.addEventListener("click", async () => {
     if (!window.confirm("Delete this annotation for all authorised reviewers?")) return;
     try { await deleteAdvocateAnnotation(state.session.sessionToken, state.selectedShareId, button.dataset.deleteAnnotation); await loadDocumentMarks(); render(); showToast("Annotation deleted.", TOAST_TYPES.SUCCESS); }
@@ -272,7 +349,7 @@ function bind() {
     try {
       state.markBusy = true; render();
       await saveAdvocateAnnotation(state.session.sessionToken, state.selectedShareId, values);
-      state.markBusy = false; state.editingAnnotationId = ""; await loadDocumentMarks(); render();
+      state.markBusy = false; state.editingAnnotationId = ""; state.inlineComposer = null; state.selectedText = null; await loadDocumentMarks(); render();
       showToast("Collaborative annotation saved.", TOAST_TYPES.SUCCESS);
     } catch (error) { state.markBusy = false; render(); showToast(error.message || "Annotation could not be saved.", TOAST_TYPES.ERROR); }
   });
@@ -282,7 +359,7 @@ function bind() {
     try {
       state.markBusy = true; render();
       await saveAdvocateBookmark(state.session.sessionToken, state.selectedShareId, values);
-      state.markBusy = false; state.editingBookmarkId = ""; await loadDocumentMarks(); render();
+      state.markBusy = false; state.editingBookmarkId = ""; state.inlineComposer = null; state.selectedText = null; await loadDocumentMarks(); render();
       showToast("Shared bookmark saved.", TOAST_TYPES.SUCCESS);
     } catch (error) { state.markBusy = false; render(); showToast(error.message || "Bookmark could not be saved.", TOAST_TYPES.ERROR); }
   });
