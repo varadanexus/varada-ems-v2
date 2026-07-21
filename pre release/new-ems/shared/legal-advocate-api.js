@@ -89,3 +89,28 @@ export async function fetchAdvocateSharedFile(sessionToken, shareId) {
     permissionLevel: response.headers.get("x-advocate-permission") || "view"
   };
 }
+
+async function callAdvocatePreviewSecurity(action, sessionToken, payload = {}) {
+  const runtime = window.EMS_RUNTIME_CONFIG || {};
+  if (!runtime.supabaseUrl || !runtime.supabaseAnonKey) throw new Error("Portal security service is not configured.");
+  const response = await fetch(`${runtime.supabaseUrl}/functions/v1/legal-integrations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: runtime.supabaseAnonKey },
+    body: JSON.stringify({ action, sessionToken, ...payload })
+  });
+  const details = await response.json().catch(() => ({}));
+  if (!response.ok || details?.error) throw new Error(details?.error || "Preview verification failed.");
+  return details;
+}
+
+export function getAdvocatePreviewOtpStatus(sessionToken) {
+  return callAdvocatePreviewSecurity("advocate_preview_otp_status", sessionToken);
+}
+
+export function requestAdvocatePreviewOtp(sessionToken) {
+  return callAdvocatePreviewSecurity("advocate_preview_otp_request", sessionToken);
+}
+
+export function verifyAdvocatePreviewOtp(sessionToken, otp) {
+  return callAdvocatePreviewSecurity("advocate_preview_otp_verify", sessionToken, { otp });
+}

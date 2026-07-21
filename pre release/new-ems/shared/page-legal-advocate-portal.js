@@ -1,9 +1,11 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { showToast } from "./utils.js";
 import { advocatePortalLogout, requireAdvocatePortalSession } from "./legal-advocate-portal-auth.js";
-import { addAdvocateComment, fetchAdvocateSharedFile, getAdvocatePortalContext } from "./legal-advocate-api.js";
+import { addAdvocateComment, fetchAdvocateSharedFile, getAdvocatePortalContext, getAdvocatePreviewOtpStatus, requestAdvocatePreviewOtp, verifyAdvocatePreviewOtp } from "./legal-advocate-api.js";
 
-const state = { session: null, context: { profile: {}, shares: [] }, selectedShareId: "", previewUrl: "", preview: null, query: "", status: "all", updatedAt: null };
+const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
+const ACTIVITY_WRITE_INTERVAL_MS = 10 * 1000;
+const state = { session: null, context: { profile: {}, shares: [] }, selectedShareId: "", previewUrl: "", preview: null, query: "", status: "all", updatedAt: null, previewUnlocked: false, otpPrompt: null, otpBusy: false, activityTimer: null, inactivityCountdownTimer: null, inactivityPrompt: null, lastActivityWrite: 0 };
 
 // This is a standalone external portal, so the authenticated EMS layout does
 // not run here to clear the global page-transition hiding state.
@@ -69,7 +71,7 @@ function renderDocumentList() {
 
 function previewContent(share) {
   if (!share) return `<div class="lap-preview-empty"><div>VN</div><h2>Select a document</h2><p>Choose a shared legal document to preview it securely.</p></div>`;
-  if (!state.previewUrl) return `<div class="lap-preview-empty"><div>LOCK</div><h2>${esc(share.display_title || share.file_name)}</h2><p>Open the secure preview when you are ready to review this file.</p><button class="lap-primary" id="openPreviewBtn" type="button">Open Secure Preview</button></div>`;
+  if (!state.previewUrl) return `<div class="lap-preview-empty"><div>${state.previewUnlocked ? "OPEN" : "OTP"}</div><h2>${esc(share.display_title || share.file_name)}</h2><p>${state.previewUnlocked ? "Your secure preview session is unlocked." : "Verify once with the OTP sent to your registered WhatsApp number. Access remains unlocked until you sign out."}</p><button class="lap-primary" id="openPreviewBtn" type="button">${state.previewUnlocked ? "Open Secure Preview" : "Send OTP & Unlock"}</button></div>`;
   const type = state.preview?.contentType || share.mime_type || "";
   if (type.includes("pdf")) return `<iframe class="lap-frame" src="${esc(state.previewUrl)}#toolbar=1&navpanes=0" title="${esc(share.display_title || share.file_name)}"></iframe>`;
   if (type.includes("html") || type.startsWith("text/")) return `<iframe class="lap-frame" sandbox="" src="${esc(state.previewUrl)}" title="${esc(share.display_title || share.file_name)}"></iframe>`;
@@ -117,7 +119,9 @@ function render() {
       .lap-workspace{height:calc(100vh - 276px);min-height:620px;display:grid;grid-template-columns:minmax(250px,300px) minmax(390px,1fr) minmax(290px,330px);border:1px solid var(--lap-line);border-radius:16px;overflow:hidden;background:var(--lap-panel);box-shadow:0 24px 70px rgba(0,0,0,.24)}.lap-list-panel{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0;border-right:1px solid var(--lap-line)}.lap-pane-head{padding:.82rem .9rem;border-bottom:1px solid var(--lap-line-soft);display:flex;align-items:center;justify-content:space-between}.lap-pane-head strong{font-size:.75rem}.lap-pane-head small{color:var(--lap-muted);font-size:.61rem}.lap-list{padding:.62rem;overflow:auto}.lap-doc{width:100%;display:grid;grid-template-columns:38px minmax(0,1fr);gap:.65rem;position:relative;text-align:left;padding:.78rem;border:1px solid transparent;border-radius:11px;background:transparent;color:#fff;margin-bottom:.42rem;cursor:pointer}.lap-doc:hover,.lap-doc.active{border-color:rgba(221,184,90,.48);background:linear-gradient(145deg,rgba(221,184,90,.075),rgba(255,255,255,.012))}.lap-doc.active:before{content:"";position:absolute;left:-1px;top:17%;height:66%;width:2px;background:var(--lap-gold)}.lap-doc-icon{display:grid;place-items:center;width:38px;height:42px;border-radius:9px;background:#17140d;color:var(--lap-gold);font-size:.55rem;font-weight:900}.lap-doc-copy{min-width:0}.lap-doc strong,.lap-doc small{display:block}.lap-doc strong{font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lap-doc small{color:var(--lap-muted);margin-top:.17rem;font-size:.59rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lap-doc .lap-doc-number{color:#cfc9ba}.lap-doc>.lap-badge{grid-column:2;justify-self:start;margin-top:.15rem}
       .lap-badge{display:inline-flex;padding:.2rem .43rem;border:1px solid var(--lap-line);border-radius:999px;color:var(--lap-gold);font-size:.56rem;text-transform:capitalize;white-space:nowrap}.lap-badge--reviewed{border-color:rgba(110,215,165,.28);color:var(--lap-success);background:rgba(110,215,165,.055)}.lap-badge--revision-required{border-color:rgba(240,154,146,.3);color:var(--lap-danger);background:rgba(240,154,146,.055)}
       .lap-preview-panel{display:grid;grid-template-rows:auto auto minmax(0,1fr);min-width:0;background:#11141b}.lap-document-head{padding:.8rem .9rem;border-bottom:1px solid var(--lap-line-soft);display:flex;align-items:center;justify-content:space-between;gap:.75rem}.lap-document-head>div{min-width:0}.lap-document-head span{display:block;color:var(--lap-gold);font-size:.52rem;font-weight:800;letter-spacing:.12em}.lap-document-head strong{display:block;font-size:.78rem;margin-top:.18rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lap-document-tools{display:flex;gap:.35rem;flex-shrink:0}.lap-tool{min-height:30px;padding:.38rem .55rem;border:1px solid var(--lap-line);border-radius:8px;background:#090b10;color:#d7d3c8;cursor:pointer;font-size:.6rem;font-weight:700}.lap-tool:hover{border-color:var(--lap-gold);color:var(--lap-gold-soft)}.lap-progress{padding:.75rem 1rem;border-bottom:1px solid var(--lap-line-soft);display:grid;grid-template-columns:repeat(4,1fr)}.lap-progress span{position:relative;display:grid;justify-items:center;gap:.3rem;color:#666b73}.lap-progress span:not(:last-child):after{content:"";position:absolute;top:10px;left:58%;width:84%;height:1px;background:#30343b}.lap-progress span.complete:not(:last-child):after{background:rgba(221,184,90,.55)}.lap-progress i{position:relative;z-index:1;width:21px;height:21px;border:1px solid #343840;border-radius:50%;background:#11141b;display:grid;place-items:center;font-size:.52rem;font-style:normal}.lap-progress small{font-size:.52rem}.lap-progress .complete{color:var(--lap-gold-soft)}.lap-progress .complete i{border-color:var(--lap-gold);background:rgba(221,184,90,.08)}.lap-progress .current i{box-shadow:0 0 0 4px rgba(221,184,90,.08)}
-      .lap-preview{min-width:0;min-height:0;display:flex;overflow:hidden}.lap-preview-wrap{position:relative;display:flex;width:100%;min-height:0;background:#141820}.lap-frame{width:100%;height:100%;min-height:0;border:0;background:#fff}.lap-image-wrap{display:grid;place-items:center;width:100%;padding:1rem;overflow:auto}.lap-image-wrap img{max-width:100%;max-height:100%}.lap-watermark{position:absolute;inset:-12%;z-index:8;pointer-events:none;display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));grid-template-rows:repeat(5,1fr);align-items:center;justify-items:center;overflow:hidden;user-select:none}.lap-watermark span{max-width:330px;transform:rotate(-24deg);color:rgba(87,63,16,.32);font-size:clamp(.62rem,.85vw,.88rem);font-weight:900;letter-spacing:.08em;text-align:center;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px rgba(255,255,255,.16);mix-blend-mode:multiply}.lap-exit-fullscreen{display:none;position:absolute;top:18px;right:18px;z-index:20;align-items:center;gap:.45rem;padding:.7rem .9rem;border:1px solid rgba(240,213,138,.55);border-radius:10px;background:rgba(7,9,13,.92);color:#f0d58a;box-shadow:0 12px 34px rgba(0,0,0,.34);backdrop-filter:blur(10px);cursor:pointer;font-size:.72rem;font-weight:900}.lap-exit-fullscreen:hover{background:#15120b;border-color:#f0d58a}.lap-preview-empty,.lap-empty{margin:auto;text-align:center;color:var(--lap-muted);padding:2rem}.lap-preview-empty>div,.lap-empty>span{width:58px;height:58px;border:1px solid var(--lap-line);border-radius:17px;display:grid;place-items:center;margin:0 auto 1rem;color:var(--lap-gold);font-weight:900}.lap-preview-empty h2{color:#ece8df;font:700 1.25rem Georgia,serif;margin:.4rem 0}.lap-preview-empty p,.lap-empty p{max-width:360px;line-height:1.6;font-size:.72rem}.lap-primary{border:0;border-radius:10px;padding:.72rem 1rem;background:linear-gradient(135deg,#f2d88d,#c99532);color:#151005;font-weight:900;cursor:pointer;font-size:.68rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}.lap-primary:hover{filter:brightness(1.04);box-shadow:0 10px 28px rgba(201,149,50,.16)}.lap-preview-wrap:fullscreen{background:#11141b}.lap-preview-wrap:fullscreen .lap-frame{height:100vh}.lap-preview-wrap:fullscreen .lap-exit-fullscreen{display:flex}
+      .lap-preview{min-width:0;min-height:0;display:flex;overflow:hidden}.lap-preview-wrap{position:relative;display:flex;width:100%;min-height:0;background:#141820}.lap-frame{width:100%;height:100%;min-height:0;border:0;background:#fff}.lap-image-wrap{display:grid;place-items:center;width:100%;padding:1rem;overflow:auto}.lap-image-wrap img{max-width:100%;max-height:100%}.lap-watermark{position:absolute;inset:-12%;z-index:8;pointer-events:none;display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));grid-template-rows:repeat(5,1fr);align-items:center;justify-items:center;overflow:hidden;user-select:none}.lap-watermark span{max-width:330px;transform:rotate(-24deg);color:rgba(87,63,16,.32);font-size:clamp(.62rem,.85vw,.88rem);font-weight:900;letter-spacing:.08em;text-align:center;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px rgba(255,255,255,.16);mix-blend-mode:multiply}.lap-exit-fullscreen{display:none;position:absolute;top:18px;right:18px;z-index:20;align-items:center;gap:.45rem;padding:.7rem .9rem;border:1px solid rgba(240,213,138,.55);border-radius:10px;background:rgba(7,9,13,.92);color:#f0d58a;box-shadow:0 12px 34px rgba(0,0,0,.34);backdrop-filter:blur(10px);cursor:pointer;font-size:.72rem;font-weight:900}.lap-exit-fullscreen:hover{background:#15120b;border-color:#f0d58a}.lap-preview-empty,.lap-empty{margin:auto;text-align:center;color:var(--lap-muted);padding:2rem}.lap-preview-empty{width:min(440px,100%);min-height:100%;display:grid;justify-items:center;align-content:center}.lap-preview-empty>div,.lap-empty>span{width:58px;height:58px;border:1px solid var(--lap-line);border-radius:17px;display:grid;place-items:center;margin:0 auto 1rem;color:var(--lap-gold);font-weight:900}.lap-preview-empty h2{color:#ece8df;font:700 1.25rem Georgia,serif;margin:.4rem 0}.lap-preview-empty p,.lap-empty p{max-width:360px;line-height:1.6;font-size:.72rem}.lap-preview-empty p{margin:.35rem auto 1rem}.lap-primary{border:0;border-radius:10px;padding:.72rem 1rem;background:linear-gradient(135deg,#f2d88d,#c99532);color:#151005;font-weight:900;cursor:pointer;font-size:.68rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}.lap-primary:hover{filter:brightness(1.04);box-shadow:0 10px 28px rgba(201,149,50,.16)}.lap-primary:disabled{opacity:.58;cursor:wait}.lap-preview-wrap:fullscreen{background:#11141b}.lap-preview-wrap:fullscreen .lap-frame{height:100vh}.lap-preview-wrap:fullscreen .lap-exit-fullscreen{display:flex}
+      .lap-modal-backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:1rem;background:rgba(1,2,4,.82);backdrop-filter:blur(12px)}.lap-otp-modal{width:min(430px,100%);border:1px solid rgba(221,184,90,.42);border-radius:18px;padding:1.35rem;background:linear-gradient(145deg,#11141a,#080a0e);box-shadow:0 30px 100px rgba(0,0,0,.65);color:var(--lap-text)}.lap-otp-mark{width:48px;height:48px;border:1px solid var(--lap-line);border-radius:14px;display:grid;place-items:center;color:var(--lap-gold);font-weight:900}.lap-otp-modal h2{font:700 1.35rem Georgia,serif;margin:.9rem 0 .35rem}.lap-otp-modal>p{color:var(--lap-muted);font-size:.72rem;line-height:1.55;margin:.25rem 0}.lap-otp-phone{display:block;color:var(--lap-gold-soft);font-weight:800;margin-top:.35rem}.lap-otp-form{display:grid;gap:.75rem;margin-top:1rem}.lap-otp-form label{display:grid;gap:.35rem;color:#cbc7bd;font-size:.66rem}.lap-otp-form input{width:100%;padding:.85rem;border:1px solid var(--lap-line);border-radius:10px;background:#05070a;color:#fff;text-align:center;font-size:1.3rem;font-weight:900;letter-spacing:.55em;outline:none}.lap-otp-form input:focus{border-color:var(--lap-gold);box-shadow:0 0 0 4px rgba(221,184,90,.08)}.lap-otp-actions{display:grid;grid-template-columns:1fr 1fr;gap:.55rem}.lap-otp-actions .lap-primary{grid-column:1/-1}.lap-otp-note{padding-top:.8rem!important;margin-top:.8rem!important;border-top:1px solid var(--lap-line-soft)}
+      .lap-timeout-modal{text-align:center}.lap-timeout-modal .lap-otp-mark{margin:0 auto}.lap-timeout-count{width:82px;height:82px;margin:1rem auto;border:2px solid var(--lap-gold);border-radius:50%;display:grid;place-items:center;color:var(--lap-gold-soft);font:700 1.65rem Georgia,serif;box-shadow:0 0 0 7px rgba(221,184,90,.06)}.lap-timeout-modal .lap-primary{width:100%;margin-top:1rem;justify-content:center}
       .lap-review{min-width:0;border-left:1px solid var(--lap-line);padding:.9rem;overflow:auto;background:#0b0e14}.lap-review-head{padding-bottom:.75rem;border-bottom:1px solid var(--lap-line-soft)}.lap-review-head>span{font-size:.55rem;color:var(--lap-gold);letter-spacing:.14em}.lap-review-head h3{margin:.3rem 0 .55rem;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lap-review-head>div{display:flex;gap:.35rem;flex-wrap:wrap}.lap-instructions{display:grid;grid-template-columns:30px 1fr;gap:.65rem;border:1px solid var(--lap-line);border-radius:11px;padding:.7rem;margin-top:.7rem;background:rgba(221,184,90,.045)}.lap-instructions>span{width:28px;height:28px;border-radius:8px;background:rgba(221,184,90,.1);display:grid;place-items:center;color:var(--lap-gold);font-size:.58rem;font-weight:900}.lap-instructions strong{font-size:.66rem}.lap-instructions p{line-height:1.5;color:#b7b3aa;font-size:.64rem;margin:.25rem 0 0}.lap-section-title{display:flex;justify-content:space-between;align-items:center;margin:.9rem 0 .4rem}.lap-section-title span{font-size:.66rem;font-weight:800}.lap-section-title small{font-size:.56rem;color:var(--lap-muted)}.lap-thread{display:grid;gap:.5rem}.lap-thread article{border:1px solid var(--lap-line-soft);border-radius:11px;padding:.72rem;background:rgba(255,255,255,.016)}.lap-thread article>div{display:flex;justify-content:space-between;gap:.5rem}.lap-thread article>div strong{font-size:.63rem;color:#e5e1d7}.lap-thread time,.lap-thread small,.lap-muted{color:var(--lap-muted);font-size:.55rem}.lap-thread article>p{line-height:1.55;color:#cbc7bd;font-size:.66rem;margin:.45rem 0}.lap-thread blockquote{margin:.55rem 0 0;padding:.62rem;border-left:2px solid var(--lap-gold);background:#07090d}.lap-thread blockquote strong{font-size:.6rem;color:var(--lap-gold-soft)}.lap-thread blockquote p{font-size:.62rem;margin:.25rem 0}.lap-awaiting{display:inline-flex;margin-top:.2rem;color:#c8a95b!important}.lap-thread-empty{padding:1rem;border:1px dashed var(--lap-line);border-radius:11px;text-align:center;color:var(--lap-muted)}.lap-thread-empty span{color:var(--lap-gold)}.lap-thread-empty p{font-size:.62rem;line-height:1.5;margin:.35rem 0 0}.lap-comment-form{display:grid;gap:.6rem;margin-top:.8rem;padding-top:.1rem}.lap-comment-form label{display:grid;gap:.32rem;font-size:.64rem;color:#c7c4bc}.lap-comment-form select,.lap-comment-form textarea{padding:.62rem;font-size:.65rem;resize:vertical}.lap-field-help{color:var(--lap-muted);font-size:.55rem;line-height:1.4}
       @media(max-width:1320px){.lap-shell{grid-template-columns:220px minmax(0,1fr)}.lap-workspace{grid-template-columns:250px minmax(390px,1fr)}.lap-review{grid-column:1/-1;border-left:0;border-top:1px solid var(--lap-line);max-height:430px}.lap-workspace{height:auto;min-height:650px}.lap-preview-panel{min-height:650px}.lap-summary{grid-template-columns:repeat(4,1fr)}}
       @media(max-width:900px){.lap-shell{grid-template-columns:1fr}.lap-side{position:relative;height:auto;display:grid;grid-template-columns:1fr 1fr}.lap-brand,.lap-side footer{grid-column:1/-1}.lap-side footer{display:flex}.lap-side-label,.lap-side-nav{display:none}.lap-content{padding:1rem}.lap-summary{grid-template-columns:repeat(2,1fr)}.lap-workspace{grid-template-columns:1fr}.lap-list-panel{border-right:0;border-bottom:1px solid var(--lap-line)}.lap-list{max-height:300px}.lap-preview-panel{min-height:650px}.lap-review{grid-column:auto}.lap-controls{grid-template-columns:1fr 180px}.lap-controls>.lap-secondary{grid-column:1/-1}.lap-top{align-items:flex-start}.lap-updated{display:none}}
@@ -143,7 +147,7 @@ function render() {
           </section>
         </div>
       </main>
-    </div><div id="toastHost" class="toast-host" aria-live="polite"></div>`;
+    </div>${state.inactivityPrompt ? `<div class="lap-modal-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="inactivityTitle"><section class="lap-otp-modal lap-timeout-modal"><div class="lap-otp-mark">IDLE</div><h2 id="inactivityTitle">Are you still active?</h2><p>No activity was detected for 30 minutes. Confirm below to keep this secure portal session open.</p><div class="lap-timeout-count" aria-label="${state.inactivityPrompt.seconds} seconds remaining">${state.inactivityPrompt.seconds}</div><button class="lap-primary" id="stayActiveBtn" type="button">I’m Active — Keep Me Signed In</button><p class="lap-otp-note">For your security, you will be signed out automatically when the countdown reaches zero.</p></section></div>` : state.otpPrompt ? `<div class="lap-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="previewOtpTitle"><section class="lap-otp-modal"><div class="lap-otp-mark">OTP</div><h2 id="previewOtpTitle">Unlock legal document preview</h2><p>A six-digit verification code was sent to the registered WhatsApp number.</p><span class="lap-otp-phone">${esc(state.otpPrompt.maskedPhone || "Registered mobile")}</span><form class="lap-otp-form" id="previewOtpForm"><label>Verification code<input id="previewOtpInput" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="••••••" required /></label><div class="lap-otp-actions"><button class="lap-primary" type="submit" ${state.otpBusy ? "disabled" : ""}>${state.otpBusy ? "Verifying..." : "Verify & Open"}</button><button class="lap-secondary" id="resendPreviewOtp" type="button" ${state.otpBusy ? "disabled" : ""}>Resend OTP</button><button class="lap-secondary" id="cancelPreviewOtp" type="button">Cancel</button></div></form><p class="lap-otp-note">After verification, document previews remain unlocked until you sign out or the portal logs you out after 30 minutes of inactivity.</p></section></div>` : ""}<div id="toastHost" class="toast-host" aria-live="polite"></div>`;
   bind();
 }
 
@@ -156,6 +160,10 @@ function clearPreview() {
 async function openPreview() {
   const share = state.context.shares.find((row) => row.id === state.selectedShareId);
   if (!share) return;
+  if (!state.previewUnlocked) {
+    await requestPreviewUnlock();
+    return;
+  }
   try {
     const file = await fetchAdvocateSharedFile(state.session.sessionToken, share.id);
     clearPreview();
@@ -164,6 +172,30 @@ async function openPreview() {
     share.review_status = share.review_status === "shared" ? "opened" : share.review_status;
     render();
   } catch (error) { showToast(error.message || "Document could not be opened.", TOAST_TYPES.ERROR); }
+}
+
+async function requestPreviewUnlock() {
+  if (state.otpBusy) return;
+  try {
+    state.otpBusy = true;
+    const result = await requestAdvocatePreviewOtp(state.session.sessionToken);
+    state.otpBusy = false;
+    if (result.unlocked) {
+      state.previewUnlocked = true;
+      state.otpPrompt = null;
+      render();
+      await openPreview();
+      return;
+    }
+    state.otpPrompt = { maskedPhone: result.maskedPhone, expiresAt: result.otpExpiresAt };
+    render();
+    setTimeout(() => document.getElementById("previewOtpInput")?.focus(), 0);
+    showToast("OTP sent to the registered WhatsApp number.", TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    state.otpBusy = false;
+    render();
+    showToast(error.message || "OTP could not be sent.", TOAST_TYPES.ERROR);
+  }
 }
 
 function bind() {
@@ -180,6 +212,30 @@ function bind() {
   document.getElementById("openPreviewToolbar")?.addEventListener("click", openPreview);
   document.getElementById("fullscreenPreview")?.addEventListener("click", () => document.querySelector(".lap-preview-wrap")?.requestFullscreen?.());
   document.getElementById("exitFullscreenPreview")?.addEventListener("click", () => document.fullscreenElement && document.exitFullscreen?.());
+  document.getElementById("stayActiveBtn")?.addEventListener("click", keepSessionActive);
+  document.getElementById("cancelPreviewOtp")?.addEventListener("click", () => { state.otpPrompt = null; state.otpBusy = false; render(); });
+  document.getElementById("resendPreviewOtp")?.addEventListener("click", requestPreviewUnlock);
+  document.getElementById("previewOtpForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const otp = String(new FormData(event.currentTarget).get("otp") || "").replace(/\D/g, "");
+    if (!/^\d{6}$/.test(otp)) { showToast("Enter the six-digit OTP.", TOAST_TYPES.ERROR); return; }
+    try {
+      state.otpBusy = true;
+      render();
+      const result = await verifyAdvocatePreviewOtp(state.session.sessionToken, otp);
+      state.previewUnlocked = Boolean(result.unlocked);
+      state.otpPrompt = null;
+      state.otpBusy = false;
+      render();
+      showToast("Secure document previews are unlocked for this session.", TOAST_TYPES.SUCCESS);
+      await openPreview();
+    } catch (error) {
+      state.otpBusy = false;
+      render();
+      setTimeout(() => document.getElementById("previewOtpInput")?.focus(), 0);
+      showToast(error.message || "OTP verification failed.", TOAST_TYPES.ERROR);
+    }
+  });
   document.getElementById("refreshPortal")?.addEventListener("click", async () => {
     try { await load(); showToast("Legal workspace refreshed.", TOAST_TYPES.SUCCESS); }
     catch (error) { showToast(error.message || "The portal could not be refreshed.", TOAST_TYPES.ERROR); }
@@ -204,18 +260,81 @@ function bind() {
 }
 
 async function load() {
-  state.context = await getAdvocatePortalContext(state.session.sessionToken);
+  const [context, security] = await Promise.all([
+    getAdvocatePortalContext(state.session.sessionToken),
+    getAdvocatePreviewOtpStatus(state.session.sessionToken)
+  ]);
+  state.context = context;
+  state.previewUnlocked = Boolean(security?.unlocked);
   state.updatedAt = new Date();
   if (!state.selectedShareId && state.context.shares?.[0]?.id) state.selectedShareId = state.context.shares[0].id;
   if (state.selectedShareId && !state.context.shares.some((row) => row.id === state.selectedShareId)) { clearPreview(); state.selectedShareId = state.context.shares?.[0]?.id || ""; }
   render();
 }
 
+function activityStorageKey() {
+  return `ems_legal_advocate_last_activity_${String(state.session?.sessionToken || "").slice(-16)}`;
+}
+
+function recordActivity(force = false) {
+  if (state.inactivityPrompt && !force) return;
+  const now = Date.now();
+  if (!force && now - state.lastActivityWrite < ACTIVITY_WRITE_INTERVAL_MS) return;
+  state.lastActivityWrite = now;
+  sessionStorage.setItem(activityStorageKey(), String(now));
+}
+
+async function enforceInactivityTimeout() {
+  if (state.inactivityPrompt) return;
+  const last = Number(sessionStorage.getItem(activityStorageKey()) || state.lastActivityWrite || Date.now());
+  if (Date.now() - last < INACTIVITY_LIMIT_MS) return;
+  state.inactivityPrompt = { seconds: 30 };
+  render();
+  state.inactivityCountdownTimer = setInterval(async () => {
+    if (!state.inactivityPrompt) return;
+    state.inactivityPrompt.seconds -= 1;
+    if (state.inactivityPrompt.seconds <= 0) {
+      clearInterval(state.inactivityCountdownTimer);
+      state.inactivityCountdownTimer = null;
+      clearInterval(state.activityTimer);
+      state.activityTimer = null;
+      clearPreview();
+      await advocatePortalLogout();
+      return;
+    }
+    render();
+  }, 1000);
+}
+
+async function keepSessionActive() {
+  clearInterval(state.inactivityCountdownTimer);
+  state.inactivityCountdownTimer = null;
+  state.inactivityPrompt = null;
+  recordActivity(true);
+  try {
+    const security = await getAdvocatePreviewOtpStatus(state.session.sessionToken);
+    state.previewUnlocked = Boolean(security?.unlocked);
+    render();
+    showToast("Secure session extended.", TOAST_TYPES.SUCCESS);
+  } catch {
+    clearPreview();
+    await advocatePortalLogout();
+  }
+}
+
+function startInactivityGuard() {
+  recordActivity(true);
+  ["pointerdown", "keydown", "touchstart", "scroll"].forEach((name) => window.addEventListener(name, () => recordActivity(), { passive: true }));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) enforceInactivityTimeout(); });
+  state.activityTimer = setInterval(enforceInactivityTimeout, 1000);
+}
+
 async function init() {
   state.session = await requireAdvocatePortalSession();
   if (!state.session) return;
+  startInactivityGuard();
   try { await load(); } catch (error) { document.getElementById("app").innerHTML = `<div class="card" style="margin:2rem"><h2>Advocate Portal Error</h2><p>${esc(error.message || "The portal could not be loaded.")}</p><button class="btn" id="advocateLogout">Return to Login</button></div>`; document.getElementById("advocateLogout")?.addEventListener("click", advocatePortalLogout); }
 }
 
-window.addEventListener("beforeunload", clearPreview);
+window.addEventListener("beforeunload", () => { clearPreview(); if (state.activityTimer) clearInterval(state.activityTimer); if (state.inactivityCountdownTimer) clearInterval(state.inactivityCountdownTimer); });
 init();

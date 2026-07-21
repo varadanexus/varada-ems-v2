@@ -1301,6 +1301,39 @@ function base64ToBytes(base64: string) {
   return bytes;
 }
 
+async function sendLegalPreviewOtp(toPhone: string, otp: string) {
+  const accountSid = env("TWILIO_ACCOUNT_SID");
+  const authToken = env("TWILIO_AUTH_TOKEN");
+  const from = env("TWILIO_WHATSAPP_FROM");
+  const messagingServiceSid = env("TWILIO_MESSAGING_SERVICE_SID");
+  const contentSid = env("LEGAL_PREVIEW_TWILIO_OTP_CONTENT_SID") || env("MEETING_TWILIO_OTP_CONTENT_SID");
+  if (!accountSid || !authToken || (!from && !messagingServiceSid)) {
+    throw new Error("WhatsApp OTP delivery is not configured. Contact Varada Nexus support.");
+  }
+  const params = new URLSearchParams();
+  params.set("To", `whatsapp:+${normalizePhone(toPhone)}`);
+  if (messagingServiceSid) params.set("MessagingServiceSid", messagingServiceSid);
+  else params.set("From", from.startsWith("whatsapp:") ? from : `whatsapp:${from}`);
+  if (contentSid) {
+    params.set("ContentSid", contentSid);
+    params.set("ContentVariables", JSON.stringify({ "1": otp }));
+  } else {
+    params.set("Body", `Your Varada Nexus legal document preview OTP is ${otp}. It expires in 10 minutes. Do not share this code.`);
+  }
+  params.set("StatusCallback", env("TWILIO_STATUS_CALLBACK_URL") || `${env("SUPABASE_URL")}/functions/v1/legal-integrations?provider=twilio`);
+  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.message || "WhatsApp OTP could not be sent");
+  return { sid: payload.sid || null, status: payload.status || "queued", template: Boolean(contentSid) };
+}
+
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 function cleanDocxName(value = "") {
@@ -3649,6 +3682,66 @@ async function advocateFileProxy(body: any) {
   });
 }
 
+async function advocatePreviewOtpStatus(body: any) {
+  const sessionToken = String(body.sessionToken || "").trim();
+  if (!sessionToken) return json({ error: "Advocate session is required" }, 400);
+  const result = await adminClient().rpc("legal_advocate_preview_otp_status", { p_session_token: sessionToken });
+  if (result.error) throw result.error;
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  return json({ ok: true, unlocked: Boolean(row?.unlocked), verifiedAt: row?.verified_at || null, maskedPhone: row?.masked_phone || null });
+}
+
+async function advocatePreviewOtpRequest(body: any) {
+  const admin = adminClient();
+  const sessionToken = String(body.sessionToken || "").trim();
+  if (!sessionToken) return json({ error: "Advocate session is required" }, 400);
+  const result = await admin.rpc("legal_advocate_preview_otp_issue", {
+    p_session_token: sessionToken,
+    p_ttl_minutes: 10,
+    p_resend_seconds: 45
+  });
+  if (result.error) throw result.error;
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  if (row?.already_unlocked) {
+    return json({ ok: true, unlocked: true, maskedPhone: row.masked_phone || null });
+  }
+  try {
+    const delivery = await sendLegalPreviewOtp(row.delivery_phone, row.otp);
+    const redactedMessage = "Varada Nexus legal document preview OTP sent. The code expires in 10 minutes.";
+    await recordWhatsAppDelivery(admin, {
+      phone: row.delivery_phone,
+      name: row.advocate_name || "Advocate",
+      messageText: redactedMessage,
+      templateAlias: "legal_preview_otp",
+      sourceModule: "legal",
+      sourceEvent: "legal_preview_otp",
+      renderedPayload: { otp_redacted: true, expires_at: row.otp_expires_at },
+      sid: delivery.sid,
+      status: delivery.status
+    });
+    return json({ ok: true, unlocked: false, maskedPhone: row.masked_phone, otpExpiresAt: row.otp_expires_at });
+  } catch (error) {
+    await admin.from("external_portal_sessions").update({
+      legal_preview_otp_hash: null,
+      legal_preview_otp_expires_at: null,
+      legal_preview_otp_sent_at: null,
+      legal_preview_otp_attempt_count: 0
+    }).eq("session_token", sessionToken);
+    throw error;
+  }
+}
+
+async function advocatePreviewOtpVerify(body: any) {
+  const sessionToken = String(body.sessionToken || "").trim();
+  const otp = String(body.otp || "").replace(/\D/g, "");
+  if (!sessionToken) return json({ error: "Advocate session is required" }, 400);
+  if (!/^\d{6}$/.test(otp)) return json({ error: "Enter the six-digit OTP" }, 400);
+  const result = await adminClient().rpc("legal_advocate_preview_otp_verify", { p_session_token: sessionToken, p_otp: otp });
+  if (result.error) throw result.error;
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  return json({ ok: true, unlocked: Boolean(row?.unlocked), verifiedAt: row?.verified_at || null });
+}
+
 async function diditWebhook(req: Request, rawBody: string) {
   const admin = adminClient();
   const verification = await verifyDiditWebhook(req, rawBody);
@@ -3819,6 +3912,9 @@ Deno.serve(async (req) => {
     if (action === "delete_agreement") return await deleteLegalAgreement(req, body);
     if (action === "rebuild_archive_artifacts") return await rebuildArchiveArtifacts(req, body);
     if (action === "archive_file_proxy") return await archiveFileProxy(req, body);
+    if (action === "advocate_preview_otp_status") return await advocatePreviewOtpStatus(body);
+    if (action === "advocate_preview_otp_request") return await advocatePreviewOtpRequest(body);
+    if (action === "advocate_preview_otp_verify") return await advocatePreviewOtpVerify(body);
     if (action === "advocate_file_proxy") return await advocateFileProxy(body);
     if (action === "countersign_agreement") return await countersignAgreement(req, body);
     if (action === "download_executed_pdf") return await downloadExecutedAgreementPdf(req, body);
