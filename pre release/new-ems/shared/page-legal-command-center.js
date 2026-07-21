@@ -61,6 +61,7 @@ function renderPage(data = {}) {
       ${renderActionCard({ title: "View Agreements", detail: "Track draft, pending, signed, rejected, archived and expired agreements.", href: ROUTES.LEGAL_AGREEMENTS, accent: "AG" })}
       ${renderActionCard({ title: "Signing Evidence", detail: "Capture consent, live photo, GPS, IP, VPN risk and evidence hash.", href: ROUTES.LEGAL_SIGNING, accent: "SE" })}
       ${renderActionCard({ title: "Google Drive Archive", detail: "Review final signed PDFs, evidence bundles and Drive file references.", href: ROUTES.LEGAL_ARCHIVE, accent: "GD" })}
+      ${renderActionCard({ title: "Advocate Sharing", detail: "Share selected drafts, agreements and evidence files through a restricted external advocate portal.", href: ROUTES.LEGAL_ADVOCATE_SHARING, accent: "AP" })}
       ${renderActionCard({ title: "Audit Trail", detail: "Inspect legal events, blocked attempts, provider callbacks and evidence logs.", href: ROUTES.LEGAL_AUDIT, accent: "AT" })}
       ${renderActionCard({ title: "Provider Settings", detail: "Prepare Didit, Twilio WhatsApp, Google Drive and public URL secrets.", href: ROUTES.LEGAL_SETTINGS, accent: "PS" })}
     </section>

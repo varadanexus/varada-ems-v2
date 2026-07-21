@@ -177,6 +177,9 @@ async function resolveExternalDashboard(sessionToken) {
   if (access.some((item) => item.source_module === "interiors" && item.access_scope === "interiors_architect_portal")) {
     return ROUTES.INTERIORS_ARCHITECT_PORTAL;
   }
+  if (access.some((item) => item.source_module === "legal" && item.access_scope === "legal_advocate_portal")) {
+    return ROUTES.LEGAL_ADVOCATE_PORTAL;
+  }
   if (access.some((item) => item.source_module === "interiors" && item.access_scope === "interiors_client_portal")) {
     return ROUTES.INTERIORS_CLIENT_APP;
   }

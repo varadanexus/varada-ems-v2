@@ -43,6 +43,8 @@ export const ROUTES = {
   LEGAL_SIGNING: "/new-ems/modules/legal-signing/index.html",
   LEGAL_PUBLIC_SIGN: "/new-ems/modules/legal-public-sign/index.html",
   LEGAL_ARCHIVE: "/new-ems/modules/legal-archive/index.html",
+  LEGAL_ADVOCATE_SHARING: "/new-ems/modules/legal-advocate-sharing/index.html",
+  LEGAL_ADVOCATE_PORTAL: "/new-ems/modules/legal-advocate-portal/index.html",
   LEGAL_AUDIT: "/new-ems/modules/legal-audit/index.html",
   LEGAL_SETTINGS: "/new-ems/modules/legal-settings/index.html",
   WHATSAPP_COMMAND_CENTER: "/new-ems/modules/whatsapp-command-center/index.html",

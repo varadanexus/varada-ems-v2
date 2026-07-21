@@ -467,6 +467,10 @@ async function handleExternalLogin(username, password) {
     window.location.assign(ROUTES.INTERIORS_ARCHITECT_PORTAL);
     return;
   }
+  if (row.user_type === "advocate") {
+    window.location.assign(ROUTES.LEGAL_ADVOCATE_PORTAL);
+    return;
+  }
 
   const dashboardRoute = ROUTES.EXTERNAL_PORTAL_DASHBOARD ?? null;
   if (dashboardRoute) {
@@ -523,8 +527,8 @@ async function checkExistingSession() {
       const { data, error } = await client.rpc("external_portal_validate_session", { p_session_token: externalStored.sessionToken });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
-      if (row?.user_type === "architect") {
-        window.location.assign(ROUTES.INTERIORS_ARCHITECT_PORTAL);
+      if (row?.user_type === "architect" || row?.user_type === "advocate") {
+        window.location.assign(row.user_type === "advocate" ? ROUTES.LEGAL_ADVOCATE_PORTAL : ROUTES.INTERIORS_ARCHITECT_PORTAL);
         return;
       }
     } catch {}

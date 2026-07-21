@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, authorizationjwt, x-client-info, apikey, content-type, x-didit-signature, x-signature, x-signature-v2, x-signature-simple, x-timestamp, x-twilio-signature",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Expose-Headers": "x-file-name, content-disposition"
+  "Access-Control-Expose-Headers": "x-file-name, x-advocate-permission, content-disposition"
 };
 
 const PUBLIC_WEBSITE_ORIGIN = "https://www.varadanexus.com";
@@ -3615,6 +3615,40 @@ async function archiveFileProxy(req: Request, body: any) {
   });
 }
 
+async function advocateFileProxy(body: any) {
+  const admin = adminClient();
+  const sessionToken = String(body.sessionToken || "").trim();
+  const shareId = String(body.shareId || "").trim();
+  if (!sessionToken || !shareId) return json({ error: "Advocate session and share ID are required" }, 400);
+
+  const accessResult = await admin.rpc("legal_advocate_portal_file_access", {
+    p_session_token: sessionToken,
+    p_share_id: shareId
+  });
+  if (accessResult.error) throw accessResult.error;
+  const access = accessResult.data || {};
+  const fileId = String(access.drive_file_id || "").trim();
+  if (!fileId) return json({ error: "Shared document is unavailable" }, 404);
+
+  const bytes = await downloadDriveFile(fileId);
+  if (!bytes) return json({ error: "Shared document could not be downloaded" }, 404);
+  const meta = await driveFileMeta(fileId).catch(() => null);
+  const fileName = String(access.file_name || meta?.name || "legal-document").replace(/["\r\n]/g, "");
+  const mimeType = access.mime_type || meta?.mimeType || "application/octet-stream";
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": mimeType,
+      "Content-Length": String(bytes.byteLength),
+      "Content-Disposition": `inline; filename="${fileName}"`,
+      "X-File-Name": encodeURIComponent(fileName),
+      "X-Advocate-Permission": access.permission_level || "view",
+      "Cache-Control": "private, no-store"
+    }
+  });
+}
+
 async function diditWebhook(req: Request, rawBody: string) {
   const admin = adminClient();
   const verification = await verifyDiditWebhook(req, rawBody);
@@ -3785,6 +3819,7 @@ Deno.serve(async (req) => {
     if (action === "delete_agreement") return await deleteLegalAgreement(req, body);
     if (action === "rebuild_archive_artifacts") return await rebuildArchiveArtifacts(req, body);
     if (action === "archive_file_proxy") return await archiveFileProxy(req, body);
+    if (action === "advocate_file_proxy") return await advocateFileProxy(body);
     if (action === "countersign_agreement") return await countersignAgreement(req, body);
     if (action === "download_executed_pdf") return await downloadExecutedAgreementPdf(req, body);
     if (action === "config_status") return await configStatus(req);
