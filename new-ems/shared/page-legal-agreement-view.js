@@ -42,7 +42,7 @@ function formatFileSize(bytes) {
 }
 
 function artifactLabel(kind) {
-  return ({ signed_pdf: "Signed Agreement PDF", acceptance_certificate_pdf: "Signing Certificate PDF", evidence_pdf: "Evidence PDF" })[kind] || kind || "Attachment";
+  return ({ draft_pdf: "Prepared Agreement PDF", signed_pdf: "Signed Agreement PDF", acceptance_certificate_pdf: "Signing Certificate PDF", evidence_pdf: "Evidence PDF" })[kind] || kind || "Attachment";
 }
 
 async function downloadBlobResult(result, fallbackName) {

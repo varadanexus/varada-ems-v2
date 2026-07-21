@@ -9,7 +9,8 @@ export async function legalIntegration(action, payload = {}) {
     let message = error.message || "Legal integration request failed.";
     const context = error.context;
     if (context && typeof context.json === "function") {
-      const details = await context.json().catch(() => null);
+      const response = typeof context.clone === "function" ? context.clone() : context;
+      const details = await response.json().catch(() => null);
       if (details?.error) message = details.error;
       else if (details?.message) message = details.message;
     } else if (context && typeof context.text === "function") {
@@ -40,6 +41,10 @@ export async function reviseLegalDraft(payload) {
 
 export async function saveLegalDraft(payload) {
   return legalIntegration("save_draft", payload);
+}
+
+export async function uploadPreparedLegalPdf(payload) {
+  return legalIntegration("prepared_pdf_upload", payload);
 }
 
 export async function startLegalWordEditor(payload) {

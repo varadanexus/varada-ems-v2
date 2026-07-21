@@ -10,9 +10,10 @@ import {
   listOfflineLegalDraftVersions,
   reviseLegalDraft,
   saveLegalDraft,
+  uploadPreparedLegalPdf,
   startLegalWordEditor,
   uploadOfflineLegalDraftVersion
-} from "./legal-api.js?v=ems-editor-6";
+} from "./legal-api.js?v=ems-editor-7";
 import { showToast } from "./utils.js";
 
 let currentDraftMode = "ai";
@@ -26,6 +27,8 @@ let manualDocxResizeObserver = null;
 let manualDriveSeriesId = sessionStorage.getItem("emsLegalDraftSeriesId") || "";
 let manualDriveVersions = [];
 let manualDriveSeries = [];
+let preparedPdfFile = null;
+let preparedPdfPreviewUrl = "";
 
 function buildGeminiPrompt() {
   const value = (key) => document.querySelector(`[data-draft="${key}"]`)?.value || "";
@@ -273,6 +276,98 @@ function draftSavePayload() {
   };
 }
 
+function preparedPdfPayload() {
+  const value = (key) => document.querySelector(`[data-pdf="${key}"]`)?.value?.trim() || "";
+  const contact = value("counterpartyContact");
+  return {
+    agreementNo: value("agreementNo"),
+    title: value("title") || preparedPdfFile?.name?.replace(/\.pdf$/i, "") || "Uploaded Legal Agreement",
+    agreementTitle: value("title"),
+    agreementType: value("type") || "Service Agreement",
+    partyType: value("counterpartyType") || "Client",
+    partyName: value("counterpartyName"),
+    counterpartyName: value("counterpartyName"),
+    signerName: value("counterpartySigner"),
+    signerMobile: extractMobile(contact),
+    signerEmail: extractEmail(contact),
+    riskLevel: value("riskLevel") || "Medium"
+  };
+}
+
+async function extractPreparedPdfText(arrayBuffer) {
+  try {
+    const pdfjs = await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs");
+    pdfjs.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs";
+    const documentProxy = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer.slice(0)) }).promise;
+    const pages = [];
+    for (let pageNumber = 1; pageNumber <= documentProxy.numPages; pageNumber += 1) {
+      const page = await documentProxy.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const text = content.items.map((item) => item.str || "").join(" ").replace(/\s+/g, " ").trim();
+      if (text) pages.push(`## Page ${pageNumber}\n\n${text}`);
+    }
+    return pages.join("\n\n").trim();
+  } catch {
+    return "";
+  }
+}
+
+function updatePreparedPdfSelection(file) {
+  preparedPdfFile = file || null;
+  if (preparedPdfPreviewUrl) URL.revokeObjectURL(preparedPdfPreviewUrl);
+  preparedPdfPreviewUrl = file ? URL.createObjectURL(file) : "";
+  const summary = document.querySelector("#preparedPdfSummary");
+  const preview = document.querySelector("#preparedPdfPreview");
+  if (summary) summary.innerHTML = file
+    ? `<strong>${escapeEditorHtml(file.name)}</strong><span>${(file.size / 1024 / 1024).toFixed(2)} MB · Ready to archive unchanged</span>`
+    : `<strong>No PDF selected</strong><span>Choose the already-drafted legal document from your computer.</span>`;
+  if (preview) {
+    preview.hidden = !preparedPdfPreviewUrl;
+    preview.src = preparedPdfPreviewUrl || "about:blank";
+  }
+}
+
+async function uploadPreparedPdf() {
+  const button = document.querySelector("#uploadPreparedPdfBtn");
+  const status = document.querySelector("#preparedPdfStatus");
+  const payload = preparedPdfPayload();
+  if (!preparedPdfFile) return showToast("Choose the prepared PDF to upload.", TOAST_TYPES.ERROR);
+  if (!/\.pdf$/i.test(preparedPdfFile.name) || preparedPdfFile.type && preparedPdfFile.type !== "application/pdf") return showToast("Only PDF files are accepted.", TOAST_TYPES.ERROR);
+  if (preparedPdfFile.size > 10 * 1024 * 1024) return showToast("The PDF must be 10 MB or smaller.", TOAST_TYPES.ERROR);
+  if (!payload.title || !payload.partyName) return showToast("Enter the agreement title and counterparty name.", TOAST_TYPES.ERROR);
+  button.disabled = true;
+  button.textContent = "Uploading PDF…";
+  if (status) {
+    status.dataset.tone = "working";
+    status.textContent = "Reading searchable text and archiving the unchanged PDF in the private legal Drive folder…";
+  }
+  try {
+    const arrayBuffer = await preparedPdfFile.arrayBuffer();
+    const draftText = await extractPreparedPdfText(arrayBuffer);
+    const result = await uploadPreparedLegalPdf({
+      ...payload,
+      fileName: preparedPdfFile.name,
+      mimeType: "application/pdf",
+      base64: arrayBufferToBase64(arrayBuffer),
+      draftText
+    });
+    if (status) {
+      status.dataset.tone = "success";
+      status.innerHTML = `<strong>Upload complete.</strong> ${escapeEditorHtml(result.agreement?.agreement_no || "Agreement")} · Version ${escapeEditorHtml(result.version?.version_no || 1)} is now available in View Agreements and the legal Drive archive under ${escapeEditorHtml(result.drivePath || result.driveFolder || "the assigned folder")}.`;
+    }
+    showToast(`Prepared PDF saved as ${result.agreement?.agreement_no || "agreement"}.`, TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    if (status) {
+      status.dataset.tone = "error";
+      status.innerHTML = `<strong>Upload failed.</strong> ${escapeEditorHtml(error?.message || "Prepared PDF upload failed.")}`;
+    }
+    showToast(error?.message || "Prepared PDF upload failed.", TOAST_TYPES.ERROR);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Upload PDF to EMS & Drive";
+  }
+}
+
 function setWordEditorStatus(message, tone = "") {
   const status = document.querySelector("#wordEditorStatus");
   if (!status) return;
@@ -427,13 +522,17 @@ async function saveDraft() {
 }
 
 function setDraftMode(mode) {
-  currentDraftMode = mode === "manual" ? "manual" : "ai";
+  currentDraftMode = mode === "manual" ? "manual" : mode === "pdf" ? "pdf" : "ai";
   const isManual = currentDraftMode === "manual";
+  const isPdf = currentDraftMode === "pdf";
   const aiPanel = document.querySelector("#aiDraftPanel");
   const manualPanel = document.querySelector("#manualDraftPanel");
+  const pdfPanel = document.querySelector("#preparedPdfPanel");
   const aiToolsPanel = document.querySelector("#aiToolsPanel");
   const generateButton = document.querySelector("#generateDraftBtn");
   const saveButton = document.querySelector("#saveDraftBtn");
+  const actionButtons = document.querySelector("#draftActionButtons");
+  const editorCard = document.querySelector("#draftEditorCard");
   const editorTitle = document.querySelector("#draftEditorTitle");
   const editorDescription = document.querySelector("#draftEditorDescription");
   const output = document.querySelector("#draftOutput");
@@ -441,14 +540,19 @@ function setDraftMode(mode) {
   const documentEditorChoice = document.querySelector("#documentEditorChoice");
   const aiModeButton = document.querySelector("#aiDraftModeBtn");
   const manualModeButton = document.querySelector("#manualDraftModeBtn");
+  const pdfModeButton = document.querySelector("#pdfUploadModeBtn");
 
-  aiPanel.hidden = isManual;
+  aiPanel.hidden = isManual || isPdf;
   manualPanel.hidden = !isManual;
-  aiToolsPanel.hidden = isManual;
-  generateButton.hidden = isManual;
-  output.hidden = isManual;
+  pdfPanel.hidden = !isPdf;
+  aiToolsPanel.hidden = isManual || isPdf;
+  generateButton.hidden = isManual || isPdf;
+  output.hidden = isManual || isPdf;
   documentEditorChoice.hidden = !isManual;
   document.querySelector(".legal-draft-layout")?.classList.toggle("is-manual-mode", isManual);
+  document.querySelector(".legal-draft-layout")?.classList.toggle("is-pdf-mode", isPdf);
+  if (actionButtons) actionButtons.hidden = isPdf;
+  if (editorCard) editorCard.hidden = isPdf;
   saveButton.textContent = isManual ? "Save Manual Draft to EMS" : "Save Draft";
   editorTitle.textContent = isManual ? "Professional Document Editor" : "Draft Editor";
   editorDescription.textContent = isManual
@@ -457,15 +561,19 @@ function setDraftMode(mode) {
   output.placeholder = isManual
     ? "Write or paste your legal agreement here. No AI request is sent in Manual Draft mode."
     : "Generated draft will appear here. You can edit it before saving.";
-  aiModeButton.classList.toggle("btn-ghost", isManual);
+  aiModeButton.classList.toggle("btn-ghost", currentDraftMode !== "ai");
   manualModeButton.classList.toggle("btn-ghost", !isManual);
-  aiModeButton.setAttribute("aria-pressed", String(!isManual));
+  pdfModeButton.classList.toggle("btn-ghost", !isPdf);
+  aiModeButton.setAttribute("aria-pressed", String(currentDraftMode === "ai"));
   manualModeButton.setAttribute("aria-pressed", String(isManual));
+  pdfModeButton.setAttribute("aria-pressed", String(isPdf));
   if (isManual && manualEditor && !manualEditor.innerText.trim() && output.value.trim()) {
     manualEditor.innerHTML = plainTextToEditorHtml(output.value);
   }
-  setManualEditorKind(manualEditorKind);
-  updateManualEditorStatus();
+  if (isManual) {
+    setManualEditorKind(manualEditorKind);
+    updateManualEditorStatus();
+  }
 }
 
 function runManualEditorCommand(command, value = null) {
@@ -909,6 +1017,7 @@ function renderPage() {
     <style>
       .legal-draft-layout{display:grid;grid-template-columns:minmax(360px,1.05fr) minmax(0,.95fr);gap:1rem;align-items:start}
       .legal-draft-layout.is-manual-mode{grid-template-columns:minmax(280px,.38fr) minmax(0,1.62fr)}
+      .legal-draft-layout.is-pdf-mode{grid-template-columns:minmax(0,1fr)}
       .draft-mode-picker{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem;padding:.85rem 1rem;border:1px solid rgba(230,200,126,.2);border-radius:14px;background:linear-gradient(135deg,rgba(230,200,126,.08),rgba(7,8,13,.98))}
       .draft-mode-picker h3,.draft-mode-picker p{margin:0}
       .draft-mode-actions{display:flex;gap:.5rem;flex-wrap:wrap}
@@ -985,6 +1094,7 @@ function renderPage() {
       .manual-editor-status{display:flex;justify-content:space-between;gap:.75rem;padding:.42rem .75rem;background:#f3f3f3;border-top:1px solid #c9c9c9;color:#555;font:600 .72rem Arial,sans-serif}
       .prompt-output{min-height:180px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem}
       .revision-box{display:grid;gap:.6rem;margin-top:1rem}
+      .prepared-pdf-drop{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.8rem;padding:1rem;border:1px dashed rgba(230,200,126,.42);border-radius:14px;background:rgba(230,200,126,.035);cursor:pointer}.prepared-pdf-drop:hover{border-color:#e6c87e;background:rgba(230,200,126,.07)}.prepared-pdf-drop>span:first-child{width:58px;height:58px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(145deg,#e6c87e,#a67b28);color:#171006;font-weight:900}.prepared-pdf-drop strong,.prepared-pdf-drop span{display:block}.prepared-pdf-drop strong{color:#f7f4ec}.prepared-pdf-drop span{color:#aaa79d;font-size:.8rem;line-height:1.5}.prepared-pdf-preview{width:100%;height:520px;margin-top:.75rem;border:1px solid rgba(230,200,126,.2);border-radius:12px;background:#fff}.prepared-pdf-status{margin:.75rem 0 0;padding:.7rem .8rem;border-left:3px solid #e6c87e;background:rgba(230,200,126,.05);color:#bdb8aa;line-height:1.55}.prepared-pdf-status[data-tone="error"]{border-left-color:#ff6b6b;background:rgba(255,77,77,.09);color:#ffd5d5}.prepared-pdf-status[data-tone="success"]{border-left-color:#39d98a;background:rgba(57,217,138,.08);color:#c9ffe5}.prepared-pdf-actions{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:.75rem}
       .legal-checklist{display:grid;gap:.5rem;margin:0;padding:0;list-style:none}
       .legal-checklist li{border:1px solid rgba(230,200,126,.14);border-radius:12px;padding:.65rem;background:#07080d;color:#c9c5b8}
       [hidden]{display:none!important}
@@ -994,11 +1104,12 @@ function renderPage() {
     <section class="draft-mode-picker">
       <div>
         <h3>Choose Drafting Method</h3>
-        <p class="muted">Use guided AI drafting or write and save the agreement entirely yourself.</p>
+        <p class="muted">Create with AI, draft manually, or archive an already-prepared PDF without changing it.</p>
       </div>
       <div class="draft-mode-actions" role="group" aria-label="Drafting method">
         <button class="btn" id="aiDraftModeBtn" type="button" aria-pressed="true">AI-Assisted Draft</button>
         <button class="btn btn-ghost" id="manualDraftModeBtn" type="button" aria-pressed="false">Manual Draft</button>
+        <button class="btn btn-ghost" id="pdfUploadModeBtn" type="button" aria-pressed="false">Upload PDF</button>
       </div>
     </section>
     <div class="legal-draft-layout">
@@ -1137,13 +1248,34 @@ function renderPage() {
             </div>
           </section>
         </div>
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.8rem;">
+        <div id="preparedPdfPanel" hidden>
+          <h3>Upload Prepared Legal PDF</h3>
+          <p class="muted">Use this when drafting is already complete. EMS will preserve the original PDF unchanged, create an agreement/version record, and archive it in the private legal Google Drive folder.</p>
+          <section class="draft-section" style="margin-top:.85rem;">
+            <div class="draft-grid">
+              <div class="draft-field"><label>Internal agreement number/reference</label><input data-pdf="agreementNo" placeholder="AGR-2026-0001" /></div>
+              <div class="draft-field"><label>Agreement title *</label><input data-pdf="title" required placeholder="Service Agreement for Interior Works" /></div>
+              <div class="draft-field"><label>Agreement type</label><select data-pdf="type"><option>Service Agreement</option><option>Terms and Conditions</option><option>Vendor Agreement</option><option>Customer Agreement</option><option>NDA</option><option>Payment Undertaking</option><option>Settlement Agreement</option><option>Employment / Consultant Agreement</option><option>Custom Agreement</option></select></div>
+              <div class="draft-field"><label>Risk level</label><select data-pdf="riskLevel"><option>Medium</option><option>Low</option><option>High</option><option>Critical</option></select></div>
+              <div class="draft-field"><label>Counterparty type</label><select data-pdf="counterpartyType"><option>Client</option><option>Vendor</option><option>Employee</option><option>Consultant</option><option>Transporter</option><option>Agent</option><option>Other</option></select></div>
+              <div class="draft-field"><label>Counterparty name *</label><input data-pdf="counterpartyName" required placeholder="Legal name" /></div>
+              <div class="draft-field"><label>Authorized signer</label><input data-pdf="counterpartySigner" placeholder="Person who will sign or accept" /></div>
+              <div class="draft-field"><label>Email / WhatsApp mobile</label><input data-pdf="counterpartyContact" placeholder="email and WhatsApp mobile" /></div>
+            </div>
+            <label class="prepared-pdf-drop" for="preparedPdfFileInput"><span>PDF</span><span id="preparedPdfSummary"><strong>No PDF selected</strong><span>Choose the already-drafted legal document from your computer. Maximum 10 MB.</span></span></label>
+            <input id="preparedPdfFileInput" type="file" accept="application/pdf,.pdf" hidden />
+            <iframe class="prepared-pdf-preview" id="preparedPdfPreview" title="Prepared PDF preview" hidden></iframe>
+            <div class="prepared-pdf-actions"><button class="btn" id="uploadPreparedPdfBtn" type="button">Upload PDF to EMS &amp; Drive</button><span class="muted">Privacy: the original PDF is preserved unchanged and is not sent to Gemini.</span></div>
+            <p class="prepared-pdf-status" id="preparedPdfStatus">Select the PDF and verify the agreement details before uploading.</p>
+          </section>
+        </div>
+        <div id="draftActionButtons" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.8rem;">
           <button class="btn" id="generateDraftBtn" type="button">Generate AI Draft</button>
           <button class="btn btn-ghost" id="saveDraftBtn" type="button">Save Draft</button>
           <button class="btn btn-ghost" id="copyDraftBtn" type="button">Copy Draft</button>
         </div>
       </section>
-      <section class="card">
+      <section class="card" id="draftEditorCard">
         <h3 id="draftEditorTitle">Draft Editor</h3>
         <p class="muted" id="draftEditorDescription">The generated or edited draft appears here. The AI prompt is kept separately below.</p>
         <div class="document-editor-choice" id="documentEditorChoice" hidden>
@@ -1279,6 +1411,9 @@ function renderPage() {
   document.querySelector("#reviseDraftBtn")?.addEventListener("click", reviseDraft);
   document.querySelector("#aiDraftModeBtn")?.addEventListener("click", () => setDraftMode("ai"));
   document.querySelector("#manualDraftModeBtn")?.addEventListener("click", () => setDraftMode("manual"));
+  document.querySelector("#pdfUploadModeBtn")?.addEventListener("click", () => setDraftMode("pdf"));
+  document.querySelector("#preparedPdfFileInput")?.addEventListener("change", (event) => updatePreparedPdfSelection(event.currentTarget.files?.[0] || null));
+  document.querySelector("#uploadPreparedPdfBtn")?.addEventListener("click", uploadPreparedPdf);
   document.querySelector("#copyIntakeToManualBtn")?.addEventListener("click", copyIntakeToManualDetails);
   document.querySelector("#blankManualDraftBtn")?.addEventListener("click", startBlankManualDraft);
   document.querySelector("#wordEditorModeBtn")?.addEventListener("click", () => setManualEditorKind("word"));
@@ -1301,7 +1436,7 @@ async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.LEGAL_DRAFTING,
     pageTitle: "Legal Drafting",
-    pageDescription: "Draft agreements manually or prepare Gemini-assisted clauses",
+    pageDescription: "Draft agreements with AI, manually, or upload an already-prepared PDF",
     workspace: WORKSPACES.LEGAL
   });
   if (!boot) return;

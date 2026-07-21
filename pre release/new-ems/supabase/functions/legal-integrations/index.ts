@@ -974,6 +974,85 @@ async function saveDraftAgreement(req: Request, body: any) {
   });
 }
 
+async function uploadPreparedPdfDraft(req: Request, body: any) {
+  const admin = adminClient();
+  await requireLegalCaller(req, admin);
+  const originalFileName = cleanPdfName(body.fileName);
+  const encoded = String(body.base64 || "").replace(/^data:[^;]+;base64,/, "");
+  if (!encoded) return json({ error: "PDF content is required." }, 400);
+  const bytes = base64ToBytes(encoded);
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) return json({ error: "The PDF must be 10 MB or smaller." }, 400);
+  // ISO 32000 permits the PDF header to occur within the first 1024 bytes.
+  // Scanner/export tools can prepend a BOM or metadata before `%PDF-`.
+  if (!new TextDecoder().decode(bytes.slice(0, 1024)).includes("%PDF-")) return json({ error: "The selected file is not a valid PDF." }, 400);
+
+  const title = String(body.title || body.agreementTitle || originalFileName.replace(/\.pdf$/i, "")).trim().slice(0, 180);
+  const partyName = String(body.partyName || body.counterpartyName || "").trim().slice(0, 180);
+  if (!title || !partyName) return json({ error: "Agreement title and counterparty name are required." }, 400);
+  const agreementNo = String(body.agreementNo || `AGR-${Date.now()}`).trim().slice(0, 100);
+  const fileHash = await sha256(bytes);
+  const extractedText = String(body.draftText || "").trim();
+  const draftText = extractedText || [
+    `# ${title}`,
+    "",
+    `Prepared PDF uploaded unchanged: ${originalFileName}`,
+    `PDF SHA-256: ${fileHash}`,
+    "",
+    "The authoritative drafted content is the archived PDF attached to this agreement version."
+  ].join("\n");
+
+  const driveAgreement = {
+    agreement_no: agreementNo,
+    title,
+    agreement_type: body.agreementType || "custom",
+    party_type: body.partyType || "client",
+    party_name: partyName,
+    signer_name: body.signerName || null
+  };
+  const driveRequest = { agreement_id: null, id: null, recipient_name: body.signerName || partyName };
+  const drivePath = await ensureLegalDrivePath(driveAgreement, driveRequest);
+  const targetFolder = driveFolderForFileKind(drivePath, "draft_pdf");
+  const driveFileName = archiveFileName(agreementNo, `prepared-draft-${new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}.pdf`);
+  const uploaded = await uploadDriveFile(driveFileName, "application/pdf", bytes, targetFolder.id);
+  if (!uploaded?.id) throw new Error(uploaded?.payload?.error || "Google Drive upload failed.");
+
+  let saved: any;
+  try {
+    const saveResponse = await saveDraftAgreement(req, { ...body, agreementNo, title, partyName, draftText, draftSource: "imported" });
+    saved = await saveResponse.json();
+    if (!saveResponse.ok || saved?.error) throw new Error(saved?.error || "The EMS agreement record could not be created.");
+  } catch (error) {
+    await deleteDriveFile(uploaded.id).catch(() => null);
+    throw error;
+  }
+
+  const archiveRequest = { agreement_id: saved.agreement.id, id: null, recipient_name: body.signerName || partyName };
+  let archive;
+  try {
+    archive = await recordArchiveFile(admin, archiveRequest, "draft_pdf", uploaded, driveFileName, "application/pdf", fileHash, targetFolder.id);
+  } catch (error) {
+    await deleteDriveFile(uploaded.id).catch(() => null);
+    throw error;
+  }
+  await admin.from("legal_provider_events").insert({
+    agreement_id: saved.agreement.id,
+    signing_request_id: null,
+    provider: "google_drive",
+    provider_event_id: uploaded.id,
+    event_type: "draft.prepared_pdf.upload",
+    status: "archived",
+    payload: { originalFileName, fileName: driveFileName, fileHash, versionNo: saved.version.version_no, extractedText: Boolean(extractedText) }
+  });
+  return json({
+    ...saved,
+    archive,
+    fileName: driveFileName,
+    fileHash,
+    driveFolder: targetFolder.name,
+    drivePath: `Legal / ${drivePath.clientName} / ${drivePath.subtype}`
+  });
+}
+
 async function googleAccessToken() {
   let clientEmail = env("GOOGLE_SERVICE_ACCOUNT_EMAIL");
   let rawPrivateKey = env("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").trim();
@@ -1343,6 +1422,15 @@ function cleanDocxName(value = "") {
     .trim()
     .slice(0, 170) || "legal-draft.docx";
   return /\.docx$/i.test(cleaned) ? cleaned : `${cleaned}.docx`;
+}
+
+function cleanPdfName(value = "") {
+  const cleaned = String(value || "legal-agreement.pdf")
+    .replace(/[\\/\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 170) || "legal-agreement.pdf";
+  return /\.pdf$/i.test(cleaned) ? cleaned : `${cleaned}.pdf`;
 }
 
 function isUuid(value = "") {
@@ -3898,6 +3986,7 @@ Deno.serve(async (req) => {
     if (action === "generate_draft") return await generateGeminiDraft(req, body);
     if (action === "revise_draft") return await reviseGeminiDraft(req, body);
     if (action === "save_draft") return await saveDraftAgreement(req, body);
+    if (action === "prepared_pdf_upload") return await uploadPreparedPdfDraft(req, body);
     if (action === "word_editor_start") return await createWordEditorSession(req, body);
     if (action === "word_editor_status") return await wordEditorStatus(req, body);
     if (action === "word_editor_force_save") return await forceSaveWordDocument(req, body);
