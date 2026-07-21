@@ -2,7 +2,7 @@ import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { showToast } from "./utils.js";
 import { advocatePortalLogout, requireAdvocatePortalSession } from "./legal-advocate-portal-auth.js";
 import { addAdvocateComment, deleteAdvocateAnnotation, deleteAdvocateBookmark, fetchAdvocateSharedFile, getAdvocateDocumentMarks, getAdvocatePortalContext, getAdvocatePreviewOtpStatus, requestAdvocatePreviewOtp, saveAdvocateAnnotation, saveAdvocateBookmark, verifyAdvocatePreviewOtp } from "./legal-advocate-api.js";
-import { mountSelectablePdf } from "./legal-pdf-selection.js?v=advocate-portal-14";
+import { mountSelectablePdf } from "./legal-pdf-selection.js?v=advocate-portal-15";
 
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
 const ACTIVITY_WRITE_INTERVAL_MS = 10 * 1000;
@@ -63,6 +63,14 @@ function documentHighlights() {
 
 function documentAnnotations() {
   return (state.marks.annotations || []).filter((row) => row.annotation_type !== "highlight");
+}
+
+function pageMarksContent(pageNumber) {
+  const page = Math.max(1, Number(pageNumber || 1));
+  const highlightCount = documentHighlights().filter((row) => Number(row.page_number) === page).length;
+  const annotationCount = documentAnnotations().filter((row) => Number(row.page_number) === page).length;
+  const bookmarkCount = (state.marks.bookmarks || []).filter((row) => Number(row.page_number) === page).length;
+  return `<span data-current-page>Page ${esc(page)}</span>${highlightCount ? `<span>${highlightCount} highlight(s)</span>` : ""}${annotationCount ? `<span>${annotationCount} annotation(s)</span>` : ""}${bookmarkCount ? `<span>${bookmarkCount} bookmark(s)</span>` : ""}`;
 }
 
 function portalMetrics() {
@@ -217,7 +225,7 @@ function render() {
           <div class="lap-controls"><label class="lap-search"><span>⌕</span><input id="advocateSearch" value="${esc(state.query)}" placeholder="Search agreement, party or file" aria-label="Search shared legal documents"/></label><select id="advocateStatus" aria-label="Filter by review status"><option value="all">All review states</option><option value="pending" ${state.status === "pending" ? "selected" : ""}>Awaiting action</option>${["shared","opened","under_review","revision_required","reviewed"].map((value) => `<option value="${value}" ${state.status === value ? "selected" : ""}>${esc(statusLabel(value))}</option>`).join("")}</select><button class="lap-secondary" id="clearAdvocateFilters" type="button">Clear filters</button></div>
           <section class="lap-workspace">
             <div class="lap-list-panel"><header class="lap-pane-head"><strong>Document library</strong><small>${filteredShares().length} visible</small></header><div class="lap-list">${renderDocumentList()}</div></div>
-            <section class="lap-preview-panel"><header class="lap-document-head"><div><span>${share ? esc(share.agreement_no) : "SECURE DOCUMENT PREVIEW"}</span><strong>${share ? esc(share.display_title || share.file_name) : "Select a document"}</strong></div><div class="lap-document-tools">${share ? `<button class="lap-tool" id="openPreviewToolbar" type="button">${state.previewUrl ? "Reload" : "Open"}</button>` : ""}${share && state.previewUnlocked ? `<button class="lap-tool" data-marks-panel="highlights" type="button">Highlights ${highlights.length ? `(${highlights.length})` : ""}</button><button class="lap-tool" data-marks-panel="annotations" type="button">Annotations ${annotations.length ? `(${annotations.length})` : ""}</button><button class="lap-tool" data-marks-panel="bookmarks" type="button">Bookmarks ${state.marks.bookmarks.length ? `(${state.marks.bookmarks.length})` : ""}</button>` : ""}${state.previewUrl ? `<button class="lap-tool" id="fullscreenPreview" type="button">Full screen</button>` : ""}${share && state.previewUrl && share.permission_level === "download" ? `<button class="lap-tool" id="downloadSharedFile" type="button">Download</button>` : ""}</div></header>${share ? reviewProgress(share.review_status) : `<div></div>`}<div class="lap-preview"><div class="lap-preview-wrap">${previewContent(share)}${previewWatermark}${state.previewUrl ? `<div class="lap-page-marks"><span id="pdfPageBadge">Page ${esc(state.activePage)}</span>${highlights.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${highlights.filter((row) => Number(row.page_number) === Number(state.activePage)).length} highlight(s)</span>` : ""}${annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${annotations.filter((row) => Number(row.page_number) === Number(state.activePage)).length} annotation(s)</span>` : ""}${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length ? `<span>${state.marks.bookmarks.filter((row) => Number(row.page_number) === Number(state.activePage)).length} bookmark(s)</span>` : ""}</div><div class="lap-fullscreen-tools" role="toolbar" aria-label="Full-screen document tools"><button type="button" data-marks-panel="highlights">Highlights ${highlights.length ? `(${highlights.length})` : ""}</button><button type="button" data-marks-panel="annotations">Annotations ${annotations.length ? `(${annotations.length})` : ""}</button><button type="button" data-marks-panel="bookmarks">Bookmarks ${state.marks.bookmarks.length ? `(${state.marks.bookmarks.length})` : ""}</button><span class="lap-fullscreen-divider"></span><button type="button" data-pdf-zoom="out" aria-label="Zoom out">−</button><button type="button" data-pdf-zoom="fit">Fit</button><button type="button" data-pdf-zoom="in" aria-label="Zoom in">+</button><span class="lap-fullscreen-divider"></span><button class="lap-fullscreen-exit" type="button" data-exit-fullscreen>✕ Exit Full Screen</button></div>` : ""}</div></div></section>
+            <section class="lap-preview-panel"><header class="lap-document-head"><div><span>${share ? esc(share.agreement_no) : "SECURE DOCUMENT PREVIEW"}</span><strong>${share ? esc(share.display_title || share.file_name) : "Select a document"}</strong></div><div class="lap-document-tools">${share ? `<button class="lap-tool" id="openPreviewToolbar" type="button">${state.previewUrl ? "Reload" : "Open"}</button>` : ""}${share && state.previewUnlocked ? `<button class="lap-tool" data-marks-panel="highlights" type="button">Highlights ${highlights.length ? `(${highlights.length})` : ""}</button><button class="lap-tool" data-marks-panel="annotations" type="button">Annotations ${annotations.length ? `(${annotations.length})` : ""}</button><button class="lap-tool" data-marks-panel="bookmarks" type="button">Bookmarks ${state.marks.bookmarks.length ? `(${state.marks.bookmarks.length})` : ""}</button>` : ""}${state.previewUrl ? `<button class="lap-tool" id="fullscreenPreview" type="button">Full screen</button>` : ""}${share && state.previewUrl && share.permission_level === "download" ? `<button class="lap-tool" id="downloadSharedFile" type="button">Download</button>` : ""}</div></header>${share ? reviewProgress(share.review_status) : `<div></div>`}<div class="lap-preview"><div class="lap-preview-wrap">${previewContent(share)}${previewWatermark}${state.previewUrl ? `<div class="lap-page-marks" id="pdfPageMarks">${pageMarksContent(state.activePage)}</div><div class="lap-fullscreen-tools" role="toolbar" aria-label="Full-screen document tools"><button type="button" data-marks-panel="highlights">Highlights ${highlights.length ? `(${highlights.length})` : ""}</button><button type="button" data-marks-panel="annotations">Annotations ${annotations.length ? `(${annotations.length})` : ""}</button><button type="button" data-marks-panel="bookmarks">Bookmarks ${state.marks.bookmarks.length ? `(${state.marks.bookmarks.length})` : ""}</button><span class="lap-fullscreen-divider"></span><button type="button" data-pdf-zoom="out" aria-label="Zoom out">−</button><button type="button" data-pdf-zoom="fit">Fit</button><button type="button" data-pdf-zoom="in" aria-label="Zoom in">+</button><span class="lap-fullscreen-divider"></span><button class="lap-fullscreen-exit" type="button" data-exit-fullscreen>✕ Exit Full Screen</button></div>` : ""}</div></div></section>
             ${renderReview(share)}
           </section>
         </div>
@@ -298,10 +306,10 @@ function mountPdfIfNeeded() {
       rememberDocumentPage(pageNumber);
       const current = document.getElementById("pdfCurrentPage");
       const total = document.getElementById("pdfPageCount");
-      const badge = document.getElementById("pdfPageBadge");
+      const pageMarks = document.getElementById("pdfPageMarks") || document.querySelector(".lap-page-marks");
       if (current) current.textContent = String(pageNumber);
       if (total) total.textContent = String(pageCount);
-      if (badge) badge.textContent = `Page ${pageNumber}`;
+      if (pageMarks) pageMarks.innerHTML = pageMarksContent(pageNumber);
     },
     onTextSelected: showPdfSelectionActions
   }).catch((error) => showToast(error.message || "Selectable PDF preview could not be loaded.", TOAST_TYPES.ERROR));

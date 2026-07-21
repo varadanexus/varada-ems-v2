@@ -130,6 +130,7 @@ export async function mountSelectablePdf({ blob, pageNumber = 1, zoom = 1, highl
     pages.replaceChildren(fragment);
     loading?.remove();
     root.classList.add("is-ready");
+    let reportedPage = safePage;
     onPageReady?.({ pageNumber: safePage, pageCount: pdfDocument.numPages });
 
     const outputScale = Math.min(2, window.devicePixelRatio || 1);
@@ -236,7 +237,10 @@ export async function mountSelectablePdf({ blob, pageNumber = 1, zoom = 1, highl
           closestPage = Number(stage.dataset.pageNumber);
         }
       });
-      onPageReady?.({ pageNumber: closestPage, pageCount: pdfDocument.numPages });
+      if (closestPage !== reportedPage) {
+        reportedPage = closestPage;
+        onPageReady?.({ pageNumber: closestPage, pageCount: pdfDocument.numPages });
+      }
     };
     const handleScroll = () => {
       if (scrollFrame) return;
