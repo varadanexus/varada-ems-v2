@@ -90,11 +90,9 @@ Deno.serve(async (req) => {
     const deliveredIds = new Set((priorDeliveries || []).map((row) => row.subscription_id));
 
     webpush.setVapidDetails("mailto:security@varadanexus.com", vapidPublicKey, vapidPrivateKey);
-    // Keep confidential business content off the OS lock screen. The user can
-    // open EMS (and pass device verification when enabled) to read full details.
     const payload = JSON.stringify({
-      title: "Varada Nexus EMS",
-      body: "You have a new EMS notification. Unlock the app to view it.",
+      title: event.title,
+      body: event.message,
       icon: "/images/logo.png",
       badge: "/new-ems/assets/icons/ems-notification-badge.png",
       tag: `ems-${event.id}`,
