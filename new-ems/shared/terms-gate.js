@@ -1,6 +1,7 @@
 import { ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { getChatSessionTokens } from "./chat-api.js";
+import { getLocalSession } from "./ems-local-auth.js";
 
 export const CURRENT_TERMS_VERSION = "2026-07-04-v4";
 const TERMS_BYPASS_SESSION_KEY = "ems_terms_owner_bypass_session";
@@ -287,10 +288,12 @@ async function getMobileHandoffStatus(handoffToken) {
 async function archiveTermsAcceptance(termsVersion) {
   const client = getSupabaseClient();
   const tokens = getChatSessionTokens();
+  const localSession = getLocalSession();
   const { data, error } = await client.functions.invoke("drive-integrations", {
     body: {
       action: "archive_terms_acceptance",
       termsVersion: termsVersion || CURRENT_TERMS_VERSION,
+      staffSessionToken: localSession?.sessionToken || null,
       transportSessionToken: tokens.transport,
       externalSessionToken: tokens.external
     }
@@ -767,9 +770,11 @@ export async function enforceTermsAcceptance() {
   }
   if (status?.popup_enabled === false) return true;
   if (status?.accepted) {
-    archiveTermsAcceptance(status.terms_version).catch((error) => {
-      console.warn("Terms Drive archive retry remains pending:", error?.message || error);
-    });
+    if (status.drive_archive_status !== "stored") {
+      archiveTermsAcceptance(status.terms_version).catch((error) => {
+        console.warn("Terms Drive archive retry remains pending:", error?.message || error);
+      });
+    }
     return true;
   }
   if (await hasValidTermsBypassSession()) return true;

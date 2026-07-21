@@ -45,6 +45,7 @@ const runtime = read("new-ems/config/runtime.js");
 const serviceWorker = read("sw.js");
 const layout = read("new-ems/shared/layout.js");
 assert(login.includes('rel="manifest" href="/new-ems/manifest.webmanifest"'), "Canonical login page is missing the manifest link.");
+assert(login.includes('name="mobile-web-app-capable" content="yes"'), "Canonical login page is missing the standard mobile web app capability meta tag.");
 assert(runtime.includes('navigator.serviceWorker') === false, "Service worker registration should remain isolated in pwa.js.");
 assert(read("new-ems/shared/pwa.js").includes('navigator.serviceWorker.register("/sw.js", { scope: "/" })'), "PWA client does not register the root service worker.");
 assert(serviceWorker.includes('request.method !== "GET"'), "Service worker must ignore write requests.");
