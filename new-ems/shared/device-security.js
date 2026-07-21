@@ -2,6 +2,8 @@ const LOCK_PREFIX = "ems_device_lock_v1:";
 const UNLOCK_PREFIX = "ems_device_unlock_v1:";
 const UNLOCK_WINDOW_MS = 15 * 60 * 1000;
 let hiddenAt = 0;
+let authenticatorActive = false;
+let internalNavigationUntil = 0;
 
 function bytesToBase64Url(bytes) {
   let value = "";
@@ -45,25 +47,32 @@ export async function enableDeviceLock(appUser) {
   const support = deviceLockSupport();
   if (!support.supported) throw new Error(support.reason);
   if (!appUser?.id) throw new Error("A signed-in user is required.");
-  const credential = await navigator.credentials.create({
-    publicKey: {
-      challenge: randomChallenge(),
-      rp: { name: "Varada Nexus EMS", id: location.hostname },
-      user: {
-        id: new TextEncoder().encode(appUser.id),
-        name: appUser.email || appUser.id,
-        displayName: appUser.display_name || appUser.full_name || appUser.email || "EMS User"
-      },
-      pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-      authenticatorSelection: {
-        authenticatorAttachment: "platform",
-        residentKey: "discouraged",
-        userVerification: "required"
-      },
-      timeout: 60000,
-      attestation: "none"
-    }
-  });
+  authenticatorActive = true;
+  let credential;
+  try {
+    credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: randomChallenge(),
+        rp: { name: "Varada Nexus EMS", id: location.hostname },
+        user: {
+          id: new TextEncoder().encode(appUser.id),
+          name: appUser.email || appUser.id,
+          displayName: appUser.display_name || appUser.full_name || appUser.email || "EMS User"
+        },
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          residentKey: "discouraged",
+          userVerification: "required"
+        },
+        timeout: 60000,
+        attestation: "none"
+      }
+    });
+  } finally {
+    authenticatorActive = false;
+    hiddenAt = 0;
+  }
   if (!credential) throw new Error("Device lock setup was cancelled.");
   localStorage.setItem(userKey(appUser), JSON.stringify({
     credentialId: bytesToBase64Url(new Uint8Array(credential.rawId)),
@@ -71,6 +80,7 @@ export async function enableDeviceLock(appUser) {
     device: navigator.userAgent.slice(0, 250)
   }));
   sessionStorage.setItem(unlockKey(appUser), String(Date.now() + UNLOCK_WINDOW_MS));
+  installDeviceRelock(appUser);
   return getDeviceLockStatus(appUser);
 }
 
@@ -83,19 +93,26 @@ export function disableDeviceLock(appUser) {
 async function verifyDevice(appUser) {
   const enrollment = readEnrollment(appUser);
   if (!enrollment?.credentialId) return true;
-  const assertion = await navigator.credentials.get({
-    publicKey: {
-      challenge: randomChallenge(),
-      rpId: location.hostname,
-      allowCredentials: [{
-        type: "public-key",
-        id: base64UrlToBytes(enrollment.credentialId),
-        transports: ["internal"]
-      }],
-      userVerification: "required",
-      timeout: 60000
-    }
-  });
+  authenticatorActive = true;
+  let assertion;
+  try {
+    assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: randomChallenge(),
+        rpId: location.hostname,
+        allowCredentials: [{
+          type: "public-key",
+          id: base64UrlToBytes(enrollment.credentialId),
+          transports: ["internal"]
+        }],
+        userVerification: "required",
+        timeout: 60000
+      }
+    });
+  } finally {
+    authenticatorActive = false;
+    hiddenAt = 0;
+  }
   if (!assertion) throw new Error("Device verification was cancelled.");
   sessionStorage.setItem(unlockKey(appUser), String(Date.now() + UNLOCK_WINDOW_MS));
   return true;
@@ -152,18 +169,34 @@ export async function verifyDeviceLockNow(appUser) {
   return verifyDevice(appUser);
 }
 
+export function allowDeviceInternalNavigation() {
+  internalNavigationUntil = Date.now() + 10_000;
+}
+
 export function installDeviceRelock(appUser) {
   if (!readEnrollment(appUser) || document.documentElement.dataset.emsRelockBound === "true") return;
   document.documentElement.dataset.emsRelockBound = "true";
   document.addEventListener("visibilitychange", () => {
+    if (!readEnrollment(appUser)) return;
     if (document.hidden) {
+      if (internalNavigationUntil > Date.now()) {
+        internalNavigationUntil = 0;
+        hiddenAt = 0;
+        return;
+      }
       hiddenAt = Date.now();
+      // Clear the grace token synchronously. Mobile operating systems may kill
+      // a closed PWA immediately, so waiting until the next launch is unreliable.
+      sessionStorage.removeItem(unlockKey(appUser));
       return;
     }
-    if (hiddenAt && Date.now() - hiddenAt > 60_000) {
-      sessionStorage.removeItem(unlockKey(appUser));
+    if (authenticatorActive) {
+      hiddenAt = 0;
+      return;
+    }
+    if (hiddenAt) {
+      hiddenAt = 0;
       location.reload();
     }
-    hiddenAt = 0;
   });
 }

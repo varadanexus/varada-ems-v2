@@ -146,7 +146,7 @@ function renderPage() {
           <button class="btn ${push.enabled ? "btn-ghost" : "primary"}" id="pushNotificationToggle" type="button" ${push.supported === false ? "disabled" : ""}>${push.enabled ? "Disable on This Device" : "Enable Notifications"}</button>
           <div>
             <strong>Device biometric/PIN app lock</strong>
-            <p class="muted">${escapeHtml(deviceLock.enabled ? "Enabled · EMS locks after being in the background for one minute." : (deviceLock.reason || "Keep the session signed in and unlock EMS using this device."))}</p>
+            <p class="muted">${escapeHtml(deviceLock.enabled ? "Enabled · EMS locks whenever the app is closed or sent to the background." : (deviceLock.reason || "Keep the session signed in and unlock EMS using this device."))}</p>
           </div>
           <button class="btn ${deviceLock.enabled ? "btn-ghost" : "primary"}" id="deviceLockToggle" type="button" ${deviceLock.supported === false ? "disabled" : ""}>${deviceLock.enabled ? "Disable Device Lock" : "Enable Device Lock"}</button>
         </div>
