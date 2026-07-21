@@ -6,6 +6,11 @@ import { showToast } from "./utils.js";
 const SESSION_KEY = "ems_external_portal_session";
 const state = { session: null, portals: [] };
 
+document.getElementById("app").innerHTML = `
+  <main style="min-height:100vh;display:grid;place-items:center;background:#050609;color:#f6f2e8;text-align:center;padding:2rem">
+    <div><strong style="display:block;letter-spacing:.18em;color:#e0bd69">VARADA NEXUS</strong><h1 style="font-family:Georgia,serif;margin:.8rem 0 .35rem">Preparing your portals</h1><p style="color:#9b988f">Validating your secure session and assigned access…</p></div>
+  </main>`;
+
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
@@ -15,11 +20,17 @@ function storedSession() {
 }
 
 async function logout() {
-  if (state.session?.sessionToken) {
-    try { await getSupabaseClient().rpc("external_portal_logout", { p_session_token: state.session.sessionToken }); } catch {}
-  }
+  const sessionToken = state.session?.sessionToken;
   localStorage.removeItem(SESSION_KEY);
-  window.location.assign(ROUTES.LOGIN);
+  window.location.replace(ROUTES.LOGIN);
+  if (sessionToken) void (async () => {
+    try { await getSupabaseClient().rpc("external_portal_logout", { p_session_token: sessionToken }); } catch {}
+  })();
+}
+
+function clearInvalidSession() {
+  localStorage.removeItem(SESSION_KEY);
+  window.location.replace(ROUTES.LOGIN);
 }
 
 function render() {
@@ -34,10 +45,10 @@ function render() {
 
 async function init() {
   state.session = storedSession();
-  if (!state.session?.sessionToken) return window.location.assign(ROUTES.LOGIN);
+  if (!state.session?.sessionToken) return clearInvalidSession();
   const { data, error } = await getSupabaseClient().rpc("external_portal_validate_session", { p_session_token: state.session.sessionToken });
   const row = Array.isArray(data) ? data[0] : data;
-  if (error || !row?.portal_user_id) return logout();
+  if (error || !row?.portal_user_id) return clearInvalidSession();
   state.session = { ...state.session, ...row };
   try {
     state.portals = await loadExternalPortalOptions(state.session.sessionToken);
@@ -51,4 +62,7 @@ async function init() {
   }
 }
 
-init();
+init().catch((error) => {
+  document.getElementById("app").innerHTML = `<main class="card" style="margin:2rem"><h2>Portal Access Error</h2><p>${esc(error?.message || "Portal access could not be loaded.")}</p><button class="btn" id="externalSelectorLogout">Return to login</button></main><div id="toastHost" class="toast-host"></div>`;
+  document.getElementById("externalSelectorLogout")?.addEventListener("click", clearInvalidSession);
+});
