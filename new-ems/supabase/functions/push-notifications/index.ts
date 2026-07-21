@@ -17,6 +17,30 @@ function compactNotificationText(value: unknown, limit: number) {
   return text.length <= limit ? text : `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
 }
 
+function resolveNotificationUrl(event: Record<string, any>) {
+  const explicit = String(event.action_url || "").trim();
+  if (explicit.startsWith("/")) return explicit;
+
+  const entityType = String(event.entity_type || "").toLowerCase();
+  const entityId = String(event.entity_id || "").trim();
+  const safeId = /^[0-9a-f-]{36}$/i.test(entityId) ? encodeURIComponent(entityId) : "";
+  if (safeId && /(?:transport.*trip|^trip$)/.test(entityType)) {
+    return `/new-ems/modules/transport-trip-details/index.html?id=${safeId}`;
+  }
+  if (safeId && /legal.*agreement/.test(entityType)) {
+    return `/new-ems/modules/legal-agreement-view/index.html?id=${safeId}`;
+  }
+  if (safeId && /interior.*project/.test(entityType)) {
+    return `/new-ems/modules/interiors-project-detail/index.html?id=${safeId}`;
+  }
+
+  const moduleCode = String(event.module_code || "").trim().toLowerCase();
+  if (/^[a-z0-9-]+$/.test(moduleCode)) {
+    return `/new-ems/modules/${moduleCode}/index.html`;
+  }
+  return "/new-ems/modules/dashboard/index.html";
+}
+
 function bearer(req: Request) {
   const value = req.headers.get("authorization") || "";
   return value.toLowerCase().startsWith("bearer ") ? value.slice(7).trim() : "";
@@ -59,7 +83,7 @@ Deno.serve(async (req) => {
     });
     const { data: event, error: eventError } = await admin
       .from("notification_events")
-      .select("id,title,message,severity,action_url,module_code,created_by")
+      .select("id,title,message,severity,action_label,action_url,module_code,entity_type,entity_id,created_by")
       .eq("id", notificationId)
       .maybeSingle();
     if (eventError || !event) return json({ error: "Notification not found" }, 404);
@@ -98,9 +122,12 @@ Deno.serve(async (req) => {
     const payload = JSON.stringify({
       title: compactNotificationText(event.title, 72),
       body: compactNotificationText(event.message, 150),
+      // Older workers used payload.icon as an expanded right-side image. A
+      // transparent compatibility icon suppresses that duplicate until v11 activates.
+      icon: "/new-ems/assets/icons/notification-transparent.png",
       badge: "/new-ems/assets/icons/ems-notification-badge.png",
       tag: `ems-${event.id}`,
-      data: { url: event.action_url || "/new-ems/modules/notifications-center/index.html", notificationId: event.id },
+      data: { url: resolveNotificationUrl(event), notificationId: event.id },
       actionLabel: compactNotificationText(event.action_label || "Open EMS", 24),
       severity: event.severity,
       moduleCode: event.module_code

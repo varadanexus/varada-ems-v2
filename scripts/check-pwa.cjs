@@ -26,6 +26,7 @@ const expectedIcons = [
   ["new-ems/assets/icons/ems-180.png", 180],
   ["new-ems/assets/icons/ems-192.png", 192],
   ["new-ems/assets/icons/ems-notification-badge.png", 96],
+  ["new-ems/assets/icons/notification-transparent.png", 1],
   ["new-ems/assets/icons/ems-512.png", 512],
   ["new-ems/assets/icons/ems-maskable-512.png", 512]
 ];
@@ -63,6 +64,7 @@ assert(serviceWorker.includes('addEventListener("push"'), "Service worker is mis
 assert(serviceWorker.includes('showNotification('), "Push events must display a user-visible notification.");
 assert(!serviceWorker.includes('icon: payload.icon'), "Expanded notifications must not duplicate the installed app logo.");
 assert(serviceWorker.includes('action: "open"'), "Push notifications should expose an Open EMS action.");
+assert(serviceWorker.indexOf("existing.navigate(target)") < serviceWorker.indexOf("existing.focus()"), "Notification clicks must navigate before focusing to avoid the biometric relock race.");
 assert(pushClient.includes("userVisibleOnly: true"), "Push subscriptions must require user-visible notifications.");
 assert(pushClient.includes("upsert_my_push_subscription"), "Push subscriptions must be bound to the signed-in EMS user.");
 assert(deviceSecurity.includes('authenticatorAttachment: "platform"'), "Device lock must use the device platform authenticator.");
