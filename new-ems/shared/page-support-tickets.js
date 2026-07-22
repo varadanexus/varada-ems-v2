@@ -3,7 +3,7 @@ import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { addSupportTicketMessage, closeMySupportTicket, getSupportTicket, listSupportAgents, listSupportTickets, updateSupportTicket } from "./support-api.js";
 import { showToast } from "./utils.js";
 
-const state = { boot: null, operator: false, tickets: [], agents: [], selected: null, status: "all", search: "", loading: false };
+const state = { boot: null, operator: false, tickets: [], agents: [], selected: null, status: "all", search: "", view: "dashboard", loading: false };
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -94,11 +94,12 @@ function detailPanel() {
 }
 
 function render() {
+  const viewTitle = ({ dashboard: "Support Dashboard", all: "All Tickets", assigned: "Assigned to Me", unassigned: "Unassigned Tickets", urgent: "Urgent Tickets", resolved: "Resolved & Closed", mine: "My Raised Tickets" })[state.view] || "Support Queue";
   renderModuleContent(`
     ${stats()}
     <section class="card">
       <div class="notification-section-head">
-        <div><h3>${state.operator ? "Support Queue" : "My Support Tickets"}</h3><p class="muted">${state.operator ? "Triage, assign, respond and resolve EMS support requests." : "Track every request and reply from the support team."}</p></div>
+        <div><h3>${state.operator ? viewTitle : "My Support Tickets"}</h3><p class="muted">${state.operator ? "Triage, assign, respond and resolve EMS support requests." : "Track every request and reply from the support team."}</p></div>
         <button class="btn primary" id="raiseSupportTicketBtn" type="button">+ Raise Ticket</button>
       </div>
       <div class="support-toolbar"><input id="supportSearch" value="${escapeHtml(state.search)}" placeholder="Search ticket number, subject or requester" /><select id="supportStatusFilter"><option value="all">All statuses</option>${statusOptions(state.status)}</select></div>
@@ -112,7 +113,14 @@ function render() {
 
 async function loadTickets({ preserveSelection = true } = {}) {
   const selectedId = preserveSelection ? state.selected?.ticket?.id : null;
-  state.tickets = await listSupportTickets({ scope: state.operator ? "all" : "mine", status: state.status, search: state.search });
+  const requesterView = !state.operator || state.view === "mine";
+  state.tickets = await listSupportTickets({ scope: requesterView ? "mine" : "all", status: state.status, search: state.search });
+  if (state.operator) {
+    if (state.view === "assigned") state.tickets = state.tickets.filter((ticket) => ticket.assigned_to_user_id === state.boot.appUser?.id);
+    if (state.view === "unassigned") state.tickets = state.tickets.filter((ticket) => !ticket.assigned_to_user_id && !["resolved", "closed"].includes(ticket.status));
+    if (state.view === "urgent") state.tickets = state.tickets.filter((ticket) => ticket.priority === "urgent");
+    if (state.view === "resolved") state.tickets = state.tickets.filter((ticket) => ["resolved", "closed"].includes(ticket.status));
+  }
   render();
   const requested = new URLSearchParams(location.search).get("ticket");
   const targetId = selectedId || requested;
@@ -123,7 +131,12 @@ async function selectTicket(ticketId, { replaceUrl = true } = {}) {
   state.loading = true; render();
   try {
     state.selected = await getSupportTicket(ticketId);
-    if (replaceUrl) history.replaceState({}, "", `${location.pathname}?ticket=${encodeURIComponent(ticketId)}`);
+    if (replaceUrl) {
+      const query = new URLSearchParams(location.search);
+      query.set("ticket", ticketId);
+      query.delete("new");
+      history.replaceState({}, "", `${location.pathname}?${query.toString()}`);
+    }
   } catch (error) { showToast(error?.message || "Could not load ticket.", TOAST_TYPES.ERROR); state.selected = null; }
   finally { state.loading = false; render(); }
 }
@@ -162,16 +175,19 @@ function bind() {
 function showLoadError(error) { showToast(error?.message || "Could not load support tickets.", TOAST_TYPES.ERROR); }
 
 async function init() {
+  const query = new URLSearchParams(location.search);
+  state.view = query.get("view") || "dashboard";
   state.boot = await bootstrapProtectedPage({
     moduleCode: MODULES.SUPPORT_TICKETS,
     pageTitle: "EMS Support Desk",
     pageDescription: "Raise, track and resolve support requests across every Varada Nexus workspace.",
-    workspace: WORKSPACES.ADMIN
+    workspace: WORKSPACES.SUPPORT
   });
   if (!state.boot) return;
   state.operator = state.boot.roleCodes.some((role) => ["super_admin", "admin"].includes(role));
   if (state.operator) state.agents = await listSupportAgents().catch(() => []);
   await loadTickets({ preserveSelection: false });
+  if (query.get("new") === "1") window.setTimeout(() => document.querySelector("#supportDeskBtn")?.click(), 100);
 }
 
 init().catch(showLoadError);

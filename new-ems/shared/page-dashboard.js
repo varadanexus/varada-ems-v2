@@ -28,7 +28,8 @@ const QUICK_ACTIONS = [
   { module: MODULES.TRANSPORTATION, title: "Transportation", href: ROUTES.TRANSPORT_DASHBOARD },
   { module: MODULES.INTERIORS, title: "Interiors", href: ROUTES.INTERIORS_DASHBOARD },
   { module: MODULES.MEETINGS, title: "Meetings", href: ROUTES.MEETINGS_COMMAND_CENTER },
-  { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD }
+  { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
+  { module: MODULES.SUPPORT_TICKETS, title: "Support", href: ROUTES.SUPPORT_TICKETS }
 ];
 
 const DEVELOPER_ITEMS = [
@@ -152,7 +153,8 @@ async function init() {
     const COMMS_MODULES = [MODULES.WHATSAPP, MODULES.EMAIL, MODULES.MEETINGS];
     const communicationCards = activeBusinessCards.filter((m) => COMMS_MODULES.includes(m.module));
     const legalCards = activeBusinessCards.filter((m) => m.module === MODULES.LEGAL);
-    const groupedModules = [...COMMS_MODULES, MODULES.LEGAL];
+    const supportCards = activeBusinessCards.filter((m) => m.module === MODULES.SUPPORT_TICKETS);
+    const groupedModules = [...COMMS_MODULES, MODULES.LEGAL, MODULES.SUPPORT_TICKETS];
     const nonGroupedBusinessCards = activeBusinessCards.filter((m) => !groupedModules.includes(m.module));
     const launchCards = [...nonGroupedBusinessCards];
     // This KPI reports active business divisions only. Finance, Legal,
@@ -174,11 +176,13 @@ async function init() {
     const activeModulesHtml = launchCards.map(renderModuleCard).join("");
     const communicationsHtml = communicationCards.map(renderModuleCard).join("");
     const legalHtml = legalCards.map(renderModuleCard).join("");
+    const supportHtml = supportCards.map(renderModuleCard).join("");
     const financeHtml = financeCards.map(renderModuleCard).join("");
     // Legal and Finance are single-card scopes, so render them side by side.
     const sideSections = [];
     if (legalHtml) sideSections.push({ title: "Legal", note: "Drafting, signing evidence &amp; secure archive", html: legalHtml });
     if (financeHtml) sideSections.push({ title: "Finance", note: "Central Accounts &amp; financial reporting", html: financeHtml });
+    if (supportHtml) sideSections.push({ title: "Support", note: "EMS help desk &amp; ticket operations", html: supportHtml });
     const sideCols = Math.max(Math.min(sideSections.length, 2), 1);
     const sideSectionsHtml = sideSections.map((s) => `
       <div class="cc-scope-col">

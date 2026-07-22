@@ -230,6 +230,32 @@ const MENU_BY_WORKSPACE = {
       ]
     }
   ],
+  [WORKSPACES.SUPPORT]: [
+    {
+      title: "Support Workspace",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.SUPPORT_TICKETS, label: "Support Dashboard", href: `${ROUTES.SUPPORT_TICKETS}?view=dashboard` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Raise Ticket", href: `${ROUTES.SUPPORT_TICKETS}?view=mine&new=1` }
+      ]
+    },
+    {
+      title: "Ticket Operations",
+      items: [
+        { module: MODULES.SUPPORT_TICKETS, label: "All Tickets", href: `${ROUTES.SUPPORT_TICKETS}?view=all` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Assigned to Me", href: `${ROUTES.SUPPORT_TICKETS}?view=assigned` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Unassigned", href: `${ROUTES.SUPPORT_TICKETS}?view=unassigned` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Urgent", href: `${ROUTES.SUPPORT_TICKETS}?view=urgent` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Resolved & Closed", href: `${ROUTES.SUPPORT_TICKETS}?view=resolved` }
+      ]
+    },
+    {
+      title: "My Support",
+      items: [
+        { module: MODULES.SUPPORT_TICKETS, label: "My Raised Tickets", href: `${ROUTES.SUPPORT_TICKETS}?view=mine` }
+      ]
+    }
+  ],
   [WORKSPACES.EMAIL]: [
     {
       title: "Email Workspace",
@@ -317,7 +343,7 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
   };
   const sectionsForWorkspace = [
     ...(MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN]),
-    { title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }
+    ...(workspace === WORKSPACES.SUPPORT ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
   ];
   const sections = sectionsForWorkspace.map((section) => {
     const visibleItems = section.items.filter((item) => item.disabled || (allowedModules || []).includes(item.module));

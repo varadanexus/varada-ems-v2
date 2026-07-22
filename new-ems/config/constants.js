@@ -328,6 +328,7 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.ACCOUNTS, title: "Accounts", subtitle: "Finance operations cockpit", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
   { module: MODULES.DIGITAL_SERVICES, title: "Digital Marketing & Services", subtitle: "Lead-to-billing delivery, white-label partners, client portals, and queries", href: ROUTES.DIGITAL_SERVICES_DASHBOARD },
   { module: MODULES.LEGAL, title: "Legal", subtitle: "Drafting, KYC, signing evidence and secure archive", href: ROUTES.LEGAL_COMMAND_CENTER },
+  { module: MODULES.SUPPORT_TICKETS, title: "Support", subtitle: "EMS help desk, ticket triage, assignment and resolution", href: ROUTES.SUPPORT_TICKETS },
   { module: MODULES.WHATSAPP, title: "WhatsApp", subtitle: "Inbox, templates, Twilio health and outbound delivery", href: ROUTES.WHATSAPP_COMMAND_CENTER },
   { module: MODULES.EMAIL, title: "Email", subtitle: "Compose, templates, inbox, history and ZeptoMail delivery", href: ROUTES.EMAIL_COMMAND_CENTER },
   { module: MODULES.MEETINGS, title: "Meetings", subtitle: "Scheduling, waiting room control, and Jitsi video sessions", href: ROUTES.MEETINGS_COMMAND_CENTER },
@@ -353,6 +354,7 @@ export const WORKSPACES = {
   EMAIL: "email",
   MEETINGS: "meetings",
   DIGITAL_SERVICES: "digital-services",
+  SUPPORT: "support",
   // Compatibility alias: marketing operations live in this single workspace.
   MARKETING: "digital-services"
 };
