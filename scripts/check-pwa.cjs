@@ -58,6 +58,7 @@ assert(runtime.includes('navigator.serviceWorker') === false, "Service worker re
 assert(read("new-ems/shared/pwa.js").includes('navigator.serviceWorker.register("/sw.js", { scope: "/" })'), "PWA client does not register the root service worker.");
 assert(read("new-ems/shared/pwa.js").includes('classList.add("ems-standalone")'), "PWA client must identify the installed standalone surface.");
 assert(read("assets/site.css").includes("body.login-page .site-nav"), "Installed login must hide the public website navigation.");
+assert(read("new-ems/shared/device-security.js").includes('window.matchMedia("(pointer: coarse)")'), "Mobile security detection must handle installed PWAs using a desktop user agent.");
 assert(serviceWorker.includes('request.method !== "GET"'), "Service worker must ignore write requests.");
 assert(serviceWorker.includes('url.origin !== self.location.origin'), "Service worker must ignore cross-origin API traffic.");
 assert(serviceWorker.includes('url.search === ""'), "Service worker must not cache query-string assets.");

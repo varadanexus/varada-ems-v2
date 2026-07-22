@@ -46,7 +46,15 @@ export function isMobileSecurityDevice() {
   const ua = navigator.userAgent || "";
   if (/android|iphone|ipad|ipod|mobile/i.test(ua)) return true;
   // iPadOS can identify itself as macOS when desktop-class browsing is enabled.
-  return /macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1;
+  if (/macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1) return true;
+
+  // Installed mobile PWAs can inherit a desktop user-agent when the browser's
+  // "Desktop site" option is enabled. Recover those devices from their touch
+  // input and phone/tablet-sized display without enabling the gate on normal PCs.
+  const hasTouch = Number(navigator.maxTouchPoints || 0) > 0 || "ontouchstart" in window;
+  const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+  const shortestScreenSide = Math.min(Number(window.screen?.width || 0), Number(window.screen?.height || 0));
+  return hasTouch && coarsePointer && shortestScreenSide > 0 && shortestScreenSide <= 1024;
 }
 
 export function getDeviceLockStatus(appUser) {
