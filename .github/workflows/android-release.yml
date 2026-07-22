@@ -77,7 +77,7 @@ jobs:
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Verify APK signature
-        run: apksigner verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
+        run: "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
 
       - name: Prepare public APK
         run: cp android/app/build/outputs/apk/release/app-release.apk Varada-EMS.apk
