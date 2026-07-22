@@ -41,6 +41,14 @@ export function deviceLockSupport() {
   return { supported, reason: supported ? "" : "Device biometric/PIN unlock is not supported by this browser." };
 }
 
+export function isMobileSecurityDevice() {
+  if (navigator.userAgentData?.mobile === true) return true;
+  const ua = navigator.userAgent || "";
+  if (/android|iphone|ipad|ipod|mobile/i.test(ua)) return true;
+  // iPadOS can identify itself as macOS when desktop-class browsing is enabled.
+  return /macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1;
+}
+
 export function getDeviceLockStatus(appUser) {
   const support = deviceLockSupport();
   return { ...support, enabled: Boolean(appUser?.id && readEnrollment(appUser)) };
