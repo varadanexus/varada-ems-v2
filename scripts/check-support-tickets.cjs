@@ -28,6 +28,7 @@ assert(widget.includes("sourceModule") && widget.includes("sourceUrl") && widget
 assert(widget.includes("My Tickets") && widget.includes("Raise Ticket"), "Global support drawer must expose creation and tracking.");
 assert(page.includes("supportManageForm") && page.includes("Internal note"), "Operator queue must support triage and internal notes.");
 assert(layout.includes("initSupportDesk"), "Protected EMS pages must initialize the support desk.");
+assert(layout.includes('workspace === WORKSPACES.SUPPORT') && layout.includes('? "Support"'), "Support workspace must use the Support division scope label.");
 assert(navbar.includes("supportDeskBtn"), "EMS navbar must expose the global support launcher.");
 assert(sidebar.includes("Help & Support") && sidebar.includes("ROUTES.SUPPORT_TICKETS"), "Every workspace sidebar must expose Support Desk.");
 assert(constants.includes("SUPPORT_TICKETS"), "Support route and module constants are missing.");
