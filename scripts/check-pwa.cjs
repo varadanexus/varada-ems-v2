@@ -58,6 +58,7 @@ assert(runtime.includes('navigator.serviceWorker') === false, "Service worker re
 assert(read("new-ems/shared/pwa.js").includes('navigator.serviceWorker.register("/sw.js", { scope: "/" })'), "PWA client does not register the root service worker.");
 assert(read("new-ems/shared/pwa.js").includes('classList.add("ems-standalone")'), "PWA client must identify the installed standalone surface.");
 assert(read("new-ems/shared/native-app-update.js").includes("isNativeAndroid()"), "Mandatory APK updates must remain restricted to native Android.");
+assert(read("login.html").includes('class="login-app-download"'), "Public login must expose the Android app download option.");
 assert(read("assets/site.css").includes("body.login-page .site-nav"), "Installed login must hide the public website navigation.");
 assert(read("new-ems/shared/device-security.js").includes("windows nt|cros"), "Mobile security detection must exclude touch-enabled PCs.");
 assert(read("new-ems/shared/device-security.js").includes("consumeInternalNavigation(appUser)"), "Device unlock may only be bypassed for a deliberate in-app navigation.");

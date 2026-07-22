@@ -42,12 +42,15 @@ assert(pwa.includes("if (isNative()) return;"), "Native builds must not register
 assert(layout.includes('const saved = isMobile() ? "closed"'), "Mobile module drawers must start closed.");
 assert(layout.includes('if (sidebar?.contains(anchor)) closeMobileSidebar();'), "Mobile module drawers must close after navigation selection.");
 assert(dashboard.includes('.cc-admin-grid{grid-template-columns:1fr;'), "Mobile administration cards must use a readable single-column layout.");
+assert(dashboard.includes('.cc-user{width:100%;max-width:100%;min-width:0;'), "Mobile command-center identity cards must not exceed their parent card.");
+assert(dashboard.includes('.cc-actions{display:grid;width:100%;max-width:100%;min-width:0;'), "Mobile command-center actions must use a bounded grid.");
 assert(nativeUpdate.includes("releases/latest"), "Native app must check the latest signed Android release.");
 assert(nativeUpdate.includes('title: "Update available"'), "Native app must show a mandatory update prompt.");
 assert(nativeUpdate.includes("compareVersions(installed, latest) < 0"), "Outdated native apps must remain blocked.");
 assert(nativeUpdate.includes('title: "Connection required"'), "Native app must fail closed when update verification is unavailable.");
 assert(layout.includes("await enforceNativeAppUpdate()"), "Protected modules must enforce the native app version gate.");
 assert(login.includes("await enforceNativeAppUpdate()"), "Native login must enforce the app version gate.");
+assert(login.includes("releases/latest/download/Varada-EMS.apk"), "Public login must link to the latest signed Android APK.");
 assert(releaseWorkflow.includes("assembleRelease"), "Signed release workflow must build the release APK.");
 assert(releaseWorkflow.includes("build-tools/36.0.0/apksigner") && releaseWorkflow.includes("verify --verbose --print-certs"), "Signed release workflow must verify the APK signature.");
 assert(releaseWorkflow.includes("softprops/action-gh-release"), "Signed APK must be published to a permanent GitHub Release.");
