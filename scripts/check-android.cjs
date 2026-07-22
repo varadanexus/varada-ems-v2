@@ -34,7 +34,7 @@ assert(deviceSecurity.includes("Plugins?.NativeDevice"), "Web security gate is n
 assert(pushNotifications.includes("requestNotifications()"), "Web notification gate is not connected to Android permission.");
 assert(pwa.includes("if (isNative()) return;"), "Native builds must not register the browser service worker.");
 assert(releaseWorkflow.includes("assembleRelease"), "Signed release workflow must build the release APK.");
-assert(releaseWorkflow.includes("apksigner verify"), "Signed release workflow must verify the APK signature.");
+assert(releaseWorkflow.includes("build-tools/36.0.0/apksigner") && releaseWorkflow.includes("verify --verbose --print-certs"), "Signed release workflow must verify the APK signature.");
 assert(releaseWorkflow.includes("softprops/action-gh-release"), "Signed APK must be published to a permanent GitHub Release.");
 
 if (!process.exitCode) console.log("Android validation passed: native bundle, biometrics, permissions, and security guards are present.");
