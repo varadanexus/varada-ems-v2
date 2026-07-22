@@ -12,6 +12,75 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   headers: { ...corsHeaders, "Content-Type": "application/json" }
 });
 
+type GoogleServiceAccount = {
+  client_email: string;
+  private_key: string;
+  project_id: string;
+  token_uri?: string;
+};
+
+let cachedGoogleToken: { accessToken: string; expiresAt: number; projectId: string } | null = null;
+
+function base64Url(value: Uint8Array | string) {
+  const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function privateKeyBytes(pem: string) {
+  const raw = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, "");
+  return Uint8Array.from(atob(raw), (character) => character.charCodeAt(0));
+}
+
+async function firebaseAccessToken() {
+  if (cachedGoogleToken && cachedGoogleToken.expiresAt > Date.now() + 60_000) return cachedGoogleToken;
+  const raw = Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON") || "";
+  if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is not configured");
+  const account = JSON.parse(raw) as GoogleServiceAccount;
+  if (!account.client_email || !account.private_key || !account.project_id) {
+    throw new Error("Google service account is missing client_email, private_key or project_id");
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claim = base64Url(JSON.stringify({
+    iss: account.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: account.token_uri || "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600
+  }));
+  const unsigned = `${header}.${claim}`;
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    privateKeyBytes(account.private_key),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned)));
+  const assertion = `${unsigned}.${base64Url(signature)}`;
+  const response = await fetch(account.token_uri || "https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.access_token) {
+    throw new Error(payload?.error_description || payload?.error || "Could not authorize Firebase Cloud Messaging");
+  }
+  cachedGoogleToken = {
+    accessToken: String(payload.access_token),
+    expiresAt: Date.now() + Number(payload.expires_in || 3600) * 1000,
+    projectId: Deno.env.get("FIREBASE_PROJECT_ID") || account.project_id
+  };
+  return cachedGoogleToken;
+}
+
 function compactNotificationText(value: unknown, limit: number) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
   return text.length <= limit ? text : `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
@@ -58,7 +127,6 @@ Deno.serve(async (req) => {
     const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY") || "";
     const token = bearer(req);
     if (!token) return json({ error: "Authentication required" }, 401);
-    if (!vapidPublicKey || !vapidPrivateKey) return json({ error: "Push service is not configured" }, 503);
 
     const isInternal = token === serviceRoleKey;
     let callerId: string | null = null;
@@ -112,46 +180,134 @@ Deno.serve(async (req) => {
       .in("app_user_id", userIds);
     if (subscriptionError) throw subscriptionError;
 
+    const { data: nativeTokens, error: nativeTokenError } = await admin
+      .from("native_push_tokens")
+      .select("id,token,platform")
+      .in("app_user_id", userIds)
+      .eq("enabled", true);
+    if (nativeTokenError) throw nativeTokenError;
+
     const { data: priorDeliveries } = await admin
       .from("push_deliveries")
       .select("subscription_id")
       .eq("notification_id", notificationId);
     const deliveredIds = new Set((priorDeliveries || []).map((row) => row.subscription_id));
 
-    webpush.setVapidDetails("mailto:security@varadanexus.com", vapidPublicKey, vapidPrivateKey);
+    const { data: priorNativeDeliveries, error: priorNativeDeliveryError } = await admin
+      .from("native_push_deliveries")
+      .select("native_token_id")
+      .eq("notification_id", notificationId);
+    if (priorNativeDeliveryError) throw priorNativeDeliveryError;
+    const deliveredNativeIds = new Set((priorNativeDeliveries || []).map((row) => row.native_token_id));
+
+    if (vapidPublicKey && vapidPrivateKey) {
+      webpush.setVapidDetails("mailto:security@varadanexus.com", vapidPublicKey, vapidPrivateKey);
+    }
+    const targetUrl = resolveNotificationUrl(event);
+    const title = compactNotificationText(event.title, 72);
+    const message = compactNotificationText(event.message, 150);
     const payload = JSON.stringify({
-      title: compactNotificationText(event.title, 72),
-      body: compactNotificationText(event.message, 150),
+      title,
+      body: message,
       // Older workers used payload.icon as an expanded right-side image. A
       // transparent compatibility icon suppresses that duplicate until v11 activates.
       icon: "/new-ems/assets/icons/notification-transparent.png",
       badge: "/new-ems/assets/icons/ems-notification-badge.png",
       tag: `ems-${event.id}`,
-      data: { url: resolveNotificationUrl(event), notificationId: event.id },
+      data: { url: targetUrl, notificationId: event.id },
       actionLabel: compactNotificationText(event.action_label || "Open EMS", 24),
       severity: event.severity,
       moduleCode: event.module_code
     });
 
-    let delivered = 0;
-    let failed = 0;
+    let webDelivered = 0;
+    let webFailed = 0;
     await Promise.all((subscriptions || []).filter((sub) => !deliveredIds.has(sub.id)).map(async (sub) => {
       try {
+        if (!vapidPublicKey || !vapidPrivateKey) throw new Error("Web Push VAPID keys are not configured");
         await webpush.sendNotification({
           endpoint: sub.endpoint,
           keys: { p256dh: sub.p256dh_key, auth: sub.auth_key }
         }, payload, { TTL: 86400, urgency: event.severity === "error" ? "high" : "normal" });
         await admin.from("push_deliveries").upsert({ notification_id: notificationId, subscription_id: sub.id });
-        delivered += 1;
+        webDelivered += 1;
       } catch (error: any) {
-        failed += 1;
+        webFailed += 1;
         if ([404, 410].includes(Number(error?.statusCode))) {
           await admin.from("push_subscriptions").delete().eq("id", sub.id);
         }
       }
     }));
 
-    return json({ delivered, failed });
+    let nativeDelivered = 0;
+    let nativeFailed = 0;
+    const pendingNativeTokens = (nativeTokens || []).filter((entry) => !deliveredNativeIds.has(entry.id));
+    if (pendingNativeTokens.length) {
+      try {
+        const firebase = await firebaseAccessToken();
+        await Promise.all(pendingNativeTokens.map(async (entry) => {
+          try {
+            const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(firebase.projectId)}/messages:send`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${firebase.accessToken}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                message: {
+                  token: entry.token,
+                  notification: { title, body: message },
+                  data: {
+                    url: targetUrl,
+                    notificationId: String(event.id),
+                    severity: String(event.severity || "info"),
+                    moduleCode: String(event.module_code || "")
+                  },
+                  android: {
+                    priority: event.severity === "error" ? "high" : "normal",
+                    ttl: "86400s",
+                    notification: {
+                      channel_id: "ems_operational_alerts",
+                      icon: "ic_stat_varada",
+                      color: "#D4B26A",
+                      sound: "default",
+                      tag: `ems-${event.id}`
+                    }
+                  }
+                }
+              })
+            });
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              const errorCode = String(result?.error?.details?.find?.((detail: any) => detail?.errorCode)?.errorCode || "");
+              if (["UNREGISTERED", "INVALID_ARGUMENT"].includes(errorCode)) {
+                await admin.from("native_push_tokens").delete().eq("id", entry.id);
+              }
+              throw new Error(result?.error?.message || `Firebase delivery failed (${response.status})`);
+            }
+            const { error: deliveryError } = await admin.from("native_push_deliveries").upsert({
+              notification_id: notificationId,
+              native_token_id: entry.id
+            });
+            if (deliveryError) throw deliveryError;
+            nativeDelivered += 1;
+          } catch (error) {
+            nativeFailed += 1;
+            console.error("FCM delivery failed", error);
+          }
+        }));
+      } catch (error) {
+        nativeFailed += pendingNativeTokens.length;
+        console.error("Firebase configuration failed", error);
+      }
+    }
+
+    return json({
+      delivered: webDelivered + nativeDelivered,
+      failed: webFailed + nativeFailed,
+      web: { delivered: webDelivered, failed: webFailed },
+      native: { delivered: nativeDelivered, failed: nativeFailed }
+    });
   } catch (error) {
     console.error("push-notifications failed", error);
     return json({ error: error instanceof Error ? error.message : "Push delivery failed" }, 500);

@@ -55,7 +55,9 @@ assert(deviceSecurity.includes('addListener("backButton"') && deviceSecurity.inc
 assert(deviceSecurity.includes("WEB_RELOCK_MIN_HIDDEN_MS"), "Browser relock must ignore transient mobile visibility changes.");
 assert(deviceSecurity.includes("if (nativeApp?.addListener)"), "Native apps must not use browser visibility to trigger biometric relock.");
 assert(navbar.includes('.ems-nav-sub{display:block'), "Mobile header must show the Private Limited company suffix.");
-assert(pushNotifications.includes("requestNotifications()"), "Web notification gate is not connected to Android permission.");
+assert(pushNotifications.includes("Plugins?.PushNotifications"), "Web notification gate is not connected to native push notifications.");
+assert(pushNotifications.includes("requestPermissions()") && pushNotifications.includes("registerNativePush()"), "Native push permission and Firebase registration are missing.");
+assert(pushNotifications.includes("upsert_my_native_push_token"), "Native Firebase tokens are not stored in EMS.");
 assert(pwa.includes("if (isNative()) return;"), "Native builds must not register the browser service worker.");
 assert(layout.includes('const saved = isMobile() ? "closed"'), "Mobile module drawers must start closed.");
 assert(layout.includes('if (sidebar?.contains(anchor)) closeMobileSidebar();'), "Mobile module drawers must close after navigation selection.");
@@ -76,6 +78,7 @@ assert(layout.includes("await enforceNativeAppUpdate()"), "Protected modules mus
 assert(login.includes("await enforceNativeAppUpdate()"), "Native login must enforce the app version gate.");
 assert(login.includes("releases/latest/download/Varada-EMS.apk"), "Public login must link to the latest signed Android APK.");
 assert(releaseWorkflow.includes("assembleRelease"), "Signed release workflow must build the release APK.");
+assert(releaseWorkflow.includes("FIREBASE_GOOGLE_SERVICES_JSON_BASE64") && releaseWorkflow.includes("android/app/google-services.json"), "Signed release workflow must restore the protected Firebase Android configuration.");
 assert(releaseWorkflow.includes("build-tools/36.0.0/apksigner") && releaseWorkflow.includes("verify --verbose --print-certs"), "Signed release workflow must verify the APK signature.");
 assert(releaseWorkflow.includes("softprops/action-gh-release"), "Signed APK must be published to a permanent GitHub Release.");
 

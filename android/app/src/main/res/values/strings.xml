@@ -4,4 +4,5 @@
     <string name="title_activity_main">Varada Nexus</string>
     <string name="package_name">com.varadanexus.ems</string>
     <string name="custom_url_scheme">com.varadanexus.ems</string>
+    <string name="default_notification_channel_id">ems_operational_alerts</string>
 </resources>
