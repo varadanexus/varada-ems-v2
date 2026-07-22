@@ -401,7 +401,14 @@ function bindGlobalActions() {
     sidebar.classList.toggle("open", state === "open" && isMobile());
   };
 
-  const saved = localStorage.getItem(KEY) || "expanded";
+  const closeMobileSidebar = () => {
+    if (!isMobile() || !sidebar) return;
+    sidebar.classList.remove("open");
+  };
+
+  // A mobile drawer is temporary UI state. Never restore it on a new page,
+  // otherwise opening one module leaves the drawer covering the next module.
+  const saved = isMobile() ? "closed" : (localStorage.getItem(KEY) || "expanded");
   applyState(saved);
 
   const navStateKey = `ems_nav_sections_${sidebar?.dataset.workspace || "admin"}`;
@@ -417,9 +424,7 @@ function bindGlobalActions() {
 
   menuToggle?.addEventListener("click", () => {
     if (isMobile()) {
-      const next = sidebar?.classList.contains("open") ? "closed" : "open";
-      localStorage.setItem(KEY, next);
-      applyState(next);
+      sidebar?.classList.toggle("open");
       return;
     }
     const next = shell?.classList.contains("sidebar-collapsed") ? "expanded" : "collapsed";
@@ -438,6 +443,7 @@ function bindGlobalActions() {
     if (!(target instanceof Element)) return;
     const anchor = target.closest("a[href]");
     if (!anchor) return;
+    if (sidebar?.contains(anchor)) closeMobileSidebar();
     const href = anchor.getAttribute("href") || "";
     if (!href || href.startsWith("#") || anchor.getAttribute("target") === "_blank") return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -452,20 +458,18 @@ function bindGlobalActions() {
     if (!isMobile() || !sidebar?.classList.contains("open")) return;
     const t = e.target;
     if (t instanceof Element && !sidebar.contains(t) && !menuToggle?.contains(t)) {
-      localStorage.setItem(KEY, "closed");
-      applyState("closed");
+      closeMobileSidebar();
     }
   });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && isMobile() && sidebar?.classList.contains("open")) {
-      localStorage.setItem(KEY, "closed");
-      applyState("closed");
+      closeMobileSidebar();
     }
   });
 
   window.addEventListener("resize", () => {
-    const state = localStorage.getItem(KEY) || "expanded";
+    const state = isMobile() ? "closed" : (localStorage.getItem(KEY) || "expanded");
     applyState(state);
   });
 

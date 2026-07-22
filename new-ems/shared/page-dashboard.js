@@ -289,7 +289,11 @@ async function init() {
           .cc-actions-row{flex-direction:column;align-items:flex-start;gap:.5rem;}
           .cc-modules-grid{grid-template-columns:1fr;}
           .cc-module-card{min-height:112px;}
-          .cc-coming-grid,.cc-admin-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+          .cc-coming-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+          .cc-admin-grid{grid-template-columns:1fr;gap:.6rem;}
+          .cc-admin-card{min-height:96px;padding:1rem 1.05rem;}
+          .cc-admin-title{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25;}
+          .cc-admin-card p{white-space:normal;overflow:visible;text-overflow:clip;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
         }
       </style>
 
