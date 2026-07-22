@@ -18,6 +18,7 @@ if (manifest) {
   assert(manifest.start_url === "/login.html", "Manifest must start at the canonical login page.");
   assert(manifest.scope === "/", "Manifest scope must include both login and EMS modules.");
   assert(manifest.display === "standalone", "Manifest display must be standalone.");
+  assert(JSON.stringify(manifest.display_override) === JSON.stringify(["standalone"]), "Manifest display override must not fall back to browser minimal UI.");
   assert(Array.isArray(manifest.icons) && manifest.icons.some((icon) => icon.sizes === "192x192"), "Manifest needs a 192px icon.");
   assert(Array.isArray(manifest.icons) && manifest.icons.some((icon) => icon.sizes === "512x512"), "Manifest needs a 512px icon.");
 }
@@ -55,6 +56,8 @@ assert(login.includes('rel="manifest" href="/new-ems/manifest.webmanifest"'), "C
 assert(login.includes('name="mobile-web-app-capable" content="yes"'), "Canonical login page is missing the standard mobile web app capability meta tag.");
 assert(runtime.includes('navigator.serviceWorker') === false, "Service worker registration should remain isolated in pwa.js.");
 assert(read("new-ems/shared/pwa.js").includes('navigator.serviceWorker.register("/sw.js", { scope: "/" })'), "PWA client does not register the root service worker.");
+assert(read("new-ems/shared/pwa.js").includes('classList.add("ems-standalone")'), "PWA client must identify the installed standalone surface.");
+assert(read("assets/site.css").includes("body.login-page .site-nav"), "Installed login must hide the public website navigation.");
 assert(serviceWorker.includes('request.method !== "GET"'), "Service worker must ignore write requests.");
 assert(serviceWorker.includes('url.origin !== self.location.origin'), "Service worker must ignore cross-origin API traffic.");
 assert(serviceWorker.includes('url.search === ""'), "Service worker must not cache query-string assets.");

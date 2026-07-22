@@ -1693,6 +1693,25 @@ body.login-page::before,body.login-page::after{display:none}
 body.login-page main{position:relative;z-index:1}
 @media(max-width:620px){body.login-page{background-position:58% center;background-attachment:scroll}}
 
+/* Installed EMS is an application surface, not the public company website. */
+@media (display-mode: standalone) {
+  body.login-page .site-nav,
+  body.login-page .auth-links { display: none !important; }
+  body.login-page .auth-wrap {
+    min-height: 100svh;
+    padding-top: max(36px, env(safe-area-inset-top));
+    padding-bottom: max(36px, env(safe-area-inset-bottom));
+  }
+}
+
+html.ems-standalone body.login-page .site-nav,
+html.ems-standalone body.login-page .auth-links { display: none !important; }
+html.ems-standalone body.login-page .auth-wrap {
+  min-height: 100svh;
+  padding-top: max(36px, env(safe-area-inset-top));
+  padding-bottom: max(36px, env(safe-area-inset-bottom));
+}
+
 /* Home hero: retain the world-network artwork, without the upper-right orbit. */
 body.home-page .hero::after,
 body.home-page .hero-orbit,

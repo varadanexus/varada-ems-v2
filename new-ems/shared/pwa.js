@@ -6,6 +6,8 @@
   let installPrompt = null;
   let installButton = null;
 
+  if (isStandalone()) document.documentElement.classList.add("ems-standalone");
+
   function addStylesheet() {
     if (document.querySelector('link[data-ems-pwa-style]')) return;
     const link = document.createElement("link");
