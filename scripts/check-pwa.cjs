@@ -80,6 +80,9 @@ assert(serviceWorker.includes('action: "open"'), "Push notifications should expo
 assert(serviceWorker.indexOf("existing.navigate(target)") < serviceWorker.indexOf("existing.focus()"), "Notification clicks must navigate before focusing to avoid the biometric relock race.");
 assert(pushClient.includes("userVisibleOnly: true"), "Push subscriptions must require user-visible notifications.");
 assert(pushClient.includes("upsert_my_push_subscription"), "Push subscriptions must be bound to the signed-in EMS user.");
+assert(pushClient.includes("offerWebPushSetup"), "Authenticated web and iOS PWA users need a notification activation prompt.");
+assert(pushClient.includes("Install EMS for background alerts"), "iOS users need Home Screen installation guidance before Web Push can be enabled.");
+assert(layout.includes("offerWebPushSetup()"), "The authenticated EMS layout must offer Web Push setup after sign-in.");
 assert(deviceSecurity.includes('authenticatorAttachment: "platform"'), "Device lock must use the device platform authenticator.");
 assert(deviceSecurity.includes('userVerification: "required"'), "Device lock must require biometric/PIN user verification.");
 assert(deviceSecurity.includes("enforceMandatorySecuritySetup"), "Protected EMS users must be gated until device lock and push are enabled.");

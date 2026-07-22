@@ -14,6 +14,7 @@ function nativePushPlugin() {
 }
 
 const NATIVE_DEVICE_ID_KEY = "ems_native_push_device_id";
+const WEB_PUSH_PROMPT_SESSION_KEY = "ems_web_push_prompt_shown";
 let nativeListenersReady = false;
 let nativeRegistrationWaiters = [];
 
@@ -219,6 +220,83 @@ export async function enablePushNotifications() {
   }
   await saveSubscription(subscription);
   return getPushNotificationStatus();
+}
+
+function showWebPushNotice({ title, message, actionLabel = "", action = null }) {
+  document.querySelector("[data-ems-web-push-notice]")?.remove();
+  const notice = document.createElement("section");
+  notice.className = "ems-pwa-notice";
+  notice.dataset.emsWebPushNotice = "true";
+  notice.setAttribute("role", "status");
+  notice.innerHTML = '<div><strong></strong><span></span></div><div class="ems-pwa-notice-actions"></div>';
+  notice.querySelector("strong").textContent = title;
+  notice.querySelector("span").textContent = message;
+  const actions = notice.querySelector(".ems-pwa-notice-actions");
+  if (actionLabel && typeof action === "function") {
+    const actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.textContent = actionLabel;
+    actionButton.addEventListener("click", async () => {
+      actionButton.disabled = true;
+      try {
+        await action();
+      } catch (error) {
+        actionButton.disabled = false;
+        notice.querySelector("span").textContent = error?.message || "Notifications could not be enabled on this device.";
+      }
+    });
+    actions.appendChild(actionButton);
+  }
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "ems-pwa-notice-close";
+  closeButton.setAttribute("aria-label", "Dismiss notification setup");
+  closeButton.textContent = "×";
+  closeButton.addEventListener("click", () => notice.remove());
+  actions.appendChild(closeButton);
+  document.body.appendChild(notice);
+  return notice;
+}
+
+export async function offerWebPushSetup() {
+  if (isNativeApp() || !window.isSecureContext) return null;
+  try {
+    if (sessionStorage.getItem(WEB_PUSH_PROMPT_SESSION_KEY) === "true") return null;
+    sessionStorage.setItem(WEB_PUSH_PROMPT_SESSION_KEY, "true");
+  } catch {}
+
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  if (ios && !standalone) {
+    return showWebPushNotice({
+      title: "Install EMS for background alerts",
+      message: "On iPhone or iPad, add Varada Nexus to the Home Screen, open the installed app, sign in and enable notifications.",
+      actionLabel: "Install app",
+      action: async () => window.installVaradaNexus?.()
+    });
+  }
+
+  const support = pushSupport();
+  if (!support.supported) return null;
+  const status = await getPushNotificationStatus();
+  if (status.enabled) return null;
+  if (status.permission === "denied") {
+    return showWebPushNotice({
+      title: "Background alerts are blocked",
+      message: "Allow notifications for Varada Nexus in this browser or device's notification settings, then reload EMS."
+    });
+  }
+
+  return showWebPushNotice({
+    title: "Enable background alerts",
+    message: "Receive EMS workflow and security notifications even when the app is closed.",
+    actionLabel: "Enable notifications",
+    action: async () => {
+      const enabled = await enablePushNotifications();
+      if (!enabled.enabled) throw new Error(enabled.reason || "Notifications could not be enabled.");
+      document.querySelector("[data-ems-web-push-notice]")?.remove();
+    }
+  });
 }
 
 export async function disablePushNotifications() {

@@ -11,6 +11,7 @@ import { initNotificationShell } from "./notification-ui.js?v=notifications-1";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
 import { allowDeviceInternalNavigation, enforceDeviceUnlock, enforceMandatorySecuritySetup, installDeviceRelock, isMobileSecurityDevice } from "./device-security.js";
+import { offerWebPushSetup } from "./push-notifications.js";
 import { enforceNativeAppUpdate } from "./native-app-update.js";
 
 const NAV_TRANSITION_KEY = "ems_nav_pending";
@@ -311,6 +312,13 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
     showToast(error?.message || "Terms and Conditions could not be loaded. Access remains blocked.", TOAST_TYPES.ERROR);
     return;
   }
+
+  // Web Push permission must follow a user gesture. Once the authenticated
+  // workspace is ready, offer a single, non-blocking activation action for
+  // desktop browsers and installed iOS/Android PWAs.
+  offerWebPushSetup().catch((error) => {
+    console.warn("Web notification setup could not be offered.", error);
+  });
 
   // Current user's role codes via SECURITY DEFINER RPC (works for non-admins whose
   // RLS blocks reading the roles table); falls back to the direct lookup.
