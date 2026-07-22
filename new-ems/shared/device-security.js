@@ -1,12 +1,13 @@
 import { enablePushNotifications, getPushNotificationStatus, pushSupport } from "./push-notifications.js";
 
 const LOCK_PREFIX = "ems_device_lock_v1:";
-const UNLOCK_PREFIX = "ems_device_unlock_v1:";
-const UNLOCK_WINDOW_MS = 15 * 60 * 1000;
+const INTERNAL_NAV_PREFIX = "ems_device_internal_nav_v1:";
+const INTERNAL_NAV_WINDOW_MS = 10 * 1000;
 let hiddenAt = 0;
 let authenticatorActive = false;
 let internalNavigationUntil = 0;
 let securitySetupActive = false;
+let activeAppUserId = "";
 
 function bytesToBase64Url(bytes) {
   let value = "";
@@ -28,8 +29,8 @@ function userKey(appUser) {
   return `${LOCK_PREFIX}${appUser.id}`;
 }
 
-function unlockKey(appUser) {
-  return `${UNLOCK_PREFIX}${appUser.id}`;
+function internalNavigationKey(appUser) {
+  return `${INTERNAL_NAV_PREFIX}${appUser.id}`;
 }
 
 function readEnrollment(appUser) {
@@ -48,13 +49,16 @@ export function isMobileSecurityDevice() {
   // iPadOS can identify itself as macOS when desktop-class browsing is enabled.
   if (/macintosh/i.test(ua) && Number(navigator.maxTouchPoints || 0) > 1) return true;
 
+  // Never treat a touch-enabled Windows PC or Chromebook as a mobile app.
+  if (/windows nt|cros/i.test(ua)) return false;
+
   // Installed mobile PWAs can inherit a desktop user-agent when the browser's
-  // "Desktop site" option is enabled. Recover those devices from their touch
-  // input and phone/tablet-sized display without enabling the gate on normal PCs.
+  // "Desktop site" option is enabled. Touch input and a phone/tablet-sized
+  // display recover those devices even when their primary pointer is reported
+  // as fine (some Android launchers and desktop modes do this).
   const hasTouch = Number(navigator.maxTouchPoints || 0) > 0 || "ontouchstart" in window;
-  const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
   const shortestScreenSide = Math.min(Number(window.screen?.width || 0), Number(window.screen?.height || 0));
-  return hasTouch && coarsePointer && shortestScreenSide > 0 && shortestScreenSide <= 1024;
+  return hasTouch && shortestScreenSide > 0 && shortestScreenSide <= 1024;
 }
 
 export function getDeviceLockStatus(appUser) {
@@ -98,7 +102,6 @@ export async function enableDeviceLock(appUser) {
     enabledAt: new Date().toISOString(),
     device: navigator.userAgent.slice(0, 250)
   }));
-  sessionStorage.setItem(unlockKey(appUser), String(Date.now() + UNLOCK_WINDOW_MS));
   installDeviceRelock(appUser);
   return getDeviceLockStatus(appUser);
 }
@@ -106,7 +109,7 @@ export async function enableDeviceLock(appUser) {
 export function disableDeviceLock(appUser) {
   if (!appUser?.id) return;
   localStorage.removeItem(userKey(appUser));
-  sessionStorage.removeItem(unlockKey(appUser));
+  sessionStorage.removeItem(internalNavigationKey(appUser));
 }
 
 async function verifyDevice(appUser) {
@@ -133,8 +136,16 @@ async function verifyDevice(appUser) {
     hiddenAt = 0;
   }
   if (!assertion) throw new Error("Device verification was cancelled.");
-  sessionStorage.setItem(unlockKey(appUser), String(Date.now() + UNLOCK_WINDOW_MS));
   return true;
+}
+
+function consumeInternalNavigation(appUser) {
+  let allowedUntil = 0;
+  try {
+    allowedUntil = Number(sessionStorage.getItem(internalNavigationKey(appUser)) || 0);
+    sessionStorage.removeItem(internalNavigationKey(appUser));
+  } catch {}
+  return allowedUntil >= Date.now();
 }
 
 function lockOverlay(appUser, onSignOut) {
@@ -179,8 +190,9 @@ function lockOverlay(appUser, onSignOut) {
 export async function enforceDeviceUnlock(appUser, onSignOut) {
   const enrollment = readEnrollment(appUser);
   if (!enrollment) return true;
-  const unlockedUntil = Number(sessionStorage.getItem(unlockKey(appUser)) || 0);
-  if (unlockedUntil > Date.now()) return true;
+  // A token is issued only for one deliberate in-app page transition. A PWA
+  // relaunch has no token and therefore always requires device verification.
+  if (consumeInternalNavigation(appUser)) return true;
   return lockOverlay(appUser, onSignOut);
 }
 
@@ -286,10 +298,15 @@ export async function enforceMandatorySecuritySetup(appUser, onSignOut) {
 }
 
 export function allowDeviceInternalNavigation() {
-  internalNavigationUntil = Date.now() + 10_000;
+  internalNavigationUntil = Date.now() + INTERNAL_NAV_WINDOW_MS;
+  if (!activeAppUserId) return;
+  try {
+    sessionStorage.setItem(`${INTERNAL_NAV_PREFIX}${activeAppUserId}`, String(internalNavigationUntil));
+  } catch {}
 }
 
 export function installDeviceRelock(appUser) {
+  activeAppUserId = appUser?.id || "";
   if (!readEnrollment(appUser) || document.documentElement.dataset.emsRelockBound === "true") return;
   document.documentElement.dataset.emsRelockBound = "true";
   document.addEventListener("visibilitychange", () => {
@@ -302,9 +319,9 @@ export function installDeviceRelock(appUser) {
         return;
       }
       hiddenAt = Date.now();
-      // Clear the grace token synchronously. Mobile operating systems may kill
-      // a closed PWA immediately, so waiting until the next launch is unreliable.
-      sessionStorage.removeItem(unlockKey(appUser));
+      // Remove any unused navigation exception synchronously. Mobile operating
+      // systems may kill a closed PWA immediately after this event.
+      sessionStorage.removeItem(internalNavigationKey(appUser));
       return;
     }
     if (authenticatorActive) {

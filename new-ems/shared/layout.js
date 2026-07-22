@@ -428,6 +428,7 @@ function bindGlobalActions() {
   });
 
   adminMenuBtn?.addEventListener("click", () => {
+    allowDeviceInternalNavigation();
     startNavigationTransition();
     window.location.assign(ROUTES.SETTINGS);
   });
@@ -505,6 +506,7 @@ function bindGlobalSearch(accessibleModules = []) {
   const go = (href) => {
     if (!href) return;
     hide();
+    allowDeviceInternalNavigation();
     startNavigationTransition();
     window.location.assign(href);
   };
