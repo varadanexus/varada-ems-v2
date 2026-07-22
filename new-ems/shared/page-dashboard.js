@@ -140,8 +140,7 @@ async function init() {
     const adminCards = isAuditor ? [] : ADMIN_ITEMS.filter((x) => allowedModules.includes(x.module));
     const configCards = GLOBAL_CONFIG_ITEMS.filter((x) => allowedModules.includes(x.module));
     const financeCards = [
-      { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD, description: "Journals, receivables, payables, treasury", tone: "active" },
-      ...(!isAuditor ? [{ module: MODULES.CENTRAL_ACCOUNTS_REPORTING, title: "Reports", href: ROUTES.CENTRAL_ACCOUNTS_REPORTING, description: "Finance reporting and statements", tone: "active" }] : [])
+      { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD, description: "Journals, receivables, payables, treasury", tone: "active" }
     ].filter((x) => allowedModules.includes(x.module));
     const developerCards = isAuditor ? [] : DEVELOPER_ITEMS.filter((x) => allowedModules.includes(x.module));
     const quickActions = QUICK_ACTIONS.filter((x) => allowedModules.includes(x.module));
