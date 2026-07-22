@@ -50,7 +50,7 @@
 .support-back{border:0;background:transparent;color:#d8b65f;padding:0;cursor:pointer;font-weight:800;text-align:left}
 .support-error{padding:11px 12px;border:1px solid rgba(236,85,85,.4);border-radius:10px;background:#211012;color:#ffb5b5;font-size:12px}
 .support-success{padding:11px 12px;border:1px solid rgba(55,198,125,.35);border-radius:10px;background:#0b2116;color:#8ee8b7;font-size:12px}
-.support-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:10px;margin-bottom:14px}
+.support-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 170px 170px;gap:10px;margin-bottom:14px}
 .support-desk-grid{display:grid;grid-template-columns:minmax(300px,.85fr) minmax(420px,1.35fr);gap:16px;align-items:start}
 .support-queue{max-height:calc(100vh - 300px);overflow:auto;padding-right:4px}
 .support-admin-panel{min-height:430px}

@@ -5,6 +5,7 @@ const errors = [];
 const assert = (condition, message) => { if (!condition) errors.push(message); };
 
 const migration = read("new-ems/supabase/migrations/20260722170000_ems_support_ticket_system.sql");
+const portalMigration = read("new-ems/supabase/migrations/20260722183000_portal_support_ticket_intake.sql");
 const api = read("new-ems/shared/support-api.js");
 const widget = read("new-ems/shared/support-desk.js");
 const page = read("new-ems/shared/page-support-tickets.js");
@@ -36,6 +37,20 @@ assert(constants.includes('SUPPORT: "support"') && constants.includes('title: "S
 assert(sidebar.includes("WORKSPACES.SUPPORT") && sidebar.includes("Assigned to Me") && sidebar.includes("Unassigned"), "Support workspace sidebar and operator views are missing.");
 assert(dashboard.includes("supportCards") && dashboard.includes('title: "Support"'), "The command center Support workspace card is missing.");
 assert(fs.existsSync("new-ems/modules/support-tickets/index.html"), "Support Desk module page is missing.");
+[
+  "support_portal_actor", "portal_create_support_ticket", "portal_list_support_tickets",
+  "portal_get_support_ticket", "portal_add_support_ticket_message", "portal_close_support_ticket"
+].forEach((name) => assert(portalMigration.includes(name), `Portal support migration is missing ${name}.`));
+assert(portalMigration.includes("department in ('general','technical','accounts','legal','transportation','interiors','digital_services','communications','administration')"), "Portal support departments are incomplete.");
+assert(portalMigration.includes("Assignee must be an active EMS staff member"), "Ticket assignment must allow active EMS staff.");
+assert(fs.existsSync("new-ems/shared/portal-support.js") && fs.existsSync("new-ems/shared/portal-support-api.js"), "Reusable portal Support interface is missing.");
+[
+  "interiors-client-app", "interiors-architect-portal", "legal-advocate-portal", "marketing-client-portal",
+  "marketing-vendor-portal", "transport-client-app", "transport-transporter-app", "transport-agent-app"
+].forEach((moduleName) => {
+  const html = read(`new-ems/modules/${moduleName}/index.html`);
+  assert(html.includes("portal-support.js") && html.includes("portal-support.css"), `${moduleName} is missing portal Support access.`);
+});
 
 if (errors.length) {
   console.error(errors.map((error) => `- ${error}`).join("\n"));

@@ -3,7 +3,7 @@ import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { addSupportTicketMessage, closeMySupportTicket, getSupportTicket, listSupportAgents, listSupportTickets, updateSupportTicket } from "./support-api.js";
 import { showToast } from "./utils.js";
 
-const state = { boot: null, operator: false, tickets: [], agents: [], selected: null, status: "all", search: "", view: "dashboard", loading: false };
+const state = { boot: null, operator: false, tickets: [], agents: [], selected: null, status: "all", department: "all", search: "", view: "dashboard", loading: false };
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
@@ -31,6 +31,11 @@ function priorityOptions(selected) {
   return ["low","normal","high","urgent"].map((value) => `<option value="${value}" ${selected === value ? "selected" : ""}>${value}</option>`).join("");
 }
 
+function departmentOptions(selected) {
+  return ["general","technical","accounts","legal","transportation","interiors","digital_services","communications","administration"]
+    .map((value) => `<option value="${value}" ${selected === value ? "selected" : ""}>${escapeHtml(label(value))}</option>`).join("");
+}
+
 function queueCards() {
   if (!state.tickets.length) return '<div class="support-empty">No tickets match this view.</div>';
   return state.tickets.map((ticket) => `
@@ -38,7 +43,7 @@ function queueCards() {
       <span class="support-ticket-top"><span class="support-ticket-number">${escapeHtml(ticket.ticket_number)}</span><span class="support-pill is-${escapeHtml(ticket.status)}">${escapeHtml(label(ticket.status))}</span></span>
       <strong>${escapeHtml(ticket.subject)}</strong>
       ${state.operator ? `<p>${escapeHtml(ticket.requester_name)} · ${escapeHtml(ticket.requester_email)}</p>` : ""}
-      <p>${escapeHtml(label(ticket.category))} · updated ${escapeHtml(formatTime(ticket.last_activity_at))}</p>
+      <p>${escapeHtml(label(ticket.department || "general"))} · ${escapeHtml(label(ticket.category))} · updated ${escapeHtml(formatTime(ticket.last_activity_at))}</p>
       <span><span class="support-pill is-${escapeHtml(ticket.priority)}">${escapeHtml(ticket.priority)}</span> <span class="support-pill">${Number(ticket.message_count || 0)} replies</span>${ticket.assignee_name ? ` <span class="support-pill">${escapeHtml(ticket.assignee_name)}</span>` : ""}</span>
     </button>`).join("");
 }
@@ -69,8 +74,8 @@ function detailPanel() {
     <div class="support-detail">
       <div class="support-ticket-top"><span class="support-ticket-number">${escapeHtml(ticket.ticket_number)}</span><span>${escapeHtml(formatTime(ticket.created_at))}</span></div>
       <h3>${escapeHtml(ticket.subject)}</h3>
-      <div class="support-detail-meta"><span><span class="support-pill is-${escapeHtml(ticket.status)}">${escapeHtml(label(ticket.status))}</span> <span class="support-pill is-${escapeHtml(ticket.priority)}">${escapeHtml(ticket.priority)}</span> <span class="support-pill">${escapeHtml(label(ticket.category))}</span></span></div>
-      ${state.operator ? `<p class="muted">Raised by <strong>${escapeHtml(ticket.requester_name)}</strong> · ${escapeHtml(ticket.requester_email)}</p>` : ""}
+      <div class="support-detail-meta"><span><span class="support-pill is-${escapeHtml(ticket.status)}">${escapeHtml(label(ticket.status))}</span> <span class="support-pill is-${escapeHtml(ticket.priority)}">${escapeHtml(ticket.priority)}</span> <span class="support-pill">${escapeHtml(label(ticket.department || "general"))}</span> <span class="support-pill">${escapeHtml(label(ticket.category))}</span></span></div>
+      ${state.operator ? `<p class="muted">Raised by <strong>${escapeHtml(ticket.requester_name)}</strong> · ${escapeHtml(ticket.requester_email || ticket.requester_phone || "No contact supplied")} · ${escapeHtml(label(ticket.requester_kind || "staff"))}</p>` : ""}
       <p class="support-description">${escapeHtml(ticket.description)}</p>
       <div class="support-context"><strong>Reported from</strong><br>${escapeHtml(ticket.source_module || "EMS")} · ${escapeHtml(ticket.source_url || "-")}</div>
       ${state.operator ? `
@@ -89,7 +94,7 @@ function detailPanel() {
           ${state.operator ? '<label class="notification-checkbox"><input type="checkbox" name="is_internal" /> <span>Internal note — hidden from requester</span></label>' : ""}
           <button class="support-primary" type="submit">${state.operator ? "Add Response" : "Send Reply"}</button>
         </form>
-        ${state.operator ? "" : '<button class="support-danger" type="button" id="supportPageCloseBtn">Close Ticket</button>'}`}
+        ${state.operator || detail.is_handler ? "" : '<button class="support-danger" type="button" id="supportPageCloseBtn">Close Ticket</button>'}`}
     </div>`;
 }
 
@@ -99,10 +104,10 @@ function render() {
     ${stats()}
     <section class="card">
       <div class="notification-section-head">
-        <div><h3>${state.operator ? viewTitle : "My Support Tickets"}</h3><p class="muted">${state.operator ? "Triage, assign, respond and resolve EMS support requests." : "Track every request and reply from the support team."}</p></div>
+        <div><h3>${state.operator || state.view === "assigned" ? viewTitle : "My Support Tickets"}</h3><p class="muted">${state.operator || state.view === "assigned" ? "Review assigned requests and provide clear support responses." : "Track every request and reply from the support team."}</p></div>
         <button class="btn primary" id="raiseSupportTicketBtn" type="button">+ Raise Ticket</button>
       </div>
-      <div class="support-toolbar"><input id="supportSearch" value="${escapeHtml(state.search)}" placeholder="Search ticket number, subject or requester" /><select id="supportStatusFilter"><option value="all">All statuses</option>${statusOptions(state.status)}</select></div>
+      <div class="support-toolbar"><input id="supportSearch" value="${escapeHtml(state.search)}" placeholder="Search ticket number, subject or requester" /><select id="supportDepartmentFilter"><option value="all">All departments</option>${departmentOptions(state.department)}</select><select id="supportStatusFilter"><option value="all">All statuses</option>${statusOptions(state.status)}</select></div>
       <div class="support-desk-grid">
         <div class="support-list support-queue" id="supportQueue">${queueCards()}</div>
         <div class="support-admin-panel" id="supportDetailPanel">${detailPanel()}</div>
@@ -113,8 +118,9 @@ function render() {
 
 async function loadTickets({ preserveSelection = true } = {}) {
   const selectedId = preserveSelection ? state.selected?.ticket?.id : null;
-  const requesterView = !state.operator || state.view === "mine";
-  state.tickets = await listSupportTickets({ scope: requesterView ? "mine" : "all", status: state.status, search: state.search });
+  const scope = state.view === "assigned" ? "assigned" : (!state.operator || state.view === "mine" ? "mine" : "all");
+  state.tickets = await listSupportTickets({ scope, status: state.status, search: state.search });
+  if (state.department !== "all") state.tickets = state.tickets.filter((ticket) => (ticket.department || "general") === state.department);
   if (state.operator) {
     if (state.view === "assigned") state.tickets = state.tickets.filter((ticket) => ticket.assigned_to_user_id === state.boot.appUser?.id);
     if (state.view === "unassigned") state.tickets = state.tickets.filter((ticket) => !ticket.assigned_to_user_id && !["resolved", "closed"].includes(ticket.status));
@@ -150,6 +156,8 @@ function bind() {
   });
   const filter = document.querySelector("#supportStatusFilter");
   if (filter) { filter.value = state.status; filter.addEventListener("change", (event) => { state.status = event.target.value; loadTickets({ preserveSelection: false }).catch(showLoadError); }); }
+  const departmentFilter = document.querySelector("#supportDepartmentFilter");
+  if (departmentFilter) { departmentFilter.value = state.department; departmentFilter.addEventListener("change", (event) => { state.department = event.target.value; loadTickets({ preserveSelection: false }).catch(showLoadError); }); }
   document.querySelector("#supportManageForm")?.addEventListener("submit", async (event) => {
     event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button"); button.disabled = true;
     try {
