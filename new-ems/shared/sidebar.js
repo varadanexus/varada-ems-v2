@@ -295,6 +295,9 @@ export function getSearchIndex() {
       });
     });
   });
+  if (!seen.has(ROUTES.SUPPORT_TICKETS)) {
+    out.push({ label: "Support Desk", href: ROUTES.SUPPORT_TICKETS, module: MODULES.SUPPORT_TICKETS, group: "Help & Support" });
+  }
   return out;
 }
 
@@ -312,7 +315,10 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
     if (itemUrl.pathname !== currentUrl.pathname) return false;
     return itemUrl.search ? itemUrl.search === currentUrl.search : true;
   };
-  const sectionsForWorkspace = MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN];
+  const sectionsForWorkspace = [
+    ...(MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN]),
+    { title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }
+  ];
   const sections = sectionsForWorkspace.map((section) => {
     const visibleItems = section.items.filter((item) => item.disabled || (allowedModules || []).includes(item.module));
     const sectionHasActive = visibleItems.some((item) => !item.disabled && item.href && isCurrentItem(item.href));

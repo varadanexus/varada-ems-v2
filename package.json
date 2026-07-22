@@ -10,6 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "check:pwa": "node scripts/check-pwa.cjs",
     "check:android": "node scripts/check-android.cjs",
+    "check:support": "node scripts/check-support-tickets.cjs",
     "check:migrations": "node scripts/check-supabase-migrations.cjs",
     "db:status": "cd new-ems && supabase migration list --linked",
     "db:dry-run": "npm run check:migrations && cd new-ems && supabase db push --linked --dry-run",

@@ -442,3 +442,12 @@ export const ROLE_MODULE_PERMISSIONS = {
     ])
   }
 };
+
+// Support is an EMS-wide facility. Database permissions remain authoritative;
+// this fallback keeps the launcher usable during offline/local bootstrap.
+Object.entries(ROLE_MODULE_PERMISSIONS).forEach(([roleCode, permissions]) => {
+  permissions[MODULES.SUPPORT_TICKETS] = [PERMISSIONS.VIEW, PERMISSIONS.CREATE];
+  if ([ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(roleCode)) {
+    permissions[MODULES.SUPPORT_TICKETS].push(PERMISSIONS.EDIT, PERMISSIONS.VIEW_AUDIT);
+  }
+});

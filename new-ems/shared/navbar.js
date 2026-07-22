@@ -40,6 +40,7 @@ export function renderNavbar(email = "", role = "", options = {}) {
       </style>
       <div class="navbar-actions">
         <button class="btn btn-ghost" id="adminMenuBtn">Admin</button>
+        <button class="icon-btn support-launcher" id="supportDeskBtn" aria-label="Open EMS Support Desk" title="Support Desk"><span aria-hidden="true">?</span></button>
         <button class="icon-btn notification-trigger" id="notificationBellBtn" aria-label="Open notifications">
           <span aria-hidden="true">🔔</span>
           <span class="notification-badge hidden" id="notificationUnreadBadge">0</span>

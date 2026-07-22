@@ -13,6 +13,7 @@ import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
 import { allowDeviceInternalNavigation, enforceDeviceUnlock, enforceMandatorySecuritySetup, installDeviceRelock, isMobileSecurityDevice } from "./device-security.js";
 import { offerWebPushSetup } from "./push-notifications.js";
 import { enforceNativeAppUpdate } from "./native-app-update.js";
+import { initSupportDesk } from "./support-desk.js?v=support-1";
 
 const NAV_TRANSITION_KEY = "ems_nav_pending";
 const FINANCIAL_TEXT_PATTERN = /\b(amount|rate|billing|bill(?:s|ing)?|invoice|payment|receipt|credit\s*note|receivable|payable|revenue|cost|margin|gst|tax|debit|credit|balance|outstanding|price|budget|expense|freight\s*charge|commission|penalty|settlement|quotation|quote|estimate|boq)\b/i;
@@ -390,6 +391,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   installFinancialRedaction(qs("#pageContent"));
   initNotificationShell().catch(() => {});
   initLiveChat().catch(() => {});
+  initSupportDesk({ appUser, roleCodes, divisionId: divisionContext?.divisionId || null });
   requestAnimationFrame(() => {
     app.classList.add("page-enter-active");
     finishNavigationTransition();
