@@ -98,6 +98,6 @@ jobs:
           body: |
             Signed Varada EMS Android release.
 
-            Download `Varada-EMS.apk` on an Android device and install it. Android may ask you to allow installation from your browser or file manager.
+            Download `Varada-EMS.apk` on an Android device and install it. This release supports secure in-app downloads for future mandatory updates. Android will still show its required installation confirmation.
           files: Varada-EMS.apk
           make_latest: true

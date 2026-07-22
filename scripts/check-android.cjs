@@ -19,6 +19,7 @@ const pwa = read("new-ems/shared/pwa.js");
 const layout = read("new-ems/shared/layout.js");
 const dashboard = read("new-ems/shared/page-dashboard.js");
 const nativeUpdate = read("new-ems/shared/native-app-update.js");
+const filePaths = read("android/app/src/main/res/xml/file_paths.xml");
 const login = read("login.html");
 const releaseWorkflow = read(".github/workflows/android-release.yml");
 
@@ -29,11 +30,16 @@ assert(manifest.includes("android:allowBackup=\"false\""), "Android backups must
 assert(manifest.includes("android:usesCleartextTraffic=\"false\""), "Cleartext network traffic must be disabled.");
 assert(manifest.includes("android.permission.USE_BIOMETRIC"), "Biometric permission is missing.");
 assert(manifest.includes("android.permission.POST_NOTIFICATIONS"), "Android notification permission is missing.");
+assert(manifest.includes("android.permission.REQUEST_INSTALL_PACKAGES"), "Android in-app update installation permission is missing.");
 assert(activity.includes("registerPlugin(NativeDevicePlugin.class)"), "Native device bridge is not registered.");
 assert(nativeDevice.includes("BiometricPrompt"), "Native biometric prompt implementation is missing.");
 assert(nativeDevice.includes("requestPermissionForAlias(\"notifications\""), "Native notification permission request is missing.");
-assert(nativeDevice.includes("public void openExternal"), "Native signed-update download bridge is missing.");
+assert(nativeDevice.includes("public void downloadAndInstallUpdate"), "Native signed-update download bridge is missing.");
+assert(nativeDevice.includes("verifyDownloadedApk"), "Native updater must verify the downloaded APK before installation.");
+assert(nativeDevice.includes("getApkContentsSigners"), "Native updater must compare APK signing certificates.");
+assert(nativeDevice.includes("ACTION_MANAGE_UNKNOWN_APP_SOURCES"), "Native updater must handle Android install-source permission.");
 assert(nativeDevice.includes('"github.com".equalsIgnoreCase(host)'), "Native update downloads must be restricted to the official release host.");
+assert(filePaths.includes('path="updates/"') && !filePaths.includes("external-path"), "APK sharing must be limited to the private update cache.");
 assert(gradle.includes("androidx.biometric:biometric"), "AndroidX biometric dependency is missing.");
 assert(gradle.includes("ANDROID_KEYSTORE_PATH"), "Release signing must be configured from protected environment secrets.");
 assert(deviceSecurity.includes("Plugins?.NativeDevice"), "Web security gate is not connected to native biometrics.");
@@ -46,6 +52,8 @@ assert(dashboard.includes('.cc-user{width:100%;max-width:100%;min-width:0;'), "M
 assert(dashboard.includes('.cc-actions{display:grid;width:100%;max-width:100%;min-width:0;'), "Mobile command-center actions must use a bounded grid.");
 assert(nativeUpdate.includes("releases/latest"), "Native app must check the latest signed Android release.");
 assert(nativeUpdate.includes('title: "Update available"'), "Native app must show a mandatory update prompt.");
+assert(nativeUpdate.includes('downloadAndInstallUpdate'), "Mandatory update prompt must use the native in-app installer.");
+assert(nativeUpdate.includes('updateDownloadProgress'), "Mandatory update prompt must show native download progress.");
 assert(nativeUpdate.includes("compareVersions(installed, latest) < 0"), "Outdated native apps must remain blocked.");
 assert(nativeUpdate.includes('title: "Connection required"'), "Native app must fail closed when update verification is unavailable.");
 assert(layout.includes("await enforceNativeAppUpdate()"), "Protected modules must enforce the native app version gate.");

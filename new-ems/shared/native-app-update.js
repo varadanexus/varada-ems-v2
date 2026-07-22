@@ -51,6 +51,10 @@ function ensureGate() {
       <h1 data-update-title>Checking for updates</h1>
       <p data-update-message>Please wait while EMS verifies the installed application.</p>
       <div class="ems-native-update-versions" data-update-versions hidden></div>
+      <div class="ems-native-update-progress" data-update-progress hidden>
+        <div class="ems-native-update-progress-track"><span data-update-progress-fill></span></div>
+        <span data-update-progress-label>Preparing download…</span>
+      </div>
       <div class="ems-native-update-actions"></div>
     </div>`;
   document.body.appendChild(gate);
@@ -69,6 +73,8 @@ function showGate({ title, message, installedVersion = "", latestVersion = "", m
     : "";
   const actions = gate.querySelector(".ems-native-update-actions");
   actions.replaceChildren();
+  const progress = gate.querySelector("[data-update-progress]");
+  progress.hidden = mode !== "downloading" && mode !== "installing";
 
   if (mode === "update") {
     const update = document.createElement("button");
@@ -92,6 +98,22 @@ function showGate({ title, message, installedVersion = "", latestVersion = "", m
   }
 }
 
+function updateDownloadProgress({ percent = 0, stage = "downloading", downloadedBytes = 0, totalBytes = 0 } = {}) {
+  const gate = ensureGate();
+  const progress = gate.querySelector("[data-update-progress]");
+  const fill = gate.querySelector("[data-update-progress-fill]");
+  const label = gate.querySelector("[data-update-progress-label]");
+  const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  progress.hidden = false;
+  fill.style.width = `${safePercent}%`;
+  if (stage === "verifying") label.textContent = "Verifying signed update…";
+  else if (stage === "permission") label.textContent = "Waiting for installation permission…";
+  else if (stage === "installing") label.textContent = "Opening Android installer…";
+  else if (totalBytes > 0) label.textContent = `${safePercent}% downloaded`;
+  else if (downloadedBytes > 0) label.textContent = `${Math.max(1, Math.round(downloadedBytes / 1048576))} MB downloaded`;
+  else label.textContent = "Starting secure download…";
+}
+
 function clearGate() {
   document.querySelector("#emsNativeUpdateGate")?.remove();
   setPageBlocked(false);
@@ -99,16 +121,34 @@ function clearGate() {
 
 async function openUpdateDownload() {
   const nativeDevice = window.Capacitor?.Plugins?.NativeDevice;
+  let progressListener = null;
   try {
-    if (!nativeDevice?.openExternal) throw new Error("Native browser bridge unavailable");
-    await nativeDevice.openExternal({ url: UPDATE_URL });
+    if (!nativeDevice?.downloadAndInstallUpdate) throw new Error("Native update installer unavailable");
+    showGate({
+      title: "Downloading update",
+      message: "Keep Varada EMS open while the signed update is downloaded securely.",
+      mode: "downloading"
+    });
+    updateDownloadProgress();
+    progressListener = await nativeDevice.addListener("updateDownloadProgress", updateDownloadProgress);
+    await nativeDevice.downloadAndInstallUpdate({ url: UPDATE_URL });
+    showGate({
+      title: "Ready to install",
+      message: "Confirm the Android installation prompt to finish updating Varada EMS.",
+      mode: "installing"
+    });
+    updateDownloadProgress({ percent: 100, stage: "installing" });
   } catch (error) {
-    console.warn("Could not open the Android update download.", error);
+    console.warn("Could not download or install the Android update.", error);
     showGate({
       title: "Update required",
-      message: "Open www.varadanexus.com/install-android.html in your browser to install the required update.",
+      message: error?.code === "INSTALL_PERMISSION_DENIED"
+        ? "Allow Varada EMS to install updates in Android Settings, then tap Update now again."
+        : "The signed update could not be installed. Check your connection and try again.",
       mode: "update"
     });
+  } finally {
+    await progressListener?.remove?.();
   }
 }
 
