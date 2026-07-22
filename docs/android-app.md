@@ -55,3 +55,9 @@ The stable employee installation page is:
 ```text
 https://www.varadanexus.com/install-android.html
 ```
+
+## Mandatory updates
+
+Native Android builds verify the installed version against the repository's latest signed GitHub Release whenever the app launches. An older build displays a non-dismissible update screen and cannot open EMS until the signed APK update is installed. If the release cannot be verified, the app fails closed with a connection-and-retry screen.
+
+The first build containing this enforcement is `android-v1.1.0`. Devices running an older APK must install 1.1.0 manually once; subsequent signed releases will be enforced automatically.

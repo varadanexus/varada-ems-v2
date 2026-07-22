@@ -1,6 +1,8 @@
 package com.varadanexus.ems;
 
 import android.Manifest;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import androidx.biometric.BiometricManager;
 import androidx.biometric.BiometricPrompt;
@@ -25,6 +27,26 @@ public class NativeDevicePlugin extends Plugin {
     private static final int AUTHENTICATORS =
         BiometricManager.Authenticators.BIOMETRIC_WEAK |
         BiometricManager.Authenticators.DEVICE_CREDENTIAL;
+
+    @PluginMethod
+    public void openExternal(PluginCall call) {
+        String url = call.getString("url", "");
+        Uri uri = Uri.parse(url);
+        String host = uri.getHost();
+        boolean trusted = "https".equalsIgnoreCase(uri.getScheme()) &&
+            ("github.com".equalsIgnoreCase(host) || "www.varadanexus.com".equalsIgnoreCase(host));
+        if (!trusted) {
+            call.reject("Only the official Varada EMS update location can be opened.", "UNTRUSTED_URL");
+            return;
+        }
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+            getActivity().startActivity(intent);
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("No browser is available to download the EMS update.", "BROWSER_UNAVAILABLE", error);
+        }
+    }
 
     @PluginMethod
     public void biometricStatus(PluginCall call) {

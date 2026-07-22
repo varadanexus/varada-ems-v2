@@ -115,6 +115,7 @@
 // (EMS staff, transport/interiors/external portal) and route to the right auth
 // system. If one identifier maps to multiple portals, show a portal picker.
 import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js?v=external-selector-1";
+import { enforceNativeAppUpdate } from "/new-ems/shared/native-app-update.js";
 
 function el(id) { return document.getElementById(id); }
 function setError(message = "") { const node = el("error"); if (node) node.innerText = message; }
@@ -221,7 +222,8 @@ el("password")?.addEventListener("keydown", (event) => {
 });
 
 // If already signed in (any system), redirect straight to the right portal.
-checkExistingSession().catch(() => {});
+// Native Android access remains blocked until the installed signed APK is current.
+if (await enforceNativeAppUpdate()) checkExistingSession().catch(() => {});
 </script>
 
 </body>

@@ -109,6 +109,11 @@
 
   function boot() {
     addStylesheet();
+    if (isNative()) {
+      import("/new-ems/shared/native-app-update.js")
+        .then(({ enforceNativeAppUpdate }) => enforceNativeAppUpdate())
+        .catch((error) => console.warn("Native update protection could not start.", error));
+    }
     if (isIos) renderInstallButton();
     registerServiceWorker();
   }

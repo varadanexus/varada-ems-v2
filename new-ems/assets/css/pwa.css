@@ -56,6 +56,48 @@
   .ems-pwa-install { display: none !important; }
 }
 
+html.ems-update-blocked,
+html.ems-update-blocked body { overflow: hidden !important; }
+
+.ems-native-update {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: max(22px, env(safe-area-inset-top)) 20px max(22px, env(safe-area-inset-bottom));
+  color: #f4f1e8;
+  background: radial-gradient(circle at 50% 12%, #172b49 0, #07111f 44%, #020509 100%);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.ems-native-update-card {
+  display: grid;
+  justify-items: center;
+  width: min(460px, 100%);
+  padding: 34px 26px 28px;
+  border: 1px solid rgba(211, 178, 104, .48);
+  border-radius: 26px;
+  text-align: center;
+  background: rgba(6, 16, 29, .97);
+  box-shadow: 0 34px 100px rgba(0, 0, 0, .62);
+}
+
+.ems-native-update-card img { width: 76px; height: 76px; margin-bottom: 16px; border-radius: 19px; }
+.ems-native-update-kicker { color: #d3b268; font-size: 11px; font-weight: 900; letter-spacing: .17em; }
+.ems-native-update-card h1 { margin: 9px 0 7px; color: #fff; font: 700 30px/1.15 Georgia, serif; }
+.ems-native-update-card p { max-width: 360px; margin: 0; color: #afbdcc; line-height: 1.6; }
+.ems-native-update-versions { margin-top: 16px; padding: 8px 12px; border-radius: 999px; color: #f0d493; background: rgba(211, 178, 104, .1); font-size: 12px; font-weight: 750; }
+.ems-native-update-actions { display: grid; width: 100%; gap: 9px; margin-top: 24px; }
+.ems-native-update-actions button { width: 100%; min-height: 48px; border: 0; border-radius: 13px; font-weight: 850; cursor: pointer; }
+.ems-native-update-primary { color: #07111f; background: linear-gradient(135deg, #f0d493, #cba553); }
+.ems-native-update-secondary { color: #d7e0ea; background: rgba(255, 255, 255, .06); }
+
+@media (max-width: 520px) {
+  .ems-native-update-card { padding: 30px 20px 24px; }
+  .ems-native-update-card h1 { font-size: 27px; }
+}
+
 .ems-device-lock {
   position: fixed;
   inset: 0;
