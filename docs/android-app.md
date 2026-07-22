@@ -1,0 +1,38 @@
+# Varada EMS Android app
+
+The Android application is a Capacitor shell around a locally bundled copy of the existing EMS frontend. It uses the same Supabase project and APIs as the website; it is not configured with a remote `server.url`.
+
+## Current native capabilities
+
+- Android package: `com.varadanexus.ems`
+- Android 7+ (`minSdk 24`)
+- Native Android biometric/face/device-PIN prompt
+- Automatic biometric prompt during first security setup and subsequent app launches
+- Android 13+ notification permission request
+- Camera and microphone support for EMS evidence and meeting workflows
+- Varada Nexus launcher icon and splash screen
+- Cleartext HTTP disabled and Android backup disabled
+
+Notification permission is wired natively. Receiving remote notifications while the app is closed still requires a free Firebase Cloud Messaging configuration (`google-services.json`) and a corresponding Supabase delivery path; the existing browser Web Push subscription remains active for the PWA.
+
+## Local build
+
+Install the current stable Android Studio and Android SDK 36, then run:
+
+```powershell
+npm ci
+npm run check:android
+npm run android:apk
+```
+
+The debug APK is created at:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+## Zero-budget cloud build
+
+Run **Build Varada EMS Android APK** from the repository's GitHub Actions tab. Download the `Varada-EMS-Android-debug` artifact when the run finishes.
+
+The debug artifact is intended for controlled testing. Before broad company distribution, create and securely back up a release signing keystore so future APK versions can update the installed app without requiring uninstall/reinstall.

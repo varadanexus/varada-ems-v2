@@ -22,3 +22,11 @@
 # MCP server (Claude Desktop blog admin) — deps & secrets are machine-local.
 /mcp/node_modules/
 /mcp/.env
+/node_modules/
+
+# Capacitor copies this deterministic web bundle into the native project.
+/native-www/
+/android/app/src/main/assets/public/
+/android/.gradle/
+/android/local.properties
+/android/app/build/

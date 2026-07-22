@@ -4,6 +4,11 @@ function runtime() {
   return window.EMS_RUNTIME_CONFIG || {};
 }
 
+function nativeDevicePlugin() {
+  if (!window.Capacitor?.isNativePlatform?.()) return null;
+  return window.Capacitor?.Plugins?.NativeDevice || null;
+}
+
 function base64UrlToBytes(value) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
   const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -12,6 +17,7 @@ function base64UrlToBytes(value) {
 }
 
 export function pushSupport() {
+  if (nativeDevicePlugin()) return { supported: true, reason: "" };
   if (!window.isSecureContext) return { supported: false, reason: "A secure HTTPS connection is required." };
   if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
     return { supported: false, reason: "Push notifications are not supported by this browser." };
@@ -40,6 +46,17 @@ async function saveSubscription(subscription) {
 }
 
 export async function getPushNotificationStatus() {
+  const nativeDevice = nativeDevicePlugin();
+  if (nativeDevice) {
+    const status = await nativeDevice.notificationStatus();
+    return {
+      supported: true,
+      enabled: Boolean(status?.granted),
+      permission: status?.granted ? "granted" : "prompt",
+      deviceCount: status?.granted ? 1 : 0,
+      reason: status?.granted ? "" : "Notification permission is required on this device."
+    };
+  }
   const support = pushSupport();
   if (!support.supported) return { ...support, enabled: false, permission: "Notification" in window ? Notification.permission : "unsupported", deviceCount: 0 };
   const reg = await registration();
@@ -65,6 +82,12 @@ export async function getPushNotificationStatus() {
 }
 
 export async function enablePushNotifications() {
+  const nativeDevice = nativeDevicePlugin();
+  if (nativeDevice) {
+    const status = await nativeDevice.requestNotifications();
+    if (!status?.granted) throw new Error("Notification permission was not granted. Enable it in Android app settings.");
+    return getPushNotificationStatus();
+  }
   const support = pushSupport();
   if (!support.supported) throw new Error(support.reason);
   const permission = await Notification.requestPermission();
@@ -82,6 +105,8 @@ export async function enablePushNotifications() {
 }
 
 export async function disablePushNotifications() {
+  const nativeDevice = nativeDevicePlugin();
+  if (nativeDevice) return getPushNotificationStatus();
   const support = pushSupport();
   if (!support.supported) return { ...support, enabled: false, deviceCount: 0 };
   const reg = await registration();

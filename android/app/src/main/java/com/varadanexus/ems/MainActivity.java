@@ -1,0 +1,12 @@
+package com.varadanexus.ems;
+
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
+
+public class MainActivity extends BridgeActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        registerPlugin(NativeDevicePlugin.class);
+        super.onCreate(savedInstanceState);
+    }
+}

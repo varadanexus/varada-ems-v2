@@ -9,6 +9,11 @@ let internalNavigationUntil = 0;
 let securitySetupActive = false;
 let activeAppUserId = "";
 
+function nativeDevicePlugin() {
+  if (!window.Capacitor?.isNativePlatform?.()) return null;
+  return window.Capacitor?.Plugins?.NativeDevice || null;
+}
+
 function bytesToBase64Url(bytes) {
   let value = "";
   bytes.forEach((byte) => { value += String.fromCharCode(byte); });
@@ -38,11 +43,13 @@ function readEnrollment(appUser) {
 }
 
 export function deviceLockSupport() {
+  if (nativeDevicePlugin()) return { supported: true, reason: "" };
   const supported = window.isSecureContext && "PublicKeyCredential" in window && Boolean(navigator.credentials);
   return { supported, reason: supported ? "" : "Device biometric/PIN unlock is not supported by this browser." };
 }
 
 export function isMobileSecurityDevice() {
+  if (window.Capacitor?.isNativePlatform?.()) return true;
   if (navigator.userAgentData?.mobile === true) return true;
   const ua = navigator.userAgent || "";
   if (/android|iphone|ipad|ipod|mobile/i.test(ua)) return true;
@@ -70,6 +77,17 @@ export async function enableDeviceLock(appUser) {
   const support = deviceLockSupport();
   if (!support.supported) throw new Error(support.reason);
   if (!appUser?.id) throw new Error("A signed-in user is required.");
+  const nativeDevice = nativeDevicePlugin();
+  if (nativeDevice) {
+    await nativeDevice.authenticate({ reason: "Confirm your identity to secure Varada EMS" });
+    localStorage.setItem(userKey(appUser), JSON.stringify({
+      native: true,
+      enabledAt: new Date().toISOString(),
+      device: "Android native app"
+    }));
+    installDeviceRelock(appUser);
+    return getDeviceLockStatus(appUser);
+  }
   authenticatorActive = true;
   let credential;
   try {
@@ -114,6 +132,12 @@ export function disableDeviceLock(appUser) {
 
 async function verifyDevice(appUser) {
   const enrollment = readEnrollment(appUser);
+  if (!enrollment) return true;
+  const nativeDevice = nativeDevicePlugin();
+  if (enrollment?.native && nativeDevice) {
+    await nativeDevice.authenticate({ reason: "Unlock Varada EMS" });
+    return true;
+  }
   if (!enrollment?.credentialId) return true;
   authenticatorActive = true;
   let assertion;
@@ -275,35 +299,47 @@ export async function enforceMandatorySecuritySetup(appUser, onSignOut) {
       return true;
     };
 
-    lockButton.addEventListener("click", async () => {
+    const turnOnLock = async () => {
       lockButton.disabled = true;
       errorBox.textContent = "";
       try {
         lockStatus = await enableDeviceLock(appUser);
-        finishIfComplete();
+        return finishIfComplete();
       } catch (error) {
         errorBox.textContent = error?.name === "NotAllowedError" ? "Biometric/PIN setup was cancelled or timed out." : (error?.message || "Could not enable device unlock.");
         render();
+        return false;
       }
-    });
+    };
 
-    pushButton.addEventListener("click", async () => {
+    const turnOnPush = async () => {
       pushButton.disabled = true;
       errorBox.textContent = "";
       try {
         pushStatus = await enablePushNotifications();
-        finishIfComplete();
+        return finishIfComplete();
       } catch (error) {
         errorBox.textContent = error?.message || "Could not enable notifications. Allow notifications in this device's browser settings, then try again.";
         render();
+        return false;
       }
-    });
+    };
+
+    lockButton.addEventListener("click", turnOnLock);
+    pushButton.addEventListener("click", turnOnPush);
 
     overlay.querySelector(".ems-device-signout").addEventListener("click", async () => {
       securitySetupActive = false;
       await onSignOut?.();
       resolve(false);
     });
+
+    if (nativeDevicePlugin()) {
+      requestAnimationFrame(async () => {
+        if (!lockStatus.enabled) await turnOnLock();
+        if (lockStatus.enabled && !pushStatus.enabled) await turnOnPush();
+      });
+    }
   });
 }
 

@@ -1,0 +1,64 @@
+name: Build Varada EMS Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "android-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate EMS and Android app
+        run: |
+          npm run check:pwa
+          npm run check:migrations
+          npm run check:android
+
+      - name: Sync native project
+        run: npm run android:sync
+
+      - name: Build installable debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare APK artifact
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Varada-EMS-Android-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Varada-EMS-Android-debug
+          path: Varada-EMS-Android-debug.apk
+          if-no-files-found: error
+          retention-days: 30

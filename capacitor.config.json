@@ -1,0 +1,29 @@
+{
+  "appId": "com.varadanexus.ems",
+  "appName": "Varada EMS",
+  "webDir": "native-www",
+  "loggingBehavior": "debug",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#05070a",
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "launchShowDuration": 1200,
+      "backgroundColor": "#05070a",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#05070a",
+      "overlaysWebView": false
+    }
+  }
+}

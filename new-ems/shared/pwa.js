@@ -1,12 +1,14 @@
 (function initialiseVaradaPwa() {
   "use strict";
 
-  const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  const isNative = () => Boolean(window.Capacitor?.isNativePlatform?.());
+  const isStandalone = () => isNative() || window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
   const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
   let installPrompt = null;
   let installButton = null;
 
   if (isStandalone()) document.documentElement.classList.add("ems-standalone");
+  if (isNative()) document.documentElement.classList.add("ems-native");
 
   function addStylesheet() {
     if (document.querySelector('link[data-ems-pwa-style]')) return;
@@ -76,6 +78,7 @@
   }
 
   async function registerServiceWorker() {
+    if (isNative()) return;
     if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
     try {
       const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
