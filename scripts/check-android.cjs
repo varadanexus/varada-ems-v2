@@ -14,6 +14,7 @@ const activity = read("android/app/src/main/java/com/varadanexus/ems/MainActivit
 const nativeDevice = read("android/app/src/main/java/com/varadanexus/ems/NativeDevicePlugin.java");
 const gradle = read("android/app/build.gradle");
 const deviceSecurity = read("new-ems/shared/device-security.js");
+const navbar = read("new-ems/shared/navbar.js");
 const pushNotifications = read("new-ems/shared/push-notifications.js");
 const pwa = read("new-ems/shared/pwa.js");
 const layout = read("new-ems/shared/layout.js");
@@ -49,6 +50,10 @@ assert(filePaths.includes('path="updates/"') && !filePaths.includes("external-pa
 assert(gradle.includes("androidx.biometric:biometric"), "AndroidX biometric dependency is missing.");
 assert(gradle.includes("ANDROID_KEYSTORE_PATH"), "Release signing must be configured from protected environment secrets.");
 assert(deviceSecurity.includes("Plugins?.NativeDevice"), "Web security gate is not connected to native biometrics.");
+assert(deviceSecurity.includes('addListener("appStateChange"'), "Native biometric relock must use the Android app lifecycle.");
+assert(deviceSecurity.includes("WEB_RELOCK_MIN_HIDDEN_MS"), "Browser relock must ignore transient mobile visibility changes.");
+assert(deviceSecurity.includes("if (nativeApp?.addListener)"), "Native apps must not use browser visibility to trigger biometric relock.");
+assert(navbar.includes('.ems-nav-sub{display:block'), "Mobile header must show the Private Limited company suffix.");
 assert(pushNotifications.includes("requestNotifications()"), "Web notification gate is not connected to Android permission.");
 assert(pwa.includes("if (isNative()) return;"), "Native builds must not register the browser service worker.");
 assert(layout.includes('const saved = isMobile() ? "closed"'), "Mobile module drawers must start closed.");

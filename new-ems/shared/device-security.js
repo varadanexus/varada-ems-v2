@@ -3,6 +3,7 @@ import { enablePushNotifications, getPushNotificationStatus, pushSupport } from 
 const LOCK_PREFIX = "ems_device_lock_v1:";
 const INTERNAL_NAV_PREFIX = "ems_device_internal_nav_v1:";
 const INTERNAL_NAV_WINDOW_MS = 10 * 1000;
+const WEB_RELOCK_MIN_HIDDEN_MS = 1500;
 let hiddenAt = 0;
 let authenticatorActive = false;
 let internalNavigationUntil = 0;
@@ -79,7 +80,13 @@ export async function enableDeviceLock(appUser) {
   if (!appUser?.id) throw new Error("A signed-in user is required.");
   const nativeDevice = nativeDevicePlugin();
   if (nativeDevice) {
-    await nativeDevice.authenticate({ reason: "Confirm your identity to secure Varada Nexus" });
+    authenticatorActive = true;
+    try {
+      await nativeDevice.authenticate({ reason: "Confirm your identity to secure Varada Nexus" });
+    } finally {
+      authenticatorActive = false;
+      hiddenAt = 0;
+    }
     localStorage.setItem(userKey(appUser), JSON.stringify({
       native: true,
       enabledAt: new Date().toISOString(),
@@ -135,7 +142,13 @@ async function verifyDevice(appUser) {
   if (!enrollment) return true;
   const nativeDevice = nativeDevicePlugin();
   if (enrollment?.native && nativeDevice) {
-    await nativeDevice.authenticate({ reason: "Unlock Varada Nexus" });
+    authenticatorActive = true;
+    try {
+      await nativeDevice.authenticate({ reason: "Unlock Varada Nexus" });
+    } finally {
+      authenticatorActive = false;
+      hiddenAt = 0;
+    }
     return true;
   }
   if (!enrollment?.credentialId) return true;
@@ -355,28 +368,50 @@ export function installDeviceRelock(appUser) {
   activeAppUserId = appUser?.id || "";
   if (!readEnrollment(appUser) || document.documentElement.dataset.emsRelockBound === "true") return;
   document.documentElement.dataset.emsRelockBound = "true";
-  document.addEventListener("visibilitychange", () => {
+
+  const markAppInactive = () => {
     if (!readEnrollment(appUser)) return;
-    if (document.hidden) {
-      if (securitySetupActive) return;
-      if (internalNavigationUntil > Date.now()) {
-        internalNavigationUntil = 0;
-        hiddenAt = 0;
-        return;
-      }
-      hiddenAt = Date.now();
-      // Remove any unused navigation exception synchronously. Mobile operating
-      // systems may kill a closed PWA immediately after this event.
-      sessionStorage.removeItem(internalNavigationKey(appUser));
+    if (securitySetupActive || authenticatorActive) return;
+    if (internalNavigationUntil > Date.now()) {
+      internalNavigationUntil = 0;
+      hiddenAt = 0;
       return;
     }
+    hiddenAt = Date.now();
+    // Remove any unused navigation exception synchronously. Mobile operating
+    // systems may kill a closed PWA immediately after this event.
+    sessionStorage.removeItem(internalNavigationKey(appUser));
+  };
+
+  const resumeApp = (minimumHiddenMs = 0) => {
     if (authenticatorActive) {
       hiddenAt = 0;
       return;
     }
-    if (hiddenAt) {
-      hiddenAt = 0;
-      location.reload();
-    }
+    if (!hiddenAt) return;
+    const inactiveFor = hiddenAt ? Date.now() - hiddenAt : 0;
+    hiddenAt = 0;
+    if (inactiveFor >= minimumHiddenMs) location.reload();
+  };
+
+  // Capacitor's native app lifecycle represents an actual Android background /
+  // foreground transition. Browser visibility can also change while closing a
+  // keyboard or an in-app panel, so it must not drive native biometric relock.
+  const nativeApp = window.Capacitor?.isNativePlatform?.()
+    ? window.Capacitor?.Plugins?.App
+    : null;
+  if (nativeApp?.addListener) {
+    nativeApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) resumeApp();
+      else markAppInactive();
+    }).catch?.(() => {});
+    return;
+  }
+
+  // Installed browser apps do not expose the native lifecycle. Ignore brief
+  // visibility changes caused by mobile UI and relock only after a real pause.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) markAppInactive();
+    else resumeApp(WEB_RELOCK_MIN_HIDDEN_MS);
   });
 }

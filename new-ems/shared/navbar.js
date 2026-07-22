@@ -25,7 +25,7 @@ export function renderNavbar(email = "", role = "", options = {}) {
         .navbar-title.ems-nav-brand .ems-nav-name{font-family:"Manrope",sans-serif;color:#f7f4ec!important;font-size:13px;font-weight:700;letter-spacing:.34em!important;text-transform:uppercase;white-space:nowrap;}
         .navbar-title.ems-nav-brand .ems-nav-nexus{margin-left:2px;font-family:inherit;font-size:inherit;font-style:normal;font-weight:inherit;letter-spacing:inherit!important;text-transform:inherit;background:linear-gradient(120deg,#f7e7b0,#e0c274 45%,#c39a44);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:#e6c87e!important;}
         .navbar-title.ems-nav-brand .ems-nav-sub{display:block;margin-top:1px;font-family:"Manrope",sans-serif;font-size:9.5px;font-weight:500;letter-spacing:.28em;text-transform:uppercase;color:#8d8a7e!important;white-space:nowrap;}
-        @media(max-width:768px){.navbar-title.ems-nav-brand .ems-nav-sub{display:none}.navbar-title.ems-nav-brand .ems-nav-name{font-size:11px;letter-spacing:.23em!important}.ems-nav-brand{gap:8px}.ems-nav-logo{height:30px;max-width:46px}}
+        @media(max-width:768px){.navbar-title.ems-nav-brand .ems-nav-sub{display:block;margin-top:2px;font-size:7px;letter-spacing:.24em}.navbar-title.ems-nav-brand .ems-nav-name{font-size:11px;letter-spacing:.23em!important}.ems-nav-brand{gap:8px}.ems-nav-logo{height:30px;max-width:46px}}
         .global-search{position:relative;display:flex;align-items:center;gap:.45rem;}
         .global-search-icon{opacity:.55;font-size:1rem;flex:0 0 auto;}
         #globalSearchInput{flex:1;min-width:0;background:transparent;border:none;outline:none;color:#e8eef7;font:inherit;}
