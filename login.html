@@ -3,12 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#07111f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Varada EMS">
 <title>Login — Varada Nexus EMS</title>
 <meta name="description" content="Secure access to the Varada Nexus ERP.">
 <meta name="author" content="Varada Nexus Private Limited">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://www.varadanexus.com/login">
 <link rel="icon" type="image/png" href="/images/logo.png">
+<link rel="manifest" href="/new-ems/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/new-ems/assets/icons/ems-180.png">
 <meta property="og:title" content="Login — Varada Nexus EMS">
 <meta property="og:description" content="Secure access to the Varada Nexus ERP.">
 <meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
@@ -107,7 +114,7 @@
 // Unified login: keep this page's look, but auto-detect the account type
 // (EMS staff, transport/interiors/external portal) and route to the right auth
 // system. If one identifier maps to multiple portals, show a portal picker.
-import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js?v=interiors-local-client-1";
+import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js?v=external-selector-1";
 
 function el(id) { return document.getElementById(id); }
 function setError(message = "") { const node = el("error"); if (node) node.innerText = message; }

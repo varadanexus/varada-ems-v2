@@ -1,0 +1,303 @@
+import { enablePushNotifications, getPushNotificationStatus, pushSupport } from "./push-notifications.js";
+
+const LOCK_PREFIX = "ems_device_lock_v1:";
+const UNLOCK_PREFIX = "ems_device_unlock_v1:";
+const UNLOCK_WINDOW_MS = 15 * 60 * 1000;
+let hiddenAt = 0;
+let authenticatorActive = false;
+let internalNavigationUntil = 0;
+let securitySetupActive = false;
+
+function bytesToBase64Url(bytes) {
+  let value = "";
+  bytes.forEach((byte) => { value += String.fromCharCode(byte); });
+  return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlToBytes(value) {
+  const padding = "=".repeat((4 - value.length % 4) % 4);
+  const raw = atob((value + padding).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (char) => char.charCodeAt(0));
+}
+
+function randomChallenge() {
+  return crypto.getRandomValues(new Uint8Array(32));
+}
+
+function userKey(appUser) {
+  return `${LOCK_PREFIX}${appUser.id}`;
+}
+
+function unlockKey(appUser) {
+  return `${UNLOCK_PREFIX}${appUser.id}`;
+}
+
+function readEnrollment(appUser) {
+  try { return JSON.parse(localStorage.getItem(userKey(appUser)) || "null"); } catch { return null; }
+}
+
+export function deviceLockSupport() {
+  const supported = window.isSecureContext && "PublicKeyCredential" in window && Boolean(navigator.credentials);
+  return { supported, reason: supported ? "" : "Device biometric/PIN unlock is not supported by this browser." };
+}
+
+export function getDeviceLockStatus(appUser) {
+  const support = deviceLockSupport();
+  return { ...support, enabled: Boolean(appUser?.id && readEnrollment(appUser)) };
+}
+
+export async function enableDeviceLock(appUser) {
+  const support = deviceLockSupport();
+  if (!support.supported) throw new Error(support.reason);
+  if (!appUser?.id) throw new Error("A signed-in user is required.");
+  authenticatorActive = true;
+  let credential;
+  try {
+    credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: randomChallenge(),
+        rp: { name: "Varada Nexus EMS", id: location.hostname },
+        user: {
+          id: new TextEncoder().encode(appUser.id),
+          name: appUser.email || appUser.id,
+          displayName: appUser.display_name || appUser.full_name || appUser.email || "EMS User"
+        },
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          residentKey: "discouraged",
+          userVerification: "required"
+        },
+        timeout: 60000,
+        attestation: "none"
+      }
+    });
+  } finally {
+    authenticatorActive = false;
+    hiddenAt = 0;
+  }
+  if (!credential) throw new Error("Device lock setup was cancelled.");
+  localStorage.setItem(userKey(appUser), JSON.stringify({
+    credentialId: bytesToBase64Url(new Uint8Array(credential.rawId)),
+    enabledAt: new Date().toISOString(),
+    device: navigator.userAgent.slice(0, 250)
+  }));
+  sessionStorage.setItem(unlockKey(appUser), String(Date.now() + UNLOCK_WINDOW_MS));
+  installDeviceRelock(appUser);
+  return getDeviceLockStatus(appUser);
+}
+
+export function disableDeviceLock(appUser) {
+  if (!appUser?.id) return;
+  localStorage.removeItem(userKey(appUser));
+  sessionStorage.removeItem(unlockKey(appUser));
+}
+
+async function verifyDevice(appUser) {
+  const enrollment = readEnrollment(appUser);
+  if (!enrollment?.credentialId) return true;
+  authenticatorActive = true;
+  let assertion;
+  try {
+    assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge: randomChallenge(),
+        rpId: location.hostname,
+        allowCredentials: [{
+          type: "public-key",
+          id: base64UrlToBytes(enrollment.credentialId),
+          transports: ["internal"]
+        }],
+        userVerification: "required",
+        timeout: 60000
+      }
+    });
+  } finally {
+    authenticatorActive = false;
+    hiddenAt = 0;
+  }
+  if (!assertion) throw new Error("Device verification was cancelled.");
+  sessionStorage.setItem(unlockKey(appUser), String(Date.now() + UNLOCK_WINDOW_MS));
+  return true;
+}
+
+function lockOverlay(appUser, onSignOut) {
+  document.querySelector(".ems-device-lock")?.remove();
+  const overlay = document.createElement("section");
+  overlay.className = "ems-device-lock";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.innerHTML = `
+    <div class="ems-device-lock-card">
+      <img src="/new-ems/assets/icons/ems-192.png" alt="" />
+      <span class="ems-device-lock-kicker">VARADA NEXUS EMS</span>
+      <h1>App locked</h1>
+      <p>Use this device's fingerprint, face recognition, or screen PIN to continue.</p>
+      <button class="ems-device-unlock" type="button">Unlock EMS</button>
+      <button class="ems-device-signout" type="button">Sign out instead</button>
+      <small class="ems-device-lock-error" role="alert"></small>
+    </div>`;
+  document.body.appendChild(overlay);
+  return new Promise((resolve) => {
+    const unlock = overlay.querySelector(".ems-device-unlock");
+    const error = overlay.querySelector(".ems-device-lock-error");
+    unlock.addEventListener("click", async () => {
+      unlock.disabled = true;
+      error.textContent = "";
+      try {
+        await verifyDevice(appUser);
+        overlay.remove();
+        resolve(true);
+      } catch (cause) {
+        error.textContent = cause?.name === "NotAllowedError" ? "Unlock was cancelled or timed out." : (cause?.message || "Could not verify this device.");
+        unlock.disabled = false;
+      }
+    });
+    overlay.querySelector(".ems-device-signout").addEventListener("click", async () => {
+      await onSignOut?.();
+      resolve(false);
+    });
+  });
+}
+
+export async function enforceDeviceUnlock(appUser, onSignOut) {
+  const enrollment = readEnrollment(appUser);
+  if (!enrollment) return true;
+  const unlockedUntil = Number(sessionStorage.getItem(unlockKey(appUser)) || 0);
+  if (unlockedUntil > Date.now()) return true;
+  return lockOverlay(appUser, onSignOut);
+}
+
+export async function verifyDeviceLockNow(appUser) {
+  return verifyDevice(appUser);
+}
+
+export async function enforceMandatorySecuritySetup(appUser, onSignOut) {
+  if (!appUser?.id) return false;
+  let lockStatus = getDeviceLockStatus(appUser);
+  let pushStatus;
+  try {
+    pushStatus = await getPushNotificationStatus();
+  } catch (error) {
+    pushStatus = { ...pushSupport(), enabled: false, reason: error?.message || "Could not verify notification status." };
+  }
+  if (lockStatus.enabled && pushStatus.enabled) return true;
+
+  securitySetupActive = true;
+  document.querySelector(".ems-security-setup")?.remove();
+  const overlay = document.createElement("section");
+  overlay.className = "ems-security-setup";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.innerHTML = `
+    <div class="ems-security-setup-card">
+      <img src="/new-ems/assets/icons/ems-192.png" alt="" />
+      <span class="ems-device-lock-kicker">REQUIRED SECURITY SETUP</span>
+      <h1>Secure this device</h1>
+      <p class="ems-security-intro">Biometric/PIN unlock and notifications are mandatory for every EMS user on each device.</p>
+      <div class="ems-security-requirement" data-security-lock>
+        <div><strong>Device biometric/PIN</strong><span></span></div>
+        <button type="button">Turn On</button>
+      </div>
+      <div class="ems-security-requirement" data-security-push>
+        <div><strong>Push notifications</strong><span></span></div>
+        <button type="button">Turn On</button>
+      </div>
+      <div class="ems-security-error" role="alert"></div>
+      <button class="ems-device-signout" type="button">Sign out instead</button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const lockRow = overlay.querySelector("[data-security-lock]");
+  const pushRow = overlay.querySelector("[data-security-push]");
+  const lockButton = lockRow.querySelector("button");
+  const pushButton = pushRow.querySelector("button");
+  const errorBox = overlay.querySelector(".ems-security-error");
+
+  const render = () => {
+    lockRow.classList.toggle("is-complete", Boolean(lockStatus.enabled));
+    lockRow.querySelector("span").textContent = lockStatus.enabled ? "Enabled on this device" : (lockStatus.reason || "Use fingerprint, face recognition, or device PIN.");
+    lockButton.textContent = lockStatus.enabled ? "Enabled" : "Turn On";
+    lockButton.disabled = Boolean(lockStatus.enabled) || lockStatus.supported === false;
+
+    pushRow.classList.toggle("is-complete", Boolean(pushStatus.enabled));
+    pushRow.querySelector("span").textContent = pushStatus.enabled ? "Enabled on this device" : (pushStatus.reason || "Required for operational and security alerts.");
+    pushButton.textContent = pushStatus.enabled ? "Enabled" : "Turn On";
+    pushButton.disabled = Boolean(pushStatus.enabled) || pushStatus.supported === false;
+  };
+  render();
+
+  return new Promise((resolve) => {
+    const finishIfComplete = () => {
+      render();
+      if (!lockStatus.enabled || !pushStatus.enabled) return false;
+      securitySetupActive = false;
+      overlay.remove();
+      resolve(true);
+      return true;
+    };
+
+    lockButton.addEventListener("click", async () => {
+      lockButton.disabled = true;
+      errorBox.textContent = "";
+      try {
+        lockStatus = await enableDeviceLock(appUser);
+        finishIfComplete();
+      } catch (error) {
+        errorBox.textContent = error?.name === "NotAllowedError" ? "Biometric/PIN setup was cancelled or timed out." : (error?.message || "Could not enable device unlock.");
+        render();
+      }
+    });
+
+    pushButton.addEventListener("click", async () => {
+      pushButton.disabled = true;
+      errorBox.textContent = "";
+      try {
+        pushStatus = await enablePushNotifications();
+        finishIfComplete();
+      } catch (error) {
+        errorBox.textContent = error?.message || "Could not enable notifications. Allow notifications in this device's browser settings, then try again.";
+        render();
+      }
+    });
+
+    overlay.querySelector(".ems-device-signout").addEventListener("click", async () => {
+      securitySetupActive = false;
+      await onSignOut?.();
+      resolve(false);
+    });
+  });
+}
+
+export function allowDeviceInternalNavigation() {
+  internalNavigationUntil = Date.now() + 10_000;
+}
+
+export function installDeviceRelock(appUser) {
+  if (!readEnrollment(appUser) || document.documentElement.dataset.emsRelockBound === "true") return;
+  document.documentElement.dataset.emsRelockBound = "true";
+  document.addEventListener("visibilitychange", () => {
+    if (!readEnrollment(appUser)) return;
+    if (document.hidden) {
+      if (securitySetupActive) return;
+      if (internalNavigationUntil > Date.now()) {
+        internalNavigationUntil = 0;
+        hiddenAt = 0;
+        return;
+      }
+      hiddenAt = Date.now();
+      // Clear the grace token synchronously. Mobile operating systems may kill
+      // a closed PWA immediately, so waiting until the next launch is unreliable.
+      sessionStorage.removeItem(unlockKey(appUser));
+      return;
+    }
+    if (authenticatorActive) {
+      hiddenAt = 0;
+      return;
+    }
+    if (hiddenAt) {
+      hiddenAt = 0;
+      location.reload();
+    }
+  });
+}

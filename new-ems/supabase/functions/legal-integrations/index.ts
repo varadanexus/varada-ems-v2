@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, authorizationjwt, x-client-info, apikey, content-type, x-didit-signature, x-signature, x-signature-v2, x-signature-simple, x-timestamp, x-twilio-signature",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Expose-Headers": "x-file-name, content-disposition"
+  "Access-Control-Expose-Headers": "x-file-name, x-advocate-permission, content-disposition"
 };
 
 const PUBLIC_WEBSITE_ORIGIN = "https://www.varadanexus.com";
@@ -974,6 +974,85 @@ async function saveDraftAgreement(req: Request, body: any) {
   });
 }
 
+async function uploadPreparedPdfDraft(req: Request, body: any) {
+  const admin = adminClient();
+  await requireLegalCaller(req, admin);
+  const originalFileName = cleanPdfName(body.fileName);
+  const encoded = String(body.base64 || "").replace(/^data:[^;]+;base64,/, "");
+  if (!encoded) return json({ error: "PDF content is required." }, 400);
+  const bytes = base64ToBytes(encoded);
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) return json({ error: "The PDF must be 10 MB or smaller." }, 400);
+  // ISO 32000 permits the PDF header to occur within the first 1024 bytes.
+  // Scanner/export tools can prepend a BOM or metadata before `%PDF-`.
+  if (!new TextDecoder().decode(bytes.slice(0, 1024)).includes("%PDF-")) return json({ error: "The selected file is not a valid PDF." }, 400);
+
+  const title = String(body.title || body.agreementTitle || originalFileName.replace(/\.pdf$/i, "")).trim().slice(0, 180);
+  const partyName = String(body.partyName || body.counterpartyName || "").trim().slice(0, 180);
+  if (!title || !partyName) return json({ error: "Agreement title and counterparty name are required." }, 400);
+  const agreementNo = String(body.agreementNo || `AGR-${Date.now()}`).trim().slice(0, 100);
+  const fileHash = await sha256(bytes);
+  const extractedText = String(body.draftText || "").trim();
+  const draftText = extractedText || [
+    `# ${title}`,
+    "",
+    `Prepared PDF uploaded unchanged: ${originalFileName}`,
+    `PDF SHA-256: ${fileHash}`,
+    "",
+    "The authoritative drafted content is the archived PDF attached to this agreement version."
+  ].join("\n");
+
+  const driveAgreement = {
+    agreement_no: agreementNo,
+    title,
+    agreement_type: body.agreementType || "custom",
+    party_type: body.partyType || "client",
+    party_name: partyName,
+    signer_name: body.signerName || null
+  };
+  const driveRequest = { agreement_id: null, id: null, recipient_name: body.signerName || partyName };
+  const drivePath = await ensureLegalDrivePath(driveAgreement, driveRequest);
+  const targetFolder = driveFolderForFileKind(drivePath, "draft_pdf");
+  const driveFileName = archiveFileName(agreementNo, `prepared-draft-${new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}.pdf`);
+  const uploaded = await uploadDriveFile(driveFileName, "application/pdf", bytes, targetFolder.id);
+  if (!uploaded?.id) throw new Error(uploaded?.payload?.error || "Google Drive upload failed.");
+
+  let saved: any;
+  try {
+    const saveResponse = await saveDraftAgreement(req, { ...body, agreementNo, title, partyName, draftText, draftSource: "imported" });
+    saved = await saveResponse.json();
+    if (!saveResponse.ok || saved?.error) throw new Error(saved?.error || "The EMS agreement record could not be created.");
+  } catch (error) {
+    await deleteDriveFile(uploaded.id).catch(() => null);
+    throw error;
+  }
+
+  const archiveRequest = { agreement_id: saved.agreement.id, id: null, recipient_name: body.signerName || partyName };
+  let archive;
+  try {
+    archive = await recordArchiveFile(admin, archiveRequest, "draft_pdf", uploaded, driveFileName, "application/pdf", fileHash, targetFolder.id);
+  } catch (error) {
+    await deleteDriveFile(uploaded.id).catch(() => null);
+    throw error;
+  }
+  await admin.from("legal_provider_events").insert({
+    agreement_id: saved.agreement.id,
+    signing_request_id: null,
+    provider: "google_drive",
+    provider_event_id: uploaded.id,
+    event_type: "draft.prepared_pdf.upload",
+    status: "archived",
+    payload: { originalFileName, fileName: driveFileName, fileHash, versionNo: saved.version.version_no, extractedText: Boolean(extractedText) }
+  });
+  return json({
+    ...saved,
+    archive,
+    fileName: driveFileName,
+    fileHash,
+    driveFolder: targetFolder.name,
+    drivePath: `Legal / ${drivePath.clientName} / ${drivePath.subtype}`
+  });
+}
+
 async function googleAccessToken() {
   let clientEmail = env("GOOGLE_SERVICE_ACCOUNT_EMAIL");
   let rawPrivateKey = env("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY").trim();
@@ -1301,6 +1380,39 @@ function base64ToBytes(base64: string) {
   return bytes;
 }
 
+async function sendLegalPreviewOtp(toPhone: string, otp: string) {
+  const accountSid = env("TWILIO_ACCOUNT_SID");
+  const authToken = env("TWILIO_AUTH_TOKEN");
+  const from = env("TWILIO_WHATSAPP_FROM");
+  const messagingServiceSid = env("TWILIO_MESSAGING_SERVICE_SID");
+  const contentSid = env("LEGAL_PREVIEW_TWILIO_OTP_CONTENT_SID") || env("MEETING_TWILIO_OTP_CONTENT_SID");
+  if (!accountSid || !authToken || (!from && !messagingServiceSid)) {
+    throw new Error("WhatsApp OTP delivery is not configured. Contact Varada Nexus support.");
+  }
+  const params = new URLSearchParams();
+  params.set("To", `whatsapp:+${normalizePhone(toPhone)}`);
+  if (messagingServiceSid) params.set("MessagingServiceSid", messagingServiceSid);
+  else params.set("From", from.startsWith("whatsapp:") ? from : `whatsapp:${from}`);
+  if (contentSid) {
+    params.set("ContentSid", contentSid);
+    params.set("ContentVariables", JSON.stringify({ "1": otp }));
+  } else {
+    params.set("Body", `Your Varada Nexus legal document preview OTP is ${otp}. It expires in 10 minutes. Do not share this code.`);
+  }
+  params.set("StatusCallback", env("TWILIO_STATUS_CALLBACK_URL") || `${env("SUPABASE_URL")}/functions/v1/legal-integrations?provider=twilio`);
+  const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.message || "WhatsApp OTP could not be sent");
+  return { sid: payload.sid || null, status: payload.status || "queued", template: Boolean(contentSid) };
+}
+
 const DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 function cleanDocxName(value = "") {
@@ -1310,6 +1422,15 @@ function cleanDocxName(value = "") {
     .trim()
     .slice(0, 170) || "legal-draft.docx";
   return /\.docx$/i.test(cleaned) ? cleaned : `${cleaned}.docx`;
+}
+
+function cleanPdfName(value = "") {
+  const cleaned = String(value || "legal-agreement.pdf")
+    .replace(/[\\/\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 170) || "legal-agreement.pdf";
+  return /\.pdf$/i.test(cleaned) ? cleaned : `${cleaned}.pdf`;
 }
 
 function isUuid(value = "") {
@@ -3615,6 +3736,100 @@ async function archiveFileProxy(req: Request, body: any) {
   });
 }
 
+async function advocateFileProxy(body: any) {
+  const admin = adminClient();
+  const sessionToken = String(body.sessionToken || "").trim();
+  const shareId = String(body.shareId || "").trim();
+  if (!sessionToken || !shareId) return json({ error: "Advocate session and share ID are required" }, 400);
+
+  const accessResult = await admin.rpc("legal_advocate_portal_file_access", {
+    p_session_token: sessionToken,
+    p_share_id: shareId
+  });
+  if (accessResult.error) throw accessResult.error;
+  const access = accessResult.data || {};
+  const fileId = String(access.drive_file_id || "").trim();
+  if (!fileId) return json({ error: "Shared document is unavailable" }, 404);
+
+  const bytes = await downloadDriveFile(fileId);
+  if (!bytes) return json({ error: "Shared document could not be downloaded" }, 404);
+  const meta = await driveFileMeta(fileId).catch(() => null);
+  const fileName = String(access.file_name || meta?.name || "legal-document").replace(/["\r\n]/g, "");
+  const mimeType = access.mime_type || meta?.mimeType || "application/octet-stream";
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": mimeType,
+      "Content-Length": String(bytes.byteLength),
+      "Content-Disposition": `inline; filename="${fileName}"`,
+      "X-File-Name": encodeURIComponent(fileName),
+      "X-Advocate-Permission": access.permission_level || "view",
+      "Cache-Control": "private, no-store"
+    }
+  });
+}
+
+async function advocatePreviewOtpStatus(body: any) {
+  const sessionToken = String(body.sessionToken || "").trim();
+  if (!sessionToken) return json({ error: "Advocate session is required" }, 400);
+  const result = await adminClient().rpc("legal_advocate_preview_otp_status", { p_session_token: sessionToken });
+  if (result.error) throw result.error;
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  return json({ ok: true, unlocked: Boolean(row?.unlocked), verifiedAt: row?.verified_at || null, maskedPhone: row?.masked_phone || null });
+}
+
+async function advocatePreviewOtpRequest(body: any) {
+  const admin = adminClient();
+  const sessionToken = String(body.sessionToken || "").trim();
+  if (!sessionToken) return json({ error: "Advocate session is required" }, 400);
+  const result = await admin.rpc("legal_advocate_preview_otp_issue", {
+    p_session_token: sessionToken,
+    p_ttl_minutes: 10,
+    p_resend_seconds: 45
+  });
+  if (result.error) throw result.error;
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  if (row?.already_unlocked) {
+    return json({ ok: true, unlocked: true, maskedPhone: row.masked_phone || null });
+  }
+  try {
+    const delivery = await sendLegalPreviewOtp(row.delivery_phone, row.otp);
+    const redactedMessage = "Varada Nexus legal document preview OTP sent. The code expires in 10 minutes.";
+    await recordWhatsAppDelivery(admin, {
+      phone: row.delivery_phone,
+      name: row.advocate_name || "Advocate",
+      messageText: redactedMessage,
+      templateAlias: "legal_preview_otp",
+      sourceModule: "legal",
+      sourceEvent: "legal_preview_otp",
+      renderedPayload: { otp_redacted: true, expires_at: row.otp_expires_at },
+      sid: delivery.sid,
+      status: delivery.status
+    });
+    return json({ ok: true, unlocked: false, maskedPhone: row.masked_phone, otpExpiresAt: row.otp_expires_at });
+  } catch (error) {
+    await admin.from("external_portal_sessions").update({
+      legal_preview_otp_hash: null,
+      legal_preview_otp_expires_at: null,
+      legal_preview_otp_sent_at: null,
+      legal_preview_otp_attempt_count: 0
+    }).eq("session_token", sessionToken);
+    throw error;
+  }
+}
+
+async function advocatePreviewOtpVerify(body: any) {
+  const sessionToken = String(body.sessionToken || "").trim();
+  const otp = String(body.otp || "").replace(/\D/g, "");
+  if (!sessionToken) return json({ error: "Advocate session is required" }, 400);
+  if (!/^\d{6}$/.test(otp)) return json({ error: "Enter the six-digit OTP" }, 400);
+  const result = await adminClient().rpc("legal_advocate_preview_otp_verify", { p_session_token: sessionToken, p_otp: otp });
+  if (result.error) throw result.error;
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  return json({ ok: true, unlocked: Boolean(row?.unlocked), verifiedAt: row?.verified_at || null });
+}
+
 async function diditWebhook(req: Request, rawBody: string) {
   const admin = adminClient();
   const verification = await verifyDiditWebhook(req, rawBody);
@@ -3771,6 +3986,7 @@ Deno.serve(async (req) => {
     if (action === "generate_draft") return await generateGeminiDraft(req, body);
     if (action === "revise_draft") return await reviseGeminiDraft(req, body);
     if (action === "save_draft") return await saveDraftAgreement(req, body);
+    if (action === "prepared_pdf_upload") return await uploadPreparedPdfDraft(req, body);
     if (action === "word_editor_start") return await createWordEditorSession(req, body);
     if (action === "word_editor_status") return await wordEditorStatus(req, body);
     if (action === "word_editor_force_save") return await forceSaveWordDocument(req, body);
@@ -3785,6 +4001,10 @@ Deno.serve(async (req) => {
     if (action === "delete_agreement") return await deleteLegalAgreement(req, body);
     if (action === "rebuild_archive_artifacts") return await rebuildArchiveArtifacts(req, body);
     if (action === "archive_file_proxy") return await archiveFileProxy(req, body);
+    if (action === "advocate_preview_otp_status") return await advocatePreviewOtpStatus(body);
+    if (action === "advocate_preview_otp_request") return await advocatePreviewOtpRequest(body);
+    if (action === "advocate_preview_otp_verify") return await advocatePreviewOtpVerify(body);
+    if (action === "advocate_file_proxy") return await advocateFileProxy(body);
     if (action === "countersign_agreement") return await countersignAgreement(req, body);
     if (action === "download_executed_pdf") return await downloadExecutedAgreementPdf(req, body);
     if (action === "config_status") return await configStatus(req);

@@ -154,6 +154,7 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.LEGAL_SEND, label: "Send To User", href: ROUTES.LEGAL_SEND },
         { module: MODULES.LEGAL_SIGNING, label: "Signing Evidence", href: ROUTES.LEGAL_SIGNING },
         { module: MODULES.LEGAL_ARCHIVE, label: "Google Drive Archive", href: ROUTES.LEGAL_ARCHIVE },
+        { module: MODULES.LEGAL_ARCHIVE, label: "Advocate Sharing", href: ROUTES.LEGAL_ADVOCATE_SHARING },
         { module: MODULES.LEGAL_AUDIT, label: "Audit Trail", href: ROUTES.LEGAL_AUDIT },
         { module: MODULES.LEGAL_SETTINGS, label: "Provider Settings", href: ROUTES.LEGAL_SETTINGS }
       ]

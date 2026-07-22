@@ -36,6 +36,12 @@ const DIVISION_ENTITY_MAP = {
       { key: "client", label: "Client", table: "marketing_clients", nameCol: "company_name", system: "external", userType: "partner", sourceModule: "digital-services", accessScope: "marketing_client_portal", portalType: "Marketing Client Portal", portalLoginUrl: ROUTES.LOGIN },
       { key: "vendor", label: "Vendor", table: "marketing_vendors", nameCol: "legal_name", system: "external", userType: "vendor", sourceModule: "digital-services", accessScope: "marketing_vendor_portal", portalType: "Marketing Delivery Team Portal", portalLoginUrl: ROUTES.LOGIN }
     ]
+  },
+  legal: {
+    label: "Legal",
+    entities: [
+      { key: "advocate", label: "Advocate", table: "legal_advocates", nameCol: "full_name", system: "external", userType: "advocate", sourceModule: "legal", accessScope: "legal_advocate_portal", portalType: "Legal Advocate Portal", portalLoginUrl: ROUTES.LOGIN }
+    ]
   }
 };
 
@@ -64,7 +70,7 @@ async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.PORTAL_ACCESS,
     pageTitle: "Portal Access",
-    pageDescription: "Create and manage portal login access for existing Transportation, Interiors, and Digital Marketing & Services business records. Business records are never created or duplicated here.",
+    pageDescription: "Create and manage portal login access for existing Transportation, Interiors, Digital Marketing & Services, and Legal business records. Business records are never created or duplicated here.",
     workspace: WORKSPACES.ADMIN
   });
   if (!boot) return;
@@ -185,6 +191,7 @@ function baseRow(u, system, division, entityType, linkedName, portalType, access
 
 function portalTypeLabel(userType, sourceModule) {
   if (sourceModule === "interiors" && userType === "client") return "Interiors Client Portal";
+  if (sourceModule === "legal" && userType === "advocate") return "Legal Advocate Portal";
   if (sourceModule === "digital-services" && userType === "vendor") return "Marketing Delivery Team Portal";
   if (sourceModule === "digital-services" && userType === "partner") return "Marketing Client Portal";
   if (userType === "agent") return "Transportation Agent Portal";
@@ -244,6 +251,7 @@ async function deliverPortalCredentials(row, password) {
 function moduleLabel(sourceModule) {
   if (sourceModule === "digital-services") return "Digital Marketing & Services";
   if (sourceModule === "interiors") return "Interiors";
+  if (sourceModule === "legal") return "Legal";
   return "Transportation";
 }
 

@@ -10,6 +10,7 @@ import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 import { initNotificationShell } from "./notification-ui.js?v=notifications-1";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
+import { allowDeviceInternalNavigation, enforceDeviceUnlock, enforceMandatorySecuritySetup, installDeviceRelock } from "./device-security.js";
 
 const NAV_TRANSITION_KEY = "ems_nav_pending";
 const FINANCIAL_TEXT_PATTERN = /\b(amount|rate|billing|bill(?:s|ing)?|invoice|payment|receipt|credit\s*note|receivable|payable|revenue|cost|margin|gst|tax|debit|credit|balance|outstanding|price|budget|expense|freight\s*charge|commission|penalty|settlement|quotation|quote|estimate|boq)\b/i;
@@ -36,8 +37,22 @@ function removeFinancialTableColumns(root) {
 function removeFinancialFormFields(root) {
   root.querySelectorAll("label").forEach((label) => {
     if (!containsFinancialText(label.textContent)) return;
-    const field = label.closest(".form-group,.form-field,.field,.input-group,[data-field]") || label.parentElement;
-    field?.remove();
+    const field = label.closest(".form-group,.form-field,.field,.input-group,[data-field]");
+    if (field && field !== root && !field.matches("form")) {
+      field.remove();
+      return;
+    }
+
+    // Several operational forms use a flat `label + input` grid. Falling back
+    // to label.parentElement in that layout removes the entire form, which hid
+    // Create Trip from finance-restricted operational users such as the COO.
+    const siblingControl = label.nextElementSibling?.matches?.("input,select,textarea,button")
+      ? label.nextElementSibling
+      : null;
+    const labelledControl = label.control || null;
+    if (labelledControl && !label.contains(labelledControl)) labelledControl.remove();
+    if (siblingControl && siblingControl !== labelledControl) siblingControl.remove();
+    label.remove();
   });
 }
 
@@ -278,6 +293,13 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
     return;
   }
 
+  const deviceUnlocked = await enforceDeviceUnlock(appUser, logout);
+  if (!deviceUnlocked) return;
+  installDeviceRelock(appUser);
+
+  const securityReady = await enforceMandatorySecuritySetup(appUser, logout);
+  if (!securityReady) return;
+
   try {
     await enforceTermsAcceptance();
   } catch (error) {
@@ -419,6 +441,7 @@ function bindGlobalActions() {
     const to = new URL(href, window.location.origin);
     if (to.origin !== window.location.origin) return;
     if (to.pathname === window.location.pathname && to.search === window.location.search) return;
+    allowDeviceInternalNavigation();
     startNavigationTransition();
   }, { capture: true });
 

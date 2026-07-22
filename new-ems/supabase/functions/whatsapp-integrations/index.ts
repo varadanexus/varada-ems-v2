@@ -33,7 +33,7 @@ function adminClient() {
 }
 
 async function dispatchSystemNotification(admin: any, payload: Record<string, any>) {
-  const { error } = await admin.rpc("dispatch_ems_notification", {
+  const { data: notificationId, error } = await admin.rpc("dispatch_ems_notification", {
     p_module_code: payload.moduleCode || "whatsapp-inbox",
     p_event_code: payload.eventCode || "general",
     p_category: payload.category || "whatsapp",
@@ -52,6 +52,17 @@ async function dispatchSystemNotification(admin: any, payload: Record<string, an
     p_channel_plan: payload.channelPlan || { in_app: true }
   });
   if (error) throw error;
+  if (notificationId) {
+    await fetch(`${env("SUPABASE_URL")}/functions/v1/push-notifications`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: env("SUPABASE_ANON_KEY"),
+        Authorization: `Bearer ${env("SUPABASE_SERVICE_ROLE_KEY")}`
+      },
+      body: JSON.stringify({ notification_id: notificationId })
+    }).catch((pushError) => console.warn("WhatsApp push delivery failed", pushError));
+  }
 }
 
 function twilioAuthHeader() {

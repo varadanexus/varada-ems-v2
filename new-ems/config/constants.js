@@ -10,6 +10,7 @@ export const ROUTES = {
   INTERIORS_PORTAL_LOGIN: "/new-ems/modules/interiors-portal-login/index.html",
   INTERIORS_CLIENT_APP: "/new-ems/modules/interiors-client-app/index.html",
   INTERIORS_ARCHITECT_PORTAL: "/new-ems/modules/interiors-architect-portal/index.html",
+  EXTERNAL_PORTAL_SELECTOR: "/new-ems/modules/external-portal-selector/index.html",
   PORTAL_MANAGEMENT: "/new-ems/modules/portal-management/index.html"
   ,PORTAL_ACCESS: "/new-ems/modules/portal-access/index.html"
   ,TRANSPORT_PORTAL_LOGIN: "/new-ems/modules/transport-portal-login/index.html",
@@ -43,6 +44,8 @@ export const ROUTES = {
   LEGAL_SIGNING: "/new-ems/modules/legal-signing/index.html",
   LEGAL_PUBLIC_SIGN: "/new-ems/modules/legal-public-sign/index.html",
   LEGAL_ARCHIVE: "/new-ems/modules/legal-archive/index.html",
+  LEGAL_ADVOCATE_SHARING: "/new-ems/modules/legal-advocate-sharing/index.html",
+  LEGAL_ADVOCATE_PORTAL: "/new-ems/modules/legal-advocate-portal/index.html",
   LEGAL_AUDIT: "/new-ems/modules/legal-audit/index.html",
   LEGAL_SETTINGS: "/new-ems/modules/legal-settings/index.html",
   WHATSAPP_COMMAND_CENTER: "/new-ems/modules/whatsapp-command-center/index.html",

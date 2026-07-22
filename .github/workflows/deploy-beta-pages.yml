@@ -25,6 +25,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate deploy inputs
+        run: |
+          npm run check:pwa
+          npm run check:migrations
+
       - name: Prepare Pages bundle
         shell: bash
         run: |
@@ -40,8 +50,16 @@ jobs:
           cp -R blog .pages-dist/blog
           cp -R professional-tools .pages-dist/professional-tools
           cp favicon.ico .pages-dist/favicon.ico
+          cp sw.js .pages-dist/sw.js
           cp -R new-ems/. .pages-dist/new-ems/
           cp CNAME .pages-dist/CNAME
+
+      - name: Verify Pages bundle
+        shell: bash
+        run: |
+          test -f .pages-dist/sw.js
+          test -f .pages-dist/new-ems/manifest.webmanifest
+          test -f .pages-dist/new-ems/index.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

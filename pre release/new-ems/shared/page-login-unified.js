@@ -32,6 +32,7 @@ import {
   getLocalSession,
   restoreLocalSession
 } from "./ems-local-auth.js";
+import { redirectExternalPortalSession } from "./external-portal-routing.js";
 import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
 
@@ -463,10 +464,7 @@ async function handleExternalLogin(username, password) {
   });
   showToast("Login successful.", TOAST_TYPES.SUCCESS);
 
-  if (row.user_type === "architect") {
-    window.location.assign(ROUTES.INTERIORS_ARCHITECT_PORTAL);
-    return;
-  }
+  if (await redirectExternalPortalSession(row.session_token)) return;
 
   const dashboardRoute = ROUTES.EXTERNAL_PORTAL_DASHBOARD ?? null;
   if (dashboardRoute) {
@@ -523,10 +521,7 @@ async function checkExistingSession() {
       const { data, error } = await client.rpc("external_portal_validate_session", { p_session_token: externalStored.sessionToken });
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
-      if (row?.user_type === "architect") {
-        window.location.assign(ROUTES.INTERIORS_ARCHITECT_PORTAL);
-        return;
-      }
+      if (await redirectExternalPortalSession(externalStored.sessionToken)) return;
     } catch {}
     clearExternalSession();
   }
