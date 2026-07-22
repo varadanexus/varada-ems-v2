@@ -168,7 +168,10 @@ function lockOverlay(appUser, onSignOut) {
   return new Promise((resolve) => {
     const unlock = overlay.querySelector(".ems-device-unlock");
     const error = overlay.querySelector(".ems-device-lock-error");
-    unlock.addEventListener("click", async () => {
+    let attemptActive = false;
+    const attemptUnlock = async () => {
+      if (attemptActive) return;
+      attemptActive = true;
       unlock.disabled = true;
       error.textContent = "";
       try {
@@ -176,14 +179,21 @@ function lockOverlay(appUser, onSignOut) {
         overlay.remove();
         resolve(true);
       } catch (cause) {
-        error.textContent = cause?.name === "NotAllowedError" ? "Unlock was cancelled or timed out." : (cause?.message || "Could not verify this device.");
+        error.textContent = cause?.name === "NotAllowedError" ? "Unlock was cancelled or timed out. Tap Unlock EMS to try again." : (cause?.message || "Could not verify this device.");
         unlock.disabled = false;
+      } finally {
+        attemptActive = false;
       }
-    });
+    };
+    unlock.addEventListener("click", attemptUnlock);
     overlay.querySelector(".ems-device-signout").addEventListener("click", async () => {
       await onSignOut?.();
       resolve(false);
     });
+    // Invoke the native biometric/PIN sheet as soon as an enrolled mobile app
+    // is relaunched. Browsers that require a user gesture fall back to the
+    // visible Unlock EMS button without allowing access to the protected page.
+    requestAnimationFrame(() => attemptUnlock());
   });
 }
 
