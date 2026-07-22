@@ -405,6 +405,19 @@ export function installDeviceRelock(appUser) {
       if (isActive) resumeApp();
       else markAppInactive();
     }).catch?.(() => {});
+
+    // Android's gesture/hardware Back restores the previous WebView document
+    // without clicking an EMS link. Issue the same one-use navigation token as
+    // normal in-app links so the restored page does not request biometrics.
+    // At the history root, Back exits the app; reopening still relocks normally.
+    nativeApp.addListener("backButton", ({ canGoBack }) => {
+      if (canGoBack) {
+        allowDeviceInternalNavigation();
+        window.history.back();
+        return;
+      }
+      nativeApp.exitApp?.();
+    }).catch?.(() => {});
     return;
   }
 

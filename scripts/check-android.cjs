@@ -51,6 +51,7 @@ assert(gradle.includes("androidx.biometric:biometric"), "AndroidX biometric depe
 assert(gradle.includes("ANDROID_KEYSTORE_PATH"), "Release signing must be configured from protected environment secrets.");
 assert(deviceSecurity.includes("Plugins?.NativeDevice"), "Web security gate is not connected to native biometrics.");
 assert(deviceSecurity.includes('addListener("appStateChange"'), "Native biometric relock must use the Android app lifecycle.");
+assert(deviceSecurity.includes('addListener("backButton"') && deviceSecurity.includes("window.history.back()"), "Android Back must be handled as internal EMS navigation.");
 assert(deviceSecurity.includes("WEB_RELOCK_MIN_HIDDEN_MS"), "Browser relock must ignore transient mobile visibility changes.");
 assert(deviceSecurity.includes("if (nativeApp?.addListener)"), "Native apps must not use browser visibility to trigger biometric relock.");
 assert(navbar.includes('.ems-nav-sub{display:block'), "Mobile header must show the Private Limited company suffix.");
