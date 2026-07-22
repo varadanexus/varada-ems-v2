@@ -33,6 +33,22 @@ img, svg, video, canvas, iframe { max-width: 100%; }
 /* ---------- ≤920px: tablet portrait — sidebar becomes a drawer ---------- */
 @media (max-width: 920px) {
   body { overflow-x: clip; }
+  .app-sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    background: rgba(0, 0, 0, .62);
+    backdrop-filter: blur(2px);
+    transition: opacity .2s ease, visibility .2s ease;
+  }
+  .app-sidebar.open + .app-sidebar-scrim {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
   /* !important: premium.css loads after this file and re-declares
      .app-shell columns without a media query — it must not win here. */
   .app-shell,
@@ -99,6 +115,10 @@ img, svg, video, canvas, iframe { max-width: 100%; }
   [class*="two-col"],
   [class*="split-grid"],
   [class*="workspace-grid"] { grid-template-columns: 1fr !important; }
+}
+
+@media (min-width: 921px) {
+  .app-sidebar-scrim { display: none !important; }
 }
 
 /* ---------- ≤768px: large phones / small tablets ---------- */

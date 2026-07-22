@@ -360,7 +360,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
 
   app.innerHTML = `
     <div class="app-shell ${sidebarless ? "sidebarless" : ""}">
-      ${sidebarless ? "" : renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace)}
+      ${sidebarless ? "" : `${renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace)}<div class="app-sidebar-scrim" id="appSidebarScrim" aria-hidden="true"></div>`}
       <div class="app-main">
         ${renderNavbar(session?.user?.email || "", navbarRole, { sidebarless })}
         <section class="page-head">
@@ -393,6 +393,7 @@ function bindGlobalActions() {
   const shell = qs(".app-shell");
   const menuToggle = qs("#menuToggle");
   const sidebar = qs("#appSidebar");
+  const sidebarScrim = qs("#appSidebarScrim");
   const logoutButton = qs("#logoutBtn");
   const adminMenuBtn = qs("#adminMenuBtn");
 
@@ -402,11 +403,13 @@ function bindGlobalActions() {
     if (!shell || !sidebar) return;
     shell.classList.toggle("sidebar-collapsed", state === "collapsed" && !isMobile());
     sidebar.classList.toggle("open", state === "open" && isMobile());
+    sidebarScrim?.setAttribute("aria-hidden", state === "open" && isMobile() ? "false" : "true");
   };
 
   const closeMobileSidebar = () => {
     if (!isMobile() || !sidebar) return;
     sidebar.classList.remove("open");
+    sidebarScrim?.setAttribute("aria-hidden", "true");
   };
 
   // A mobile drawer is temporary UI state. Never restore it on a new page,
@@ -428,6 +431,7 @@ function bindGlobalActions() {
   menuToggle?.addEventListener("click", () => {
     if (isMobile()) {
       sidebar?.classList.toggle("open");
+      sidebarScrim?.setAttribute("aria-hidden", sidebar?.classList.contains("open") ? "false" : "true");
       return;
     }
     const next = shell?.classList.contains("sidebar-collapsed") ? "expanded" : "collapsed";
@@ -457,13 +461,15 @@ function bindGlobalActions() {
     startNavigationTransition();
   }, { capture: true });
 
-  document.addEventListener("click", (e) => {
+  const dismissMobileSidebar = (e) => {
     if (!isMobile() || !sidebar?.classList.contains("open")) return;
-    const t = e.target;
-    if (t instanceof Element && !sidebar.contains(t) && !menuToggle?.contains(t)) {
-      closeMobileSidebar();
-    }
-  });
+    const target = e.target;
+    if (!(target instanceof Element) || sidebar.contains(target) || menuToggle?.contains(target)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    closeMobileSidebar();
+  };
+  document.addEventListener("click", dismissMobileSidebar, { capture: true });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && isMobile() && sidebar?.classList.contains("open")) {

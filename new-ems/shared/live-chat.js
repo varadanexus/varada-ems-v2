@@ -148,6 +148,7 @@ function injectStyles() {
     .ems-chat-main{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:radial-gradient(circle at 78% 4%,rgba(225,189,104,.07),transparent 32%),#070808}
     .ems-chat-empty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:2rem;color:var(--chat-muted)}.ems-chat-empty-mark{width:72px;height:72px;border-radius:24px;border:1px solid rgba(225,189,104,.3);display:grid;place-items:center;margin:0 auto 1rem;color:var(--chat-gold);font-size:1.6rem;background:linear-gradient(145deg,rgba(225,189,104,.12),transparent)}.ems-chat-empty h3{font-family:Georgia,"Times New Roman",serif;color:#f3eee4;font-size:1.5rem;margin:0 0 .45rem}.ems-chat-empty p{max-width:360px;line-height:1.65;margin:0}
     .ems-chat-thread-head{padding:.9rem 1rem;border-bottom:1px solid var(--chat-line);display:flex;justify-content:space-between;align-items:center;gap:1rem;background:rgba(13,14,15,.9)}.ems-chat-thread-title{font-family:Georgia,"Times New Roman",serif;font-size:1.1rem;font-weight:700;color:#f5f0e6}.ems-chat-thread-sub{font-size:.72rem;color:var(--chat-muted);margin-top:.2rem}.ems-chat-secure{color:#7bc991}.ems-chat-secure::before{content:"";width:6px;height:6px;display:inline-block;background:#51c878;border-radius:50%;margin-right:.36rem;box-shadow:0 0 0 4px rgba(81,200,120,.09)}
+    .ems-chat-thread-head>div{min-width:0}.ems-chat-thread-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ems-chat-back{min-width:76px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;gap:.3rem;border:1px solid rgba(225,189,104,.3);border-radius:12px;background:rgba(225,189,104,.06);color:var(--chat-gold-soft);font-weight:800;cursor:pointer}.ems-chat-back span{font-size:1.25rem;line-height:1}
     .ems-chat-messages{flex:1 1 0;min-height:0;overflow-y:auto;overflow-x:hidden;padding:1.2rem;display:flex;flex-direction:column;gap:.7rem;overscroll-behavior:contain;background-image:linear-gradient(rgba(225,189,104,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(225,189,104,.022) 1px,transparent 1px);background-size:28px 28px}
     .ems-chat-msg{max-width:74%;border:1px solid rgba(225,189,104,.16);background:#121314;border-radius:4px 16px 16px 16px;padding:.68rem .8rem;align-self:flex-start;box-shadow:0 10px 30px rgba(0,0,0,.14)}
     .ems-chat-msg.mine{align-self:flex-end;background:linear-gradient(145deg,#282013,#18150f);border-color:rgba(225,189,104,.3);border-radius:16px 4px 16px 16px}
@@ -159,7 +160,7 @@ function injectStyles() {
     .ems-chat-pill{font-size:.66rem;border:1px solid rgba(225,189,104,.25);border-radius:999px;padding:.12rem .4rem;color:var(--chat-gold-soft)}.ems-chat-policy{margin:.45rem .8rem 0;padding:.58rem .65rem;color:#99958b;font-size:.7rem;border:1px solid rgba(225,189,104,.13);border-radius:10px;line-height:1.45;background:rgba(225,189,104,.025)}.ems-chat-pings{padding:.5rem .8rem;border-bottom:1px solid var(--chat-line)}
     .ems-chat-ping-item{font-size:.78rem;border:1px solid rgba(250,204,21,.28);border-radius:12px;background:rgba(250,204,21,.08);padding:.5rem;margin-bottom:.35rem;cursor:pointer}
     .ems-chat-side-foot{border-top:1px solid var(--chat-line);padding:.6rem .8rem;color:#716e67;font-size:.61rem;text-align:center;letter-spacing:.08em;text-transform:uppercase}.ems-chat-side-foot span{color:var(--chat-gold)}
-    @media(max-width:760px){.ems-chat-panel,.ems-chat-panel.expanded{grid-template-columns:1fr;inset:.5rem;width:calc(100vw - 1rem);height:calc(100vh - 1rem);border-radius:18px}.ems-chat-side{display:${STATE.activeConversationId ? "none" : "flex"}}.ems-chat-launcher-copy small{display:none}.ems-chat-launcher{right:.75rem;bottom:.75rem}.ems-chat-msg{max-width:86%}}
+    @media(max-width:760px){html.ems-chat-open,html.ems-chat-open body{overflow:hidden!important}.ems-chat-panel,.ems-chat-panel.expanded{grid-template-columns:1fr;inset:0;width:100vw;height:100vh;height:100dvh;border:0;border-radius:0}.ems-chat-panel.has-active-thread .ems-chat-side{display:none}.ems-chat-panel:not(.has-active-thread) .ems-chat-main{display:none}.ems-chat-panel.has-active-thread .ems-chat-main{display:flex}.ems-chat-main{height:100%;min-height:0}.ems-chat-thread-head{padding:max(.8rem,env(safe-area-inset-top)) .85rem .8rem}.ems-chat-messages{padding:.85rem}.ems-chat-compose-wrap{padding:.6rem max(.65rem,env(safe-area-inset-right)) max(.65rem,env(safe-area-inset-bottom)) max(.65rem,env(safe-area-inset-left))}.ems-chat-compose{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch}.ems-chat-compose.dual-action .ems-chat-input{grid-row:span 2}.ems-chat-input{resize:none;max-height:96px}.ems-chat-btn{min-width:66px;padding:.65rem}.ems-chat-composer-meta{display:none}.ems-chat-launcher-copy small{display:none}.ems-chat-launcher{right:.75rem;bottom:.75rem}.ems-chat-msg{max-width:86%}}
   `;
   document.head.appendChild(style);
 }
@@ -260,7 +261,7 @@ function renderThread() {
         <div class="ems-chat-thread-title">${esc(conv.other_display_name || conv.title || "Conversation")}</div>
         <div class="ems-chat-thread-sub"><span class="ems-chat-secure">Secure channel</span> · ${esc(actorTypeLabel(conv.other_actor_type) || "Direct chat")} · ${formatTime(conv.last_message_at)}</div>
       </div>
-      <button class="ems-chat-close" id="emsChatBack" type="button">Back</button>
+      <button class="ems-chat-back" id="emsChatBack" type="button" aria-label="Back to conversations"><span aria-hidden="true">‹</span> Back</button>
     </div>
     <div class="ems-chat-messages" id="emsChatMessages">
       ${STATE.messages.map((m) => `
@@ -274,7 +275,7 @@ function renderThread() {
     ${operatorBar}
     ${sendAs}
     <div class="ems-chat-compose-wrap">
-      <form class="ems-chat-compose" id="emsChatCompose">
+      <form class="ems-chat-compose ${isAiConversation(conv) ? "single-action" : "dual-action"}" id="emsChatCompose">
         <textarea class="ems-chat-input" id="emsChatInput" placeholder="${esc(inputPlaceholder)}" rows="2"></textarea>
         <button class="ems-chat-btn" type="submit">Send</button>
         ${isAiConversation(conv) ? "" : `<button class="ems-chat-btn ping" id="emsChatPingBtn" type="button">Ping</button>`}
@@ -291,7 +292,7 @@ function renderPanel() {
     ? "Portal chat is department-first: choose Accounts, Transport, Interiors, Management, or Nexus."
     : "Staff can chat with people, portal users, departments, and Nexus.";
   return `
-    <div class="ems-chat-panel ${STATE.open ? "" : "hidden"} ${STATE.expanded ? "expanded" : ""}" id="emsChatPanel" role="dialog" aria-label="Varada Nexus secure communications">
+    <div class="ems-chat-panel ${STATE.open ? "" : "hidden"} ${STATE.expanded ? "expanded" : ""} ${STATE.activeConversationId ? "has-active-thread" : ""}" id="emsChatPanel" role="dialog" aria-label="Varada Nexus secure communications">
       <aside class="ems-chat-side">
         <div class="ems-chat-head">
           <div class="ems-chat-brand"><img class="ems-chat-brand-mark" src="/images/logo.png" alt="Varada Nexus logo" /><span class="ems-chat-brand-copy"><span class="ems-chat-eyebrow">Secure communications</span><h3>Nexus Concierge</h3></span></div>
@@ -324,6 +325,7 @@ function root() {
 
 function render() {
   injectStyles();
+  document.documentElement.classList.toggle("ems-chat-open", STATE.open);
   root().innerHTML = `${renderLauncher()}${renderPanel()}`;
   bindEvents();
   const messages = document.getElementById("emsChatMessages");
