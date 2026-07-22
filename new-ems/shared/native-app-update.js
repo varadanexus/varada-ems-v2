@@ -47,7 +47,7 @@ function ensureGate() {
   gate.innerHTML = `
     <div class="ems-native-update-card">
       <img src="/new-ems/assets/icons/ems-192.png" alt="Varada Nexus" />
-      <span class="ems-native-update-kicker">VARADA NEXUS EMS</span>
+      <span class="ems-native-update-kicker">VARADA NEXUS</span>
       <h1 data-update-title>Checking for updates</h1>
       <p data-update-message>Please wait while EMS verifies the installed application.</p>
       <div class="ems-native-update-versions" data-update-versions hidden></div>
@@ -126,7 +126,7 @@ async function openUpdateDownload() {
     if (!nativeDevice?.downloadAndInstallUpdate) throw new Error("Native update installer unavailable");
     showGate({
       title: "Downloading update",
-      message: "Keep Varada EMS open while the signed update is downloaded securely.",
+      message: "Keep Varada Nexus open while the signed update is downloaded securely.",
       mode: "downloading"
     });
     updateDownloadProgress();
@@ -134,7 +134,7 @@ async function openUpdateDownload() {
     await nativeDevice.downloadAndInstallUpdate({ url: UPDATE_URL });
     showGate({
       title: "Ready to install",
-      message: "Confirm the Android installation prompt to finish updating Varada EMS.",
+      message: "Confirm the Android installation prompt to finish updating Varada Nexus.",
       mode: "installing"
     });
     updateDownloadProgress({ percent: 100, stage: "installing" });
@@ -143,7 +143,7 @@ async function openUpdateDownload() {
     showGate({
       title: "Update required",
       message: error?.code === "INSTALL_PERMISSION_DENIED"
-        ? "Allow Varada EMS to install updates in Android Settings, then tap Update now again."
+        ? "Allow Varada Nexus to install updates in Android Settings, then tap Update now again."
         : "The signed update could not be installed. Check your connection and try again.",
       mode: "update"
     });

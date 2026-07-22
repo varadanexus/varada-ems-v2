@@ -20,9 +20,9 @@ const APP_SHELL = [
 self.addEventListener("push", (event) => {
   let payload = {};
   try { payload = event.data?.json() || {}; } catch { payload = { body: event.data?.text() || "" }; }
-  const title = payload.title || "Varada Nexus EMS";
+  const title = payload.title || "Varada Nexus";
   event.waitUntil(self.registration.showNotification(title, {
-    body: payload.body || "You have a new EMS notification.",
+    body: payload.body || "You have a new Varada Nexus notification.",
     badge: payload.badge || "/new-ems/assets/icons/ems-notification-badge.png",
     tag: payload.tag || "varada-ems-notification",
     renotify: true,

@@ -14,7 +14,7 @@ try {
 }
 
 if (manifest) {
-  assert(manifest.name === "Varada Nexus EMS", "Manifest name is missing or incorrect.");
+  assert(manifest.name === "Varada Nexus" && manifest.short_name === "Varada Nexus", "Manifest brand name is missing or incorrect.");
   assert(manifest.start_url === "/login.html", "Manifest must start at the canonical login page.");
   assert(manifest.scope === "/", "Manifest scope must include both login and EMS modules.");
   assert(manifest.display === "standalone", "Manifest display must be standalone.");
@@ -57,6 +57,9 @@ assert(login.includes('name="mobile-web-app-capable" content="yes"'), "Canonical
 assert(runtime.includes('navigator.serviceWorker') === false, "Service worker registration should remain isolated in pwa.js.");
 assert(read("new-ems/shared/pwa.js").includes('navigator.serviceWorker.register("/sw.js", { scope: "/" })'), "PWA client does not register the root service worker.");
 assert(read("new-ems/shared/pwa.js").includes('classList.add("ems-standalone")'), "PWA client must identify the installed standalone surface.");
+assert(read("new-ems/shared/pwa.js").includes('Install Varada Nexus'), "PWA install prompts must use the Varada Nexus brand.");
+assert(read("sw.js").includes('payload.title || "Varada Nexus"'), "Push notifications must default to the Varada Nexus brand.");
+assert(read("new-ems/config/runtime.js").includes('"Varada Nexus"'), "Module metadata must use the Varada Nexus brand.");
 assert(read("new-ems/shared/native-app-update.js").includes("isNativeAndroid()"), "Mandatory APK updates must remain restricted to native Android.");
 assert(read("login.html").includes('class="login-app-download"'), "Public login must expose the Android app download option.");
 assert(read("assets/site.css").includes("body.login-page .site-nav"), "Installed login must hide the public website navigation.");

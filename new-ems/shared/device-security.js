@@ -79,7 +79,7 @@ export async function enableDeviceLock(appUser) {
   if (!appUser?.id) throw new Error("A signed-in user is required.");
   const nativeDevice = nativeDevicePlugin();
   if (nativeDevice) {
-    await nativeDevice.authenticate({ reason: "Confirm your identity to secure Varada EMS" });
+    await nativeDevice.authenticate({ reason: "Confirm your identity to secure Varada Nexus" });
     localStorage.setItem(userKey(appUser), JSON.stringify({
       native: true,
       enabledAt: new Date().toISOString(),
@@ -94,7 +94,7 @@ export async function enableDeviceLock(appUser) {
     credential = await navigator.credentials.create({
       publicKey: {
         challenge: randomChallenge(),
-        rp: { name: "Varada Nexus EMS", id: location.hostname },
+        rp: { name: "Varada Nexus", id: location.hostname },
         user: {
           id: new TextEncoder().encode(appUser.id),
           name: appUser.email || appUser.id,
@@ -135,7 +135,7 @@ async function verifyDevice(appUser) {
   if (!enrollment) return true;
   const nativeDevice = nativeDevicePlugin();
   if (enrollment?.native && nativeDevice) {
-    await nativeDevice.authenticate({ reason: "Unlock Varada EMS" });
+    await nativeDevice.authenticate({ reason: "Unlock Varada Nexus" });
     return true;
   }
   if (!enrollment?.credentialId) return true;
@@ -181,7 +181,7 @@ function lockOverlay(appUser, onSignOut) {
   overlay.innerHTML = `
     <div class="ems-device-lock-card">
       <img src="/new-ems/assets/icons/ems-192.png" alt="" />
-      <span class="ems-device-lock-kicker">VARADA NEXUS EMS</span>
+      <span class="ems-device-lock-kicker">VARADA NEXUS</span>
       <h1>App locked</h1>
       <p>Use this device's fingerprint, face recognition, or screen PIN to continue.</p>
       <button class="ems-device-unlock" type="button">Unlock EMS</button>

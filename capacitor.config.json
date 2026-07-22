@@ -1,6 +1,6 @@
 {
   "appId": "com.varadanexus.ems",
-  "appName": "Varada EMS",
+  "appName": "Varada Nexus",
   "webDir": "native-www",
   "loggingBehavior": "debug",
   "android": {

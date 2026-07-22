@@ -1,4 +1,4 @@
-name: Publish signed Varada EMS Android release
+name: Publish signed Varada Nexus Android release
 
 on:
   push:
@@ -94,9 +94,9 @@ jobs:
       - name: Publish permanent GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          name: Varada EMS Android ${{ github.ref_name }}
+          name: Varada Nexus Android ${{ github.ref_name }}
           body: |
-            Signed Varada EMS Android release.
+            Signed Varada Nexus Android release.
 
             Download `Varada-EMS.apk` on an Android device and install it. This release supports secure in-app downloads for future mandatory updates. Android will still show its required installation confirmation.
           files: Varada-EMS.apk

@@ -57,7 +57,7 @@ public class NativeDevicePlugin extends Plugin {
     public void downloadAndInstallUpdate(PluginCall call) {
         String url = call.getString("url", "");
         if (!isTrustedUpdateUrl(url, true)) {
-            call.reject("Only the official signed Varada EMS update can be downloaded.", "UNTRUSTED_URL");
+            call.reject("Only the official signed Varada Nexus update can be downloaded.", "UNTRUSTED_URL");
             return;
         }
         if (!updateDownloadActive.compareAndSet(false, true)) {
@@ -193,7 +193,7 @@ public class NativeDevicePlugin extends Plugin {
         PackageInfo current = packageManager.getPackageInfo(getContext().getPackageName(), flags);
         PackageInfo candidate = packageManager.getPackageArchiveInfo(apk.getAbsolutePath(), flags);
         if (candidate == null || !getContext().getPackageName().equals(candidate.packageName)) {
-            throw new UpdateException("The downloaded file is not a Varada EMS update.", "UPDATE_PACKAGE_MISMATCH");
+            throw new UpdateException("The downloaded file is not a Varada Nexus update.", "UPDATE_PACKAGE_MISMATCH");
         }
         if (packageVersionCode(candidate) <= packageVersionCode(current)) {
             throw new UpdateException("The downloaded APK is not newer than this installation.", "UPDATE_VERSION_INVALID");
@@ -248,7 +248,7 @@ public class NativeDevicePlugin extends Plugin {
         if (call == null) return;
         File apk = new File(new File(getContext().getCacheDir(), "updates"), "Varada-EMS.apk");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getContext().getPackageManager().canRequestPackageInstalls()) {
-            call.reject("Installation permission was not enabled for Varada EMS.", "INSTALL_PERMISSION_DENIED");
+            call.reject("Installation permission was not enabled for Varada Nexus.", "INSTALL_PERMISSION_DENIED");
             return;
         }
         launchInstaller(call, apk);
@@ -312,7 +312,7 @@ public class NativeDevicePlugin extends Plugin {
             return;
         }
 
-        String reason = call.getString("reason", "Unlock Varada EMS");
+        String reason = call.getString("reason", "Unlock Varada Nexus");
         Executor executor = ContextCompat.getMainExecutor(getContext());
         getActivity().runOnUiThread(() -> {
             BiometricPrompt prompt = new BiometricPrompt(
@@ -335,7 +335,7 @@ public class NativeDevicePlugin extends Plugin {
             );
 
             BiometricPrompt.PromptInfo promptInfo = new BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Varada EMS")
+                .setTitle("Varada Nexus")
                 .setSubtitle(reason)
                 .setAllowedAuthenticators(AUTHENTICATORS)
                 .setConfirmationRequired(false)

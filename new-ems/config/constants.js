@@ -1,4 +1,4 @@
-export const APP_NAME = "EMS 2.0";
+export const APP_NAME = "Varada Nexus";
 
 export const ROUTES = {
   ROOT: "/new-ems/index.html",

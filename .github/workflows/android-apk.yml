@@ -1,4 +1,4 @@
-name: Build Varada EMS Android APK
+name: Build Varada Nexus Android APK
 
 on:
   workflow_dispatch:

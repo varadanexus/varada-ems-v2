@@ -55,7 +55,7 @@
     installButton = document.createElement("button");
     installButton.type = "button";
     installButton.className = "ems-pwa-install";
-    installButton.setAttribute("aria-label", "Install Varada EMS on this device");
+    installButton.setAttribute("aria-label", "Install Varada Nexus on this device");
     installButton.innerHTML = '<span aria-hidden="true">↓</span> Install EMS';
     installButton.addEventListener("click", async () => {
       if (installPrompt) {
@@ -65,7 +65,7 @@
         removeInstallButton();
         return;
       }
-      showMessage("Install Varada EMS", "In Safari, tap Share and then Add to Home Screen.");
+      showMessage("Install Varada Nexus", "In Safari, tap Share and then Add to Home Screen.");
     });
     document.body.appendChild(installButton);
   }
@@ -96,7 +96,7 @@
         window.location.reload();
       });
     } catch (error) {
-      console.warn("Varada EMS app installation is unavailable.", error);
+      console.warn("Varada Nexus app installation is unavailable.", error);
     }
   }
 
