@@ -24,6 +24,27 @@
     installButton = null;
   }
 
+  async function requestInstall() {
+    if (isStandalone()) {
+      showMessage("Varada Nexus is installed", "Open it from your Home Screen to use the app experience.");
+      return;
+    }
+    if (installPrompt) {
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      removeInstallButton();
+      return;
+    }
+    if (isIos) {
+      showMessage("Install on iPhone or iPad", "Open this page in Safari, tap Share, then choose Add to Home Screen.");
+      return;
+    }
+    showMessage("Install Varada Nexus", "Open this page in your browser menu and choose Install app or Add to Home Screen.");
+  }
+
+  window.installVaradaNexus = requestInstall;
+
   function showMessage(title, message, action) {
     document.querySelector(".ems-pwa-notice")?.remove();
     const notice = document.createElement("section");
@@ -51,22 +72,13 @@
   }
 
   function renderInstallButton() {
-    if (installButton || isStandalone() || (!installPrompt && !isIos)) return;
+    if (installButton || isStandalone() || document.querySelector(".login-apps") || (!installPrompt && !isIos)) return;
     installButton = document.createElement("button");
     installButton.type = "button";
     installButton.className = "ems-pwa-install";
     installButton.setAttribute("aria-label", "Install Varada Nexus on this device");
     installButton.innerHTML = '<span aria-hidden="true">↓</span> Install EMS';
-    installButton.addEventListener("click", async () => {
-      if (installPrompt) {
-        installPrompt.prompt();
-        await installPrompt.userChoice;
-        installPrompt = null;
-        removeInstallButton();
-        return;
-      }
-      showMessage("Install Varada Nexus", "In Safari, tap Share and then Add to Home Screen.");
-    });
+    installButton.addEventListener("click", requestInstall);
     document.body.appendChild(installButton);
   }
 

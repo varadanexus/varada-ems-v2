@@ -36,7 +36,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/site.css?v=login-aurum-5">
+<link rel="stylesheet" href="/assets/site.css?v=login-aurum-6">
+<script defer src="/new-ems/shared/pwa.js?v=login-install-1" data-ems-pwa="true"></script>
 
 </head>
 <body class="login-page">
@@ -96,15 +97,22 @@
         </div>
         <button class="btn btn-primary" id="loginBtn" onclick="login()" style="width:100%;justify-content:center;margin-top:6px">Login</button>
       </div>
-      <a class="login-app-download" href="https://github.com/varadanexus/varada-ems-v2/releases/latest/download/Varada-EMS.apk" target="_blank" rel="noopener">
-        <span aria-hidden="true">↓</span>
-        <span><strong>Download Android App</strong><small>Always installs the latest signed APK</small></span>
-      </a>
       <div id="portalPicker" hidden></div>
       <div class="error-text" id="error"></div>
       <div class="auth-links">
         <a href="/portals/meeting/meeting-login.html">Join a Meeting →</a>
       </div>
+      <section class="login-apps" aria-labelledby="downloadAppHeading">
+        <h2 id="downloadAppHeading">Download App</h2>
+        <div class="login-app-options">
+          <a class="login-app-download" href="https://github.com/varadanexus/varada-ems-v2/releases/latest/download/Varada-EMS.apk" target="_blank" rel="noopener">
+            Android
+          </a>
+          <button class="login-app-download login-app-install" id="iosPwaInstall" type="button">
+            iOS
+          </button>
+        </div>
+      </section>
     </div>
   </section>
 </main>
@@ -223,6 +231,14 @@ window.login = async function login() {
 
 el("password")?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") { event.preventDefault(); window.login(); }
+});
+
+el("iosPwaInstall")?.addEventListener("click", () => {
+  if (typeof window.installVaradaNexus === "function") {
+    window.installVaradaNexus();
+    return;
+  }
+  window.alert("On iPhone or iPad, open this page in Safari, tap Share, then choose Add to Home Screen.");
 });
 
 // If already signed in (any system), redirect straight to the right portal.
