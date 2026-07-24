@@ -275,6 +275,25 @@ const MENU_BY_WORKSPACE = {
       ]
     }
   ],
+  [WORKSPACES.NOTIFICATIONS]: [
+    {
+      title: "Communications",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Notification Studio", href: ROUTES.NOTIFICATION_STUDIO },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "My Notifications", href: ROUTES.NOTIFICATIONS_CENTER }
+      ]
+    },
+    {
+      title: "Campaign Operations",
+      items: [
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Campaigns", href: ROUTES.NOTIFICATION_CAMPAIGNS },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Compose", href: ROUTES.NOTIFICATION_COMPOSE },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Templates", href: ROUTES.NOTIFICATION_TEMPLATES },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Analytics", href: ROUTES.NOTIFICATION_ANALYTICS }
+      ]
+    }
+  ],
   [WORKSPACES.INTERIORS]: [
     {
       title: "Home",

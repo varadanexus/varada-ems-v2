@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08090c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Varada Nexus" />
+    <meta
+      name="description"
+      content="Install the official Varada Nexus EMS app for Android or iPhone and iPad."
+    />
+    <link rel="canonical" href="https://www.varadanexus.com/download-app.html" />
+    <link rel="icon" type="image/png" href="/images/logo.png" />
+    <link rel="apple-touch-icon" href="/new-ems/assets/icons/ems-180.png" />
+    <link rel="manifest" href="/new-ems/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap"
+    />
+    <link rel="stylesheet" href="/assets/app-download.css?v=3" />
+    <script
+      defer
+      src="/new-ems/shared/pwa.js?v=download-app-1"
+      data-ems-pwa="true"
+    ></script>
+    <title>Download EMS App | Varada Nexus</title>
+  </head>
+  <body>
+    <main class="download-shell">
+      <a class="download-brand" href="/" aria-label="Varada Nexus home">
+        <img src="/images/logo.png" alt="Varada Nexus logo" />
+        <span class="download-brand-copy">
+          <span class="download-brand-name">Varada <span>Nexus</span></span>
+          <span class="download-brand-subtitle">Private Limited</span>
+        </span>
+      </a>
+
+      <section class="download-card" aria-labelledby="downloadTitle">
+        <span class="download-kicker">OFFICIAL EMS APPLICATION</span>
+        <h1 id="downloadTitle">Choose your device</h1>
+        <p class="download-lead">
+          Select your platform to install the secure Varada Nexus EMS app.
+        </p>
+        <div class="release-status">
+          <span>Current Android release</span>
+          <strong id="currentVersion">v1.4.3</strong>
+        </div>
+
+        <div class="platform-grid">
+          <a
+            class="platform-card"
+            id="androidDownload"
+            href="https://github.com/varadanexus/varada-ems-v2/releases/latest/download/Varada-EMS.apk"
+          >
+            <span class="platform-icon" aria-hidden="true">
+              <img
+                src="/assets/icons/android.svg"
+                alt=""
+                width="25"
+                height="25"
+              />
+            </span>
+            <span class="platform-copy">
+              <strong>Android</strong>
+              <small>Download the latest signed APK</small>
+            </span>
+            <span class="platform-action">Download ↓</span>
+          </a>
+
+          <button class="platform-card" id="iosDownload" type="button">
+            <span class="platform-icon apple" aria-hidden="true">
+              <img
+                src="/assets/icons/apple.svg"
+                alt=""
+                width="24"
+                height="24"
+              />
+            </span>
+            <span class="platform-copy">
+              <strong>iPhone &amp; iPad</strong>
+              <small>Install the secure EMS web app</small>
+            </span>
+            <span class="platform-action">Install →</span>
+          </button>
+        </div>
+
+        <section class="ios-guide" id="iosGuide" hidden aria-live="polite">
+          <div>
+            <span class="download-kicker">INSTALL ON iOS</span>
+            <h2>Add EMS to your Home Screen</h2>
+          </div>
+          <ol>
+            <li>Open this page in <strong>Safari</strong>.</li>
+            <li>Tap the <strong>Share</strong> button.</li>
+            <li>Select <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>.</li>
+          </ol>
+          <button type="button" id="requestIosInstall">Start installation</button>
+        </section>
+
+        <div class="download-footer">
+          <span>✓ Official Varada Nexus release</span>
+          <span>✓ Secure account access</span>
+          <a href="/login.html">Continue in browser</a>
+        </div>
+
+        <section class="download-legal" aria-label="Download terms and privacy">
+          <details id="downloadTerms">
+            <summary>Download Terms &amp; Disclaimer</summary>
+            <p>
+              The official Android application is only the signed APK linked from
+              this page, and the official iOS experience is only the Varada Nexus
+              web app installed from this domain. Varada Nexus Private Limited
+              does not authorise, support or accept liability for applications,
+              APKs, modified packages, copies or versions obtained from any other
+              website, message attachment, third-party store or source, or for a
+              version not identified on this page as the current release.
+            </p>
+            <p>
+              Users must verify the domain and displayed release before
+              installation. To the extent permitted by applicable law, Varada
+              Nexus Private Limited is not responsible for loss, malware, data
+              compromise, device damage, service interruption or other outcomes
+              caused by unofficial, altered, outdated or unlisted downloads.
+              Nothing here excludes liability that cannot legally be excluded.
+            </p>
+          </details>
+          <details id="downloadPrivacy">
+            <summary>Privacy &amp; Security</summary>
+            <p>
+              This page does not ask for EMS credentials to start a download.
+              Android downloads are delivered through the official Varada Nexus
+              GitHub release, which may receive ordinary connection and device
+              information. The iOS web app uses browser installation and service
+              worker features. Account access remains subject to EMS security,
+              privacy and authorised-use terms after installation.
+            </p>
+          </details>
+        </section>
+      </section>
+
+      <p class="download-note">
+        Only install Varada Nexus EMS from this official page. Access remains
+        protected by your assigned credentials and device-security controls.
+      </p>
+    </main>
+
+    <script>
+      const iosGuide = document.getElementById("iosGuide");
+      const iosButton = document.getElementById("iosDownload");
+      const installButton = document.getElementById("requestIosInstall");
+      const androidButton = document.getElementById("androidDownload");
+      const currentVersion = document.getElementById("currentVersion");
+
+      function requestWebAppInstall() {
+        iosGuide.hidden = false;
+        iosGuide.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        if (typeof window.installVaradaNexus === "function") {
+          window.installVaradaNexus();
+        }
+      }
+
+      iosButton.addEventListener("click", requestWebAppInstall);
+      installButton.addEventListener("click", requestWebAppInstall);
+      androidButton.addEventListener("click", () => {
+        androidButton.classList.add("downloading");
+        androidButton.querySelector(".platform-action").textContent =
+          "Starting…";
+      });
+
+      const preferredPlatform = new URLSearchParams(location.search).get("platform");
+      if (preferredPlatform === "ios") {
+        window.addEventListener("load", () => iosButton.click(), { once: true });
+      }
+      if (preferredPlatform === "android") {
+        androidButton.focus();
+      }
+
+      fetch("https://api.github.com/repos/varadanexus/varada-ems-v2/releases/latest", {
+        headers: { Accept: "application/vnd.github+json" },
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error("Release check unavailable");
+          return response.json();
+        })
+        .then((release) => {
+          const version = String(release.tag_name || "").replace(/^android-v/i, "");
+          const hasApk = Array.isArray(release.assets) &&
+            release.assets.some((asset) => asset.name === "Varada-EMS.apk");
+          if (!version || !hasApk) return;
+          currentVersion.textContent = `v${version}`;
+        })
+        .catch(() => {
+          // Keep the verified release shown in the page when GitHub is unavailable.
+        });
+    </script>
+  </body>
+</html>

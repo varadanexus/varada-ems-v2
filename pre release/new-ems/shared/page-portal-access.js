@@ -3,7 +3,7 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { hasAnyRolePermission } from "./permissions.js";
 import { PERMISSIONS } from "../config/roles.js";
-import { notifyPortalAccessCreated } from "./transport-integrations-api.js";
+import { notifyPortalAccessCreated, sendEmsAccountAccessReady } from "./transport-integrations-api.js";
 import { notifyMarketingWhatsApp } from "./marketing-whatsapp-api.js";
 import { sendPortalCredentialEmail } from "./email-api.js";
 import { showToast } from "./utils.js";
@@ -563,6 +563,7 @@ function rowActions(r) {
       <button class="btn btn-sm" data-pa-action="unlock" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Unlock</button>
       <button class="btn btn-sm" data-pa-action="reset-password" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Reset Password</button>
       <button class="btn btn-sm" data-pa-action="resend-credentials" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Resend credentials</button>
+      <button class="btn btn-sm" data-pa-action="send-app-access" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Send App Access Message</button>
       <button class="btn btn-sm" data-pa-action="force-logout" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Force Logout</button>
       <button class="btn btn-sm" data-pa-action="login-history" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">View Audit</button>
       <button class="btn btn-sm" data-pa-action="terms-consent" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Record T&amp;C Consent</button>
@@ -838,6 +839,7 @@ function handlePasswordToolsSearch() {
           ${canEdit() ? `
             <button class="btn btn-sm" data-pa-action="reset-password" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Reset Password</button>
             <button class="btn btn-sm" data-pa-action="resend-credentials" data-system="${r.system}" data-id="${r.portalUserId}" data-username="${escapeHtml(r.username)}" type="button">Resend credentials</button>
+            <button class="btn btn-sm" data-pa-action="send-app-access" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Send App Access Message</button>
             <button class="btn btn-sm" data-pa-action="set-status" data-system="${r.system}" data-id="${r.portalUserId}" data-value="${r.status === "active" ? "disabled" : "active"}" type="button">${r.status === "active" ? "Disable" : "Enable"}</button>
             <button class="btn btn-sm" data-pa-action="unlock" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Unlock</button>
             <button class="btn btn-sm" data-pa-action="force-logout" data-system="${r.system}" data-id="${r.portalUserId}" type="button">Force Logout</button>
@@ -1155,6 +1157,28 @@ async function handleRowAction(btn) {
       PAGE_STATE.resetPasswordModal = { mode: "resend", ...row };
       render();
       return;
+    } else if (action === "send-app-access") {
+      const row = PAGE_STATE.allRows.find((item) => item.portalUserId === id && item.system === system);
+      if (!row) throw new Error("Portal user record not found");
+      if (String(row.phone || "").replace(/\D/g, "").length < 10) {
+        throw new Error("Add a valid registered mobile number before sending the app access message");
+      }
+      const recipientName = row.displayName || row.linkedName || row.username || "User";
+      const accessDescription = row.portalType || `${row.division || "portal"} access`;
+      if (!window.confirm(`Send the approved EMS app access WhatsApp message to ${recipientName}?`)) return;
+      btn.disabled = true;
+      const result = await sendEmsAccountAccessReady({
+        recipientName,
+        recipientPhone: row.phone,
+        accessDescription,
+        sourceModule: "portal-access"
+      });
+      if (!result?.whatsapp?.sent) {
+        throw new Error(result?.whatsapp?.reason || "App access message was not sent");
+      }
+      showToast("App access WhatsApp message sent.", TOAST_TYPES.SUCCESS);
+      btn.disabled = false;
+      return;
     } else if (action === "force-logout") {
       const fn = system === "external" ? "external_portal_admin_force_logout" : "transport_portal_admin_force_logout";
       const { error } = await client.rpc(fn, { p_portal_user_id: id });
@@ -1197,6 +1221,7 @@ async function handleRowAction(btn) {
     await loadDashboard();
     render();
   } catch (error) {
+    btn.disabled = false;
     showToast(error?.message || "Action failed.", TOAST_TYPES.ERROR);
   }
 }

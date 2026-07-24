@@ -36,7 +36,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/site.css?v=login-aurum-6">
+<link rel="stylesheet" href="/assets/site.css?v=login-aurum-8">
 <script defer src="/new-ems/shared/pwa.js?v=login-install-1" data-ems-pwa="true"></script>
 
 </head>
@@ -88,14 +88,39 @@
       <h1>Welcome Back</h1>
       <p class="sub">Secure access to Varada Nexus ERP</p>
       <div id="loginForm">
-        <div class="field">
-          <input type="text" id="email" placeholder="Email" autocomplete="username">
+        <div class="login-method-switch" role="tablist" aria-label="Login method">
+          <button class="login-method active" id="passwordMethod" type="button" role="tab" aria-selected="true">Password</button>
+          <button class="login-method" id="otpMethod" type="button" role="tab" aria-selected="false">OTP</button>
         </div>
-        <div class="field pw-wrap">
-          <input type="password" id="password" placeholder="Password" autocomplete="current-password">
-          <button type="button" class="pw-toggle" onclick="togglePassword()">Show</button>
+        <div id="passwordLoginPanel" class="login-method-panel">
+          <div class="field">
+            <input type="text" id="email" placeholder="Email" autocomplete="username">
+          </div>
+          <div class="field pw-wrap">
+            <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+            <button type="button" class="pw-toggle" onclick="togglePassword()">Show</button>
+          </div>
+          <button class="btn btn-primary" id="loginBtn" onclick="login()" style="width:100%;justify-content:center;margin-top:6px">Login</button>
         </div>
-        <button class="btn btn-primary" id="loginBtn" onclick="login()" style="width:100%;justify-content:center;margin-top:6px">Login</button>
+        <div id="otpLoginPanel" class="login-method-panel otp-login-panel" hidden>
+          <p class="otp-intro">Receive a six-digit SMS on the mobile registered with your EMS staff account.</p>
+          <div class="field">
+            <input type="text" id="otpIdentifier" placeholder="EMS email, username or mobile" autocomplete="username" inputmode="email">
+          </div>
+          <button class="btn btn-primary" id="requestOtpBtn" type="button" style="width:100%;justify-content:center">Send OTP</button>
+          <div id="otpVerifyStep" hidden>
+            <p class="otp-destination" id="otpDestination"></p>
+            <div class="field otp-code-field">
+              <input type="text" id="otpCode" placeholder="000000" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" aria-label="Six-digit verification code">
+            </div>
+            <button class="btn btn-primary" id="verifyOtpBtn" type="button" style="width:100%;justify-content:center">Verify &amp; Login</button>
+            <div class="otp-secondary-actions">
+              <button class="otp-text-button" id="resendOtpBtn" type="button" disabled>Resend in 60s</button>
+              <button class="otp-text-button" id="changeOtpAccountBtn" type="button">Change account</button>
+            </div>
+          </div>
+          <p class="otp-security-note">Codes expire after 5 minutes. Android can securely detect the SMS without reading your other messages.</p>
+        </div>
       </div>
       <div id="portalPicker" hidden></div>
       <div class="error-text" id="error"></div>
@@ -106,12 +131,16 @@
         <h2 id="downloadAppHeading">Download App</h2>
         <div class="login-app-options">
           <a class="login-app-download" href="https://github.com/varadanexus/varada-ems-v2/releases/latest/download/Varada-EMS.apk" target="_blank" rel="noopener">
-            Android
+            <img class="login-app-icon" src="/assets/icons/android.svg" alt="" aria-hidden="true">
+            <span>Android</span>
           </a>
           <button class="login-app-download login-app-install" id="iosPwaInstall" type="button">
-            iOS
+            <img class="login-app-icon" src="/assets/icons/apple.svg" alt="" aria-hidden="true">
+            <span>iOS</span>
           </button>
         </div>
+        <p class="login-app-version">Android v1.4.3 · iOS secure web app</p>
+        <p class="login-app-legal">Download only from the official Varada Nexus page. Third-party or unlisted versions are not supported. <a href="/download-app.html#downloadTerms">Terms</a></p>
       </section>
     </div>
   </section>
@@ -126,7 +155,7 @@
 // Unified login: keep this page's look, but auto-detect the account type
 // (EMS staff, transport/interiors/external portal) and route to the right auth
 // system. If one identifier maps to multiple portals, show a portal picker.
-import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession } from "/new-ems/shared/login-core.js?v=external-selector-1";
+import { lookupIdentifier, usableAccounts, authenticate, checkExistingSession, requestEmsLoginOtp, verifyEmsLoginOtp } from "/new-ems/shared/login-core.js?v=ems-otp-login-1";
 import { enforceNativeAppUpdate } from "/new-ems/shared/native-app-update.js";
 
 function el(id) { return document.getElementById(id); }
@@ -149,6 +178,142 @@ window.togglePassword = function togglePassword() {
 };
 
 let PENDING = null;
+let PENDING_OTP = null;
+let OTP_BUSY = false;
+let OTP_RESEND_TIMER = null;
+let OTP_AUTOFILL_ABORT = null;
+let NATIVE_OTP_LISTENER = null;
+
+function setMethod(method) {
+  const otp = method === "otp";
+  el("passwordLoginPanel").hidden = otp;
+  el("otpLoginPanel").hidden = !otp;
+  el("passwordMethod").classList.toggle("active", !otp);
+  el("otpMethod").classList.toggle("active", otp);
+  el("passwordMethod").setAttribute("aria-selected", String(!otp));
+  el("otpMethod").setAttribute("aria-selected", String(otp));
+  setError("");
+  const source = otp ? el("email")?.value : el("otpIdentifier")?.value;
+  const target = otp ? el("otpIdentifier") : el("email");
+  if (target && !target.value && source) target.value = source;
+  window.setTimeout(() => (otp ? el("otpIdentifier") : el("email"))?.focus(), 0);
+}
+
+function isNativeAndroid() {
+  return Boolean(window.Capacitor?.isNativePlatform?.() && window.Capacitor?.getPlatform?.() === "android");
+}
+
+async function prepareNativeOtpDetection() {
+  if (!isNativeAndroid()) return { appHash: "", platform: "web" };
+  const plugin = window.Capacitor?.Plugins?.SmsOtp;
+  if (!plugin) return { appHash: "", platform: "native" };
+  try {
+    if (!NATIVE_OTP_LISTENER) {
+      NATIVE_OTP_LISTENER = await plugin.addListener("otpReceived", ({ code }) => acceptDetectedOtp(code));
+    }
+    const [{ hash }] = await Promise.all([plugin.getAppHash(), plugin.startListening()]);
+    return { appHash: hash || "", platform: "native" };
+  } catch {
+    return { appHash: "", platform: "native" };
+  }
+}
+
+function startWebOtpDetection() {
+  if (!("OTPCredential" in window) || !navigator.credentials?.get || isNativeAndroid()) return;
+  OTP_AUTOFILL_ABORT?.abort();
+  OTP_AUTOFILL_ABORT = new AbortController();
+  navigator.credentials.get({ otp: { transport: ["sms"] }, signal: OTP_AUTOFILL_ABORT.signal })
+    .then((credential) => acceptDetectedOtp(credential?.code))
+    .catch(() => {});
+}
+
+function acceptDetectedOtp(value) {
+  const code = String(value || "").replace(/\D/g, "").slice(0, 6);
+  if (code.length !== 6 || !PENDING_OTP || OTP_BUSY) return;
+  el("otpCode").value = code;
+  verifyOtpCode();
+}
+
+function beginResendCountdown(seconds = 60) {
+  window.clearInterval(OTP_RESEND_TIMER);
+  let remaining = seconds;
+  const button = el("resendOtpBtn");
+  button.disabled = true;
+  button.textContent = `Resend in ${remaining}s`;
+  OTP_RESEND_TIMER = window.setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      window.clearInterval(OTP_RESEND_TIMER);
+      button.disabled = false;
+      button.textContent = "Resend OTP";
+      return;
+    }
+    button.textContent = `Resend in ${remaining}s`;
+  }, 1000);
+}
+
+function resetOtpStep() {
+  PENDING_OTP = null;
+  OTP_BUSY = false;
+  OTP_AUTOFILL_ABORT?.abort();
+  el("otpVerifyStep").hidden = true;
+  el("requestOtpBtn").hidden = false;
+  el("otpIdentifier").disabled = false;
+  el("otpCode").value = "";
+  window.clearInterval(OTP_RESEND_TIMER);
+  el("otpIdentifier").focus();
+}
+
+async function requestOtpCode() {
+  const identifier = el("otpIdentifier")?.value?.trim() || "";
+  if (!identifier || OTP_BUSY) { if (!identifier) setError("Enter your EMS email, username or registered mobile."); return; }
+  OTP_BUSY = true;
+  setError("");
+  const button = el("requestOtpBtn");
+  button.disabled = true;
+  button.textContent = "Sending secure code…";
+  try {
+    const native = await prepareNativeOtpDetection();
+    startWebOtpDetection();
+    const result = await requestEmsLoginOtp(identifier, native);
+    PENDING_OTP = { requestId: result.request_id, identifier };
+    el("otpIdentifier").disabled = true;
+    el("otpVerifyStep").hidden = false;
+    button.hidden = true;
+    el("otpDestination").textContent = result.masked_phone
+      ? `Code sent to the mobile ending ${result.masked_phone.slice(-4)}.`
+      : "If this EMS staff account is active, a code has been sent to its registered mobile.";
+    beginResendCountdown(60);
+    el("otpCode").focus();
+  } catch (error) {
+    setError(error?.message || "Could not send the verification code.");
+  } finally {
+    OTP_BUSY = false;
+    button.disabled = false;
+    button.textContent = "Send OTP";
+  }
+}
+
+async function verifyOtpCode() {
+  const code = String(el("otpCode")?.value || "").replace(/\D/g, "").slice(0, 6);
+  if (!PENDING_OTP || OTP_BUSY) return;
+  if (code.length !== 6) { setError("Enter the six-digit verification code."); return; }
+  OTP_BUSY = true;
+  setError("");
+  const button = el("verifyOtpBtn");
+  button.disabled = true;
+  button.textContent = "Verifying…";
+  try {
+    await verifyEmsLoginOtp(PENDING_OTP.requestId, code);
+  } catch (error) {
+    setError(error?.message || "OTP verification failed.");
+    el("otpCode").select();
+  } finally {
+    OTP_BUSY = false;
+    button.disabled = false;
+    button.textContent = "Verify & Login";
+  }
+}
 
 function showLoginForm() {
   const picker = el("portalPicker");
@@ -231,6 +396,27 @@ window.login = async function login() {
 
 el("password")?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") { event.preventDefault(); window.login(); }
+});
+
+el("passwordMethod")?.addEventListener("click", () => setMethod("password"));
+el("otpMethod")?.addEventListener("click", () => setMethod("otp"));
+el("requestOtpBtn")?.addEventListener("click", requestOtpCode);
+el("verifyOtpBtn")?.addEventListener("click", verifyOtpCode);
+el("resendOtpBtn")?.addEventListener("click", () => {
+  if (!PENDING_OTP) return;
+  el("otpIdentifier").disabled = false;
+  el("requestOtpBtn").hidden = false;
+  el("otpVerifyStep").hidden = true;
+  PENDING_OTP = null;
+  requestOtpCode();
+});
+el("changeOtpAccountBtn")?.addEventListener("click", resetOtpStep);
+el("otpIdentifier")?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); requestOtpCode(); }
+});
+el("otpCode")?.addEventListener("input", (event) => {
+  event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "").slice(0, 6);
+  if (event.currentTarget.value.length === 6) verifyOtpCode();
 });
 
 el("iosPwaInstall")?.addEventListener("click", () => {

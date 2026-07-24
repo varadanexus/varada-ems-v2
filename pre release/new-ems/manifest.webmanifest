@@ -1,0 +1,44 @@
+{
+  "id": "/login.html",
+  "name": "Varada Nexus",
+  "short_name": "Varada Nexus",
+  "description": "Secure enterprise management for Varada Nexus.",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "start_url": "/login.html",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone"],
+  "orientation": "any",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "categories": ["business", "productivity", "finance"],
+  "icons": [
+    {
+      "src": "/new-ems/assets/icons/ems-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/new-ems/assets/icons/ems-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/new-ems/assets/icons/ems-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open command center",
+      "short_name": "Dashboard",
+      "url": "/new-ems/modules/dashboard/index.html",
+      "icons": [{ "src": "/new-ems/assets/icons/ems-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

@@ -413,7 +413,7 @@ export const ROLE_MODULE_PERMISSIONS = {
   [ROLES.COO]: {
     ...grant([MODULES.EMAIL, MODULES.EMAIL_COMMAND_CENTER], [PERMISSIONS.VIEW]),
     ...grant([MODULES.EMAIL_COMPOSE], [PERMISSIONS.VIEW, PERMISSIONS.CREATE]),
-    ...grant([MODULES.TRANSPORT_TRIPS], [PERMISSIONS.VIEW]),
+    ...grant([MODULES.TRANSPORT_TRIPS], [PERMISSIONS.VIEW, PERMISSIONS.CREATE, PERMISSIONS.EDIT]),
     ...grant([MODULES.TRANSPORT_TRIP_EXPENSES], [PERMISSIONS.VIEW, PERMISSIONS.CREATE, PERMISSIONS.EDIT]),
     ...grant(ALL_INTERIORS_PROJECT_MODULES.filter((moduleCode) => !isFinancialModuleCode(moduleCode)), [PERMISSIONS.VIEW]),
     ...grant([MODULES.DASHBOARD], [PERMISSIONS.VIEW]),
@@ -442,3 +442,12 @@ export const ROLE_MODULE_PERMISSIONS = {
     ])
   }
 };
+
+// Support is an EMS-wide facility. Database permissions remain authoritative;
+// this fallback keeps the launcher usable during offline/local bootstrap.
+Object.entries(ROLE_MODULE_PERMISSIONS).forEach(([roleCode, permissions]) => {
+  permissions[MODULES.SUPPORT_TICKETS] = [PERMISSIONS.VIEW, PERMISSIONS.CREATE];
+  if ([ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(roleCode)) {
+    permissions[MODULES.SUPPORT_TICKETS].push(PERMISSIONS.EDIT, PERMISSIONS.VIEW_AUDIT);
+  }
+});

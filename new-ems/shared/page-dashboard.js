@@ -149,7 +149,7 @@ async function init() {
       : [];
     // Grouped domain sections: Communications (WhatsApp + Email) and Legal each
     // get their own heading; Central Accounts is surfaced as the Finance section.
-    const COMMS_MODULES = [MODULES.WHATSAPP, MODULES.EMAIL, MODULES.MEETINGS];
+    const COMMS_MODULES = [MODULES.WHATSAPP, MODULES.EMAIL, MODULES.MEETINGS, MODULES.NOTIFICATIONS_CENTER];
     const communicationCards = activeBusinessCards.filter((m) => COMMS_MODULES.includes(m.module));
     const legalCards = activeBusinessCards.filter((m) => m.module === MODULES.LEGAL);
     const supportCards = activeBusinessCards.filter((m) => m.module === MODULES.SUPPORT_TICKETS);

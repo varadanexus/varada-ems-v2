@@ -1,0 +1,208 @@
+.ems-pwa-install {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 10000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 11px 18px;
+  border: 1px solid rgba(211, 178, 104, .75);
+  border-radius: 999px;
+  color: #07111f;
+  background: linear-gradient(135deg, #f0d493, #cba553);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .3);
+  font: 700 14px/1 Inter, ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.ems-pwa-install:hover { transform: translateY(-1px); filter: brightness(1.04); }
+.ems-pwa-install:focus-visible { outline: 3px solid rgba(211, 178, 104, .35); outline-offset: 3px; }
+
+.ems-pwa-notice {
+  position: fixed;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: min(620px, calc(100% - 32px));
+  padding: 14px 14px 14px 18px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(211, 178, 104, .42);
+  border-radius: 16px;
+  color: #eef3f8;
+  background: rgba(7, 17, 31, .97);
+  box-shadow: 0 20px 56px rgba(0, 0, 0, .4);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.ems-pwa-notice > div:first-child { display: grid; gap: 3px; }
+.ems-pwa-notice strong { font-size: 14px; }
+.ems-pwa-notice span { color: #afbdcc; font-size: 13px; line-height: 1.4; }
+.ems-pwa-notice-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.ems-pwa-notice button { border: 0; border-radius: 10px; padding: 9px 13px; color: #07111f; background: #d3b268; font: 700 13px/1 system-ui, sans-serif; cursor: pointer; }
+.ems-pwa-notice .ems-pwa-notice-close { padding: 8px 10px; color: #d9e2eb; background: transparent; font-size: 20px; }
+
+@media (max-width: 560px) {
+  .ems-pwa-notice { align-items: flex-start; gap: 10px; }
+  .ems-pwa-install { right: 14px; bottom: 14px; }
+}
+
+@media (display-mode: standalone) {
+  .ems-pwa-install { display: none !important; }
+}
+
+html.ems-update-blocked,
+html.ems-update-blocked body { overflow: hidden !important; }
+
+.ems-native-update {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: max(22px, env(safe-area-inset-top)) 20px max(22px, env(safe-area-inset-bottom));
+  color: #f4f1e8;
+  background: radial-gradient(circle at 50% 12%, #172b49 0, #07111f 44%, #020509 100%);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.ems-native-update-card {
+  display: grid;
+  justify-items: center;
+  width: min(460px, 100%);
+  padding: 34px 26px 28px;
+  border: 1px solid rgba(211, 178, 104, .48);
+  border-radius: 26px;
+  text-align: center;
+  background: rgba(6, 16, 29, .97);
+  box-shadow: 0 34px 100px rgba(0, 0, 0, .62);
+}
+
+.ems-native-update-card img { width: 76px; height: 76px; margin-bottom: 16px; border-radius: 19px; }
+.ems-native-update-kicker { color: #d3b268; font-size: 11px; font-weight: 900; letter-spacing: .17em; }
+.ems-native-update-card h1 { margin: 9px 0 7px; color: #fff; font: 700 30px/1.15 Georgia, serif; }
+.ems-native-update-card p { max-width: 360px; margin: 0; color: #afbdcc; line-height: 1.6; }
+.ems-native-update-versions { margin-top: 16px; padding: 8px 12px; border-radius: 999px; color: #f0d493; background: rgba(211, 178, 104, .1); font-size: 12px; font-weight: 750; }
+.ems-native-update-progress { display: grid; width: 100%; gap: 8px; margin-top: 20px; }
+.ems-native-update-progress[hidden] { display: none; }
+.ems-native-update-progress-track { width: 100%; height: 9px; overflow: hidden; border-radius: 999px; background: rgba(255, 255, 255, .1); }
+.ems-native-update-progress-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #cba553, #f0d493); transition: width .2s ease; }
+.ems-native-update-progress > span { color: #c8d2dd; font-size: 12px; font-weight: 700; }
+.ems-native-update-actions { display: grid; width: 100%; gap: 9px; margin-top: 24px; }
+.ems-native-update-actions button { width: 100%; min-height: 48px; border: 0; border-radius: 13px; font-weight: 850; cursor: pointer; }
+.ems-native-update-primary { color: #07111f; background: linear-gradient(135deg, #f0d493, #cba553); }
+.ems-native-update-secondary { color: #d7e0ea; background: rgba(255, 255, 255, .06); }
+
+@media (max-width: 520px) {
+  .ems-native-update-card { padding: 30px 20px 24px; }
+  .ems-native-update-card h1 { font-size: 27px; }
+}
+
+.ems-device-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #eef3f8;
+  background: radial-gradient(circle at 50% 20%, #132947 0, #07111f 46%, #03070d 100%);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.ems-device-lock-card {
+  display: grid;
+  justify-items: center;
+  width: min(420px, 100%);
+  padding: 34px 28px;
+  border: 1px solid rgba(211, 178, 104, .4);
+  border-radius: 24px;
+  text-align: center;
+  background: rgba(7, 17, 31, .94);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, .55);
+}
+
+.ems-device-lock-card img { width: 72px; height: 72px; border-radius: 18px; margin-bottom: 16px; }
+.ems-device-lock-kicker { color: #d3b268; font-size: 11px; font-weight: 800; letter-spacing: .16em; }
+.ems-device-lock-card h1 { margin: 8px 0 4px; font-size: 28px; }
+.ems-device-lock-card p { max-width: 330px; margin: 0 0 22px; color: #afbdcc; line-height: 1.55; }
+.ems-device-lock-card button { width: 100%; min-height: 46px; border: 0; border-radius: 12px; font-weight: 800; cursor: pointer; }
+.ems-device-unlock { color: #07111f; background: linear-gradient(135deg, #f0d493, #cba553); }
+.ems-device-signout { margin-top: 8px; color: #c8d2dd; background: transparent; }
+.ems-device-lock-error { min-height: 20px; margin-top: 10px; color: #ff9f9f; }
+
+.ems-security-setup {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  color: #eef3f8;
+  background: radial-gradient(circle at 50% 15%, #173154 0, #07111f 48%, #03070d 100%);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.ems-security-setup-card {
+  width: min(520px, 100%);
+  padding: 30px;
+  border: 1px solid rgba(211, 178, 104, .44);
+  border-radius: 24px;
+  background: rgba(7, 17, 31, .97);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, .58);
+}
+
+.ems-security-setup-card > img { display: block; width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 16px; }
+.ems-security-setup-card > .ems-device-lock-kicker { display: block; text-align: center; }
+.ems-security-setup-card h1 { margin: 8px 0 5px; text-align: center; font-size: 28px; }
+.ems-security-intro { margin: 0 auto 20px; color: #afbdcc; text-align: center; line-height: 1.5; }
+
+.ems-security-requirement {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 15px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  border-radius: 14px;
+  background: rgba(15, 28, 47, .8);
+}
+
+.ems-security-requirement div { display: grid; gap: 4px; }
+.ems-security-requirement span { color: #afbdcc; font-size: 13px; line-height: 1.35; }
+.ems-security-requirement button { min-width: 92px; min-height: 42px; border: 0; border-radius: 10px; color: #07111f; background: #d3b268; font-weight: 800; cursor: pointer; }
+.ems-security-requirement.is-complete { border-color: rgba(74, 222, 128, .4); background: rgba(22, 101, 52, .16); }
+.ems-security-requirement.is-complete button { color: #bbf7d0; background: rgba(34, 197, 94, .18); }
+.ems-security-error { min-height: 22px; margin-top: 12px; color: #ffaaaa; font-size: 13px; text-align: center; }
+.ems-security-setup-card > .ems-device-signout { width: 100%; min-height: 42px; border: 0; color: #c8d2dd; background: transparent; font-weight: 700; cursor: pointer; }
+
+@media (max-width: 520px) {
+  .ems-security-setup-card { padding: 24px 18px; }
+  .ems-security-requirement { grid-template-columns: 1fr; }
+  .ems-security-requirement button { width: 100%; }
+}
+
+.notification-device-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: center;
+  gap: 12px 20px;
+  margin: 16px 0 20px;
+  padding: 16px;
+  border: 1px solid rgba(211, 178, 104, .24);
+  border-radius: 14px;
+  background: rgba(7, 17, 31, .35);
+}
+
+.notification-device-controls p { margin: 4px 0 0; }
+
+@media (max-width: 640px) {
+  .notification-device-controls { grid-template-columns: 1fr; }
+  .notification-device-controls button { width: 100%; }
+}

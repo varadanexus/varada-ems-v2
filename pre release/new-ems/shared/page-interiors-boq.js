@@ -2,6 +2,7 @@ import { MODULES, WORKSPACES, TOAST_TYPES } from "../config/constants.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 import { getSupabaseClient } from "../config/supabase.js";
+import { generateInteriorsBoqPdf } from "./interiors-boq-pdf.js?v=boq-pdf-2";
 
 const client = getSupabaseClient();
 
@@ -101,6 +102,7 @@ function render() {
         </div>
         <div class="int-actions">
           <button class="btn" id="saveBoqHeaderBtn" type="button">${selectedHeader ? 'Save Header' : 'Create Header'}</button>
+          ${selectedHeader ? `<button class="btn btn-ghost" id="downloadBoqPdfBtn" type="button" ${selectedLines.length ? '' : 'disabled'}>Download BOQ PDF</button>` : ''}
         </div>
       </section>
 
@@ -161,9 +163,62 @@ function bindEvents() {
   document.getElementById('boqLineQty')?.addEventListener('input', syncLineAmountPreview);
   document.getElementById('boqLineRate')?.addEventListener('input', syncLineAmountPreview);
   document.getElementById('saveBoqHeaderBtn')?.addEventListener('click', saveHeader);
+  document.getElementById('downloadBoqPdfBtn')?.addEventListener('click', downloadBoqPdf);
   document.getElementById('addBoqLineBtn')?.addEventListener('click', addLine);
   document.querySelectorAll('[data-boq-delete]').forEach((btn) => btn.addEventListener('click', deleteLine));
   document.querySelectorAll('[data-boq-edit]').forEach((btn) => btn.addEventListener('click', editLine));
+}
+
+async function downloadBoqPdf(event) {
+  const button = event.currentTarget;
+  const selectedHeader = PAGE_STATE.headers.find((row) => row.id === PAGE_STATE.selectedHeaderId) || null;
+  const selectedLines = PAGE_STATE.lines
+    .filter((row) => row.boq_header_id === PAGE_STATE.selectedHeaderId)
+    .sort((left, right) => Number(left.line_no || 0) - Number(right.line_no || 0));
+  if (!selectedHeader) return showToast('Select a BOQ before downloading the estimate.', TOAST_TYPES.WARNING);
+  if (!selectedLines.length) return showToast('Add at least one BOQ line before downloading the estimate.', TOAST_TYPES.WARNING);
+
+  const project = PAGE_STATE.projectLookup.get(String(selectedHeader.project_id)) || {};
+  const previousLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Preparing PDF...';
+  try {
+    const result = await generateInteriorsBoqPdf({
+      header: {
+        boqCode: selectedHeader.boq_code,
+        boqName: selectedHeader.boq_name,
+        revisionNo: selectedHeader.revision_no,
+        status: selectedHeader.status,
+        description: selectedHeader.description,
+        totalAmount: selectedHeader.total_amount
+      },
+      project: {
+        projectCode: project.project_code || selectedHeader.projects?.project_code,
+        projectName: project.project_name || selectedHeader.projects?.project_name,
+        projectTitle: project.project_title,
+        clientName: project.client_name
+      },
+      lines: selectedLines.map((row) => ({
+        lineNo: row.line_no,
+        scopeItem: row.scope_item,
+        description: row.description,
+        uom: row.uom,
+        quantity: row.quantity,
+        wastagePercent: row.wastage_percent,
+        unitRate: row.unit_rate,
+        lineAmount: row.line_amount,
+        remarks: row.remarks
+      }))
+    });
+    showToast(`${result.filename} downloaded.`, TOAST_TYPES.SUCCESS);
+  } catch (error) {
+    showToast(error?.message || 'Failed to create the BOQ PDF.', TOAST_TYPES.ERROR);
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      button.textContent = previousLabel;
+    }
+  }
 }
 
 function syncLineAmountPreview() {

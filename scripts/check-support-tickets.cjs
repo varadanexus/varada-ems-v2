@@ -49,7 +49,7 @@ assert(fs.existsSync("new-ems/shared/portal-support.js") && fs.existsSync("new-e
   "marketing-vendor-portal", "transport-client-app", "transport-transporter-app", "transport-agent-app"
 ].forEach((moduleName) => {
   const html = read(`new-ems/modules/${moduleName}/index.html`);
-  assert(html.includes("portal-support.js") && html.includes("portal-support.css"), `${moduleName} is missing portal Support access.`);
+  assert(html.includes("portal-support-notifications.js") && html.includes("portal-support.css"), `${moduleName} is missing portal Support access.`);
 });
 
 if (errors.length) {

@@ -12,6 +12,7 @@ const config = JSON.parse(read("capacitor.config.json"));
 const manifest = read("android/app/src/main/AndroidManifest.xml");
 const activity = read("android/app/src/main/java/com/varadanexus/ems/MainActivity.java");
 const nativeDevice = read("android/app/src/main/java/com/varadanexus/ems/NativeDevicePlugin.java");
+const smsOtp = read("android/app/src/main/java/com/varadanexus/ems/SmsOtpPlugin.java");
 const gradle = read("android/app/build.gradle");
 const deviceSecurity = read("new-ems/shared/device-security.js");
 const navbar = read("new-ems/shared/navbar.js");
@@ -38,6 +39,10 @@ assert(manifest.includes("android.permission.POST_NOTIFICATIONS"), "Android noti
 assert(manifest.includes("android.permission.REQUEST_INSTALL_PACKAGES"), "Android in-app update installation permission is missing.");
 assert(androidStrings.includes('<string name="app_name">Varada Nexus</string>'), "Android launcher name must be Varada Nexus.");
 assert(activity.includes("registerPlugin(NativeDevicePlugin.class)"), "Native device bridge is not registered.");
+assert(activity.includes("registerPlugin(SmsOtpPlugin.class)"), "Native SMS OTP bridge is not registered.");
+assert(smsOtp.includes("startSmsRetriever()"), "Android OTP login must start the permission-free SMS Retriever API.");
+assert(smsOtp.includes("SmsRetriever.SEND_PERMISSION"), "SMS OTP receiver must require the Google Play services sender permission.");
+assert(smsOtp.includes('Pattern.compile("(?<!\\\\d)(\\\\d{6})(?!\\\\d)")'), "Native OTP extraction must accept only isolated six-digit codes.");
 assert(nativeDevice.includes("BiometricPrompt"), "Native biometric prompt implementation is missing.");
 assert(nativeDevice.includes('.setTitle("Varada Nexus")'), "Native biometric prompts must use the Varada Nexus brand.");
 assert(nativeDevice.includes("requestPermissionForAlias(\"notifications\""), "Native notification permission request is missing.");
@@ -48,6 +53,7 @@ assert(nativeDevice.includes("ACTION_MANAGE_UNKNOWN_APP_SOURCES"), "Native updat
 assert(nativeDevice.includes('"github.com".equalsIgnoreCase(host)'), "Native update downloads must be restricted to the official release host.");
 assert(filePaths.includes('path="updates/"') && !filePaths.includes("external-path"), "APK sharing must be limited to the private update cache.");
 assert(gradle.includes("androidx.biometric:biometric"), "AndroidX biometric dependency is missing.");
+assert(gradle.includes("play-services-auth-api-phone"), "Google SMS Retriever dependency is missing.");
 assert(gradle.includes("ANDROID_KEYSTORE_PATH"), "Release signing must be configured from protected environment secrets.");
 assert(deviceSecurity.includes("Plugins?.NativeDevice"), "Web security gate is not connected to native biometrics.");
 assert(deviceSecurity.includes('addListener("appStateChange"'), "Native biometric relock must use the Android app lifecycle.");
@@ -76,6 +82,8 @@ assert(nativeUpdate.includes("compareVersions(installed, latest) < 0"), "Outdate
 assert(nativeUpdate.includes('title: "Connection required"'), "Native app must fail closed when update verification is unavailable.");
 assert(layout.includes("await enforceNativeAppUpdate()"), "Protected modules must enforce the native app version gate.");
 assert(login.includes("await enforceNativeAppUpdate()"), "Native login must enforce the app version gate.");
+assert(login.includes('autocomplete="one-time-code"'), "OTP login must enable safe operating-system code autofill.");
+assert(login.includes('Plugins?.SmsOtp'), "OTP login is not connected to the native SMS Retriever bridge.");
 assert(login.includes("releases/latest/download/Varada-EMS.apk"), "Public login must link to the latest signed Android APK.");
 assert(releaseWorkflow.includes("assembleRelease"), "Signed release workflow must build the release APK.");
 assert(releaseWorkflow.includes("FIREBASE_GOOGLE_SERVICES_JSON_BASE64") && releaseWorkflow.includes("android/app/google-services.json"), "Signed release workflow must restore the protected Firebase Android configuration.");

@@ -230,6 +230,32 @@ const MENU_BY_WORKSPACE = {
       ]
     }
   ],
+  [WORKSPACES.SUPPORT]: [
+    {
+      title: "Support Workspace",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.SUPPORT_TICKETS, label: "Support Dashboard", href: `${ROUTES.SUPPORT_TICKETS}?view=dashboard` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Raise Ticket", href: `${ROUTES.SUPPORT_TICKETS}?view=mine&new=1` }
+      ]
+    },
+    {
+      title: "Ticket Operations",
+      items: [
+        { module: MODULES.SUPPORT_TICKETS, label: "All Tickets", href: `${ROUTES.SUPPORT_TICKETS}?view=all` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Assigned to Me", href: `${ROUTES.SUPPORT_TICKETS}?view=assigned` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Unassigned", href: `${ROUTES.SUPPORT_TICKETS}?view=unassigned` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Urgent", href: `${ROUTES.SUPPORT_TICKETS}?view=urgent` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Resolved & Closed", href: `${ROUTES.SUPPORT_TICKETS}?view=resolved` }
+      ]
+    },
+    {
+      title: "My Support",
+      items: [
+        { module: MODULES.SUPPORT_TICKETS, label: "My Raised Tickets", href: `${ROUTES.SUPPORT_TICKETS}?view=mine` }
+      ]
+    }
+  ],
   [WORKSPACES.EMAIL]: [
     {
       title: "Email Workspace",
@@ -246,6 +272,25 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.EMAIL_HISTORY, label: "Outbox", href: ROUTES.EMAIL_HISTORY },
         { module: MODULES.EMAIL_TEMPLATES, label: "Templates", href: ROUTES.EMAIL_TEMPLATES },
         { module: MODULES.EMAIL_SETTINGS, label: "Provider Settings", href: ROUTES.EMAIL_SETTINGS }
+      ]
+    }
+  ],
+  [WORKSPACES.NOTIFICATIONS]: [
+    {
+      title: "Communications",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Notification Studio", href: ROUTES.NOTIFICATION_STUDIO },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "My Notifications", href: ROUTES.NOTIFICATIONS_CENTER }
+      ]
+    },
+    {
+      title: "Campaign Operations",
+      items: [
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Campaigns", href: ROUTES.NOTIFICATION_CAMPAIGNS },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Compose", href: ROUTES.NOTIFICATION_COMPOSE },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Templates", href: ROUTES.NOTIFICATION_TEMPLATES },
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "Analytics", href: ROUTES.NOTIFICATION_ANALYTICS }
       ]
     }
   ],
@@ -295,6 +340,9 @@ export function getSearchIndex() {
       });
     });
   });
+  if (!seen.has(ROUTES.SUPPORT_TICKETS)) {
+    out.push({ label: "Support Desk", href: ROUTES.SUPPORT_TICKETS, module: MODULES.SUPPORT_TICKETS, group: "Help & Support" });
+  }
   return out;
 }
 
@@ -312,7 +360,10 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
     if (itemUrl.pathname !== currentUrl.pathname) return false;
     return itemUrl.search ? itemUrl.search === currentUrl.search : true;
   };
-  const sectionsForWorkspace = MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN];
+  const sectionsForWorkspace = [
+    ...(MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN]),
+    ...(workspace === WORKSPACES.SUPPORT ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
+  ];
   const sections = sectionsForWorkspace.map((section) => {
     const visibleItems = section.items.filter((item) => item.disabled || (allowedModules || []).includes(item.module));
     const sectionHasActive = visibleItems.some((item) => !item.disabled && item.href && isCurrentItem(item.href));

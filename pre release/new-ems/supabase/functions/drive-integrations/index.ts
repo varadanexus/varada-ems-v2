@@ -1199,6 +1199,22 @@ async function handleUploadMarketingVendorInvoice(payload: any) {
 
 async function resolveTermsArchiveActor(req: Request, payload: any) {
   const db = adminClient();
+  if (payload.staffSessionToken) {
+    const { data, error } = await db.rpc("ems_local_validate_session", {
+      p_session_token: payload.staffSessionToken
+    });
+    const session = Array.isArray(data) ? data[0] : data;
+    if (error || !session?.app_user_id) throw new Error("The EMS staff session is invalid or expired");
+    return {
+      db,
+      actorType: "staff",
+      actorId: session.app_user_id,
+      displayName: session.display_name || session.email || "EMS Staff",
+      account: session.email || session.app_user_id,
+      label: "EMS staff account",
+      rootGroup: "01 Staff Accounts"
+    };
+  }
   if (payload.externalSessionToken) {
     const { data, error } = await db.rpc("external_portal_validate_session", {
       p_session_token: payload.externalSessionToken

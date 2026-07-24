@@ -31,6 +31,7 @@ import {
 } from "./interiors-portal-auth.js";
 import {
   emsLocalLogin,
+  establishLocalSession,
   getLocalSession,
   restoreLocalSession
 } from "./ems-local-auth.js";
@@ -165,6 +166,34 @@ async function handleExternalLogin(username, password) {
     return { status: "redirecting" };
   }
   return { status: "external_no_dashboard", displayName: row.display_name, userType: row.user_type };
+}
+
+async function otpEndpoint(payload) {
+  const runtime = window.EMS_RUNTIME_CONFIG || {};
+  const response = await fetch(`${runtime.supabaseUrl}/functions/v1/ems-login-otp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": runtime.supabaseAnonKey || "",
+      "Authorization": `Bearer ${runtime.supabaseAnonKey || ""}`
+    },
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "OTP service is unavailable");
+  return data;
+}
+
+export function requestEmsLoginOtp(identifier, { appHash = "", platform = "web" } = {}) {
+  return otpEndpoint({ action: "request", identifier, app_hash: appHash, platform });
+}
+
+export async function verifyEmsLoginOtp(requestId, otp) {
+  clearPortalSessionTokens();
+  const row = await otpEndpoint({ action: "verify", request_id: requestId, otp });
+  await establishLocalSession(row);
+  await redirectToResolvedPortal();
+  return { status: "redirecting" };
 }
 
 // Silent pre-check for an existing session; redirects if one is valid.

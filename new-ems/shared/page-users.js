@@ -7,7 +7,7 @@ import { updateUserSecurity } from "./admin-api.js";
 import { getCurrentAppUser } from "./auth.js";
 import { requestUserPasswordReset } from "./admin-api.js";
 import { sendModuleEmail, sendUserCredentialEmail } from "./email-api.js";
-import { notifyEmsUserCreated } from "./transport-integrations-api.js";
+import { notifyEmsUserCreated, sendEmsAccountAccessReady } from "./transport-integrations-api.js";
 import { sendWhatsAppWorkspaceMessage } from "./whatsapp-api.js";
 import { getSupabaseClient } from "../config/supabase.js";
 
@@ -399,6 +399,7 @@ function renderUserModal(user) {
               <button class="btn" data-reset-user-id="${escAttr(user.id)}">${user.auth_provider === "supabase" ? "Reset Password" : "Set Password"}</button>
               ${user.auth_provider !== "supabase" && canRevealStaffPassword() ? `<button class="btn" data-reveal-user-password="${escAttr(user.id)}" style="border-color:#b45309;color:#e6c87e">Reveal password</button>` : ""}
               <button class="btn" data-resend-user-id="${escAttr(user.id)}">Resend credentials</button>
+              <button class="btn" data-app-access-user-id="${escAttr(user.id)}">Send App Access Message</button>
               <button class="btn" data-terms-user-id="${escAttr(user.id)}">T&amp;C acceptance</button>
               <button class="btn" data-edit-user-id="${escAttr(user.id)}">Edit details</button>
               ${user.auth_provider === "supabase" ? "" : `<button class="btn" data-delete-user-id="${escAttr(user.id)}" style="color:#fca5a5;border-color:rgba(248,113,113,.38)">Delete user</button>`}
@@ -773,6 +774,36 @@ function renderUsers() {
         else showToast("New credentials sent successfully by email and WhatsApp", "success");
       } catch (error) {
         showToast(error?.message || "Failed to resend credentials", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  body.querySelectorAll("button[data-app-access-user-id]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.getAttribute("data-app-access-user-id");
+      const user = allUsers.find((item) => String(item.id) === String(userId));
+      if (!user) return showToast("User record not found", "error");
+      if (String(user.phone || "").replace(/\D/g, "").length < 10) {
+        return showToast("Add a valid registered mobile number before sending the app access message", "error");
+      }
+      const { roleName, divisionName } = userAccessLabels(user);
+      const accessDescription = [roleName, divisionName].filter(Boolean).join(" - ") || "your assigned EMS account";
+      const recipientName = user.display_name || user.email || user.username || "User";
+      if (!window.confirm(`Send the approved EMS app access WhatsApp message to ${recipientName}?`)) return;
+      btn.disabled = true;
+      try {
+        const result = await sendEmsAccountAccessReady({
+          recipientName,
+          recipientPhone: user.phone,
+          accessDescription,
+          sourceModule: "users"
+        });
+        if (result?.whatsapp?.sent) showToast("App access WhatsApp message sent", "success");
+        else showToast(result?.whatsapp?.reason || "App access message was not sent", "warning");
+      } catch (error) {
+        showToast(error?.message || "Failed to send app access message", "error");
       } finally {
         btn.disabled = false;
       }
