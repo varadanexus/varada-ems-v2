@@ -41,17 +41,20 @@
     else links.appendChild(blog);
   })();
 
-  /* Keep the service menu aligned with the expanded nine-service catalogue. */
+  /* Keep the service menu aligned with the grouped service catalogue. */
   document.querySelectorAll(".nav-drop").forEach(function (drop) {
     drop.innerHTML =
+      '<a href="/residential-construction.html">Residential Construction</a>' +
+      '<a href="/commercial-construction.html">Commercial Construction</a>' +
       '<a href="/hospital.html">Hospital Construction</a>' +
+      '<a href="/interior">Interior Design</a>' +
       '<a href="/consultancy.html">Hospital Consultancy</a>' +
-      '<a href="/hr.html">HR</a>' +
-      '<a href="/pr.html">PR</a>' +
-      '<a href="/import-export.html">Import &amp; Export</a>' +
       '<a href="/mining.html">Mining</a>' +
       '<a href="/logistics.html">Logistics</a>' +
+      '<a href="/import-export.html">Import &amp; Export</a>' +
       '<a href="/ecommerce.html">E-Commerce</a>' +
+      '<a href="/hr.html">HR</a>' +
+      '<a href="/pr.html">PR</a>' +
       '<a href="/arbitrage.html">Strategic Arbitrage</a>' +
       '<a href="/services.html" class="nav-drop-all">All Services &rarr;</a>';
   });
@@ -345,6 +348,12 @@
       });
     }
     var serviceImages = {
+      "/residential-construction.html":"/images/service-residential-construction.png",
+      "/commercial-construction.html":"/images/service-commercial-construction.png",
+      "/interior":"/images/service-interior-design.png",
+      "/interior/":"/images/service-interior-design.png",
+      "/interior.html":"/images/service-interior-design.png",
+      "/interior-design.html":"/images/service-interior-design.png",
       "/hospital.html":"/images/service-hospital.png",
       "/consultancy.html":"/images/service-consultancy.png",
       "/hr.html":"/images/service-hr.png",
@@ -362,7 +371,7 @@
         var media = document.createElement("span");
         media.className = "service-card-media";
         media.setAttribute("aria-hidden", "true");
-        media.innerHTML = '<img src="' + (serviceImages[card.getAttribute("href")] || "/images/services-city.png") + '" alt="">';
+        media.innerHTML = '<img src="' + (card.getAttribute("data-image") || serviceImages[card.getAttribute("href")] || "/images/services-city.png") + '" alt="">';
         card.insertBefore(media, card.firstChild);
       }
     });
@@ -372,6 +381,12 @@
 
   /* Detail service pages: image-led cinematic hero with shared parallax language. */
   var serviceDetailImages = {
+    "/residential-construction.html":"/images/service-residential-construction.png",
+    "/commercial-construction.html":"/images/service-commercial-construction.png",
+    "/interior":"/images/service-interior-design.png",
+    "/interior/":"/images/service-interior-design.png",
+    "/interior.html":"/images/service-interior-design.png",
+    "/interior-design.html":"/images/service-interior-design.png",
     "/hospital.html":"/images/service-hospital.png",
     "/consultancy.html":"/images/service-consultancy.png",
     "/hr.html":"/images/service-hr.png",
