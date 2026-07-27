@@ -75,26 +75,46 @@ async function init() {
     const host = qs("#tripDocCreateRows");
     if (!host) return;
     const mkRow = (label, type, mandatory = false) => {
-      const rec = pendingCreateDocs.find((d) => d.document_type === type && (!d.custom_document_name || d.custom_document_name === ""));
-      return `<tr><td>${label}${mandatory ? " <span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Mandatory</span>" : ""}</td><td>${rec ? (rec.is_uploaded ? "Uploaded" : "Pending Upload") : (mandatory ? "Missing" : "Missing")}</td><td><button type='button' class='btn' data-c-up='${type}'>Mark Required</button></td><td><button type='button' class='btn' ${rec?.file_url ? "" : "disabled"}>View</button></td><td><button type='button' class='btn' data-c-rep='${type}' ${rec ? "" : "disabled"}>Replace</button></td><td><button type='button' class='btn btn-danger' data-c-del='${type}' ${rec ? "" : "disabled"}>Delete</button></td></tr>`;
+      const rec = pendingCreateDocs.find((d) => d.document_type === type);
+      const displayName = rec?.custom_document_name ? `${label}: ${rec.custom_document_name}` : label;
+      const status = rec?.pickedFile ? `Ready: ${rec.pickedFile.fileName}` : "Missing";
+      return `<tr><td>${displayName}${mandatory ? " <span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Mandatory</span>" : ""}</td><td>${status}</td><td><button type='button' class='btn' data-c-view='${type}' ${rec?.pickedFile?.previewUrl ? "" : "disabled"}>View</button></td><td><button type='button' class='btn' data-c-up='${type}'>Upload</button></td><td><button type='button' class='btn' data-c-rep='${type}' ${rec?.pickedFile ? "" : "disabled"}>Replace</button></td><td><button type='button' class='btn btn-danger' data-c-del='${type}' ${rec ? "" : "disabled"}>Delete</button></td></tr>`;
     };
-    host.innerHTML = `<div class='table-shell'><table><thead><tr><th>Document</th><th>Status</th><th>Upload</th><th>View</th><th>Replace</th><th>Delete</th></tr></thead><tbody>
+    host.innerHTML = `<div class='table-shell'><table><thead><tr><th>Document</th><th>Status</th><th>View</th><th>Upload</th><th>Replace</th><th>Delete</th></tr></thead><tbody>
       ${mkRow("Weight Bill", "WEIGHT_BILL", true)}
       ${mkRow("Trip Sheet", "TRIP_SHEET", false)}
       ${mkRow("Other Documents", "OTHER", false)}
-    </tbody></table></div><p class="muted" style="margin:.4rem 0 0 0;">These declare which documents the trip needs. Upload the actual files (to Google Drive) from <strong>Details</strong> after the trip is created.</p>`;
+    </tbody></table></div><p class="muted" style="margin:.4rem 0 0 0;">Select and preview files now. They will upload to Google Drive immediately after the trip is created.</p>`;
 
-    host.querySelectorAll("button[data-c-up],button[data-c-rep]").forEach((b) => b.addEventListener("click", () => {
+    host.querySelectorAll("button[data-c-up],button[data-c-rep]").forEach((b) => b.addEventListener("click", async () => {
       const type = b.getAttribute("data-c-up") || b.getAttribute("data-c-rep");
-      const isOther = type === "OTHER";
-      const customName = isOther ? window.prompt("Document Name (required for OTHER)", "") : "";
-      if (isOther && !String(customName || "").trim()) return showToast("Document Name required for OTHER", TOAST_TYPES.ERROR);
-      pendingCreateDocs = pendingCreateDocs.filter((d) => !(d.document_type === type && (type !== "OTHER" || d.custom_document_name === customName)));
-      pendingCreateDocs.push({ document_type: type, custom_document_name: isOther ? customName.trim() : null, original_file_name: null, file_url: null, file_size: null, mime_type: null, remarks: "Placeholder", is_uploaded: false, is_active: true });
+      const existing = pendingCreateDocs.find((d) => d.document_type === type);
+      const isReplace = Boolean(b.getAttribute("data-c-rep"));
+      const customName = type === "OTHER" && !isReplace
+        ? window.prompt("Document Name (required for OTHER)", existing?.custom_document_name || "")
+        : existing?.custom_document_name || null;
+      if (type === "OTHER" && !String(customName || "").trim()) return showToast("Document Name required for OTHER", TOAST_TYPES.ERROR);
+      const pickedFile = await pickFileAsBase64(".pdf,.png,.jpg,.jpeg,.webp");
+      if (!pickedFile) return;
+      if (existing?.pickedFile?.previewUrl) URL.revokeObjectURL(existing.pickedFile.previewUrl);
+      pendingCreateDocs = pendingCreateDocs.filter((d) => d.document_type !== type);
+      pendingCreateDocs.push({
+        document_type: type,
+        custom_document_name: type === "OTHER" ? String(customName).trim() : null,
+        pickedFile,
+        is_active: true
+      });
       renderCreateDocRows();
+    }));
+    host.querySelectorAll("button[data-c-view]").forEach((b) => b.addEventListener("click", () => {
+      const rec = pendingCreateDocs.find((d) => d.document_type === b.getAttribute("data-c-view"));
+      if (!rec?.pickedFile?.previewUrl) return showToast("Select a file to preview", TOAST_TYPES.ERROR);
+      window.open(rec.pickedFile.previewUrl, "_blank", "noopener");
     }));
     host.querySelectorAll("button[data-c-del]").forEach((b) => b.addEventListener("click", () => {
       const type = b.getAttribute("data-c-del");
+      const existing = pendingCreateDocs.find((d) => d.document_type === type);
+      if (existing?.pickedFile?.previewUrl) URL.revokeObjectURL(existing.pickedFile.previewUrl);
       pendingCreateDocs = pendingCreateDocs.filter((d) => d.document_type !== type);
       renderCreateDocRows();
     }));
@@ -210,9 +230,23 @@ async function init() {
     try {
       const created = await createTrip(payload);
       const appUser = await getCurrentAppUser();
+      const documentUploadFailures = [];
       for (const d of pendingCreateDocs) {
-        const doc = await createTripDocument({ division_id: fixedDivisionId, trip_id: created.id, ...d });
-        await addTripTimeline({ trip_id: created.id, status: created.status, remarks: `Document Added: ${doc.document_type} ${doc.stored_file_name || ""}`, changed_by: appUser?.id || null });
+        const doc = await createTripDocument({
+          division_id: fixedDivisionId,
+          trip_id: created.id,
+          document_type: d.document_type,
+          custom_document_name: d.custom_document_name || null,
+          is_uploaded: false,
+          is_active: true
+        });
+        try {
+          const uploaded = await uploadPickedFileIntoDoc(doc, created, d.pickedFile, { appUser });
+          await addTripTimeline({ trip_id: created.id, status: created.status, remarks: `Document Uploaded (staff): ${uploaded.document_type} ${uploaded.original_file_name || ""}`, changed_by: appUser?.id || null });
+        } catch (uploadError) {
+          documentUploadFailures.push(`${d.pickedFile?.fileName || d.document_type}: ${uploadError?.message || "Upload failed"}`);
+          await addTripTimeline({ trip_id: created.id, status: created.status, remarks: `Document upload pending: ${doc.document_type}`, changed_by: appUser?.id || null });
+        }
       }
       await addTripTimeline({ trip_id: created.id, status: "draft", remarks: "Trip created", changed_by: appUser?.id || null });
       await logAuditEvent("trip_create", { moduleCode: MODULES.TRANSPORT_TRIPS, entityType: "transport_trips", entityId: created.id, afterData: created, action: "create" });
@@ -240,6 +274,9 @@ async function init() {
       const meta = qs("#tripCreateMeta");
       if (meta) meta.textContent = `Generated Trip No: ${created.trip_no || "(pending)"}`;
       showToast(`Trip created: ${created.trip_no}`, TOAST_TYPES.SUCCESS);
+      if (documentUploadFailures.length) {
+        showToast(`Trip created, but ${documentUploadFailures.length} document upload(s) remain pending. Open Details to retry.`, TOAST_TYPES.WARNING);
+      }
       try {
         const notification = await notifyTransportTripCreated(created.id);
         if (notification?.whatsapp?.sent) {
@@ -251,6 +288,9 @@ async function init() {
         showToast(`Trip created, but WhatsApp failed: ${notifyError?.message || "Unknown error"}`, TOAST_TYPES.WARNING);
       }
       form.reset();
+      pendingCreateDocs.forEach((d) => {
+        if (d.pickedFile?.previewUrl) URL.revokeObjectURL(d.pickedFile.previewUrl);
+      });
       pendingCreateDocs = [];
       renderCreateDocRows();
       await load();
@@ -277,7 +317,7 @@ async function init() {
         const file = inp.files && inp.files[0];
         if (!file) return done(null);
         const reader = new FileReader();
-        reader.onload = () => done({ base64: String(reader.result || "").split(",").pop() || "", fileName: file.name, mimeType: file.type || "application/octet-stream", size: file.size });
+        reader.onload = () => done({ base64: String(reader.result || "").split(",").pop() || "", fileName: file.name, mimeType: file.type || "application/octet-stream", size: file.size, previewUrl: URL.createObjectURL(file) });
         reader.onerror = () => done(null);
         reader.readAsDataURL(file);
       }, { once: true });
@@ -288,13 +328,9 @@ async function init() {
     });
   }
 
-  // Staff-side upload: push the chosen file to Drive, then link it onto the doc
-  // row (is_uploaded=true, auto-approved because staff is the reviewer).
-  async function staffUploadIntoDoc(docRow, tripObj, { isReplace = false } = {}) {
-    const picked = await pickFileAsBase64();
-    if (!picked || !picked.base64) return false;
-    showToast("Uploading to Drive…", TOAST_TYPES.INFO);
-    const appUser = await getCurrentAppUser();
+  async function uploadPickedFileIntoDoc(docRow, tripObj, picked, { isReplace = false, appUser = null } = {}) {
+    if (!picked?.base64) throw new Error("Select a valid file");
+    const uploader = appUser || await getCurrentAppUser();
     const res = await uploadDocumentToDrive({
       category: "TRIP_DOCUMENT",
       documentType: docRow.document_type,
@@ -306,9 +342,9 @@ async function init() {
       fileName: `${docRow.stored_file_name || docRow.document_type}-${picked.fileName}`,
       mimeType: picked.mimeType,
       divisionId: fixedDivisionId,
-      uploadedBy: appUser?.id || null
+      uploadedBy: uploader?.id || null
     }, picked.base64);
-    const updated = await updateTripDocument(docRow.id, {
+    return await updateTripDocument(docRow.id, {
       original_file_name: picked.fileName,
       mime_type: picked.mimeType,
       file_size: picked.size || null,
@@ -319,10 +355,22 @@ async function init() {
       approval_status: "approved",
       approved_at: new Date().toISOString(),
       uploaded_by_actor_type: "staff",
-      uploaded_by_actor_id: appUser?.id || null,
+      uploaded_by_actor_id: uploader?.id || null,
       remarks: isReplace ? "Replaced by staff" : "Uploaded by staff"
     });
-    return updated;
+  }
+
+  // Staff-side upload: push the chosen file to Drive, then link it onto the doc
+  // row (is_uploaded=true, auto-approved because staff is the reviewer).
+  async function staffUploadIntoDoc(docRow, tripObj, { isReplace = false } = {}) {
+    const picked = await pickFileAsBase64();
+    if (!picked || !picked.base64) return false;
+    showToast("Uploading to Drive…", TOAST_TYPES.INFO);
+    try {
+      return await uploadPickedFileIntoDoc(docRow, tripObj, picked, { isReplace });
+    } finally {
+      if (picked.previewUrl) URL.revokeObjectURL(picked.previewUrl);
+    }
   }
 
   async function openDetails(id) {

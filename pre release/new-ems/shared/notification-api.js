@@ -1,6 +1,7 @@
 import { MODULES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { fanoutNotificationEmail } from "./email-api.js";
+import { deliverPushNotification } from "./push-notifications.js";
 
 function client() {
   return getSupabaseClient();
@@ -126,6 +127,16 @@ export async function dispatchNotification(payload = {}) {
       await fanoutNotificationEmail(data);
     } catch (emailError) {
       console.warn("Notification email fanout failed:", emailError?.message || emailError);
+    }
+  }
+
+  // Web Push is also best-effort. The database notification remains the source
+  // of truth even when an individual device is offline or has revoked consent.
+  if (data) {
+    try {
+      await deliverPushNotification(data);
+    } catch (pushError) {
+      console.warn("Notification push delivery failed:", pushError?.message || pushError);
     }
   }
 

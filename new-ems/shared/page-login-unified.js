@@ -160,7 +160,7 @@ function renderMainForm(app) {
     <style>${SHARED_CSS}</style>
     <div class="ul-shell">
       <div class="ul-card">
-        <h1 class="ul-brand">Varada <span>EMS 2.0</span></h1>
+        <h1 class="ul-brand">Varada <span>Nexus</span></h1>
         <p class="ul-subtitle">Secure access for staff, clients, transporters, vendors, and partners.</p>
 
         ${mtInfo ? `
@@ -202,7 +202,7 @@ function renderPicker(app) {
     <style>${SHARED_CSS}</style>
     <div class="ul-shell">
       <div class="ul-card">
-        <h1 class="ul-brand">Varada <span>EMS 2.0</span></h1>
+        <h1 class="ul-brand">Varada <span>Nexus</span></h1>
         <p class="ul-subtitle">
           Multiple accounts found for <strong>${escHtml(id)}</strong>.
           Choose which to sign in to:
@@ -227,7 +227,7 @@ function renderExternalNoDashboard(app) {
     <style>${SHARED_CSS}</style>
     <div class="ul-shell">
       <div class="ul-card">
-        <h1 class="ul-brand">Varada <span>EMS 2.0</span></h1>
+        <h1 class="ul-brand">Varada <span>Nexus</span></h1>
         <h2 style="font-size:1.1rem;margin:.5rem 0;">Welcome, ${escHtml(displayName || "Portal User")}</h2>
         <p style="color:#8ea3bd;font-size:.875rem;margin:0 0 1.25rem;">You have been logged in successfully.</p>
         <div style="background:rgba(245,193,108,.06);border:1px solid rgba(245,193,108,.22);border-radius:8px;padding:.9rem 1rem;font-size:.875rem;color:#f5c16c;line-height:1.6;">

@@ -1,4 +1,4 @@
-export const APP_NAME = "EMS 2.0";
+export const APP_NAME = "Varada Nexus";
 
 export const ROUTES = {
   ROOT: "/new-ems/index.html",
@@ -81,6 +81,12 @@ export const ROUTES = {
   // Compatibility alias: Digital Marketing & Services portals use the main login only.
   MARKETING_PORTAL_LOGIN: "/login.html",
   NOTIFICATIONS_CENTER: "/new-ems/modules/notifications-center/index.html",
+  NOTIFICATION_STUDIO: "/new-ems/modules/notification-studio/index.html",
+  NOTIFICATION_CAMPAIGNS: "/new-ems/modules/notification-campaigns/index.html",
+  NOTIFICATION_COMPOSE: "/new-ems/modules/notification-compose/index.html",
+  NOTIFICATION_TEMPLATES: "/new-ems/modules/notification-templates/index.html",
+  NOTIFICATION_ANALYTICS: "/new-ems/modules/notification-analytics/index.html",
+  SUPPORT_TICKETS: "/new-ems/modules/support-tickets/index.html",
   USERS: "/new-ems/modules/users/index.html",
   ROLES: "/new-ems/modules/roles/index.html",
   SETTINGS: "/new-ems/modules/settings/index.html",
@@ -233,6 +239,7 @@ export const MODULES = {
   MARKETING: "marketing",
   MARKETING_COMMAND_CENTER: "marketing-command-center",
   NOTIFICATIONS_CENTER: "notifications-center",
+  SUPPORT_TICKETS: "support-tickets",
   USERS: "users",
   ROLES: "roles",
   SETTINGS: "settings",
@@ -326,9 +333,11 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.ACCOUNTS, title: "Accounts", subtitle: "Finance operations cockpit", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
   { module: MODULES.DIGITAL_SERVICES, title: "Digital Marketing & Services", subtitle: "Lead-to-billing delivery, white-label partners, client portals, and queries", href: ROUTES.DIGITAL_SERVICES_DASHBOARD },
   { module: MODULES.LEGAL, title: "Legal", subtitle: "Drafting, KYC, signing evidence and secure archive", href: ROUTES.LEGAL_COMMAND_CENTER },
+  { module: MODULES.SUPPORT_TICKETS, title: "Support", subtitle: "EMS help desk, ticket triage, assignment and resolution", href: ROUTES.SUPPORT_TICKETS },
   { module: MODULES.WHATSAPP, title: "WhatsApp", subtitle: "Inbox, templates, Twilio health and outbound delivery", href: ROUTES.WHATSAPP_COMMAND_CENTER },
   { module: MODULES.EMAIL, title: "Email", subtitle: "Compose, templates, inbox, history and ZeptoMail delivery", href: ROUTES.EMAIL_COMMAND_CENTER },
   { module: MODULES.MEETINGS, title: "Meetings", subtitle: "Scheduling, waiting room control, and Jitsi video sessions", href: ROUTES.MEETINGS_COMMAND_CENTER },
+  { module: MODULES.NOTIFICATIONS_CENTER, title: "Notification Studio", subtitle: "Custom campaigns, scheduling, staff and portal push analytics", href: ROUTES.NOTIFICATION_STUDIO },
   { module: MODULES.SETTINGS, title: "Administration", subtitle: "System controls and policy", href: ROUTES.SETTINGS },
   { module: MODULES.MASTER_CLIENTS, title: "Master Data", subtitle: "Reference entities and codes", href: ROUTES.MASTER_CLIENTS }
 ];
@@ -350,7 +359,9 @@ export const WORKSPACES = {
   WHATSAPP: "whatsapp",
   EMAIL: "email",
   MEETINGS: "meetings",
+  NOTIFICATIONS: "notifications",
   DIGITAL_SERVICES: "digital-services",
+  SUPPORT: "support",
   // Compatibility alias: marketing operations live in this single workspace.
   MARKETING: "digital-services"
 };

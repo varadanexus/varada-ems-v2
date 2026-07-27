@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const DEFAULT_TEMPLATE_SIDS = {
+  ems_account_access_ready: "HXd0c2969823293635ae653bbafcdb3e7f",
   trip_update_v1: "HXd8a5ab2b0295e9271e04037448eda159",
   expense_update_v1: "HX1e0d2241c09a5e04509aae900777837c",
   payment_update_v1: "HX599c0b958b071caac666e8826f9a7995",
@@ -74,6 +75,7 @@ async function requireStaffCaller(req: Request, admin: any) {
 
 function templateSidFor(alias: string) {
   const envMap: Record<string, string> = {
+    ems_account_access_ready: env("EMS_ACCOUNT_ACCESS_READY_CONTENT_SID"),
     trip_update_v1: env("TRANSPORT_TWILIO_TRIP_CONTENT_SID"),
     expense_update_v1: env("TRANSPORT_TWILIO_EXPENSE_CONTENT_SID"),
     payment_update_v1: env("TRANSPORT_TWILIO_PAYMENT_CONTENT_SID"),
@@ -84,6 +86,12 @@ function templateSidFor(alias: string) {
 }
 
 function fallbackMessage(alias: string, variables: Record<string, string>) {
+  if (alias === "ems_account_access_ready") {
+    return [
+      `Hello ${variables["1"] || "User"}, your Varada Nexus EMS access for ${variables["2"] || "your assigned account"} is ready.`,
+      "Use the secure page below to sign in or install the Varada Nexus app for your assigned account."
+    ].join("\n\n");
+  }
   if (alias === "trip_update_v1") {
     return [
       `Hello ${variables["1"] || "Transporter"},`,
@@ -529,6 +537,42 @@ async function notifyEmsUserCreated(body: any) {
   };
 }
 
+async function sendEmsAccountAccessReady(body: any) {
+  const phone = body.recipientPhone || "";
+  const recipientName = body.recipientName || body.displayName || body.username || "User";
+  const accessDescription = String(body.accessDescription || body.portalType || body.roleName || "your assigned account").trim();
+  const variables = {
+    "1": recipientName,
+    "2": accessDescription
+  };
+  const result = await sendTwilioTemplateMessage({
+    toPhone: phone,
+    templateAlias: "ems_account_access_ready",
+    variables
+  });
+  if (result?.sent) {
+    const admin = adminClient();
+    await recordWhatsAppDelivery(admin, {
+      phone,
+      name: recipientName,
+      templateAlias: "ems_account_access_ready",
+      sourceModule: body.sourceModule || "users",
+      sourceEvent: "ems_account_access_message_sent",
+      messageText: renderedTemplateMessage("ems_account_access_ready", variables),
+      renderedPayload: variables,
+      sid: result.sid,
+      status: "sent"
+    });
+  }
+  return {
+    event: "ems_account_access_message_sent",
+    recipientName,
+    recipientPhone: normalizePhone(phone),
+    accessDescription,
+    whatsapp: result
+  };
+}
+
 async function loadClientBillSnapshot(admin: any, billId: string) {
   const { data: bill, error } = await admin.from("transport_client_bills")
     .select("id,bill_no,transport_client_id,invoice_total,net_receivable").eq("id", billId).is("deleted_at", null).maybeSingle();
@@ -613,6 +657,9 @@ Deno.serve(async (req) => {
     }
     if (action === "notify_ems_user_created") {
       return json(await notifyEmsUserCreated(body));
+    }
+    if (action === "send_ems_account_access_ready") {
+      return json(await sendEmsAccountAccessReady(body));
     }
     if (action === "notify_bill_created") {
       if (!body.clientBillId) return json({ error: "clientBillId is required." }, 400);

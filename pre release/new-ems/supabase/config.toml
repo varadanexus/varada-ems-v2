@@ -403,10 +403,22 @@ static_files = [
 [functions.whatsapp-integrations]
 verify_jwt = false
 
+[functions.ems-login-otp]
+verify_jwt = false
+
 # Meeting guest join links and host JWT minting share one function. Public guest
 # joins must work without an authenticated EMS session, while host tokens are
 # authorized server-side based on the caller's EMS roles.
 [functions.meetings-integrations]
+verify_jwt = false
+
+# Authentication is resolved through the database so this also supports the
+# EMS local-staff JWT flow in addition to Supabase Auth sessions.
+[functions.push-notifications]
+verify_jwt = false
+
+# Scheduled notification campaigns authenticate with a dedicated cron secret.
+[functions.notification-campaigns]
 verify_jwt = false
 
   # [edge_runtime.secrets]

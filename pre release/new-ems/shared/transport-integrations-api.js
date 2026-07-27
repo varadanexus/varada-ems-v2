@@ -42,6 +42,10 @@ export function notifyEmsUserCreated(payload) {
   return transportIntegration("notify_ems_user_created", payload);
 }
 
+export function sendEmsAccountAccessReady(payload) {
+  return transportIntegration("send_ems_account_access_ready", payload);
+}
+
 export function notifyTransportBillGenerated(clientBillId) {
   return transportIntegration("notify_bill_created", { clientBillId });
 }

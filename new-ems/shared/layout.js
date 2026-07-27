@@ -10,7 +10,10 @@ import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 import { initNotificationShell } from "./notification-ui.js?v=notifications-1";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
-import { allowDeviceInternalNavigation, enforceDeviceUnlock, enforceMandatorySecuritySetup, installDeviceRelock } from "./device-security.js";
+import { allowDeviceInternalNavigation, enforceDeviceUnlock, enforceMandatorySecuritySetup, installDeviceRelock, isMobileSecurityDevice } from "./device-security.js";
+import { offerWebPushSetup } from "./push-notifications.js";
+import { enforceNativeAppUpdate } from "./native-app-update.js";
+import { initSupportDesk } from "./support-desk.js?v=support-1";
 
 const NAV_TRANSITION_KEY = "ems_nav_pending";
 const FINANCIAL_TEXT_PATTERN = /\b(amount|rate|billing|bill(?:s|ing)?|invoice|payment|receipt|credit\s*note|receivable|payable|revenue|cost|margin|gst|tax|debit|credit|balance|outstanding|price|budget|expense|freight\s*charge|commission|penalty|settlement|quotation|quote|estimate|boq)\b/i;
@@ -200,7 +203,9 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
         ? "Interiors"
         : workspace === WORKSPACES.LEGAL
           ? "Legal"
-          : (workspace === WORKSPACES.WHATSAPP || workspace === WORKSPACES.EMAIL || workspace === WORKSPACES.MEETINGS)
+          : workspace === WORKSPACES.SUPPORT
+            ? "Support"
+          : (workspace === WORKSPACES.WHATSAPP || workspace === WORKSPACES.EMAIL || workspace === WORKSPACES.MEETINGS || workspace === WORKSPACES.NOTIFICATIONS)
             ? "Communications"
             : workspace === WORKSPACES.DIGITAL_SERVICES
               ? "Digital Marketing & Services"
@@ -260,6 +265,8 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
 }
 
 export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, sidebarless = false, workspace = WORKSPACES.ADMIN }) {
+  const appVersionReady = await enforceNativeAppUpdate();
+  if (!appVersionReady) return;
   initTheme();
   if (shouldShowInitialTransition()) {
     document.body.classList.add("page-transition-active");
@@ -293,12 +300,14 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
     return;
   }
 
-  const deviceUnlocked = await enforceDeviceUnlock(appUser, logout);
-  if (!deviceUnlocked) return;
-  installDeviceRelock(appUser);
+  if (isMobileSecurityDevice()) {
+    const deviceUnlocked = await enforceDeviceUnlock(appUser, logout);
+    if (!deviceUnlocked) return;
+    installDeviceRelock(appUser);
 
-  const securityReady = await enforceMandatorySecuritySetup(appUser, logout);
-  if (!securityReady) return;
+    const securityReady = await enforceMandatorySecuritySetup(appUser, logout);
+    if (!securityReady) return;
+  }
 
   try {
     await enforceTermsAcceptance();
@@ -306,6 +315,13 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
     showToast(error?.message || "Terms and Conditions could not be loaded. Access remains blocked.", TOAST_TYPES.ERROR);
     return;
   }
+
+  // Web Push permission must follow a user gesture. Once the authenticated
+  // workspace is ready, offer a single, non-blocking activation action for
+  // desktop browsers and installed iOS/Android PWAs.
+  offerWebPushSetup().catch((error) => {
+    console.warn("Web notification setup could not be offered.", error);
+  });
 
   // Current user's role codes via SECURITY DEFINER RPC (works for non-admins whose
   // RLS blocks reading the roles table); falls back to the direct lookup.
@@ -355,7 +371,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
 
   app.innerHTML = `
     <div class="app-shell ${sidebarless ? "sidebarless" : ""}">
-      ${sidebarless ? "" : renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace)}
+      ${sidebarless ? "" : `${renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace)}<div class="app-sidebar-scrim" id="appSidebarScrim" aria-hidden="true"></div>`}
       <div class="app-main">
         ${renderNavbar(session?.user?.email || "", navbarRole, { sidebarless })}
         <section class="page-head">
@@ -377,6 +393,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   installFinancialRedaction(qs("#pageContent"));
   initNotificationShell().catch(() => {});
   initLiveChat().catch(() => {});
+  initSupportDesk({ appUser, roleCodes, divisionId: divisionContext?.divisionId || null });
   requestAnimationFrame(() => {
     app.classList.add("page-enter-active");
     finishNavigationTransition();
@@ -388,6 +405,7 @@ function bindGlobalActions() {
   const shell = qs(".app-shell");
   const menuToggle = qs("#menuToggle");
   const sidebar = qs("#appSidebar");
+  const sidebarScrim = qs("#appSidebarScrim");
   const logoutButton = qs("#logoutBtn");
   const adminMenuBtn = qs("#adminMenuBtn");
 
@@ -397,9 +415,18 @@ function bindGlobalActions() {
     if (!shell || !sidebar) return;
     shell.classList.toggle("sidebar-collapsed", state === "collapsed" && !isMobile());
     sidebar.classList.toggle("open", state === "open" && isMobile());
+    sidebarScrim?.setAttribute("aria-hidden", state === "open" && isMobile() ? "false" : "true");
   };
 
-  const saved = localStorage.getItem(KEY) || "expanded";
+  const closeMobileSidebar = () => {
+    if (!isMobile() || !sidebar) return;
+    sidebar.classList.remove("open");
+    sidebarScrim?.setAttribute("aria-hidden", "true");
+  };
+
+  // A mobile drawer is temporary UI state. Never restore it on a new page,
+  // otherwise opening one module leaves the drawer covering the next module.
+  const saved = isMobile() ? "closed" : (localStorage.getItem(KEY) || "expanded");
   applyState(saved);
 
   const navStateKey = `ems_nav_sections_${sidebar?.dataset.workspace || "admin"}`;
@@ -415,9 +442,8 @@ function bindGlobalActions() {
 
   menuToggle?.addEventListener("click", () => {
     if (isMobile()) {
-      const next = sidebar?.classList.contains("open") ? "closed" : "open";
-      localStorage.setItem(KEY, next);
-      applyState(next);
+      sidebar?.classList.toggle("open");
+      sidebarScrim?.setAttribute("aria-hidden", sidebar?.classList.contains("open") ? "false" : "true");
       return;
     }
     const next = shell?.classList.contains("sidebar-collapsed") ? "expanded" : "collapsed";
@@ -426,6 +452,7 @@ function bindGlobalActions() {
   });
 
   adminMenuBtn?.addEventListener("click", () => {
+    allowDeviceInternalNavigation();
     startNavigationTransition();
     window.location.assign(ROUTES.SETTINGS);
   });
@@ -435,6 +462,7 @@ function bindGlobalActions() {
     if (!(target instanceof Element)) return;
     const anchor = target.closest("a[href]");
     if (!anchor) return;
+    if (sidebar?.contains(anchor)) closeMobileSidebar();
     const href = anchor.getAttribute("href") || "";
     if (!href || href.startsWith("#") || anchor.getAttribute("target") === "_blank") return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -445,24 +473,24 @@ function bindGlobalActions() {
     startNavigationTransition();
   }, { capture: true });
 
-  document.addEventListener("click", (e) => {
+  const dismissMobileSidebar = (e) => {
     if (!isMobile() || !sidebar?.classList.contains("open")) return;
-    const t = e.target;
-    if (t instanceof Element && !sidebar.contains(t) && !menuToggle?.contains(t)) {
-      localStorage.setItem(KEY, "closed");
-      applyState("closed");
-    }
-  });
+    const target = e.target;
+    if (!(target instanceof Element) || sidebar.contains(target) || menuToggle?.contains(target)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    closeMobileSidebar();
+  };
+  document.addEventListener("click", dismissMobileSidebar, { capture: true });
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && isMobile() && sidebar?.classList.contains("open")) {
-      localStorage.setItem(KEY, "closed");
-      applyState("closed");
+      closeMobileSidebar();
     }
   });
 
   window.addEventListener("resize", () => {
-    const state = localStorage.getItem(KEY) || "expanded";
+    const state = isMobile() ? "closed" : (localStorage.getItem(KEY) || "expanded");
     applyState(state);
   });
 
@@ -503,6 +531,7 @@ function bindGlobalSearch(accessibleModules = []) {
   const go = (href) => {
     if (!href) return;
     hide();
+    allowDeviceInternalNavigation();
     startNavigationTransition();
     window.location.assign(href);
   };

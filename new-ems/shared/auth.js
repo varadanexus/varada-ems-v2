@@ -3,6 +3,7 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { getAllowedModulesForRoles, getAppUserByAuthId, getUserRoleCodes, getMyAllowedModules } from "./admin-api.js";
 import { logAuthEvent } from "./audit.js";
 import { getLocalSession, restoreLocalSession, emsLocalLogout, clearLocalAuthState } from "./ems-local-auth.js";
+import { disablePushNotifications } from "./push-notifications.js";
 
 function debugLog(message, data = null) {
   if (!window.EMS_DEBUG_AUTH_FLOW) return;
@@ -250,6 +251,7 @@ export async function loginWithPassword(email, password) {
 export async function logout() {
   const isLoginPage = window.location.pathname.endsWith("/new-ems/login.html") || window.location.pathname.endsWith("login.html");
   sessionStorage.removeItem("ems_terms_owner_bypass_session");
+  await disablePushNotifications().catch(() => {});
 
   // Clear BOTH session types so no stale session can hijack the next login.
   const local = getLocalSession();
@@ -271,6 +273,7 @@ export async function logout() {
 
 export async function signOutSessionOnly() {
   sessionStorage.removeItem("ems_terms_owner_bypass_session");
+  await disablePushNotifications().catch(() => {});
   const local = getLocalSession();
   if (local?.authUserId) {
     await emsLocalLogout();

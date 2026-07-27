@@ -31,6 +31,26 @@ function storeLocalSession(data) {
   try { localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(data)); } catch {}
 }
 
+// Bind a server-issued EMS session (password or OTP) to the normal local-staff
+// JWT flow. Keeping this in one place guarantees identical RLS/session handling.
+export async function establishLocalSession(row) {
+  if (!row?.session_token || !row?.auth_user_id) throw new Error("Could not establish EMS session");
+  clearLocalAuthToken();
+  try { await getSupabaseClient().auth.signOut({ scope: "local" }); } catch {}
+  const minted = await mintToken(row.session_token);
+  const session = {
+    sessionToken: row.session_token,
+    appUserId: row.app_user_id,
+    authUserId: row.auth_user_id,
+    displayName: row.display_name,
+    email: row.email
+  };
+  storeLocalSession(session);
+  setLocalAuthToken(minted.access_token);
+  scheduleRefresh(minted.expires_in);
+  return session;
+}
+
 function clearLocalSessionStorage() {
   try { localStorage.removeItem(LOCAL_SESSION_KEY); } catch {}
 }
@@ -78,19 +98,7 @@ export async function emsLocalLogin(identifier, password) {
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.session_token) throw new Error("Invalid credentials");
 
-  const minted = await mintToken(row.session_token);
-
-  const session = {
-    sessionToken: row.session_token,
-    appUserId: row.app_user_id,
-    authUserId: row.auth_user_id,
-    displayName: row.display_name,
-    email: row.email
-  };
-  storeLocalSession(session);
-  setLocalAuthToken(minted.access_token);
-  scheduleRefresh(minted.expires_in);
-  return session;
+  return establishLocalSession(row);
 }
 
 // ─── Restore on page load / refresh timer ───────────────────────────────────

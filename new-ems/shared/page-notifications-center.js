@@ -118,7 +118,7 @@ function renderPage() {
         <div class="notification-section-head">
           <div>
             <h3>My Inbox</h3>
-            <p class="muted">Read, dismiss, and search your live EMS notifications.</p>
+            <p class="muted">Read, dismiss, and search your live Varada Nexus notifications.</p>
           </div>
           <button class="btn btn-ghost" id="notificationCenterMarkAllBtn" type="button">Mark All Read</button>
         </div>

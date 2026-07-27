@@ -14,10 +14,11 @@ try {
 }
 
 if (manifest) {
-  assert(manifest.name === "Varada Nexus EMS", "Manifest name is missing or incorrect.");
+  assert(manifest.name === "Varada Nexus" && manifest.short_name === "Varada Nexus", "Manifest brand name is missing or incorrect.");
   assert(manifest.start_url === "/login.html", "Manifest must start at the canonical login page.");
   assert(manifest.scope === "/", "Manifest scope must include both login and EMS modules.");
   assert(manifest.display === "standalone", "Manifest display must be standalone.");
+  assert(JSON.stringify(manifest.display_override) === JSON.stringify(["standalone"]), "Manifest display override must not fall back to browser minimal UI.");
   assert(Array.isArray(manifest.icons) && manifest.icons.some((icon) => icon.sizes === "192x192"), "Manifest needs a 192px icon.");
   assert(Array.isArray(manifest.icons) && manifest.icons.some((icon) => icon.sizes === "512x512"), "Manifest needs a 512px icon.");
 }
@@ -55,6 +56,18 @@ assert(login.includes('rel="manifest" href="/new-ems/manifest.webmanifest"'), "C
 assert(login.includes('name="mobile-web-app-capable" content="yes"'), "Canonical login page is missing the standard mobile web app capability meta tag.");
 assert(runtime.includes('navigator.serviceWorker') === false, "Service worker registration should remain isolated in pwa.js.");
 assert(read("new-ems/shared/pwa.js").includes('navigator.serviceWorker.register("/sw.js", { scope: "/" })'), "PWA client does not register the root service worker.");
+assert(read("new-ems/shared/pwa.js").includes('classList.add("ems-standalone")'), "PWA client must identify the installed standalone surface.");
+assert(read("new-ems/shared/pwa.js").includes('Install Varada Nexus'), "PWA install prompts must use the Varada Nexus brand.");
+assert(read("sw.js").includes('payload.title || "Varada Nexus"'), "Push notifications must default to the Varada Nexus brand.");
+assert(read("new-ems/config/runtime.js").includes('"Varada Nexus"'), "Module metadata must use the Varada Nexus brand.");
+assert(read("new-ems/shared/native-app-update.js").includes("isNativeAndroid()"), "Mandatory APK updates must remain restricted to native Android.");
+assert(read("login.html").includes('class="login-app-download"'), "Public login must expose the Android app download option.");
+assert(read("assets/site.css").includes("body.login-page .site-nav"), "Installed login must hide the public website navigation.");
+assert(read("new-ems/shared/device-security.js").includes("windows nt|cros"), "Mobile security detection must exclude touch-enabled PCs.");
+assert(read("new-ems/shared/device-security.js").includes("consumeInternalNavigation(appUser)"), "Device unlock may only be bypassed for a deliberate in-app navigation.");
+assert(!read("new-ems/shared/device-security.js").includes("UNLOCK_WINDOW_MS"), "A timed unlock must not survive an installed-app relaunch.");
+assert(read("new-ems/shared/device-security.js").includes("requestAnimationFrame(() => attemptUnlock())"), "An installed mobile app relaunch must invoke device verification automatically.");
+assert((read("new-ems/shared/layout.js").match(/allowDeviceInternalNavigation\(\)/g) || []).length >= 3, "Every programmatic in-app navigation must preserve the current device unlock exactly once.");
 assert(serviceWorker.includes('request.method !== "GET"'), "Service worker must ignore write requests.");
 assert(serviceWorker.includes('url.origin !== self.location.origin'), "Service worker must ignore cross-origin API traffic.");
 assert(serviceWorker.includes('url.search === ""'), "Service worker must not cache query-string assets.");
@@ -67,9 +80,13 @@ assert(serviceWorker.includes('action: "open"'), "Push notifications should expo
 assert(serviceWorker.indexOf("existing.navigate(target)") < serviceWorker.indexOf("existing.focus()"), "Notification clicks must navigate before focusing to avoid the biometric relock race.");
 assert(pushClient.includes("userVisibleOnly: true"), "Push subscriptions must require user-visible notifications.");
 assert(pushClient.includes("upsert_my_push_subscription"), "Push subscriptions must be bound to the signed-in EMS user.");
+assert(pushClient.includes("offerWebPushSetup"), "Authenticated web and iOS PWA users need a notification activation prompt.");
+assert(pushClient.includes("Install EMS for background alerts"), "iOS users need Home Screen installation guidance before Web Push can be enabled.");
+assert(layout.includes("offerWebPushSetup()"), "The authenticated EMS layout must offer Web Push setup after sign-in.");
 assert(deviceSecurity.includes('authenticatorAttachment: "platform"'), "Device lock must use the device platform authenticator.");
 assert(deviceSecurity.includes('userVerification: "required"'), "Device lock must require biometric/PIN user verification.");
 assert(deviceSecurity.includes("enforceMandatorySecuritySetup"), "Protected EMS users must be gated until device lock and push are enabled.");
+assert(layout.includes("if (isMobileSecurityDevice())"), "Mandatory biometric and push setup must remain mobile-only.");
 assert(!layout.includes('label.closest(".form-group,.form-field,.field,.input-group,[data-field]") || label.parentElement'), "Financial redaction must never fall back to removing an entire flat form.");
 
 if (errors.length) {

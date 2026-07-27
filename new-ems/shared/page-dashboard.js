@@ -28,7 +28,8 @@ const QUICK_ACTIONS = [
   { module: MODULES.TRANSPORTATION, title: "Transportation", href: ROUTES.TRANSPORT_DASHBOARD },
   { module: MODULES.INTERIORS, title: "Interiors", href: ROUTES.INTERIORS_DASHBOARD },
   { module: MODULES.MEETINGS, title: "Meetings", href: ROUTES.MEETINGS_COMMAND_CENTER },
-  { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD }
+  { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
+  { module: MODULES.SUPPORT_TICKETS, title: "Support", href: ROUTES.SUPPORT_TICKETS }
 ];
 
 const DEVELOPER_ITEMS = [
@@ -139,8 +140,7 @@ async function init() {
     const adminCards = isAuditor ? [] : ADMIN_ITEMS.filter((x) => allowedModules.includes(x.module));
     const configCards = GLOBAL_CONFIG_ITEMS.filter((x) => allowedModules.includes(x.module));
     const financeCards = [
-      { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD, description: "Journals, receivables, payables, treasury", tone: "active" },
-      ...(!isAuditor ? [{ module: MODULES.CENTRAL_ACCOUNTS_REPORTING, title: "Reports", href: ROUTES.CENTRAL_ACCOUNTS_REPORTING, description: "Finance reporting and statements", tone: "active" }] : [])
+      { module: MODULES.ACCOUNTS, title: "Central Accounts", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD, description: "Journals, receivables, payables, treasury", tone: "active" }
     ].filter((x) => allowedModules.includes(x.module));
     const developerCards = isAuditor ? [] : DEVELOPER_ITEMS.filter((x) => allowedModules.includes(x.module));
     const quickActions = QUICK_ACTIONS.filter((x) => allowedModules.includes(x.module));
@@ -149,10 +149,11 @@ async function init() {
       : [];
     // Grouped domain sections: Communications (WhatsApp + Email) and Legal each
     // get their own heading; Central Accounts is surfaced as the Finance section.
-    const COMMS_MODULES = [MODULES.WHATSAPP, MODULES.EMAIL, MODULES.MEETINGS];
+    const COMMS_MODULES = [MODULES.WHATSAPP, MODULES.EMAIL, MODULES.MEETINGS, MODULES.NOTIFICATIONS_CENTER];
     const communicationCards = activeBusinessCards.filter((m) => COMMS_MODULES.includes(m.module));
     const legalCards = activeBusinessCards.filter((m) => m.module === MODULES.LEGAL);
-    const groupedModules = [...COMMS_MODULES, MODULES.LEGAL];
+    const supportCards = activeBusinessCards.filter((m) => m.module === MODULES.SUPPORT_TICKETS);
+    const groupedModules = [...COMMS_MODULES, MODULES.LEGAL, MODULES.SUPPORT_TICKETS];
     const nonGroupedBusinessCards = activeBusinessCards.filter((m) => !groupedModules.includes(m.module));
     const launchCards = [...nonGroupedBusinessCards];
     // This KPI reports active business divisions only. Finance, Legal,
@@ -174,11 +175,13 @@ async function init() {
     const activeModulesHtml = launchCards.map(renderModuleCard).join("");
     const communicationsHtml = communicationCards.map(renderModuleCard).join("");
     const legalHtml = legalCards.map(renderModuleCard).join("");
+    const supportHtml = supportCards.map(renderModuleCard).join("");
     const financeHtml = financeCards.map(renderModuleCard).join("");
     // Legal and Finance are single-card scopes, so render them side by side.
     const sideSections = [];
     if (legalHtml) sideSections.push({ title: "Legal", note: "Drafting, signing evidence &amp; secure archive", html: legalHtml });
     if (financeHtml) sideSections.push({ title: "Finance", note: "Central Accounts &amp; financial reporting", html: financeHtml });
+    if (supportHtml) sideSections.push({ title: "Support", note: "EMS help desk &amp; ticket operations", html: supportHtml });
     const sideCols = Math.max(Math.min(sideSections.length, 2), 1);
     const sideSectionsHtml = sideSections.map((s) => `
       <div class="cc-scope-col">
@@ -282,14 +285,27 @@ async function init() {
           .cc-panels{grid-template-columns:1fr;}
         }
         @media (max-width:760px){
-          .cc-bar-grid{grid-template-columns:1fr;gap:.9rem;}
+          .cc-dashboard,.cc-bar,.cc-bar-grid{width:100%;max-width:100%;min-width:0;}
+          .cc-bar{padding:1rem;}
+          .cc-bar-grid{grid-template-columns:minmax(0,1fr);gap:.9rem;}
+          .cc-ident{width:100%;max-width:100%;min-width:0;}
           .cc-ident-copy h2{white-space:normal;font-size:1.22rem;}
           .cc-ident-copy p{white-space:normal;}
-          .cc-user{width:100%;max-width:none;justify-self:stretch;}
-          .cc-actions-row{flex-direction:column;align-items:flex-start;gap:.5rem;}
+          .cc-user{width:100%;max-width:100%;min-width:0;justify-self:stretch;overflow:hidden;}
+          .cc-user-copy{width:100%;max-width:100%;min-width:0;}
+          .cc-actions-row{width:100%;max-width:100%;min-width:0;flex-direction:column;align-items:stretch;gap:.5rem;}
+          .cc-actions{display:grid;width:100%;max-width:100%;min-width:0;grid-template-columns:repeat(2,minmax(0,1fr));}
+          .cc-actions .pm-pill{width:100%;min-width:0;height:auto;min-height:40px;padding:.45rem .65rem;white-space:normal;text-align:center;line-height:1.2;}
           .cc-modules-grid{grid-template-columns:1fr;}
           .cc-module-card{min-height:112px;}
-          .cc-coming-grid,.cc-admin-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+          .cc-coming-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+          .cc-admin-grid{grid-template-columns:1fr;gap:.6rem;}
+          .cc-admin-card{min-height:96px;padding:1rem 1.05rem;}
+          .cc-admin-title{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25;}
+          .cc-admin-card p{white-space:normal;overflow:visible;text-overflow:clip;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+        }
+        @media (max-width:360px){
+          .cc-actions{grid-template-columns:1fr;}
         }
       </style>
 

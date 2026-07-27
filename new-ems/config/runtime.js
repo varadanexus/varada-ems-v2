@@ -8,6 +8,7 @@ window.EMS_RUNTIME_CONFIG = window.EMS_RUNTIME_CONFIG || {
 // PWA metadata and behaviour are loaded from this shared bootstrap so every
 // EMS module participates without duplicating tags across more than 100 pages.
 (function loadEmsPwa() {
+  document.title = document.title.replace(/(?:Varada )?EMS 2\.0/gi, "Varada Nexus");
   if (!document.querySelector('link[rel="manifest"]')) {
     const manifest = document.createElement("link");
     manifest.rel = "manifest";
@@ -29,7 +30,7 @@ window.EMS_RUNTIME_CONFIG = window.EMS_RUNTIME_CONFIG || {
   [
     ["apple-mobile-web-app-capable", "yes"],
     ["apple-mobile-web-app-status-bar-style", "black-translucent"],
-    ["apple-mobile-web-app-title", "Varada EMS"]
+    ["apple-mobile-web-app-title", "Varada Nexus"]
   ].forEach(([name, content]) => {
     if (document.querySelector(`meta[name="${name}"]`)) return;
     const meta = document.createElement("meta");
