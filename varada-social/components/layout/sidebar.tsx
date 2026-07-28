@@ -6,6 +6,7 @@ import {
   ChevronDown,
   FileStack,
   LayoutDashboard,
+  Camera,
   Lightbulb,
   Megaphone,
   Settings,
@@ -27,6 +28,7 @@ const navigation = [
   { label: "Approvals", icon: Users, href: "/approvals" },
   { label: "Trends", icon: Lightbulb, href: "/trends" },
   { label: "Analytics", icon: BarChart3, href: "/analytics" },
+  { label: "Instagram", icon: Camera, href: "/instagram" },
   { label: "Accounts", icon: Radio, href: "/accounts" },
   { label: "Ads campaigns", icon: Megaphone, href: "/campaigns" },
 ];

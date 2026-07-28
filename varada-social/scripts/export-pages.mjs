@@ -16,6 +16,7 @@ const routes = [
   "approvals",
   "trends",
   "analytics",
+  "instagram",
   "accounts",
   "campaigns",
   "settings",

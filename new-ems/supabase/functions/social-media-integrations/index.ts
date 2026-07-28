@@ -621,6 +621,160 @@ async function handleListAccounts(req: Request) {
   return data || [];
 }
 
+function insightValue(insights: any, name: string) {
+  const metric = (insights?.data || []).find((item: any) => item.name === name);
+  const value = metric?.total_value?.value ?? metric?.values?.[0]?.value ?? 0;
+  return typeof value === "object"
+    ? Object.values(value).reduce((sum: number, item: any) => sum + Number(item || 0), 0)
+    : Number(value || 0);
+}
+
+async function fetchInstagramWorkspace(db: any, limit = 50) {
+  const { data: rows, error } = await db
+    .from("social_accounts")
+    .select("*")
+    .eq("platform", "instagram")
+    .eq("status", "active")
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  const accounts = [];
+  const posts = [];
+  for (const row of rows || []) {
+    const credentials = JSON.parse(await decryptSecret(row.credential_ciphertext));
+    const token = credentials.accessToken;
+    let profile: any = {};
+    try {
+      profile = await graph(row.external_account_id, token, {
+        query: {
+          fields:
+            "id,username,name,profile_picture_url,followers_count,follows_count,media_count,biography,website",
+        },
+      });
+    } catch {
+      profile = {};
+    }
+    const account = {
+      id: row.id,
+      external_account_id: row.external_account_id,
+      display_name: profile.name || row.display_name,
+      username: profile.username || row.username,
+      status: row.status,
+      credential_expires_at: row.credential_expires_at,
+      profile_picture_url:
+        profile.profile_picture_url || row.metadata?.profilePictureUrl || null,
+      followers_count:
+        Number(profile.followers_count ?? row.metadata?.followersCount ?? 0),
+      follows_count: Number(profile.follows_count || 0),
+      media_count: Number(profile.media_count ?? row.metadata?.mediaCount ?? 0),
+      biography: profile.biography || null,
+      website: profile.website || null,
+      page_name: row.metadata?.pageName || null,
+    };
+    accounts.push(account);
+    const media = await graph(`${row.external_account_id}/media`, token, {
+      query: {
+        fields:
+          "id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,username,like_count,comments_count,children{id,media_type,media_url,thumbnail_url}",
+        limit: String(Math.max(1, Math.min(limit, 100))),
+      },
+    });
+    const enriched = await Promise.all(
+      (media.data || []).map(async (item: any) => {
+        let insights: any = { data: [] };
+        try {
+          insights = await graph(`${item.id}/insights`, token, {
+            query: {
+              metric: "reach,views,saved,shares,total_interactions",
+            },
+          });
+        } catch {
+          // Metric availability varies by media type and Meta permission review.
+        }
+        return {
+          id: item.id,
+          account_id: row.id,
+          account_username: account.username,
+          caption: item.caption || "",
+          media_type: item.media_type,
+          media_product_type: item.media_product_type || item.media_type,
+          media_url: item.media_url || item.thumbnail_url || null,
+          thumbnail_url: item.thumbnail_url || item.media_url || null,
+          permalink: item.permalink,
+          timestamp: item.timestamp,
+          like_count: Number(item.like_count || 0),
+          comments_count: Number(item.comments_count || 0),
+          reach: insightValue(insights, "reach"),
+          views: insightValue(insights, "views"),
+          saved: insightValue(insights, "saved"),
+          shares: insightValue(insights, "shares"),
+          total_interactions: insightValue(insights, "total_interactions"),
+          children: item.children?.data || [],
+        };
+      }),
+    );
+    posts.push(...enriched);
+    await db
+      .from("social_accounts")
+      .update({
+        display_name: account.display_name,
+        username: account.username,
+        metadata: {
+          ...row.metadata,
+          profilePictureUrl: account.profile_picture_url,
+          followersCount: account.followers_count,
+          followsCount: account.follows_count,
+          mediaCount: account.media_count,
+          biography: account.biography,
+          website: account.website,
+          profileSyncedAt: new Date().toISOString(),
+        },
+      })
+      .eq("id", row.id);
+  }
+  posts.sort(
+    (left: any, right: any) =>
+      new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+  );
+  const totals = posts.reduce(
+    (result: any, post: any) => {
+      result.likes += post.like_count;
+      result.comments += post.comments_count;
+      result.shares += post.shares;
+      result.saves += post.saved;
+      result.reach += post.reach;
+      result.views += post.views;
+      result.interactions +=
+        post.total_interactions ||
+        post.like_count + post.comments_count + post.shares + post.saved;
+      return result;
+    },
+    { likes: 0, comments: 0, shares: 0, saves: 0, reach: 0, views: 0, interactions: 0 },
+  );
+  return {
+    accounts,
+    posts,
+    totals: {
+      ...totals,
+      followers: accounts.reduce(
+        (sum: number, account: any) => sum + account.followers_count,
+        0,
+      ),
+      engagementRate: totals.reach
+        ? (totals.interactions / totals.reach) * 100
+        : 0,
+    },
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+async function handleInstagramWorkspace(req: Request, payload: any) {
+  const { db } = await authenticatedCaller(req, "view");
+  return fetchInstagramWorkspace(
+    db,
+    Math.max(1, Math.min(Number(payload.limit || 50), 100)),
+  );
+}
+
 async function handleDashboard(req: Request) {
   const { db, appUser } = await authenticatedCaller(req, "view");
   const now = new Date();
@@ -768,7 +922,34 @@ async function handleAnalytics(req: Request, payload: any) {
     .gte("captured_at", since.toISOString())
     .order("captured_at");
   if (error) throw new Error(error.message);
-  const series = data || [];
+  let instagram: any = null;
+  try {
+    instagram = await fetchInstagramWorkspace(db, Math.min(days * 2, 100));
+  } catch {
+    // Database analytics remain available for non-Meta channels.
+  }
+  const instagramSeries = (instagram?.posts || [])
+    .filter((post: any) => new Date(post.timestamp) >= since)
+    .map((post: any) => ({
+      id: `instagram:${post.id}`,
+      captured_at: post.timestamp,
+      likes: post.like_count,
+      comments: post.comments_count,
+      shares: post.shares,
+      saves: post.saved,
+      reach: post.reach,
+      impressions: post.views,
+      external_permalink: post.permalink,
+      media_url: post.thumbnail_url,
+      social_content_channels: {
+        platform: "instagram",
+        social_content_items: {
+          title: post.caption?.slice(0, 100) || "Instagram post",
+          format: post.media_product_type,
+        },
+      },
+    }));
+  const series = [...(data || []), ...instagramSeries];
   const totals = series.reduce(
     (result, row: any) => {
       result.likes += Number(row.likes || 0);
@@ -803,6 +984,8 @@ async function handleAnalytics(req: Request, payload: any) {
             Number(left.shares || 0)),
       )
       .slice(0, 10),
+    instagramAccounts: instagram?.accounts || [],
+    syncedAt: instagram?.syncedAt || null,
   };
 }
 
@@ -1781,6 +1964,9 @@ Deno.serve(async (req) => {
         break;
       case "list_accounts":
         data = await handleListAccounts(req);
+        break;
+      case "instagram_workspace":
+        data = await handleInstagramWorkspace(req, payload);
         break;
       case "dashboard":
         data = await handleDashboard(req);

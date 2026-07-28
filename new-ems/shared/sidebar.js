@@ -246,7 +246,8 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Calendar", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=calendar` },
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Approvals", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=approvals` },
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Trends", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=trends` },
-        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Analytics", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=analytics` }
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Analytics", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=analytics` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Instagram", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=instagram` }
       ]
     },
     {

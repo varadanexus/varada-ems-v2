@@ -54,7 +54,14 @@ export function AccountManager() {
       const result = await socialEdgeFetch<{ url: string }>("connect_url", {
         returnUrl,
       });
-      window.top?.location.assign(result.url);
+      if (window.top && window.top !== window) {
+        window.top.postMessage(
+          { type: "VARADA_SOCIAL_NAVIGATE", url: result.url },
+          new URL(document.referrer).origin,
+        );
+      } else {
+        window.location.assign(result.url);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Meta connection could not start.");
       setBusy(false);
