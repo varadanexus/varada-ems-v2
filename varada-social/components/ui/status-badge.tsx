@@ -5,7 +5,7 @@ const tones: Record<string, string> = {
   manager_review: "bg-amber-500/12 text-amber-300",
   admin_review: "bg-orange-500/12 text-orange-300",
   approved: "bg-emerald-500/12 text-emerald-300",
-  scheduled: "bg-blue-500/12 text-blue-300",
+  scheduled: "bg-accent-soft text-accent",
   publishing: "bg-violet-500/12 text-violet-300",
   published: "bg-emerald-500/12 text-emerald-300",
   rejected: "bg-red-500/12 text-red-300",

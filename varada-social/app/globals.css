@@ -1,33 +1,33 @@
 @import "tailwindcss";
 
 :root {
-  --background: #070b12;
-  --surface: #0d1420;
-  --surface-raised: #111b2a;
-  --foreground: #f4f0e7;
-  --muted: #91a0b4;
-  --line: #243248;
-  --brand: #b9944c;
-  --brand-bright: #d4b26a;
+  --background: #050609;
+  --surface: #07080d;
+  --surface-raised: #0b0c10;
+  --foreground: #f7f4ec;
+  --muted: #a6a08f;
+  --line: rgba(230, 200, 126, 0.16);
+  --brand: #c39a44;
+  --brand-bright: #e0c274;
   --accent: #d4b26a;
-  --accent-soft: #2d261a;
-  --success: #57b98d;
-  --sidebar: #05080d;
+  --accent-soft: rgba(212, 178, 106, 0.12);
+  --success: #6bc69d;
+  --sidebar: #030407;
 }
 
 .dark {
-  --background: #070b12;
-  --surface: #0d1420;
-  --surface-raised: #111b2a;
-  --foreground: #f4f0e7;
-  --muted: #91a0b4;
-  --line: #243248;
-  --brand: #b9944c;
-  --brand-bright: #d4b26a;
+  --background: #050609;
+  --surface: #07080d;
+  --surface-raised: #0b0c10;
+  --foreground: #f7f4ec;
+  --muted: #a6a08f;
+  --line: rgba(230, 200, 126, 0.16);
+  --brand: #c39a44;
+  --brand-bright: #e0c274;
   --accent: #d4b26a;
-  --accent-soft: #2d261a;
-  --success: #57b98d;
-  --sidebar: #05080d;
+  --accent-soft: rgba(212, 178, 106, 0.12);
+  --success: #6bc69d;
+  --sidebar: #030407;
 }
 
 @theme inline {
@@ -62,6 +62,12 @@ body {
     var(--background);
   color: var(--foreground);
   font-family: var(--font-body), sans-serif;
+}
+
+select option,
+select optgroup {
+  background: #0b0c10;
+  color: var(--foreground);
 }
 
 button,
