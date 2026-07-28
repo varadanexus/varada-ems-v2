@@ -862,7 +862,42 @@ async function instagramInboxAccount(db: any, accountId?: string) {
   if (!pageId || !credentials.accessToken) {
     throw new Error("Reconnect Meta to enable Instagram Inbox");
   }
-  return { account: data, pageId, accessToken: credentials.accessToken };
+  let accessToken = credentials.accessToken;
+  let pageTasks: string[] = [];
+  const connectionId = data.metadata?.metaConnectionId;
+  if (connectionId) {
+    const { data: connection } = await db
+      .from("social_meta_connections")
+      .select("credential_ciphertext")
+      .eq("id", connectionId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (connection?.credential_ciphertext) {
+      try {
+        const userCredentials = JSON.parse(
+          await decryptSecret(connection.credential_ciphertext),
+        );
+        const page = await graph(pageId, userCredentials.accessToken, {
+          query: { fields: "id,name,access_token,tasks" },
+        });
+        accessToken = page.access_token || accessToken;
+        pageTasks = page.tasks || [];
+      } catch {
+        // The encrypted Page token remains the fallback.
+      }
+    }
+  }
+  if (
+    pageTasks.length &&
+    !pageTasks.some((task) =>
+      ["MESSAGING", "MODERATE", "MANAGE"].includes(String(task).toUpperCase()),
+    )
+  ) {
+    throw new Error(
+      "Your Facebook profile needs Messaging or Moderate access to the linked Page",
+    );
+  }
+  return { account: data, pageId, accessToken, pageTasks };
 }
 
 function normalizeConversation(conversation: any, ownInstagramId: string) {
@@ -890,14 +925,32 @@ function normalizeConversation(conversation: any, ownInstagramId: string) {
 async function handleInstagramInbox(req: Request, payload: any) {
   const { db } = await authenticatedCaller(req, "view");
   const resolved = await instagramInboxAccount(db, String(payload.accountId || "") || undefined);
-  const result = await graph(`${resolved.pageId}/conversations`, resolved.accessToken, {
-    query: {
-      platform: "instagram",
-      fields:
-        "id,updated_time,participants{id,name,username},messages.limit(30){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
-      limit: String(Math.max(1, Math.min(Number(payload.limit || 50), 100))),
-    },
-  });
+  const query = {
+    platform: "instagram",
+    fields:
+      "id,updated_time,participants{id,name,username},messages.limit(30){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
+    limit: String(Math.max(1, Math.min(Number(payload.limit || 50), 100))),
+  };
+  let result: any;
+  let ownerObjectId = resolved.pageId;
+  try {
+    result = await graph(`${resolved.pageId}/conversations`, resolved.accessToken, {
+      query,
+    });
+  } catch (pageError) {
+    try {
+      ownerObjectId = resolved.account.external_account_id;
+      result = await graph(
+        `${resolved.account.external_account_id}/conversations`,
+        resolved.accessToken,
+        { query },
+      );
+    } catch {
+      throw new Error(
+        `${String(pageError?.message || pageError)}. Confirm Instagram Connected Tools is enabled and that the app has Advanced Access for instagram_manage_messages.`,
+      );
+    }
+  }
   return {
     account: {
       id: resolved.account.id,
@@ -905,6 +958,7 @@ async function handleInstagramInbox(req: Request, payload: any) {
       display_name: resolved.account.display_name,
       username: resolved.account.username,
       profile_picture_url: resolved.account.metadata?.profilePictureUrl || null,
+      messaging_owner_id: ownerObjectId,
     },
     conversations: (result.data || []).map((item: any) =>
       normalizeConversation(item, resolved.account.external_account_id),
@@ -934,14 +988,28 @@ async function handleInstagramSendMessage(req: Request, payload: any) {
   const recipientId = cleanText(payload.recipientId, 160);
   const message = cleanText(payload.message, 1000);
   if (!recipientId || !message) throw new Error("Recipient and message are required");
-  const result = await graph(`${resolved.pageId}/messages`, resolved.accessToken, {
+  const request = {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       recipient: { id: recipientId },
       message: { text: message },
     }),
-  });
+  };
+  let result: any;
+  try {
+    result = await graph(`${resolved.pageId}/messages`, resolved.accessToken, request);
+  } catch (pageError) {
+    try {
+      result = await graph(
+        `${resolved.account.external_account_id}/messages`,
+        resolved.accessToken,
+        request,
+      );
+    } catch {
+      throw pageError;
+    }
+  }
   await db.from("social_audit_logs").insert({
     actor_id: appUser.id,
     action: "instagram.message.sent",

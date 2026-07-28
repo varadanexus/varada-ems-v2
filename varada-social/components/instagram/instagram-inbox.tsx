@@ -125,7 +125,7 @@ export function InstagramInbox() {
         </button>}
       />
       {error && <ErrorState message={error} retry={load} />}
-      {!data ? <LoadingState /> : data.conversations.length === 0 ? (
+      {!data && !error ? <LoadingState /> : !data ? null : data.conversations.length === 0 ? (
         <EmptyState title="No Instagram conversations returned" description="Enable Connected Tools in Instagram Message Controls, then send a message to this professional account and synchronize again." />
       ) : (
         <section className="grid h-[min(720px,calc(100vh-190px))] min-h-[560px] overflow-hidden rounded-2xl border bg-surface-raised lg:grid-cols-[340px_minmax(0,1fr)]">
