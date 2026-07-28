@@ -1,0 +1,54 @@
+{
+  "name": "Varada Nexus Social Operations",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 1 }] } },
+      "id": "publish-schedule",
+      "name": "Publishing schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.NEXUS_SOCIAL_URL}}/api/v1/cron/publish",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.NEXUS_SOCIAL_CRON_SECRET}}" }] }
+      },
+      "id": "process-publish-jobs",
+      "name": "Process due publishing jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] } },
+      "id": "analytics-schedule",
+      "name": "Analytics schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.NEXUS_SOCIAL_URL}}/api/v1/cron/analytics",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{$env.NEXUS_SOCIAL_CRON_SECRET}}" }] }
+      },
+      "id": "sync-meta-analytics",
+      "name": "Synchronize Meta analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 180]
+    }
+  ],
+  "connections": {
+    "Publishing schedule": { "main": [[{ "node": "Process due publishing jobs", "type": "main", "index": 0 }]] },
+    "Analytics schedule": { "main": [[{ "node": "Synchronize Meta analytics", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "none" },
+  "versionId": "varada-nexus-social-v1"
+}

@@ -75,6 +75,7 @@ export const ROUTES = {
   DIGITAL_SERVICES_VENDORS: "/new-ems/modules/digital-services-vendors/index.html",
   DIGITAL_SERVICES_BILLING: "/new-ems/modules/digital-services-billing/index.html",
   DIGITAL_SERVICES_SETTINGS: "/new-ems/modules/digital-services-settings/index.html",
+  SOCIAL_MEDIA_MANAGER: "/new-ems/modules/social-media-manager/index.html",
   MARKETING_COMMAND_CENTER: "/new-ems/modules/marketing-command-center/index.html",
   MARKETING_CLIENT_PORTAL: "/new-ems/modules/marketing-client-portal/index.html",
   MARKETING_VENDOR_PORTAL: "/new-ems/modules/marketing-vendor-portal/index.html",
@@ -236,6 +237,7 @@ export const MODULES = {
   DIGITAL_SERVICES_VENDORS: "digital-services-vendors",
   DIGITAL_SERVICES_BILLING: "digital-services-billing",
   DIGITAL_SERVICES_SETTINGS: "digital-services-settings",
+  SOCIAL_MEDIA_MANAGER: "social-media-manager",
   MARKETING: "marketing",
   MARKETING_COMMAND_CENTER: "marketing-command-center",
   NOTIFICATIONS_CENTER: "notifications-center",
@@ -332,6 +334,7 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.ECOMMERCE, title: "E-Commerce", subtitle: "Storefront operations", href: null },
   { module: MODULES.ACCOUNTS, title: "Accounts", subtitle: "Finance operations cockpit", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
   { module: MODULES.DIGITAL_SERVICES, title: "Digital Marketing & Services", subtitle: "Lead-to-billing delivery, white-label partners, client portals, and queries", href: ROUTES.DIGITAL_SERVICES_DASHBOARD },
+  { module: MODULES.SOCIAL_MEDIA_MANAGER, title: "Nexus Social", subtitle: "AI content research, creation, approvals, publishing, and performance intelligence", href: ROUTES.SOCIAL_MEDIA_MANAGER },
   { module: MODULES.LEGAL, title: "Legal", subtitle: "Drafting, KYC, signing evidence and secure archive", href: ROUTES.LEGAL_COMMAND_CENTER },
   { module: MODULES.SUPPORT_TICKETS, title: "Support", subtitle: "EMS help desk, ticket triage, assignment and resolution", href: ROUTES.SUPPORT_TICKETS },
   { module: MODULES.WHATSAPP, title: "WhatsApp", subtitle: "Inbox, templates, Twilio health and outbound delivery", href: ROUTES.WHATSAPP_COMMAND_CENTER },
@@ -361,6 +364,7 @@ export const WORKSPACES = {
   MEETINGS: "meetings",
   NOTIFICATIONS: "notifications",
   DIGITAL_SERVICES: "digital-services",
+  SOCIAL_MEDIA: "social-media",
   SUPPORT: "support",
   // Compatibility alias: marketing operations live in this single workspace.
   MARKETING: "digital-services"
