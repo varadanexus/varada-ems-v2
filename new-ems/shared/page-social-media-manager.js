@@ -8,14 +8,14 @@ function safeModuleUrl(view) {
   const fallback = "http://localhost:3000/dashboard?embedded=1";
   const routes = new Set([
     "dashboard", "create", "content", "calendar", "approvals",
-    "trends", "analytics", "instagram", "accounts", "campaigns", "settings", "audit"
+    "trends", "analytics", "instagram", "inbox", "accounts", "campaigns", "settings", "audit"
   ]);
 
   try {
     const url = new URL(configured || fallback, window.location.origin);
     if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsupported protocol");
     const route = view === "overview" ? "dashboard" : routes.has(view) ? view : "dashboard";
-    url.pathname = url.pathname.replace(/\/(dashboard|create|content|calendar|approvals|trends|analytics|instagram|accounts|campaigns|settings|audit)\/?$/, `/${route}`);
+    url.pathname = url.pathname.replace(/\/(dashboard|create|content|calendar|approvals|trends|analytics|instagram|inbox|accounts|campaigns|settings|audit)\/?$/, `/${route}`);
     url.search = "embedded=1";
     return url.href;
   } catch {

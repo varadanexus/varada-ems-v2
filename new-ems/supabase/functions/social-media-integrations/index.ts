@@ -846,6 +846,116 @@ async function handleInstagramCommentAction(req: Request, payload: any) {
   return { success: result?.success !== false, id: result?.id || commentId };
 }
 
+async function instagramInboxAccount(db: any, accountId?: string) {
+  let query = db
+    .from("social_accounts")
+    .select("*")
+    .eq("platform", "instagram")
+    .eq("status", "active")
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (accountId) query = query.eq("id", accountId);
+  const { data, error } = await query.maybeSingle();
+  if (error || !data) throw new Error("Connect an Instagram Business account first");
+  const credentials = JSON.parse(await decryptSecret(data.credential_ciphertext));
+  const pageId = data.metadata?.pageId;
+  if (!pageId || !credentials.accessToken) {
+    throw new Error("Reconnect Meta to enable Instagram Inbox");
+  }
+  return { account: data, pageId, accessToken: credentials.accessToken };
+}
+
+function normalizeConversation(conversation: any, ownInstagramId: string) {
+  const participants = conversation.participants?.data || [];
+  const contact =
+    participants.find((item: any) => String(item.id) !== String(ownInstagramId)) ||
+    participants[0] ||
+    {};
+  const messages = conversation.messages?.data || [];
+  const latest = messages[0] || {};
+  return {
+    id: conversation.id,
+    updated_time: conversation.updated_time || latest.created_time || null,
+    contact: {
+      id: contact.id || null,
+      name: contact.name || contact.username || "Instagram user",
+      username: contact.username || null,
+    },
+    participants,
+    latest_message: latest.message || (latest.attachments ? "Attachment" : ""),
+    messages,
+  };
+}
+
+async function handleInstagramInbox(req: Request, payload: any) {
+  const { db } = await authenticatedCaller(req, "view");
+  const resolved = await instagramInboxAccount(db, String(payload.accountId || "") || undefined);
+  const result = await graph(`${resolved.pageId}/conversations`, resolved.accessToken, {
+    query: {
+      platform: "instagram",
+      fields:
+        "id,updated_time,participants{id,name,username},messages.limit(30){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
+      limit: String(Math.max(1, Math.min(Number(payload.limit || 50), 100))),
+    },
+  });
+  return {
+    account: {
+      id: resolved.account.id,
+      external_account_id: resolved.account.external_account_id,
+      display_name: resolved.account.display_name,
+      username: resolved.account.username,
+      profile_picture_url: resolved.account.metadata?.profilePictureUrl || null,
+    },
+    conversations: (result.data || []).map((item: any) =>
+      normalizeConversation(item, resolved.account.external_account_id),
+    ),
+    paging: result.paging || null,
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+async function handleInstagramConversation(req: Request, payload: any) {
+  const { db } = await authenticatedCaller(req, "view");
+  const resolved = await instagramInboxAccount(db, String(payload.accountId || "") || undefined);
+  const conversationId = cleanText(payload.conversationId, 500);
+  if (!conversationId) throw new Error("Instagram conversation ID is required");
+  const conversation = await graph(conversationId, resolved.accessToken, {
+    query: {
+      fields:
+        "id,updated_time,participants{id,name,username},messages.limit(100){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
+    },
+  });
+  return normalizeConversation(conversation, resolved.account.external_account_id);
+}
+
+async function handleInstagramSendMessage(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "post");
+  const resolved = await instagramInboxAccount(db, String(payload.accountId || "") || undefined);
+  const recipientId = cleanText(payload.recipientId, 160);
+  const message = cleanText(payload.message, 1000);
+  if (!recipientId || !message) throw new Error("Recipient and message are required");
+  const result = await graph(`${resolved.pageId}/messages`, resolved.accessToken, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      message: { text: message },
+    }),
+  });
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "instagram.message.sent",
+    resource_type: "instagram_conversation",
+    resource_id: cleanText(payload.conversationId, 500) || recipientId,
+    after_data: {
+      accountId: resolved.account.id,
+      recipientId,
+      messageId: result.message_id || null,
+    },
+  });
+  return { messageId: result.message_id || null, recipientId };
+}
+
 async function handleDashboard(req: Request) {
   const { db, appUser } = await authenticatedCaller(req, "view");
   const now = new Date();
@@ -2044,6 +2154,15 @@ Deno.serve(async (req) => {
         break;
       case "instagram_comment_action":
         data = await handleInstagramCommentAction(req, payload);
+        break;
+      case "instagram_inbox":
+        data = await handleInstagramInbox(req, payload);
+        break;
+      case "instagram_conversation":
+        data = await handleInstagramConversation(req, payload);
+        break;
+      case "instagram_send_message":
+        data = await handleInstagramSendMessage(req, payload);
         break;
       case "dashboard":
         data = await handleDashboard(req);
