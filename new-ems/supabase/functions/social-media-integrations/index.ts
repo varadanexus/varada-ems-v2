@@ -773,6 +773,79 @@ async function handleInstagramWorkspace(req: Request, payload: any) {
   );
 }
 
+async function resolveInstagramAccount(db: any, accountId: string) {
+  const { data, error } = await db
+    .from("social_accounts")
+    .select("*")
+    .eq("id", accountId)
+    .eq("platform", "instagram")
+    .eq("status", "active")
+    .maybeSingle();
+  if (error || !data) throw new Error("Select a linked Instagram account");
+  const credentials = JSON.parse(await decryptSecret(data.credential_ciphertext));
+  if (!credentials.accessToken) throw new Error("The Instagram token is invalid");
+  return { account: data, accessToken: credentials.accessToken };
+}
+
+async function handleInstagramComments(req: Request, payload: any) {
+  const { db } = await authenticatedCaller(req, "view");
+  const mediaId = cleanText(payload.mediaId, 120);
+  if (!mediaId) throw new Error("Instagram media ID is required");
+  const resolved = await resolveInstagramAccount(db, String(payload.accountId || ""));
+  const result = await graph(`${mediaId}/comments`, resolved.accessToken, {
+    query: {
+      fields:
+        "id,text,timestamp,username,like_count,hidden,parent_id,replies{id,text,timestamp,username,like_count,hidden,parent_id}",
+      order: "reverse_chronological",
+      limit: String(Math.max(1, Math.min(Number(payload.limit || 100), 100))),
+    },
+  });
+  return {
+    comments: result.data || [],
+    paging: result.paging || null,
+    mediaId,
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+async function handleInstagramCommentAction(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "post");
+  const resolved = await resolveInstagramAccount(db, String(payload.accountId || ""));
+  const commentId = cleanText(payload.commentId, 120);
+  const operation = cleanText(payload.operation, 30);
+  if (!commentId) throw new Error("Instagram comment ID is required");
+  let result: any;
+  if (operation === "reply") {
+    const message = cleanText(payload.message, 1000);
+    if (!message) throw new Error("Reply text is required");
+    result = await graph(`${commentId}/replies`, resolved.accessToken, {
+      method: "POST",
+      query: { message },
+    });
+  } else if (operation === "hide" || operation === "unhide") {
+    result = await graph(commentId, resolved.accessToken, {
+      method: "POST",
+      query: { hide: operation === "hide" ? "true" : "false" },
+    });
+  } else if (operation === "delete") {
+    result = await graph(commentId, resolved.accessToken, { method: "DELETE" });
+  } else {
+    throw new Error("Unsupported Instagram comment action");
+  }
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: `instagram.comment.${operation}`,
+    resource_type: "instagram_comment",
+    resource_id: commentId,
+    after_data: {
+      accountId: resolved.account.id,
+      mediaId: cleanText(payload.mediaId, 120) || null,
+      replyId: result?.id || null,
+    },
+  });
+  return { success: result?.success !== false, id: result?.id || commentId };
+}
+
 async function handleDashboard(req: Request) {
   const { db, appUser } = await authenticatedCaller(req, "view");
   const now = new Date();
@@ -1965,6 +2038,12 @@ Deno.serve(async (req) => {
         break;
       case "instagram_workspace":
         data = await handleInstagramWorkspace(req, payload);
+        break;
+      case "instagram_comments":
+        data = await handleInstagramComments(req, payload);
+        break;
+      case "instagram_comment_action":
+        data = await handleInstagramCommentAction(req, payload);
         break;
       case "dashboard":
         data = await handleDashboard(req);
