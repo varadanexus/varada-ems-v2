@@ -1,10 +1,10 @@
 # Government and Public-Authority Data Request Response Procedure
 
-**Owner:** Privacy and Legal Function, Varada Nexus Private Limited  
-**Approved by:** Management of Varada Nexus Private Limited  
-**Effective date:** 29 July 2026  
-**Review cycle:** At least annually and after any material legal, regulatory, or platform change  
-**Applies to:** All Varada Nexus personnel, contractors, systems, EMS modules, Nexus Social, connected platforms, and service providers that may process personal data
+- **Owner:** Privacy and Legal Function, Varada Nexus Private Limited
+- **Approved by:** Management of Varada Nexus Private Limited
+- **Effective date:** 29 July 2026
+- **Review cycle:** At least annually and after any material legal, regulatory, or platform change
+- **Applies to:** All Varada Nexus personnel, contractors, systems, EMS modules, Nexus Social, connected platforms, and service providers that may process personal data
 
 ## 1. Purpose
 
@@ -98,4 +98,3 @@ Personnel with access to personal data must be informed of this escalation requi
 ## 11. Current transparency statement
 
 Management confirmed on 29 July 2026 that Varada Nexus Private Limited did not provide Meta user personal data to public authorities for national-security purposes during the preceding 12 months.
-
