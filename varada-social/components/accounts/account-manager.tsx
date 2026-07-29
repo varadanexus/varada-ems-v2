@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { ExternalLink, Link2, LoaderCircle, Plus, Radio } from "lucide-react";
+import { CheckCircle2, ExternalLink, Link2, LoaderCircle, Plus, Radio, RefreshCw, ShieldCheck } from "lucide-react";
 import { socialEdgeFetch } from "@/lib/api/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
@@ -17,18 +17,64 @@ type Account = {
   status: string;
 };
 
+type MetaConnection = {
+  id: string;
+  external_user_id: string;
+  display_name: string;
+  credential_expires_at: string | null;
+  granted_scopes: string[];
+  declined_scopes: string[];
+  updated_at: string;
+};
+
+type MetaSubscription = {
+  account_id: string;
+  page_id: string;
+  display_name: string;
+  category: string | null;
+  fan_count: number;
+  followers_count: number;
+  instagram_business_account: {
+    id: string;
+    username?: string;
+  } | null;
+  success: boolean;
+};
+
+const META_FEATURES = [
+  { label: "Instagram profile and posts", scopes: ["instagram_basic"] },
+  { label: "Comments and replies", scopes: ["instagram_manage_comments"] },
+  { label: "Content publishing", scopes: ["instagram_content_publish"] },
+  { label: "Instagram inbox", scopes: ["instagram_manage_messages"] },
+  { label: "Analytics", scopes: ["pages_read_engagement"] },
+  { label: "Ads reporting and campaigns", scopes: ["ads_read", "ads_management"] },
+] as const;
+
 export function AccountManager() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
+  const [connections, setConnections] = useState<MetaConnection[] | null>(null);
+  const [subscriptions, setSubscriptions] = useState<MetaSubscription[]>([]);
   const [error, setError] = useState("");
+  const [healthError, setHealthError] = useState("");
   const [manual, setManual] = useState(false);
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
-    try {
-      const result = await socialEdgeFetch<Account[]>("list_accounts");
-      setAccounts(result);
+    const [accountResult, connectionResult] = await Promise.allSettled([
+      socialEdgeFetch<Account[]>("list_accounts"),
+      socialEdgeFetch<MetaConnection[]>("meta_connection_status"),
+    ]);
+    if (accountResult.status === "fulfilled") {
+      setAccounts(accountResult.value);
       setError("");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Accounts could not be loaded.");
+    } else {
+      setError(accountResult.reason instanceof Error ? accountResult.reason.message : "Accounts could not be loaded.");
+    }
+    if (connectionResult.status === "fulfilled") {
+      setConnections(connectionResult.value);
+      setHealthError("");
+    } else {
+      setConnections([]);
+      setHealthError(connectionResult.reason instanceof Error ? connectionResult.reason.message : "Meta access status could not be checked.");
     }
   }, []);
   useEffect(() => {
@@ -68,6 +114,22 @@ export function AccountManager() {
     }
   }
 
+  async function refreshMetaAccess() {
+    setBusy(true);
+    setHealthError("");
+    try {
+      const refreshed = await socialEdgeFetch<MetaSubscription[]>("refresh_meta_subscriptions");
+      const current = await socialEdgeFetch<MetaConnection[]>("meta_connection_status");
+      setSubscriptions(refreshed);
+      setConnections(current);
+      await load();
+    } catch (reason) {
+      setHealthError(reason instanceof Error ? reason.message : "Meta access could not be refreshed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -102,6 +164,81 @@ export function AccountManager() {
         </>}
       />
       {error && <ErrorState message={error} retry={load} />}
+      {accounts && accounts.length > 0 && (
+        <section className="rounded-2xl border bg-surface-raised p-5">
+          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+            <div>
+              <div className="flex items-center gap-2 text-accent">
+                <ShieldCheck size={18} />
+                <h2 className="font-display text-lg font-semibold text-foreground">Meta connection health</h2>
+              </div>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-muted">
+                This checks the existing Meta connection and Page subscriptions. It does not create a new Facebook Page, Instagram profile, or ad account.
+              </p>
+            </div>
+            <button onClick={refreshMetaAccess} disabled={busy} className="btn-secondary shrink-0">
+              {busy ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+              Refresh access
+            </button>
+          </div>
+          {healthError && <div className="mt-4"><ErrorState message={healthError} retry={refreshMetaAccess} /></div>}
+          {connections === null ? (
+            <div className="mt-5 text-sm text-muted">Checking Meta access…</div>
+          ) : connections.length === 0 ? (
+            <p className="mt-5 text-sm text-muted">No active Meta authorization was returned. Use Connect Meta to authorize the existing business assets.</p>
+          ) : (
+            <div className="mt-5 space-y-4">
+              {connections.map((connection) => {
+                const granted = new Set(connection.granted_scopes);
+                return (
+                  <div key={connection.id} className="rounded-xl border bg-background p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-semibold">{connection.display_name}</p>
+                        <p className="mt-1 text-xs text-muted">Meta authorization · updated {new Date(connection.updated_at).toLocaleString("en-IN")}</p>
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                        <CheckCircle2 size={13} /> Linked
+                      </span>
+                    </div>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                      {META_FEATURES.map((feature) => {
+                        const ready = feature.scopes.every((scope) => granted.has(scope));
+                        return (
+                          <div key={feature.label} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs">
+                            <span>{feature.label}</span>
+                            <span className={ready ? "font-semibold text-emerald-300" : "text-amber-300"}>{ready ? "Scope granted" : "Permission needed"}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-muted">
+                      A granted scope confirms token access. Meta App Review and feature capability approval can still be required before Instagram inbox or other restricted operations work in production.
+                    </p>
+                    {connection.declined_scopes.length > 0 && (
+                      <p className="mt-2 text-xs text-amber-300">Declined: {connection.declined_scopes.join(", ")}</p>
+                    )}
+                  </div>
+                );
+              })}
+              {subscriptions.map((subscription) => (
+                <div key={subscription.account_id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background px-4 py-3 text-sm">
+                  <div>
+                    <p className="font-semibold">{subscription.display_name}</p>
+                    <p className="mt-1 text-xs text-muted">
+                      Facebook Page {subscription.page_id}
+                      {subscription.instagram_business_account?.username ? ` · Instagram @${subscription.instagram_business_account.username}` : ""}
+                    </p>
+                  </div>
+                  <span className={subscription.success ? "text-emerald-300" : "text-amber-300"}>
+                    {subscription.success ? "Webhook subscribed" : "Subscription needs attention"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
       {manual && (
         <form onSubmit={submit} className="grid gap-4 rounded-2xl border bg-surface p-5 md:grid-cols-2">
           <Field label="Platform"><select name="platform" className="field" required>{["instagram","facebook","linkedin","x","threads","pinterest","google_business","youtube_community"].map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}</select></Field>

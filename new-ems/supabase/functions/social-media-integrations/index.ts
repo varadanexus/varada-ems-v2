@@ -322,13 +322,22 @@ async function authenticatedCaller(req: Request, action = "view") {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${jwt}` } },
   });
-  const { data: authData, error: authError } = await caller.auth.getUser(jwt);
-  if (authError || !authData?.user?.id) throw new Error("Authentication required");
+  // EMS LOCAL users receive a short-lived, project-signed JWT from ems-auth.
+  // It is intentionally not a GoTrue refresh-token session, so auth.getUser()
+  // rejects it even though PostgREST correctly validates the JWT and applies
+  // auth.uid() for RLS. Validate through the security-definer identity RPC
+  // instead; this supports both native Supabase sessions and EMS LOCAL JWTs
+  // without trusting an unverified token payload in this verify_jwt=false
+  // function.
+  const { data: appUserId, error: identityError } = await caller.rpc(
+    "current_app_user_id",
+  );
+  if (identityError || !appUserId) throw new Error("Authentication required");
   const db = adminClient();
   const { data: appUser, error: userError } = await db
     .from("app_users")
     .select("id,display_name,email,status,is_locked,deleted_at")
-    .eq("auth_user_id", authData.user.id)
+    .eq("id", appUserId)
     .maybeSingle();
   if (
     userError ||
@@ -414,18 +423,13 @@ async function handleConnectUrl(req: Request, payload: any) {
     [
       "pages_show_list",
       "pages_read_engagement",
-      "pages_manage_ads",
       "pages_manage_metadata",
-      "pages_messaging",
       "instagram_basic",
       "instagram_content_publish",
       "instagram_manage_comments",
       "instagram_manage_messages",
-      "business_management",
       "ads_management",
       "ads_read",
-      "leads_retrieval",
-      "catalog_management",
     ].join(","),
   );
   url.searchParams.set("state", state);
@@ -554,7 +558,7 @@ async function handleCallback(req: Request, requestUrl: URL) {
           method: "POST",
           query: {
             subscribed_fields:
-              "feed,messages,messaging_postbacks,mention,comments,live_comments",
+              "feed,messages,messaging_postbacks,mention,conversations",
           },
         });
       } catch {
@@ -617,6 +621,94 @@ async function handleListAccounts(req: Request) {
     .order("display_name");
   if (error) throw new Error(error.message);
   return data || [];
+}
+
+async function handleMetaConnectionStatus(req: Request) {
+  const { db } = await authenticatedCaller(req, "view");
+  const { data: rows, error } = await db
+    .from("social_meta_connections")
+    .select("*")
+    .eq("status", "active")
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const connections = [];
+  for (const row of rows || []) {
+    const credentials = JSON.parse(await decryptSecret(row.credential_ciphertext));
+    const permissions = await graph("me/permissions", credentials.accessToken);
+    const permissionStatus = Object.fromEntries(
+      (permissions.data || []).map((item: any) => [
+        item.permission,
+        item.status,
+      ]),
+    );
+    connections.push({
+      id: row.id,
+      external_user_id: row.external_user_id,
+      display_name: row.display_name,
+      credential_expires_at: row.credential_expires_at,
+      granted_scopes: Object.entries(permissionStatus)
+        .filter(([, status]) => status === "granted")
+        .map(([permission]) => permission),
+      declined_scopes: Object.entries(permissionStatus)
+        .filter(([, status]) => status !== "granted")
+        .map(([permission]) => permission),
+      updated_at: row.updated_at,
+    });
+  }
+  return connections;
+}
+
+async function handleRefreshMetaSubscriptions(req: Request) {
+  const { db, appUser } = await authenticatedCaller(req, "edit");
+  const { data: rows, error } = await db
+    .from("social_accounts")
+    .select("*")
+    .eq("platform", "facebook")
+    .eq("status", "active");
+  if (error) throw new Error(error.message);
+  if (!rows?.length) throw new Error("Connect a Facebook Page before refreshing subscriptions");
+
+  const results = [];
+  for (const row of rows) {
+    const credentials = JSON.parse(await decryptSecret(row.credential_ciphertext));
+    const subscription = await graph(
+      `${row.external_account_id}/subscribed_apps`,
+      credentials.accessToken,
+      {
+        method: "POST",
+        query: {
+          subscribed_fields:
+            "feed,messages,messaging_postbacks,mention,conversations",
+        },
+      },
+    );
+    const page = await graph(row.external_account_id, credentials.accessToken, {
+      query: {
+        fields:
+          "id,name,username,category,fan_count,followers_count,instagram_business_account{id,username}",
+      },
+    });
+    results.push({
+      account_id: row.id,
+      page_id: row.external_account_id,
+      display_name: page.name || row.display_name,
+      category: page.category || null,
+      fan_count: Number(page.fan_count || 0),
+      followers_count: Number(page.followers_count || 0),
+      instagram_business_account: page.instagram_business_account || null,
+      success: subscription?.success === true,
+    });
+  }
+
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "meta.subscriptions.refreshed",
+    resource_type: "social_account",
+    request_id: crypto.randomUUID(),
+    after_data: { results },
+  });
+  return results;
 }
 
 function insightValue(insights: any, name: string) {
@@ -945,9 +1037,12 @@ async function handleInstagramInbox(req: Request, payload: any) {
         resolved.accessToken,
         { query },
       );
-    } catch {
+    } catch (instagramError) {
       throw new Error(
-        `${String(pageError?.message || pageError)}. Confirm Instagram Connected Tools is enabled and that the app has Advanced Access for instagram_manage_messages.`,
+        `Page conversations failed: ${String(pageError?.message || pageError)}. ` +
+          `Instagram conversations failed: ${String(
+            instagramError?.message || instagramError,
+          )}. Confirm Instagram Connected Tools is enabled and that the app has Advanced Access for instagram_manage_messages.`,
       );
     }
   }
@@ -2213,6 +2308,12 @@ Deno.serve(async (req) => {
         break;
       case "list_accounts":
         data = await handleListAccounts(req);
+        break;
+      case "meta_connection_status":
+        data = await handleMetaConnectionStatus(req);
+        break;
+      case "refresh_meta_subscriptions":
+        data = await handleRefreshMetaSubscriptions(req);
         break;
       case "instagram_workspace":
         data = await handleInstagramWorkspace(req, payload);
