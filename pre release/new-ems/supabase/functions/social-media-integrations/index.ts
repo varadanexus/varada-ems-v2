@@ -3483,6 +3483,152 @@ function automationFormatPool(configuredFormats: unknown) {
   return enabled.length ? enabled : ["single_post"];
 }
 
+function plannedContentTitle(category: string, funnelStage: string) {
+  if (funnelStage === "awareness") return `Varada Nexus ${category}: Practical Insight`;
+  if (funnelStage === "consideration") return `How Varada Nexus Approaches ${category}`;
+  return `${category} Requirements? Talk to Varada Nexus`;
+}
+
+async function handleMaterializeSchedule(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "create");
+  const { brand, policy } = await loadBrandSystem(db);
+  if (!policy) throw new Error("Configure the automation policy first");
+
+  const requestedDays = Math.max(1, Math.min(30, Number(payload.days) || Number(policy.planning_horizon_days) || 14));
+  const postsPerDay = Math.max(1, Math.min(6, Number(policy.posts_per_day) || 1));
+  const istToday = new Date(new Date().toLocaleString("en-US", { timeZone: policy.timezone || "Asia/Kolkata" }));
+  istToday.setHours(0, 0, 0, 0);
+  const start = payload.startDate
+    ? new Date(`${String(payload.startDate)}T12:00:00+05:30`)
+    : new Date(istToday.getTime() + 86_400_000);
+  if (Number.isNaN(start.getTime())) throw new Error("Choose a valid schedule start date");
+
+  const categories = (policy.categories || CONTENT_CATEGORIES)
+    .map(String)
+    .filter((item: string) => CONTENT_CATEGORIES.includes(item));
+  const balancedCategories = categories.length ? categories : CONTENT_CATEGORIES;
+  const formatPool = automationFormatPool(policy.formats);
+  const platforms = Array.isArray(policy.platforms) && policy.platforms.length
+    ? policy.platforms.map(String)
+    : ["instagram", "facebook"];
+  const times = Array.isArray(policy.preferred_times) && policy.preferred_times.length
+    ? policy.preferred_times.map((item: unknown) => String(item).slice(0, 5))
+    : ["10:00"];
+  const activeWeekdays = Array.isArray(policy.active_weekdays)
+    ? policy.active_weekdays.map(Number)
+    : [0, 1, 2, 3, 4, 5, 6];
+  const funnel = [
+    { stage: "awareness", objective: "Build qualified awareness with a useful company-centred insight" },
+    { stage: "consideration", objective: "Help decision-makers evaluate the relevant Varada Nexus capability" },
+    { stage: "conversion", objective: "Generate a qualified requirement discussion or consultation enquiry" },
+  ];
+
+  const candidateSlots: any[] = [];
+  for (let offset = 0; offset < requestedDays; offset += 1) {
+    const date = new Date(start.getTime() + offset * 86_400_000);
+    const datePart = date.toISOString().slice(0, 10);
+    const weekday = new Date(`${datePart}T12:00:00+05:30`).getUTCDay();
+    if (!activeWeekdays.includes(weekday)) continue;
+    for (let slotIndex = 0; slotIndex < postsPerDay; slotIndex += 1) {
+      const sequence = candidateSlots.length;
+      const scheduledFor = new Date(`${datePart}T${times[slotIndex % times.length]}:00+05:30`).toISOString();
+      const category = balancedCategories[sequence % balancedCategories.length];
+      const funnelItem = funnel[slotIndex % funnel.length];
+      const format = formatPool[sequence % formatPool.length];
+      candidateSlots.push({
+        date: datePart,
+        scheduledFor,
+        slotIndex,
+        category,
+        funnelStage: funnelItem.stage,
+        objective: funnelItem.objective,
+        format,
+      });
+    }
+  }
+
+  const rangeStart = candidateSlots[0]?.scheduledFor;
+  const rangeEnd = candidateSlots[candidateSlots.length - 1]?.scheduledFor;
+  if (!rangeStart || !rangeEnd) return { createdCount: 0, existingCount: 0, totalCount: 0, items: [] };
+  const { data: existing, error: existingError } = await db.from("social_content_items")
+    .select("id,scheduled_for")
+    .eq("brand_id", brand.id)
+    .neq("status", "archived")
+    .gte("scheduled_for", rangeStart)
+    .lte("scheduled_for", rangeEnd);
+  if (existingError) throw existingError;
+  const occupied = new Set((existing || []).map((item: any) => new Date(item.scheduled_for).toISOString()));
+  const missing = candidateSlots.filter((slot) => !occupied.has(slot.scheduledFor));
+  if (!missing.length) {
+    return { createdCount: 0, existingCount: candidateSlots.length, totalCount: candidateSlots.length, items: [] };
+  }
+
+  const rows = missing.map((slot) => ({
+    brand_id: brand.id,
+    title: plannedContentTitle(slot.category, slot.funnelStage),
+    format: slot.format,
+    status: "draft",
+    platforms,
+    topic: automationTopic(slot.category, slot.date, candidateSlots.indexOf(slot)),
+    objective: slot.objective,
+    tone: "Professional, credible, premium and educational",
+    content_package: {
+      planningStatus: "planned",
+      requiresGeneration: true,
+      funnelStage: slot.funnelStage,
+      scheduledSlot: slot.slotIndex + 1,
+      note: "AI copy, approved brand artwork, safety validation and approval are required before publishing.",
+    },
+    source_modules: [],
+    created_by: appUser.id,
+    updated_by: appUser.id,
+    scheduled_for: slot.scheduledFor,
+    suggested_posting_time: slot.scheduledFor,
+    category: slot.category,
+    target_audience: "Business owners, project leaders, procurement teams and enterprise decision-makers",
+    keywords: ["Varada Nexus", slot.category, "India", "business solutions"],
+    safety_status: "pending",
+  }));
+  const { data: inserted, error: insertError } = await db.from("social_content_items")
+    .insert(rows)
+    .select("id,title,status,platforms,scheduled_for,category,format,content_package");
+  if (insertError) throw insertError;
+
+  const { data: accounts } = await db.from("social_accounts")
+    .select("id,platform")
+    .eq("brand_id", brand.id)
+    .eq("status", "active")
+    .in("platform", platforms);
+  const channels = (inserted || []).flatMap((item: any) => platforms.map((platform: string) => ({
+    content_id: item.id,
+    account_id: accounts?.find((account: any) => account.platform === platform)?.id || null,
+    platform,
+    scheduled_for: item.scheduled_for,
+    status: "draft",
+    platform_payload: { planningStatus: "planned" },
+  })));
+  if (channels.length) {
+    const { error: channelError } = await db.from("social_content_channels").insert(channels);
+    if (channelError) throw channelError;
+  }
+  await db.from("social_automation_policies")
+    .update({ last_planned_through: missing[missing.length - 1].date, updated_by: appUser.id })
+    .eq("id", policy.id);
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "automation.schedule_materialized",
+    resource_type: "social_automation_policy",
+    resource_id: policy.id,
+    after_data: { createdCount: inserted?.length || 0, rangeStart, rangeEnd, safeDrafts: true },
+  });
+  return {
+    createdCount: inserted?.length || 0,
+    existingCount: candidateSlots.length - missing.length,
+    totalCount: candidateSlots.length,
+    items: inserted || [],
+  };
+}
+
 async function handleAutomationPlan(req: Request, payload: any) {
   const { db, appUser } = await authenticatedCaller(req, "create");
   const { brand, policy } = await loadBrandSystem(db);
@@ -4124,6 +4270,9 @@ Deno.serve(async (req) => {
         break;
       case "automation_plan":
         data = await handleAutomationPlan(req, payload);
+        break;
+      case "materialize_schedule":
+        data = await handleMaterializeSchedule(req, payload);
         break;
       case "save_automation_policy":
         data = await handleSaveAutomationPolicy(req, payload);

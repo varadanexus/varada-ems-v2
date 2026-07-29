@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { socialEdgeFetch } from "@/lib/api/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
 
-type Item = { id: string; title: string; status: string; platforms: string[]; scheduled_for: string | null };
+type Item = { id: string; title: string; status: string; platforms: string[]; scheduled_for: string | null; category?: string; format?: string; content_package?: { planningStatus?: string; funnelStage?: string } };
 
 export function PublishingCalendar() {
   const [cursor, setCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -57,6 +58,10 @@ export function PublishingCalendar() {
       {error && <ErrorState message={error} retry={load} />}
       {!items ? <LoadingState /> : (
         <section className="overflow-x-auto rounded-2xl border bg-surface-raised">
+          {items.length === 0 && <div className="flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="font-semibold">No content is planned for this month</p><p className="mt-1 text-sm text-muted">Create the rolling schedule in Settings; all new slots remain drafts until generation, safety checks and approval are complete.</p></div>
+            <Link href="/settings" className="btn-primary shrink-0"><CalendarDays size={15} /> Fill calendar</Link>
+          </div>}
           <div className="min-w-[850px]">
             <div className="grid grid-cols-7 border-b text-center text-[10px] font-bold uppercase tracking-wider text-muted">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <div key={day} className="p-3">{day}</div>)}
@@ -72,6 +77,7 @@ export function PublishingCalendar() {
                           <div key={item.id} className="rounded-lg border bg-background p-2">
                             <p className="truncate text-xs font-semibold">{item.title}</p>
                             <p className="mt-1 text-[10px] text-muted">{new Date(item.scheduled_for!).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} · {item.platforms.join(", ")}</p>
+                            {item.category && <p className="mt-1 truncate text-[10px] text-accent">{item.category} · {item.format?.replace("_", " ")}</p>}
                             <div className="mt-2"><StatusBadge status={item.status} /></div>
                           </div>
                         ))}

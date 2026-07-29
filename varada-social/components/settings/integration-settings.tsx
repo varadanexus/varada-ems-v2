@@ -168,7 +168,7 @@ function AutomationSettings({
   const [days, setDays] = useState(policy?.planning_horizon_days || 14);
   const [postsPerDay, setPostsPerDay] = useState(policy?.posts_per_day || 1);
   const [times, setTimes] = useState((policy?.preferred_times || ["10:00", "17:30"]).map((item) => String(item).slice(0, 5)).join(", "));
-  const [busy, setBusy] = useState<"save" | "plan" | "publish" | "">("");
+  const [busy, setBusy] = useState<"save" | "schedule" | "plan" | "publish" | "">("");
   const [message, setMessage] = useState("");
 
   async function savePolicy() {
@@ -185,8 +185,23 @@ function AutomationSettings({
         formats: policy?.formats,
         activeWeekdays: [0, 1, 2, 3, 4, 5, 6],
       });
-      setMessage("Automation policy saved."); await reload();
+      if (enabled) {
+        const schedule = await socialEdgeFetch<{ createdCount: number; existingCount: number; totalCount: number }>("materialize_schedule", { days });
+        setMessage(`Automation policy saved. ${schedule.totalCount} calendar slots are ready (${schedule.createdCount} added, ${schedule.existingCount} already present).`);
+      } else {
+        setMessage("Automation policy saved.");
+      }
+      await reload();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Policy could not be saved."); }
+    finally { setBusy(""); }
+  }
+
+  async function refreshSchedule() {
+    setBusy("schedule"); setError(""); setMessage("");
+    try {
+      const result = await socialEdgeFetch<{ createdCount: number; existingCount: number; totalCount: number }>("materialize_schedule", { days });
+      setMessage(`${result.totalCount} safe draft slots are visible in the calendar (${result.createdCount} added, ${result.existingCount} already present).`); await reload();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Calendar schedule could not be created."); }
     finally { setBusy(""); }
   }
 
@@ -228,6 +243,7 @@ function AutomationSettings({
       <label className="mt-4 flex items-center gap-3 text-sm"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} className="size-4 accent-[var(--accent)]" /> Keep the rolling content plan enabled</label>
       <div className="mt-5 flex flex-wrap gap-2">
         <button onClick={savePolicy} disabled={Boolean(busy)} className="btn-secondary">{busy === "save" ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />} Save policy</button>
+        <button onClick={refreshSchedule} disabled={Boolean(busy)} className="btn-secondary">{busy === "schedule" ? <LoaderCircle size={15} className="animate-spin" /> : <CalendarDays size={15} />} Fill calendar</button>
         <button onClick={createPlan} disabled={Boolean(busy)} className="btn-primary">{busy === "plan" ? <LoaderCircle size={15} className="animate-spin" /> : <Play size={15} />} Generate content plan</button>
         <button onClick={publishDue} disabled={Boolean(busy)} className="btn-secondary">{busy === "publish" ? <LoaderCircle size={15} className="animate-spin" /> : <Play size={15} />} Process due posts</button>
         <Link href="/calendar" className="btn-secondary"><CalendarDays size={15} /> View publishing calendar</Link>
