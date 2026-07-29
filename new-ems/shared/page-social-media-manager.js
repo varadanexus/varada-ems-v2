@@ -16,7 +16,7 @@ function safeModuleUrl(view) {
     if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsupported protocol");
     const route = view === "overview" ? "dashboard" : routes.has(view) ? view : "dashboard";
     url.pathname = url.pathname.replace(/\/(dashboard|create|content|calendar|approvals|trends|analytics|instagram|inbox|accounts|campaigns|settings|audit)\/?$/, `/${route}`);
-    url.search = "embedded=1&build=nexus-social-20260729-2";
+    url.search = "embedded=1&build=nexus-social-20260730-1";
     return url.href;
   } catch {
     return fallback;
