@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, CalendarClock, Copy, FileStack, Rocket, Search, Send, Sparkles } from "lucide-react";
+import { Archive, CalendarClock, Copy, Eye, FileStack, Rocket, Search, Send, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { socialEdgeFetch } from "@/lib/api/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/utils/cn";
+import { PostDetailEditor, type SocialContentItem } from "@/components/content/post-detail-editor";
 
-type Item = {
+type Item = SocialContentItem & {
   id: string;
   title: string;
   format: string;
@@ -31,6 +32,7 @@ export function ContentLibrary({ approvalOnly = false }: { approvalOnly?: boolea
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
+  const [selected, setSelected] = useState<Item | null>(null);
   const load = useCallback(async () => {
     try {
       const data = await socialEdgeFetch<Item[]>("list_content", {
@@ -119,7 +121,7 @@ export function ContentLibrary({ approvalOnly = false }: { approvalOnly?: boolea
           </div>
           <div className="divide-y">
             {visible.map((item) => (
-              <article key={item.id} className="grid gap-4 p-5 lg:grid-cols-[minmax(220px,1fr)_130px_150px_155px_minmax(250px,auto)] lg:items-center">
+              <article key={item.id} role="button" tabIndex={0} onClick={() => setSelected(item)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelected(item); }} className="grid cursor-pointer gap-4 p-5 transition hover:bg-surface lg:grid-cols-[minmax(220px,1fr)_130px_150px_155px_minmax(250px,auto)] lg:items-center">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{item.title}</p>
                   <p className="mt-1 text-xs capitalize text-muted">{item.format.replaceAll("_", " ")} · Updated {new Date(item.updated_at).toLocaleDateString("en-IN")}</p>
@@ -130,6 +132,7 @@ export function ContentLibrary({ approvalOnly = false }: { approvalOnly?: boolea
                 <p className="truncate text-xs capitalize text-muted">{item.platforms.join(", ")}</p>
                 <p className="text-xs text-muted">{item.scheduled_for ? new Date(item.scheduled_for).toLocaleString("en-IN") : "Not scheduled"}</p>
                 <div className="flex flex-wrap gap-1.5">
+                  <Action label="View / edit" icon={Eye} disabled={false} onClick={() => setSelected(item)} />
                   {["draft", "rejected"].includes(item.status) && <Action label="Submit" icon={Send} disabled={busy === item.id + "submit"} onClick={() => act(item, "submit")} />}
                   {["manager_review", "admin_review"].includes(item.status) && <>
                     <Action label="Approve" icon={Send} disabled={busy === item.id + "approve"} onClick={() => act(item, "approve")} />
@@ -147,10 +150,11 @@ export function ContentLibrary({ approvalOnly = false }: { approvalOnly?: boolea
           </div>
         </section>
       )}
+      {selected && <PostDetailEditor key={selected.id} item={selected} onClose={() => setSelected(null)} onSaved={load} />}
     </div>
   );
 }
 
 function Action({ label, icon: Icon, onClick, disabled }: { label: string; icon: typeof Send; onClick: () => void; disabled: boolean }) {
-  return <button disabled={disabled} onClick={onClick} className="inline-flex items-center gap-1.5 rounded-lg border bg-background px-2.5 py-1.5 text-[11px] font-semibold text-muted hover:border-accent/40 hover:text-foreground disabled:opacity-50"><Icon size={12} /> {label}</button>;
+  return <button disabled={disabled} onClick={(event) => { event.stopPropagation(); onClick(); }} className="inline-flex items-center gap-1.5 rounded-lg border bg-background px-2.5 py-1.5 text-[11px] font-semibold text-muted hover:border-accent/40 hover:text-foreground disabled:opacity-50"><Icon size={12} /> {label}</button>;
 }

@@ -7,13 +7,15 @@ import { socialEdgeFetch } from "@/lib/api/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { ErrorState, LoadingState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { PostDetailEditor, type SocialContentItem } from "@/components/content/post-detail-editor";
 
-type Item = { id: string; title: string; status: string; platforms: string[]; scheduled_for: string | null; category?: string; format?: string; content_package?: { planningStatus?: string; funnelStage?: string } };
+type Item = SocialContentItem;
 
 export function PublishingCalendar() {
   const [cursor, setCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [items, setItems] = useState<Item[] | null>(null);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState<Item | null>(null);
   const start = useMemo(() => new Date(cursor.getFullYear(), cursor.getMonth(), 1), [cursor]);
   const end = useMemo(() => new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59), [cursor]);
   const load = useCallback(async () => {
@@ -74,12 +76,12 @@ export function PublishingCalendar() {
                     {day && <><span className="text-xs font-semibold text-muted">{day.getDate()}</span>
                       <div className="mt-2 space-y-2">
                         {scheduled.map((item) => (
-                          <div key={item.id} className="rounded-lg border bg-background p-2">
+                          <button key={item.id} onClick={() => setSelected(item)} className="block w-full rounded-lg border bg-background p-2 text-left transition hover:border-accent/45 hover:bg-surface">
                             <p className="truncate text-xs font-semibold">{item.title}</p>
                             <p className="mt-1 text-[10px] text-muted">{new Date(item.scheduled_for!).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} · {item.platforms.join(", ")}</p>
                             {item.category && <p className="mt-1 truncate text-[10px] text-accent">{item.category} · {item.format?.replace("_", " ")}</p>}
                             <div className="mt-2"><StatusBadge status={item.status} /></div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </>}
@@ -90,6 +92,7 @@ export function PublishingCalendar() {
           </div>
         </section>
       )}
+      {selected && <PostDetailEditor key={selected.id} item={selected} onClose={() => setSelected(null)} onSaved={load} />}
     </div>
   );
 }

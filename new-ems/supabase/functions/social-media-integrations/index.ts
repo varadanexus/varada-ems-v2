@@ -1947,6 +1947,95 @@ async function handleListContent(req: Request, payload: any) {
   return data || [];
 }
 
+async function handleUpdateContent(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "edit");
+  const contentId = String(payload.contentId || "");
+  const { data: content, error } = await db.from("social_content_items")
+    .select("*").eq("id", contentId).maybeSingle();
+  if (error || !content) throw new Error("Content was not found");
+  if (["publishing", "published", "archived"].includes(content.status)) {
+    throw new Error(`Content is read-only while it is ${content.status.replaceAll("_", " ")}`);
+  }
+  const title = cleanText(payload.title, 240);
+  if (!title) throw new Error("Post title is required");
+  const allowedPlatforms = new Set(["instagram", "facebook", "linkedin", "x", "threads", "pinterest", "google_business", "youtube_community"]);
+  const platforms = Array.isArray(payload.platforms)
+    ? [...new Set(payload.platforms.map(String).filter((platform: string) => allowedPlatforms.has(platform)))].slice(0, 8)
+    : content.platforms;
+  if (!platforms.length) throw new Error("Select at least one publishing platform");
+  let scheduledFor: string | null = null;
+  if (payload.scheduledFor) {
+    const parsedSchedule = new Date(String(payload.scheduledFor));
+    if (Number.isNaN(parsedSchedule.getTime())) throw new Error("Choose a valid publishing time");
+    scheduledFor = parsedSchedule.toISOString();
+  }
+  const contentPackage = payload.contentPackage && typeof payload.contentPackage === "object" && !Array.isArray(payload.contentPackage)
+    ? payload.contentPackage
+    : content.content_package;
+  const nextSafety = content.generation_fingerprint || content.safety_status === "passed" ? "needs_review" : "pending";
+  const update = {
+    title,
+    topic: cleanText(payload.topic, 4000) || null,
+    objective: cleanText(payload.objective, 1000) || null,
+    target_audience: cleanText(payload.targetAudience, 1000) || null,
+    keywords: Array.isArray(payload.keywords) ? payload.keywords.map((item: unknown) => cleanText(item, 100)).filter(Boolean).slice(0, 40) : content.keywords,
+    platforms,
+    content_package: contentPackage,
+    scheduled_for: scheduledFor,
+    suggested_posting_time: scheduledFor,
+    status: "draft",
+    safety_status: nextSafety,
+    rejection_reason: null,
+    archived_at: null,
+    updated_by: appUser.id,
+  };
+  const { data: updated, error: updateError } = await db.from("social_content_items")
+    .update(update).eq("id", contentId).select().single();
+  if (updateError) throw new Error(updateError.message);
+
+  const { data: existingChannels } = await db.from("social_content_channels")
+    .select("id,platform").eq("content_id", contentId);
+  const channelIds = (existingChannels || []).map((channel: any) => channel.id);
+  if (channelIds.length) {
+    await db.from("social_publish_jobs").update({ status: "cancelled" })
+      .in("channel_id", channelIds).in("status", ["queued", "retrying"]);
+  }
+  const removed = (existingChannels || []).filter((channel: any) => !platforms.includes(channel.platform)).map((channel: any) => channel.id);
+  if (removed.length) await db.from("social_content_channels").delete().in("id", removed);
+  const { data: accounts } = await db.from("social_accounts").select("id,platform")
+    .eq("brand_id", content.brand_id).eq("status", "active").in("platform", platforms);
+  const channelRows = platforms.map((platform: string) => ({
+    content_id: contentId,
+    platform,
+    account_id: accounts?.find((account: any) => account.platform === platform)?.id || null,
+    status: "draft",
+    scheduled_for: scheduledFor,
+    platform_payload: { editedAt: new Date().toISOString(), editedBy: appUser.id },
+  }));
+  const { error: channelError } = await db.from("social_content_channels")
+    .upsert(channelRows, { onConflict: "content_id,platform" });
+  if (channelError) throw new Error(channelError.message);
+  if (content.status !== "draft") {
+    await db.from("social_approval_actions").insert({
+      content_id: contentId,
+      actor_id: appUser.id,
+      action: "commented",
+      from_status: content.status,
+      to_status: "draft",
+      comment: "Content edited and returned to draft for safety validation and approval.",
+    });
+  }
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "content.updated",
+    resource_type: "social_content",
+    resource_id: contentId,
+    before_data: content,
+    after_data: updated,
+  });
+  return updated;
+}
+
 function workflowTransition(current: string, action: string) {
   if (action === "submit" && ["draft", "rejected"].includes(current)) {
     return { status: "manager_review", approvalAction: "submitted" };
@@ -4246,6 +4335,9 @@ Deno.serve(async (req) => {
         break;
       case "content_action":
         data = await handleContentAction(req, payload);
+        break;
+      case "update_content":
+        data = await handleUpdateContent(req, payload);
         break;
       case "create_content":
         data = await handleCreateContent(req, payload);
