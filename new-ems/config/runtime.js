@@ -1,9 +1,7 @@
 window.EMS_RUNTIME_CONFIG = window.EMS_RUNTIME_CONFIG || {
   supabaseUrl: "https://ftejxcycoiagbslnzaab.supabase.co",
   supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0ZWp4Y3ljb2lhZ2JzbG56YWFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMzIzMjIsImV4cCI6MjA5NTgwODMyMn0.Fd9O069Gmoi5l-bcImmWUp5hWblQwJV0_s00UdFWscw",
-  socialMediaManagerUrl: ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)
-    ? "http://localhost:3000/dashboard?embedded=1"
-    : "/social-media/dashboard?embedded=1",
+  socialMediaManagerUrl: "https://www.varadanexus.com/social-media/dashboard?embedded=1",
   transportAgentPenaltiesReady: true,
   vapidPublicKey: "BCntF46g0ncAPg2K9A9btuwiern8jOsEjNfxGONGv7vtHi7PvgWvBcs6lq_VnQNnBT3MArBduzTPWW4bU8U7Pqc"
 };

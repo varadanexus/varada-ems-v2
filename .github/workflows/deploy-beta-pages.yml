@@ -39,7 +39,7 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: /social-media
           NEXT_PUBLIC_SUPABASE_URL: https://ftejxcycoiagbslnzaab.supabase.co
-          NEXT_PUBLIC_EMS_PARENT_ORIGINS: https://www.varadanexus.com,https://varadanexus.com
+          NEXT_PUBLIC_EMS_PARENT_ORIGINS: https://www.varadanexus.com,https://varadanexus.com,https://localhost
         run: |
           npm ci --prefix varada-social
           npm run social:build
