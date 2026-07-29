@@ -7,6 +7,7 @@ import { socialEdgeFetch } from "@/lib/api/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { cn } from "@/utils/cn";
 
 type Item = {
   id: string;
@@ -17,6 +18,9 @@ type Item = {
   scheduled_for: string | null;
   updated_at: string;
   rejection_reason?: string | null;
+  category?: string | null;
+  safety_status?: string;
+  automation_run_id?: string | null;
 };
 
 const statuses = ["all", "draft", "manager_review", "admin_review", "approved", "scheduled", "published", "rejected", "failed", "archived"];
@@ -119,9 +123,10 @@ export function ContentLibrary({ approvalOnly = false }: { approvalOnly?: boolea
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{item.title}</p>
                   <p className="mt-1 text-xs capitalize text-muted">{item.format.replaceAll("_", " ")} · Updated {new Date(item.updated_at).toLocaleDateString("en-IN")}</p>
+                  {(item.category || item.automation_run_id) && <p className="mt-1 text-xs text-accent">{item.category || "Automated campaign"}{item.automation_run_id ? " · AI plan" : ""}</p>}
                   {item.rejection_reason && <p className="mt-1 text-xs text-red-300">{item.rejection_reason}</p>}
                 </div>
-                <div><StatusBadge status={item.status} /></div>
+                <div className="space-y-1.5"><StatusBadge status={item.status} />{item.safety_status && item.safety_status !== "pending" && <p className={cn("text-[10px] font-bold uppercase tracking-wider", item.safety_status === "passed" ? "text-emerald-300" : "text-amber-300")}>{item.safety_status.replace("_", " ")}</p>}</div>
                 <p className="truncate text-xs capitalize text-muted">{item.platforms.join(", ")}</p>
                 <p className="text-xs text-muted">{item.scheduled_for ? new Date(item.scheduled_for).toLocaleString("en-IN") : "Not scheduled"}</p>
                 <div className="flex flex-wrap gap-1.5">

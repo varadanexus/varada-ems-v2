@@ -69,7 +69,9 @@ export function CampaignManager() {
   }, [loadAccounts]);
 
   useEffect(() => {
-    if (selected) void loadCampaigns(selected);
+    if (!selected) return;
+    const timer = window.setTimeout(() => void loadCampaigns(selected), 0);
+    return () => window.clearTimeout(timer);
   }, [loadCampaigns, selected]);
 
   async function createCampaign(event: FormEvent<HTMLFormElement>) {

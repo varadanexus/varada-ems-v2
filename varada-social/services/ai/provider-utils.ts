@@ -27,7 +27,11 @@ export function parseGeneratedContent(
   parsed.variants = parsed.variants.filter((variant) =>
     platforms.includes(variant.platform),
   );
-  return { ...parsed, provider, model };
+  const review = parsed.safetyReview;
+  const safetyStatus = review && review.branding && review.language && review.claims && review.copyright && !review.issues?.length
+    ? "passed"
+    : "needs_review";
+  return { ...parsed, provider, model, safetyStatus, fingerprint: "" };
 }
 
 export async function providerFetch(

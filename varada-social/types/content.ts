@@ -29,6 +29,8 @@ export interface ContentGenerationRequest {
   callToAction?: string;
   emsModules: string[];
   includeEmsContext: boolean;
+  category?: string;
+  contentType?: string;
 }
 
 export interface PlatformVariant {
@@ -42,6 +44,14 @@ export interface GeneratedContent {
   headline: string;
   concept: string;
   hook: string;
+  cta: string;
+  altText: string;
+  keywords: string[];
+  suggestedPostingTime: string;
+  targetAudience: string;
+  recommendedPlatforms: string[];
+  category: string;
+  contentType: string;
   variants: PlatformVariant[];
   carouselSlides: Array<{ heading: string; body: string }>;
   reel: {
@@ -58,7 +68,25 @@ export interface GeneratedContent {
     musicKeywords: string[];
   };
   imagePrompt: string;
+  brandAssetInstructions: {
+    logoAsset: string;
+    logoPlacement: string;
+    watermark: boolean;
+    colours: string[];
+    typography: string;
+    template: string;
+  };
   safetyNotes: string[];
+  safetyStatus: "passed" | "blocked" | "needs_review";
+  safetyReview: {
+    branding: boolean;
+    language: boolean;
+    claims: boolean;
+    copyright: boolean;
+    issues: string[];
+  };
+  fingerprint: string;
+  cacheHit?: boolean;
   provider: string;
   model: string;
 }

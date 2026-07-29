@@ -9,7 +9,7 @@ import { generateContent } from "@/services/ai/provider-router";
 import { recordTextGeneration } from "@/services/persistence/generation-log";
 
 const requestSchema = generationRequestSchema.extend({
-  preferredProvider: z.enum(["openai", "anthropic", "gemini"]).optional(),
+  preferredProvider: z.enum(["vertex", "openai", "anthropic", "gemini"]).optional(),
 });
 
 export async function POST(request: NextRequest) {

@@ -11,6 +11,8 @@ export const generationRequestSchema = z.object({
   callToAction: z.string().trim().max(180).optional().default(""),
   emsModules: z.array(z.string().trim().max(60)).max(12).default([]),
   includeEmsContext: z.boolean().default(true),
+  category: z.string().trim().max(100).optional(),
+  contentType: z.string().trim().max(80).optional(),
 });
 
 export const imageRequestSchema = z.object({

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Camera, ExternalLink, Eye, EyeOff, Film, Grid3X3, Heart, LoaderCircle,
-  MessageCircle, RefreshCw, Send, Share2, Trash2, Users, X,
+  MessageCircle, RefreshCw, Send, Share2, ShieldCheck, Trash2, Users, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { socialEdgeFetch } from "@/lib/api/client";
@@ -34,6 +34,14 @@ type InstagramComment = {
   like_count: number; hidden: boolean; parent_id?: string;
   replies?: { data?: InstagramComment[] };
 };
+type MetaReviewTests = {
+  checkedAt: string;
+  tests: Record<string, { success: boolean; awaitingReview?: boolean; message?: string }>;
+};
+type MetaRequiredTests = {
+  checkedAt: string;
+  results: Record<string, { success: boolean; message?: string }>;
+};
 const compact = new Intl.NumberFormat("en-IN", { notation: "compact", maximumFractionDigits: 1 });
 
 export function InstagramWorkspace() {
@@ -46,6 +54,16 @@ export function InstagramWorkspace() {
   const [commentBusy, setCommentBusy] = useState("");
   const [replyTo, setReplyTo] = useState("");
   const [replyText, setReplyText] = useState("");
+  const [reviewTests, setReviewTests] = useState<MetaReviewTests | null>(null);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [requiredTests, setRequiredTests] = useState<MetaRequiredTests | null>(null);
+  const [requiredBusy, setRequiredBusy] = useState(false);
+  const closePost = useCallback(() => {
+    setSelectedPost(null);
+    setComments(null);
+    setReplyTo("");
+    setReplyText("");
+  }, []);
   const load = useCallback(async () => {
     setBusy(true);
     try {
@@ -61,6 +79,47 @@ export function InstagramWorkspace() {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+  useEffect(() => {
+    if (!selectedPost) return;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closePost();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [closePost, selectedPost]);
+
+  async function runMetaReviewTests() {
+    setReviewBusy(true);
+    try {
+      setReviewTests(await socialEdgeFetch<MetaReviewTests>("meta_review_tests"));
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Meta permission tests could not be completed.");
+    } finally {
+      setReviewBusy(false);
+    }
+  }
+
+  async function runRequiredMetaTests() {
+    if (!window.confirm("Run Meta's required live tests? This publishes one clearly labelled temporary Instagram test post and replies to a test comment.")) return;
+    setRequiredBusy(true);
+    try {
+      setRequiredTests(await socialEdgeFetch<MetaRequiredTests>("meta_required_tests", {
+        confirmation: "RUN_REQUIRED_META_TESTS",
+      }));
+      setError("");
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Required Meta tests could not be completed.");
+    } finally {
+      setRequiredBusy(false);
+    }
+  }
 
   async function loadComments(post: InstagramPost) {
     setSelectedPost(post);
@@ -123,11 +182,42 @@ export function InstagramWorkspace() {
         title="Instagram"
         description="View connected profiles, live posts and post-level insights directly from Meta."
         icon={Camera}
-        actions={<button onClick={load} disabled={busy} className="btn-secondary">
-          {busy ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />} Sync from Instagram
-        </button>}
+        actions={<div className="flex flex-wrap gap-2">
+          <button onClick={() => void runRequiredMetaTests()} disabled={requiredBusy} className="btn-primary">
+            {requiredBusy ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />} Run required tests
+          </button>
+          <button onClick={() => void runMetaReviewTests()} disabled={reviewBusy} className="btn-secondary">
+            {reviewBusy ? <LoaderCircle size={16} className="animate-spin" /> : <ShieldCheck size={16} />} Verify Meta access
+          </button>
+          <button onClick={load} disabled={busy} className="btn-secondary">
+            {busy ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />} Sync from Instagram
+          </button>
+        </div>}
       />
       {error && <ErrorState message={error} retry={load} />}
+      {reviewTests && <section className="rounded-2xl border bg-surface-raised p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Meta permission verification</p><h2 className="mt-1 font-display text-lg font-semibold">Live API test results</h2></div>
+          <p className="text-xs text-muted">Checked {new Date(reviewTests.checkedAt).toLocaleString("en-IN")}</p>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Object.entries(reviewTests.tests).map(([permission, result]) => <div key={permission} className="rounded-xl border bg-background p-3">
+            <p className="break-all text-xs font-semibold">{permission}</p>
+            <p className={`mt-2 text-sm font-semibold ${result.success ? "text-emerald-300" : result.awaitingReview ? "text-accent" : "text-red-300"}`}>{result.success ? "API test passed" : result.awaitingReview ? "Awaiting Meta review" : "Action required"}</p>
+            {result.message && <p className="mt-1 text-xs leading-5 text-muted">{result.message}</p>}
+          </div>)}
+        </div>
+      </section>}
+      {requiredTests && <section className="rounded-2xl border border-accent/30 bg-surface-raised p-5">
+        <div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Required Meta API tests</p><h2 className="mt-1 font-display text-lg font-semibold">Live write-test results</h2></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {Object.entries(requiredTests.results).map(([permission, result]) => <div key={permission} className="rounded-xl border bg-background p-3">
+            <p className="break-all text-xs font-semibold">{permission}</p>
+            <p className={`mt-2 text-sm font-semibold ${result.success ? "text-emerald-300" : "text-red-300"}`}>{result.success ? "Required call completed" : "Still blocked"}</p>
+            {result.message && <p className="mt-1 text-xs leading-5 text-muted">{result.message}</p>}
+          </div>)}
+        </div>
+      </section>}
       {!data ? <LoadingState /> : data.accounts.length === 0 ? (
         <EmptyState title="No Instagram Business account linked" description="Open Social Accounts and complete Connect Meta. The Instagram account must be professional and linked to a Facebook Page." />
       ) : <>
@@ -190,24 +280,39 @@ export function InstagramWorkspace() {
           )}
         </section>
         {selectedPost && (
-          <div className="fixed inset-0 z-[80] grid bg-black/80 p-3 backdrop-blur-sm sm:p-8" role="dialog" aria-modal="true">
-            <div className="mx-auto grid h-full w-full max-w-6xl overflow-hidden rounded-2xl border bg-background lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)]">
-              <div className="grid min-h-0 place-items-center bg-black">
+          <div
+            className="fixed inset-0 z-[80] grid place-items-center bg-black/80 p-3 backdrop-blur-sm sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Instagram post viewer"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) closePost();
+            }}
+          >
+            <div className="relative mx-auto grid h-full max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl min-h-0 grid-rows-[minmax(0,44vh)_minmax(0,1fr)] overflow-hidden rounded-2xl border bg-background shadow-2xl md:grid-cols-[minmax(0,1.15fr)_minmax(320px,.85fr)] md:grid-rows-1 sm:max-h-[calc(100dvh-3rem)]">
+              <button
+                onClick={closePost}
+                className="absolute right-3 top-3 z-20 grid size-10 place-items-center rounded-full border border-white/20 bg-black/80 text-white shadow-lg transition hover:border-accent/60 hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                aria-label="Close post viewer"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+              <div className="grid min-h-0 overflow-hidden place-items-center bg-black">
                 {selectedPost.media_product_type === "REELS" && selectedPost.media_url ? (
-                  <video src={selectedPost.media_url} controls className="max-h-full max-w-full" />
+                  <video src={selectedPost.media_url} controls className="h-full max-h-full w-full max-w-full object-contain" />
                 ) : selectedPost.media_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={selectedPost.media_url} alt="" className="max-h-full max-w-full object-contain" />
+                  <img src={selectedPost.media_url} alt="" className="h-full max-h-full w-full max-w-full object-contain" />
                 ) : <Camera size={40} className="text-muted" />}
               </div>
-              <aside className="flex min-h-0 flex-col border-l">
-                <header className="flex items-center gap-3 border-b p-4">
+              <aside className="flex min-h-0 flex-col overflow-hidden border-t md:border-l md:border-t-0">
+                <header className="flex items-center gap-3 border-b p-4 pr-16">
                   <span className="grid size-10 place-items-center rounded-full bg-accent-soft text-accent"><Camera size={18} /></span>
                   <div className="min-w-0 flex-1"><p className="font-semibold">@{selectedPost.account_username}</p><p className="text-xs text-muted">{selectedPost.media_product_type}</p></div>
                   <a href={selectedPost.permalink} target="_blank" rel="noreferrer" className="rounded-lg p-2 text-muted hover:bg-surface" title="Edit or delete this post in Instagram"><ExternalLink size={18} /></a>
-                  <button onClick={() => setSelectedPost(null)} className="rounded-lg p-2 text-muted hover:bg-surface" aria-label="Close"><X size={19} /></button>
                 </header>
-                <div className="border-b p-4">
+                <div className="max-h-[38%] shrink-0 overflow-y-auto border-b p-4 md:max-h-[44%]">
                   <p className="whitespace-pre-wrap text-sm leading-6">{selectedPost.caption || "Instagram post"}</p>
                   <div className="mt-4 flex gap-5 text-xs text-muted">
                     <span className="flex items-center gap-1"><Heart size={14} /> {compact.format(selectedPost.like_count)}</span>

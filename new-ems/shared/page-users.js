@@ -79,7 +79,7 @@ async function init() {
       <form id="createUserForm" class="form-row">
         <input id="newUserEmail" type="email" placeholder="Email" required />
         <input id="newUserUsername" type="text" placeholder="Username (optional)" />
-        <input id="newUserPhone" type="tel" inputmode="numeric" placeholder="Registered mobile number" required />
+        <input id="newUserPhone" type="tel" inputmode="numeric" placeholder="Registered mobile number (optional)" />
         <input id="newUserPassword" type="password" minlength="8" placeholder="Initial password (minimum 8 characters)" required />
         <input id="newUserName" type="text" placeholder="Display name" />
         <select id="newUserAuthMethod" required>
@@ -888,8 +888,8 @@ function bindCreateForm() {
         showToast("Initial password must be at least 8 characters", "error");
         return;
       }
-      if (String(phone || "").replace(/\D/g, "").length < 10) {
-        showToast("A valid registered mobile number is required for WhatsApp and the protected credential PDF", "error");
+      if (phone && String(phone).replace(/\D/g, "").length < 10) {
+        showToast("Enter a valid registered mobile number, or leave it blank", "error");
         return;
       }
 

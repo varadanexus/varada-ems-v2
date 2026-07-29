@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Check,
   Clipboard,
+  Film,
   ImageIcon,
   LoaderCircle,
   Music2,
@@ -38,6 +39,22 @@ const formats: Array<{ value: ContentFormat; label: string }> = [
   { value: "reel", label: "Reel" },
 ];
 
+const categories = [
+  "Healthcare Infrastructure", "Hospital Consultancy", "Transportation & Logistics",
+  "Mining", "Interior Design", "Import & Export", "Digital Marketing", "HR & PR",
+  "Corporate Services", "Company Announcements", "Recruitment", "Client Success Stories",
+  "CSR Activities", "Educational Content", "Industry News", "Tips & Guides",
+  "Festival Greetings", "Motivational Posts", "Product & Service Promotions",
+];
+
+const contentTypes = [
+  ["image_post", "Image post"], ["carousel", "Carousel"], ["story", "Story"],
+  ["reel_caption", "Reel caption"], ["reel_script", "Reel script"],
+  ["promotional_graphic", "Promotional graphic"], ["quote_card", "Quote card"],
+  ["infographic", "Infographic"], ["before_after", "Before / after"],
+  ["event_announcement", "Event announcement"], ["holiday_greeting", "Holiday greeting"],
+] as const;
+
 const emsModules = [
   ["transportation", "Transportation"],
   ["interiors", "Interiors"],
@@ -56,19 +73,24 @@ export function CreationStudio() {
     "transportation",
   ]);
   const [format, setFormat] = useState<ContentFormat>("carousel");
+  const [category, setCategory] = useState("Corporate Services");
+  const [contentType, setContentType] = useState("carousel");
   const [topic, setTopic] = useState("");
-  const [objective, setObjective] = useState("Build authority and generate qualified enquiries");
+  const [objective, setObjective] = useState("Center Varada Nexus as the solution provider, give prospective clients useful guidance, and generate qualified enquiries");
   const [tone, setTone] = useState("Professional and educational");
   const [length, setLength] = useState<"short" | "medium" | "long">("medium");
-  const [cta, setCta] = useState("Contact Varada Nexus to discuss your requirements");
-  const [provider, setProvider] = useState("openai");
+  const [cta, setCta] = useState("Send Varada Nexus your requirement to arrange a consultation, assessment or quotation");
+  const [provider, setProvider] = useState("vertex");
   const [result, setResult] = useState<GeneratedContent | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [imageStoragePath, setImageStoragePath] = useState("");
+  const [imageBrandOverlay, setImageBrandOverlay] = useState<Record<string, unknown> | null>(null);
+  const [carouselAssets, setCarouselAssets] = useState<Array<{ publicUrl: string; storagePath?: string; brandOverlay?: Record<string, unknown> }>>([]);
+  const [generatedMediaType, setGeneratedMediaType] = useState<"image" | "video">("image");
   const [manualTitle, setManualTitle] = useState("");
   const [manualCaption, setManualCaption] = useState("");
   const [manualMediaUrl, setManualMediaUrl] = useState("");
-  const [loading, setLoading] = useState<"content" | "image" | null>(null);
+  const [loading, setLoading] = useState<"content" | "image" | "video" | null>(null);
   const [saving, setSaving] = useState<"draft" | "review" | "manual-draft" | "manual-review" | null>(null);
   const [savedMessage, setSavedMessage] = useState("");
   const [error, setError] = useState("");
@@ -108,10 +130,15 @@ export function CreationStudio() {
           emsModules: selectedModules,
           includeEmsContext: true,
           preferredProvider: provider,
+          category,
+          contentType,
       });
       setResult(generated);
       setImageUrl("");
       setImageStoragePath("");
+      setImageBrandOverlay(null);
+      setCarouselAssets([]);
+      setGeneratedMediaType("image");
       setSavedMessage("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Generation failed.");
@@ -125,16 +152,62 @@ export function CreationStudio() {
     setLoading("image");
     setError("");
     try {
-      const generated = await socialEdgeFetch<{ assetUrl: string; storagePath?: string }>("generate_image", {
-          prompt: result.imagePrompt,
-          aspectRatio: format === "story" || format === "reel" ? "story" : "portrait",
-          quality: "medium",
-          style: "premium black and gold corporate editorial photography",
-      });
-      setImageUrl(generated.assetUrl);
-      setImageStoragePath(generated.storagePath || "");
+      const plans = format === "carousel" && result.carouselSlides.length
+        ? result.carouselSlides.slice(0, 8)
+        : [{ heading: result.headline, body: result.concept }];
+      const generatedAssets = [];
+      for (let slideIndex = 0; slideIndex < plans.length; slideIndex += 1) {
+        const slide = plans[slideIndex];
+        const generated = await socialEdgeFetch<{ assetUrl: string; storagePath?: string; brandOverlay?: Record<string, unknown> }>("generate_image", {
+            prompt: `${result.imagePrompt}\nVisual ${slideIndex + 1} of ${plans.length}: ${slide.heading}. ${slide.body}. Keep the campaign visually coherent but make this frame distinct.`,
+            aspectRatio: format === "story" || format === "reel" ? "story" : "portrait",
+            quality: "medium",
+            style: "premium black and gold corporate editorial photography",
+        });
+        generatedAssets.push({ publicUrl: generated.assetUrl, storagePath: generated.storagePath, brandOverlay: generated.brandOverlay });
+      }
+      const primary = generatedAssets[0];
+      setImageUrl(primary.publicUrl);
+      setImageStoragePath(primary.storagePath || "");
+      setImageBrandOverlay(primary.brandOverlay || null);
+      setCarouselAssets(format === "carousel" ? generatedAssets : []);
+      setGeneratedMediaType("image");
+      if (format === "carousel") setSavedMessage(`${generatedAssets.length} branded carousel slides are ready.`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Image generation failed.");
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function createVideo() {
+    if (!result?.imagePrompt) return;
+    setLoading("video");
+    setError("");
+    try {
+      const started = await socialEdgeFetch<{ jobId: string; estimatedCostInr: number }>("generate_video", {
+        prompt: `${result.imagePrompt} ${result.reel?.scenes?.map((scene) => scene.visual).join(" ") || ""}`,
+        aspectRatio: "9:16",
+        durationSeconds: 8,
+      });
+      setSavedMessage(`Vertex AI is rendering an 8-second reel clip (the current Veo production maximum per clip; guarded estimate ₹${started.estimatedCostInr.toFixed(2)}).`);
+      let completed: { status: string; public_url?: string; storage_path?: string; error_message?: string } | null = null;
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 10_000));
+        const polled = await socialEdgeFetch<{ status: string; public_url?: string; storage_path?: string; error_message?: string }>("poll_video", { jobId: started.jobId });
+        completed = polled;
+        if (polled.status !== "processing" && polled.status !== "queued") break;
+      }
+      if (!completed || completed.status !== "succeeded" || !completed.public_url) {
+        throw new Error(completed?.error_message || "Video generation is still processing. It can be checked again from the media job history.");
+      }
+      setImageUrl(completed.public_url);
+      setImageStoragePath(completed.storage_path || "");
+      setImageBrandOverlay({ provider: "vertex", model: "veo-3.1-fast-generate-001", approvedBrandPrompt: true });
+      setGeneratedMediaType("video");
+      setSavedMessage("The branded reel is ready. Save it as a draft or submit it for approval.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Video generation failed.");
     } finally {
       setLoading(null);
     }
@@ -152,15 +225,21 @@ export function CreationStudio() {
           topic,
           objective,
           tone,
+          category,
           contentPackage: result,
           status,
           emsModules: selectedModules,
-          asset: imageUrl ? {
-            publicUrl: imageUrl,
-            storagePath: imageStoragePath || undefined,
+          assets: carouselAssets.length ? carouselAssets.map((asset) => ({
+            ...asset,
             mediaType: "image",
             mimeType: "image/png",
-          } : null,
+          })) : imageUrl ? [{
+            publicUrl: imageUrl,
+            storagePath: imageStoragePath || undefined,
+            mediaType: generatedMediaType,
+            mimeType: generatedMediaType === "video" ? "video/mp4" : "image/png",
+            brandOverlay: imageBrandOverlay,
+          }] : [],
       });
       setSavedMessage(status === "draft" ? "Campaign saved as a draft." : "Campaign submitted for manager approval.");
     } catch (reason) {
@@ -182,6 +261,7 @@ export function CreationStudio() {
     setSaving(status === "draft" ? "manual-draft" : "manual-review");
     setError("");
     try {
+      const manualIsVideo = format === "reel" || /\.(mp4|mov|webm)(?:\?|#|$)/i.test(manualMediaUrl.trim());
       await socialEdgeFetch("create_content", {
         title: manualTitle,
         format,
@@ -214,8 +294,8 @@ export function CreationStudio() {
         asset: manualMediaUrl.trim() ? {
           publicUrl: manualMediaUrl.trim(),
           storagePath: `external/${Date.now()}`,
-          mediaType: format === "reel" || format === "story" ? "video" : "image",
-          mimeType: format === "reel" || format === "story" ? "video/mp4" : "image/jpeg",
+          mediaType: manualIsVideo ? "video" : "image",
+          mimeType: manualIsVideo ? "video/mp4" : "image/jpeg",
         } : null,
       });
       setSavedMessage(
@@ -276,6 +356,19 @@ export function CreationStudio() {
               </div>
             </Field>
 
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+              <Field label="Business category">
+                <select value={category} onChange={(event) => setCategory(event.target.value)} className="h-11 w-full rounded-xl border bg-background px-3 text-sm">
+                  {categories.map((item) => <option key={item}>{item}</option>)}
+                </select>
+              </Field>
+              <Field label="Content type">
+                <select value={contentType} onChange={(event) => setContentType(event.target.value)} className="h-11 w-full rounded-xl border bg-background px-3 text-sm">
+                  {contentTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </Field>
+            </div>
+
             <Field label="Platforms">
               <div className="flex flex-wrap gap-2">
                 {platforms.map((item) => (
@@ -331,9 +424,10 @@ export function CreationStudio() {
             </Field>
             <Field label="AI provider">
               <select value={provider} onChange={(event) => setProvider(event.target.value)} className="h-11 w-full rounded-xl border bg-background px-3 text-sm">
+                <option value="vertex">Google Cloud · Vertex AI Gemini (Primary)</option>
                 <option value="openai">OpenAI · GPT-5.6</option>
                 <option value="anthropic">Anthropic · Claude</option>
-                <option value="gemini">Google · Gemini</option>
+                <option value="gemini">Google · Gemini API (Fallback)</option>
               </select>
             </Field>
 
@@ -426,7 +520,10 @@ export function CreationStudio() {
               result={result}
               imageUrl={imageUrl}
               loadingImage={loading === "image"}
+              loadingVideo={loading === "video"}
               onCreateImage={createImage}
+              onCreateVideo={createVideo}
+              generatedMediaType={generatedMediaType}
               onRegenerate={generate}
               onSaveDraft={() => save("draft")}
               onSubmitReview={() => save("manager_review")}
@@ -446,7 +543,10 @@ function ResultPanel({
   result,
   imageUrl,
   loadingImage,
+  loadingVideo,
   onCreateImage,
+  onCreateVideo,
+  generatedMediaType,
   onRegenerate,
   onSaveDraft,
   onSubmitReview,
@@ -456,7 +556,10 @@ function ResultPanel({
   result: GeneratedContent;
   imageUrl: string;
   loadingImage: boolean;
+  loadingVideo: boolean;
   onCreateImage: () => void;
+  onCreateVideo: () => void;
+  generatedMediaType: "image" | "video";
   onRegenerate: () => void;
   onSaveDraft: () => void;
   onSubmitReview: () => void;
@@ -487,11 +590,19 @@ function ResultPanel({
       </div>
       {savedMessage && <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-sm text-emerald-200">{savedMessage}</div>}
 
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-xl border bg-background/45 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Category</p><p className="mt-2 text-sm font-semibold">{result.category}</p></div>
+        <div className="rounded-xl border bg-background/45 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Target audience</p><p className="mt-2 text-sm font-semibold">{result.targetAudience}</p></div>
+        <div className="rounded-xl border bg-background/45 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Suggested time</p><p className="mt-2 text-sm font-semibold">{result.suggestedPostingTime ? new Date(result.suggestedPostingTime).toLocaleString("en-IN") : "Review required"}</p></div>
+        <div className="rounded-xl border bg-background/45 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-muted">Safety</p><p className={cn("mt-2 text-sm font-semibold capitalize", result.safetyStatus === "passed" ? "text-success" : "text-amber-300")}>{result.safetyStatus.replace("_", " ")}</p></div>
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(280px,.9fr)]">
         <div className="space-y-5">
           <div className="rounded-xl border bg-background/45 p-4">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">Hook</p>
             <p className="mt-2 font-display text-xl font-semibold">{result.hook}</p>
+            <p className="mt-3 text-sm text-muted"><b className="text-foreground">CTA:</b> {result.cta}</p>
           </div>
 
           <div>
@@ -553,27 +664,41 @@ function ResultPanel({
         <aside>
           <div className="overflow-hidden rounded-xl border bg-background/60">
             {imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt="AI-generated campaign visual" className="aspect-[4/5] w-full object-cover" />
+              generatedMediaType === "video" ? (
+                <video src={imageUrl} controls playsInline className="aspect-[9/16] max-h-[680px] w-full bg-black object-contain" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={imageUrl} alt={result.altText || "Varada Nexus campaign visual"} className="aspect-[4/5] w-full object-cover" />
+              )
             ) : (
               <div className="grid aspect-[4/5] place-items-center p-8 text-center">
                 <div>
                   <span className="mx-auto grid size-14 place-items-center rounded-2xl bg-accent-soft text-accent"><ImageIcon size={23} /></span>
                   <h3 className="mt-4 font-display text-lg font-semibold">Generate the campaign visual</h3>
                   <p className="mt-2 text-sm leading-6 text-muted">{result.imagePrompt}</p>
-                  <button onClick={onCreateImage} disabled={loadingImage} className="mx-auto mt-5 flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-[#100c05] disabled:opacity-50">
-                    {loadingImage ? <LoaderCircle size={16} className="animate-spin" /> : <ImageIcon size={16} />}
-                    Generate image
-                  </button>
+                  <div className="mt-5 flex flex-wrap justify-center gap-2">
+                    <button onClick={onCreateImage} disabled={loadingImage || loadingVideo} className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-bold text-[#100c05] disabled:opacity-50">
+                      {loadingImage ? <LoaderCircle size={16} className="animate-spin" /> : <ImageIcon size={16} />}
+                      Generate image
+                    </button>
+                    <button onClick={onCreateVideo} disabled={loadingImage || loadingVideo} className="btn-secondary">
+                      {loadingVideo ? <LoaderCircle size={16} className="animate-spin" /> : <Film size={16} />}
+                      {loadingVideo ? "Rendering reel…" : "Generate 8s reel clip"}
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs text-muted">Video generation uses the protected Google Cloud credit ledger and stops before paid overage.</p>
                 </div>
               </div>
             )}
           </div>
           <div className="mt-4 rounded-xl border bg-surface p-4">
-            <p className="flex items-center gap-2 text-sm font-semibold"><Check size={15} className="text-success" /> Brand safety review</p>
+            <p className="flex items-center gap-2 text-sm font-semibold"><Check size={15} className={result.safetyStatus === "passed" ? "text-success" : "text-amber-300"} /> Brand safety review</p>
             <ul className="mt-3 space-y-2 text-xs leading-5 text-muted">
-              {(result.safetyNotes.length ? result.safetyNotes : ["No material risks identified."]).map((note) => <li key={note}>• {note}</li>)}
+              {[...result.safetyNotes, ...(result.safetyReview?.issues || [])].length
+                ? [...new Set([...result.safetyNotes, ...(result.safetyReview?.issues || [])])].map((note) => <li key={note}>• {note}</li>)
+                : <li>• Branding, language, claims and copyright checks passed.</li>}
             </ul>
+            <p className="mt-3 text-xs text-muted"><b className="text-foreground">Keywords:</b> {result.keywords.join(", ")}</p>
           </div>
         </aside>
       </div>

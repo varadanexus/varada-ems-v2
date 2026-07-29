@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, Inbox, LoaderCircle, MessageCircle, RefreshCw, Search, Send,
+  ShieldCheck,
 } from "lucide-react";
 import { socialEdgeFetch } from "@/lib/api/client";
 import { PageHeader } from "@/components/ui/page-header";
@@ -112,6 +113,7 @@ export function InstagramInbox() {
     );
   }, [data, query]);
   const messages = [...(selected?.messages || [])].reverse();
+  const approvalPending = error.includes("awaiting Meta approval");
 
   return (
     <div className="space-y-6">
@@ -124,7 +126,29 @@ export function InstagramInbox() {
           {busy === "sync" ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />} Sync inbox
         </button>}
       />
-      {error && <ErrorState message={error} retry={load} />}
+      {error && (approvalPending ? (
+        <section className="rounded-2xl border border-accent/35 bg-accent-soft/30 p-5 sm:p-6">
+          <div className="flex items-start gap-4">
+            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+              <ShieldCheck size={20} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Meta review in progress</p>
+              <h2 className="mt-1 text-lg font-semibold">Instagram Inbox is configured</h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+                Page access and Instagram Connected Tools are ready. Live conversations will appear here after Meta grants Advanced Access for <code>instagram_manage_messages</code>.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button onClick={load} disabled={busy === "sync"} className="btn-secondary">
+                  {busy === "sync" ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                  Check again
+                </button>
+                <a href="/accounts?embedded=1" className="btn-primary">Reconnect Meta after approval</a>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : <ErrorState message={error} retry={load} />)}
       {!data && !error ? <LoadingState /> : !data ? null : data.conversations.length === 0 ? (
         <EmptyState title="No Instagram conversations returned" description="Enable Connected Tools in Instagram Message Controls, then send a message to this professional account and synchronize again." />
       ) : (

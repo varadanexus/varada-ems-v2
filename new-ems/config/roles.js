@@ -4,6 +4,7 @@ export const ROLES = {
   CHAIRMAN_MANAGING_DIRECTOR: "chairman_managing_director",
   SUPER_ADMIN: "super_admin",
   ADMIN: "admin",
+  META_REVIEWER: "meta_reviewer",
   MANAGER: "manager",
   OPERATOR: "operator",
   ACCOUNTS: "accounts",
