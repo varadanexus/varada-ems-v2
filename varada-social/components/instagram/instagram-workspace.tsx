@@ -94,7 +94,21 @@ export function InstagramWorkspace() {
       });
       setReplyTo("");
       setReplyText("");
-      await loadComments(selectedPost);
+      if (operation === "hide" || operation === "unhide") {
+        setComments((current) =>
+          (current || []).map((item) =>
+            item.id === comment.id
+              ? { ...item, hidden: operation === "hide" }
+              : item,
+          ),
+        );
+      } else if (operation === "delete") {
+        setComments((current) =>
+          (current || []).filter((item) => item.id !== comment.id),
+        );
+      } else {
+        await loadComments(selectedPost);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Instagram comment action failed.");
     } finally {
