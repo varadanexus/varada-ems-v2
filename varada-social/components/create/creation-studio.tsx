@@ -65,8 +65,11 @@ export function CreationStudio() {
   const [result, setResult] = useState<GeneratedContent | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [imageStoragePath, setImageStoragePath] = useState("");
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualCaption, setManualCaption] = useState("");
+  const [manualMediaUrl, setManualMediaUrl] = useState("");
   const [loading, setLoading] = useState<"content" | "image" | null>(null);
-  const [saving, setSaving] = useState<"draft" | "review" | null>(null);
+  const [saving, setSaving] = useState<"draft" | "review" | "manual-draft" | "manual-review" | null>(null);
   const [savedMessage, setSavedMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -162,6 +165,66 @@ export function CreationStudio() {
       setSavedMessage(status === "draft" ? "Campaign saved as a draft." : "Campaign submitted for manager approval.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Campaign could not be saved.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function saveManual(status: "draft" | "manager_review") {
+    if (!manualTitle.trim() || !manualCaption.trim()) {
+      setError("Enter a manual campaign title and caption.");
+      return;
+    }
+    if (selectedPlatforms.includes("instagram") && !manualMediaUrl.trim()) {
+      setError("Instagram publishing requires a public image or video URL.");
+      return;
+    }
+    setSaving(status === "draft" ? "manual-draft" : "manual-review");
+    setError("");
+    try {
+      await socialEdgeFetch("create_content", {
+        title: manualTitle,
+        format,
+        platforms: selectedPlatforms,
+        topic: manualCaption,
+        objective,
+        tone,
+        contentPackage: {
+          headline: manualTitle,
+          concept: topic || manualCaption,
+          hook: manualTitle,
+          variants: selectedPlatforms.map((platform) => ({
+            platform,
+            title: manualTitle,
+            caption: manualCaption,
+            hashtags: [],
+          })),
+          carouselSlides: [],
+          reel: {
+            durationSeconds: 0,
+            scenes: [],
+            endingCta: cta,
+            musicKeywords: [],
+          },
+          imagePrompt: "",
+          safetyNotes: ["Manually authored content; approval workflow remains required."],
+        },
+        status,
+        emsModules: selectedModules,
+        asset: manualMediaUrl.trim() ? {
+          publicUrl: manualMediaUrl.trim(),
+          storagePath: `external/${Date.now()}`,
+          mediaType: format === "reel" || format === "story" ? "video" : "image",
+          mimeType: format === "reel" || format === "story" ? "video/mp4" : "image/jpeg",
+        } : null,
+      });
+      setSavedMessage(
+        status === "draft"
+          ? "Manual campaign saved as a draft."
+          : "Manual campaign submitted for manager approval.",
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Manual campaign could not be saved.");
     } finally {
       setSaving(null);
     }
@@ -292,6 +355,68 @@ export function CreationStudio() {
               )}
               Generate campaign
             </button>
+
+            <details className="rounded-xl border bg-background/45 p-4">
+              <summary className="cursor-pointer text-sm font-semibold">
+                Create manually
+              </summary>
+              <p className="mt-2 text-xs leading-5 text-muted">
+                Author a campaign without an AI provider. The same approval,
+                scheduling, audit and publishing controls still apply.
+              </p>
+              <div className="mt-4 space-y-3">
+                <Field label="Manual campaign title">
+                  <input
+                    value={manualTitle}
+                    onChange={(event) => setManualTitle(event.target.value)}
+                    className="h-11 w-full rounded-xl border bg-background px-3 text-sm"
+                    maxLength={180}
+                    placeholder="Campaign title"
+                  />
+                </Field>
+                <Field label="Caption">
+                  <textarea
+                    value={manualCaption}
+                    onChange={(event) => setManualCaption(event.target.value)}
+                    className="min-h-28 w-full resize-y rounded-xl border bg-background p-3 text-sm"
+                    maxLength={2200}
+                    placeholder="Channel-ready caption"
+                  />
+                </Field>
+                <Field label="Public media URL">
+                  <input
+                    value={manualMediaUrl}
+                    onChange={(event) => setManualMediaUrl(event.target.value)}
+                    className="h-11 w-full rounded-xl border bg-background px-3 text-sm"
+                    type="url"
+                    placeholder="https://example.com/image.jpg"
+                  />
+                </Field>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => saveManual("draft")}
+                    disabled={Boolean(saving)}
+                    className="btn-secondary"
+                  >
+                    <Save size={14} />
+                    {saving === "manual-draft" ? "Saving…" : "Save manual draft"}
+                  </button>
+                  <button
+                    onClick={() => saveManual("manager_review")}
+                    disabled={Boolean(saving)}
+                    className="btn-primary"
+                  >
+                    <Send size={14} />
+                    {saving === "manual-review" ? "Submitting…" : "Submit manual campaign"}
+                  </button>
+                </div>
+              </div>
+            </details>
+            {savedMessage && (
+              <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                {savedMessage}
+              </div>
+            )}
           </div>
         </section>
 
@@ -305,7 +430,7 @@ export function CreationStudio() {
               onRegenerate={generate}
               onSaveDraft={() => save("draft")}
               onSubmitReview={() => save("manager_review")}
-              saving={saving}
+              saving={saving === "draft" || saving === "review" ? saving : null}
               savedMessage={savedMessage}
             />
           ) : (

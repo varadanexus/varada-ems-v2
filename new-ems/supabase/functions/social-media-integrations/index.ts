@@ -1446,6 +1446,12 @@ async function handleContentAction(req: Request, payload: any) {
 
   let nextStatus = content.status;
   let approvalAction: string | null = null;
+  let publication: {
+    id: string;
+    creationId: string;
+    permalink: string | null;
+    channelId: string;
+  } | null = null;
   if (["submit", "approve", "reject", "archive"].includes(action)) {
     const transition = workflowTransition(content.status, action);
     nextStatus = transition.status;
@@ -1454,7 +1460,116 @@ async function handleContentAction(req: Request, payload: any) {
     if (!payload.scheduledFor) throw new Error("Choose a publishing time");
     nextStatus = "scheduled";
   } else if (action === "publish") {
-    nextStatus = "publishing";
+    if (content.status !== "approved") {
+      throw new Error("Only approved content can be published");
+    }
+    if (
+      !Array.isArray(content.platforms) ||
+      content.platforms.length !== 1 ||
+      content.platforms[0] !== "instagram"
+    ) {
+      throw new Error(
+        "Direct publishing currently requires an Instagram-only campaign",
+      );
+    }
+    const { data: channel, error: channelError } = await db
+      .from("social_content_channels")
+      .select("id,account_id,platform")
+      .eq("content_id", contentId)
+      .eq("platform", "instagram")
+      .maybeSingle();
+    if (channelError || !channel?.account_id) {
+      throw new Error("The campaign is not connected to an Instagram account");
+    }
+    const resolved = await resolveInstagramAccount(db, channel.account_id);
+    const { data: assets, error: assetError } = await db
+      .from("social_media_assets")
+      .select("id,media_type,metadata,created_at")
+      .eq("content_id", contentId)
+      .order("created_at", { ascending: true });
+    if (assetError) throw new Error(assetError.message);
+    const mediaUrls = (assets || [])
+      .map((asset: any) => String(asset.metadata?.public_url || "").trim())
+      .filter(Boolean);
+    if (!mediaUrls.length) {
+      throw new Error("Add a public media asset before publishing to Instagram");
+    }
+    const instagramVariant = (content.content_package?.variants || []).find(
+      (variant: any) => variant.platform === "instagram",
+    );
+    const captionParts = [
+      cleanText(instagramVariant?.caption || content.topic || content.title, 2000),
+      Array.isArray(instagramVariant?.hashtags)
+        ? instagramVariant.hashtags.map(String).join(" ")
+        : "",
+    ].filter(Boolean);
+    const caption = captionParts.join("\n\n").slice(0, 2200);
+    let creationId = "";
+    if (content.format === "carousel") {
+      if (mediaUrls.length < 2 || mediaUrls.length > 10) {
+        throw new Error("Instagram carousels require 2 to 10 public media assets");
+      }
+      const children = [];
+      for (const mediaUrl of mediaUrls) {
+        const child = await graph(
+          `${resolved.account.external_account_id}/media`,
+          resolved.accessToken,
+          {
+            method: "POST",
+            query: { image_url: mediaUrl, is_carousel_item: "true" },
+          },
+        );
+        children.push(child.id);
+      }
+      const container = await graph(
+        `${resolved.account.external_account_id}/media`,
+        resolved.accessToken,
+        {
+          method: "POST",
+          query: {
+            media_type: "CAROUSEL",
+            children,
+            caption,
+          },
+        },
+      );
+      creationId = container.id;
+    } else {
+      const query: Record<string, unknown> = { caption };
+      if (content.format === "reel" || content.format === "story") {
+        query.video_url = mediaUrls[0];
+        query.media_type = content.format === "reel" ? "REELS" : "STORIES";
+      } else {
+        query.image_url = mediaUrls[0];
+      }
+      const container = await graph(
+        `${resolved.account.external_account_id}/media`,
+        resolved.accessToken,
+        { method: "POST", query },
+      );
+      creationId = container.id;
+    }
+    const published = await graph(
+      `${resolved.account.external_account_id}/media_publish`,
+      resolved.accessToken,
+      { method: "POST", query: { creation_id: creationId } },
+    );
+    let permalink: string | null = null;
+    try {
+      const media = await graph(published.id, resolved.accessToken, {
+        query: { fields: "permalink" },
+      });
+      permalink = media.permalink || null;
+    } catch {
+      // Publishing succeeded; permalink lookup is best-effort.
+    }
+    publication = {
+      id: published.id,
+      creationId,
+      permalink,
+      channelId: channel.id,
+    };
+    nextStatus = "published";
   } else {
     throw new Error("Unsupported content action");
   }
@@ -1466,6 +1581,7 @@ async function handleContentAction(req: Request, payload: any) {
     archived_at: action === "archive" ? new Date().toISOString() : null,
   };
   if (action === "schedule") update.scheduled_for = payload.scheduledFor;
+  if (publication) update.published_at = new Date().toISOString();
   const { data: updated, error: updateError } = await db
     .from("social_content_items")
     .update(update)
@@ -1478,6 +1594,15 @@ async function handleContentAction(req: Request, payload: any) {
     .update({
       status: nextStatus,
       ...(action === "schedule" && { scheduled_for: payload.scheduledFor }),
+      ...(publication && {
+        external_post_id: publication.id,
+        external_permalink: publication.permalink,
+        published_at: update.published_at,
+        platform_payload: {
+          creationId: publication.creationId,
+          publishedBy: "instagram_graph_api",
+        },
+      }),
     })
     .eq("content_id", contentId);
   if (approvalAction) {
@@ -1496,9 +1621,9 @@ async function handleContentAction(req: Request, payload: any) {
     resource_type: "social_content",
     resource_id: contentId,
     before_data: content,
-    after_data: updated,
+    after_data: publication ? { ...updated, publication } : updated,
   });
-  return updated;
+  return publication ? { ...updated, publication } : updated;
 }
 
 async function handleAddAccount(req: Request, payload: any) {
