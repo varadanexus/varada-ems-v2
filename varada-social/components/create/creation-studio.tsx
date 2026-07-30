@@ -260,6 +260,8 @@ export function CreationStudio() {
             aspectRatio: format === "story" || format === "reel" ? "story" : "portrait",
             quality: "medium",
             style: "premium black and gold corporate editorial photography",
+            // Baked onto the image over a gradient scrim by the backend.
+            overlayText: slide.heading,
         });
         generatedAssets.push({ publicUrl: generated.assetUrl, storagePath: generated.storagePath, brandOverlay: generated.brandOverlay });
       }
