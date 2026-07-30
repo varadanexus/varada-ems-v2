@@ -2132,6 +2132,93 @@ async function handleRegenerateContentAsset(req: Request, payload: any) {
   return { contentId, asset: savedAsset, artwork };
 }
 
+async function handleReplaceContentAsset(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "edit");
+  const contentId = String(payload.contentId || "");
+  const assetId = String(payload.assetId || "");
+  const dataUrl = String(payload.dataUrl || "");
+  const match = dataUrl.match(/^data:(image\/(?:png|jpeg));base64,([A-Za-z0-9+/=]+)$/);
+  if (!match) throw new Error("Upload a PNG or JPEG artwork file.");
+
+  const { data: content, error } = await db.from("social_content_items")
+    .select("*,social_media_assets(id,storage_path,media_type,mime_type,metadata)")
+    .eq("id", contentId)
+    .maybeSingle();
+  if (error || !content) throw new Error("Content was not found");
+  if (["publishing", "published", "archived"].includes(content.status)) {
+    throw new Error(`Artwork is read-only while content is ${content.status.replaceAll("_", " ")}`);
+  }
+  const target = (content.social_media_assets || []).find((asset: any) => asset.id === assetId && asset.media_type === "image");
+  if (!target) throw new Error("Image asset was not found");
+
+  const binary = atob(match[2]);
+  if (binary.length > 8 * 1024 * 1024) throw new Error("Artwork must be 8 MB or smaller.");
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  const mimeType = match[1];
+  const extension = mimeType === "image/png" ? "png" : "jpg";
+  const storagePath = `replacements/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${extension}`;
+  const { error: uploadError } = await db.storage.from("social-media-assets")
+    .upload(storagePath, bytes, { contentType: mimeType, upsert: false });
+  if (uploadError) throw new Error(uploadError.message);
+  const { data: publicData } = db.storage.from("social-media-assets").getPublicUrl(storagePath);
+  const now = new Date().toISOString();
+  const metadata = {
+    ...(target.metadata || {}),
+    public_url: publicData.publicUrl,
+    manual_replacement: true,
+    replacement_verified: true,
+    replaced_at: now,
+    replaced_by: appUser.id,
+  };
+  const { data: savedAsset, error: assetError } = await db.from("social_media_assets").update({
+    storage_path: storagePath,
+    mime_type: mimeType,
+    metadata,
+  }).eq("id", target.id).select().single();
+  if (assetError) throw new Error(assetError.message);
+
+  const { data: channels } = await db.from("social_content_channels").select("id").eq("content_id", contentId);
+  const channelIds = (channels || []).map((channel: any) => channel.id);
+  if (channelIds.length) {
+    await db.from("social_publish_jobs").update({ status: "cancelled" })
+      .in("channel_id", channelIds).in("status", ["queued", "retrying"]);
+  }
+  const [contentUpdate, channelUpdate] = await Promise.all([
+    db.from("social_content_items").update({
+      status: "draft",
+      safety_status: "needs_review",
+      rejection_reason: null,
+      updated_by: appUser.id,
+    }).eq("id", contentId),
+    db.from("social_content_channels").update({
+      status: "draft",
+      platform_payload: { artworkReplacedAt: now, artworkReplacedBy: appUser.id },
+    }).eq("content_id", contentId),
+  ]);
+  if (contentUpdate.error) throw new Error(contentUpdate.error.message);
+  if (channelUpdate.error) throw new Error(channelUpdate.error.message);
+  if (content.status !== "draft") {
+    await db.from("social_approval_actions").insert({
+      content_id: contentId,
+      actor_id: appUser.id,
+      action: "commented",
+      from_status: content.status,
+      to_status: "draft",
+      comment: "Artwork replaced with a verified branded asset and returned to draft for approval.",
+    });
+  }
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "content.artwork_replaced",
+    resource_type: "social_content",
+    resource_id: contentId,
+    before_data: target,
+    after_data: savedAsset,
+  });
+  return { contentId, asset: savedAsset };
+}
+
 function workflowTransition(current: string, action: string) {
   if (action === "submit" && ["draft", "rejected"].includes(current)) {
     return { status: "manager_review", approvalAction: "submitted" };
@@ -3132,7 +3219,29 @@ Return a short factual reason. Do not judge the eventual official logo because i
     },
   );
   const text = response.candidates?.[0]?.content?.parts?.map((item: any) => item.text || "").join("") || "";
-  const result = JSON.parse(text || "{}");
+  const clean = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  let result: Record<string, unknown> = {};
+  try {
+    result = JSON.parse(clean || "{}");
+  } catch {
+    // Vertex occasionally returns valid boolean fields alongside a malformed
+    // quoted reason. Preserve the security decision fields and fail closed if
+    // any of them are absent instead of aborting the complete generation run.
+    const readBoolean = (key: string) => {
+      const match = clean.match(new RegExp(`["']?${key}["']?\\s*:\\s*(true|false)`, "i"));
+      return match ? match[1].toLowerCase() === "true" : undefined;
+    };
+    const reasonMatch = clean.match(/["']?reason["']?\s*:\s*["']?([^\r\n}]{1,500})/i);
+    result = {
+      approved: readBoolean("approved"),
+      containsUnauthorizedMark: readBoolean("containsUnauthorizedMark"),
+      containsText: readBoolean("containsText"),
+      hasLogoBackingPanel: readBoolean("hasLogoBackingPanel"),
+      topRightContinuous: readBoolean("topRightContinuous"),
+      reason: reasonMatch?.[1]?.replace(/["',]\s*$/, "").trim() ||
+        "The visual QA response was malformed, so this attempt was rejected and will be regenerated.",
+    };
+  }
   const approved = result.approved === true &&
     result.containsUnauthorizedMark !== true &&
     result.containsText !== true &&
@@ -4531,6 +4640,9 @@ Deno.serve(async (req) => {
         break;
       case "regenerate_content_asset":
         data = await handleRegenerateContentAsset(req, payload);
+        break;
+      case "replace_content_asset":
+        data = await handleReplaceContentAsset(req, payload);
         break;
       case "create_content":
         data = await handleCreateContent(req, payload);

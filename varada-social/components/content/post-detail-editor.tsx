@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- Meta and generated campaign assets use dynamic signed/public URLs. */
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, ExternalLink, ImageIcon, LoaderCircle, RefreshCw, Save, ShieldCheck, X } from "lucide-react";
+import { CalendarClock, ExternalLink, ImageIcon, LoaderCircle, RefreshCw, Save, ShieldCheck, Upload, X } from "lucide-react";
 import { socialEdgeFetch } from "@/lib/api/client";
 import { StatusBadge } from "@/components/ui/status-badge";
 
@@ -74,6 +74,7 @@ export function PostDetailEditor({ item, onClose, onSaved }: { item: SocialConte
   const [scheduledFor, setScheduledFor] = useState(localInputValue(item.scheduled_for));
   const [saving, setSaving] = useState(false);
   const [regeneratingAsset, setRegeneratingAsset] = useState("");
+  const [replacingAsset, setReplacingAsset] = useState("");
   const [error, setError] = useState("");
   const editable = editableStatuses.has(item.status);
   const assets = item.social_media_assets || [];
@@ -153,6 +154,35 @@ export function PostDetailEditor({ item, onClose, onSaved }: { item: SocialConte
     }
   }
 
+  async function replaceArtwork(assetId: string, file: File) {
+    if (!editable || replacingAsset) return;
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      setError("Upload a PNG or JPEG artwork file.");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setError("Artwork must be 8 MB or smaller.");
+      return;
+    }
+    setReplacingAsset(assetId);
+    setError("");
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Artwork could not be read."));
+        reader.onerror = () => reject(new Error("Artwork could not be read."));
+        reader.readAsDataURL(file);
+      });
+      await socialEdgeFetch("replace_content_asset", { contentId: item.id, assetId, dataUrl });
+      await onSaved();
+      onClose();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Artwork could not be replaced.");
+    } finally {
+      setReplacingAsset("");
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[120] grid place-items-center bg-black/80 p-3 backdrop-blur-sm sm:p-6" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section role="dialog" aria-modal="true" aria-label={`Post details: ${item.title}`} className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl">
@@ -172,7 +202,13 @@ export function PostDetailEditor({ item, onClose, onSaved }: { item: SocialConte
               const url = String(asset.metadata?.public_url || "");
               return <div key={asset.id} className="relative overflow-hidden rounded-xl border bg-surface">
                 {url && asset.media_type === "video" ? <video src={url} controls className="aspect-[4/5] w-full object-contain" /> : url ? <img src={url} alt={altText || item.title} className="aspect-[4/5] w-full object-contain" /> : <div className="grid aspect-[4/5] place-items-center text-muted"><ImageIcon size={28} /></div>}
-                {editable && asset.media_type === "image" && <button type="button" onClick={() => void regenerateArtwork(asset.id)} disabled={Boolean(regeneratingAsset)} className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/80 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm disabled:opacity-60">{regeneratingAsset === asset.id ? <LoaderCircle size={14} className="animate-spin" /> : <RefreshCw size={14} />} Regenerate clean artwork</button>}
+                {editable && asset.media_type === "image" && <div className="absolute bottom-3 left-3 right-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  <button type="button" onClick={() => void regenerateArtwork(asset.id)} disabled={Boolean(regeneratingAsset || replacingAsset)} className="flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/80 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm disabled:opacity-60">{regeneratingAsset === asset.id ? <LoaderCircle size={14} className="animate-spin" /> : <RefreshCw size={14} />} Regenerate</button>
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/80 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
+                    {replacingAsset === asset.id ? <LoaderCircle size={14} className="animate-spin" /> : <Upload size={14} />} Replace artwork
+                    <input type="file" accept="image/png,image/jpeg" className="sr-only" disabled={Boolean(regeneratingAsset || replacingAsset)} onChange={(event) => { const file = event.target.files?.[0]; if (file) void replaceArtwork(asset.id, file); event.currentTarget.value = ""; }} />
+                  </label>
+                </div>}
               </div>;
             })}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed bg-surface text-center text-muted"><div><ImageIcon className="mx-auto" /><p className="mt-2 text-sm">Artwork has not been generated yet.</p></div></div>}
             <div className="mt-4 rounded-xl border bg-surface p-4 text-xs leading-5 text-muted">
