@@ -143,6 +143,9 @@ export function register(server) {
         content_type: z.string().optional(),
         status: z.enum(STATUS).optional().describe("Set status directly (advanced)."),
         published_at: z.string().optional().describe("ISO datetime."),
+        seo_score: z.number().min(0).max(100).optional().describe("Manual SEO score override (0-100)."),
+        quality_score: z.number().min(0).max(100).optional().describe("Manual editorial quality score (0-100)."),
+        confidence_score: z.number().min(0).max(100).optional().describe("Manual confidence score (0-100)."),
       },
     },
     guard(async (a) => {
@@ -153,6 +156,7 @@ export function register(server) {
         meta_title: "meta_title", meta_description: "meta_description",
         cover_image: "cover_image", alt_text: "alt_text", content_type: "content_type",
         status: "status", published_at: "published_at",
+        seo_score: "seo_score", quality_score: "quality_score", confidence_score: "confidence_score",
       };
       for (const [k, col] of Object.entries(map)) if (a[k] !== undefined) patch[col] = a[k];
       if (a.category !== undefined) patch.primary_category = a.category;
