@@ -244,6 +244,12 @@ export function CreationStudio() {
     tone: string;
   }>;
 
+  type ImageGenerationOptions = {
+    generated?: GeneratedContent;
+    contentFormat?: ContentFormat;
+    silent?: boolean;
+  };
+
   async function generate(overrides?: GenerationOverrides) {
     // Overrides let the "Surprise me" flow generate with fresh random values
     // immediately, without waiting for React state updates to flush.
@@ -275,13 +281,14 @@ export function CreationStudio() {
           category: brief.category,
           contentType: brief.contentType,
       });
-      setResult(generated);
       setImageUrl("");
       setImageStoragePath("");
       setImageBrandOverlay(null);
       setCarouselAssets([]);
       setGeneratedMediaType("image");
       setSavedMessage("");
+      setResult(generated);
+      await createImage({ generated, contentFormat: brief.format, silent: true });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Generation failed.");
     } finally {
@@ -318,30 +325,32 @@ export function CreationStudio() {
     });
   }
 
-  async function createImage() {
-    if (!result?.imagePrompt) return;
+  async function createImage(options: ImageGenerationOptions = {}) {
+    const source = options.generated || result;
+    const sourceFormat = options.contentFormat || format;
+    if (!source?.imagePrompt) return;
     setLoading("image");
-    setError("");
+    if (!options.silent) setError("");
     try {
-      const plans = format === "carousel"
-        ? (result.carouselSlides.length
-            ? result.carouselSlides.slice(0, 8)
+      const plans = sourceFormat === "carousel"
+        ? (source.carouselSlides.length
+            ? source.carouselSlides.slice(0, 8)
             // No explicit slide plan returned: still produce a multi-image
             // carousel by fanning the concept across several distinct frames.
             : Array.from({ length: CAROUSEL_FALLBACK_SLIDES }, (_, index) => ({
-                heading: index === 0 ? result.headline : `${result.headline} — part ${index + 1}`,
-                body: result.concept,
+                heading: index === 0 ? source.headline : `${source.headline} - part ${index + 1}`,
+                body: source.concept,
               })))
-        : [{ heading: result.headline, body: result.concept }];
+        : [{ heading: source.headline, body: source.concept }];
       const generatedAssets = [];
       for (let slideIndex = 0; slideIndex < plans.length; slideIndex += 1) {
         const slide = plans[slideIndex];
         const generated = await socialEdgeFetch<{ assetUrl: string; storagePath?: string; brandOverlay?: Record<string, unknown> }>("generate_image", {
-            prompt: `${result.imagePrompt}\nVisual ${slideIndex + 1} of ${plans.length}: ${slide.heading}. ${slide.body}. Keep the campaign visually coherent but make this frame distinct.`,
-            aspectRatio: format === "story" || format === "reel" ? "story" : "portrait",
+            prompt: `${source.imagePrompt}\nVisual ${slideIndex + 1} of ${plans.length}: ${slide.heading}. ${slide.body}. Keep the campaign visually coherent but make this frame distinct.`,
+            aspectRatio: sourceFormat === "story" || sourceFormat === "reel" ? "story" : "portrait",
             quality: "medium",
             style: "premium black and gold corporate editorial photography",
-            // Baked onto the image over a gradient scrim by the backend.
+            // The official transparent logo is composited by the backend.
             overlayText: slide.heading,
         });
         generatedAssets.push({ publicUrl: generated.assetUrl, storagePath: generated.storagePath, brandOverlay: generated.brandOverlay });
@@ -350,9 +359,10 @@ export function CreationStudio() {
       setImageUrl(primary.publicUrl);
       setImageStoragePath(primary.storagePath || "");
       setImageBrandOverlay(primary.brandOverlay || null);
-      setCarouselAssets(format === "carousel" ? generatedAssets : []);
+      setCarouselAssets(sourceFormat === "carousel" ? generatedAssets : []);
       setGeneratedMediaType("image");
-      if (format === "carousel") setSavedMessage(`${generatedAssets.length} branded carousel slides are ready.`);
+      if (sourceFormat === "carousel") setSavedMessage(`${generatedAssets.length} branded carousel slides are ready.`);
+      else if (options.silent) setSavedMessage("Campaign text and branded visual are ready.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Image generation failed.");
     } finally {
