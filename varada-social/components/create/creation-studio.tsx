@@ -6,9 +6,11 @@ import {
   Clipboard,
   Film,
   ImageIcon,
+  Images,
   LoaderCircle,
   Music2,
   RefreshCw,
+  Shuffle,
   Sparkles,
   WandSparkles,
   Save,
@@ -64,6 +66,48 @@ const emsModules = [
   ["legal", "Legal"],
 ] as const;
 
+// Formats the "Surprise me" random generator is allowed to choose from.
+const randomFormats: ContentFormat[] = ["single_post", "carousel", "story"];
+
+const randomTones = [
+  "Professional and educational",
+  "Luxury and aspirational",
+  "Emotional storytelling",
+  "Direct CTA focused",
+  "SEO optimised",
+];
+
+// Seed ideas so a random campaign always has a usable topic to build on.
+const randomTopics = [
+  "How technology is making mineral logistics safer and more transparent",
+  "What decision-makers should check before commissioning a new hospital fit-out",
+  "Turning a bare commercial shell into a premium, on-brand workspace",
+  "Behind the scenes of a smooth, compliant import-export shipment",
+  "Signs it is time to bring in a professional interior design partner",
+  "How the right HR and PR strategy compounds into long-term brand trust",
+  "A practical checklist for planning large-scale construction logistics",
+  "Why integrated corporate services save growing companies time and cost",
+  "Lessons from a recent client success story worth celebrating",
+  "Simple operational upgrades that quietly improve customer experience",
+];
+
+// When the random format is not a dedicated carousel/story, pick a content type.
+const randomPostContentTypes = [
+  "image_post",
+  "promotional_graphic",
+  "quote_card",
+  "infographic",
+  "event_announcement",
+];
+
+function pickRandom<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+// Number of slides generated for a carousel when the AI does not return an
+// explicit slide plan, so a carousel always produces multiple images.
+const CAROUSEL_FALLBACK_SLIDES = 5;
+
 export function CreationStudio() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<SocialPlatform[]>([
     "instagram",
@@ -111,8 +155,25 @@ export function CreationStudio() {
     );
   }
 
-  async function generate() {
-    if (!topic.trim()) {
+  type GenerationOverrides = Partial<{
+    topic: string;
+    format: ContentFormat;
+    category: string;
+    contentType: string;
+    tone: string;
+  }>;
+
+  async function generate(overrides?: GenerationOverrides) {
+    // Overrides let the "Surprise me" flow generate with fresh random values
+    // immediately, without waiting for React state updates to flush.
+    const brief = {
+      topic: overrides?.topic ?? topic,
+      format: overrides?.format ?? format,
+      category: overrides?.category ?? category,
+      contentType: overrides?.contentType ?? contentType,
+      tone: overrides?.tone ?? tone,
+    };
+    if (!brief.topic.trim()) {
       setError("Enter a topic or campaign brief.");
       return;
     }
@@ -120,18 +181,18 @@ export function CreationStudio() {
     setError("");
     try {
       const generated = await socialEdgeFetch<GeneratedContent>("generate_text", {
-          topic,
+          topic: brief.topic,
           objective,
           platforms: selectedPlatforms,
-          format,
-          tone,
+          format: brief.format,
+          tone: brief.tone,
           length,
           callToAction: cta,
           emsModules: selectedModules,
           includeEmsContext: true,
           preferredProvider: provider,
-          category,
-          contentType,
+          category: brief.category,
+          contentType: brief.contentType,
       });
       setResult(generated);
       setImageUrl("");
@@ -147,13 +208,49 @@ export function CreationStudio() {
     }
   }
 
+  async function generateRandom() {
+    // Pick a random format, then a matching content type, category, tone and
+    // seed topic, reflect them in the form, and generate straight away.
+    const randomFormat = pickRandom(randomFormats);
+    const randomContentType =
+      randomFormat === "carousel"
+        ? "carousel"
+        : randomFormat === "story"
+          ? "story"
+          : pickRandom(randomPostContentTypes);
+    const randomCategory = pickRandom(categories);
+    const randomTone = pickRandom(randomTones);
+    const randomTopic = pickRandom(randomTopics);
+
+    setFormat(randomFormat);
+    setContentType(randomContentType);
+    setCategory(randomCategory);
+    setTone(randomTone);
+    setTopic(randomTopic);
+
+    await generate({
+      topic: randomTopic,
+      format: randomFormat,
+      category: randomCategory,
+      contentType: randomContentType,
+      tone: randomTone,
+    });
+  }
+
   async function createImage() {
     if (!result?.imagePrompt) return;
     setLoading("image");
     setError("");
     try {
-      const plans = format === "carousel" && result.carouselSlides.length
-        ? result.carouselSlides.slice(0, 8)
+      const plans = format === "carousel"
+        ? (result.carouselSlides.length
+            ? result.carouselSlides.slice(0, 8)
+            // No explicit slide plan returned: still produce a multi-image
+            // carousel by fanning the concept across several distinct frames.
+            : Array.from({ length: CAROUSEL_FALLBACK_SLIDES }, (_, index) => ({
+                heading: index === 0 ? result.headline : `${result.headline} — part ${index + 1}`,
+                body: result.concept,
+              })))
         : [{ heading: result.headline, body: result.concept }];
       const generatedAssets = [];
       for (let slideIndex = 0; slideIndex < plans.length; slideIndex += 1) {
@@ -438,7 +535,7 @@ export function CreationStudio() {
             )}
 
             <button
-              onClick={generate}
+              onClick={() => generate()}
               disabled={Boolean(loading) || !selectedPlatforms.length}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent font-bold text-[#100c05] shadow-[0_12px_30px_rgba(212,178,106,.16)] transition hover:bg-[#e2c47e] disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -449,6 +546,23 @@ export function CreationStudio() {
               )}
               Generate campaign
             </button>
+
+            <button
+              onClick={generateRandom}
+              disabled={Boolean(loading) || !selectedPlatforms.length}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-accent/40 bg-accent-soft font-semibold text-accent transition hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Randomly choose a post, carousel or story and generate it"
+            >
+              {loading === "content" ? (
+                <LoaderCircle size={18} className="animate-spin" />
+              ) : (
+                <Shuffle size={18} />
+              )}
+              Surprise me · random post
+            </button>
+            <p className="text-center text-xs text-muted">
+              Randomly builds a post, carousel or story for the selected platforms.
+            </p>
 
             <details className="rounded-xl border bg-background/45 p-4">
               <summary className="cursor-pointer text-sm font-semibold">
@@ -519,12 +633,13 @@ export function CreationStudio() {
             <ResultPanel
               result={result}
               imageUrl={imageUrl}
+              carouselAssets={carouselAssets}
               loadingImage={loading === "image"}
               loadingVideo={loading === "video"}
               onCreateImage={createImage}
               onCreateVideo={createVideo}
               generatedMediaType={generatedMediaType}
-              onRegenerate={generate}
+              onRegenerate={() => generate()}
               onSaveDraft={() => save("draft")}
               onSubmitReview={() => save("manager_review")}
               saving={saving === "draft" || saving === "review" ? saving : null}
@@ -542,6 +657,7 @@ export function CreationStudio() {
 function ResultPanel({
   result,
   imageUrl,
+  carouselAssets,
   loadingImage,
   loadingVideo,
   onCreateImage,
@@ -555,6 +671,7 @@ function ResultPanel({
 }: {
   result: GeneratedContent;
   imageUrl: string;
+  carouselAssets: Array<{ publicUrl: string; storagePath?: string; brandOverlay?: Record<string, unknown> }>;
   loadingImage: boolean;
   loadingVideo: boolean;
   onCreateImage: () => void;
@@ -691,6 +808,25 @@ function ResultPanel({
               </div>
             )}
           </div>
+          {generatedMediaType === "image" && carouselAssets.length > 1 && (
+            <div className="mt-4 rounded-xl border bg-surface p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <Images size={15} className="text-accent" /> Carousel slides · {carouselAssets.length}
+              </p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {carouselAssets.map((asset, index) => (
+                  <div key={asset.storagePath || asset.publicUrl || index} className="relative overflow-hidden rounded-lg border bg-background/60">
+                    <span className="absolute left-1.5 top-1.5 z-10 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={asset.publicUrl} alt={`${result.altText || "Carousel slide"} ${index + 1}`} className="aspect-[4/5] w-full object-cover" />
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-muted">All {carouselAssets.length} slides are saved with the campaign when you save the draft or submit for approval.</p>
+            </div>
+          )}
           <div className="mt-4 rounded-xl border bg-surface p-4">
             <p className="flex items-center gap-2 text-sm font-semibold"><Check size={15} className={result.safetyStatus === "passed" ? "text-success" : "text-amber-300"} /> Brand safety review</p>
             <ul className="mt-3 space-y-2 text-xs leading-5 text-muted">

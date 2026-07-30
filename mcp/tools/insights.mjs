@@ -1,13 +1,47 @@
 // mcp/tools/insights.mjs — SEO audit, low-quality finder, generation logs, failed posts.
 
 import { z } from "zod";
-import { sbGet, enc, findPost } from "../lib/supabase.mjs";
+import { sbGet, sbUpdate, enc, findPost } from "../lib/supabase.mjs";
 import { auditPost } from "../lib/seo.mjs";
 import { ok, fail, guard } from "./_util.mjs";
 
 const AUDIT_COLS =
   "id,slug,title,excerpt,content,meta_title,meta_description,tags,primary_category," +
-  "cover_image,alt_text,canonical_url,seo_score,quality_score,status";
+  "cover_image,alt_text,canonical_url,seo_score,quality_score,confidence_score,source,status";
+
+// Persist audit results back to the row so seo_score / quality_score /
+// confidence_score stop being null. seo_score (deterministic on-page) is always
+// refreshed. quality_score & confidence_score are written only for hand-authored
+// posts (source = "manual") or where the value is currently null — this fills the
+// gap for manual posts on every run WITHOUT ever overwriting a score the AI
+// generation pipeline's quality gate has already set on an AI-generated post.
+async function persistScores(p, r) {
+  const patch = { seo_score: r.score };
+  const manualOrEmpty =
+    p.source === "manual" || p.quality_score == null || p.confidence_score == null;
+  if (manualOrEmpty) {
+    patch.quality_score = r.quality;
+    patch.confidence_score = r.confidence;
+  }
+  try {
+    await sbUpdate("blog_posts", `id=eq.${enc(p.id)}`, patch);
+    return {
+      changed: Object.keys(patch),
+      seo_score: r.score,
+      quality_score: patch.quality_score ?? p.quality_score ?? null,
+      confidence_score: patch.confidence_score ?? p.confidence_score ?? null,
+    };
+  } catch (e) {
+    // Never let a persistence failure break the audit response.
+    return {
+      changed: [],
+      seo_score: r.score,
+      quality_score: p.quality_score ?? null,
+      confidence_score: p.confidence_score ?? null,
+      persist_error: String((e && e.message) || e),
+    };
+  }
+}
 
 export function register(server) {
   // 23) run_seo_audit ---------------------------------------------------------
@@ -18,7 +52,9 @@ export function register(server) {
       description:
         "Run a deterministic on-page SEO audit (no AI, fast). Audit one post (blog_id) or a batch by " +
         "category / all live posts. Flags missing meta, weak titles, thin content, no internal links, " +
-        "missing images/alt/tags, and returns a heuristic 0-100 score per post.",
+        "missing images/alt/tags, and returns a heuristic 0-100 score per post. Persists seo_score to " +
+        "every audited post, and quality_score + confidence_score for hand-authored (manual) posts, " +
+        "so those fields are no longer null after an audit.",
       inputSchema: {
         blog_id: z.string().optional().describe("Audit a single post (uuid or slug)."),
         category: z.string().optional().describe("Audit all live posts in this primary_category."),
@@ -29,21 +65,29 @@ export function register(server) {
       if (a.blog_id) {
         const p = await findPost(a.blog_id, AUDIT_COLS);
         const r = auditPost(p);
+        const persisted = await persistScores(p, r);
         return ok({ post: { id: p.id, slug: p.slug, title: p.title, status: p.status },
-          seo_score: r.score, problems: r.problems, stats: r.stats });
+          seo_score: r.score, quality_score: persisted.quality_score,
+          confidence_score: persisted.confidence_score, score_source: "deterministic_audit",
+          persisted: persisted.changed, persist_error: persisted.persist_error,
+          problems: r.problems, stats: r.stats });
       }
       const parts = [`select=${enc(AUDIT_COLS)}`, "status=in.(published,auto_published,backdated)",
         `limit=${a.limit || 25}`, "order=published_at.desc"];
       if (a.category) parts.push(`primary_category=eq.${enc(a.category)}`);
       const rows = (await sbGet("blog_posts", parts.join("&"))) || [];
-      const results = rows.map((p) => {
+      const results = [];
+      for (const p of rows) {
         const r = auditPost(p);
-        return { id: p.id, slug: p.slug, title: p.title, seo_score: r.score,
-          problem_count: r.problems.length, problems: r.problems };
-      }).sort((x, y) => x.seo_score - y.seo_score);
+        const persisted = await persistScores(p, r);
+        results.push({ id: p.id, slug: p.slug, title: p.title, seo_score: r.score,
+          quality_score: persisted.quality_score, confidence_score: persisted.confidence_score,
+          problem_count: r.problems.length, problems: r.problems });
+      }
+      results.sort((x, y) => x.seo_score - y.seo_score);
       const avg = results.length ? Math.round(results.reduce((s, r) => s + r.seo_score, 0) / results.length) : null;
       return ok({ audited: results.length, average_seo_score: avg,
-        worst_first: results });
+        score_source: "deterministic_audit", worst_first: results });
     })
   );
 

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Varada Nexus — Interiors Brochure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,500;1,600&family=Inter:wght@300;400;500;600&display=swap">
+<style>
+  @page{ size:A4; margin:0; }
+  :root{
+    --bg:#0a0a0d; --panel:#131318; --panel-2:#15131a; --text:#f7f4ec; --text-2:#c9c5b8; --text-3:#9b9788;
+    --gold:#e6c87e; --gold-2:#c39a44; --line:rgba(230,200,126,.24);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  html,body{background:#3a3a3a;font-family:'Inter',system-ui,sans-serif;color:var(--text);}
+  .page{position:relative;width:210mm;height:297mm;overflow:hidden;background:var(--bg);margin:0 auto;page-break-after:always;}
+  html.paper-letter .page{width:215.9mm;height:279.4mm;}
+  .page:last-child{page-break-after:auto;}
+  .page:not(.cover-page):not(.back-page)::before{
+    content:"";position:absolute;z-index:8;top:11mm;right:13mm;width:38mm;height:14mm;
+    background:url('images/logo.png') center/contain no-repeat;opacity:.11;pointer-events:none;
+  }
+  .serif{font-family:'Playfair Display',serif;}
+  .gold{color:var(--gold);}
+  .eyebrow{font-size:10.5px;letter-spacing:.32em;text-transform:uppercase;color:var(--gold);font-weight:500;}
+  img{display:block;}
+  .screen-hint{background:#111;color:#e6c87e;font-family:Inter,sans-serif;text-align:center;padding:14px 18px;font-size:14px;letter-spacing:.02em;border-bottom:1px solid #333;}
+  @media print{
+    .screen-hint{display:none;}
+    html,body{background:#fff;}
+    .page{margin:0;break-after:page;page-break-after:always;}
+    .page:last-child{break-after:auto;page-break-after:auto;}
+  }
+
+  /* COVER */
+  .cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .cover-veil{position:absolute;inset:0;background:
+    linear-gradient(90deg,rgba(5,6,9,.9) 0%,rgba(5,6,9,.55) 42%,rgba(5,6,9,.12) 78%,rgba(5,6,9,.05) 100%),
+    linear-gradient(180deg,rgba(5,6,9,.5) 0%,rgba(5,6,9,.28) 34%,rgba(5,6,9,.6) 70%,rgba(5,6,9,.95) 100%);}
+  .cover-inner{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:26mm 24mm;}
+  .brandline{display:flex;align-items:center;gap:12px;}
+  .brandline img{width:44px;height:44px;object-fit:contain;}
+  .brandline .bn{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;}
+  .brandline .bs{display:block;font-size:9px;letter-spacing:.34em;text-transform:uppercase;color:var(--text-3);margin-top:2px;}
+  .cover-inner .brandline{gap:18px;}
+  .cover-inner .brandline img{width:72px;height:72px;}
+  .cover-inner .brandline .bn{font-size:30px;line-height:1;font-weight:700;letter-spacing:.01em;}
+  .cover-inner .brandline .bs{font-size:10.5px;letter-spacing:.38em;margin-top:7px;color:#d8d4c8;}
+  .cover-title{font-size:70px;line-height:1.03;font-weight:700;letter-spacing:-.015em;text-shadow:0 2px 30px rgba(0,0,0,.75);}
+  .cover-sub{font-size:15px;line-height:1.7;color:#f0ece2;max-width:120mm;margin-top:20px;font-weight:300;text-shadow:0 1px 16px rgba(0,0,0,.75);}
+  .cover-inner .eyebrow{text-shadow:0 1px 14px rgba(0,0,0,.7);}
+  .cover-rule{width:64px;height:2px;background:var(--gold);margin:26px 0 0;}
+  .cover-foot{display:flex;justify-content:space-between;align-items:flex-end;font-size:11px;letter-spacing:.05em;color:#d8d4c8;}
+
+  /* COMPANY INTRO */
+  .company-page{background:
+    radial-gradient(circle at 86% 12%,rgba(230,200,126,.12),transparent 32%),
+    linear-gradient(rgba(230,200,126,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(230,200,126,.025) 1px,transparent 1px),
+    linear-gradient(145deg,#0a0a0d 0%,#101016 58%,#171219 100%);}
+  .company-page{background-size:auto,22mm 22mm,22mm 22mm,auto;}
+  .company-layout{display:grid;grid-template-columns:1.08fr .92fr;gap:11mm;margin-top:13mm;align-items:stretch;}
+  .company-lockup{max-width:100%;}
+  .company-lockup h2{font-family:'Playfair Display',serif;font-size:43px;line-height:1.04;font-weight:700;letter-spacing:-.02em;}
+  .company-lockup .legal{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold);margin-bottom:17px;}
+  .company-rule{width:58px;height:2px;background:var(--gold);margin:24px 0;}
+  .company-copy{max-width:100%;font-size:12.5px;line-height:1.8;color:var(--text-2);font-weight:300;}
+  .company-visual{position:relative;min-height:99mm;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--panel);}
+  .company-visual img{width:100%;height:100%;position:absolute;inset:0;object-fit:cover;}
+  .company-visual::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,5,8,.08),rgba(5,5,8,.18) 46%,rgba(5,5,8,.9));}
+  .company-visual-copy{position:absolute;z-index:1;left:16px;right:16px;bottom:15px;}
+  .company-visual-copy span{display:block;font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);margin-bottom:7px;}
+  .company-visual-copy strong{font-family:'Playfair Display',serif;font-size:18px;line-height:1.2;font-weight:600;}
+  .company-pillars{display:grid;grid-template-columns:repeat(3,1fr);margin-top:15px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+  .company-pillar{padding:13px 14px 14px;border-right:1px solid rgba(255,255,255,.08);}
+  .company-pillar:last-child{border-right:none;}
+  .company-pillar .num{font-family:'Playfair Display',serif;font-size:11px;color:var(--gold-2);}
+  .company-pillar h4{font-family:'Playfair Display',serif;font-size:13px;line-height:1.25;margin-top:5px;font-weight:600;}
+  .company-pillar p{font-size:8.5px;line-height:1.5;color:var(--text-3);margin-top:4px;font-weight:300;}
+  .company-division{margin-top:15px;border:1px solid var(--line);border-radius:8px;padding:18px 21px;background:linear-gradient(135deg,rgba(230,200,126,.08),rgba(19,19,24,.72));display:grid;grid-template-columns:1.1fr .9fr;gap:20px;align-items:center;}
+  .company-division .label{font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold-2);margin-bottom:9px;}
+  .company-division h3{font-family:'Playfair Display',serif;font-size:22px;font-weight:600;line-height:1.15;}
+  .company-division p{font-size:10px;line-height:1.65;color:var(--text-3);font-weight:300;}
+  .company-details{display:flex;gap:22px;margin-top:11px;font-size:9px;color:var(--text-3);letter-spacing:.03em;}
+  .company-details b{color:var(--gold);font-weight:500;}
+  .company-footprint{display:grid;grid-template-columns:.9fr 1.1fr;gap:24px;margin-top:17px;padding-top:17px;border-top:1px solid var(--line);align-items:end;}
+  .company-footprint .label{font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold-2);margin-bottom:7px;}
+  .company-footprint h3{font-family:'Playfair Display',serif;font-size:21px;line-height:1.18;font-weight:600;}
+  .company-sectors{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end;}
+  .company-sectors span{font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);padding:6px 9px;border:1px solid rgba(230,200,126,.18);border-radius:20px;background:rgba(255,255,255,.02);}
+
+  /* CONTENTS */
+  .contents-list{margin-top:24px;border-top:1px solid var(--line);}
+  .contents-row{display:grid;grid-template-columns:17mm 1fr auto;align-items:baseline;gap:8px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.08);}
+  .contents-row .chapter{font-family:'Playfair Display',serif;font-size:12px;color:var(--gold-2);}
+  .contents-row .title{font-family:'Playfair Display',serif;font-size:18px;color:var(--text);}
+  .contents-row .page-ref{font-size:10px;letter-spacing:.2em;color:var(--text-3);}
+  .contents-note{margin-top:auto;font-size:11px;line-height:1.7;color:var(--text-3);max-width:142mm;font-weight:300;}
+
+  /* CONTENT SHELL */
+  .pad{padding:22mm 22mm 20mm;height:100%;display:flex;flex-direction:column;position:relative;}
+  .kicker-row{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+  .kicker-row .dash{width:34px;height:1px;background:var(--line);}
+  h2.big{font-family:'Playfair Display',serif;font-size:38px;line-height:1.08;font-weight:700;letter-spacing:-.01em;}
+  .lede{font-size:13.5px;line-height:1.8;color:var(--text-2);font-weight:300;}
+  .pagenum{position:absolute;bottom:12mm;right:22mm;font-size:10px;letter-spacing:.28em;color:var(--text-3);}
+  .footmark{position:absolute;bottom:12mm;left:22mm;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--text-3);}
+
+  .intro-img{width:100%;height:78mm;object-fit:cover;margin-top:auto;border:1px solid var(--line);border-radius:5px;}
+  .stat-row{display:flex;margin-top:24px;border-top:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08);}
+  .stat{flex:1;padding:16px 4px;text-align:center;border-right:1px solid rgba(255,255,255,.08);}
+  .stat:last-child{border-right:none;}
+  .stat .n{font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--gold);}
+  .stat .l{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text-3);margin-top:5px;}
+
+  /* PHILOSOPHY split */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:0;flex:1;margin-top:22px;border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+  .split .imgcol{background-size:cover;background-position:center;min-height:100%;}
+  .split .txtcol{padding:26px 28px;display:flex;flex-direction:column;justify-content:center;background:var(--panel);}
+  .principle{padding:13px 0;border-bottom:1px solid rgba(255,255,255,.08);}
+  .principle:last-child{border-bottom:none;}
+  .principle h4{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;margin-bottom:5px;}
+  .principle p{font-size:11.5px;line-height:1.6;color:var(--text-2);font-weight:300;}
+
+  /* SECTORS */
+  .sector-grid{display:grid;grid-template-columns:1fr 1fr;gap:7mm;margin-top:22px;flex:1;}
+  .sector{display:flex;flex-direction:column;background:var(--panel);border:1px solid rgba(255,255,255,.07);border-radius:6px;overflow:hidden;}
+  .sector img{width:100%;height:44mm;object-fit:cover;border-bottom:1px solid rgba(230,200,126,.16);}
+  .sector .body{padding:14px 17px 15px;}
+  .sector h3{font-family:'Playfair Display',serif;font-size:18px;font-weight:600;margin-bottom:6px;}
+  .sector p{font-size:10.5px;line-height:1.58;color:var(--text-2);font-weight:300;}
+  .sector .tags{margin-top:9px;font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-2);}
+
+  /* GALLERY */
+  .gallery{display:grid;grid-template-columns:repeat(2,1fr);grid-auto-rows:56mm;gap:6mm;margin-top:22px;}
+  .gtile{position:relative;border-radius:5px;overflow:hidden;border:1px solid rgba(255,255,255,.07);}
+  .gtile img{width:100%;height:100%;object-fit:cover;}
+  .gtile span{position:absolute;left:0;bottom:0;right:0;padding:16px 12px 8px;font-size:10px;letter-spacing:.05em;color:#f4efe2;background:linear-gradient(0deg,rgba(0,0,0,.78),transparent);}
+
+  /* CAPABILITIES */
+  .cap-grid{display:grid;grid-template-columns:1fr 1fr 1fr;margin-top:22px;border-top:1px solid rgba(255,255,255,.09);}
+  .cap{padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.09);border-right:1px solid rgba(255,255,255,.09);}
+  .cap:nth-child(3n){border-right:none;}
+  .cap .num{font-family:'Playfair Display',serif;font-size:12px;color:var(--gold-2);}
+  .cap h4{font-size:13.5px;font-weight:600;margin:6px 0 5px;letter-spacing:-.01em;}
+  .cap p{font-size:10px;line-height:1.55;color:var(--text-3);font-weight:300;}
+
+  /* PROCESS detailed */
+  .flow{margin-top:20px;}
+  .fstep{display:grid;grid-template-columns:60px 1fr 1fr;gap:16px;padding:16px 0;border-top:1px solid rgba(255,255,255,.09);align-items:start;}
+  .fstep .idx{font-family:'Playfair Display',serif;font-size:34px;color:var(--gold);font-weight:700;line-height:1;}
+  .fstep h4{font-family:'Playfair Display',serif;font-size:18px;font-weight:600;margin-bottom:5px;}
+  .fstep .desc{font-size:11px;line-height:1.6;color:var(--text-2);font-weight:300;}
+  .fstep .deliver{font-size:10px;line-height:1.6;color:var(--text-3);font-weight:300;}
+  .fstep .deliver b{color:var(--gold-2);font-weight:500;letter-spacing:.05em;text-transform:uppercase;font-size:8.5px;display:block;margin-bottom:4px;}
+  .portal{margin-top:auto;display:flex;gap:20px;align-items:center;background:linear-gradient(135deg,rgba(230,200,126,.10),rgba(20,16,24,.6));border:1px solid var(--line);border-radius:10px;padding:20px 24px;}
+  .portal .picon{flex:0 0 auto;width:52px;height:52px;border-radius:10px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;background:rgba(230,200,126,.08);}
+  .portal h4{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;margin-bottom:5px;}
+  .portal h4 .tag{font-family:'Inter',sans-serif;font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-2);border:1px solid var(--line);border-radius:20px;padding:2px 8px;margin-left:8px;vertical-align:middle;}
+  .portal p{font-size:11px;line-height:1.6;color:var(--text-2);font-weight:300;}
+
+  /* CASE STUDY */
+  .case-hero{width:100%;height:76mm;object-fit:cover;border-radius:6px;border:1px solid var(--line);margin-top:20px;}
+  .case-body{display:grid;grid-template-columns:1.45fr 1fr;gap:28px;margin-top:20px;}
+  .case-body .lede{font-size:12px;line-height:1.75;}
+  .case-meta{align-self:start;}
+  .case-meta .mline{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:11px;}
+  .case-meta .mline span:first-child{color:var(--text-3);}
+  .case-meta .mline span:last-child{color:var(--text);font-weight:500;}
+
+  /* PRICING */
+  .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm;margin-top:22px;}
+  .tier{position:relative;background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:9px;padding:22px 20px;display:flex;flex-direction:column;}
+  .tier.feat{border-color:var(--line);background:linear-gradient(180deg,rgba(230,200,126,.09),rgba(19,19,24,.5));}
+  .tier .tname{font-family:'Playfair Display',serif;font-size:19px;font-weight:600;}
+  .tier .tp{font-size:10px;color:var(--text-3);margin-top:2px;line-height:1.4;}
+  .tier .price{font-family:'Playfair Display',serif;font-size:24px;color:var(--gold);margin:14px 0 2px;}
+  .tier .price small{font-size:10px;color:var(--text-3);font-family:'Inter',sans-serif;font-weight:300;}
+  .tier ul{list-style:none;margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:12px;}
+  .tier li{font-size:10px;line-height:1.45;color:var(--text-2);padding:5px 0 5px 15px;position:relative;font-weight:300;}
+  .tier li::before{content:"";position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:50%;background:var(--gold-2);}
+  .tier .badge{position:absolute;top:-9px;left:20px;background:var(--gold);color:#0a0a0d;font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:600;padding:3px 10px;border-radius:20px;}
+  .finance{margin-top:18px;font-size:11px;color:var(--text-2);text-align:center;font-weight:300;}
+  .finance b{color:var(--gold);font-weight:500;}
+
+  /* SERVICES */
+  .svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6mm;margin-top:20px;}
+  .svc{background:var(--panel);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:16px;}
+  .svc .si{display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:rgba(230,200,126,.07);margin-bottom:10px;}
+  .svc h4{font-size:12.5px;font-weight:600;margin-bottom:5px;}
+  .svc p{font-size:9.5px;line-height:1.5;color:var(--text-3);font-weight:300;}
+  .reach{margin-top:auto;border-top:1px solid rgba(255,255,255,.09);padding-top:16px;}
+  .reach .rl{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold-2);margin-bottom:12px;}
+  .reach .cities{display:flex;flex-wrap:wrap;gap:8px;}
+  .reach .city{font-size:11px;color:var(--text-2);border:1px solid var(--line);border-radius:20px;padding:5px 14px;font-weight:300;}
+
+  /* FAQ */
+  .faq{margin-top:20px;column-count:2;column-gap:32px;}
+  .faq .qa{break-inside:avoid;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.08);}
+  .faq h4{font-size:12.5px;font-weight:600;margin-bottom:6px;color:var(--text);}
+  .faq h4 .q{color:var(--gold-2);margin-right:6px;font-family:'Playfair Display',serif;}
+  .faq p{font-size:10.5px;line-height:1.6;color:var(--text-3);font-weight:300;}
+
+  /* BACK EXTRAS */
+  .back-qr{width:80px;height:80px;border-radius:8px;background:#fff;padding:6px;margin:26px auto 0;}
+  .back-qr img{width:100%;height:100%;display:block;}
+  .back-qr-cap{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-3);margin-top:9px;}
+  .socials{margin-top:10px;font-size:12.5px;color:var(--gold);letter-spacing:.02em;}
+
+  /* MATERIALS */
+  .mat-hero{width:100%;height:82mm;object-fit:cover;border-radius:6px;border:1px solid var(--line);margin-top:20px;}
+  .mat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0 26px;margin-top:20px;border-top:1px solid rgba(255,255,255,.09);}
+  .mat-grid .mrow{padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);}
+  .mat-grid h4{font-size:12.5px;font-weight:600;margin-bottom:4px;}
+  .mat-grid p{font-size:10px;line-height:1.5;color:var(--text-3);font-weight:300;}
+  .swatches{display:flex;gap:10px;margin-top:20px;}
+  .sw{flex:1;height:40px;border-radius:4px;border:1px solid rgba(255,255,255,.12);}
+
+  /* STANDARD */
+  .quote{font-family:'Playfair Display',serif;font-style:italic;font-size:24px;line-height:1.4;color:var(--text);font-weight:500;margin-top:16px;}
+  .std-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;}
+  .std{background:var(--panel);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:18px 20px;}
+  .std h4{font-family:'Playfair Display',serif;font-size:15px;font-weight:600;margin-bottom:6px;color:var(--gold);}
+  .std p{font-size:10.5px;line-height:1.6;color:var(--text-2);font-weight:300;}
+
+  /* BACK */
+  .back-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .back-veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,11,.84),rgba(8,8,11,.92));}
+  .back{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:0 26mm;}
+  .back h2{font-family:'Playfair Display',serif;font-size:44px;line-height:1.1;font-weight:700;}
+  .back .sub{font-size:14px;color:#e6e2d7;margin-top:18px;font-weight:300;max-width:130mm;line-height:1.7;}
+  .contact{margin-top:34px;display:flex;flex-direction:column;gap:9px;font-size:12.5px;color:#e6e2d7;letter-spacing:.03em;}
+  .contact b{color:var(--gold);font-weight:500;}
+  .back .logo{width:56px;height:56px;object-fit:contain;margin-bottom:22px;}
+  .back-foot{position:absolute;bottom:15mm;left:0;right:0;text-align:center;font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--text-3);}
+</style>
+<script>
+  if (new URLSearchParams(window.location.search).get("paper") === "letter") {
+    document.documentElement.classList.add("paper-letter");
+    const letterPageStyle = document.createElement("style");
+    letterPageStyle.textContent = "@page{size:Letter;margin:0}";
+    document.head.appendChild(letterPageStyle);
+  }
+</script>
+</head>
+<body>
+
+<div class="screen-hint">16-page A4 print preview — press <b>Ctrl&nbsp;+&nbsp;P</b> → Destination <b>Save as PDF</b> → Paper size <b>A4</b> → Scale <b>100%</b> → tick <b>Background graphics</b> → Margins <b>None</b> → Save.</div>
+
+<!-- 1 · COVER -->
+<div class="page cover-page">
+  <img class="cover-img" src="https://images.pexels.com/photos/27923188/pexels-photo-27923188.jpeg?auto=compress&cs=tinysrgb&w=1600" alt="">
+  <div class="cover-veil"></div>
+  <div class="cover-inner">
+    <div class="brandline">
+      <img src="images/logo.png" alt="Varada Nexus">
+      <span><span class="bn serif">Varada <span class="gold">Nexus</span></span><span class="bs">Private Limited</span></span>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:18px">Interior Design &amp; Architecture</div>
+      <h1 class="serif cover-title">Spaces designed<br>to be <span class="gold" style="font-style:italic">remembered.</span></h1>
+      <p class="cover-sub">Turnkey interior design and fit-out for luxury homes, corporate offices, and healthcare facilities across India — conceived, built, and delivered as a single, seamless engagement.</p>
+      <div class="cover-rule"></div>
+    </div>
+    <div class="cover-foot">
+      <span>Design · Build · Furnish</span>
+      <span>www.varadanexus.com</span>
+    </div>
+  </div>
+</div>
+
+<!-- 2 · COMPANY -->
+<div class="page company-page">
+  <div class="pad">
+    <div class="brandline">
+      <img src="images/logo.png" alt="Varada Nexus">
+      <span><span class="bn serif">Varada <span class="gold">Nexus</span></span><span class="bs">Private Limited</span></span>
+    </div>
+    <div class="company-layout">
+      <div class="company-lockup">
+        <div class="legal">An Indian enterprise</div>
+        <h2>Varada Nexus<br><span class="gold" style="font-style:italic">Private Limited.</span></h2>
+        <div class="company-rule"></div>
+        <p class="company-copy">A multi-sector company bringing design intelligence, engineering discipline, and accountable execution together. Across every engagement, we build with clarity, operate with rigour, and remain responsible for the outcome from first conversation to final delivery.</p>
+      </div>
+      <div class="company-visual">
+        <img src="images/interiors-company-modern-indian.png" alt="Modern Indian living room with walnut joinery, warm stone, brass accents, and a contemporary jaali screen">
+        <div class="company-visual-copy"><span>Design · Build · Deliver</span><strong>Made for the way India lives and works.</strong></div>
+      </div>
+    </div>
+    <div class="company-pillars">
+      <div class="company-pillar"><div class="num">01</div><h4>Design Intelligence</h4><p>Thoughtful planning shaped around people, purpose, and context.</p></div>
+      <div class="company-pillar"><div class="num">02</div><h4>Engineering Discipline</h4><p>Clear specifications, rigorous coordination, and buildable detail.</p></div>
+      <div class="company-pillar"><div class="num">03</div><h4>Accountable Delivery</h4><p>One coordinated team responsible from concept through handover.</p></div>
+    </div>
+    <div class="company-division">
+      <div>
+        <div class="label">Our specialist division</div>
+        <h3>Interior Design &amp; Architecture</h3>
+      </div>
+      <div>
+        <p>Architecture-led planning, bespoke interiors, turnkey execution, furnishing, and aftercare — delivered through one coordinated team.</p>
+        <div class="company-details">
+          <span><b>Studio</b>&nbsp; Rajahmundry</span>
+          <span><b>Web</b>&nbsp; varadanexus.com</span>
+        </div>
+      </div>
+    </div>
+    <div class="company-footprint">
+      <div>
+        <div class="label">One enterprise · multiple capabilities</div>
+        <h3>Built across sectors.<br><span class="gold" style="font-style:italic">United by execution.</span></h3>
+      </div>
+      <div class="company-sectors">
+        <span>Construction</span><span>Healthcare</span><span>Mining &amp; Logistics</span>
+        <span>Global Trade</span><span>Advisory</span><span>Marketing</span>
+      </div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Private Limited</div>
+  <div class="pagenum">02</div>
+</div>
+
+<!-- 3 · CONTENTS -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Contents</span><span class="dash"></span></div>
+    <h2 class="big serif">Inside the <span class="gold" style="font-style:italic">brochure.</span></h2>
+    <div class="contents-list">
+      <div class="contents-row"><span class="chapter">01</span><span class="title">Overview</span><span class="page-ref">04</span></div>
+      <div class="contents-row"><span class="chapter">02</span><span class="title">Design Philosophy</span><span class="page-ref">05</span></div>
+      <div class="contents-row"><span class="chapter">03</span><span class="title">Sectors We Design</span><span class="page-ref">06</span></div>
+      <div class="contents-row"><span class="chapter">04</span><span class="title">Signature Spaces</span><span class="page-ref">07</span></div>
+      <div class="contents-row"><span class="chapter">05</span><span class="title">Representative Project</span><span class="page-ref">08</span></div>
+      <div class="contents-row"><span class="chapter">06</span><span class="title">Capabilities</span><span class="page-ref">09</span></div>
+      <div class="contents-row"><span class="chapter">07</span><span class="title">Our Process &amp; Client Portal</span><span class="page-ref">10</span></div>
+      <div class="contents-row"><span class="chapter">08</span><span class="title">Materials &amp; Craftsmanship</span><span class="page-ref">11</span></div>
+      <div class="contents-row"><span class="chapter">09</span><span class="title">Packages</span><span class="page-ref">12</span></div>
+      <div class="contents-row"><span class="chapter">10</span><span class="title">Add-on Services &amp; Reach</span><span class="page-ref">13</span></div>
+      <div class="contents-row"><span class="chapter">11</span><span class="title">Frequently Asked Questions</span><span class="page-ref">14</span></div>
+      <div class="contents-row"><span class="chapter">12</span><span class="title">The Varada Nexus Standard</span><span class="page-ref">15</span></div>
+    </div>
+    <p class="contents-note">From first sketch to final handover, this brochure outlines how Varada Nexus approaches complete interior environments with design clarity, transparent coordination, and execution discipline.</p>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">03</div>
+</div>
+
+<!-- 4 · OVERVIEW -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Overview</span><span class="dash"></span></div>
+    <h2 class="big serif">One team, from<br>blueprint to <span class="gold" style="font-style:italic">handover.</span></h2>
+    <p class="lede" style="margin-top:18px;max-width:158mm">
+      Varada Nexus Interiors designs and executes complete spaces under one roof — architecture-led planning,
+      bespoke joinery, curated materials, lighting, and furnishing. You work with a single accountable partner
+      from the first sketch to the final walkthrough, with no handoffs between designer and contractor.
+      Rooted in Indian craft and context, delivered to an international standard, every project is drawn around
+      how the space will truly be lived in and used.
+    </p>
+    <div class="stat-row">
+      <div class="stat"><div class="n serif">4</div><div class="l">Sectors Served</div></div>
+      <div class="stat"><div class="n serif">1</div><div class="l">Point of Contact</div></div>
+      <div class="stat"><div class="n serif">360°</div><div class="l">Design to Delivery</div></div>
+      <div class="stat"><div class="n serif">100%</div><div class="l">Turnkey Handover</div></div>
+    </div>
+    <img class="intro-img" src="https://images.pexels.com/photos/7534561/pexels-photo-7534561.jpeg?auto=compress&cs=tinysrgb&w=1400" alt="">
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">04</div>
+</div>
+
+<!-- 5 · PHILOSOPHY -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Design Philosophy</span><span class="dash"></span></div>
+    <h2 class="big serif">Rooted in craft, <span class="gold" style="font-style:italic">built to last.</span></h2>
+    <div class="split">
+      <div class="imgcol" style="background-image:url('https://images.pexels.com/photos/32031452/pexels-photo-32031452.jpeg?auto=compress&cs=tinysrgb&w=1200')"></div>
+      <div class="txtcol">
+        <div class="principle"><h4>Context First</h4><p>We design for climate, light, and the way Indian homes and workplaces are actually used — not imported templates.</p></div>
+        <div class="principle"><h4>Honest Materials</h4><p>Sheesham and teak, stone, brass, and handloom textile — natural finishes that age with grace rather than date quickly.</p></div>
+        <div class="principle"><h4>Light as Architecture</h4><p>Layered, mood-driven lighting treated as a core design element, engineered into every room from the outset.</p></div>
+        <div class="principle"><h4>Engineered to Endure</h4><p>Specifications that hold and detailing that survives daily life — beauty backed by build quality.</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">05</div>
+</div>
+
+<!-- 6 · SECTORS -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">What we design</span><span class="dash"></span></div>
+    <h2 class="big serif">Four worlds, <span class="gold" style="font-style:italic">one standard.</span></h2>
+    <div class="sector-grid">
+      <div class="sector">
+        <img src="https://images.pexels.com/photos/35203563/pexels-photo-35203563.jpeg?auto=compress&cs=tinysrgb&w=900" alt="">
+        <div class="body"><h3>Residential &amp; Luxury</h3><p>Villas, penthouses, and apartments finished to a bespoke standard — custom joinery, curated materials, and lighting designed around how you live.</p><div class="tags">Villas · Apartments · Penthouses</div></div>
+      </div>
+      <div class="sector">
+        <img src="https://images.pexels.com/photos/33827320/pexels-photo-33827320.jpeg?auto=compress&cs=tinysrgb&w=900" alt="">
+        <div class="body"><h3>Commercial &amp; Office</h3><p>Workspaces, showrooms, retail, and hospitality that reflect your brand and work hard — planning that balances presence with productivity.</p><div class="tags">Offices · Retail · Hospitality</div></div>
+      </div>
+      <div class="sector">
+        <img src="images/interiors-sector-healthcare-modern-indian.png" alt="Modern Indian hospital reception with warm wood, pale stone, sage seating, and integrated lighting">
+        <div class="body"><h3>Hospital &amp; Healthcare</h3><p>Clinical fit-outs built to standard — reception, consultation suites, wards, and theatres designed for hygiene, workflow, and calm.</p><div class="tags">Clinics · Wards · Theatres</div></div>
+      </div>
+      <div class="sector">
+        <img src="images/interiors-sector-turnkey-modern-indian.png" alt="Completed modern Indian turnkey interior with living, dining, kitchen, custom joinery, and a jaali screen">
+        <div class="body"><h3>Turnkey &amp; Full-Service</h3><p>Design, execution, and furnishing delivered end to end — a single contract, a single point of accountability, and a move-in-ready space.</p><div class="tags">Design · Build · Furnish</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">06</div>
+</div>
+
+<!-- 7 · SIGNATURE SPACES -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Signature Spaces</span><span class="dash"></span></div>
+    <h2 class="big serif">Designed to the <span class="gold" style="font-style:italic">last detail.</span></h2>
+    <div class="gallery">
+      <div class="gtile"><img src="https://images.pexels.com/photos/6585598/pexels-photo-6585598.jpeg?auto=compress&cs=tinysrgb&w=900" alt=""><span>Open-plan living &amp; dining</span></div>
+      <div class="gtile"><img src="https://images.pexels.com/photos/33688058/pexels-photo-33688058.jpeg?auto=compress&cs=tinysrgb&w=900" alt=""><span>Contemporary living room</span></div>
+      <div class="gtile"><img src="https://images.pexels.com/photos/8438253/pexels-photo-8438253.jpeg?auto=compress&cs=tinysrgb&w=900" alt=""><span>Modern master bedroom</span></div>
+      <div class="gtile"><img src="https://images.pexels.com/photos/32062853/pexels-photo-32062853.jpeg?auto=compress&cs=tinysrgb&w=900" alt=""><span>Modern island kitchen</span></div>
+      <div class="gtile"><img src="https://images.pexels.com/photos/33827306/pexels-photo-33827306.jpeg?auto=compress&cs=tinysrgb&w=900" alt=""><span>Open-plan workspace</span></div>
+      <div class="gtile"><img src="https://images.pexels.com/photos/35229793/pexels-photo-35229793.jpeg?auto=compress&cs=tinysrgb&w=900" alt=""><span>Contemporary façade</span></div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">07</div>
+</div>
+
+<!-- 8 · REPRESENTATIVE PROJECT -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Representative Project</span><span class="dash"></span></div>
+    <h2 class="big serif">A home, <span class="gold" style="font-style:italic">reimagined.</span></h2>
+    <img class="case-hero" src="https://images.pexels.com/photos/17947890/pexels-photo-17947890.jpeg?auto=compress&cs=tinysrgb&w=1400" alt="">
+    <div class="case-body">
+      <div>
+        <p class="lede"><strong style="color:var(--text)">The brief.</strong> A representative four-bedroom apartment engagement, beginning as a bare shell and envisioned as a warm, contemporary family home — open, light-filled, and clutter-free, with clever storage throughout.</p>
+        <p class="lede" style="margin-top:12px"><strong style="color:var(--text)">The result.</strong> We opened up the living and dining, introduced a floating staircase and layered lighting, and worked in walnut veneer, marble, and handloom textiles for warmth. Every fitting — from the modular kitchen to the wardrobes — was custom-built and installed by our own team, and handed over move-in ready.</p>
+      </div>
+      <div class="case-meta">
+        <div class="mline"><span>Type</span><span>Residential · 4 BHK</span></div>
+        <div class="mline"><span>Scope</span><span>Full turnkey</span></div>
+        <div class="mline"><span>Area</span><span>2,400 sq. ft.</span></div>
+        <div class="mline"><span>Timeline</span><span>12 weeks</span></div>
+        <div class="mline"><span>Style</span><span>Contemporary</span></div>
+      </div>
+    </div>
+    <div class="stat-row" style="margin-top:auto">
+      <div class="stat"><div class="n serif" style="font-size:17px">Turnkey</div><div class="l">Single Contract</div></div>
+      <div class="stat"><div class="n serif" style="font-size:17px">In-house</div><div class="l">Execution Team</div></div>
+      <div class="stat"><div class="n serif" style="font-size:17px">Portal</div><div class="l">Live Approvals</div></div>
+      <div class="stat"><div class="n serif" style="font-size:17px">Warranty</div><div class="l">Backed Handover</div></div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">08</div>
+</div>
+
+<!-- 9 · CAPABILITIES -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Capabilities</span><span class="dash"></span></div>
+    <h2 class="big serif">What we <span class="gold" style="font-style:italic">deliver.</span></h2>
+    <div class="cap-grid">
+      <div class="cap"><div class="num serif">01</div><h4>Concept &amp; Space Planning</h4><p>Layouts, zoning, and 3D concepts tailored to how the space will be used.</p></div>
+      <div class="cap"><div class="num serif">02</div><h4>Architecture &amp; Layout</h4><p>Structure-aware planning, elevations, and civil coordination.</p></div>
+      <div class="cap"><div class="num serif">03</div><h4>Bespoke Joinery</h4><p>Custom furniture, wardrobes, and millwork built to measure.</p></div>
+      <div class="cap"><div class="num serif">04</div><h4>Materials &amp; Finishes</h4><p>Curated palettes of stone, wood, textile, and metal.</p></div>
+      <div class="cap"><div class="num serif">05</div><h4>Lighting Design</h4><p>Layered, mood-driven lighting engineered into every room.</p></div>
+      <div class="cap"><div class="num serif">06</div><h4>Modular Kitchens &amp; Wardrobes</h4><p>Ergonomic, hard-wearing systems tailored to Indian kitchens.</p></div>
+      <div class="cap"><div class="num serif">07</div><h4>False Ceiling &amp; POP</h4><p>Ceiling design, cove lighting, and detailing done in-house.</p></div>
+      <div class="cap"><div class="num serif">08</div><h4>Execution &amp; Project Management</h4><p>Contractors, timelines, and quality control managed for you.</p></div>
+      <div class="cap"><div class="num serif">09</div><h4>Furnishing &amp; Styling</h4><p>Final styling, art, and décor for a complete handover.</p></div>
+    </div>
+    <p class="lede" style="margin-top:20px">Every capability sits under one roof and one contract — you are never left coordinating between an architect, a carpenter, an electrician, and a decorator.</p>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">09</div>
+</div>
+
+<!-- 10 · PROCESS -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Our Process</span><span class="dash"></span></div>
+    <h2 class="big serif">How we <span class="gold" style="font-style:italic">work.</span></h2>
+    <div class="flow">
+      <div class="fstep"><div class="idx serif">1</div><div><h4>Discovery</h4><div class="desc">We understand your brief, site, lifestyle or brand, and budget through an on-site survey and consultation.</div></div><div class="deliver"><b>You receive</b>Site survey · requirement brief · indicative budget band</div></div>
+      <div class="fstep"><div class="idx serif">2</div><div><h4>Design</h4><div class="desc">Concepts, layouts, 3D visuals, material boards, and a detailed cost estimate — refined with you until approved.</div></div><div class="deliver"><b>You receive</b>Floor plans · 3D renders · material palette · costing</div></div>
+      <div class="fstep"><div class="idx serif">3</div><div><h4>Build</h4><div class="desc">Bespoke joinery, civil, electrical, and finishing executed with dedicated on-site project management.</div></div><div class="deliver"><b>You receive</b>Weekly progress · quality checks · timeline tracking</div></div>
+      <div class="fstep"><div class="idx serif">4</div><div><h4>Furnish &amp; Style</h4><div class="desc">Loose furniture, soft furnishings, lighting, art, and décor installed and styled to the final vision.</div></div><div class="deliver"><b>You receive</b>Styled interior · fixtures · finishing touches</div></div>
+      <div class="fstep"><div class="idx serif">5</div><div><h4>Handover</h4><div class="desc">Snagging, cleaning, and a walkthrough — you receive a functioning, move-in-ready space with warranties.</div></div><div class="deliver"><b>You receive</b>Snag-free handover · warranties · aftercare</div></div>
+    </div>
+    <div class="portal">
+      <div class="picon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#e6c87e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 20h8M12 17v3"/><path d="M8.5 10.5l2.5 2.5 4.5-4.5"/></svg>
+      </div>
+      <div>
+        <h4>Your Client Portal<span class="tag">Included</span></h4>
+        <p>Every client receives secure access to an online portal — review 3D designs and drawings, approve each stage, track progress and timelines, and sign off on the work from anywhere, at any time. Full transparency, no surprises.</p>
+      </div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">10</div>
+</div>
+
+<!-- 11 · MATERIALS -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Materials &amp; Craftsmanship</span><span class="dash"></span></div>
+    <h2 class="big serif">Finishes that <span class="gold" style="font-style:italic">age well.</span></h2>
+    <img class="mat-hero" src="https://images.pexels.com/photos/8089172/pexels-photo-8089172.jpeg?auto=compress&cs=tinysrgb&w=1400" alt="">
+    <div class="mat-grid">
+      <div class="mrow"><h4>Engineered &amp; Veneer Wood</h4><p>Walnut and oak veneers for sleek, seamless modern joinery.</p></div>
+      <div class="mrow"><h4>Large-Format Stone &amp; Marble</h4><p>Book-matched marble and porcelain for floors and feature walls.</p></div>
+      <div class="mrow"><h4>Laminates &amp; Acrylic Finishes</h4><p>High-gloss and matte surfaces for contemporary cabinetry.</p></div>
+      <div class="mrow"><h4>Metal, Glass &amp; Mirror</h4><p>Brushed brass, blackened steel, and slim-profile glazing.</p></div>
+      <div class="mrow"><h4>Architectural Lighting</h4><p>Recessed, linear, and cove lighting integrated by design.</p></div>
+    </div>
+    <div class="swatches">
+      <div class="sw" style="background:#5b3f2a"></div>
+      <div class="sw" style="background:#a9793f"></div>
+      <div class="sw" style="background:#e6c87e"></div>
+      <div class="sw" style="background:#d9d3c6"></div>
+      <div class="sw" style="background:#26262a"></div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">11</div>
+</div>
+
+<!-- 12 · PACKAGES -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Our Packages</span><span class="dash"></span></div>
+    <h2 class="big serif">Three ways to <span class="gold" style="font-style:italic">work with us.</span></h2>
+    <div class="tiers">
+      <div class="tier">
+        <div class="tname serif">Essential</div>
+        <div class="tp">Smart, well-built interiors on a considered budget</div>
+        <div class="price serif" style="font-size:16px">Tailored quote</div>
+        <ul>
+          <li>Space planning &amp; 2D layouts</li>
+          <li>Core modular units &amp; wardrobes</li>
+          <li>Standard finishes &amp; laminates</li>
+          <li>Basic lighting &amp; false ceiling</li>
+          <li>Project management &amp; handover</li>
+        </ul>
+      </div>
+      <div class="tier feat">
+        <div class="badge">Most Popular</div>
+        <div class="tname serif">Signature</div>
+        <div class="tp">Bespoke design with premium materials</div>
+        <div class="price serif" style="font-size:16px">Tailored quote</div>
+        <ul>
+          <li>Everything in Essential</li>
+          <li>3D design &amp; material boards</li>
+          <li>Custom joinery &amp; veneers</li>
+          <li>Layered, engineered lighting</li>
+          <li>Curated furnishing &amp; styling</li>
+          <li>Client portal &amp; live approvals</li>
+        </ul>
+      </div>
+      <div class="tier">
+        <div class="tname serif">Bespoke</div>
+        <div class="tp">Fully custom, luxury turnkey delivery</div>
+        <div class="price serif" style="font-size:16px">Tailored quote</div>
+        <ul>
+          <li>Everything in Signature</li>
+          <li>Architecture &amp; layout redesign</li>
+          <li>Imported stone, brass &amp; automation</li>
+          <li>Bespoke furniture &amp; art curation</li>
+          <li>Dedicated design lead</li>
+          <li>Extended warranty &amp; aftercare</li>
+        </ul>
+      </div>
+    </div>
+    <p class="finance"><b>Every project is custom-scoped.</b> &nbsp;Pricing is tailored to your space, materials, and requirements — and confirmed after a site survey and detailed scope of work.</p>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">12</div>
+</div>
+
+<!-- 13 · SERVICES & REACH -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Add-on Services</span><span class="dash"></span></div>
+    <h2 class="big serif">Everything under <span class="gold" style="font-style:italic">one roof.</span></h2>
+    <div class="svc-grid">
+      <div class="svc"><div class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e6c87e" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 9h18M9 9v12"/></svg></div><h4>Modular Kitchens</h4><p>Ergonomic, hard-wearing kitchens built for Indian cooking.</p></div>
+      <div class="svc"><div class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e6c87e" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M12 3v18M8 8h1M15 8h1"/></svg></div><h4>Wardrobes &amp; Storage</h4><p>Fitted wardrobes, walk-ins, and clever concealed storage.</p></div>
+      <div class="svc"><div class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e6c87e" stroke-width="1.6"><path d="M5 12a7 7 0 0 1 14 0"/><path d="M9 12a3 3 0 0 1 6 0"/><circle cx="12" cy="12" r="1"/></svg></div><h4>Home Automation</h4><p>Smart lighting, climate, security, and voice control.</p></div>
+      <div class="svc"><div class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e6c87e" stroke-width="1.6"><rect x="3" y="4" width="18" height="5"/><path d="M7 9v11M17 9v11M12 9v4"/></svg></div><h4>False Ceiling &amp; Lighting</h4><p>Ceiling design, cove and profile lighting, in-house.</p></div>
+      <div class="svc"><div class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e6c87e" stroke-width="1.6"><path d="M12 22V9M12 9c0-4 3-6 6-6 0 4-3 6-6 6zM12 12c0-3-2-5-5-5 0 3 2 5 5 5z"/></svg></div><h4>Landscaping &amp; Balcony</h4><p>Green balconies, planters, and outdoor living spaces.</p></div>
+      <div class="svc"><div class="si"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e6c87e" stroke-width="1.6"><path d="M4 20v-6a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v6M4 16h16M7 10V7a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v3"/></svg></div><h4>Furniture &amp; Décor</h4><p>Custom and curated furniture, art, and finishing touches.</p></div>
+    </div>
+    <div class="reach">
+      <div class="rl">Where we work</div>
+      <div class="cities">
+        <span class="city">Rajahmundry</span>
+        <span class="city">Visakhapatnam</span>
+        <span class="city">Vijayawada</span>
+        <span class="city">Hyderabad</span>
+        <span class="city">Bengaluru</span>
+        <span class="city">Chennai</span>
+        <span class="city">&amp; across India</span>
+      </div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">13</div>
+</div>
+
+<!-- 14 · FAQ -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">Good to Know</span><span class="dash"></span></div>
+    <h2 class="big serif">Frequently <span class="gold" style="font-style:italic">asked.</span></h2>
+    <div class="faq">
+      <div class="qa"><h4><span class="q">Q.</span>How long does a project take?</h4><p>A full home fit-out typically takes 10–14 weeks from design sign-off, depending on size and scope. We share a committed timeline before work begins.</p></div>
+      <div class="qa"><h4><span class="q">Q.</span>How is payment structured?</h4><p>Payments are staged against milestones — design, execution, and handover — with clear, tailored estimates agreed upfront before any work begins.</p></div>
+      <div class="qa"><h4><span class="q">Q.</span>Do you handle everything, or just design?</h4><p>Everything. Design, civil work, joinery, electrical, furnishing, and styling are delivered under one contract and one point of contact.</p></div>
+      <div class="qa"><h4><span class="q">Q.</span>Can I track progress?</h4><p>Yes — every client gets secure portal access to view 3D designs, approve each stage, and follow progress and timelines from anywhere.</p></div>
+      <div class="qa"><h4><span class="q">Q.</span>Will you work with my architect?</h4><p>Absolutely. We collaborate with your architect or work from your existing plans, and can also handle layout design ourselves.</p></div>
+      <div class="qa"><h4><span class="q">Q.</span>Is the work under warranty?</h4><p>Yes. Our workmanship is warranty-backed, with responsive aftercare long after the keys are handed over.</p></div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">14</div>
+</div>
+
+<!-- 15 · THE STANDARD -->
+<div class="page">
+  <div class="pad">
+    <div class="kicker-row"><span class="eyebrow">The Varada Nexus Standard</span><span class="dash"></span></div>
+    <h2 class="big serif">Design that is also <span class="gold" style="font-style:italic">engineered.</span></h2>
+    <p class="quote serif">“Interiors sit inside a group that builds and operates real infrastructure — so our specifications <span class="gold">hold</span>, our timelines are <span class="gold">met</span>, and our finishes <span class="gold">last</span>.”</p>
+    <div class="std-grid">
+      <div class="std"><h4>One Partner, Full Accountability</h4><p>No handoffs between designer and contractor. We own the outcome end to end — the space you were shown is the space you receive.</p></div>
+      <div class="std"><h4>Engineering Discipline</h4><p>The rigour of a group that runs hospitals and logistics, applied to every drawing, material spec, and site review.</p></div>
+      <div class="std"><h4>Curated, Not Catalogued</h4><p>Every palette is composed for the project — bespoke joinery and considered materials over off-the-shelf packages.</p></div>
+      <div class="std"><h4>Transparent Costing</h4><p>Clear estimates, staged payments, and no hidden extras — you always know where the budget stands.</p></div>
+      <div class="std"><h4>Delivered Move-In Ready</h4><p>Styling, snagging, and furnishing included, so handover means walking into a finished, functioning space.</p></div>
+      <div class="std"><h4>Aftercare &amp; Warranty</h4><p>Workmanship warranties and responsive aftercare long after the keys are handed over.</p></div>
+    </div>
+  </div>
+  <div class="footmark">Varada Nexus · Interiors</div>
+  <div class="pagenum">15</div>
+</div>
+
+<!-- 16 · BACK -->
+<div class="page back-page">
+  <img class="back-img" src="https://images.pexels.com/photos/32031452/pexels-photo-32031452.jpeg?auto=compress&cs=tinysrgb&w=1600" alt="">
+  <div class="back-veil"></div>
+  <div class="back">
+    <img class="logo" src="images/logo.png" alt="Varada Nexus">
+    <div class="eyebrow" style="margin-bottom:20px">Interior Design &amp; Architecture</div>
+    <h2 class="serif">Let’s design your<br><span class="gold" style="font-style:italic">next space.</span></h2>
+    <p class="sub">Tell us about your home, office, or facility — and we’ll take it from concept to completion.</p>
+    <div class="contact">
+      <span><b>Web</b>&nbsp;&nbsp;www.varadanexus.com</span>
+      <span><b>Enquiries</b>&nbsp;&nbsp;connect@varadanexus.com</span>
+      <span><b>Studio</b>&nbsp;&nbsp;Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+    <div class="socials">Instagram&nbsp;&nbsp;@varada_nexus</div>
+    <div class="back-qr"><img src="data:image/png;base64,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" alt="Scan to enquire"></div>
+    <div class="back-qr-cap">Scan to book a consultation</div>
+  </div>
+  <div class="back-foot">© 2026 Varada Nexus Private Limited · All rights reserved</div>
+</div>
+
+</body>
+</html>

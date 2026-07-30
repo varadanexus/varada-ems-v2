@@ -17,11 +17,19 @@ export function auditPost(p) {
   const title = p.title || "";
   const metaTitle = p.meta_title || "";
   const metaDesc = p.meta_description || "";
+  const html = String(p.content || "");
   const plain = stripHtml(p.content);
   const words = plain ? plain.split(" ").length : 0;
-  const h2 = (String(p.content || "").match(/<h2\b/gi) || []).length;
-  const internalLinks = (String(p.content || "").match(/href=["']\/(blog|services|founder|contact)/gi) || []).length;
-  const anyLinks = (String(p.content || "").match(/<a\b/gi) || []).length;
+  const h2 = (html.match(/<h2\b/gi) || []).length;
+  // Internal links: count BOTH site-relative hrefs (/blog…) AND absolute URLs to
+  // any varadanexus domain — covers varadanexus.com, varadanexus.in and the
+  // beta. subdomain, including the platform's own /blog/post.html?slug=… permalink
+  // format that all internal cross-links use. The previous regex only matched
+  // relative paths, so absolute internal links were wrongly counted as zero.
+  const internalLinks = (html.match(
+    /href=["'](?:\/(?:blog|services|founder|contact|about|resources)|https?:\/\/[^"']*varadanexus\.[a-z]+\/[^"']*)/gi
+  ) || []).length;
+  const anyLinks = (html.match(/<a\b/gi) || []).length;
 
   let score = 100;
   const penalise = (pts, msg) => { score -= pts; problems.push(msg); };
@@ -58,13 +66,60 @@ export function auditPost(p) {
   if (p.slug && p.slug.length > 75) penalise(2, "Slug is very long.");
 
   score = Math.max(0, Math.min(100, Math.round(score)));
+
+  // --------------------------------------------------------------------------
+  // Deterministic quality & confidence scores.
+  //
+  // These are on-page, reproducible heuristics — DISTINCT from the AI generation
+  // pipeline's quality gate. They exist so that hand-authored posts (source =
+  // "manual"), which never pass through the AI gate, still carry meaningful
+  // quality_score / confidence_score values instead of null. They are labelled
+  // as source "deterministic_audit" by the caller so the two are never conflated.
+  // --------------------------------------------------------------------------
+  const hasFaq = /<h2[^>]*>\s*(faqs?|frequently asked)/i.test(html);
+  const hasSchema = /application\/ld\+json/i.test(html);
+  const hasExternalRef = /rel=["'][^"']*nofollow/i.test(html);
+  const tagsN = Array.isArray(p.tags) ? p.tags.length : 0;
+  const metaComplete =
+    !!metaTitle && metaTitle.length <= 60 &&
+    !!metaDesc && metaDesc.length >= 70 && metaDesc.length <= 160;
+
+  // quality: editorial completeness of the article itself (depth, structure,
+  // FAQ, structured data, internal linking, an authoritative citation, metadata,
+  // and media). Weighted to 0-100.
+  let quality = 0;
+  quality += words >= 1500 ? 26 : words >= 1000 ? 18 : words >= 600 ? 10 : 0;
+  quality += h2 >= 4 ? 16 : h2 >= 2 ? 10 : h2 >= 1 ? 5 : 0;
+  quality += hasFaq ? 12 : 0;
+  quality += hasSchema ? 12 : 0;
+  quality += internalLinks >= 2 ? 12 : internalLinks === 1 ? 6 : 0;
+  quality += hasExternalRef ? 8 : 0;
+  quality += metaComplete ? 8 : (metaTitle && metaDesc ? 4 : 0);
+  quality += (p.cover_image && p.alt_text) ? 6 : (p.cover_image ? 3 : 0);
+  quality = Math.max(0, Math.min(100, Math.round(quality)));
+
+  // confidence: how complete the publishable record is — the fraction of the
+  // required publishing signals that are verifiably present. A record missing
+  // metadata, links or schema is one we are less confident is fully ready.
+  const signals = [
+    !!title, !!metaTitle, !!metaDesc, !!p.excerpt, !!p.primary_category,
+    tagsN >= 4, !!p.cover_image, !!p.alt_text, internalLinks >= 2,
+    hasExternalRef, hasSchema, hasFaq, words >= 1000,
+  ];
+  const confidence = Math.round((signals.filter(Boolean).length / signals.length) * 100);
+
   return {
     score,
+    quality,
+    confidence,
     problems,
     stats: {
       words,
       h2_count: h2,
       internal_links: internalLinks,
+      external_ref: hasExternalRef,
+      has_faq: hasFaq,
+      has_schema: hasSchema,
       title_length: title.length,
       meta_description_length: metaDesc.length,
       canonical: p.canonical_url || `${CONFIG.siteUrl}/blog/post.html?slug=${p.slug || ""}`,
