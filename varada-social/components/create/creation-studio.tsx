@@ -100,6 +100,87 @@ const randomPostContentTypes = [
   "event_announcement",
 ];
 
+// Topic seeds per business category, so "Surprise me" keeps the selected
+// category and picks a topic that actually fits it. Keys must match `categories`.
+const categoryTopicSeeds: Record<string, string[]> = {
+  "Healthcare Infrastructure": [
+    "What decision-makers should check before commissioning a new hospital build",
+    "How well-planned healthcare infrastructure improves patient outcomes and running costs",
+  ],
+  "Hospital Consultancy": [
+    "Signs a hospital project needs specialist consultancy support early",
+    "Turning a healthcare vision into a commissioned, compliant facility",
+  ],
+  "Transportation & Logistics": [
+    "How technology is making cargo and mineral logistics safer and more transparent",
+    "A practical checklist for planning large-scale transportation and logistics",
+  ],
+  "Mining": [
+    "Making mining operations safer, cleaner and more efficient",
+    "How reliable logistics keeps a mining supply chain moving",
+  ],
+  "Interior Design": [
+    "Turning a bare commercial shell into a premium, on-brand workspace",
+    "Signs it is time to bring in a professional interior design partner",
+  ],
+  "Import & Export": [
+    "Behind the scenes of a smooth, compliant import-export shipment",
+    "Common trade-documentation mistakes and how to avoid them",
+  ],
+  "Digital Marketing": [
+    "How a clear digital marketing strategy generates qualified enquiries",
+    "Turning website visitors into real business conversations",
+  ],
+  "HR & PR": [
+    "How the right HR and PR strategy compounds into long-term brand trust",
+    "Building an employer brand that attracts the right talent",
+  ],
+  "Corporate Services": [
+    "Why integrated corporate services save growing companies time and cost",
+    "One partner for compliance, operations and back-office support",
+  ],
+  "Company Announcements": [
+    "Sharing a meaningful company milestone with our clients and partners",
+    "A new capability we are proud to bring to our clients",
+  ],
+  "Recruitment": [
+    "We are hiring: what it is like to build a career at Varada Nexus",
+    "What we look for in the people who join our teams",
+  ],
+  "Client Success Stories": [
+    "Lessons from a recent client success story worth celebrating",
+    "How we helped a client solve a real operational challenge",
+  ],
+  "CSR Activities": [
+    "A community initiative we are proud to support",
+    "How responsible business practices shape the way we work",
+  ],
+  "Educational Content": [
+    "A simple explainer on a topic our clients often ask about",
+    "The fundamentals every buyer should understand before starting a project",
+  ],
+  "Industry News": [
+    "What a recent industry development means for businesses like yours",
+    "A trend worth watching in our sector this year",
+  ],
+  "Tips & Guides": [
+    "Practical tips to get a project right the first time",
+    "A short guide to choosing the right partner for your requirement",
+  ],
+  "Festival Greetings": [
+    "Warm festival greetings from the Varada Nexus family",
+    "Celebrating the season with our clients, partners and team",
+  ],
+  "Motivational Posts": [
+    "A mindset that helps teams deliver excellent work",
+    "Why consistency and quality build lasting business relationships",
+  ],
+  "Product & Service Promotions": [
+    "A closer look at a service that solves a common business problem",
+    "How our offering helps clients move faster with less risk",
+  ],
+};
+
 function pickRandom<T>(items: readonly T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
@@ -218,20 +299,20 @@ export function CreationStudio() {
         : randomFormat === "story"
           ? "story"
           : pickRandom(randomPostContentTypes);
-    const randomCategory = pickRandom(categories);
     const randomTone = pickRandom(randomTones);
-    const randomTopic = pickRandom(randomTopics);
+    // Keep the category the user selected; pick a topic that fits it.
+    const seeds = categoryTopicSeeds[category] ?? randomTopics;
+    const randomTopic = pickRandom(seeds);
 
     setFormat(randomFormat);
     setContentType(randomContentType);
-    setCategory(randomCategory);
     setTone(randomTone);
     setTopic(randomTopic);
 
     await generate({
       topic: randomTopic,
       format: randomFormat,
-      category: randomCategory,
+      category,
       contentType: randomContentType,
       tone: randomTone,
     });
@@ -563,7 +644,7 @@ export function CreationStudio() {
               Surprise me · random post
             </button>
             <p className="text-center text-xs text-muted">
-              Randomly builds a post, carousel or story for the selected platforms.
+              Randomly builds a post, carousel or story in the selected category ({category}).
             </p>
 
             <details className="rounded-xl border bg-background/45 p-4">
