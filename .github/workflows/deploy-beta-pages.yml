@@ -35,6 +35,15 @@ jobs:
           npm run check:pwa
           npm run check:migrations
 
+      - name: Build Nexus Social
+        env:
+          NEXT_PUBLIC_BASE_PATH: /social-media
+          NEXT_PUBLIC_SUPABASE_URL: https://ftejxcycoiagbslnzaab.supabase.co
+          NEXT_PUBLIC_EMS_PARENT_ORIGINS: https://www.varadanexus.com,https://varadanexus.com,https://localhost
+        run: |
+          npm ci --prefix varada-social
+          npm run social:build
+
       - name: Prepare Pages bundle
         shell: bash
         run: |
@@ -53,6 +62,7 @@ jobs:
           cp sw.js .pages-dist/sw.js
           cp -R new-ems/. .pages-dist/new-ems/
           cp CNAME .pages-dist/CNAME
+          npm --prefix varada-social run export:pages -- "$GITHUB_WORKSPACE/.pages-dist"
 
       - name: Verify Pages bundle
         shell: bash
@@ -60,6 +70,9 @@ jobs:
           test -f .pages-dist/sw.js
           test -f .pages-dist/new-ems/manifest.webmanifest
           test -f .pages-dist/new-ems/index.html
+          test -f .pages-dist/social-media/dashboard/index.html
+          test -f .pages-dist/social-media/accounts/index.html
+          test -f .pages-dist/social-media/campaigns/index.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

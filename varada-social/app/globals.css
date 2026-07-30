@@ -1,0 +1,191 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050609;
+  --surface: #07080d;
+  --surface-raised: #0b0c10;
+  --foreground: #f7f4ec;
+  --muted: #a6a08f;
+  --line: rgba(230, 200, 126, 0.16);
+  --brand: #c39a44;
+  --brand-bright: #e0c274;
+  --accent: #d4b26a;
+  --accent-soft: rgba(212, 178, 106, 0.12);
+  --success: #6bc69d;
+  --sidebar: #030407;
+}
+
+.dark {
+  --background: #050609;
+  --surface: #07080d;
+  --surface-raised: #0b0c10;
+  --foreground: #f7f4ec;
+  --muted: #a6a08f;
+  --line: rgba(230, 200, 126, 0.16);
+  --brand: #c39a44;
+  --brand-bright: #e0c274;
+  --accent: #d4b26a;
+  --accent-soft: rgba(212, 178, 106, 0.12);
+  --success: #6bc69d;
+  --sidebar: #030407;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-bright: var(--brand-bright);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-sidebar: var(--sidebar);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+* {
+  border-color: var(--line);
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 28rem),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), sans-serif;
+}
+
+select option,
+select optgroup {
+  background: #0b0c10;
+  color: var(--foreground);
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 2px;
+}
+
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+@layer components {
+  .btn-primary {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    background: var(--accent);
+    padding: 0.65rem 1rem;
+    color: #100c05;
+    font-size: 0.875rem;
+    font-weight: 700;
+    transition: transform 160ms ease, filter 160ms ease;
+  }
+
+  .btn-primary:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    transform: none;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    min-height: 2.75rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    background: var(--surface);
+    padding: 0.65rem 1rem;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 700;
+    transition: background 160ms ease, border-color 160ms ease;
+  }
+
+  .btn-secondary:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    background: var(--surface-raised);
+  }
+
+  .field {
+    width: 100%;
+    min-height: 2.75rem;
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    background: var(--background);
+    padding: 0.65rem 0.8rem;
+    color: var(--foreground);
+    font-size: 0.875rem;
+  }
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.ems-embedded body {
+  background: var(--background);
+}
+
+.ems-embedded .nexus-app-shell {
+  display: block;
+  min-height: 100vh;
+}
+
+.ems-embedded .nexus-module-navigation,
+.ems-embedded .nexus-module-topbar {
+  display: none;
+}
+
+.ems-embedded .nexus-module-content {
+  width: 100%;
+  max-width: none;
+  padding: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .ems-embedded .nexus-module-content {
+    padding: 0.85rem;
+  }
+}

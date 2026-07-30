@@ -1,0 +1,114 @@
+:root {
+  --legal-bg: #07111f;
+  --legal-panel: #0d1929;
+  --legal-border: rgba(216, 178, 95, 0.22);
+  --legal-gold: #d8b25f;
+  --legal-text: #f5f1e8;
+  --legal-muted: #aeb9c8;
+}
+
+body.legal-page {
+  background: var(--legal-bg);
+  color: var(--legal-text);
+}
+
+.legal-hero {
+  padding: 150px 24px 56px;
+  text-align: center;
+}
+
+.legal-hero h1 {
+  margin: 14px auto 18px;
+  max-width: 920px;
+  font-size: clamp(38px, 7vw, 72px);
+  line-height: 1.04;
+}
+
+.legal-hero p {
+  max-width: 720px;
+  margin: 0 auto;
+  color: var(--legal-muted);
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+.legal-document {
+  width: min(920px, calc(100% - 32px));
+  margin: 0 auto 96px;
+  padding: clamp(26px, 5vw, 58px);
+  border: 1px solid var(--legal-border);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(17, 31, 48, 0.98), rgba(8, 19, 33, 0.98));
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.26);
+}
+
+.legal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-bottom: 34px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--legal-border);
+  color: var(--legal-muted);
+  font-size: 14px;
+}
+
+.legal-document h2 {
+  margin: 38px 0 12px;
+  color: var(--legal-gold);
+  font-size: 24px;
+}
+
+.legal-document h3 {
+  margin: 24px 0 10px;
+  font-size: 18px;
+}
+
+.legal-document p,
+.legal-document li {
+  color: var(--legal-muted);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.legal-document ul,
+.legal-document ol {
+  padding-left: 22px;
+}
+
+.legal-document a {
+  color: var(--legal-gold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.legal-callout {
+  margin: 26px 0;
+  padding: 20px 22px;
+  border-left: 3px solid var(--legal-gold);
+  border-radius: 0 12px 12px 0;
+  background: rgba(216, 178, 95, 0.08);
+}
+
+.legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 38px;
+  padding-top: 24px;
+  border-top: 1px solid var(--legal-border);
+}
+
+.legal-links a {
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .legal-hero {
+    padding-top: 120px;
+  }
+
+  .legal-document {
+    border-radius: 16px;
+  }
+}

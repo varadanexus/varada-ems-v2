@@ -223,10 +223,48 @@ const MENU_BY_WORKSPACE = {
       ]
     },
     {
+      title: "AI Content Operations",
+      items: [
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Nexus Social", href: ROUTES.SOCIAL_MEDIA_MANAGER }
+      ]
+    },
+    {
       title: "White-label Marketing Delivery",
       items: [
         { module: MODULES.MARKETING_COMMAND_CENTER, label: "Marketing Operations", href: ROUTES.MARKETING_COMMAND_CENTER },
         { module: MODULES.PORTAL_ACCESS, label: "Portal Users", href: `${ROUTES.PORTAL_ACCESS}?tab=create&division=digital-services` }
+      ]
+    }
+  ],
+  [WORKSPACES.SOCIAL_MEDIA]: [
+    {
+      title: "Nexus Social",
+      items: [
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Overview", href: ROUTES.SOCIAL_MEDIA_MANAGER },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Create with AI", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=create` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Content Library", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=content` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Calendar", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=calendar` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Approvals", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=approvals` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Trends", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=trends` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Analytics", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=analytics` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Instagram", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=instagram` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Instagram Inbox", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=inbox` }
+      ]
+    },
+    {
+      title: "Connections",
+      items: [
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Social Accounts", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=accounts` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ads Campaigns", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=campaigns` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Settings", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=settings` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Audit History", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=audit` }
+      ]
+    },
+    {
+      title: "EMS",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.DIGITAL_SERVICES_DASHBOARD, label: "Digital Services", href: ROUTES.DIGITAL_SERVICES_DASHBOARD }
       ]
     }
   ],
