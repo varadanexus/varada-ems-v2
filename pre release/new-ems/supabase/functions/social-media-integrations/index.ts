@@ -3361,7 +3361,28 @@ The official transparent logo will be composited later by the secure backend dir
     const logoWidth = Math.max(96, Math.round(artwork.width * 0.16));
     logo.resize(logoWidth, Image.RESIZE_AUTO);
     const margin = Math.max(24, Math.round(artwork.width * 0.045));
-    artwork.composite(logo, artwork.width - logo.width - margin, margin);
+    const logoX = artwork.width - logo.width - margin;
+    const logoY = margin;
+    // Dark rounded scrim behind the logo so the transparent gold/white mark
+    // stays legible over bright artwork (e.g. windows, sky, pale walls).
+    try {
+      const pad = Math.max(12, Math.round(logo.width * 0.22));
+      const panelW = logo.width + pad * 2;
+      const panelH = logo.height + pad * 2;
+      const panel = new Image(panelW, panelH);
+      panel.fill(0x000000b0); // black at ~69% opacity
+      if (typeof (panel as unknown as { roundCorners?: (r?: number) => unknown }).roundCorners === "function") {
+        (panel as unknown as { roundCorners: (r?: number) => unknown }).roundCorners(
+          Math.round(Math.min(panelW, panelH) * 0.32),
+        );
+      }
+      const panelX = Math.max(0, logoX - pad);
+      const panelY = Math.max(0, logoY - pad);
+      artwork.composite(panel, panelX, panelY);
+    } catch {
+      // If the scrim cannot be drawn, still place the logo rather than failing.
+    }
+    artwork.composite(logo, logoX, logoY);
     binary = await artwork.encode();
   } catch (error) {
     throw new Error(`Official logo composition failed: ${String(error?.message || error)}`);
@@ -3394,9 +3415,10 @@ The official transparent logo will be composited later by the secure backend dir
       required: true,
       appliedByTemplate: true,
       transparentBackground: true,
-      backingPanel: false,
+      backingPanel: true,
+      backingPanelStyle: "dark-rounded-scrim",
       baseArtworkQa: artworkQa,
-      note: "The approved transparent official logo was composited directly over continuous artwork by the secure EMS backend; the image model did not recreate it.",
+      note: "The approved transparent official logo was composited by the secure EMS backend over a subtle dark rounded scrim for legibility; the image model did not recreate the logo.",
     },
   };
 }
