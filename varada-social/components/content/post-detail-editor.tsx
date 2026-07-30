@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- Meta and generated campaign assets use dynamic signed/public URLs. */
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, ExternalLink, ImageIcon, LoaderCircle, Save, ShieldCheck, X } from "lucide-react";
+import { CalendarClock, ExternalLink, ImageIcon, LoaderCircle, RefreshCw, Save, ShieldCheck, X } from "lucide-react";
 import { socialEdgeFetch } from "@/lib/api/client";
 import { StatusBadge } from "@/components/ui/status-badge";
 
@@ -73,6 +73,7 @@ export function PostDetailEditor({ item, onClose, onSaved }: { item: SocialConte
   const [platforms, setPlatforms] = useState(item.platforms || []);
   const [scheduledFor, setScheduledFor] = useState(localInputValue(item.scheduled_for));
   const [saving, setSaving] = useState(false);
+  const [regeneratingAsset, setRegeneratingAsset] = useState("");
   const [error, setError] = useState("");
   const editable = editableStatuses.has(item.status);
   const assets = item.social_media_assets || [];
@@ -137,6 +138,21 @@ export function PostDetailEditor({ item, onClose, onSaved }: { item: SocialConte
     }
   }
 
+  async function regenerateArtwork(assetId: string) {
+    if (!editable || regeneratingAsset) return;
+    setRegeneratingAsset(assetId);
+    setError("");
+    try {
+      await socialEdgeFetch("regenerate_content_asset", { contentId: item.id, assetId });
+      await onSaved();
+      onClose();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Artwork could not be regenerated.");
+    } finally {
+      setRegeneratingAsset("");
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[120] grid place-items-center bg-black/80 p-3 backdrop-blur-sm sm:p-6" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section role="dialog" aria-modal="true" aria-label={`Post details: ${item.title}`} className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border bg-background shadow-2xl">
@@ -154,8 +170,9 @@ export function PostDetailEditor({ item, onClose, onSaved }: { item: SocialConte
             <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">Post artwork</p>
             {assets.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">{assets.map((asset) => {
               const url = String(asset.metadata?.public_url || "");
-              return <div key={asset.id} className="overflow-hidden rounded-xl border bg-surface">
+              return <div key={asset.id} className="relative overflow-hidden rounded-xl border bg-surface">
                 {url && asset.media_type === "video" ? <video src={url} controls className="aspect-[4/5] w-full object-contain" /> : url ? <img src={url} alt={altText || item.title} className="aspect-[4/5] w-full object-contain" /> : <div className="grid aspect-[4/5] place-items-center text-muted"><ImageIcon size={28} /></div>}
+                {editable && asset.media_type === "image" && <button type="button" onClick={() => void regenerateArtwork(asset.id)} disabled={Boolean(regeneratingAsset)} className="absolute bottom-3 left-3 right-3 flex items-center justify-center gap-2 rounded-lg border border-white/15 bg-black/80 px-3 py-2 text-xs font-semibold text-white backdrop-blur-sm disabled:opacity-60">{regeneratingAsset === asset.id ? <LoaderCircle size={14} className="animate-spin" /> : <RefreshCw size={14} />} Regenerate clean artwork</button>}
               </div>;
             })}</div> : <div className="grid min-h-64 place-items-center rounded-xl border border-dashed bg-surface text-center text-muted"><div><ImageIcon className="mx-auto" /><p className="mt-2 text-sm">Artwork has not been generated yet.</p></div></div>}
             <div className="mt-4 rounded-xl border bg-surface p-4 text-xs leading-5 text-muted">

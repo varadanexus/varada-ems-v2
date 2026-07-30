@@ -2036,6 +2036,102 @@ async function handleUpdateContent(req: Request, payload: any) {
   return updated;
 }
 
+async function handleRegenerateContentAsset(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "edit");
+  const contentId = String(payload.contentId || "");
+  const assetId = String(payload.assetId || "");
+  const { data: content, error } = await db.from("social_content_items")
+    .select("*,social_media_assets(id,storage_path,media_type,mime_type,metadata)")
+    .eq("id", contentId)
+    .maybeSingle();
+  if (error || !content) throw new Error("Content was not found");
+  if (["publishing", "published", "archived"].includes(content.status)) {
+    throw new Error(`Artwork is read-only while content is ${content.status.replaceAll("_", " ")}`);
+  }
+  const imageAssets = (content.social_media_assets || []).filter((asset: any) => asset.media_type === "image");
+  const target = imageAssets.find((asset: any) => asset.id === assetId) || imageAssets[0] || null;
+  const carousel = target?.metadata?.carousel || null;
+  const basePrompt = cleanText(content.content_package?.imagePrompt, 3000) ||
+    cleanText(`${content.title}. ${content.topic || ""}`, 3000);
+  const prompt = carousel
+    ? `${basePrompt}. Carousel frame ${carousel.position || 1}: ${cleanText(carousel.heading, 240)}. ${cleanText(carousel.body, 500)}`
+    : basePrompt;
+  const artwork = await generateBrandedImage(db, appUser, {
+    prompt,
+    aspectRatio: ["story", "reel"].includes(content.format) ? "story" : "portrait",
+    quality: "medium",
+    style: "premium black and gold corporate editorial photography",
+  });
+  const metadata = {
+    ...(target?.metadata || {}),
+    public_url: artwork.assetUrl,
+    brandOverlay: artwork.brandOverlay,
+    regenerated_at: new Date().toISOString(),
+    regenerated_by: appUser.id,
+  };
+  let savedAsset;
+  if (target) {
+    const { data, error: assetError } = await db.from("social_media_assets").update({
+      storage_path: artwork.storagePath,
+      mime_type: "image/png",
+      metadata,
+    }).eq("id", target.id).select().single();
+    if (assetError) throw new Error(assetError.message);
+    savedAsset = data;
+  } else {
+    const { data, error: assetError } = await db.from("social_media_assets").insert({
+      content_id: contentId,
+      storage_path: artwork.storagePath,
+      media_type: "image",
+      mime_type: "image/png",
+      metadata,
+      created_by: appUser.id,
+    }).select().single();
+    if (assetError) throw new Error(assetError.message);
+    savedAsset = data;
+  }
+  const { data: channels } = await db.from("social_content_channels")
+    .select("id").eq("content_id", contentId);
+  const channelIds = (channels || []).map((channel: any) => channel.id);
+  if (channelIds.length) {
+    await db.from("social_publish_jobs").update({ status: "cancelled" })
+      .in("channel_id", channelIds).in("status", ["queued", "retrying"]);
+  }
+  const [contentUpdate, channelUpdate] = await Promise.all([
+    db.from("social_content_items").update({
+      status: "draft",
+      safety_status: "needs_review",
+      rejection_reason: null,
+      updated_by: appUser.id,
+    }).eq("id", contentId),
+    db.from("social_content_channels").update({
+      status: "draft",
+      platform_payload: { artworkRegeneratedAt: new Date().toISOString(), artworkRegeneratedBy: appUser.id },
+    }).eq("content_id", contentId),
+  ]);
+  if (contentUpdate.error) throw new Error(contentUpdate.error.message);
+  if (channelUpdate.error) throw new Error(channelUpdate.error.message);
+  if (content.status !== "draft") {
+    await db.from("social_approval_actions").insert({
+      content_id: contentId,
+      actor_id: appUser.id,
+      action: "commented",
+      from_status: content.status,
+      to_status: "draft",
+      comment: "Artwork regenerated with transparent official logo composition and returned to draft for approval.",
+    });
+  }
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "content.artwork_regenerated",
+    resource_type: "social_content",
+    resource_id: contentId,
+    before_data: target,
+    after_data: savedAsset,
+  });
+  return { contentId, asset: savedAsset, artwork };
+}
+
 function workflowTransition(current: string, action: string) {
   if (action === "submit" && ["draft", "rejected"].includes(current)) {
     return { status: "manager_review", approvalAction: "submitted" };
@@ -2981,6 +3077,74 @@ async function handleGenerateText(req: Request, payload: any) {
   return generateCampaign(db, appUser, payload);
 }
 
+function prepareBaseArtworkPrompt(value: unknown) {
+  const normalized = cleanText(value, 3000)
+    .replace(/\bVarada\s+Nexus(?:\s+Private\s+Limited|\s+Pvt\.?\s+Ltd\.?)?\b/gi, "the client enterprise")
+    .replace(/\bVN\s+logo\b/gi, "")
+    .split(/\n+|(?<=[.!?])\s+/)
+    .filter((sentence) => !/\b(?:logo|wordmark|watermark|brand\s*mark|emblem|monogram)\b/i.test(sentence))
+    .join(" ")
+    .trim();
+  return normalized || "Premium original corporate editorial artwork";
+}
+
+async function inspectVertexBaseArtwork(
+  endpoint: string,
+  projectId: string,
+  location: string,
+  token: string,
+  base64: string,
+) {
+  const model = Deno.env.get("VERTEX_VISION_MODEL") || Deno.env.get("VERTEX_GEMINI_MODEL") || "gemini-2.5-flash";
+  const response = await providerJson(
+    `${endpoint}/v1/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [
+          { text: `Inspect this base social-media artwork before the official transparent logo is applied.
+Approve it only when ALL conditions are true:
+1. It contains no logo, wordmark, watermark, initials, company name, readable text, signage, emblem, or logo-like symbol anywhere.
+2. The top-right area is a natural continuation of the same photograph or illustration.
+3. There is no white square, solid rectangle, card, badge, plaque, glow panel, border, or artificial backing area intended for a logo.
+Return a short factual reason. Do not judge the eventual official logo because it is not present yet.` },
+          { inlineData: { mimeType: "image/png", data: base64 } },
+        ] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            required: ["approved", "containsUnauthorizedMark", "containsText", "hasLogoBackingPanel", "topRightContinuous", "reason"],
+            properties: {
+              approved: { type: "BOOLEAN" },
+              containsUnauthorizedMark: { type: "BOOLEAN" },
+              containsText: { type: "BOOLEAN" },
+              hasLogoBackingPanel: { type: "BOOLEAN" },
+              topRightContinuous: { type: "BOOLEAN" },
+              reason: { type: "STRING" },
+            },
+          },
+          temperature: 0,
+          maxOutputTokens: 512,
+        },
+      }),
+    },
+  );
+  const text = response.candidates?.[0]?.content?.parts?.map((item: any) => item.text || "").join("") || "";
+  const result = JSON.parse(text || "{}");
+  const approved = result.approved === true &&
+    result.containsUnauthorizedMark !== true &&
+    result.containsText !== true &&
+    result.hasLogoBackingPanel !== true &&
+    result.topRightContinuous === true;
+  return {
+    approved,
+    model,
+    reason: cleanText(result.reason || (approved ? "Base artwork passed logo-area QA." : "Base artwork failed logo-area QA."), 500),
+  };
+}
+
 async function generateBrandedImage(
   db: ReturnType<typeof adminClient>,
   appUser: any,
@@ -3001,14 +3165,19 @@ async function generateBrandedImage(
     story: "1024x1536",
   };
   const ratios: Record<string, string> = { square: "1:1", portrait: "4:5", landscape: "16:9", story: "9:16" };
-  const brandedPrompt = `${prompt}
-Create original premium corporate artwork for Varada Nexus Private Limited.
+  const baseArtworkPrompt = prepareBaseArtworkPrompt(prompt);
+  const brandedPrompt = `${baseArtworkPrompt}
+Create original premium corporate artwork for a diversified Indian enterprise.
 Brand palette: ${JSON.stringify(brand.visual_identity)}.
 Visual style: ${cleanText(payload.style, 300) || "premium black and gold corporate editorial"}.
-Reserve a clean, uncluttered safe area at the top-right for the official logo overlay. Do not draw, imitate, alter, or invent a logo. Do not embed text, signatures, trademarks, or third-party copyrighted elements.`;
+Keep the top-right area visually calm but continue the underlying photograph or illustration naturally through it.
+Do not create a blank area, white square, rectangle, card, badge, plaque, border, glow, gradient tile, or backing panel in any corner.
+Do not draw or imitate any logo, wordmark, watermark, monogram, initials, company name, readable text, signage, signature, trademark, or logo-like symbol anywhere in the artwork.
+The official transparent logo will be composited later by the secure backend directly over the continuous artwork.`;
   let base64 = "";
   let model = "";
   let provider = "vertex";
+  let artworkQa: { approved: boolean; model: string; reason: string } | null = null;
   if (vertex) {
     model = Deno.env.get("VERTEX_IMAGE_MODEL") || Deno.env.get("VERTEX_IMAGEN_MODEL") || "gemini-3.1-flash-image";
     const imageLocation = vertex.location || "global";
@@ -3016,24 +3185,42 @@ Reserve a clean, uncluttered safe area at the top-right for the official logo ov
       ? "https://aiplatform.googleapis.com"
       : `https://${imageLocation}-aiplatform.googleapis.com`;
     const token = await vertexAccessToken(vertex.serviceAccount);
-    const response = await providerJson(
-      `${imageEndpoint}/v1/projects/${encodeURIComponent(vertex.projectId)}/locations/${encodeURIComponent(imageLocation)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: brandedPrompt }] }],
-          generationConfig: {
-            responseModalities: ["TEXT", "IMAGE"],
-            imageConfig: { aspectRatio: ratios[String(payload.aspectRatio)] || "4:5" },
-          },
-        }),
-      },
-    );
-    const imagePart = response.candidates?.[0]?.content?.parts?.find((part: any) =>
-      part.inlineData?.data && String(part.inlineData?.mimeType || "").startsWith("image/")
-    );
-    base64 = imagePart?.inlineData?.data || "";
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const retryInstruction = artworkQa && !artworkQa.approved
+        ? `\nPrevious attempt was rejected by brand QA: ${artworkQa.reason}. Correct that problem completely.`
+        : "";
+      const response = await providerJson(
+        `${imageEndpoint}/v1/projects/${encodeURIComponent(vertex.projectId)}/locations/${encodeURIComponent(imageLocation)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: `${brandedPrompt}${retryInstruction}` }] }],
+            generationConfig: {
+              responseModalities: ["TEXT", "IMAGE"],
+              imageConfig: { aspectRatio: ratios[String(payload.aspectRatio)] || "4:5" },
+            },
+          }),
+        },
+      );
+      const imagePart = response.candidates?.[0]?.content?.parts?.find((part: any) =>
+        part.inlineData?.data && String(part.inlineData?.mimeType || "").startsWith("image/")
+      );
+      base64 = imagePart?.inlineData?.data || "";
+      if (!base64) continue;
+      artworkQa = await inspectVertexBaseArtwork(
+        imageEndpoint,
+        vertex.projectId,
+        imageLocation,
+        token,
+        base64,
+      );
+      if (artworkQa.approved) break;
+      base64 = "";
+      if (attempt === 3) {
+        throw new Error(`Generated artwork failed brand QA after 3 attempts: ${artworkQa.reason}`);
+      }
+    }
   } else {
     provider = "openai";
     const key = await storedSecret(db, "openai", "api_key", ["OPENAI_API_KEY"]);
@@ -3097,7 +3284,10 @@ Reserve a clean, uncluttered safe area at the top-right for the official logo ov
       usageRules: primaryLogo.usage_rules,
       required: true,
       appliedByTemplate: true,
-      note: "The approved official logo was composited by the secure EMS backend; the image model did not recreate it.",
+      transparentBackground: true,
+      backingPanel: false,
+      baseArtworkQa: artworkQa,
+      note: "The approved transparent official logo was composited directly over continuous artwork by the secure EMS backend; the image model did not recreate it.",
     },
   };
 }
@@ -4338,6 +4528,9 @@ Deno.serve(async (req) => {
         break;
       case "update_content":
         data = await handleUpdateContent(req, payload);
+        break;
+      case "regenerate_content_asset":
+        data = await handleRegenerateContentAsset(req, payload);
         break;
       case "create_content":
         data = await handleCreateContent(req, payload);
