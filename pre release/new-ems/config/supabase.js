@@ -19,20 +19,23 @@ function getRuntimeConfig() {
 }
 
 function hasStoredLocalSession() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(LOCAL_SESSION_KEY) || "null");
-    return Boolean(stored?.sessionToken);
-  } catch {
-    return false;
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      const stored = JSON.parse(storage.getItem(LOCAL_SESSION_KEY) || "null");
+      if (stored?.sessionToken) return true;
+    } catch {}
   }
+  return false;
 }
 
-// Bind (or rebind) the local staff JWT. On a fresh local login the existing
-// normal-auth client is discarded; subsequent protected pages initialise in
-// local mode from the stored session before their first database request.
+// Bind (or rebind) the local staff JWT. The bearer header is immutable on a
+// client instance, so both a fresh login and a timed JWT refresh discard the
+// previous client before the next authenticated request.
 export function setLocalAuthToken(token) {
-  localAuthToken = token || null;
-  if (localAuthToken && clientMode && clientMode !== "local") {
+  const nextToken = token || null;
+  const tokenChanged = nextToken !== localAuthToken;
+  localAuthToken = nextToken;
+  if (localAuthToken && clientMode && (clientMode !== "local" || tokenChanged)) {
     clientInstance = null;
     clientMode = null;
   }
@@ -59,13 +62,15 @@ export function getSupabaseClient() {
     throw new Error(`${APP_NAME}: Missing Supabase runtime config`);
   }
 
-  const useLocalSession = hasStoredLocalSession();
+  const useLocalSession = hasStoredLocalSession() && Boolean(localAuthToken);
   const options = useLocalSession
     ? {
-        // Supabase's supported custom-JWT path. The callback is evaluated for
-        // each request, so tokens re-minted by restoreLocalSession() and the
-        // refresh timer are used without recreating page-level clients.
-        accessToken: async () => localAuthToken || null,
+        // Keep the normal auth client available while all PostgREST, Storage,
+        // Functions, and Realtime requests run as the minted LOCAL identity.
+        // Newer supabase-js versions replace client.auth with a throwing proxy
+        // when the top-level accessToken option is used; several shared EMS
+        // services legitimately need client.auth even during a local session.
+        global: { headers: { Authorization: `Bearer ${localAuthToken}` } },
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       }
     : {};

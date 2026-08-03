@@ -18,12 +18,14 @@
   }
 
   function readJson(key) {
-    try {
-      var raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : null;
-    } catch (_) {
-      return null;
+    var stores = [localStorage, sessionStorage];
+    for (var i = 0; i < stores.length; i += 1) {
+      try {
+        var raw = stores[i].getItem(key);
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
     }
+    return null;
   }
 
   async function mintLocalJwtIfNeeded() {

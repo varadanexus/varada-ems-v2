@@ -3254,6 +3254,75 @@ Return a short factual reason. Do not judge the eventual official logo because i
   };
 }
 
+function vertexImageModels() {
+  const configured = [
+    ...(Deno.env.get("VERTEX_IMAGE_MODELS") || "").split(","),
+    Deno.env.get("VERTEX_IMAGE_MODEL") || "",
+    Deno.env.get("VERTEX_IMAGEN_MODEL") || "",
+  ].map((item) => item.trim()).filter(Boolean);
+  return [...new Set([
+    ...configured,
+    "gemini-2.5-flash-image",
+    "imagen-3.0-generate-002",
+    "imagen-3.0-fast-generate-001",
+  ])];
+}
+
+function isImagenModel(model: string) {
+  return /^imagen-|^imagegeneration@/i.test(model);
+}
+
+async function generateVertexBaseArtwork(options: {
+  endpoint: string;
+  projectId: string;
+  location: string;
+  token: string;
+  model: string;
+  prompt: string;
+  aspectRatio: string;
+}) {
+  if (isImagenModel(options.model)) {
+    const imagenAspectRatio = options.aspectRatio === "4:5" ? "3:4" : options.aspectRatio;
+    const response = await providerJson(
+      `${options.endpoint}/v1/projects/${encodeURIComponent(options.projectId)}/locations/${encodeURIComponent(options.location)}/publishers/google/models/${encodeURIComponent(options.model)}:predict`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${options.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instances: [{ prompt: options.prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio: imagenAspectRatio,
+          },
+        }),
+      },
+      2,
+    );
+    return response.predictions?.[0]?.bytesBase64Encoded ||
+      response.predictions?.[0]?.image?.bytesBase64Encoded ||
+      "";
+  }
+
+  const response = await providerJson(
+    `${options.endpoint}/v1/projects/${encodeURIComponent(options.projectId)}/locations/${encodeURIComponent(options.location)}/publishers/google/models/${encodeURIComponent(options.model)}:generateContent`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${options.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: options.prompt }] }],
+        generationConfig: {
+          responseModalities: ["TEXT", "IMAGE"],
+          imageConfig: { aspectRatio: options.aspectRatio },
+        },
+      }),
+    },
+  );
+  const imagePart = response.candidates?.[0]?.content?.parts?.find((part: any) =>
+    part.inlineData?.data && String(part.inlineData?.mimeType || "").startsWith("image/")
+  );
+  return imagePart?.inlineData?.data || "";
+}
+
 async function generateBrandedImage(
   db: ReturnType<typeof adminClient>,
   appUser: any,
@@ -3288,47 +3357,51 @@ The official transparent logo will be composited later by the secure backend dir
   let provider = "vertex";
   let artworkQa: { approved: boolean; model: string; reason: string } | null = null;
   if (vertex) {
-    model = Deno.env.get("VERTEX_IMAGE_MODEL") || Deno.env.get("VERTEX_IMAGEN_MODEL") || "gemini-3.1-flash-image";
-    const imageLocation = vertex.location || "global";
-    const imageEndpoint = imageLocation === "global"
-      ? "https://aiplatform.googleapis.com"
-      : `https://${imageLocation}-aiplatform.googleapis.com`;
     const token = await vertexAccessToken(vertex.serviceAccount);
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      const retryInstruction = artworkQa && !artworkQa.approved
-        ? `\nPrevious attempt was rejected by brand QA: ${artworkQa.reason}. Correct that problem completely.`
-        : "";
-      const response = await providerJson(
-        `${imageEndpoint}/v1/projects/${encodeURIComponent(vertex.projectId)}/locations/${encodeURIComponent(imageLocation)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: `${brandedPrompt}${retryInstruction}` }] }],
-            generationConfig: {
-              responseModalities: ["TEXT", "IMAGE"],
-              imageConfig: { aspectRatio: ratios[String(payload.aspectRatio)] || "4:5" },
-            },
-          }),
-        },
-      );
-      const imagePart = response.candidates?.[0]?.content?.parts?.find((part: any) =>
-        part.inlineData?.data && String(part.inlineData?.mimeType || "").startsWith("image/")
-      );
-      base64 = imagePart?.inlineData?.data || "";
-      if (!base64) continue;
-      artworkQa = await inspectVertexBaseArtwork(
-        imageEndpoint,
-        vertex.projectId,
-        imageLocation,
-        token,
-        base64,
-      );
-      if (artworkQa.approved) break;
-      base64 = "";
-      if (attempt === 3) {
-        throw new Error(`Generated artwork failed brand QA after 3 attempts: ${artworkQa.reason}`);
+    const failures: string[] = [];
+    for (const candidateModel of vertexImageModels()) {
+      model = candidateModel;
+      const imageLocation = vertex.location === "global" && isImagenModel(model)
+        ? "us-central1"
+        : (vertex.location || "global");
+      const imageEndpoint = imageLocation === "global"
+        ? "https://aiplatform.googleapis.com"
+        : `https://${imageLocation}-aiplatform.googleapis.com`;
+      artworkQa = null;
+      try {
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          const retryInstruction = artworkQa && !artworkQa.approved
+            ? `\nPrevious attempt was rejected by brand QA: ${artworkQa.reason}. Correct that problem completely.`
+            : "";
+          base64 = await generateVertexBaseArtwork({
+            endpoint: imageEndpoint,
+            projectId: vertex.projectId,
+            location: imageLocation,
+            token,
+            model,
+            prompt: `${brandedPrompt}${retryInstruction}`,
+            aspectRatio: ratios[String(payload.aspectRatio)] || "4:5",
+          });
+          if (!base64) throw new Error("provider returned no image");
+          artworkQa = await inspectVertexBaseArtwork(
+            imageEndpoint,
+            vertex.projectId,
+            imageLocation,
+            token,
+            base64,
+          );
+          if (artworkQa.approved) break;
+          base64 = "";
+        }
+        if (base64) break;
+        failures.push(`${model}@${imageLocation}: brand QA rejected ${artworkQa?.reason || "the artwork"}`);
+      } catch (error) {
+        failures.push(`${model}@${imageLocation}: ${cleanText(error?.message || error, 220)}`);
+        base64 = "";
       }
+    }
+    if (!base64 && failures.length) {
+      throw new Error(`Vertex image generation failed for project ${vertex.projectId}. Tried ${failures.join(" | ")}`);
     }
   } else {
     provider = "openai";
@@ -3363,25 +3436,6 @@ The official transparent logo will be composited later by the secure backend dir
     const margin = Math.max(24, Math.round(artwork.width * 0.045));
     const logoX = artwork.width - logo.width - margin;
     const logoY = margin;
-    // Dark rounded scrim behind the logo so the transparent gold/white mark
-    // stays legible over bright artwork (e.g. windows, sky, pale walls).
-    try {
-      const pad = Math.max(12, Math.round(logo.width * 0.22));
-      const panelW = logo.width + pad * 2;
-      const panelH = logo.height + pad * 2;
-      const panel = new Image(panelW, panelH);
-      panel.fill(0x000000b0); // black at ~69% opacity
-      if (typeof (panel as unknown as { roundCorners?: (r?: number) => unknown }).roundCorners === "function") {
-        (panel as unknown as { roundCorners: (r?: number) => unknown }).roundCorners(
-          Math.round(Math.min(panelW, panelH) * 0.32),
-        );
-      }
-      const panelX = Math.max(0, logoX - pad);
-      const panelY = Math.max(0, logoY - pad);
-      artwork.composite(panel, panelX, panelY);
-    } catch {
-      // If the scrim cannot be drawn, still place the logo rather than failing.
-    }
     artwork.composite(logo, logoX, logoY);
     binary = await artwork.encode();
   } catch (error) {
@@ -3415,10 +3469,9 @@ The official transparent logo will be composited later by the secure backend dir
       required: true,
       appliedByTemplate: true,
       transparentBackground: true,
-      backingPanel: true,
-      backingPanelStyle: "dark-rounded-scrim",
+      backingPanel: false,
       baseArtworkQa: artworkQa,
-      note: "The approved transparent official logo was composited by the secure EMS backend over a subtle dark rounded scrim for legibility; the image model did not recreate the logo.",
+      note: "The approved transparent official logo was composited by the secure EMS backend directly on the artwork; the image model did not recreate the logo.",
     },
   };
 }

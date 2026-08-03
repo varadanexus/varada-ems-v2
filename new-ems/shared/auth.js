@@ -5,6 +5,9 @@ import { logAuthEvent } from "./audit.js";
 import { getLocalSession, restoreLocalSession, emsLocalLogout, clearLocalAuthState } from "./ems-local-auth.js";
 import { disablePushNotifications } from "./push-notifications.js";
 
+const SUPABASE_SESSION_HANDOFF_KEY = "ems_supabase_session_handoff";
+const observedAuthClients = new WeakSet();
+
 function debugLog(message, data = null) {
   if (!window.EMS_DEBUG_AUTH_FLOW) return;
   if (data === null) {
@@ -16,13 +19,83 @@ function debugLog(message, data = null) {
 
 export async function getSession() {
   const client = getSupabaseClient();
-  const { data } = await client.auth.getSession();
+  observeSupabaseSession(client);
+  const { data, error } = await client.auth.getSession();
+  if (error) {
+    debugLog("session recovery error", { message: error.message || String(error) });
+  }
+
+  let session = data?.session || null;
+  if (!session) session = await restoreSupabaseSessionHandoff(client);
+  if (session) stageSupabaseSessionHandoff(session);
+
   debugLog("current session", {
-    hasSession: Boolean(data?.session),
-    userId: data?.session?.user?.id || null,
-    email: data?.session?.user?.email || null
+    hasSession: Boolean(session),
+    userId: session?.user?.id || null,
+    email: session?.user?.email || null
   });
-  return data?.session || null;
+  return session;
+}
+
+function clearSupabaseSessionHandoff() {
+  try { sessionStorage.removeItem(SUPABASE_SESSION_HANDOFF_KEY); } catch {}
+}
+
+function stageSupabaseSessionHandoff(session) {
+  if (!session?.access_token || !session?.refresh_token || !session?.user?.id) {
+    throw new Error("Login completed without a reusable session. Please try again.");
+  }
+  try {
+    sessionStorage.setItem(SUPABASE_SESSION_HANDOFF_KEY, JSON.stringify({
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
+      userId: session.user.id,
+      expiresAt: Number(session.expires_at || 0)
+    }));
+  } catch {
+    // Normal Supabase persistence may still work. The protected page will give
+    // a clear login redirect if this browser blocks both storage mechanisms.
+  }
+}
+
+function observeSupabaseSession(client) {
+  if (!client?.auth || observedAuthClients.has(client)) return;
+  observedAuthClients.add(client);
+  try {
+    client.auth.onAuthStateChange((event, session) => {
+      if (["INITIAL_SESSION", "SIGNED_IN", "TOKEN_REFRESHED", "USER_UPDATED"].includes(event) && session) {
+        stageSupabaseSessionHandoff(session);
+      } else if (event === "SIGNED_OUT") {
+        clearSupabaseSessionHandoff();
+      }
+    });
+  } catch {}
+}
+
+async function restoreSupabaseSessionHandoff(client) {
+  let handoff = null;
+  try {
+    handoff = JSON.parse(sessionStorage.getItem(SUPABASE_SESSION_HANDOFF_KEY) || "null");
+  } catch {}
+
+  if (!handoff?.accessToken || !handoff?.refreshToken || !handoff?.userId) {
+    clearSupabaseSessionHandoff();
+    return null;
+  }
+
+  const { data, error } = await client.auth.setSession({
+    access_token: handoff.accessToken,
+    refresh_token: handoff.refreshToken
+  });
+  if (error || data?.session?.user?.id !== handoff.userId) {
+    clearSupabaseSessionHandoff();
+    debugLog("session handoff failed", { message: error?.message || "User mismatch" });
+    return null;
+  }
+
+  clearSupabaseSessionHandoff();
+  debugLog("session handoff restored", { userId: data.session.user.id });
+  return data.session;
 }
 
 // Sprint 13F: the effective authenticated identity, resolving LOCAL staff
@@ -245,12 +318,14 @@ export async function loginWithPassword(email, password) {
     throw new Error("Your account is locked. Contact administrator.");
   }
   await logAuthEvent("login", data?.user?.id || null);
+  stageSupabaseSessionHandoff(data?.session);
   return data;
 }
 
 export async function logout() {
   const isLoginPage = window.location.pathname.endsWith("/new-ems/login.html") || window.location.pathname.endsWith("login.html");
   sessionStorage.removeItem("ems_terms_owner_bypass_session");
+  clearSupabaseSessionHandoff();
   await disablePushNotifications().catch(() => {});
 
   // Clear BOTH session types so no stale session can hijack the next login.
@@ -273,6 +348,7 @@ export async function logout() {
 
 export async function signOutSessionOnly() {
   sessionStorage.removeItem("ems_terms_owner_bypass_session");
+  clearSupabaseSessionHandoff();
   await disablePushNotifications().catch(() => {});
   const local = getLocalSession();
   if (local?.authUserId) {
