@@ -361,6 +361,27 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.INTERIORS_REPORTS, label: "Reports", href: ROUTES.INTERIORS_REPORTS }
       ]
     }
+  ],
+  [WORKSPACES.HOSPITAL_PROJECTS]: [
+    {
+      title: "Hospital Projects",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Dashboard", href: ROUTES.HOSPITAL_DASHBOARD },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Hospitals / Clients", href: ROUTES.HOSPITAL_CLIENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Vendors", href: ROUTES.HOSPITAL_VENDORS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Projects", href: ROUTES.HOSPITAL_PROJECTS }
+      ]
+    },
+    {
+      title: "Commercial & Communication",
+      items: [
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Centralized Billing", href: ROUTES.HOSPITAL_BILLING },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Credit Notes", href: ROUTES.HOSPITAL_CREDIT_NOTES },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Query Desk", href: ROUTES.HOSPITAL_QUERIES },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Portal Access", href: ROUTES.HOSPITAL_PORTAL_ACCESS }
+      ]
+    }
   ]
 };
 

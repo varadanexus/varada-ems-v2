@@ -201,6 +201,8 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
       ? "Finance"
       : workspace === WORKSPACES.INTERIORS
         ? "Interiors"
+        : workspace === WORKSPACES.HOSPITAL_PROJECTS
+          ? "Hospital Projects"
         : workspace === WORKSPACES.LEGAL
           ? "Legal"
           : workspace === WORKSPACES.SUPPORT

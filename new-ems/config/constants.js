@@ -159,6 +159,16 @@ export const ROUTES = {
   ,INTERIORS_VARIATION_REQUESTS: "/new-ems/modules/interiors-variation-requests/index.html"
   ,INTERIORS_CHANGE_ORDERS: "/new-ems/modules/interiors-change-orders/index.html"
   ,INTERIORS_PROJECT_CLOSURE: "/new-ems/modules/interiors-project-closure/index.html"
+  ,HOSPITAL_DASHBOARD: "/new-ems/modules/hospital-dashboard/index.html"
+  ,HOSPITAL_CLIENTS: "/new-ems/modules/hospital-clients/index.html"
+  ,HOSPITAL_VENDORS: "/new-ems/modules/hospital-vendors/index.html"
+  ,HOSPITAL_PROJECTS: "/new-ems/modules/hospital-projects/index.html"
+  ,HOSPITAL_BILLING: "/new-ems/modules/hospital-billing/index.html"
+  ,HOSPITAL_CREDIT_NOTES: "/new-ems/modules/hospital-credit-notes/index.html"
+  ,HOSPITAL_QUERIES: "/new-ems/modules/hospital-queries/index.html"
+  ,HOSPITAL_PORTAL_ACCESS: "/new-ems/modules/portal-access/index.html?tab=create&division=hospital-projects"
+  ,HOSPITAL_CLIENT_PORTAL: "/new-ems/modules/hospital-client-portal/index.html"
+  ,HOSPITAL_VENDOR_PORTAL: "/new-ems/modules/hospital-vendor-portal/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -327,7 +337,7 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.TRANSPORTATION, title: "Transportation & Minerals Logistics", subtitle: "Dispatch, trips, challans, settlements", href: ROUTES.TRANSPORT_DASHBOARD },
   { module: MODULES.CONSTRUCTION, title: "Construction", subtitle: "Site operations and execution", href: null },
   { module: MODULES.INTERIORS, title: "Interiors", subtitle: "Spatial structure, design, finish, and specification control", href: ROUTES.INTERIORS_DASHBOARD },
-  { module: MODULES.HOSPITAL_PROJECTS, title: "Hospital Projects", subtitle: "Infrastructure programs", href: null },
+  { module: MODULES.HOSPITAL_PROJECTS, title: "Hospital Projects", subtitle: "Projects, vendors, billing and client delivery", href: ROUTES.HOSPITAL_DASHBOARD },
   { module: MODULES.HOSPITAL_CONSULTANCY, title: "Hospital Consultancy", subtitle: "Advisory workflow", href: null },
   { module: MODULES.IMPORTS_EXPORTS, title: "Imports & Exports", subtitle: "Shipment and compliance desk", href: null },
   { module: MODULES.TRADING, title: "Trading", subtitle: "Order and margin ops", href: null },
@@ -361,6 +371,7 @@ export const WORKSPACES = {
   TRANSPORTATION: "transportation",
   ACCOUNTS: "accounts",
   INTERIORS: "interiors",
+  HOSPITAL_PROJECTS: "hospital-projects",
   LEGAL: "legal",
   WHATSAPP: "whatsapp",
   EMAIL: "email",
