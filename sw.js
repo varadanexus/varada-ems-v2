@@ -1,4 +1,4 @@
-const VERSION = "varada-ems-v28";
+const VERSION = "varada-ems-v29";
 const STATIC_CACHE = `${VERSION}-static`;
 
 // Only public application-shell files belong here. Authenticated API responses,
@@ -100,16 +100,18 @@ self.addEventListener("fetch", (event) => {
 
   if (!isVersionedStaticFile) return;
 
+  // Auth and authorization modules must never execute a stale cached copy.
+  // Network-first still keeps an offline fallback, but a connected EMS client
+  // always receives the latest security/session logic before rendering a page.
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request).then((response) => {
+    caches.match(request).then((cached) =>
+      fetch(request).then((response) => {
         if (response.ok && response.type === "basic") {
           const copy = response.clone();
           caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy));
         }
         return response;
-      }).catch(() => cached || Response.error());
-      return cached || network;
-    })
+      }).catch(() => cached || Response.error())
+    )
   );
 });

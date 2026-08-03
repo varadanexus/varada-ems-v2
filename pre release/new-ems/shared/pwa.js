@@ -94,6 +94,7 @@
     if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
     try {
       const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      await registration.update();
       if (registration.waiting && navigator.serviceWorker.controller) offerUpdate(registration.waiting);
       registration.addEventListener("updatefound", () => {
         const worker = registration.installing;

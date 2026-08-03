@@ -19,16 +19,22 @@ let refreshTimer = null;
 
 // ─── Stored session helpers ─────────────────────────────────────────────────
 export function getLocalSession() {
-  try {
-    const raw = localStorage.getItem(LOCAL_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
+  for (const storage of [localStorage, sessionStorage]) {
+    try {
+      const raw = storage.getItem(LOCAL_SESSION_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
   }
+  return null;
 }
 
 function storeLocalSession(data) {
-  try { localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(data)); } catch {}
+  const serialized = JSON.stringify(data);
+  let stored = false;
+  for (const storage of [localStorage, sessionStorage]) {
+    try { storage.setItem(LOCAL_SESSION_KEY, serialized); stored = true; } catch {}
+  }
+  if (!stored) throw new Error("This browser is blocking session storage. Allow site data and try again.");
 }
 
 // Bind a server-issued EMS session (password or OTP) to the normal local-staff
@@ -52,7 +58,9 @@ export async function establishLocalSession(row) {
 }
 
 function clearLocalSessionStorage() {
-  try { localStorage.removeItem(LOCAL_SESSION_KEY); } catch {}
+  for (const storage of [localStorage, sessionStorage]) {
+    try { storage.removeItem(LOCAL_SESSION_KEY); } catch {}
+  }
 }
 
 function scheduleRefresh(expiresInSeconds) {
