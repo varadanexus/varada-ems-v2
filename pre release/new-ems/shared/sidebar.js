@@ -364,26 +364,42 @@ const MENU_BY_WORKSPACE = {
   ],
   [WORKSPACES.HOSPITAL_PROJECTS]: [
     {
-      title: "Hospital Projects",
+      title: "Dashboard",
       items: [
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Command Center", href: ROUTES.HOSPITAL_DASHBOARD },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Hospitals / Clients", href: ROUTES.HOSPITAL_CLIENTS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Projects", href: ROUTES.HOSPITAL_PROJECTS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Vendors", href: ROUTES.HOSPITAL_VENDORS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Documents", href: ROUTES.HOSPITAL_DOCUMENTS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Client Payments", href: ROUTES.HOSPITAL_CLIENT_PAYMENTS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Vendor Payments", href: ROUTES.HOSPITAL_VENDOR_PAYMENTS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Reports", href: ROUTES.HOSPITAL_REPORTS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Licenses", href: ROUTES.HOSPITAL_LICENSES },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Settings", href: ROUTES.HOSPITAL_SETTINGS }
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Hospital Dashboard", href: ROUTES.HOSPITAL_DASHBOARD }
       ]
     },
     {
-      title: "Commercial & Communication",
+      title: "Client / Vendor / Project",
       items: [
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Credit Notes", href: ROUTES.HOSPITAL_CREDIT_NOTES },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Hospital / Client", href: ROUTES.HOSPITAL_CLIENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Vendor", href: ROUTES.HOSPITAL_VENDORS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Lead", disabled: true },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Project", href: ROUTES.HOSPITAL_PROJECTS }
+      ]
+    },
+    {
+      title: "Client Payments",
+      items: [
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Billing", href: ROUTES.HOSPITAL_BILLING },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Receipt", disabled: true },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Ledger", disabled: true },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Credit Note", href: ROUTES.HOSPITAL_CREDIT_NOTES }
+      ]
+    },
+    {
+      title: "Vendor Payments",
+      items: [
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Bills", disabled: true },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Payments", href: ROUTES.HOSPITAL_VENDOR_PAYMENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Ledger", disabled: true }
+      ]
+    },
+    {
+      title: "Communication",
+      items: [
         { module: MODULES.HOSPITAL_PROJECTS, label: "Query Desk", href: ROUTES.HOSPITAL_QUERIES },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Portal Access", href: ROUTES.HOSPITAL_PORTAL_ACCESS },
         { module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }
       ]
     }

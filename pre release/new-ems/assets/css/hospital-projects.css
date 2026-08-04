@@ -88,6 +88,19 @@
 .hp-workspace-link small { display: block; }
 .hp-workspace-link strong { color: var(--primary-strong); }
 .hp-workspace-link small { margin-top: 0.25rem; color: var(--muted); }
+.hp-client-master { margin-bottom: 1rem; }
+.hp-section-heading { justify-content: space-between; }
+.hp-section-heading h3 { margin: 0.25rem 0; }
+.hp-master-form { display: grid; gap: 0.85rem; }
+.hp-master-section { overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: rgba(255, 255, 255, 0.015); }
+.hp-master-section > summary { padding: 0.85rem 1rem; color: var(--primary-strong); font-weight: 800; cursor: pointer; list-style-position: inside; }
+.hp-master-section > .hp-form,
+.hp-master-section > p { margin: 0; padding: 0 1rem 1rem; }
+.hp-master-section > p + .hp-form { padding-top: 0; }
+.hp-check { display: flex !important; align-items: flex-start; gap: 0.55rem; padding: 0.7rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-soft); }
+.hp-check input { width: auto !important; margin: 0.2rem 0 0 !important; }
+.hp-inline-action { display: flex; align-items: end; }
+.hp-form-submit { justify-content: flex-end; padding-top: 0.25rem; }
 
 @media (max-width: 1050px) {
   .hp-kpis,

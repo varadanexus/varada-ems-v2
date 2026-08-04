@@ -1,3 +1,1 @@
-import { initHospitalPage } from "./page-hospital-projects.js";
-
-initHospitalPage("clients");
+import "./page-hospital-client-master.js";

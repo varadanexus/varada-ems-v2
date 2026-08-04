@@ -991,8 +991,10 @@ async function loadAvailableEntities(term = "") {
   PAGE_STATE.wizard.searchResults = (data || []).map((row) => ({
     id: row.id,
     label: row[entityDef.nameCol],
-    email: row.email || null,
-    phone: row.phone || row.phone_number || row.contact_no || null,
+    email: entityDef.table === "hospital_clients" ? (row.portal_email || row.email || null) : (row.email || null),
+    phone: entityDef.table === "hospital_clients"
+      ? (row.portal_phone || row.phone || null)
+      : (row.phone || row.phone_number || row.contact_no || null),
     raw: row
   }));
   render();
@@ -1008,7 +1010,7 @@ async function handleSelectEntity(entityId) {
   w.selectedEntity = {
     id: found.id, label: found.label, table: entityDef.table, system: entityDef.system, userType: entityDef.userType, sourceModule: entityDef.sourceModule, accessScope: entityDef.accessScope, portalType: entityDef.portalType, portalLoginUrl: entityDef.portalLoginUrl,
     email: found.email, phone: found.phone,
-    gstin: raw.gstin || raw.gst_number || null, pan: raw.pan_number || null
+    gstin: raw.gstin || raw.gst_number || null, pan: raw.pan || raw.pan_number || null
   };
 
   w.existingAccess = await findExistingAccess(entityDef, found.id);
