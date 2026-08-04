@@ -5,6 +5,7 @@ import { hasAnyRolePermission } from "./permissions.js";
 import { PERMISSIONS } from "../config/roles.js";
 import { logAuditEvent } from "./audit.js";
 import { showToast } from "./utils.js";
+import { generateHospitalPartyCode, isDuplicatePartyCodeError } from "./hospital-party-codes.js";
 
 const db = getSupabaseClient();
 const state = { boot: null, divisionId: null, clients: [], editingId: null, modalOpen: false };
@@ -40,6 +41,7 @@ function masterForm() {
   if (!state.modalOpen) return "";
   if (!can(state.editingId ? PERMISSIONS.EDIT : PERMISSIONS.CREATE)) return "";
   const record = state.clients.find((row) => row.id === state.editingId) || {
+    client_code: generateHospitalPartyCode("HCL", state.clients.map((row) => row.client_code)),
     client_type: "hospital", legal_entity_type: "private_limited", registered_country: "India", billing_country: "India",
     tax_treatment: "registered", payment_terms_days: 30, credit_limit: 0, invoice_delivery_method: "email",
     currency_code: "INR", portal_preferred_channel: "email", status: "active"
@@ -52,7 +54,7 @@ function masterForm() {
     </div>
     <form id="clientMasterForm" class="hp-master-form">
       <details class="hp-master-section" open><summary>1. Client and legal identity</summary><div class="hp-form">
-        ${input(record, "client_code", "Client code", { required: true, placeholder: "HCL-001", attrs: 'maxlength="40"' })}
+        ${input(record, "client_code", "Client code", { required: true, placeholder: "HCL-26-K7M4Q9X", attrs: `maxlength="40" ${state.editingId ? 'readonly aria-readonly="true" title="Existing client codes cannot be changed"' : ""}` })}
         ${input(record, "hospital_name", "Hospital / client display name", { required: true })}
         ${input(record, "legal_name", "Legal billing name", { required: true })}
         ${input(record, "trade_name", "Trade name")}
@@ -175,6 +177,7 @@ function bind() {
     event.preventDefault();
     try {
       const payload = formPayload(form);
+      if (state.editingId) delete payload.client_code;
       if (payload.gstin && !/^\d{2}[A-Z0-9]{13}$/.test(payload.gstin)) throw new Error("Enter a valid 15-character GSTIN.");
       if (payload.pan && !/^[A-Z]{5}\d{4}[A-Z]$/.test(payload.pan)) throw new Error("Enter a valid PAN.");
       if (["private_limited", "public_limited"].includes(payload.legal_entity_type)
@@ -194,7 +197,9 @@ function bind() {
       state.modalOpen = false;
       await loadClients();
       render();
-    } catch (error) { showToast(error.message || "Client master could not be saved", TOAST_TYPES.ERROR); }
+    } catch (error) {
+      showToast(isDuplicatePartyCodeError(error, "client_code") ? "Client code already exists. Use the generated code or enter another unique code." : (error.message || "Client master could not be saved"), TOAST_TYPES.ERROR);
+    }
   });
   document.getElementById("copyPrimaryToPortal")?.addEventListener("click", () => {
     copyFields(form, [["contact_name", "portal_contact_name"], ["email", "portal_email"], ["phone", "portal_phone"]]);
