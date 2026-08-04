@@ -27,6 +27,13 @@ function itemAmounts(item) {
   return { unitsTotal, gst, totalIncGst: taxable + gst };
 }
 
+function chargeAmounts(charge) {
+  const amount = Number(charge.amount) || 0;
+  const gstRate = Number(charge.gstRate) || 0;
+  const gst = amount * gstRate / 100;
+  return { amount, gst, totalIncGst: amount + gst };
+}
+
 async function buildProcurementPdf(snapshot, type) {
   const isPurchaseOrder = type === "purchase_order";
   const doc = await createPdfDocument();
@@ -82,9 +89,12 @@ async function buildProcurementPdf(snapshot, type) {
   if ((snapshot.charges || []).length) {
     y = addTable(doc, {
       startY: y + 3,
-      head: ["Package charge", "Description", "HSN/SAC", "GST", "Amount"],
-      body: snapshot.charges.map((charge) => [charge.type, charge.description, value(charge.hsnSac), `${Number(charge.gstRate || 0)}%`, formatPdfCurrency(charge.amount)]),
-      options: { columnStyles: { 4: { halign: "right" } } }
+      head: ["Package charge", "Description", "HSN/SAC", "Amount", "GST", "Total inc. GST"],
+      body: snapshot.charges.map((charge) => {
+        const amount = chargeAmounts(charge);
+        return [charge.type, charge.description, value(charge.hsnSac), formatPdfCurrency(amount.amount), `${formatPdfCurrency(amount.gst)} (${Number(charge.gstRate || 0)}%)`, formatPdfCurrency(amount.totalIncGst)];
+      }),
+      options: { columnStyles: { 3: { halign: "right" }, 4: { halign: "right" }, 5: { halign: "right" } } }
     });
   }
 
