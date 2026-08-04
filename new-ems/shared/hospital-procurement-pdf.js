@@ -13,6 +13,19 @@ import {
 } from "./pdf-utils.js";
 
 const value = (input) => input ?? "—";
+function itemAmounts(item) {
+  const quantity = Number(item.quantity) || 0;
+  const unitPrice = Number(item.unitPrice) || 0;
+  const discount = Number(item.discount) || 0;
+  const gstRate = Number(item.gstRate) || 0;
+  const unitsTotal = quantity * unitPrice;
+  const enteredTotal = unitsTotal - discount;
+  const taxable = Number.isFinite(Number(item.taxableAmount))
+    ? Number(item.taxableAmount)
+    : item.gstIncluded && gstRate > 0 ? enteredTotal * 100 / (100 + gstRate) : enteredTotal;
+  const gst = item.gstIncluded ? enteredTotal - taxable : taxable * gstRate / 100;
+  return { unitsTotal, gst, totalIncGst: taxable + gst };
+}
 
 async function buildProcurementPdf(snapshot, type) {
   const isPurchaseOrder = type === "purchase_order";
@@ -23,6 +36,7 @@ async function buildProcurementPdf(snapshot, type) {
   const packageInfo = snapshot.package || {};
   const project = snapshot.project || {};
   const totals = snapshot.totals || {};
+  const hasDiscount = (snapshot.items || []).some((item) => Number(item.discount) > 0);
 
   let y = await addDocumentHeader(doc, {
     title,
@@ -47,18 +61,22 @@ async function buildProcurementPdf(snapshot, type) {
 
   y = addTable(doc, {
     startY: y + 3,
-    head: ["#", "Item / specification", "HSN/SAC", "Qty", "Unit price", "Discount", "GST", "Taxable"],
-    body: (snapshot.items || []).map((item, index) => [
-      index + 1,
-      [item.name, item.makeModel, item.specification].filter(Boolean).join("\n"),
-      value(item.hsnSac),
-      `${formatPdfQuantity(item.quantity)} ${value(item.unit)}`,
-      formatPdfCurrency(item.unitPrice),
-      formatPdfCurrency(item.discount),
-      `${Number(item.gstRate || 0)}% ${item.gstIncluded ? "included" : "extra"}`,
-      formatPdfCurrency(item.taxableAmount)
-    ]),
-    options: { fontSize: 6.9, columnStyles: { 0: { cellWidth: 7 }, 1: { cellWidth: 49 }, 2: { cellWidth: 19 }, 3: { cellWidth: 20 }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" } } }
+    head: ["#", "Item / specification", "HSN/SAC", "Qty", "Unit price", "Total price", ...(hasDiscount ? ["Discount"] : []), "GST", "Total inc. GST"],
+    body: (snapshot.items || []).map((item, index) => {
+      const amount = itemAmounts(item);
+      return [
+        index + 1,
+        [item.name, item.makeModel, item.specification].filter(Boolean).join("\n"),
+        value(item.hsnSac),
+        `${formatPdfQuantity(item.quantity)} ${value(item.unit)}`,
+        formatPdfCurrency(item.unitPrice),
+        formatPdfCurrency(amount.unitsTotal),
+        ...(hasDiscount ? [formatPdfCurrency(item.discount)] : []),
+        `${formatPdfCurrency(amount.gst)} (${Number(item.gstRate || 0)}%)`,
+        formatPdfCurrency(amount.totalIncGst)
+      ];
+    }),
+    options: { fontSize: 6.4, columnStyles: { 0: { cellWidth: 6 }, 1: { cellWidth: 38 }, 2: { cellWidth: 15 }, 3: { cellWidth: 15 }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" }, 8: { halign: "right" } } }
   });
 
   if ((snapshot.charges || []).length) {
