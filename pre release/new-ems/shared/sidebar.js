@@ -366,20 +366,25 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Hospital Projects",
       items: [
-        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Dashboard", href: ROUTES.HOSPITAL_DASHBOARD },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Command Center", href: ROUTES.HOSPITAL_DASHBOARD },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Hospitals / Clients", href: ROUTES.HOSPITAL_CLIENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Projects", href: ROUTES.HOSPITAL_PROJECTS },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Vendors", href: ROUTES.HOSPITAL_VENDORS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Projects", href: ROUTES.HOSPITAL_PROJECTS }
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Documents", href: ROUTES.HOSPITAL_DOCUMENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Client Payments", href: ROUTES.HOSPITAL_CLIENT_PAYMENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Vendor Payments", href: ROUTES.HOSPITAL_VENDOR_PAYMENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Reports", href: ROUTES.HOSPITAL_REPORTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Licenses", href: ROUTES.HOSPITAL_LICENSES },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Settings", href: ROUTES.HOSPITAL_SETTINGS }
       ]
     },
     {
       title: "Commercial & Communication",
       items: [
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Centralized Billing", href: ROUTES.HOSPITAL_BILLING },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Credit Notes", href: ROUTES.HOSPITAL_CREDIT_NOTES },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Query Desk", href: ROUTES.HOSPITAL_QUERIES },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Portal Access", href: ROUTES.HOSPITAL_PORTAL_ACCESS }
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Portal Access", href: ROUTES.HOSPITAL_PORTAL_ACCESS },
+        { module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }
       ]
     }
   ]
@@ -405,7 +410,7 @@ export function getSearchIndex() {
   return out;
 }
 
-export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACES.ADMIN) {
+export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACES.ADMIN, context = null) {
   const sectionStateKey = `ems_nav_sections_${workspace}`;
   let expandedSections = [];
   try {
@@ -419,9 +424,10 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
     if (itemUrl.pathname !== currentUrl.pathname) return false;
     return itemUrl.search ? itemUrl.search === currentUrl.search : true;
   };
+  const contextualSections = Array.isArray(context?.sections) ? context.sections : null;
   const sectionsForWorkspace = [
-    ...(MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN]),
-    ...(workspace === WORKSPACES.SUPPORT ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
+    ...(contextualSections || MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN]),
+    ...([WORKSPACES.SUPPORT, WORKSPACES.HOSPITAL_PROJECTS].includes(workspace) ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
   ];
   const sections = sectionsForWorkspace.map((section) => {
     const visibleItems = section.items.filter((item) => item.disabled || (allowedModules || []).includes(item.module));
@@ -444,9 +450,15 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
     return `<details class="nav-section" data-nav-section="${section.title}" ${open}><summary class="nav-section-title"><span class="nav-section-label">${section.title}</span><span class="nav-caret" aria-hidden="true">›</span></summary><div class="nav-list">${items}</div></details>`;
   }).join("");
 
+  const hospitalModuleHeader = workspace === WORKSPACES.HOSPITAL_PROJECTS;
+  const contextTitle = context?.title || (hospitalModuleHeader ? "Hospital Projects" : "");
+  const contextBackHref = context?.backHref || (hospitalModuleHeader ? ROUTES.DASHBOARD : "");
+  const contextBackLabel = context?.backLabel || (hospitalModuleHeader ? "← Back to EMS" : "");
+  const contextSubtitle = context?.subtitle || "";
+
   return `
     <aside class="app-sidebar" id="appSidebar" data-workspace="${workspace}">
-      
+      ${contextTitle ? `<div class="context-sidebar-head">${contextBackHref ? `<a class="context-sidebar-back" href="${contextBackHref}">${contextBackLabel}</a>` : ""}<strong>${contextTitle}</strong>${contextSubtitle ? `<small>${contextSubtitle}</small>` : ""}</div>` : ""}
       <nav class="nav-root">${sections}</nav>
     </aside>
   `;

@@ -266,7 +266,7 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
   };
 }
 
-export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, sidebarless = false, workspace = WORKSPACES.ADMIN }) {
+export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, sidebarless = false, workspace = WORKSPACES.ADMIN, sidebarContext = null }) {
   const appVersionReady = await enforceNativeAppUpdate();
   if (!appVersionReady) return;
   initTheme();
@@ -373,7 +373,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
 
   app.innerHTML = `
     <div class="app-shell ${sidebarless ? "sidebarless" : ""}">
-      ${sidebarless ? "" : `${renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace)}<div class="app-sidebar-scrim" id="appSidebarScrim" aria-hidden="true"></div>`}
+      ${sidebarless ? "" : `${renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace, sidebarContext)}<div class="app-sidebar-scrim" id="appSidebarScrim" aria-hidden="true"></div>`}
       <div class="app-main">
         ${renderNavbar(session?.user?.email || "", navbarRole, { sidebarless })}
         <section class="page-head">
