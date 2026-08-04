@@ -30,8 +30,11 @@ function itemAmounts(item) {
 function chargeAmounts(charge) {
   const amount = Number(charge.amount) || 0;
   const gstRate = Number(charge.gstRate) || 0;
-  const gst = amount * gstRate / 100;
-  return { amount, gst, totalIncGst: amount + gst };
+  const taxable = Number.isFinite(Number(charge.taxableAmount))
+    ? Number(charge.taxableAmount)
+    : charge.gstIncluded && gstRate > 0 ? amount * 100 / (100 + gstRate) : amount;
+  const gst = charge.gstIncluded ? amount - taxable : taxable * gstRate / 100;
+  return { amount, gst, totalIncGst: taxable + gst };
 }
 
 async function buildProcurementPdf(snapshot, type) {

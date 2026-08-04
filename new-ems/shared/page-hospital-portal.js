@@ -1,7 +1,7 @@
 import { ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
-import { downloadHospitalProcurementProposal } from "./hospital-procurement-pdf.js?v=procurement-footer-1";
+import { downloadHospitalProcurementProposal } from "./hospital-procurement-pdf.js?v=procurement-charge-gst-1";
 
 const db=getSupabaseClient(),key="ems_external_portal_session";
 const expected=location.pathname.includes("vendor")?"vendor":"client";
@@ -13,7 +13,7 @@ const money=v=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",ma
 const date=v=>v?new Date(v).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"—";
 const label=v=>String(v||"—").replaceAll("_"," ");
 function itemAmounts(item){const quantity=Number(item.quantity)||0,unitPrice=Number(item.unitPrice)||0,discount=Number(item.discount)||0,gstRate=Number(item.gstRate)||0,unitsTotal=quantity*unitPrice,enteredTotal=unitsTotal-discount;const taxable=Number.isFinite(Number(item.taxableAmount))?Number(item.taxableAmount):(item.gstIncluded&&gstRate>0?enteredTotal*100/(100+gstRate):enteredTotal);const gst=item.gstIncluded?enteredTotal-taxable:taxable*gstRate/100;return {unitsTotal,gst,totalIncGst:taxable+gst}}
-function chargeAmounts(charge){const amount=Number(charge.amount)||0,gstRate=Number(charge.gstRate)||0,gst=amount*gstRate/100;return {amount,gst,totalIncGst:amount+gst}}
+function chargeAmounts(charge){const amount=Number(charge.amount)||0,gstRate=Number(charge.gstRate)||0,taxable=Number.isFinite(Number(charge.taxableAmount))?Number(charge.taxableAmount):(charge.gstIncluded&&gstRate>0?amount*100/(100+gstRate):amount),gst=charge.gstIncluded?amount-taxable:taxable*gstRate/100;return {amount,gst,totalIncGst:taxable+gst}}
 const app=document.getElementById("app");app.classList.add("page-enter-active");
 function stored(){try{return JSON.parse(localStorage.getItem(key)||"null")}catch{return null}}
 function project(id){return (state.data.projects||[]).find(p=>p.id===id)}
