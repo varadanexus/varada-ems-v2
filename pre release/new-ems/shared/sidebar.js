@@ -375,7 +375,6 @@ const MENU_BY_WORKSPACE = {
       items: [
         { module: MODULES.HOSPITAL_PROJECTS, label: "Hospital / Client", href: ROUTES.HOSPITAL_CLIENTS },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Vendor", href: ROUTES.HOSPITAL_VENDORS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Lead", disabled: true },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Project", href: ROUTES.HOSPITAL_PROJECTS }
       ]
     },
