@@ -59,7 +59,6 @@ function workspaceItems() {
   items.push({ view: "planning", label: "Planning & Design", show: hasScope("hospital_construction", "hospital_consultancy", "interior_design", "hospital_renovation", "medical_gas_pipeline", "modular_ot", "cssd", "icu_setup", "laboratory_setup", "radiology_setup", "pmc") });
   items.push({ view: "construction", label: "Construction", show: hasScope("hospital_construction", "interior_design", "hospital_renovation", "medical_gas_pipeline", "modular_ot", "pmc") });
   items.push({ view: "procurement", label: "Procurement", show: hasScope("medical_equipment_procurement", "modular_ot", "cssd", "icu_setup", "laboratory_setup", "radiology_setup") });
-  items.push({ view: "medical-equipment", label: "Medical Equipment", show: hasScope("medical_equipment_procurement", "modular_ot", "cssd", "icu_setup", "laboratory_setup", "radiology_setup") });
   items.push({ view: "licensing", label: "Licensing & Compliance", show: hasScope("licensing_regulatory", "nabh_accreditation") });
   items.push({ view: "contractors", label: "Contractors", show: hasScope("hospital_construction", "interior_design", "hospital_renovation", "medical_gas_pipeline", "modular_ot", "pmc") });
   items.push({ view: "documents", label: "Documents", show: true }, { view: "client-payments", label: "Client Payments", show: true });
