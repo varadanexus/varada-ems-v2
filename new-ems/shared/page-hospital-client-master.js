@@ -7,7 +7,7 @@ import { logAuditEvent } from "./audit.js";
 import { showToast } from "./utils.js";
 
 const db = getSupabaseClient();
-const state = { boot: null, divisionId: null, clients: [], editingId: null };
+const state = { boot: null, divisionId: null, clients: [], editingId: null, modalOpen: false };
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const label = (value) => String(value || "—").replaceAll("_", " ");
@@ -37,16 +37,18 @@ function select(record, name, title, choices) {
 }
 
 function masterForm() {
+  if (!state.modalOpen) return "";
   if (!can(state.editingId ? PERMISSIONS.EDIT : PERMISSIONS.CREATE)) return "";
   const record = state.clients.find((row) => row.id === state.editingId) || {
     client_type: "hospital", legal_entity_type: "private_limited", registered_country: "India", billing_country: "India",
     tax_treatment: "registered", payment_terms_days: 30, credit_limit: 0, invoice_delivery_method: "email",
     currency_code: "INR", portal_preferred_channel: "email", status: "active"
   };
-  return `<section class="hp-card hp-client-master" id="clientMasterCard">
+  return `<div class="hp-client-modal" id="clientMasterModal" role="presentation">
+    <section class="hp-card hp-client-master" id="clientMasterCard" role="dialog" aria-modal="true" aria-labelledby="clientMasterTitle">
     <div class="hp-actions hp-section-heading">
-      <div><span class="hp-eyebrow">AUTHORITATIVE CLIENT MASTER</span><h3>${state.editingId ? "Edit hospital / client" : "Create hospital / client"}</h3><p class="muted">Used for project delivery, centralized billing and Portal Access onboarding.</p></div>
-      ${state.editingId ? '<button class="btn btn-ghost" id="cancelClientEdit" type="button">Cancel edit</button>' : ""}
+      <div><span class="hp-eyebrow">AUTHORITATIVE CLIENT MASTER</span><h3 id="clientMasterTitle">${state.editingId ? "Edit hospital / client" : "Add hospital / client"}</h3><p class="muted">Used for project delivery, centralized billing and Portal Access onboarding.</p></div>
+      <button class="btn btn-ghost" id="closeClientModal" type="button" aria-label="Close client form">Close</button>
     </div>
     <form id="clientMasterForm" class="hp-master-form">
       <details class="hp-master-section" open><summary>1. Client and legal identity</summary><div class="hp-form">
@@ -129,7 +131,8 @@ function masterForm() {
 
       <div class="hp-actions hp-form-submit"><button class="btn" type="submit">${state.editingId ? "Update client master" : "Create client master"}</button>${state.editingId ? `<a class="btn btn-ghost" href="${ROUTES.HOSPITAL_PORTAL_ACCESS}">Open Portal Access</a>` : ""}</div>
     </form>
-  </section>`;
+    </section>
+  </div>`;
 }
 
 function clientRegister() {
@@ -138,7 +141,7 @@ function clientRegister() {
     const portalReady = row.portal_contact_name && row.portal_email && row.portal_phone;
     return `<tr><td><strong>${esc(row.hospital_name)}</strong><br><small>${esc(row.client_code)} · ${esc(label(row.legal_entity_type))}</small></td><td>${esc(row.legal_name || "—")}<br><small>${esc(row.gstin || row.pan || "Tax identity pending")}</small></td><td>${esc(row.contact_name || "—")}<br><small>${esc(row.email || row.phone || "")}</small></td><td><span class="meta-pill">${billingReady ? "Ready" : "Incomplete"}</span></td><td><span class="meta-pill">${row.auth_user_id ? "Linked" : portalReady ? "Ready to create" : "Incomplete"}</span></td><td>${esc(label(row.status))}</td><td><div class="hp-actions">${can(PERMISSIONS.EDIT) ? `<button class="btn btn-sm" data-edit-client="${row.id}" type="button">Edit</button>` : ""}${portalReady ? `<a class="btn btn-sm" href="${ROUTES.HOSPITAL_PORTAL_ACCESS}">Portal user</a>` : ""}</div></td></tr>`;
   }).join("");
-  return `<section class="hp-card"><div class="hp-actions hp-section-heading"><div><h3>Hospital / client register</h3><p class="muted">Billing and portal readiness are calculated from the saved master details.</p></div>${can(PERMISSIONS.CREATE) ? '<button class="btn" id="newClientMaster" type="button">New client</button>' : ""}</div><div class="table-container"><table><thead><tr><th>Hospital / client</th><th>Legal and tax</th><th>Primary contact</th><th>Billing</th><th>Portal</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="hp-empty">No Hospital clients yet</td></tr>'}</tbody></table></div></section>`;
+  return `<section class="hp-card"><div class="hp-actions hp-section-heading"><div><h3>Hospital / client register</h3><p class="muted">Billing and portal readiness are calculated from the saved master details.</p></div>${can(PERMISSIONS.CREATE) ? '<button class="btn" id="newClientMaster" type="button">Add Client</button>' : ""}</div><div class="table-container"><table><thead><tr><th>Hospital / client</th><th>Legal and tax</th><th>Primary contact</th><th>Billing</th><th>Portal</th><th>Status</th><th>Actions</th></tr></thead><tbody>${rows || '<tr><td colspan="7" class="hp-empty">No Hospital clients yet</td></tr>'}</tbody></table></div></section>`;
 }
 
 function render() {
@@ -188,6 +191,7 @@ function bind() {
       await logAuditEvent(state.editingId ? "hospital_client_updated" : "hospital_client_created", { moduleCode: MODULES.HOSPITAL_PROJECTS, entityType: "hospital_clients", entityId: data.id, beforeData: before, afterData: data });
       showToast(state.editingId ? "Client master updated." : "Client master created.", TOAST_TYPES.SUCCESS);
       state.editingId = null;
+      state.modalOpen = false;
       await loadClients();
       render();
     } catch (error) { showToast(error.message || "Client master could not be saved", TOAST_TYPES.ERROR); }
@@ -201,10 +205,20 @@ function bind() {
     form.elements.portal_access_required.checked = true;
   });
   document.getElementById("copyRegisteredToBilling")?.addEventListener("click", () => copyFields(form, [["registered_address", "billing_address"], ["registered_city", "billing_city"], ["registered_state", "billing_state"], ["registered_postal_code", "billing_postal_code"], ["registered_country", "billing_country"]]));
-  document.getElementById("cancelClientEdit")?.addEventListener("click", () => { state.editingId = null; render(); });
-  document.getElementById("newClientMaster")?.addEventListener("click", () => { state.editingId = null; render(); document.getElementById("clientMasterCard")?.scrollIntoView({ behavior: "smooth", block: "start" }); });
-  document.querySelectorAll("[data-edit-client]").forEach((button) => button.addEventListener("click", () => { state.editingId = button.dataset.editClient; render(); document.getElementById("clientMasterCard")?.scrollIntoView({ behavior: "smooth", block: "start" }); }));
+  const closeModal = () => { state.editingId = null; state.modalOpen = false; render(); };
+  document.getElementById("closeClientModal")?.addEventListener("click", closeModal);
+  document.getElementById("clientMasterModal")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) closeModal(); });
+  document.getElementById("newClientMaster")?.addEventListener("click", () => { state.editingId = null; state.modalOpen = true; render(); document.querySelector("#clientMasterForm input")?.focus(); });
+  document.querySelectorAll("[data-edit-client]").forEach((button) => button.addEventListener("click", () => { state.editingId = button.dataset.editClient; state.modalOpen = true; render(); document.querySelector("#clientMasterForm input")?.focus(); }));
 }
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.modalOpen) {
+    state.editingId = null;
+    state.modalOpen = false;
+    render();
+  }
+});
 
 async function loadClients() {
   const { data, error } = await db.from("hospital_clients").select("*").order("created_at", { ascending: false });

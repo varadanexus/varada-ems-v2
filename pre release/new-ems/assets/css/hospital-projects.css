@@ -88,7 +88,9 @@
 .hp-workspace-link small { display: block; }
 .hp-workspace-link strong { color: var(--primary-strong); }
 .hp-workspace-link small { margin-top: 0.25rem; color: var(--muted); }
-.hp-client-master { margin-bottom: 1rem; }
+.hp-client-modal { position: fixed; inset: 0; z-index: 10050; display: grid; place-items: center; padding: 1rem; background: rgba(0, 0, 0, 0.82); backdrop-filter: blur(8px); }
+.hp-client-master { width: min(1180px, 96vw); max-height: 92vh; overflow-y: auto; }
+.hp-client-modal .hp-section-heading { position: sticky; top: -1rem; z-index: 2; margin: -1rem -1rem 1rem; padding: 1rem; border-bottom: 1px solid var(--border); background: #0c1117; }
 .hp-section-heading { justify-content: space-between; }
 .hp-section-heading h3 { margin: 0.25rem 0; }
 .hp-master-form { display: grid; gap: 0.85rem; }
@@ -120,4 +122,6 @@
   .hp-workspace-links { grid-template-columns: 1fr; }
   .hp-form .span2 { grid-column: auto; }
   .hp-hero { align-items: flex-start; flex-direction: column; }
+  .hp-client-modal { padding: 0; }
+  .hp-client-master { width: 100vw; max-height: 100vh; min-height: 100vh; border-radius: 0; }
 }
