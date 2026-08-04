@@ -55,7 +55,7 @@ async function buildProcurementPdf(snapshot, type) {
       `${formatPdfQuantity(item.quantity)} ${value(item.unit)}`,
       formatPdfCurrency(item.unitPrice),
       formatPdfCurrency(item.discount),
-      `${Number(item.gstRate || 0)}%`,
+      `${Number(item.gstRate || 0)}% ${item.gstIncluded ? "included" : "extra"}`,
       formatPdfCurrency(item.taxableAmount)
     ]),
     options: { fontSize: 6.9, columnStyles: { 0: { cellWidth: 7 }, 1: { cellWidth: 49 }, 2: { cellWidth: 19 }, 3: { cellWidth: 20 }, 4: { halign: "right" }, 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" } } }
