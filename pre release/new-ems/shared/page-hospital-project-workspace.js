@@ -8,7 +8,7 @@ import { logAuditEvent } from "./audit.js";
 import { showToast } from "./utils.js";
 import { listEmailHistory } from "./email-api.js";
 import { listWhatsAppHistory } from "./whatsapp-api.js";
-import { downloadHospitalProcurementProposal, downloadHospitalPurchaseOrder } from "./hospital-procurement-pdf.js?v=procurement-totals-1";
+import { downloadHospitalProcurementProposal, downloadHospitalPurchaseOrder } from "./hospital-procurement-pdf.js?v=procurement-footer-1";
 
 const db = getSupabaseClient();
 const projectId = new URLSearchParams(location.search).get("project_id") || "";

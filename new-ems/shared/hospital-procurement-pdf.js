@@ -127,7 +127,7 @@ async function buildProcurementPdf(snapshot, type) {
 
   await addDocumentFooter(doc, isPurchaseOrder
     ? "System-generated purchase order linked to an approved client procurement revision."
-    : "Client-facing proposal. Vendor cost and internal commercial information are excluded.");
+    : "System-generated procurement proposal.");
   return doc;
 }
 

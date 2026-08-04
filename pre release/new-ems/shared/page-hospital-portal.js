@@ -1,7 +1,7 @@
 import { ROUTES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
-import { downloadHospitalProcurementProposal } from "./hospital-procurement-pdf.js?v=procurement-charges-1";
+import { downloadHospitalProcurementProposal } from "./hospital-procurement-pdf.js?v=procurement-footer-1";
 
 const db=getSupabaseClient(),key="ems_external_portal_session";
 const expected=location.pathname.includes("vendor")?"vendor":"client";
