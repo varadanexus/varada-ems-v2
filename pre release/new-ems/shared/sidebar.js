@@ -382,7 +382,7 @@ const MENU_BY_WORKSPACE = {
       title: "Client Payments",
       items: [
         { module: MODULES.HOSPITAL_PROJECTS, label: "Billing", href: ROUTES.HOSPITAL_BILLING },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Receipt", disabled: true },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Receipt", href: ROUTES.HOSPITAL_CLIENT_PAYMENTS },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Ledger", disabled: true },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Credit Note", href: ROUTES.HOSPITAL_CREDIT_NOTES }
       ]
@@ -390,7 +390,7 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Vendor Payments",
       items: [
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Bills", disabled: true },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Bills", href: ROUTES.HOSPITAL_VENDOR_PAYMENTS },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Payments", href: ROUTES.HOSPITAL_VENDOR_PAYMENTS },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Ledger", disabled: true }
       ]

@@ -1,3 +1,3 @@
-import { initHospitalPage } from "./page-hospital-projects.js";
+import { initHospitalModuleHub } from "./page-hospital-module-hubs.js";
 
-initHospitalPage("billing");
+initHospitalModuleHub("client-billing");
