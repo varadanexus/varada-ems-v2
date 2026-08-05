@@ -477,6 +477,13 @@ function categoryLayout(category: string, payload: any, fy: string, mm: string, 
         safeFolderSegment(payload.projectCode || payload.projectName, "Unassigned Project"),
         safeFolderSegment(payload.documentType, "General")
       ];
+    case "HOSPITAL_PROJECT":
+      return [
+        "Hospital Projects",
+        safeFolderSegment(payload.clientName, "Unassigned Hospital"),
+        safeFolderSegment(`${payload.projectCode || "PROJECT"} - ${payload.projectName || "Hospital Project"}`, "Hospital Project"),
+        safeFolderSegment(payload.documentType, "Documents")
+      ];
     default:
       return ["04 Consolidated & Other", ...dateSegs];
   }
@@ -674,6 +681,72 @@ async function handleUpload(payload: any) {
     } catch { /* best-effort */ }
     throw e;
   }
+}
+
+async function hospitalProjectDriveContext(req: Request, projectId: string) {
+  if (!projectId) throw new Error("Hospital project id is required");
+  const { caller, db, appUser } = await authenticatedCaller(req);
+  const { data: allowed, error: accessError } = await caller.rpc("hospital_can_access_project", { p_project_id: projectId });
+  if (accessError || !allowed) throw new Error("Hospital project access denied");
+  const { data: project, error } = await db.from("hospital_projects")
+    .select("id,division_id,project_code,title,hospital_clients(hospital_name)")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error || !project) throw new Error(error?.message || "Hospital project not found");
+  const client = Array.isArray(project.hospital_clients) ? project.hospital_clients[0] : project.hospital_clients;
+  return { db, appUser, project, clientName: client?.hospital_name || "Unassigned Hospital" };
+}
+
+async function handleEnsureHospitalProjectFolders(req: Request, payload: any) {
+  const ctx = await hospitalProjectDriveContext(req, String(payload.projectId || ""));
+  const basePayload = {
+    category: "HOSPITAL_PROJECT",
+    clientName: ctx.clientName,
+    projectCode: ctx.project.project_code,
+    projectName: ctx.project.title
+  };
+  try {
+    const token = await getAccessToken();
+    const target = resolveTargetFolder({ ...basePayload, documentType: "Documents" });
+    const projectSegments = target.segments.slice(0, -1);
+    const projectFolderId = await ensureFolderPath(token, target.baseId, projectSegments);
+    const folders = ["Documents", "Planning & Design", "Construction", "Procurement", "Medical Equipment", "Licensing & Compliance", "Contractors", "Commercial"];
+    for (const folder of folders) await ensureFolder(token, projectFolderId, folder);
+    const folderPath = projectSegments.join(" / ");
+    await ctx.db.from("hospital_projects").update({
+      drive_folder_id: projectFolderId,
+      drive_folder_path: folderPath,
+      drive_folder_status: "ready",
+      drive_folder_error: null
+    }).eq("id", ctx.project.id);
+    return { ok: true, folderId: projectFolderId, folderPath };
+  } catch (error) {
+    await ctx.db.from("hospital_projects").update({
+      drive_folder_status: "failed",
+      drive_folder_error: String(error?.message || error).slice(0, 500)
+    }).eq("id", ctx.project.id);
+    throw error;
+  }
+}
+
+async function handleUploadHospitalProjectDocument(req: Request, payload: any) {
+  const ctx = await hospitalProjectDriveContext(req, String(payload.projectId || ""));
+  return await handleUpload({
+    base64: payload.base64,
+    fileName: payload.fileName,
+    mimeType: payload.mimeType,
+    category: "HOSPITAL_PROJECT",
+    documentType: payload.documentType || "Documents",
+    entityType: "hospital_projects",
+    entityId: ctx.project.id,
+    documentNo: payload.documentNo || null,
+    divisionId: ctx.project.division_id,
+    uploadedBy: ctx.appUser.id,
+    clientName: ctx.clientName,
+    projectCode: ctx.project.project_code,
+    projectName: ctx.project.title,
+    date: payload.date || new Date().toISOString()
+  });
 }
 
 const INTERIORS_UPLOAD_RULES: Record<string, { moduleCode: string; entityType: string; extensions: string[] }> = {
@@ -1461,6 +1534,10 @@ Deno.serve(async (req) => {
         return json(await handleUpload(payload));
       case "upload_interiors_document":
         return json(await handleInteriorsUpload(req, payload));
+      case "ensure_hospital_project_folders":
+        return json(await handleEnsureHospitalProjectFolders(req, payload));
+      case "upload_hospital_project_document":
+        return json(await handleUploadHospitalProjectDocument(req, payload));
       case "preview_interiors_client_document":
         return await handleInteriorsClientDocumentPreview(payload);
       case "preview_interiors_staff_document":

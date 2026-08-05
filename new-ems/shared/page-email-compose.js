@@ -4,7 +4,7 @@ import { getEmailBranding, listEmailDirectory, listEmailSenders, listEmailTempla
 import { showToast } from "./utils.js";
 
 const FALLBACK_LOGO = "/new-ems/assets/pdf/vn-logo.png";
-const state = { users: [], templates: [], senders: [], branding: {}, attachments: [] };
+const state = { users: [], templates: [], senders: [], branding: {}, attachments: [], sourceModule: "email-compose", sourceEvent: null };
 
 function fmtSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -465,7 +465,7 @@ async function onSubmit(event) {
   button.disabled = true;
   button.textContent = state.attachments.length ? "Uploading & sending..." : "Sending...";
   try {
-    const result = await sendModuleEmail({ userIds, to, subject, bodyHtml, textBody: bodyText, templateAlias, senderKey, attachments: state.attachments, sourceModule: "email-compose" });
+    const result = await sendModuleEmail({ userIds, to, subject, bodyHtml, textBody: bodyText, templateAlias, senderKey, attachments: state.attachments, sourceModule: state.sourceModule, sourceEvent: state.sourceEvent });
     let msg = `Email sent: ${result.sent}/${result.total}${result.failed ? `, ${result.failed} failed` : ""}.`;
     if (result.attachments) msg += result.driveArchived ? ` ${result.attachments} attachment(s) archived to Drive.` : ` ${result.attachments} attachment(s) sent (Drive archive skipped).`;
     showToast(msg, result.failed ? TOAST_TYPES.WARNING : TOAST_TYPES.SUCCESS);
@@ -497,6 +497,15 @@ async function init() {
   state.senders = (snd.senders || []).filter((s) => s.is_active);
   state.branding = brand.branding || {};
   render();
+  const params = new URLSearchParams(location.search);
+  const freeform = document.querySelector('[name="freeform"]');
+  const subject = document.querySelector('[name="subject"]');
+  if (freeform && params.get("to")) freeform.value = params.get("to");
+  if (subject && params.get("subject")) subject.value = params.get("subject");
+  state.sourceModule = params.get("source_module") || "email-compose";
+  state.sourceEvent = params.get("source_event") || null;
+  refreshRecipients();
+  updatePreview();
 }
 
 init();

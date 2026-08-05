@@ -7,6 +7,8 @@ const PORTALS = [
   { key: "interiors-client", sourceModule: "interiors", accessScope: "interiors_client_portal", title: "Interiors Client Portal", description: "Track projects, designs, approvals and site updates.", badge: "Interiors", icon: "IC", route: () => ROUTES.INTERIORS_CLIENT_APP },
   { key: "marketing-client", sourceModule: "digital-services", accessScope: "marketing_client_portal", title: "Marketing Client Portal", description: "View campaigns, deliverables, approvals and reports.", badge: "Digital Services", icon: "MC", route: () => ROUTES.MARKETING_CLIENT_PORTAL },
   { key: "marketing-vendor", sourceModule: "digital-services", accessScope: "marketing_vendor_portal", title: "Marketing Delivery Portal", description: "Access assigned delivery work and collaboration items.", badge: "Digital Services", icon: "MD", route: () => ROUTES.MARKETING_VENDOR_PORTAL }
+  ,{ key: "hospital-client", sourceModule: "hospital-projects", accessScope: "hospital_client_portal", title: "Hospital Client Portal", description: "Track hospital delivery, invoices, credit notes and queries.", badge: "Hospital Projects", icon: "HC", route: () => ROUTES.HOSPITAL_CLIENT_PORTAL }
+  ,{ key: "hospital-vendor", sourceModule: "hospital-projects", accessScope: "hospital_vendor_portal", title: "Hospital Vendor Portal", description: "View assigned hospital packages and respond to project queries.", badge: "Hospital Projects", icon: "HV", route: () => ROUTES.HOSPITAL_VENDOR_PORTAL }
 ];
 
 export function externalPortalOptions(accessRows = []) {

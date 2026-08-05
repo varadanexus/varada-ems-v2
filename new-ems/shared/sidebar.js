@@ -179,6 +179,22 @@ const MENU_BY_WORKSPACE = {
       ]
     }
   ],
+  [WORKSPACES.ONBOARDING]: [
+    {
+      title: "Onboarding Workspace",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.CENTRALISED_ONBOARDING, label: "Centralised Onboarding", href: ROUTES.CENTRALISED_ONBOARDING }
+      ]
+    },
+    {
+      title: "Operations",
+      items: [
+        { module: MODULES.CENTRALISED_ONBOARDING, label: "Send Onboarding", href: `${ROUTES.CENTRALISED_ONBOARDING}?view=send` },
+        { module: MODULES.CENTRALISED_ONBOARDING, label: "Submissions", href: `${ROUTES.CENTRALISED_ONBOARDING}?view=records` }
+      ]
+    }
+  ],
   [WORKSPACES.MEETINGS]: [
     {
       title: "Meetings Workspace",
@@ -319,7 +335,8 @@ const MENU_BY_WORKSPACE = {
       items: [
         { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.NOTIFICATIONS_CENTER, label: "Notification Studio", href: ROUTES.NOTIFICATION_STUDIO },
-        { module: MODULES.NOTIFICATIONS_CENTER, label: "My Notifications", href: ROUTES.NOTIFICATIONS_CENTER }
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "My Notifications", href: ROUTES.NOTIFICATIONS_CENTER },
+        { module: MODULES.CENTRALISED_ONBOARDING, label: "Centralised Onboarding", href: ROUTES.CENTRALISED_ONBOARDING }
       ]
     },
     {
@@ -361,6 +378,47 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.INTERIORS_REPORTS, label: "Reports", href: ROUTES.INTERIORS_REPORTS }
       ]
     }
+  ],
+  [WORKSPACES.HOSPITAL_PROJECTS]: [
+    {
+      title: "Dashboard",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Hospital Dashboard", href: ROUTES.HOSPITAL_DASHBOARD }
+      ]
+    },
+    {
+      title: "Client / Vendor / Project",
+      items: [
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Hospital / Client", href: ROUTES.HOSPITAL_CLIENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Vendor", href: ROUTES.HOSPITAL_VENDORS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Project", href: ROUTES.HOSPITAL_PROJECTS }
+      ]
+    },
+    {
+      title: "Client Payments",
+      items: [
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Billing", href: ROUTES.HOSPITAL_BILLING },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Receipt", href: ROUTES.HOSPITAL_CLIENT_PAYMENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Ledger", disabled: true },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Credit Note", href: ROUTES.HOSPITAL_CREDIT_NOTES }
+      ]
+    },
+    {
+      title: "Vendor Payments",
+      items: [
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Bills", href: ROUTES.HOSPITAL_VENDOR_PAYMENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Payments", href: ROUTES.HOSPITAL_VENDOR_PAYMENTS },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Ledger", disabled: true }
+      ]
+    },
+    {
+      title: "Communication",
+      items: [
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Query Desk", href: ROUTES.HOSPITAL_QUERIES },
+        { module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }
+      ]
+    }
   ]
 };
 
@@ -384,7 +442,7 @@ export function getSearchIndex() {
   return out;
 }
 
-export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACES.ADMIN) {
+export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACES.ADMIN, context = null) {
   const sectionStateKey = `ems_nav_sections_${workspace}`;
   let expandedSections = [];
   try {
@@ -398,9 +456,10 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
     if (itemUrl.pathname !== currentUrl.pathname) return false;
     return itemUrl.search ? itemUrl.search === currentUrl.search : true;
   };
+  const contextualSections = Array.isArray(context?.sections) ? context.sections : null;
   const sectionsForWorkspace = [
-    ...(MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN]),
-    ...(workspace === WORKSPACES.SUPPORT ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
+    ...(contextualSections || MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN]),
+    ...([WORKSPACES.SUPPORT, WORKSPACES.HOSPITAL_PROJECTS].includes(workspace) ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
   ];
   const sections = sectionsForWorkspace.map((section) => {
     const visibleItems = section.items.filter((item) => item.disabled || (allowedModules || []).includes(item.module));
@@ -423,9 +482,15 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
     return `<details class="nav-section" data-nav-section="${section.title}" ${open}><summary class="nav-section-title"><span class="nav-section-label">${section.title}</span><span class="nav-caret" aria-hidden="true">›</span></summary><div class="nav-list">${items}</div></details>`;
   }).join("");
 
+  const hospitalModuleHeader = workspace === WORKSPACES.HOSPITAL_PROJECTS;
+  const contextTitle = context?.title || (hospitalModuleHeader ? "Hospital Projects" : "");
+  const contextBackHref = context?.backHref || (hospitalModuleHeader ? ROUTES.DASHBOARD : "");
+  const contextBackLabel = context?.backLabel || (hospitalModuleHeader ? "← Back to EMS" : "");
+  const contextSubtitle = context?.subtitle || "";
+
   return `
     <aside class="app-sidebar" id="appSidebar" data-workspace="${workspace}">
-      
+      ${contextTitle ? `<div class="context-sidebar-head">${contextBackHref ? `<a class="context-sidebar-back" href="${contextBackHref}">${contextBackLabel}</a>` : ""}<strong>${contextTitle}</strong>${contextSubtitle ? `<small>${contextSubtitle}</small>` : ""}</div>` : ""}
       <nav class="nav-root">${sections}</nav>
     </aside>
   `;

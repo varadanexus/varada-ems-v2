@@ -201,11 +201,13 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
       ? "Finance"
       : workspace === WORKSPACES.INTERIORS
         ? "Interiors"
+        : workspace === WORKSPACES.HOSPITAL_PROJECTS
+          ? "Hospital Projects"
         : workspace === WORKSPACES.LEGAL
           ? "Legal"
           : workspace === WORKSPACES.SUPPORT
             ? "Support"
-          : (workspace === WORKSPACES.WHATSAPP || workspace === WORKSPACES.EMAIL || workspace === WORKSPACES.MEETINGS || workspace === WORKSPACES.NOTIFICATIONS)
+          : (workspace === WORKSPACES.WHATSAPP || workspace === WORKSPACES.EMAIL || workspace === WORKSPACES.MEETINGS || workspace === WORKSPACES.NOTIFICATIONS || workspace === WORKSPACES.ONBOARDING)
             ? "Communications"
             : workspace === WORKSPACES.DIGITAL_SERVICES
               ? "Digital Marketing & Services"
@@ -264,7 +266,7 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
   };
 }
 
-export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, sidebarless = false, workspace = WORKSPACES.ADMIN }) {
+export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescription, sidebarless = false, workspace = WORKSPACES.ADMIN, sidebarContext = null }) {
   const appVersionReady = await enforceNativeAppUpdate();
   if (!appVersionReady) return;
   initTheme();
@@ -371,7 +373,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
 
   app.innerHTML = `
     <div class="app-shell ${sidebarless ? "sidebarless" : ""}">
-      ${sidebarless ? "" : `${renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace)}<div class="app-sidebar-scrim" id="appSidebarScrim" aria-hidden="true"></div>`}
+      ${sidebarless ? "" : `${renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace, sidebarContext)}<div class="app-sidebar-scrim" id="appSidebarScrim" aria-hidden="true"></div>`}
       <div class="app-main">
         ${renderNavbar(session?.user?.email || "", navbarRole, { sidebarless })}
         <section class="page-head">

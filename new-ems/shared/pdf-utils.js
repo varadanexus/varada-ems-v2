@@ -51,6 +51,7 @@ export async function createPdfDocument() {
 export async function addDocumentHeader(doc, { title, fields = [] } = {}) {
   const assets = await ensurePdfAssets();
   const pageWidth = doc.internal.pageSize.getWidth();
+  const contentRight = pageWidth - 14;
   if (assets.logo) {
     try {
       doc.addImage(assets.logo, "PNG", 14, 12, 20, 18);
@@ -68,19 +69,33 @@ export async function addDocumentHeader(doc, { title, fields = [] } = {}) {
   doc.text(COMPANY_ADDRESS_LINE_2, headerTextX, 29);
   doc.text(COMPANY_CIN, headerTextX, 33);
 
-  doc.setTextColor(0, 120, 0);
+  const verifiedWidth = 39;
+  const verifiedHeight = 7;
+  const verifiedX = contentRight - verifiedWidth;
+  const verifiedY = 11.8;
+  doc.setFillColor(240, 253, 244);
+  doc.setDrawColor(34, 197, 94);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(verifiedX, verifiedY, verifiedWidth, verifiedHeight, 1.3, 1.3, "FD");
+  doc.setFillColor(34, 197, 94);
+  doc.circle(verifiedX + 4.2, verifiedY + (verifiedHeight / 2), 1.7, "F");
+  doc.setDrawColor(255, 255, 255);
+  doc.setLineWidth(0.35);
+  doc.line(verifiedX + 3.45, verifiedY + 3.55, verifiedX + 4.0, verifiedY + 4.1);
+  doc.line(verifiedX + 4.0, verifiedY + 4.1, verifiedX + 5.05, verifiedY + 2.95);
+  doc.setTextColor(22, 101, 52);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("✔ Digitally Verified", pageWidth - 14, 16, { align: "right" });
+  doc.setFontSize(7.2);
+  doc.text("DIGITALLY VERIFIED", verifiedX + 7.2, verifiedY + 4.55);
   doc.setTextColor(0, 0, 0);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text(String(title || "Document").toUpperCase(), pageWidth - 14, 30, { align: "right" });
+  doc.text(String(title || "Document").toUpperCase(), contentRight, 30, { align: "right" });
 
   const infoStartY = 37;
-  const infoLeft = 132;
-  const infoWidth = pageWidth - infoLeft - 14;
+  const infoLeft = 120;
+  const infoWidth = contentRight - infoLeft;
   const infoRows = fields.map((field) => [field.label || "", String(field.value ?? "—")]);
   if (infoRows.length) {
     doc.autoTable({
@@ -89,11 +104,11 @@ export async function addDocumentHeader(doc, { title, fields = [] } = {}) {
       tableWidth: infoWidth,
       body: infoRows,
       theme: "grid",
-      styles: { font: "helvetica", fontSize: 8, cellPadding: 1.8, textColor: [17, 24, 39] },
+      styles: { font: "helvetica", fontSize: 7.5, cellPadding: 1.8, textColor: [17, 24, 39], overflow: "linebreak", valign: "middle" },
       alternateRowStyles: { fillColor: [250, 250, 250] },
       columnStyles: {
-        0: { fontStyle: "bold", cellWidth: 22 },
-        1: { cellWidth: infoWidth - 22 }
+        0: { fontStyle: "bold", cellWidth: 24 },
+        1: { cellWidth: infoWidth - 24 }
       }
     });
   }
@@ -494,14 +509,15 @@ export function addDetailsSection(doc, title, fields = [], startY = 40, options 
     body,
     theme: "grid",
     margin: { left: 14, right: 14 },
-    styles: { font: "helvetica", fontSize: 8, cellPadding: 1.8, textColor: [17, 24, 39] },
+    tableWidth: 182,
+    styles: { font: "helvetica", fontSize: 8, cellPadding: 1.8, textColor: [17, 24, 39], overflow: "linebreak", valign: "middle" },
     headStyles: { fillColor: [0, 102, 204], textColor: [255, 255, 255], fontStyle: "bold", halign: "left" },
     alternateRowStyles: { fillColor: [245, 245, 245] },
     columnStyles: {
-      0: { fontStyle: "bold", cellWidth: options.leftLabelWidth || 28 },
-      1: { cellWidth: options.leftValueWidth || 58 },
-      2: { fontStyle: "bold", cellWidth: options.rightLabelWidth || 28 },
-      3: { cellWidth: options.rightValueWidth || 58 }
+      0: { fontStyle: "bold", cellWidth: options.leftLabelWidth || 27 },
+      1: { cellWidth: options.leftValueWidth || 64 },
+      2: { fontStyle: "bold", cellWidth: options.rightLabelWidth || 29 },
+      3: { cellWidth: options.rightValueWidth || 62 }
     }
   });
   return doc.lastAutoTable?.finalY || startY;
@@ -722,25 +738,28 @@ export async function addSignatureSection(doc, startY = 40) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const x1 = 132;
   const x2 = pageWidth - 14;
-  const safeY = Math.min(startY + 14, doc.internal.pageSize.getHeight() - 28);
+  const blockTop = Math.min(startY, doc.internal.pageSize.getHeight() - 50);
+  const signatureLineY = blockTop + 29;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(17, 24, 39);
+  doc.text("FOR VARADA NEXUS PRIVATE LIMITED", (x1 + x2) / 2, blockTop + 4, { align: "center" });
   if (assets.signature) {
     try {
-      doc.addImage(assets.signature, "PNG", 143, safeY - 17, 34, 12);
+      doc.addImage(assets.signature, "PNG", 142, blockTop + 8, 32, 11);
     } catch {}
   }
   if (assets.stamp) {
     try {
-      doc.addImage(assets.stamp, "PNG", 166, safeY - 20, 22, 22);
+      doc.addImage(assets.stamp, "PNG", 165, blockTop + 6, 22, 22);
     } catch {}
   }
   doc.setDrawColor(0, 0, 0);
-  doc.line(x1, safeY, x2, safeY);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text("FOR VARADA NEXUS PRIVATE LIMITED", x2, safeY - 7, { align: "right" });
+  doc.line(x1, signatureLineY, x2, signatureLineY);
   doc.setFont("helvetica", "normal");
-  doc.text("Authorized Signatory", x2, safeY + 5, { align: "right" });
-  return safeY + 10;
+  doc.setFontSize(9);
+  doc.text("Authorized Signatory", x2, signatureLineY + 5, { align: "right" });
+  return signatureLineY + 10;
 }
 
 export async function addClientInvoiceSignatureBlock(doc, startY = 40) {

@@ -82,6 +82,18 @@ export function uploadInteriorsDocumentToDrive(meta = {}, base64) {
   return driveIntegration("upload_interiors_document", { ...meta, base64 });
 }
 
+// Hospital project folders and documents use the shared Drive integration.
+// The Edge Function resolves trusted project/client names and validates project access.
+export function ensureHospitalProjectDriveFolders(projectId) {
+  if (!projectId) return Promise.reject(new Error("Missing Hospital project id"));
+  return driveIntegration("ensure_hospital_project_folders", { projectId });
+}
+
+export function uploadHospitalProjectDocumentToDrive(meta = {}, base64) {
+  if (!base64) return Promise.reject(new Error("Missing Hospital project document"));
+  return driveIntegration("upload_hospital_project_document", { ...meta, base64 });
+}
+
 // Architect-portal design upload. The Edge Function validates the external
 // portal session, project assignment, and design ownership before touching
 // Drive. Files are stored below the dedicated Interiors root folder.

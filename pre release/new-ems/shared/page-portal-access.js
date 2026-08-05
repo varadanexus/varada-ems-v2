@@ -37,6 +37,13 @@ const DIVISION_ENTITY_MAP = {
       { key: "vendor", label: "Vendor", table: "marketing_vendors", nameCol: "legal_name", system: "external", userType: "vendor", sourceModule: "digital-services", accessScope: "marketing_vendor_portal", portalType: "Marketing Delivery Team Portal", portalLoginUrl: ROUTES.LOGIN }
     ]
   },
+  "hospital-projects": {
+    label: "Hospital Projects",
+    entities: [
+      { key: "client", label: "Hospital / Client", table: "hospital_clients", nameCol: "hospital_name", system: "external", userType: "client", sourceModule: "hospital-projects", accessScope: "hospital_client_portal", portalType: "Hospital Client Portal", portalLoginUrl: ROUTES.LOGIN },
+      { key: "vendor", label: "Hospital Vendor", table: "hospital_vendors", nameCol: "legal_name", system: "external", userType: "vendor", sourceModule: "hospital-projects", accessScope: "hospital_vendor_portal", portalType: "Hospital Vendor Portal", portalLoginUrl: ROUTES.LOGIN }
+    ]
+  },
   legal: {
     label: "Legal",
     entities: [
@@ -70,7 +77,7 @@ async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.PORTAL_ACCESS,
     pageTitle: "Portal Access",
-    pageDescription: "Create and manage portal login access for existing Transportation, Interiors, Digital Marketing & Services, and Legal business records. Business records are never created or duplicated here.",
+    pageDescription: "Create and manage portal login access for existing Transportation, Interiors, Hospital Projects, Digital Marketing & Services, and Legal business records. Business records are never created or duplicated here.",
     workspace: WORKSPACES.ADMIN
   });
   if (!boot) return;
@@ -179,6 +186,8 @@ function externalLinkedEntityLabel(user, access) {
   if (recordType.includes("interior_clients")) return "Interiors Client";
   if (recordType.includes("marketing_clients")) return "Marketing Client";
   if (recordType.includes("marketing_vendors")) return "Marketing Vendor";
+  if (recordType.includes("hospital_clients")) return "Hospital Client";
+  if (recordType.includes("hospital_vendors")) return "Hospital Vendor";
   if (recordType.includes("interior_vendors")) return "Vendor";
   if (recordType.includes("transport_agents")) return "Agent";
   if (recordType.includes("contractor")) return "Contractor";
@@ -194,6 +203,8 @@ function portalTypeLabel(userType, sourceModule) {
   if (sourceModule === "legal" && userType === "advocate") return "Legal Advocate Portal";
   if (sourceModule === "digital-services" && userType === "vendor") return "Marketing Delivery Team Portal";
   if (sourceModule === "digital-services" && userType === "partner") return "Marketing Client Portal";
+  if (sourceModule === "hospital-projects" && userType === "client") return "Hospital Client Portal";
+  if (sourceModule === "hospital-projects" && userType === "vendor") return "Hospital Vendor Portal";
   if (userType === "agent") return "Transportation Agent Portal";
   if (userType === "vendor") return sourceModule === "interiors" ? "Interiors Vendor Portal" : "External Vendor Portal";
   if (userType === "contractor") return "External Contractor Portal";
@@ -251,6 +262,7 @@ async function deliverPortalCredentials(row, password) {
 function moduleLabel(sourceModule) {
   if (sourceModule === "digital-services") return "Digital Marketing & Services";
   if (sourceModule === "interiors") return "Interiors";
+  if (sourceModule === "hospital-projects") return "Hospital Projects";
   if (sourceModule === "legal") return "Legal";
   return "Transportation";
 }
@@ -979,8 +991,10 @@ async function loadAvailableEntities(term = "") {
   PAGE_STATE.wizard.searchResults = (data || []).map((row) => ({
     id: row.id,
     label: row[entityDef.nameCol],
-    email: row.email || null,
-    phone: row.phone || row.phone_number || row.contact_no || null,
+    email: entityDef.table === "hospital_clients" ? (row.portal_email || row.email || null) : (row.email || null),
+    phone: entityDef.table === "hospital_clients"
+      ? (row.portal_phone || row.phone || null)
+      : (row.phone || row.phone_number || row.contact_no || null),
     raw: row
   }));
   render();
@@ -996,7 +1010,7 @@ async function handleSelectEntity(entityId) {
   w.selectedEntity = {
     id: found.id, label: found.label, table: entityDef.table, system: entityDef.system, userType: entityDef.userType, sourceModule: entityDef.sourceModule, accessScope: entityDef.accessScope, portalType: entityDef.portalType, portalLoginUrl: entityDef.portalLoginUrl,
     email: found.email, phone: found.phone,
-    gstin: raw.gstin || raw.gst_number || null, pan: raw.pan_number || null
+    gstin: raw.gstin || raw.gst_number || null, pan: raw.pan || raw.pan_number || null
   };
 
   w.existingAccess = await findExistingAccess(entityDef, found.id);

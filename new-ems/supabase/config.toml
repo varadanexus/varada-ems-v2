@@ -406,6 +406,12 @@ verify_jwt = false
 [functions.ems-login-otp]
 verify_jwt = false
 
+# Centralised Onboarding. Public customer actions (OTP, submit, upload) must be
+# callable without an EMS session; the function authorises via the request token
+# and OTP session server-side. Staff actions require a valid EMS bearer JWT.
+[functions.onboarding-integrations]
+verify_jwt = false
+
 # Meeting guest join links and host JWT minting share one function. Public guest
 # joins must work without an authenticated EMS session, while host tokens are
 # authorized server-side based on the caller's EMS roles.

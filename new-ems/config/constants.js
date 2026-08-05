@@ -159,6 +159,43 @@ export const ROUTES = {
   ,INTERIORS_VARIATION_REQUESTS: "/new-ems/modules/interiors-variation-requests/index.html"
   ,INTERIORS_CHANGE_ORDERS: "/new-ems/modules/interiors-change-orders/index.html"
   ,INTERIORS_PROJECT_CLOSURE: "/new-ems/modules/interiors-project-closure/index.html"
+  ,HOSPITAL_DASHBOARD: "/new-ems/modules/hospital-dashboard/index.html"
+  ,HOSPITAL_CLIENTS: "/new-ems/modules/hospital-clients/index.html"
+  ,HOSPITAL_VENDORS: "/new-ems/modules/hospital-vendors/index.html"
+  ,HOSPITAL_PROJECTS: "/new-ems/modules/hospital-projects/index.html"
+  ,HOSPITAL_WORK_PACKAGES: "/new-ems/modules/hospital-work-packages/index.html"
+  ,HOSPITAL_EQUIPMENT: "/new-ems/modules/hospital-equipment/index.html"
+  ,HOSPITAL_LICENSES: "/new-ems/modules/hospital-licenses/index.html"
+  ,HOSPITAL_DOCUMENTS: "/new-ems/modules/hospital-documents/index.html"
+  ,HOSPITAL_CLIENT_PAYMENTS: "/new-ems/modules/hospital-client-payments/index.html"
+  ,HOSPITAL_VENDOR_PAYMENTS: "/new-ems/modules/hospital-vendor-payments/index.html"
+  ,HOSPITAL_REPORTS: "/new-ems/modules/hospital-reports/index.html"
+  ,HOSPITAL_SETTINGS: "/new-ems/modules/hospital-settings/index.html"
+  ,HOSPITAL_BILLING: "/new-ems/modules/hospital-billing/index.html"
+  ,HOSPITAL_CREDIT_NOTES: "/new-ems/modules/hospital-credit-notes/index.html"
+  ,HOSPITAL_QUERIES: "/new-ems/modules/hospital-queries/index.html"
+  ,HOSPITAL_PORTAL_ACCESS: "/new-ems/modules/portal-access/index.html?tab=create&division=hospital-projects"
+  ,HOSPITAL_CLIENT_PORTAL: "/new-ems/modules/hospital-client-portal/index.html"
+  ,HOSPITAL_CLIENT_PROJECTS: "/new-ems/modules/hospital-client-projects/index.html"
+  ,HOSPITAL_CLIENT_PROCUREMENT_APPROVALS: "/new-ems/modules/hospital-client-procurement-approvals/index.html"
+  ,HOSPITAL_CLIENT_BILLING: "/new-ems/modules/hospital-client-billing/index.html"
+  ,HOSPITAL_CLIENT_QUERIES: "/new-ems/modules/hospital-client-queries/index.html"
+  ,HOSPITAL_VENDOR_PORTAL: "/new-ems/modules/hospital-vendor-portal/index.html"
+  ,HOSPITAL_PROJECT_OVERVIEW: "/new-ems/modules/hospital-project-overview/index.html"
+  ,HOSPITAL_PROJECT_PLANNING: "/new-ems/modules/hospital-project-planning/index.html"
+  ,HOSPITAL_PROJECT_CONSTRUCTION: "/new-ems/modules/hospital-project-construction/index.html"
+  ,HOSPITAL_PROJECT_PROCUREMENT: "/new-ems/modules/hospital-project-procurement/index.html"
+  ,HOSPITAL_PROJECT_MEDICAL_EQUIPMENT: "/new-ems/modules/hospital-project-medical-equipment/index.html"
+  ,HOSPITAL_PROJECT_LICENSING: "/new-ems/modules/hospital-project-licensing/index.html"
+  ,HOSPITAL_PROJECT_CONTRACTORS: "/new-ems/modules/hospital-project-contractors/index.html"
+  ,HOSPITAL_PROJECT_DOCUMENTS: "/new-ems/modules/hospital-project-documents/index.html"
+  ,HOSPITAL_PROJECT_CLIENT_PAYMENTS: "/new-ems/modules/hospital-project-client-payments/index.html"
+  ,HOSPITAL_PROJECT_VENDOR_PAYMENTS: "/new-ems/modules/hospital-project-vendor-payments/index.html"
+  ,HOSPITAL_PROJECT_COMMUNICATIONS: "/new-ems/modules/hospital-project-communications/index.html"
+  ,HOSPITAL_PROJECT_REPORTS: "/new-ems/modules/hospital-project-reports/index.html"
+  ,HOSPITAL_PROJECT_SETTINGS: "/new-ems/modules/hospital-project-settings/index.html"
+  ,CENTRALISED_ONBOARDING: "/new-ems/modules/centralised-onboarding/index.html"
+  ,ONBOARDING_PUBLIC: "/new-ems/modules/onboarding-public/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -321,13 +358,14 @@ export const MODULES = {
   ,INTERIORS_PROJECT_CLOSURE: "interiors-project-closure"
   ,PORTAL_MANAGEMENT: "portal-management"
   ,PORTAL_ACCESS: "portal-access"
+  ,CENTRALISED_ONBOARDING: "centralised-onboarding"
 };
 
 export const CONTROL_CENTER_MODULES = [
   { module: MODULES.TRANSPORTATION, title: "Transportation & Minerals Logistics", subtitle: "Dispatch, trips, challans, settlements", href: ROUTES.TRANSPORT_DASHBOARD },
   { module: MODULES.CONSTRUCTION, title: "Construction", subtitle: "Site operations and execution", href: null },
   { module: MODULES.INTERIORS, title: "Interiors", subtitle: "Spatial structure, design, finish, and specification control", href: ROUTES.INTERIORS_DASHBOARD },
-  { module: MODULES.HOSPITAL_PROJECTS, title: "Hospital Projects", subtitle: "Infrastructure programs", href: null },
+  { module: MODULES.HOSPITAL_PROJECTS, title: "Hospital Projects", subtitle: "Projects, vendors, billing and client delivery", href: ROUTES.HOSPITAL_DASHBOARD },
   { module: MODULES.HOSPITAL_CONSULTANCY, title: "Hospital Consultancy", subtitle: "Advisory workflow", href: null },
   { module: MODULES.IMPORTS_EXPORTS, title: "Imports & Exports", subtitle: "Shipment and compliance desk", href: null },
   { module: MODULES.TRADING, title: "Trading", subtitle: "Order and margin ops", href: null },
@@ -344,6 +382,7 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.EMAIL, title: "Email", subtitle: "Compose, templates, inbox, history and ZeptoMail delivery", href: ROUTES.EMAIL_COMMAND_CENTER },
   { module: MODULES.MEETINGS, title: "Meetings", subtitle: "Scheduling, waiting room control, and Jitsi video sessions", href: ROUTES.MEETINGS_COMMAND_CENTER },
   { module: MODULES.NOTIFICATIONS_CENTER, title: "Notification Studio", subtitle: "Custom campaigns, scheduling, staff and portal push analytics", href: ROUTES.NOTIFICATION_STUDIO },
+  { module: MODULES.CENTRALISED_ONBOARDING, title: "Centralised Onboarding", subtitle: "Send client onboarding links, collect KYC documents, live verification and terms", href: ROUTES.CENTRALISED_ONBOARDING },
   { module: MODULES.SETTINGS, title: "Administration", subtitle: "System controls and policy", href: ROUTES.SETTINGS },
   { module: MODULES.MASTER_CLIENTS, title: "Master Data", subtitle: "Reference entities and codes", href: ROUTES.MASTER_CLIENTS }
 ];
@@ -361,6 +400,7 @@ export const WORKSPACES = {
   TRANSPORTATION: "transportation",
   ACCOUNTS: "accounts",
   INTERIORS: "interiors",
+  HOSPITAL_PROJECTS: "hospital-projects",
   LEGAL: "legal",
   WHATSAPP: "whatsapp",
   EMAIL: "email",
@@ -370,6 +410,7 @@ export const WORKSPACES = {
   SOCIAL_MEDIA: "social-media",
   WORLD_MONITOR: "world-monitor",
   SUPPORT: "support",
+  ONBOARDING: "onboarding",
   // Compatibility alias: marketing operations live in this single workspace.
   MARKETING: "digital-services"
 };
