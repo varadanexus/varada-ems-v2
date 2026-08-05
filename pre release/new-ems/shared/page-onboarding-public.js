@@ -13,6 +13,11 @@ const DIVISION_LABELS = {
   "transport": "Transport",
   "digital-services": "Digital Marketing & Services"
 };
+const ENTITY_TYPES = [
+  "Private Limited Company", "Public Limited Company", "Limited Liability Partnership (LLP)",
+  "Partnership Firm", "Sole Proprietorship", "One Person Company (OPC)", "Trust", "Society",
+  "Hindu Undivided Family (HUF)", "Cooperative Society", "Government / PSU", "Individual", "Other"
+];
 
 const state = {
   step: "verify",          // verify | details | documents | photo | terms | done
@@ -140,7 +145,7 @@ function renderDetails() {
     <input class="onb-in" id="f_legal" value="${esc(d.legal_name || c.entity_name || "")}" />
     <div class="onb-grid">
       <div><label class="onb-l">Entity type</label>
-        <input class="onb-in" id="f_type" placeholder="Pvt Ltd / LLP / Trust / Proprietorship…" value="${esc(d.entity_type || c.entity_type || "")}" /></div>
+        <select class="onb-in" id="f_type"><option value="">Select entity type…</option>${ENTITY_TYPES.map((t) => `<option${(d.entity_type || c.entity_type) === t ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></div>
       <div><label class="onb-l">Registration / CIN no.</label>
         <input class="onb-in" id="f_reg" value="${esc(d.registration_no || "")}" /></div>
       <div><label class="onb-l">PAN</label><input class="onb-in" id="f_pan" value="${esc(d.pan || "")}" /></div>

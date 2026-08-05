@@ -16,6 +16,11 @@ const DIVISIONS = [
   { code: "digital-services", label: "Digital Marketing & Services" }
 ];
 const DIVISION_LABEL = Object.fromEntries(DIVISIONS.map((d) => [d.code, d.label]));
+const ENTITY_TYPES = [
+  "Private Limited Company", "Public Limited Company", "Limited Liability Partnership (LLP)",
+  "Partnership Firm", "Sole Proprietorship", "One Person Company (OPC)", "Trust", "Society",
+  "Hindu Undivided Family (HUF)", "Cooperative Society", "Government / PSU", "Individual", "Other"
+];
 
 function esc(v) {
   return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -66,7 +71,8 @@ function renderSend() {
         <div><label class="onb-l">Division</label>
           <select class="onb-in" id="s_div">${DIVISIONS.map((d) => `<option value="${d.code}">${d.label}</option>`).join("")}</select></div>
         <div><label class="onb-l">Entity / client name</label><input class="onb-in" id="s_entity" /></div>
-        <div><label class="onb-l">Entity type</label><input class="onb-in" id="s_type" placeholder="Pvt Ltd / LLP / Trust…" /></div>
+        <div><label class="onb-l">Entity type</label>
+          <select class="onb-in" id="s_type"><option value="">Select entity type…</option>${ENTITY_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}</select></div>
         <div><label class="onb-l">Contact person</label><input class="onb-in" id="s_cname" /></div>
         <div><label class="onb-l">Contact phone (WhatsApp)</label><input class="onb-in" id="s_phone" placeholder="10-digit or +91…" /></div>
         <div><label class="onb-l">Contact email</label><input class="onb-in" id="s_email" /></div>

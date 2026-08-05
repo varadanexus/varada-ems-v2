@@ -382,6 +382,7 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.EMAIL, title: "Email", subtitle: "Compose, templates, inbox, history and ZeptoMail delivery", href: ROUTES.EMAIL_COMMAND_CENTER },
   { module: MODULES.MEETINGS, title: "Meetings", subtitle: "Scheduling, waiting room control, and Jitsi video sessions", href: ROUTES.MEETINGS_COMMAND_CENTER },
   { module: MODULES.NOTIFICATIONS_CENTER, title: "Notification Studio", subtitle: "Custom campaigns, scheduling, staff and portal push analytics", href: ROUTES.NOTIFICATION_STUDIO },
+  { module: MODULES.CENTRALISED_ONBOARDING, title: "Centralised Onboarding", subtitle: "Send client onboarding links, collect KYC documents, live verification and terms", href: ROUTES.CENTRALISED_ONBOARDING },
   { module: MODULES.SETTINGS, title: "Administration", subtitle: "System controls and policy", href: ROUTES.SETTINGS },
   { module: MODULES.MASTER_CLIENTS, title: "Master Data", subtitle: "Reference entities and codes", href: ROUTES.MASTER_CLIENTS }
 ];

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redirecting… | Varada Nexus Onboarding</title>
+  <meta name="robots" content="noindex" />
+  <script>
+    (function () {
+      var qs = window.location.search || "";
+      // Also support a path-style token: /onboard/<token>
+      var m = window.location.pathname.match(/\/onboard\/([^\/?#]+)/);
+      if (!qs && m && m[1]) qs = "?t=" + m[1];
+      window.location.replace("/new-ems/modules/onboarding-public/index.html" + qs);
+    })();
+  </script>
+</head>
+<body style="background:#050609;color:#c39a44;font-family:Arial,Helvetica,sans-serif;text-align:center;padding-top:22vh;margin:0">
+  <div>Redirecting to your secure onboarding…</div>
+  <noscript style="color:#eee">Please enable JavaScript, or open your onboarding link on a modern browser.</noscript>
+</body>
+</html>

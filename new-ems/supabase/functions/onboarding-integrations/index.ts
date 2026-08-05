@@ -282,7 +282,7 @@ async function sendLink(req: Request, admin: any, body: any) {
   // WhatsApp via approved template (token in the template's URL button variable)
   if (r.contact_phone && (body?.whatsapp !== false)) {
     try {
-      const sid = env("ONBOARDING_INVITE_CONTENT_SID");
+      const sid = env("ONBOARDING_INVITE_CONTENT_SID", "HXc6c357ea53d669b97787636bb974f798");
       // Template variables: 1 = contact name, 2 = division, 3 = token (button URL suffix)
       await sendWhatsAppTemplate(r.contact_phone, sid, {
         "1": r.contact_name || r.entity_name, "2": division, "3": String(r.public_token)
@@ -305,7 +305,7 @@ async function requestOtp(req: Request, admin: any, body: any) {
 
   try {
     if (row.channel === "whatsapp") {
-      await sendWhatsAppTemplate(row.destination, env("ONBOARDING_OTP_CONTENT_SID"), { "1": row.otp });
+      await sendWhatsAppTemplate(row.destination, env("ONBOARDING_OTP_CONTENT_SID", "HXda3ab60da25d7327f72999393ce36652"), { "1": row.otp });
     } else {
       await sendEmail(row.destination, row.contact_name || row.entity_name, "Your Varada Nexus verification code",
         `<p>Your verification code is <strong style="font-size:20px">${row.otp}</strong>. It expires shortly. Do not share this code.</p>`);
