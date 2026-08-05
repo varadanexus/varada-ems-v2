@@ -28,6 +28,7 @@ function statusPill(s) {
 let cache = { requests: [] };
 
 function renderShell() {
+  const _initialView = new URLSearchParams(location.search).get("view") === "records" ? "records" : "send";
   renderModuleContent(`
     <style>
       .onb-tabs{display:flex;gap:.5rem;margin-bottom:1rem}
@@ -45,8 +46,8 @@ function renderShell() {
       @media(max-width:760px){.onb-form{grid-template-columns:1fr}.onb-kv{grid-template-columns:1fr}}
     </style>
     <div class="onb-tabs">
-      <div class="onb-tab active" data-tab="send">Send onboarding</div>
-      <div class="onb-tab" data-tab="records">Submissions</div>
+      <div class="onb-tab ${_initialView === "send" ? "active" : ""}" data-tab="send">Send onboarding</div>
+      <div class="onb-tab ${_initialView === "records" ? "active" : ""}" data-tab="records">Submissions</div>
     </div>
     <div id="onbBody"></div>
   `);
@@ -54,7 +55,7 @@ function renderShell() {
     document.querySelectorAll(".onb-tab").forEach((x) => x.classList.toggle("active", x === t));
     t.dataset.tab === "send" ? renderSend() : renderRecords();
   }));
-  renderSend();
+  _initialView === "records" ? renderRecords() : renderSend();
 }
 
 function renderSend() {
