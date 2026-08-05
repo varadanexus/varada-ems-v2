@@ -6,7 +6,7 @@ import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 import {
   createOnboardingRequest, sendOnboardingLink, listOnboardingRequests,
-  getOnboardingSubmission, approveOnboarding, updateOnboardingRequest, deleteOnboardingRequest
+  getOnboardingSubmission, getOnboardingMedia, approveOnboarding, updateOnboardingRequest, deleteOnboardingRequest
 } from "./onboarding-api.js";
 
 const DIVISIONS = [
@@ -48,6 +48,14 @@ function renderShell() {
       .onb-link{color:#e6c87e;cursor:pointer;text-decoration:underline}
       .onb-detail{border:1px solid #23262e;border-radius:10px;padding:1rem;margin-top:1rem;background:#0b0c10}
       .onb-kv{display:grid;grid-template-columns:180px 1fr;gap:.3rem .8rem;font-size:.85rem}
+      .onb-liveimg{max-width:300px;border-radius:10px;border:1px solid rgba(226,200,126,.35);cursor:pointer;display:block;margin-top:.4rem}
+      .onb-modal{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(3,4,6,.82);backdrop-filter:blur(3px)}
+      .onb-modal-box{width:min(900px,100%);max-height:92vh;display:flex;flex-direction:column;background:#0c0d11;border:1px solid rgba(226,200,126,.3);border-radius:12px;overflow:hidden}
+      .onb-modal-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.7rem 1rem;border-bottom:1px solid #23262e;color:#e7e3d9;font-size:.9rem}
+      .onb-modal-x{background:none;border:0;color:#c9a26a;font-size:1.6rem;line-height:1;cursor:pointer}
+      .onb-modal-body{overflow:auto;background:#050609;display:flex;align-items:center;justify-content:center;min-height:220px}
+      .onb-modal-body img{max-width:100%;max-height:82vh;display:block}
+      .onb-modal-body iframe{width:100%;height:80vh;border:0;background:#fff}
       @media(max-width:760px){.onb-form{grid-template-columns:1fr}.onb-kv{grid-template-columns:1fr}}
     </style>
     <div class="onb-tabs">
@@ -144,6 +152,7 @@ async function openDetail(id) {
   try {
     const r = await getOnboardingSubmission({ request_id: id });
     const req = r.request || {}; const sub = r.submission || {}; const d = sub.details || {};
+    const acc = (r.acceptances || [])[0] || {};
     host.innerHTML = `
       <div class="onb-detail">
         <h4>${esc(req.entity_name)} — ${esc(DIVISION_LABEL[req.division_code] || req.division_code)} ${statusPill(req.status)}</h4>
@@ -158,10 +167,11 @@ async function openDetail(id) {
           <div>Address</div><div>${esc(d.address || "-")}</div>
         </div>
         <h4 style="margin-top:1rem">Documents</h4>
-        ${(r.documents || []).length ? `<ul>${r.documents.map((x) => `<li>${esc(x.document_label || x.document_key)}: ${x.web_view_link ? `<a class="onb-link" target="_blank" href="${esc(x.web_view_link)}">${esc(x.file_name)}</a>` : esc(x.file_name)}</li>`).join("")}</ul>` : `<p class="muted">No documents.</p>`}
-        <h4 style="margin-top:1rem">Live image &amp; T&amp;C</h4>
-        <p class="muted">${sub.live_image_link ? `<a class="onb-link" target="_blank" href="${esc(sub.live_image_link)}">View live photo</a> · ` : ""}
-        T&amp;C ${(r.acceptances || []).length ? `accepted (${esc(r.acceptances[0].terms_version)}) on ${esc((r.acceptances[0].accepted_at || "").slice(0, 19).replace("T", " "))}` : "not yet accepted"}</p>
+        ${(r.documents || []).length ? `<ul>${r.documents.map((x) => `<li>${esc(x.document_label || x.document_key)}: ${x.drive_file_id ? `<span class="onb-link" data-file="${esc(x.drive_file_id)}" data-mime="${esc(x.mime_type || "")}" data-name="${esc(x.file_name || "")}">${esc(x.file_name)}</span>` : esc(x.file_name)}</li>`).join("")}</ul>` : `<p class="muted">No documents.</p>`}
+        <h4 style="margin-top:1rem">Live authentication image</h4>
+        ${acc.live_image_drive_id ? `<div id="onbLiveImg" class="muted">Loading image…</div>` : `<p class="muted">No live image captured.</p>`}
+        <h4 style="margin-top:1rem">Terms &amp; Conditions</h4>
+        <p class="muted">${(r.acceptances || []).length ? `Accepted (${esc(acc.terms_version)}) on ${esc((acc.accepted_at || "").slice(0, 19).replace("T", " "))}` : "Not yet accepted"}</p>
         <div style="margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
           <button class="btn btn-ghost" id="onbEdit">Edit</button>
           <button class="btn btn-ghost" id="onbResend">Resend link</button>
@@ -176,7 +186,41 @@ async function openDetail(id) {
     document.querySelector("#onbResend")?.addEventListener("click", () => resend(id));
     document.querySelector("#onbDelete")?.addEventListener("click", () => remove(id, req.entity_name));
     document.querySelector("#onbEdit")?.addEventListener("click", () => editForm(req));
+    host.querySelectorAll("[data-file]").forEach((el) => el.addEventListener("click", () => previewMedia(el.dataset.file, el.dataset.mime, el.dataset.name)));
+    if (acc.live_image_drive_id) loadLiveImage(acc.live_image_drive_id);
   } catch (e) { host.innerHTML = `<div class="onb-detail danger-text">${esc(e.message)}</div>`; }
+}
+
+function openMediaModal(name, dataUrl, mime) {
+  const isImg = /^image\//i.test(mime || "") || String(dataUrl || "").startsWith("data:image");
+  const inner = isImg ? `<img src="${dataUrl}" alt="${esc(name)}" />` : `<iframe src="${dataUrl}" title="${esc(name)}"></iframe>`;
+  const o = document.createElement("div");
+  o.className = "onb-modal";
+  o.innerHTML = `<div class="onb-modal-box"><div class="onb-modal-head"><strong>${esc(name || "Document")}</strong><button class="onb-modal-x" type="button" aria-label="Close">&times;</button></div><div class="onb-modal-body">${inner}</div></div>`;
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const close = () => { document.removeEventListener("keydown", onKey); o.remove(); };
+  o.addEventListener("click", (e) => { if (e.target === o) close(); });
+  o.querySelector(".onb-modal-x").addEventListener("click", close);
+  document.addEventListener("keydown", onKey);
+  document.body.appendChild(o);
+}
+async function previewMedia(fileId, mime, name) {
+  if (!fileId) return;
+  showToast("Opening…", "success");
+  try {
+    const r = await getOnboardingMedia({ drive_file_id: fileId });
+    openMediaModal(name || r.name, r.base64, r.mime || mime);
+  } catch (e) { showToast(e.message, "error"); }
+}
+async function loadLiveImage(fileId) {
+  const c = document.querySelector("#onbLiveImg");
+  if (!c) return;
+  try {
+    const r = await getOnboardingMedia({ drive_file_id: fileId });
+    c.classList.remove("muted");
+    c.innerHTML = `<img src="${r.base64}" class="onb-liveimg" alt="Live authentication" />`;
+    c.querySelector("img").addEventListener("click", () => openMediaModal("Live authentication", r.base64, r.mime || "image/jpeg"));
+  } catch (e) { c.innerHTML = `<span class="danger-text">${esc(e.message)}</span>`; }
 }
 
 async function resend(id) {
