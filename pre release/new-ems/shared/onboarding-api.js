@@ -32,6 +32,7 @@ export const createOnboardingRequest = (p) => onboardingIntegration("create_requ
 export const sendOnboardingLink = (p) => onboardingIntegration("send_link", p);
 export const listOnboardingRequests = (p) => onboardingIntegration("list_requests", p);
 export const getOnboardingSubmission = (p) => onboardingIntegration("get_submission", p);
+export const getOnboardingMedia = (p) => onboardingIntegration("get_drive_media", p);
 export const approveOnboarding = (p) => onboardingIntegration("approve_request", p);
 export const updateOnboardingRequest = (p) => onboardingIntegration("update_request", p);
 export const deleteOnboardingRequest = (p) => onboardingIntegration("delete_request", p);

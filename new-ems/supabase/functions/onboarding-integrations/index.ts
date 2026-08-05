@@ -208,7 +208,10 @@ async function uploadDriveFile(token: string, folderId: string, fileName: string
   const meta = { name: fileName, parents: [folderId] };
   const pre = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
   const post = `\r\n--${boundary}--`;
-  const body = new Uint8Array([...new TextEncoder().encode(pre), ...bytes, ...new TextEncoder().encode(post)]);
+  // Assemble the multipart body as a Blob. Spreading the file bytes into an
+  // array literal ([...bytes]) allocates one boxed JS number per byte, which for
+  // a multi-MB scan exhausts the worker's memory and returns a 546 error.
+  const body = new Blob([new TextEncoder().encode(pre), bytes, new TextEncoder().encode(post)]);
   const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&${DRIVE_QS}&fields=id,name,webViewLink`, {
     method: "POST",
     headers: { "Authorization": `Bearer ${token}`, "Content-Type": `multipart/related; boundary=${boundary}` },
@@ -225,10 +228,15 @@ function base64ToBytes(b64: string) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
 }
-async function uploadOnboarding(entityName: string, divisionCode: string, fileName: string, mimeType: string, base64: string) {
+// Drive layout: <root> / <Division> / <Entity or person the link was sent to> /
+//   <subfolder> (e.g. "Documents", "Live Photo"). The client folder is named
+// after the onboarding entity/person; each artefact type lands in its subfolder.
+async function uploadOnboarding(entityName: string, divisionCode: string, fileName: string, mimeType: string, base64: string, subfolder = "") {
   const token = await getDriveToken();
   const root = env("ONBOARDING_DRIVE_ROOT_FOLDER_ID", DEFAULT_DRIVE_ROOT);
-  const folderId = await ensureFolderPath(token, root, [DIVISION_LABELS[divisionCode] || divisionCode, entityName || "Client"]);
+  const segments = [DIVISION_LABELS[divisionCode] || divisionCode, entityName || "Client"];
+  if (subfolder) segments.push(subfolder);
+  const folderId = await ensureFolderPath(token, root, segments);
   const uploaded = await uploadDriveFile(token, folderId, fileName, mimeType || "application/octet-stream", base64ToBytes(base64));
   return { folderId, fileId: uploaded.id, webViewLink: uploaded.webViewLink || null, fileName: uploaded.name || fileName };
 }
@@ -337,6 +345,29 @@ async function getContext(req: Request, admin: any, body: any) {
   return json({ ok: true, context: data });
 }
 
+// Stream an onboarding artefact (document or live image) back to staff as a
+// base64 data URL, using the service account — so staff never need Drive access.
+async function getDriveMedia(req: Request, admin: any, body: any) {
+  await requireStaff(req, admin);
+  const fileId = String(body?.drive_file_id || "").trim();
+  if (!fileId) return json({ error: "Missing file id." }, 400);
+  // Only allow ids that belong to an onboarding document or a live image.
+  const [docHit, liveHit] = await Promise.all([
+    admin.from("onboarding_documents").select("file_name, mime_type").eq("drive_file_id", fileId).maybeSingle(),
+    admin.from("onboarding_terms_acceptances").select("id").eq("live_image_drive_id", fileId).maybeSingle()
+  ]);
+  if (!docHit.data && !liveHit.data) return json({ error: "File not found." }, 404);
+  const token = await getDriveToken();
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`, { headers: { "Authorization": `Bearer ${token}` } });
+  if (!res.ok) { const t = await res.text().catch(() => ""); return json({ error: "Could not fetch file: " + t.slice(0, 180) }, 502); }
+  const mime = docHit.data?.mime_type || res.headers.get("content-type") || (liveHit.data ? "image/jpeg" : "application/octet-stream");
+  const buf = new Uint8Array(await res.arrayBuffer());
+  let bin = ""; const CH = 0x8000;
+  for (let i = 0; i < buf.length; i += CH) bin += String.fromCharCode.apply(null, buf.subarray(i, i + CH));
+  const b64 = btoa(bin);
+  return json({ ok: true, mime, name: docHit.data?.file_name || "live-image.jpg", base64: `data:${mime};base64,${b64}` });
+}
+
 async function saveSubmission(req: Request, admin: any, body: any) {
   const session = String(body?.session_token || "").trim();
   if (!session) return json({ error: "Session expired." }, 401);
@@ -358,7 +389,7 @@ async function uploadDocument(req: Request, admin: any, body: any) {
   if (!r) return json({ error: "Onboarding not found." }, 404);
   if (!body?.base64) return json({ error: "Missing file." }, 400);
 
-  const up = await uploadOnboarding(r.entity_name, r.division_code, String(body?.file_name || "document"), String(body?.mime_type || "application/octet-stream"), body.base64);
+  const up = await uploadOnboarding(r.entity_name, r.division_code, String(body?.file_name || "document"), String(body?.mime_type || "application/octet-stream"), body.base64, "Documents");
   const { data: docId, error } = await admin.rpc("record_onboarding_document", {
     p_session_token: session,
     p_document_key: String(body?.document_key || "document"),
@@ -381,7 +412,7 @@ async function acceptTerms(req: Request, admin: any, body: any) {
   let liveId = null, liveLink = null;
   if (body?.live_image_base64) {
     try {
-      const up = await uploadOnboarding(r.entity_name, r.division_code, `live-image-${Date.now()}.jpg`, "image/jpeg", body.live_image_base64);
+      const up = await uploadOnboarding(r.entity_name, r.division_code, `live-image-${Date.now()}.jpg`, "image/jpeg", body.live_image_base64, "Live Photo");
       liveId = up.fileId; liveLink = up.webViewLink;
     } catch (e) { return json({ error: `Could not save the live photo: ${e.message}` }, 502); }
   }
@@ -471,6 +502,7 @@ Deno.serve(async (req) => {
       case "send_link":       return await sendLink(req, admin, body);
       case "list_requests":   return await listRequests(req, admin, body);
       case "get_submission":  return await getSubmission(req, admin, body);
+      case "get_drive_media": return await getDriveMedia(req, admin, body);
       case "approve_request": return await approveRequest(req, admin, body);
       case "update_request":  return await updateRequest(req, admin, body);
       case "delete_request":  return await deleteRequest(req, admin, body);
