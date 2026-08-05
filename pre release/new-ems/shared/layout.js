@@ -207,7 +207,7 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
           ? "Legal"
           : workspace === WORKSPACES.SUPPORT
             ? "Support"
-          : (workspace === WORKSPACES.WHATSAPP || workspace === WORKSPACES.EMAIL || workspace === WORKSPACES.MEETINGS || workspace === WORKSPACES.NOTIFICATIONS)
+          : (workspace === WORKSPACES.WHATSAPP || workspace === WORKSPACES.EMAIL || workspace === WORKSPACES.MEETINGS || workspace === WORKSPACES.NOTIFICATIONS || workspace === WORKSPACES.ONBOARDING)
             ? "Communications"
             : workspace === WORKSPACES.DIGITAL_SERVICES
               ? "Digital Marketing & Services"

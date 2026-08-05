@@ -194,6 +194,8 @@ export const ROUTES = {
   ,HOSPITAL_PROJECT_COMMUNICATIONS: "/new-ems/modules/hospital-project-communications/index.html"
   ,HOSPITAL_PROJECT_REPORTS: "/new-ems/modules/hospital-project-reports/index.html"
   ,HOSPITAL_PROJECT_SETTINGS: "/new-ems/modules/hospital-project-settings/index.html"
+  ,CENTRALISED_ONBOARDING: "/new-ems/modules/centralised-onboarding/index.html"
+  ,ONBOARDING_PUBLIC: "/new-ems/modules/onboarding-public/index.html"
 };
 
 export const STORAGE_KEYS = {
@@ -356,6 +358,7 @@ export const MODULES = {
   ,INTERIORS_PROJECT_CLOSURE: "interiors-project-closure"
   ,PORTAL_MANAGEMENT: "portal-management"
   ,PORTAL_ACCESS: "portal-access"
+  ,CENTRALISED_ONBOARDING: "centralised-onboarding"
 };
 
 export const CONTROL_CENTER_MODULES = [
@@ -406,6 +409,7 @@ export const WORKSPACES = {
   SOCIAL_MEDIA: "social-media",
   WORLD_MONITOR: "world-monitor",
   SUPPORT: "support",
+  ONBOARDING: "onboarding",
   // Compatibility alias: marketing operations live in this single workspace.
   MARKETING: "digital-services"
 };

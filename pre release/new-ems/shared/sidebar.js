@@ -179,6 +179,22 @@ const MENU_BY_WORKSPACE = {
       ]
     }
   ],
+  [WORKSPACES.ONBOARDING]: [
+    {
+      title: "Onboarding Workspace",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.CENTRALISED_ONBOARDING, label: "Centralised Onboarding", href: ROUTES.CENTRALISED_ONBOARDING }
+      ]
+    },
+    {
+      title: "Operations",
+      items: [
+        { module: MODULES.CENTRALISED_ONBOARDING, label: "Send Onboarding", href: `${ROUTES.CENTRALISED_ONBOARDING}?view=send` },
+        { module: MODULES.CENTRALISED_ONBOARDING, label: "Submissions", href: `${ROUTES.CENTRALISED_ONBOARDING}?view=records` }
+      ]
+    }
+  ],
   [WORKSPACES.MEETINGS]: [
     {
       title: "Meetings Workspace",
@@ -319,7 +335,8 @@ const MENU_BY_WORKSPACE = {
       items: [
         { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.NOTIFICATIONS_CENTER, label: "Notification Studio", href: ROUTES.NOTIFICATION_STUDIO },
-        { module: MODULES.NOTIFICATIONS_CENTER, label: "My Notifications", href: ROUTES.NOTIFICATIONS_CENTER }
+        { module: MODULES.NOTIFICATIONS_CENTER, label: "My Notifications", href: ROUTES.NOTIFICATIONS_CENTER },
+        { module: MODULES.CENTRALISED_ONBOARDING, label: "Centralised Onboarding", href: ROUTES.CENTRALISED_ONBOARDING }
       ]
     },
     {
