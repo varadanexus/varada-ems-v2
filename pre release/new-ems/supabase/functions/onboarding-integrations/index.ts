@@ -430,6 +430,34 @@ async function approveRequest(req: Request, admin: any, body: any) {
   return json({ ok: true, status: decision });
 }
 
+async function updateRequest(req: Request, admin: any, body: any) {
+  await requireStaff(req, admin);
+  const id = String(body?.request_id || "").trim();
+  if (!id) return json({ error: "Missing request." }, 400);
+  const patch: any = {};
+  if (body?.division_code && DIVISION_LABELS[body.division_code]) patch.division_code = body.division_code;
+  if (body?.entity_name !== undefined) patch.entity_name = String(body.entity_name).trim();
+  if (body?.entity_type !== undefined) patch.entity_type = String(body.entity_type).trim() || null;
+  if (body?.contact_name !== undefined) patch.contact_name = String(body.contact_name).trim() || null;
+  if (body?.contact_phone !== undefined) patch.contact_phone = String(body.contact_phone).trim() || null;
+  if (body?.contact_email !== undefined) patch.contact_email = String(body.contact_email).trim() || null;
+  if (body?.notes !== undefined) patch.notes = String(body.notes).trim() || null;
+  if (!Object.keys(patch).length) return json({ error: "Nothing to update." }, 400);
+  if (patch.entity_name !== undefined && !patch.entity_name) return json({ error: "Entity name cannot be empty." }, 400);
+  const { error } = await admin.from("onboarding_requests").update(patch).eq("id", id);
+  if (error) throw error;
+  return json({ ok: true });
+}
+
+async function deleteRequest(req: Request, admin: any, body: any) {
+  await requireStaff(req, admin);
+  const id = String(body?.request_id || "").trim();
+  if (!id) return json({ error: "Missing request." }, 400);
+  const { error } = await admin.from("onboarding_requests").delete().eq("id", id);
+  if (error) throw error;
+  return json({ ok: true });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -444,6 +472,8 @@ Deno.serve(async (req) => {
       case "list_requests":   return await listRequests(req, admin, body);
       case "get_submission":  return await getSubmission(req, admin, body);
       case "approve_request": return await approveRequest(req, admin, body);
+      case "update_request":  return await updateRequest(req, admin, body);
+      case "delete_request":  return await deleteRequest(req, admin, body);
       // Public (token / session gated)
       case "request_otp":     return await requestOtp(req, admin, body);
       case "verify_otp":      return await verifyOtp(req, admin, body);

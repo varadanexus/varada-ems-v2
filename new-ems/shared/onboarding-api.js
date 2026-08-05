@@ -33,6 +33,8 @@ export const sendOnboardingLink = (p) => onboardingIntegration("send_link", p);
 export const listOnboardingRequests = (p) => onboardingIntegration("list_requests", p);
 export const getOnboardingSubmission = (p) => onboardingIntegration("get_submission", p);
 export const approveOnboarding = (p) => onboardingIntegration("approve_request", p);
+export const updateOnboardingRequest = (p) => onboardingIntegration("update_request", p);
+export const deleteOnboardingRequest = (p) => onboardingIntegration("delete_request", p);
 
 // Public (customer)
 export const requestOnboardingOtp = (p) => onboardingIntegration("request_otp", p);

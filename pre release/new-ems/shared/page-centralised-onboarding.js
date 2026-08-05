@@ -6,7 +6,7 @@ import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 import {
   createOnboardingRequest, sendOnboardingLink, listOnboardingRequests,
-  getOnboardingSubmission, approveOnboarding
+  getOnboardingSubmission, approveOnboarding, updateOnboardingRequest, deleteOnboardingRequest
 } from "./onboarding-api.js";
 
 const DIVISIONS = [
@@ -162,13 +162,74 @@ async function openDetail(id) {
         <h4 style="margin-top:1rem">Live image &amp; T&amp;C</h4>
         <p class="muted">${sub.live_image_link ? `<a class="onb-link" target="_blank" href="${esc(sub.live_image_link)}">View live photo</a> · ` : ""}
         T&amp;C ${(r.acceptances || []).length ? `accepted (${esc(r.acceptances[0].terms_version)}) on ${esc((r.acceptances[0].accepted_at || "").slice(0, 19).replace("T", " "))}` : "not yet accepted"}</p>
-        ${req.status === "submitted" ? `<div style="margin-top:1rem;display:flex;gap:.5rem">
-          <button class="btn" id="onbApprove">Approve</button>
-          <button class="btn btn-ghost" id="onbReject">Reject</button></div>` : ""}
+        <div style="margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-ghost" id="onbEdit">Edit</button>
+          <button class="btn btn-ghost" id="onbResend">Resend link</button>
+          ${req.status === "submitted" ? `<button class="btn" id="onbApprove">Approve</button>
+          <button class="btn btn-ghost" id="onbReject">Reject</button>` : ""}
+          <button class="btn btn-ghost" id="onbDelete" style="margin-left:auto;color:#e06a6a;border-color:#5a2a2a">Delete</button>
+        </div>
+        <div id="onbEditForm"></div>
       </div>`;
     document.querySelector("#onbApprove")?.addEventListener("click", () => decide(id, "approve"));
     document.querySelector("#onbReject")?.addEventListener("click", () => decide(id, "reject"));
+    document.querySelector("#onbResend")?.addEventListener("click", () => resend(id));
+    document.querySelector("#onbDelete")?.addEventListener("click", () => remove(id, req.entity_name));
+    document.querySelector("#onbEdit")?.addEventListener("click", () => editForm(req));
   } catch (e) { host.innerHTML = `<div class="onb-detail danger-text">${esc(e.message)}</div>`; }
+}
+
+async function resend(id) {
+  try {
+    const r = await sendOnboardingLink({ request_id: id });
+    showToast(`Resent — email: ${r.email || "n/a"} · WhatsApp: ${r.whatsapp || "n/a"}`, "success");
+  } catch (e) { showToast(e.message, "error"); }
+}
+
+async function remove(id, name) {
+  if (!confirm(`Delete onboarding for "${name}"?\n\nThis permanently removes its submission, documents and Terms acceptance records. This cannot be undone.`)) return;
+  try {
+    await deleteOnboardingRequest({ request_id: id });
+    showToast("Onboarding deleted", "success");
+    renderRecords();
+  } catch (e) { showToast(e.message, "error"); }
+}
+
+function editForm(req) {
+  const host = document.querySelector("#onbEditForm");
+  host.innerHTML = `
+    <div class="onb-detail" style="margin-top:.6rem">
+      <h4>Edit onboarding</h4>
+      <div class="onb-form">
+        <div><label class="onb-l">Division</label>
+          <select class="onb-in" id="e_div">${DIVISIONS.map((d) => `<option value="${d.code}"${d.code === req.division_code ? " selected" : ""}>${d.label}</option>`).join("")}</select></div>
+        <div><label class="onb-l">Entity / client name</label><input class="onb-in" id="e_entity" value="${esc(req.entity_name || "")}" /></div>
+        <div><label class="onb-l">Entity type</label>
+          <select class="onb-in" id="e_type"><option value="">Select entity type…</option>${ENTITY_TYPES.map((t) => `<option${req.entity_type === t ? " selected" : ""}>${t}</option>`).join("")}</select></div>
+        <div><label class="onb-l">Contact person</label><input class="onb-in" id="e_cname" value="${esc(req.contact_name || "")}" /></div>
+        <div><label class="onb-l">Contact phone (WhatsApp)</label><input class="onb-in" id="e_phone" value="${esc(req.contact_phone || "")}" /></div>
+        <div><label class="onb-l">Contact email</label><input class="onb-in" id="e_email" value="${esc(req.contact_email || "")}" /></div>
+        <div class="full"><label class="onb-l">Notes (internal)</label><input class="onb-in" id="e_notes" value="${esc(req.notes || "")}" /></div>
+      </div>
+      <div style="margin-top:.8rem;display:flex;gap:.5rem">
+        <button class="btn" id="e_save">Save changes</button>
+        <button class="btn btn-ghost" id="e_cancel">Cancel</button>
+      </div>
+    </div>`;
+  document.querySelector("#e_cancel").addEventListener("click", () => { host.innerHTML = ""; });
+  document.querySelector("#e_save").addEventListener("click", async () => {
+    const g = (sel) => (document.querySelector(sel)?.value || "").trim();
+    if (!g("#e_entity")) return showToast("Entity name is required", "error");
+    try {
+      await updateOnboardingRequest({
+        request_id: req.id, division_code: g("#e_div"), entity_name: g("#e_entity"),
+        entity_type: g("#e_type"), contact_name: g("#e_cname"), contact_phone: g("#e_phone"),
+        contact_email: g("#e_email"), notes: g("#e_notes")
+      });
+      showToast("Onboarding updated", "success");
+      openDetail(req.id);
+    } catch (e) { showToast(e.message, "error"); }
+  });
 }
 
 async function decide(id, decision) {
