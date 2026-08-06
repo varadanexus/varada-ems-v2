@@ -53,6 +53,8 @@
     whatsapp.href = "/whatsapp-platform";
     whatsapp.className = "nav-drop-toggle";
     whatsapp.innerHTML = 'WhatsApp Solutions<span class="nav-caret" aria-hidden="true"></span>';
+    whatsapp.setAttribute("aria-haspopup", "true");
+    whatsapp.setAttribute("aria-expanded", "false");
     if (location.pathname.indexOf("/whatsapp-platform") === 0) whatsapp.className = "active";
     if (location.pathname.indexOf("/whatsapp-platform") === 0) whatsapp.className += " nav-drop-toggle";
     var drop = document.createElement("div");
@@ -62,8 +64,7 @@
       '<a href="/whatsapp-platform/features/">Features</a>' +
       '<a href="/whatsapp-platform/solutions/">Solutions</a>' +
       '<a href="/whatsapp-platform/pricing/">Pricing</a>' +
-      '<a href="/whatsapp-platform#signin">Customer sign in</a>' +
-      '<a href="/whatsapp-platform#get-started" class="nav-drop-all">Get started &rarr;</a>';
+      '<a href="/whatsapp-platform/access/" class="nav-drop-all">Login / Sign up &rarr;</a>';
     item.appendChild(whatsapp);
     item.appendChild(drop);
     var login = links.querySelector('a[href="/login.html"]');
@@ -123,13 +124,32 @@
     });
     document.querySelectorAll(".nav-drop-toggle").forEach(function (servicesLink) {
       servicesLink.addEventListener("click", function (event) {
-        if (window.innerWidth > 860 || !document.body.classList.contains("menu-open")) return;
         var item = servicesLink.closest(".nav-item");
-        if (!item || item.classList.contains("services-open")) return;
+        if (!item) return;
+        var isWhatsAppMenu = item.classList.contains("whatsapp-nav-item");
+        var desktopWhatsAppClick = window.innerWidth > 860 && isWhatsAppMenu;
+        var mobileMenuClick = window.innerWidth <= 860 && document.body.classList.contains("menu-open");
+        if (!desktopWhatsAppClick && !mobileMenuClick) return;
+        if (item.classList.contains("services-open")) {
+          item.classList.remove("services-open");
+          servicesLink.setAttribute("aria-expanded", "false");
+          return;
+        }
         event.preventDefault();
         event.stopImmediatePropagation();
+        document.querySelectorAll(".nav-item.services-open").forEach(function (openItem) {
+          if (openItem !== item) openItem.classList.remove("services-open");
+        });
         item.classList.add("services-open");
         servicesLink.setAttribute("aria-expanded", "true");
+      });
+    });
+    document.addEventListener("click", function (event) {
+      document.querySelectorAll(".nav-item.services-open").forEach(function (item) {
+        if (!item.contains(event.target)) {
+          item.classList.remove("services-open");
+          item.querySelector(".nav-drop-toggle")?.setAttribute("aria-expanded", "false");
+        }
       });
     });
     document.querySelectorAll(".nav-links a").forEach(function (a) {

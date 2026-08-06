@@ -909,6 +909,10 @@ body.home .hero-media{display:none}
 .nav-item:hover .nav-drop,.nav-item:focus-within .nav-drop{
   opacity:1;visibility:visible;pointer-events:auto;transform:translateX(-50%) translateY(11px);
 }
+.nav-item.services-open .nav-drop{
+  opacity:1;visibility:visible;pointer-events:auto;transform:translateX(-50%) translateY(11px);
+}
+.nav-item.services-open .nav-caret{transform:rotate(-135deg) translateY(1px)}
 .nav-drop a{
   display:block;padding:10px 14px;border-radius:10px;
   font-size:13px;color:var(--text-2);letter-spacing:.01em;white-space:nowrap;
@@ -931,7 +935,7 @@ body.home .hero-media{display:none}
     -webkit-backdrop-filter:none;backdrop-filter:none;
     transition:max-height .42s var(--ease),opacity .28s var(--ease),visibility .28s,padding .42s var(--ease);
   }
-  .nav-item.services-open .nav-drop{opacity:1;visibility:visible;pointer-events:auto;max-height:650px;padding:2px 0 8px 12px}
+  .nav-item.services-open .nav-drop{opacity:1;visibility:visible;pointer-events:auto;max-height:650px;padding:2px 0 8px 12px;transform:none}
   .nav-item.services-open .nav-caret{transform:rotate(-135deg) translateY(1px)}
   .nav-drop::before{display:none}
   .nav-item:hover .nav-drop,.nav-item:focus-within .nav-drop{transform:none}

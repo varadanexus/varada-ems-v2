@@ -1,5 +1,6 @@
 const SESSION_KEY = "vn_whatsapp_platform_session";
-const PUBLIC_PORTAL_PATH = "/whatsapp-platform";
+const OVERVIEW_PATH = "/whatsapp-platform";
+const ACCESS_PATH = "/whatsapp-platform/access/";
 const runtime = window.WHATSAPP_PLATFORM_CONFIG || {};
 const platformConfig = runtime;
 const app = document.querySelector("#app");
@@ -11,11 +12,17 @@ let refreshTimer = null;
 let signupStep = 1;
 let signupDraft = {};
 
-// Never expose the internal source-file location in the customer-facing URL.
-// Both the extensionless root document and folder index host this application,
-// so normal production hosting and local preview servers retain a clean URL.
-if (location.pathname !== PUBLIC_PORTAL_PATH) {
-  history.replaceState({}, "", `${PUBLIC_PORTAL_PATH}${location.search}${location.hash}`);
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
+function isAccessPage() {
+  return location.pathname === ACCESS_PATH || location.pathname === ACCESS_PATH.slice(0, -1);
+}
+
+// Keep the public overview and customer access surfaces on distinct clean URLs.
+if (location.pathname.startsWith("/new-ems/modules/whatsapp-platform-portal")) {
+  history.replaceState({}, "", `${ACCESS_PATH}${location.search}${location.hash}`);
+} else if (location.pathname === "/whatsapp-platform.html") {
+  history.replaceState({}, "", `${OVERVIEW_PATH}${location.search}`);
 }
 
 function escapeHtml(value) {
@@ -139,19 +146,20 @@ function renderAuth(mode = "login", focusAuth = false) {
   const signup = mode === "signup";
   app.innerHTML = `
     <main class="wp-marketing">
+      <div class="wp-marketing-content">
       <section class="wp-sales-hero">
         <div class="wp-sales-copy">
           <span class="wp-kicker">Varada Nexus · WhatsApp Solutions</span>
           <h1>Turn WhatsApp into your <span>sales and service engine.</span></h1>
           <p>Bring customer conversations, campaigns and team workflows into one organised workspace—built for businesses ready to move beyond a single phone.</p>
           <div class="wp-hero-actions">
-            <button class="wp-cta-primary" type="button" data-auth-mode="signup">Start your workspace</button>
-            <a class="wp-cta-secondary" href="#pricing">Explore plans</a>
+            <button class="wp-cta-primary" type="button" data-auth-mode="signup">Sign up</button>
+            <button class="wp-cta-secondary" type="button" data-auth-mode="login">Existing customer sign in</button>
           </div>
           <div class="wp-hero-proof" aria-label="Platform benefits">
             <span>Shared team inbox</span><span>Guided onboarding</span><span>Business-owned account</span>
           </div>
-          <a class="wp-customer-signin" href="#signin">Already a customer? Sign in to your workspace →</a>
+          <a class="wp-customer-signin" href="/whatsapp-platform/pricing/">Explore plans and pricing →</a>
         </div>
         <div class="wp-product-preview" aria-label="WhatsApp team workspace preview">
           <div class="wp-preview-head"><div><span class="wp-preview-logo">VN</span><strong>Customer Inbox</strong></div><span class="wp-live"><i></i> Live</span></div>
@@ -177,25 +185,12 @@ function renderAuth(mode = "login", focusAuth = false) {
         <div><span>Acquire</span><i></i><span>Convert</span><i></i><span>Support</span><i></i><span>Retain</span></div>
       </section>
 
-      <section class="wp-section" id="features">
-        <div class="wp-section-heading"><span class="wp-kicker">Everything your team needs</span><h2>From first message to loyal customer</h2><p>Give sales, support and operations one clear view of every conversation—without losing the speed and familiarity of WhatsApp.</p></div>
-        <div class="wp-capability-grid">
-          <article><span class="wp-cap-icon">01</span><h3>Shared team inbox</h3><p>Manage conversations together, assign owners, add context and keep every follow-up visible.</p></article>
-          <article><span class="wp-cap-icon">02</span><h3>Campaigns that feel personal</h3><p>Reach opted-in audiences with approved templates, useful updates and targeted offers.</p></article>
-          <article><span class="wp-cap-icon">03</span><h3>Smart automation</h3><p>Handle greetings, FAQs, qualification and routing while preserving a smooth handover to people.</p></article>
-          <article><span class="wp-cap-icon">04</span><h3>Contacts and segmentation</h3><p>Organise customers with attributes, tags and segments so the right message reaches the right audience.</p></article>
-          <article><span class="wp-cap-icon">05</span><h3>Performance visibility</h3><p>Track response times, delivery, engagement and team activity to improve every customer journey.</p></article>
-          <article><span class="wp-cap-icon">06</span><h3>APIs and integrations</h3><p>Connect business systems through secure APIs and webhooks as your communication operation grows.</p></article>
-        </div>
-      </section>
-
-      <section class="wp-section wp-use-cases">
-        <div class="wp-section-heading"><span class="wp-kicker">Built around real conversations</span><h2>One channel. Many business outcomes.</h2></div>
-        <div class="wp-use-grid">
-          <article><span>Sales</span><h3>Turn interest into action</h3><p>Qualify leads, share offers and keep high-intent conversations moving.</p><small>Lead routing · Product enquiries · Follow-ups</small></article>
-          <article><span>Customer service</span><h3>Resolve issues with context</h3><p>Give agents a shared history and a clear owner for every customer request.</p><small>Team inbox · Quick replies · Escalations</small></article>
-          <article><span>Operations</span><h3>Keep customers informed</h3><p>Send useful order, appointment, payment and service updates at the right time.</p><small>Notifications · Reminders · Status updates</small></article>
-          <article><span>Marketing</span><h3>Re-engage responsibly</h3><p>Build opt-in audiences and run relevant campaigns with measurable results.</p><small>Segments · Templates · Campaign analytics</small></article>
+      <section class="wp-section wp-overview-paths">
+        <div class="wp-section-heading"><span class="wp-kicker">Explore WhatsApp Solutions</span><h2>Find the information you need</h2><p>Each section has its own focused page, so you can evaluate capabilities, business use cases and commercial plans without searching through one long page.</p></div>
+        <div class="wp-overview-grid">
+          <a href="/whatsapp-platform/features/"><span>01</span><h3>Features</h3><p>Shared inbox, campaigns, automation, contacts, analytics, APIs and team controls.</p><strong>Explore features →</strong></a>
+          <a href="/whatsapp-platform/solutions/"><span>02</span><h3>Solutions</h3><p>See practical journeys for sales, customer service, operations, healthcare and marketing.</p><strong>Explore solutions →</strong></a>
+          <a href="/whatsapp-platform/pricing/"><span>03</span><h3>Pricing</h3><p>Compare Launch, Growth and Enterprise plan structures and understand how billing works.</p><strong>Explore pricing →</strong></a>
         </div>
       </section>
 
@@ -207,16 +202,6 @@ function renderAuth(mode = "login", focusAuth = false) {
           <li><span>3</span><div><strong>Configure your workspace</strong><p>Set up teams, templates, routing and the workflows that matter first.</p></div></li>
           <li><span>4</span><div><strong>Launch with confidence</strong><p>Train users, test key journeys and improve with practical reporting.</p></div></li>
         </ol>
-      </section>
-
-      <section class="wp-section" id="pricing">
-        <div class="wp-section-heading"><span class="wp-kicker">Flexible commercial plans</span><h2>Pay for the capability you need</h2><p>Choose a foundation for today and expand as your team, automation and messaging volume grow.</p></div>
-        <div class="wp-pricing-grid">
-          <article class="wp-plan"><span class="wp-plan-label">Launch</span><h3>For teams getting started</h3><div class="wp-price">Tailored quote</div><p>Build a professional WhatsApp operation with the essentials and guided setup.</p><ul><li>Business account onboarding</li><li>Shared inbox essentials</li><li>Template message setup</li><li>Contact organisation</li><li>Core reporting</li></ul><button type="button" data-auth-mode="signup">Get started</button></article>
-          <article class="wp-plan featured"><span class="wp-popular">Most popular</span><span class="wp-plan-label">Growth</span><h3>For teams ready to scale</h3><div class="wp-price">Tailored quote</div><p>Add automation, campaigns and richer controls for growing customer operations.</p><ul><li>Everything in Launch</li><li>Campaigns and segments</li><li>Automation workflows</li><li>Team routing and roles</li><li>Advanced performance insights</li></ul><button type="button" data-auth-mode="signup">Discuss Growth</button></article>
-          <article class="wp-plan"><span class="wp-plan-label">Enterprise</span><h3>For complex operations</h3><div class="wp-price">Custom</div><p>Design a governed solution around multiple teams, systems and higher volumes.</p><ul><li>Everything in Growth</li><li>Custom integrations</li><li>Advanced governance</li><li>Priority implementation</li><li>Dedicated support model</li></ul><a href="/contact.html?subject=WhatsApp%20Enterprise">Talk to sales</a></article>
-        </div>
-        <p class="wp-pricing-note"><strong>Clear cost structure:</strong> your Varada Nexus platform and service fee is quoted separately from Meta’s WhatsApp messaging charges, which vary by message category and destination. Taxes may apply.</p>
       </section>
 
       <section class="wp-section wp-trust">
@@ -234,6 +219,9 @@ function renderAuth(mode = "login", focusAuth = false) {
           <details><summary>Can we send bulk promotional messages?</summary><p>Marketing must follow WhatsApp opt-in, template and quality requirements. We do not support unofficial blasting or methods that put your number and customer trust at risk.</p></details>
         </div>
       </section>
+
+      <section class="wp-page-cta wp-overview-final-cta"><div><h2>Ready to make WhatsApp work harder for your business?</h2><p>Create a workspace to begin onboarding, or sign in if your company already has one.</p></div><div class="wp-hero-actions"><button class="wp-cta-primary" type="button" data-auth-mode="signup">Sign up</button><button class="wp-cta-secondary" type="button" data-auth-mode="login">Existing customer sign in</button></div></section>
+      </div>
 
       <section class="wp-auth-zone" id="get-started">
         <div class="wp-auth-intro">
@@ -255,23 +243,37 @@ function renderAuth(mode = "login", focusAuth = false) {
         </section>
       </section>
 
-      <footer class="wp-sales-footer"><div><strong>Varada Nexus</strong><span>WhatsApp solutions for ambitious teams.</span></div><nav aria-label="WhatsApp solutions footer"><a href="#features">Features</a><a href="#pricing">Plans</a><a href="/contact.html">Contact</a><a href="/privacy-policy.html">Privacy</a><a href="/terms-of-service.html">Terms</a></nav></footer>
+      <footer class="wp-sales-footer"><div><strong>Varada Nexus</strong><span>WhatsApp solutions for ambitious teams.</span></div><nav aria-label="WhatsApp solutions footer"><a href="/whatsapp-platform/features/">Features</a><a href="/whatsapp-platform/solutions/">Solutions</a><a href="/whatsapp-platform/pricing/">Pricing</a><a href="/contact.html">Contact</a><a href="/privacy-policy.html">Privacy</a></nav></footer>
     </main>
   `;
 
+  const accessPage = isAccessPage();
+  document.body.classList.toggle("wp-access-page", accessPage);
+  if (accessPage) app.querySelector(".wp-marketing-content")?.remove();
+  else app.querySelector(".wp-auth-zone")?.remove();
+
   app.querySelectorAll("[data-auth-mode]").forEach((button) => button.addEventListener("click", () => {
-    if (button.dataset.authMode !== "signup") { signupStep = 1; signupDraft = {}; }
-    renderAuth(button.dataset.authMode, true);
+    const nextMode = button.dataset.authMode === "signup" ? "signup" : "signin";
+    if (!accessPage) {
+      location.assign(`${ACCESS_PATH}#${nextMode}`);
+      return;
+    }
+    if (nextMode !== "signup") { signupStep = 1; signupDraft = {}; }
+    renderAuth(nextMode === "signup" ? "signup" : "login", false);
   }));
-  document.querySelectorAll('a[href="#signin"], a[href="/whatsapp-platform#signin"]').forEach((link) => {
+  document.querySelectorAll(`a[href="${ACCESS_PATH}#signin"]`).forEach((link) => {
     if (link.dataset.wpSigninBound === "true") return;
     link.dataset.wpSigninBound = "true";
     link.addEventListener("click", (event) => {
       event.preventDefault();
-      history.replaceState({}, "", `${PUBLIC_PORTAL_PATH}#signin`);
+      if (!accessPage) {
+        location.assign(`${ACCESS_PATH}#signin`);
+        return;
+      }
+      history.replaceState({}, "", `${ACCESS_PATH}#signin`);
       signupStep = 1;
       signupDraft = {};
-      renderAuth("login", true);
+      renderAuth("login", false);
     });
   });
   app.querySelector("#wpSignupBack")?.addEventListener("click", () => {
@@ -279,7 +281,8 @@ function renderAuth(mode = "login", focusAuth = false) {
     renderAuth("signup", true);
   });
   app.querySelector("#wpAuthForm")?.addEventListener("submit", submitAuthForm);
-  if (focusAuth) requestAnimationFrame(() => app.querySelector("#get-started")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  if (focusAuth && accessPage) requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  if (!accessPage) requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
 }
 
 async function submitAuthForm(event) {
@@ -300,7 +303,7 @@ async function submitAuthForm(event) {
     }
     if (signupStep < 3) {
       signupStep += 1;
-      renderAuth("signup", true);
+      renderAuth("signup", false);
       return;
     }
     if (!form.elements.terms?.checked) return;
@@ -389,7 +392,7 @@ async function renderDashboard() {
           <article class="wp-card"><h2>Onboarding checklist</h2><p>Your company owns its WhatsApp assets. Varada Nexus receives only the permissions needed to provide the platform.</p><ol class="wp-steps"><li><span class="wp-step-no">1</span><div><strong>Create your secure workspace</strong><span>Completed for ${escapeHtml(session.email)}.</span></div></li><li><span class="wp-step-no">2</span><div><strong>Connect Meta Business</strong><span>${setupReady ? "Ready to launch Embedded Signup." : "Available after Meta Tech Provider configuration is approved."}</span></div></li><li><span class="wp-step-no">3</span><div><strong>Add a WhatsApp number</strong><span>Select or register a number owned by your business.</span></div></li><li><span class="wp-step-no">4</span><div><strong>Configure inbox and templates</strong><span>Team features unlock after the Meta connection is verified.</span></div></li></ol></article>
           <article class="wp-card"><h2>WhatsApp Business Accounts</h2><p>Tenant-scoped connections visible only to your company.</p>${connections.length ? connections.map((row) => `<div class="wp-empty"><strong>${escapeHtml(row.verified_name || row.display_phone_number || "Meta WhatsApp Account")}</strong><br>${escapeHtml(row.status)}</div>`).join("") : `<div class="wp-empty">No Meta account connected yet.</div>`}</article>
         </section>
-        <p class="wp-domain">Secure customer portal · https://www.varadanexus.com/whatsapp-platform</p>
+        <p class="wp-domain">Secure customer portal · https://www.varadanexus.com/whatsapp-platform/access/</p>
       </section>
     </main>
   `;
@@ -398,6 +401,15 @@ async function renderDashboard() {
 }
 
 async function init() {
+  if (!isAccessPage()) {
+    if (["#signup", "#signin", "#get-started"].includes(location.hash)) {
+      const accessHash = location.hash === "#signin" ? "#signin" : "#signup";
+      location.replace(`${ACCESS_PATH}${accessHash}`);
+      return;
+    }
+    renderAuth("login", false);
+    return;
+  }
   if (!session) {
     const requestedSignup = location.hash === "#signup" || location.hash === "#get-started";
     const requestedAuth = requestedSignup || location.hash === "#signin";
