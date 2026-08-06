@@ -41,23 +41,43 @@
     else links.appendChild(blog);
   })();
 
-  /* Public WhatsApp product: keep it directly between Contact and Login. */
+  /* Public WhatsApp product hub: keep it between Contact and Login. */
   (function () {
     var links = document.querySelector(".nav-links");
-    if (!links || links.querySelector('a[href="/whatsapp-platform"]')) return;
+    if (!links || links.querySelector(".whatsapp-nav-item")) return;
+    var existing = links.querySelector('a[href="/whatsapp-platform"]');
+    if (existing && existing.parentNode === links) existing.remove();
+    var item = document.createElement("div");
+    item.className = "nav-item whatsapp-nav-item";
     var whatsapp = document.createElement("a");
     whatsapp.href = "/whatsapp-platform";
-    whatsapp.textContent = "WhatsApp Solutions";
+    whatsapp.className = "nav-drop-toggle";
+    whatsapp.innerHTML = 'WhatsApp Solutions<span class="nav-caret" aria-hidden="true"></span>';
     if (location.pathname.indexOf("/whatsapp-platform") === 0) whatsapp.className = "active";
+    if (location.pathname.indexOf("/whatsapp-platform") === 0) whatsapp.className += " nav-drop-toggle";
+    var drop = document.createElement("div");
+    drop.className = "nav-drop whatsapp-nav-drop";
+    drop.innerHTML =
+      '<a href="/whatsapp-platform">Overview</a>' +
+      '<a href="/whatsapp-platform/features/">Features</a>' +
+      '<a href="/whatsapp-platform/solutions/">Solutions</a>' +
+      '<a href="/whatsapp-platform/pricing/">Pricing</a>' +
+      '<a href="/whatsapp-platform#signin">Customer sign in</a>' +
+      '<a href="/whatsapp-platform#get-started" class="nav-drop-all">Get started &rarr;</a>';
+    item.appendChild(whatsapp);
+    item.appendChild(drop);
     var login = links.querySelector('a[href="/login.html"]');
     var contact = links.querySelector('a[href="/contact.html"]');
-    if (login && login.parentNode === links) links.insertBefore(whatsapp, login);
-    else if (contact && contact.parentNode === links) links.insertBefore(whatsapp, contact.nextSibling);
-    else links.appendChild(whatsapp);
+    if (login && login.parentNode === links) links.insertBefore(item, login);
+    else if (contact && contact.parentNode === links) links.insertBefore(item, contact.nextSibling);
+    else links.appendChild(item);
   })();
 
   /* Keep the service menu aligned with the grouped service catalogue. */
-  document.querySelectorAll(".nav-drop").forEach(function (drop) {
+  document.querySelectorAll(".nav-item").forEach(function (item) {
+    var toggle = item.querySelector('.nav-drop-toggle[href="/services.html"]');
+    var drop = item.querySelector(".nav-drop");
+    if (!toggle || !drop) return;
     drop.innerHTML =
       '<a href="/residential-construction.html">Residential Construction</a>' +
       '<a href="/commercial-construction.html">Commercial Construction</a>' +
