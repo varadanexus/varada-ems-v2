@@ -193,7 +193,7 @@ function renderAuth(mode = "login", focusAuth = false) {
           <a href="/whatsapp-platform/pricing/"><span>03</span><h3>Pricing</h3><p>Compare Launch, Growth and Enterprise plan structures and understand how billing works.</p><strong>Explore pricing →</strong></a>
           <a href="/whatsapp-platform/results/"><span>04</span><h3>Results &amp; playbooks</h3><p>Choose the operating metrics and launch playbooks that match your customer journey.</p><strong>Plan measurable outcomes →</strong></a>
           <a href="/whatsapp-platform/developers/"><span>05</span><h3>Developers</h3><p>Understand events, webhooks, integrations and the secure architecture behind connected workflows.</p><strong>Explore integrations →</strong></a>
-          <a href="/whatsapp-platform/trust/"><span>06</span><h3>Security &amp; trust</h3><p>Review access controls, tenant isolation, responsible messaging and privacy practices.</p><strong>Review safeguards →</strong></a>
+          <a href="/whatsapp-platform/trust/"><span>06</span><h3>Security &amp; trust</h3><p>Review access governance, workspace separation, responsible messaging and privacy practices.</p><strong>Review safeguards →</strong></a>
         </div>
       </section>
 
@@ -390,7 +390,7 @@ async function renderDashboard() {
           <article class="wp-stat"><span>Workspace</span><strong>Active</strong></article>
           <article class="wp-stat"><span>Meta connections</span><strong>${connected.length}</strong></article>
           <article class="wp-stat"><span>Plan</span><strong>Starter</strong></article>
-          <article class="wp-stat"><span>Authentication</span><strong>Local · Protected</strong></article>
+          <article class="wp-stat"><span>Access protection</span><strong>Active</strong></article>
         </section>
         <section class="wp-content-grid">
           <article class="wp-card"><h2>Onboarding checklist</h2><p>Your company owns its WhatsApp assets. Varada Nexus receives only the permissions needed to provide the platform.</p><ol class="wp-steps"><li><span class="wp-step-no">1</span><div><strong>Create your secure workspace</strong><span>Completed for ${escapeHtml(session.email)}.</span></div></li><li><span class="wp-step-no">2</span><div><strong>Connect Meta Business</strong><span>${setupReady ? "Ready to launch Embedded Signup." : "Available after Meta Tech Provider configuration is approved."}</span></div></li><li><span class="wp-step-no">3</span><div><strong>Add a WhatsApp number</strong><span>Select or register a number owned by your business.</span></div></li><li><span class="wp-step-no">4</span><div><strong>Configure inbox and templates</strong><span>Team features unlock after the Meta connection is verified.</span></div></li></ol></article>
