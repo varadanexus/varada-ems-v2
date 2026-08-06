@@ -185,6 +185,34 @@ function renderAuth(mode = "login", focusAuth = false) {
         <div><span>Acquire</span><i></i><span>Convert</span><i></i><span>Support</span><i></i><span>Retain</span></div>
       </section>
 
+      <section class="wp-scroll-story" data-scroll-story aria-label="How customer conversations move through the platform">
+        <div class="wp-scroll-stage">
+          <div class="wp-story-rail" data-story-rail>
+            <article class="wp-story-panel wp-story-intro" data-story-panel>
+              <div class="wp-story-copy"><span class="wp-kicker">One connected journey</span><h2>Every conversation can <em>move the business forward.</em></h2><p>Scroll to follow a customer enquiry from first message to measurable improvement.</p><span class="wp-story-scroll-cue">Scroll to explore <i>↓</i></span></div>
+              <div class="wp-story-visual wp-story-network" aria-hidden="true"><span class="wp-orbit orbit-one"></span><span class="wp-orbit orbit-two"></span><b>VN</b><i class="node n1">01</i><i class="node n2">02</i><i class="node n3">03</i><i class="node n4">04</i></div>
+            </article>
+            <article class="wp-story-panel" data-story-panel>
+              <div class="wp-story-copy"><span class="wp-story-step">01 · Capture</span><h2>Turn first contact into <em>clear intent.</em></h2><p>Welcome the customer, understand what they need and preserve the context your team needs to respond well.</p><div class="wp-story-tags"><span>Opt-in aware</span><span>Customer context</span><span>Structured enquiry</span></div></div>
+              <div class="wp-story-visual wp-story-phone" aria-label="Illustrative incoming WhatsApp conversation"><header><span>AM</span><div><strong>Aarav Mehta</strong><small>New enquiry</small></div></header><div class="wp-story-chat"><p class="in">Hi, I need a quotation for my team.</p><p class="system">Intent detected · Pricing enquiry</p><p class="out">Thank you. I’ll connect you with the right specialist.</p></div></div>
+            </article>
+            <article class="wp-story-panel" data-story-panel>
+              <div class="wp-story-copy"><span class="wp-story-step">02 · Route</span><h2>Put the right conversation with the <em>right owner.</em></h2><p>Use teams, assignments and visible responsibility so promising enquiries do not disappear inside a shared phone.</p><div class="wp-story-tags"><span>Team routing</span><span>Ownership</span><span>Priority signals</span></div></div>
+              <div class="wp-story-visual wp-route-board" aria-label="Illustrative conversation routing"><div class="route-source"><b>Customer enquiry</b><small>Pricing · High intent</small></div><span class="route-line"></span><div class="route-team"><i>SA</i><span><b>Sales team</b><small>Assigned to Sana</small></span><em>Ready</em></div><div class="route-team muted"><i>CS</i><span><b>Customer service</b><small>Available if needed</small></span></div></div>
+            </article>
+            <article class="wp-story-panel" data-story-panel>
+              <div class="wp-story-copy"><span class="wp-story-step">03 · Resolve</span><h2>Automate the repeatable. Keep people for the <em>moments that matter.</em></h2><p>Move routine steps forward automatically while preserving a clear handover when judgment or empathy is needed.</p><div class="wp-story-tags"><span>Workflow actions</span><span>Human handover</span><span>Follow-up</span></div></div>
+              <div class="wp-story-visual wp-flow-card" aria-label="Illustrative assisted workflow"><div><span>1</span><b>Enquiry captured</b><small>Context saved</small></div><i></i><div><span>2</span><b>Quote prepared</b><small>Team action</small></div><i></i><div class="active"><span>3</span><b>Follow-up scheduled</b><small>Workflow active</small></div></div>
+            </article>
+            <article class="wp-story-panel" data-story-panel>
+              <div class="wp-story-copy"><span class="wp-story-step">04 · Improve</span><h2>See what works. Fix what <em>slows customers down.</em></h2><p>Track response, completion and quality signals so every new workflow starts from better evidence.</p><div class="wp-story-tags"><span>Response trends</span><span>Journey completion</span><span>Quality review</span></div><a class="wp-story-link" href="/whatsapp-platform/results/">Explore measurable playbooks →</a></div>
+              <div class="wp-story-visual wp-insight-card" aria-label="Illustrative operational trends"><header><div><strong>Conversation health</strong><small>Illustrative dashboard</small></div><span>Improving</span></header><div class="wp-bars"><i style="--bar:38%"></i><i style="--bar:52%"></i><i style="--bar:47%"></i><i style="--bar:68%"></i><i style="--bar:79%"></i><i style="--bar:91%"></i></div><footer><span>Response</span><span>Completion</span><span>Quality</span></footer></div>
+            </article>
+          </div>
+          <div class="wp-story-progress" aria-hidden="true"><span data-story-progress></span><div><b>Start</b><b>Capture</b><b>Route</b><b>Resolve</b><b>Improve</b></div></div>
+        </div>
+      </section>
+
       <section class="wp-section wp-overview-paths">
         <div class="wp-section-heading"><span class="wp-kicker">Explore WhatsApp Solutions</span><h2>Find the information you need</h2><p>Each section has its own focused page, so you can evaluate capabilities, business use cases and commercial plans without searching through one long page.</p></div>
         <div class="wp-overview-grid">
@@ -286,7 +314,48 @@ function renderAuth(mode = "login", focusAuth = false) {
   });
   app.querySelector("#wpAuthForm")?.addEventListener("submit", submitAuthForm);
   if (focusAuth && accessPage) requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
-  if (!accessPage) requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  if (!accessPage) {
+    initScrollStory();
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  }
+}
+
+function initScrollStory() {
+  const story = app.querySelector("[data-scroll-story]");
+  const rail = story?.querySelector("[data-story-rail]");
+  const panels = [...(story?.querySelectorAll("[data-story-panel]") || [])];
+  const progressBar = story?.querySelector("[data-story-progress]");
+  if (!story || !rail || panels.length < 2 || !progressBar) return;
+
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  const mobile = matchMedia("(max-width: 760px)");
+  let frame = 0;
+  const draw = () => {
+    frame = 0;
+    if (reduceMotion.matches || mobile.matches) {
+      rail.style.transform = "none";
+      panels.forEach((panel) => { panel.style.opacity = "1"; panel.style.transform = "none"; });
+      progressBar.style.transform = "scaleX(1)";
+      return;
+    }
+    const rect = story.getBoundingClientRect();
+    const range = Math.max(1, story.offsetHeight - innerHeight);
+    const progress = Math.min(1, Math.max(0, -rect.top / range));
+    const position = progress * (panels.length - 1);
+    rail.style.transform = `translate3d(${-position * (100 / panels.length)}%,0,0)`;
+    progressBar.style.transform = `scaleX(${progress})`;
+    panels.forEach((panel, index) => {
+      const distance = Math.abs(position - index);
+      panel.style.opacity = String(Math.max(.16, 1 - distance * .7));
+      panel.style.transform = `scale(${Math.max(.92, 1 - distance * .035)})`;
+    });
+  };
+  const requestDraw = () => { if (!frame) frame = requestAnimationFrame(draw); };
+  addEventListener("scroll", requestDraw, { passive: true });
+  addEventListener("resize", requestDraw, { passive: true });
+  reduceMotion.addEventListener?.("change", requestDraw);
+  mobile.addEventListener?.("change", requestDraw);
+  draw();
 }
 
 async function submitAuthForm(event) {
