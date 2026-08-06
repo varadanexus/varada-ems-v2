@@ -130,7 +130,20 @@ async function init() {
     const allowedModules = boot.accessibleModules || boot.allowedModules || [];
     const primaryRoleKey = String(boot.primaryRole || "user").trim().toLowerCase();
     const isAuditor = primaryRoleKey === "auditor";
-    const visibleCards = CONTROL_CENTER_MODULES.filter((m) => allowedModules.includes(m.module));
+    // The customer platform launcher is safe to expose to leadership before its
+    // permission seed reaches a linked environment: it opens only the public,
+    // separately authenticated customer portal. Tenant data remains protected
+    // by the portal's own local session and RLS boundaries.
+    const canLaunchCustomerPlatform = [
+      "chairman_managing_director",
+      "super_admin",
+      "admin",
+      "coo"
+    ].includes(primaryRoleKey);
+    const visibleCards = CONTROL_CENTER_MODULES.filter((m) =>
+      allowedModules.includes(m.module)
+      || (m.module === MODULES.WHATSAPP_PLATFORM && canLaunchCustomerPlatform)
+    );
     // Business entities and global Master Data stay out of the Control Center by design.
     const businessCards = visibleCards.filter((m) => ![MODULES.SETTINGS, MODULES.MASTER_CLIENTS, MODULES.ACCOUNTS].includes(m.module));
     const activeBusinessCards = businessCards.filter((m) => Boolean(m.href));
@@ -357,7 +370,7 @@ async function init() {
         ${communicationsHtml ? `
         <div class="cc-section-head">
           <strong>Communications</strong>
-          <span>Email, WhatsApp, and Meetings</span>
+          <span>Internal company Email, WhatsApp, and Meetings</span>
         </div>
         <div class="cc-modules-grid">${communicationsHtml}</div>
         ` : ""}

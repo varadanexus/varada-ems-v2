@@ -41,6 +41,21 @@
     else links.appendChild(blog);
   })();
 
+  /* Public WhatsApp product: keep it directly between Contact and Login. */
+  (function () {
+    var links = document.querySelector(".nav-links");
+    if (!links || links.querySelector('a[href="/whatsapp-platform"]')) return;
+    var whatsapp = document.createElement("a");
+    whatsapp.href = "/whatsapp-platform";
+    whatsapp.textContent = "WhatsApp Solutions";
+    if (location.pathname.indexOf("/whatsapp-platform") === 0) whatsapp.className = "active";
+    var login = links.querySelector('a[href="/login.html"]');
+    var contact = links.querySelector('a[href="/contact.html"]');
+    if (login && login.parentNode === links) links.insertBefore(whatsapp, login);
+    else if (contact && contact.parentNode === links) links.insertBefore(whatsapp, contact.nextSibling);
+    else links.appendChild(whatsapp);
+  })();
+
   /* Keep the service menu aligned with the grouped service catalogue. */
   document.querySelectorAll(".nav-drop").forEach(function (drop) {
     drop.innerHTML =

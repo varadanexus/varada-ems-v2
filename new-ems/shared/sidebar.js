@@ -179,6 +179,25 @@ const MENU_BY_WORKSPACE = {
       ]
     }
   ],
+  [WORKSPACES.WHATSAPP_PLATFORM]: [
+    {
+      title: "Product Management",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Platform Overview", href: ROUTES.WHATSAPP_PLATFORM_ADMIN },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Customers", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=customers` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Meta Connections", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=connections` }
+      ]
+    },
+    {
+      title: "Application Control",
+      items: [
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Meta App Setup", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=meta` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Security", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=security` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Public Customer Portal", href: ROUTES.WHATSAPP_PLATFORM_PORTAL }
+      ]
+    }
+  ],
   [WORKSPACES.ONBOARDING]: [
     {
       title: "Onboarding Workspace",

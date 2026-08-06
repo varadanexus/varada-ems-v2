@@ -1,5 +1,5 @@
 import { MODULES } from "../config/constants.js";
-import { PERMISSIONS, ROLE_MODULE_PERMISSIONS, ROLES } from "../config/roles.js";
+import { PERMISSIONS, ROLES } from "../config/roles.js";
 
 const MODULE_PERMISSION_ALIASES = {
   [MODULES.TRANSPORT_FINANCE_APPROVAL]: [MODULES.TRANSPORT_FINANCE_APPROVAL, MODULES.TRANSPORT_LEDGER],
@@ -44,12 +44,20 @@ const MODULE_PERMISSION_ALIASES = {
 
 // Sprint 13F.14: DB-granted permissions for the current user, loaded once by
 // bootstrapProtectedPage from get_my_permissions(). Entries are "module:action".
-// The hardcoded ROLE_MODULE_PERMISSIONS map below remains authoritative ONLY for
-// super_admin (lockout safety valve); every other role is driven by these grants.
+// Full-authority roles bypass these rows as a permanent lockout safety valve;
+// every other role is driven by the database grants.
 let DB_PERMISSION_SET = new Set();
+let CURRENT_ROLE_SET = new Set();
 
-export function setDbPermissionSet(rows) {
+export function setDbPermissionSet(rows, roleCodes = []) {
   DB_PERMISSION_SET = new Set((rows || []).map((r) => `${r.module_code}:${r.action_code}`));
+  CURRENT_ROLE_SET = new Set(normalizeRoleCodes(roleCodes));
+}
+
+function hasFullSystemAuthority(roleCodes = CURRENT_ROLE_SET) {
+  return normalizeRoleCodes(roleCodes).some((roleCode) =>
+    roleCode === ROLES.CHAIRMAN_MANAGING_DIRECTOR || roleCode === ROLES.SUPER_ADMIN
+  );
 }
 
 function hasDbPermission(moduleCode, action) {
@@ -57,7 +65,7 @@ function hasDbPermission(moduleCode, action) {
 }
 
 export function hasCurrentUserPermission(moduleCode, action = PERMISSIONS.VIEW) {
-  return hasDbPermission(moduleCode, action);
+  return hasFullSystemAuthority() || hasDbPermission(moduleCode, action);
 }
 
 function normalizeRoleCodes(userRoleOrRoles) {
@@ -74,14 +82,9 @@ function getModuleCandidates(moduleCode) {
 }
 
 export function hasModulePermission(userRole, moduleCode, action) {
-  // The Chairman & Managing Director is the permanent ultimate authority.
-  // Server-side enforcement is provided by the matching IAM migration.
-  if (userRole === ROLES.CHAIRMAN_MANAGING_DIRECTOR) return true;
-  // Super admin keeps the full hardcoded map (cannot be locked out via the matrix).
-  if (userRole === ROLES.SUPER_ADMIN) {
-    const roleMap = ROLE_MODULE_PERMISSIONS[ROLES.SUPER_ADMIN] || {};
-    return getModuleCandidates(moduleCode).some((candidate) => (roleMap[candidate] || []).includes(action));
-  }
+  // Permanent authority invariant: these two roles always receive every
+  // current and future module/action, independent of permission seed rows.
+  if (hasFullSystemAuthority([userRole])) return true;
   // Everyone else: the Roles & Permissions matrix (DB) is the source of truth.
   return hasDbPermission(moduleCode, action);
 }
@@ -98,11 +101,10 @@ export function hasAnyRolePermission(userRoleOrRoles, moduleCode, action, option
 
 export function getAccessibleModules(userRoleOrRoles, allowedModules = []) {
   const result = new Set(Array.isArray(allowedModules) ? allowedModules : []);
-  if (normalizeRoleCodes(userRoleOrRoles).some((role) => [ROLES.CHAIRMAN_MANAGING_DIRECTOR, ROLES.SUPER_ADMIN].includes(role))) {
-    const roleMap = ROLE_MODULE_PERMISSIONS[ROLES.SUPER_ADMIN] || {};
-    Object.entries(roleMap).forEach(([moduleCode, actions]) => {
-      if (Array.isArray(actions) && actions.includes(PERMISSIONS.VIEW)) result.add(moduleCode);
-    });
+  if (hasFullSystemAuthority(userRoleOrRoles)) {
+    // Object.values(MODULES) makes new constants automatically visible without
+    // requiring a matching hardcoded role-map entry.
+    Object.values(MODULES).filter(Boolean).forEach((moduleCode) => result.add(moduleCode));
   }
   return [...result];
 }
