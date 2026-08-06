@@ -287,14 +287,19 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-tab { border: 0; border-radius: 9px; padding: .7rem; background: transparent; color: var(--wp-muted); font-weight: 750; }
 .wp-tab.active { background: var(--wp-panel-2); color: var(--wp-text); box-shadow: inset 0 0 0 1px var(--wp-line); }
 .wp-form { display: grid; gap: .9rem; margin-top: 1.25rem; }
-.wp-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
-.wp-field { display: grid; gap: .38rem; }
+.wp-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; align-items: start; }
+.wp-field { display: grid; align-content: start; gap: .38rem; }
 .wp-field span { color: #c9ded1; font-size: .79rem; font-weight: 700; }
 .wp-field input, .wp-field select, .wp-field textarea { width: 100%; border: 1px solid var(--wp-line); border-radius: 11px; padding: .78rem .85rem; color: var(--wp-text); background: #06130d; outline: none; }
 .wp-field select { color-scheme: dark; }
 .wp-field textarea { min-height: 82px; resize: vertical; }
 .wp-field input:focus, .wp-field select:focus, .wp-field textarea:focus { border-color: var(--wp-green); box-shadow: 0 0 0 3px rgba(43, 223, 131, .12); }
 .wp-field small { color: var(--wp-muted); font-size: .7rem; line-height: 1.4; }
+.wp-password-control { position: relative; display: block; color: inherit; font-size: inherit; font-weight: inherit; }
+.wp-password-control input { padding-right: 4rem; }
+.wp-password-control button { position: absolute; top: 50%; right: .45rem; min-width: 3.1rem; padding: .42rem .5rem; transform: translateY(-50%); border: 0; border-radius: 8px; background: rgba(43,223,131,.1); color: #a9e8c6; font-size: .7rem; font-weight: 850; }
+.wp-password-control button:hover,.wp-password-control button:focus-visible { background: rgba(43,223,131,.18); color: var(--wp-text); outline: 1px solid rgba(43,223,131,.45); }
+.wp-password-row .wp-field > small { min-height: 2em; }
 .wp-signup-progress { display: grid; grid-template-columns: repeat(3, 1fr); gap: .45rem; margin-top: 1rem; }
 .wp-signup-progress span { height: 4px; border-radius: 999px; background: rgba(139,226,180,.13); }
 .wp-signup-progress span.active { background: var(--wp-green); box-shadow: 0 0 12px rgba(43,223,131,.25); }

@@ -107,20 +107,28 @@ async function signOut(callServer = true) {
 
 function draftValue(name) { return escapeHtml(signupDraft[name] || ""); }
 function selected(name, value) { return signupDraft[name] === value ? "selected" : ""; }
+function normalizeWebsite(value) {
+  const entered = String(value || "").trim();
+  if (!entered) return "";
+  const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(entered) ? entered : `https://${entered}`;
+  const parsed = new URL(candidate);
+  if (!/^https?:$/.test(parsed.protocol) || !parsed.hostname.includes(".")) throw new Error("Invalid website");
+  return parsed.toString();
+}
 
 function signupFields() {
   if (signupStep === 1) return `
     <div class="wp-signup-heading"><strong>Tell us about your business</strong><span>Step 1 of 3</span></div>
     <label class="wp-field"><span>Legal business name</span><input name="legalName" value="${draftValue("legalName")}" autocomplete="organization" minlength="2" maxlength="160" required /><small>Use the name on your business registration or tax records.</small></label>
     <label class="wp-field"><span>Brand / trading name</span><input name="companyName" value="${draftValue("companyName")}" autocomplete="organization" minlength="2" maxlength="120" required /><small>Use the legal name again if you do not trade under another name.</small></label>
-    <div class="wp-form-row"><label class="wp-field"><span>Business website <small>(optional)</small></span><input name="website" value="${draftValue("website")}" type="url" maxlength="300" placeholder="https://example.com" /></label><label class="wp-field"><span>Country</span><input name="country" value="${draftValue("country")}" autocomplete="country-name" minlength="2" maxlength="80" required /></label></div>
+    <div class="wp-form-row"><label class="wp-field"><span>Business website <small>(optional)</small></span><input name="website" value="${draftValue("website")}" type="text" inputmode="url" autocomplete="url" maxlength="300" placeholder="example.com" /><small>You can enter example.com or a complete https:// address.</small></label><label class="wp-field"><span>Country</span><input name="country" value="${draftValue("country")}" autocomplete="country-name" minlength="2" maxlength="80" required /><small aria-hidden="true">Country of business registration.</small></label></div>
     <div class="wp-form-row"><label class="wp-field"><span>Business type</span><select name="businessType" required><option value="">Select type</option><option value="private_limited" ${selected("businessType","private_limited")}>Private limited company</option><option value="public_limited" ${selected("businessType","public_limited")}>Public limited company</option><option value="partnership" ${selected("businessType","partnership")}>Partnership / LLP</option><option value="sole_proprietor" ${selected("businessType","sole_proprietor")}>Sole proprietor</option><option value="nonprofit" ${selected("businessType","nonprofit")}>Non-profit</option><option value="government" ${selected("businessType","government")}>Government</option><option value="other" ${selected("businessType","other")}>Other</option></select></label><label class="wp-field"><span>Company size</span><select name="companySize" required><option value="">Select size</option><option value="1_10" ${selected("companySize","1_10")}>1–10 people</option><option value="11_50" ${selected("companySize","11_50")}>11–50 people</option><option value="51_200" ${selected("companySize","51_200")}>51–200 people</option><option value="201_1000" ${selected("companySize","201_1000")}>201–1,000 people</option><option value="1000_plus" ${selected("companySize","1000_plus")}>1,000+ people</option></select></label></div>`;
 
   if (signupStep === 2) return `
     <div class="wp-signup-heading"><strong>Create the account owner</strong><span>Step 2 of 3</span></div>
     <div class="wp-form-row"><label class="wp-field"><span>Full name</span><input name="displayName" value="${draftValue("displayName")}" autocomplete="name" minlength="2" maxlength="100" required /></label><label class="wp-field"><span>Job title</span><input name="jobTitle" value="${draftValue("jobTitle")}" autocomplete="organization-title" minlength="2" maxlength="100" required /></label></div>
     <div class="wp-form-row"><label class="wp-field"><span>Work email</span><input name="email" value="${draftValue("email")}" type="email" autocomplete="email" maxlength="254" required /></label><label class="wp-field"><span>Business phone</span><input name="contactPhone" value="${draftValue("contactPhone")}" type="tel" autocomplete="tel" minlength="7" maxlength="24" placeholder="+91 98765 43210" required /></label></div>
-    <div class="wp-form-row"><label class="wp-field"><span>Password</span><input name="password" value="${draftValue("password")}" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><small>10+ characters with uppercase, lowercase and a number.</small></label><label class="wp-field"><span>Confirm password</span><input name="confirmPassword" value="${draftValue("confirmPassword")}" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /></label></div>`;
+    <div class="wp-form-row wp-password-row"><label class="wp-field"><span>Password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><button type="button" data-password-toggle aria-label="Show password" aria-pressed="false">Show</button></span><small>10+ characters with uppercase, lowercase and a number.</small></label><label class="wp-field"><span>Confirm password</span><span class="wp-password-control"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><button type="button" data-password-toggle aria-label="Show confirm password" aria-pressed="false">Show</button></span><small aria-hidden="true">Re-enter the same password.</small></label></div>`;
 
   const timezone = signupDraft.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   return `
@@ -136,7 +144,7 @@ function signupFields() {
 function authForm(mode) {
   const signup = mode === "signup";
   return `<form class="wp-form" id="wpAuthForm" novalidate>
-    ${signup ? `<div class="wp-signup-progress" aria-label="Signup progress"><span class="active"></span><span class="${signupStep >= 2 ? "active" : ""}"></span><span class="${signupStep >= 3 ? "active" : ""}"></span></div>${signupFields()}` : `<label class="wp-field"><span>Email address</span><input name="email" type="email" autocomplete="username" maxlength="254" required autofocus /></label><label class="wp-field"><span>Password</span><input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required /></label>`}
+    ${signup ? `<div class="wp-signup-progress" aria-label="Signup progress"><span class="active"></span><span class="${signupStep >= 2 ? "active" : ""}"></span><span class="${signupStep >= 3 ? "active" : ""}"></span></div>${signupFields()}` : `<label class="wp-field"><span>Email address</span><input name="email" type="email" autocomplete="username" maxlength="254" required autofocus /></label><label class="wp-field"><span>Password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required /><button type="button" data-password-toggle aria-label="Show password" aria-pressed="false">Show</button></span></label>`}
     <div class="wp-form-message" id="wpFormMessage"></div>
     ${signup ? `<div class="wp-form-actions">${signupStep > 1 ? '<button class="wp-back" id="wpSignupBack" type="button">Back</button>' : '<span></span>'}<button class="wp-submit" type="submit">${signupStep < 3 ? "Continue" : "Create secure workspace"}</button></div>` : '<button class="wp-submit" type="submit">Sign in</button>'}
   </form>`;
@@ -310,8 +318,22 @@ function renderAuth(mode = "login", focusAuth = false) {
   });
   app.querySelector("#wpSignupBack")?.addEventListener("click", () => {
     signupStep = Math.max(1, signupStep - 1);
+    if (signupStep === 2) {
+      signupDraft.password = "";
+      signupDraft.confirmPassword = "";
+    }
     renderAuth("signup", true);
   });
+  app.querySelectorAll("[data-password-toggle]").forEach((button) => button.addEventListener("click", () => {
+    const input = button.closest(".wp-password-control")?.querySelector("input");
+    if (!input) return;
+    const reveal = input.type === "password";
+    input.type = reveal ? "text" : "password";
+    button.textContent = reveal ? "Hide" : "Show";
+    button.setAttribute("aria-pressed", String(reveal));
+    button.setAttribute("aria-label", `${reveal ? "Hide" : "Show"} ${input.name === "confirmPassword" ? "confirm password" : "password"}`);
+    input.focus({ preventScroll: true });
+  }));
   app.querySelector("#wpAuthForm")?.addEventListener("submit", submitAuthForm);
   if (focusAuth && accessPage) requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
   if (!accessPage) {
@@ -364,6 +386,17 @@ async function submitAuthForm(event) {
   const submit = form.querySelector("button[type=submit]");
   const message = form.querySelector("#wpFormMessage");
   const isSignup = document.querySelector('[data-auth-mode="signup"]')?.getAttribute("aria-selected") === "true";
+  const websiteInput = form.elements.website;
+  if (websiteInput && websiteInput.value.trim()) {
+    try {
+      websiteInput.value = normalizeWebsite(websiteInput.value);
+      websiteInput.setCustomValidity("");
+    } catch {
+      websiteInput.setCustomValidity("Enter a valid business website, such as example.com.");
+      websiteInput.reportValidity();
+      return;
+    }
+  }
   if (!form.reportValidity()) return;
   const currentValues = Object.fromEntries(new FormData(form).entries());
   if (isSignup) {
