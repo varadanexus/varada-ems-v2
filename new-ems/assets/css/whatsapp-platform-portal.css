@@ -128,6 +128,31 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-plan button, .wp-plan > a { min-height: 46px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 10px; background: var(--wp-green); color: #03140b; font-weight: 900; text-decoration: none; transition: .2s ease; }
 .wp-pricing-note { max-width: 920px; margin: 1rem auto 0; padding: 1rem 1.2rem; border: 1px solid var(--wp-line); border-radius: 12px; color: var(--wp-muted); font-size: .82rem; line-height: 1.6; text-align: center; }
 .wp-pricing-note strong { color: #d9ebe0; }
+.wp-estimator { width: min(1180px, calc(100% - 3rem)); margin: 0 auto clamp(4rem,8vw,7rem); padding: clamp(1.5rem,4vw,3rem); border: 1px solid var(--wp-line); border-radius: 22px; background: linear-gradient(145deg,rgba(16,39,29,.84),rgba(7,19,14,.92)); }
+.wp-estimator-head { max-width: 760px; margin-bottom: 1.8rem; }
+.wp-estimator-head h2 { margin: .55rem 0 .7rem; font-family: Georgia,serif; font-size: clamp(2rem,4vw,3.5rem); font-weight: 500; }
+.wp-estimator-head p, .wp-estimator-note { color: var(--wp-muted); line-height: 1.65; }
+.wp-estimator-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
+.wp-estimator label { display: grid; gap: .45rem; color: #c9ded1; font-size: .78rem; font-weight: 750; }
+.wp-estimator select { min-height: 48px; padding: .7rem .8rem; border: 1px solid var(--wp-line); border-radius: 10px; background: #06130d; color: var(--wp-text); color-scheme: dark; }
+.wp-estimator-check { display: flex !important; grid-column: 1/-1; align-items: center; gap: .7rem !important; }
+.wp-estimator-check input { width: 18px; height: 18px; accent-color: var(--wp-green); }
+.wp-estimator-actions { display: flex; gap: .7rem; margin-top: 1.2rem; }
+.wp-estimator-actions button { min-height: 44px; padding: .7rem 1rem; border: 1px solid var(--wp-line); border-radius: 10px; background: transparent; color: var(--wp-text); font-weight: 850; }
+.wp-estimator-actions button:first-child { border-color: var(--wp-green); background: var(--wp-green); color: #03140b; }
+.wp-estimator-result { margin-top: 1.4rem; padding: 1.3rem; border-left: 3px solid var(--wp-green); background: rgba(43,223,131,.07); }
+.wp-estimator-result strong { display: block; margin-bottom: .35rem; color: var(--wp-green); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; }
+.wp-estimator-result h3 { margin: 0 0 .5rem; font-size: 1.45rem; }
+.wp-estimator-result p { margin: 0; color: var(--wp-muted); line-height: 1.6; }
+.wp-disclosure { margin: 0 0 1.5rem; padding: 1rem 1.2rem; border: 1px solid rgba(242,209,133,.3); border-radius: 12px; background: rgba(242,209,133,.06); color: #d8d9c6; line-height: 1.6; }
+.wp-metric-list { display: grid; gap: .55rem; margin: 1rem 0 0; padding: 0; list-style: none; }
+.wp-metric-list li { padding-top: .55rem; border-top: 1px solid var(--wp-line); color: #bed4c6; font-size: .84rem; }
+.wp-architecture { display: grid; grid-template-columns: repeat(4,1fr); gap: .7rem; margin-top: 2rem; }
+.wp-architecture span { padding: 1rem; border: 1px solid var(--wp-line); border-radius: 12px; background: rgba(7,19,14,.72); text-align: center; color: #d9ebe0; font-size: .82rem; }
+.wp-event-list { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.3rem; }
+.wp-event-list code { padding: .45rem .65rem; border: 1px solid var(--wp-line); border-radius: 8px; background: #06130d; color: #a9e8c6; font-size: .78rem; }
+@media (max-width: 900px) { .wp-estimator-grid, .wp-architecture { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .wp-estimator-grid, .wp-architecture { grid-template-columns: 1fr; } }
 .wp-trust { display: grid; grid-template-columns: .8fr 1.2fr; gap: 5rem; border-block: 1px solid var(--wp-line); }
 .wp-trust-grid { display: grid; gap: .8rem; }
 .wp-trust-grid article { padding: 1.2rem 1.3rem; border-left: 2px solid var(--wp-green); background: rgba(12,28,21,.48); }

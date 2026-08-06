@@ -161,8 +161,8 @@ function renderAuth(mode = "login", focusAuth = false) {
           </div>
           <a class="wp-customer-signin" href="/whatsapp-platform/pricing/">Explore plans and pricing →</a>
         </div>
-        <div class="wp-product-preview" aria-label="WhatsApp team workspace preview">
-          <div class="wp-preview-head"><div><span class="wp-preview-logo">VN</span><strong>Customer Inbox</strong></div><span class="wp-live"><i></i> Live</span></div>
+        <div class="wp-product-preview" aria-label="Illustrative WhatsApp team workspace preview using sample data">
+          <div class="wp-preview-head"><div><span class="wp-preview-logo">VN</span><strong>Sample Customer Inbox</strong></div><span class="wp-live"><i></i> Illustrative</span></div>
           <div class="wp-preview-body">
             <aside class="wp-preview-list">
               <span class="wp-preview-search">Search conversations</span>
@@ -176,7 +176,7 @@ function renderAuth(mode = "login", focusAuth = false) {
               <footer>Reply as Varada Nexus <button type="button" tabindex="-1">Send</button></footer>
             </section>
           </div>
-          <div class="wp-preview-stats"><span><strong>96%</strong> response rate</span><span><strong>4m</strong> first response</span><span><strong>28</strong> open leads</span></div>
+          <div class="wp-preview-stats"><span><strong>Track</strong> response rate</span><span><strong>Measure</strong> first response</span><span><strong>Manage</strong> open leads</span></div>
         </div>
       </section>
 
@@ -191,6 +191,9 @@ function renderAuth(mode = "login", focusAuth = false) {
           <a href="/whatsapp-platform/features/"><span>01</span><h3>Features</h3><p>Shared inbox, campaigns, automation, contacts, analytics, APIs and team controls.</p><strong>Explore features →</strong></a>
           <a href="/whatsapp-platform/solutions/"><span>02</span><h3>Solutions</h3><p>See practical journeys for sales, customer service, operations, healthcare and marketing.</p><strong>Explore solutions →</strong></a>
           <a href="/whatsapp-platform/pricing/"><span>03</span><h3>Pricing</h3><p>Compare Launch, Growth and Enterprise plan structures and understand how billing works.</p><strong>Explore pricing →</strong></a>
+          <a href="/whatsapp-platform/results/"><span>04</span><h3>Results &amp; playbooks</h3><p>Choose the operating metrics and launch playbooks that match your customer journey.</p><strong>Plan measurable outcomes →</strong></a>
+          <a href="/whatsapp-platform/developers/"><span>05</span><h3>Developers</h3><p>Understand events, webhooks, integrations and the secure architecture behind connected workflows.</p><strong>Explore integrations →</strong></a>
+          <a href="/whatsapp-platform/trust/"><span>06</span><h3>Security &amp; trust</h3><p>Review access controls, tenant isolation, responsible messaging and privacy practices.</p><strong>Review safeguards →</strong></a>
         </div>
       </section>
 
@@ -244,7 +247,7 @@ function renderAuth(mode = "login", focusAuth = false) {
         </section>
       </section>
 
-      <footer class="wp-sales-footer"><div><strong>Varada Nexus</strong><span>WhatsApp solutions for ambitious teams.</span></div><nav aria-label="WhatsApp solutions footer"><a href="/whatsapp-platform/features/">Features</a><a href="/whatsapp-platform/solutions/">Solutions</a><a href="/whatsapp-platform/pricing/">Pricing</a><a href="/contact.html">Contact</a><a href="/terms-of-service.html">Terms of Service</a><a href="/privacy-policy.html">Privacy Policy</a></nav></footer>
+      <footer class="wp-sales-footer"><div><strong>Varada Nexus</strong><span>WhatsApp solutions for ambitious teams.</span></div><nav aria-label="WhatsApp solutions footer"><a href="/whatsapp-platform/features/">Features</a><a href="/whatsapp-platform/solutions/">Solutions</a><a href="/whatsapp-platform/pricing/">Pricing</a><a href="/whatsapp-platform/results/">Results</a><a href="/whatsapp-platform/developers/">Developers</a><a href="/whatsapp-platform/trust/">Security</a><a href="/contact.html">Contact</a><a href="/terms-of-service.html">Terms</a><a href="/privacy-policy.html">Privacy</a></nav></footer>
     </main>
   `;
 

@@ -6,10 +6,13 @@
   <url><loc>https://www.varadanexus.com/blog/</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
   <url><loc>https://www.varadanexus.com/founder.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://www.varadanexus.com/contact.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://www.varadanexus.com/whatsapp-platform</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://www.varadanexus.com/whatsapp-platform/features/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://www.varadanexus.com/whatsapp-platform/solutions/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://www.varadanexus.com/whatsapp-platform/pricing/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.varadanexus.com/whatsapp-platform</loc><lastmod>2026-08-06</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.varadanexus.com/whatsapp-platform/features/</loc><lastmod>2026-08-06</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.varadanexus.com/whatsapp-platform/solutions/</loc><lastmod>2026-08-06</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.varadanexus.com/whatsapp-platform/pricing/</loc><lastmod>2026-08-06</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.varadanexus.com/whatsapp-platform/results/</loc><lastmod>2026-08-06</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.varadanexus.com/whatsapp-platform/developers/</loc><lastmod>2026-08-06</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.varadanexus.com/whatsapp-platform/trust/</loc><lastmod>2026-08-06</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://www.varadanexus.com/terms-of-service.html</loc><lastmod>2026-08-06</lastmod><changefreq>yearly</changefreq><priority>0.5</priority></url>
   <url><loc>https://www.varadanexus.com/privacy-policy.html</loc><lastmod>2026-08-06</lastmod><changefreq>yearly</changefreq><priority>0.5</priority></url>
   <url><loc>https://www.varadanexus.com/data-deletion.html</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>

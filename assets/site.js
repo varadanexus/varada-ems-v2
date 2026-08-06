@@ -64,6 +64,9 @@
       '<a href="/whatsapp-platform/features/">Features</a>' +
       '<a href="/whatsapp-platform/solutions/">Solutions</a>' +
       '<a href="/whatsapp-platform/pricing/">Pricing</a>' +
+      '<a href="/whatsapp-platform/results/">Results &amp; Playbooks</a>' +
+      '<a href="/whatsapp-platform/developers/">Developers</a>' +
+      '<a href="/whatsapp-platform/trust/">Security &amp; Trust</a>' +
       '<a href="/whatsapp-platform/access/" class="nav-drop-all">Login / Sign up &rarr;</a>';
     item.appendChild(whatsapp);
     item.appendChild(drop);
