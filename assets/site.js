@@ -111,6 +111,34 @@
     else links.appendChild(tools);
   })();
 
+  /* Keep the public navigation in the company-approved order on every page. */
+  (function () {
+    var links = document.querySelector(".nav-links");
+    if (!links) return;
+    var children = Array.prototype.slice.call(links.children);
+    function directLink(href, label) {
+      return children.find(function (child) {
+        return child.tagName === "A" && (child.getAttribute("href") === href || child.textContent.trim().toLowerCase() === label);
+      });
+    }
+    function menuItem(href) {
+      return children.find(function (child) {
+        return child.classList?.contains("nav-item") && child.querySelector('.nav-drop-toggle[href="' + href + '"]');
+      });
+    }
+    [
+      directLink("/", "home"),
+      menuItem("/services.html"),
+      menuItem("/whatsapp-platform"),
+      directLink("/founder.html", "founder"),
+      directLink("/team.html", "team"),
+      directLink("/blog/", "blog"),
+      directLink("/professional-tools/", "professional tools"),
+      directLink("/contact.html", "contact"),
+      links.querySelector(".nav-cta")
+    ].filter(Boolean).forEach(function (item) { links.appendChild(item); });
+  })();
+
   /* mobile menu */
   var toggle = document.querySelector(".nav-toggle");
   if (toggle) {

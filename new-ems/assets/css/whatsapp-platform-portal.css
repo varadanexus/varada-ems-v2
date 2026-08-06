@@ -142,7 +142,20 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-auth-zone .wp-auth-panel { padding: clamp(1rem, 3vw, 2.5rem); border-left: 1px solid var(--wp-line); background: rgba(4,12,8,.46); }
 .wp-auth-zone .wp-auth-card { box-shadow: none; }
 .wp-access-page .wp-marketing { min-height: calc(100vh - 64px); }
-.wp-access-page .wp-auth-zone { min-height: min(760px, calc(100vh - 160px)); margin-top: clamp(2rem,6vw,5rem); }
+.wp-access-page .wp-auth-zone { position: relative; min-height: min(720px, calc(100vh - 150px)); margin-top: clamp(2rem,5vw,4rem); grid-template-columns: minmax(0,.94fr) minmax(500px,1.06fr); background: radial-gradient(circle at 8% 12%, rgba(43,223,131,.16), transparent 34%), linear-gradient(135deg,#092117,#06130e 56%,#081a12); box-shadow: 0 34px 90px rgba(0,0,0,.28); }
+.wp-access-page .wp-auth-intro { align-items: flex-start; }
+.wp-access-page .wp-auth-intro h2 { max-width: 580px; margin-top: .8rem; }
+.wp-access-page .wp-auth-panel { border-left: 0; background: rgba(2,11,7,.32); }
+.wp-access-page .wp-auth-card { width: min(100%,520px); padding: clamp(1.5rem,3vw,2.35rem); border-color: rgba(139,226,180,.22); background: linear-gradient(155deg,rgba(14,43,30,.96),rgba(5,19,13,.98)); box-shadow: 0 24px 65px rgba(0,0,0,.3); }
+.wp-access-page .wp-auth-card.signup { width: min(100%,680px); }
+.wp-access-points { width: 100%; display: grid; margin-top: 1.7rem; border-top: 1px solid var(--wp-line); }
+.wp-access-points span { min-height: 50px; display: grid; grid-template-columns: 34px 1fr; align-items: center; border-bottom: 1px solid var(--wp-line); color: #c6dacf; font-size: .84rem; }
+.wp-access-points i { color: var(--wp-green); font-size: .63rem; font-style: normal; font-weight: 900; }
+.wp-access-points b { font-weight: 650; }
+.wp-access-links { display: flex; flex-wrap: wrap; gap: .8rem 1.2rem; margin-top: 1.4rem; }
+.wp-access-links a { color: #a9e8c6; font-size: .77rem; font-weight: 750; text-decoration: none; }
+.wp-auth-logo-lockup { margin-bottom: 1.25rem; }
+.wp-auth-logo-lockup > img { width: 50px; height: 40px; object-fit: contain; }
 .wp-access-page .wp-sales-footer { margin-top: auto; }
 .wp-sales-footer { width: min(1320px, calc(100% - 3rem)); margin: 0 auto; padding: 2rem 0 3rem; display: flex; justify-content: space-between; gap: 2rem; border-top: 1px solid var(--wp-line); }
 .wp-sales-footer strong, .wp-sales-footer span { display: block; }
@@ -285,6 +298,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .wp-use-grid { grid-template-columns: repeat(2, 1fr); }
   .wp-onboarding, .wp-trust { grid-template-columns: 1fr; gap: 2rem; }
   .wp-auth-zone { grid-template-columns: 1fr; }
+  .wp-access-page .wp-auth-zone { grid-template-columns: 1fr; }
   .wp-auth-zone .wp-auth-panel { border-left: 0; border-top: 1px solid var(--wp-line); }
 }
 

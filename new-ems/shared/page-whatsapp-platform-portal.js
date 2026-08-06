@@ -225,14 +225,15 @@ function renderAuth(mode = "login", focusAuth = false) {
 
       <section class="wp-auth-zone" id="get-started">
         <div class="wp-auth-intro">
-          <span class="wp-kicker">Start the conversation</span>
-          <h2>${signup ? "Create your business workspace." : "Welcome back to your workspace."}</h2>
-          <p>${signup ? "Tell us about your business and goals. We’ll use these details to prepare the right onboarding path for your team." : "Sign in to continue onboarding and manage your WhatsApp business workspace."}</p>
-          <a href="/contact.html?subject=WhatsApp%20Solutions">Prefer to talk first? Contact our solutions team →</a>
+          <span class="wp-kicker">Secure customer portal</span>
+          <h2>${signup ? "Bring your business to WhatsApp." : "Your workspace is ready when you are."}</h2>
+          <p>${signup ? "Create your business workspace and tell us what you want to achieve. We’ll prepare the right onboarding path for your team." : "Continue your onboarding, manage connected business assets and prepare your customer communication workspace."}</p>
+          <div class="wp-access-points"><span><i>01</i><b>Business-owned account and number</b></span><span><i>02</i><b>Guided Meta onboarding</b></span><span><i>03</i><b>Protected company workspace</b></span></div>
+          <div class="wp-access-links"><a href="/whatsapp-platform">← Explore WhatsApp Solutions</a><a href="/contact.html?subject=WhatsApp%20Solutions">Talk to our solutions team →</a></div>
         </div>
         <section class="wp-auth-panel">
         <div class="wp-auth-card ${signup ? "signup" : ""}">
-          <div class="wp-brand"><span class="wp-brand-mark">VN</span><div><strong>WhatsApp Solutions</strong><small>Secure business access</small></div></div>
+          <div class="wp-brand wp-auth-logo-lockup"><img src="/images/logo.png" alt="Varada Nexus company logo" /><div><strong>WhatsApp Solutions</strong><small>${signup ? "Create a customer workspace" : "Customer workspace sign in"}</small></div></div>
           <div class="wp-tabs" role="tablist">
             <button class="wp-tab ${signup ? "" : "active"}" type="button" data-auth-mode="login" role="tab" aria-selected="${signup ? "false" : "true"}">Sign in</button>
             <button class="wp-tab ${signup ? "active" : ""}" type="button" data-auth-mode="signup" role="tab" aria-selected="${signup ? "true" : "false"}">Sign up</button>
