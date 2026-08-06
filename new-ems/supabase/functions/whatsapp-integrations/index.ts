@@ -2446,6 +2446,8 @@ async function sendMessage(req: Request, body: any) {
   const storedMessage = body.templateAlias
     ? fullRenderedMessage || `[Template] ${body.templateAlias}`
     : outboundText || `Document: ${attachment?.fileName || "attachment"}`;
+  const sourceModule = trimText(body.sourceModule) || "whatsapp";
+  const sourceEvent = trimText(body.sourceEvent) || "manual_send";
   const renderedPayload = {
     ...(body.variables || {}),
     ...(attachment
@@ -2472,8 +2474,8 @@ async function sendMessage(req: Request, body: any) {
       status: twilioPayload.status || "queued",
       media_url: attachment?.signedUrl || null,
       template_alias: body.templateAlias || null,
-      source_module: "whatsapp",
-      source_event: "manual_send",
+      source_module: sourceModule,
+      source_event: sourceEvent,
       rendered_payload: renderedPayload,
     })
     .select("*")
@@ -2497,8 +2499,8 @@ async function sendMessage(req: Request, body: any) {
     status: twilioPayload.status || "queued",
     message_sid: twilioPayload.sid || null,
     message_text: storedMessage,
-    source_module: "whatsapp",
-    source_event: "manual_send",
+    source_module: sourceModule,
+    source_event: sourceEvent,
     rendered_payload: renderedPayload,
   });
 

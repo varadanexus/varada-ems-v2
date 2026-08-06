@@ -272,6 +272,16 @@ function legalSubfolder(documentType: string) {
   return "Agreements";
 }
 
+async function replaceFile(token: string, fileId: string, fileName: string, mimeType: string, bytes: Uint8Array) {
+  const boundary = "vnbnd" + crypto.randomUUID().replace(/-/g, "");
+  const enc = new TextEncoder();
+  const pre = enc.encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: fileName })}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`);
+  const post = enc.encode(`\r\n--${boundary}--`);
+  const body = new Uint8Array(pre.length + bytes.length + post.length);
+  body.set(pre, 0); body.set(bytes, pre.length); body.set(post, pre.length + bytes.length);
+  return await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=multipart&${DRIVE_QS}&fields=id,name,webViewLink,webContentLink,size`, token, { method: "PATCH", headers: { "Content-Type": `multipart/related; boundary=${boundary}` }, body });
+}
+
 async function findFileInFolder(token: string, folderId: string, fileName: string) {
   const q = [
     `name='${escapeDriveQuery(fileName)}'`,
@@ -479,7 +489,6 @@ function categoryLayout(category: string, payload: any, fy: string, mm: string, 
       ];
     case "HOSPITAL_PROJECT":
       return [
-        "Hospital Projects",
         safeFolderSegment(payload.clientName, "Unassigned Hospital"),
         safeFolderSegment(`${payload.projectCode || "PROJECT"} - ${payload.projectName || "Hospital Project"}`, "Hospital Project"),
         safeFolderSegment(payload.documentType, "Documents")
@@ -525,7 +534,9 @@ function resolveTargetFolder(payload: any) {
   const withDate = useDateSubfolders();
 
   const interiorsRoot = env("GDRIVE_INTERIORS_FOLDER_ID", "1-8Pu3TFUdhOyM3FxieCKr6ePWzFl3bLy");
+  const hospitalProjectsRoot = env("GDRIVE_HOSPITAL_PROJECTS_FOLDER_ID");
   const base = map[category]
+    || (category === "HOSPITAL_PROJECT" ? hospitalProjectsRoot : "")
     || (category.startsWith("INTERIORS_") ? interiorsRoot : "")
     || map.DEFAULT
     || env("GDRIVE_ROOT_FOLDER_ID");
@@ -545,11 +556,13 @@ async function handleHealth() {
   const rootId = env("GDRIVE_ROOT_FOLDER_ID");
   const marketingVendorRoot = env("GDRIVE_MARKETING_VENDOR_FOLDER_ID", "1FaMwA7oEKpBQEBEoFjnZTAXgZnGn5Yb5");
   const interiorsRoot = env("GDRIVE_INTERIORS_FOLDER_ID", "1-8Pu3TFUdhOyM3FxieCKr6ePWzFl3bLy");
+  const hospitalProjectsRoot = env("GDRIVE_HOSPITAL_PROJECTS_FOLDER_ID");
   const termsRoot = env("GDRIVE_TERMS_FOLDER_ID", "1oUSH1IacRP7UyYs6kTspDX4nDspGxGT3");
   const targets: Record<string, string> = { ...map };
   if (rootId) targets.ROOT = rootId;
   if (marketingVendorRoot) targets.MARKETING_VENDOR_ROOT = marketingVendorRoot;
   if (interiorsRoot) targets.INTERIORS_ROOT = interiorsRoot;
+  if (hospitalProjectsRoot) targets.HOSPITAL_PROJECTS_ROOT = hospitalProjectsRoot;
   if (termsRoot) targets.TERMS_ROOT = termsRoot;
   if (!Object.keys(targets).length) {
     throw new Error("No folders configured: set GDRIVE_FOLDER_MAP and/or GDRIVE_ROOT_FOLDER_ID");
@@ -710,8 +723,14 @@ async function handleEnsureHospitalProjectFolders(req: Request, payload: any) {
     const target = resolveTargetFolder({ ...basePayload, documentType: "Documents" });
     const projectSegments = target.segments.slice(0, -1);
     const projectFolderId = await ensureFolderPath(token, target.baseId, projectSegments);
-    const folders = ["Documents", "Planning & Design", "Construction", "Procurement", "Medical Equipment", "Licensing & Compliance", "Contractors", "Commercial"];
-    for (const folder of folders) await ensureFolder(token, projectFolderId, folder);
+    const folders = [
+      "Documents", "Planning & Design", "Construction", "Procurement",
+      "Procurement Proposals", "Purchase Orders", "Medical Equipment",
+      "Licensing & Compliance", "Contractors", "Client Invoices",
+      "Client Receipts", "Credit Notes", "Vendor Bills", "Vendor Payments",
+      "Commercial"
+    ];
+    for (const folder of folders) await findOrCreateFolder(token, projectFolderId, folder);
     const folderPath = projectSegments.join(" / ");
     await ctx.db.from("hospital_projects").update({
       drive_folder_id: projectFolderId,
@@ -747,6 +766,237 @@ async function handleUploadHospitalProjectDocument(req: Request, payload: any) {
     projectName: ctx.project.title,
     date: payload.date || new Date().toISOString()
   });
+}
+
+async function handleUploadHospitalVendorInvoice(req: Request, payload: any) {
+  const sessionToken = String(payload.sessionToken || "").trim();
+  const projectId = String(payload.projectId || "").trim();
+  const suppliedVendorId = String(payload.vendorId || "").trim();
+  const vendorInvoiceNumber = String(payload.vendorInvoiceNumber || "").trim();
+  const billDate = String(payload.billDate || "").trim();
+  const dueDate = String(payload.dueDate || "").trim() || null;
+  const description = String(payload.description || "").trim();
+  const taxableAmount = Number(payload.taxableAmount || 0);
+  const taxRate = Number(payload.taxRate || 0);
+  const originalName = cleanUploadFileName(payload.fileName || "vendor-invoice.pdf");
+  const mimeType = String(payload.mimeType || "application/pdf").toLowerCase();
+
+  if (!projectId) throw new Error("Hospital project is required");
+  if (!vendorInvoiceNumber) throw new Error("Vendor invoice number is required");
+  if (!description) throw new Error("Invoice description is required");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(billDate) || Number.isNaN(Date.parse(`${billDate}T00:00:00Z`))) throw new Error("A valid bill date is required");
+  if (dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || Number.isNaN(Date.parse(`${dueDate}T00:00:00Z`)))) throw new Error("Due date is invalid");
+  if (!Number.isFinite(taxableAmount) || taxableAmount <= 0) throw new Error("Taxable amount must be greater than zero");
+  if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) throw new Error("GST rate must be between 0 and 100");
+  if (!payload.base64) throw new Error("Vendor invoice file is required");
+  if (!["application/pdf","image/jpeg","image/png"].includes(mimeType)) throw new Error("Upload a PDF, JPG, or PNG invoice");
+  const bytes = base64ToBytes(payload.base64);
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw new Error("Invoice file must be 10 MB or smaller");
+
+  const db = adminClient();
+  let source = "staff";
+  let vendorId = suppliedVendorId;
+  let staffAppUserId: string | null = null;
+  let portalUserId: string | null = null;
+  let divisionId: string;
+  let projectCode: string;
+  let projectName: string;
+  let clientName: string;
+  let vendorName: string;
+
+  if (sessionToken) {
+    source = "vendor_portal";
+    const { data: context, error } = await db.rpc("hospital_vendor_upload_context", { p_session_token: sessionToken, p_project_id: projectId });
+    if (error || !context?.vendorId) throw new Error(error?.message || "Vendor project access could not be verified");
+    vendorId = context.vendorId;
+    portalUserId = context.portalUserId;
+    divisionId = context.divisionId;
+    projectCode = context.projectCode;
+    projectName = context.projectName;
+    clientName = context.clientName;
+    vendorName = context.vendorName;
+  } else {
+    if (!vendorId) throw new Error("Assigned vendor is required");
+    const { caller, appUser } = await authenticatedCaller(req);
+    const { data: permitted, error: permissionError } = await caller.rpc("has_permission", { module_code:"hospital-projects", action_code:"create" });
+    if (permissionError || !permitted) throw new Error("Hospital vendor invoice create permission required");
+    staffAppUserId = appUser.id;
+    const { data: project, error: projectError } = await db.from("hospital_projects")
+      .select("id,division_id,project_code,title,hospital_clients(hospital_name)").eq("id",projectId).maybeSingle();
+    if (projectError || !project) throw new Error(projectError?.message || "Hospital project not found");
+    const { data: vendor, error: vendorError } = await db.from("hospital_vendors").select("id,legal_name").eq("id",vendorId).maybeSingle();
+    if (vendorError || !vendor) throw new Error(vendorError?.message || "Hospital vendor not found");
+    const { data: assignment, error: assignmentError } = await db.from("hospital_project_vendors")
+      .select("id").eq("project_id",projectId).eq("vendor_id",vendorId).neq("status","cancelled").limit(1);
+    if (assignmentError || !assignment?.length) throw new Error("Select a vendor assigned to this project");
+    const client = Array.isArray(project.hospital_clients) ? project.hospital_clients[0] : project.hospital_clients;
+    divisionId = project.division_id; projectCode = project.project_code; projectName = project.title;
+    clientName = client?.hospital_name || "Unassigned Hospital"; vendorName = vendor.legal_name;
+  }
+
+  const { data: duplicate, error: duplicateError } = await db.from("hospital_vendor_bills")
+    .select("id").eq("vendor_id",vendorId).ilike("vendor_invoice_number",vendorInvoiceNumber).limit(1);
+  if (duplicateError) throw new Error(duplicateError.message);
+  if (duplicate?.length) throw new Error("This vendor invoice number has already been submitted");
+
+  const token = await getAccessToken();
+  const target = resolveTargetFolder({ category:"HOSPITAL_PROJECT", documentType:"Vendor Bills", clientName, projectCode, projectName, date:billDate });
+  const folderId = await ensureFolderPath(token,target.baseId,target.segments);
+  const safeReference = vendorInvoiceNumber.replace(/[^a-zA-Z0-9._-]+/g,"-").replace(/^-+|-+$/g,"") || "vendor-invoice";
+  const extension = mimeType === "application/pdf" ? ".pdf" : mimeType === "image/png" ? ".png" : ".jpg";
+  const fileName = `${safeReference}-${billDate}${extension}`;
+  const uploaded = await uploadFile(token,folderId,fileName,mimeType,bytes);
+
+  let bill: any;
+  try {
+    const { data, error } = await db.rpc("hospital_record_vendor_invoice_upload", {
+      p_project_id:projectId,p_vendor_id:vendorId,p_vendor_invoice_number:vendorInvoiceNumber,
+      p_bill_date:billDate,p_due_date:dueDate,p_description:description,p_taxable_amount:taxableAmount,
+      p_tax_rate:taxRate,p_source:source,p_staff_app_user_id:staffAppUserId,p_portal_user_id:portalUserId,
+      p_original_file_name:originalName,p_mime_type:mimeType,p_file_size:uploaded.size?Number(uploaded.size):bytes.length
+    });
+    if (error || !data?.id) throw new Error(error?.message || "Vendor invoice record could not be created");
+    bill = data;
+  } catch (error) {
+    await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(uploaded.id)}?supportsAllDrives=true`,token,{method:"DELETE"}).catch(()=>null);
+    throw error;
+  }
+
+  const { data: registry, error: registryError } = await db.from("drive_documents").insert({
+    division_id:divisionId,category:"HOSPITAL_PROJECT",document_type:"Vendor Bills",
+    entity_type:"hospital_vendor_bills",entity_id:bill.id,document_no:bill.bill_number,
+    file_name:uploaded.name||fileName,mime_type:mimeType,file_size:uploaded.size?Number(uploaded.size):bytes.length,
+    drive_file_id:uploaded.id,drive_folder_id:folderId,web_view_link:uploaded.webViewLink||null,
+    web_content_link:uploaded.webContentLink||null,upload_status:"stored",uploaded_by:staffAppUserId||portalUserId
+  }).select("*").single();
+  if (registryError) {
+    await db.from("hospital_vendor_bills").delete().eq("id",bill.id);
+    await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(uploaded.id)}?supportsAllDrives=true`,token,{method:"DELETE"}).catch(()=>null);
+    throw new Error(`Invoice file registry failed: ${registryError.message}`);
+  }
+  const { error: updateError } = await db.from("hospital_vendor_bills").update({drive_document_id:registry.id}).eq("id",bill.id);
+  if (updateError) {
+    await db.from("drive_documents").delete().eq("id",registry.id);
+    await db.from("hospital_vendor_bills").delete().eq("id",bill.id);
+    await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(uploaded.id)}?supportsAllDrives=true`,token,{method:"DELETE"}).catch(()=>null);
+    throw new Error(updateError.message);
+  }
+  await db.from("audit_logs").insert({
+    event_type:"hospital_vendor_invoice_uploaded",module_code:"hospital-projects",
+    actor_app_user_id:staffAppUserId,entity_type:"hospital_vendor_bills",entity_id:bill.id,
+    details:{source,vendor_id:vendorId,vendor_name:vendorName,project_id:projectId,vendor_invoice_number:vendorInvoiceNumber,drive_file_id:uploaded.id}
+  });
+  return {ok:true,bill:{...bill,drive_document_id:registry.id,web_view_link:uploaded.webViewLink||null},fileId:uploaded.id,webViewLink:uploaded.webViewLink||null,folderPath:target.label};
+}
+
+async function handleDeleteHospitalProjectDocument(req: Request, payload: any) {
+  const documentId = String(payload.documentId || "").trim();
+  if (!documentId) throw new Error("Hospital project document id is required");
+  const { caller, db, appUser } = await authenticatedCaller(req);
+  const { data: permitted, error: permissionError } = await caller.rpc("has_permission", {
+    module_code: "hospital-projects",
+    action_code: "delete"
+  });
+  if (permissionError || !permitted) throw new Error("Hospital project delete permission required");
+  const { data: document, error } = await db.from("drive_documents")
+    .select("id,category,entity_type,entity_id,file_name,drive_file_id,deleted_at")
+    .eq("id", documentId)
+    .eq("category", "HOSPITAL_PROJECT")
+    .maybeSingle();
+  if (error || !document) throw new Error(error?.message || "Hospital project document not found");
+  if (document.deleted_at) return { ok: true, alreadyDeleted: true };
+  if (document.entity_type !== "hospital_projects" || !document.entity_id) throw new Error("Invalid Hospital project document association");
+  const { data: allowed, error: accessError } = await caller.rpc("hospital_can_access_project", { p_project_id: document.entity_id });
+  if (accessError || !allowed) throw new Error("Hospital project access denied");
+  if (!document.drive_file_id) throw new Error("Google Drive file reference is missing");
+
+  const token = await getAccessToken();
+  await driveFetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?supportsAllDrives=true&fields=id,trashed`,
+    token,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }) }
+  );
+  const deletedAt = new Date().toISOString();
+  const { error: updateError } = await db.from("drive_documents").update({
+    deleted_at: deletedAt,
+    upload_status: "deleted",
+    error_detail: null
+  }).eq("id", document.id);
+  if (updateError) {
+    await driveFetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?supportsAllDrives=true&fields=id,trashed`,
+      token,
+      { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: false }) }
+    ).catch(() => null);
+    throw new Error(updateError.message);
+  }
+  await db.from("audit_logs").insert({
+    event_type: "hospital_project_drive_document_deleted",
+    module_code: "hospital-projects",
+    actor_app_user_id: appUser.id,
+    entity_type: "drive_documents",
+    entity_id: document.id,
+    details: { project_id: document.entity_id, file_name: document.file_name, drive_file_id: document.drive_file_id, drive_trashed: true }
+  });
+  return { ok: true, documentId: document.id, driveTrashed: true, deletedAt };
+}
+
+function hospitalBillingEntity(value: unknown) {
+  const entityType = String(value || "").trim();
+  if (!['hospital_invoices','hospital_credit_notes'].includes(entityType)) throw new Error("Unsupported Hospital billing document type");
+  return entityType;
+}
+
+async function hospitalBillingContext(req: Request, entityType: string, entityId: string) {
+  const { caller, db, appUser } = await authenticatedCaller(req);
+  const numberColumn = entityType === "hospital_invoices" ? "invoice_number" : "credit_note_number";
+  const { data: entity, error } = await db.from(entityType).select(`id,project_id,division_id,${numberColumn}`).eq("id", entityId).maybeSingle();
+  if (error || !entity) throw new Error(error?.message || "Hospital billing document not found");
+  const ctx = await hospitalProjectDriveContext(req, entity.project_id);
+  return { caller, db, appUser, entity, ctx, documentNo: entity[numberColumn] };
+}
+
+async function handleUpsertHospitalBillingDocument(req: Request, payload: any) {
+  const entityType = hospitalBillingEntity(payload.entityType);
+  const entityId = String(payload.entityId || "").trim();
+  if (!entityId || !payload.base64) throw new Error("Hospital billing document and PDF are required");
+  const billing = await hospitalBillingContext(req, entityType, entityId);
+  const documentType = entityType === "hospital_invoices" ? "Client Invoices" : "Credit Notes";
+  const filePrefix = entityType === "hospital_invoices" ? "INVOICE" : "CREDIT-NOTE";
+  const safeNo = String(billing.documentNo || entityId).replace(/[^a-zA-Z0-9._-]+/g, "-");
+  const fileName = `${filePrefix}-${safeNo}.pdf`;
+  const bytes = base64ToBytes(payload.base64);
+  const token = await getAccessToken();
+  const target = resolveTargetFolder({ category:"HOSPITAL_PROJECT", documentType, clientName:billing.ctx.clientName, projectCode:billing.ctx.project.project_code, projectName:billing.ctx.project.title, date:payload.date || new Date().toISOString() });
+  const folderId = await ensureFolderPath(token, target.baseId, target.segments);
+  const { data: rows, error: registryError } = await billing.db.from("drive_documents").select("*").eq("category","HOSPITAL_PROJECT").eq("entity_type",entityType).eq("entity_id",entityId).is("deleted_at",null).order("created_at",{ascending:false}).limit(1);
+  if (registryError) throw new Error(registryError.message);
+  const existing = rows?.[0] || null;
+  const uploaded = existing?.drive_file_id ? await replaceFile(token, existing.drive_file_id, fileName, "application/pdf", bytes) : await uploadFile(token, folderId, fileName, "application/pdf", bytes);
+  const values = { division_id:billing.entity.division_id,category:"HOSPITAL_PROJECT",document_type:documentType,entity_type:entityType,entity_id:entityId,document_no:billing.documentNo,file_name:fileName,mime_type:"application/pdf",file_size:uploaded.size?Number(uploaded.size):bytes.length,drive_file_id:uploaded.id,drive_folder_id:folderId,web_view_link:uploaded.webViewLink||existing?.web_view_link||null,web_content_link:uploaded.webContentLink||existing?.web_content_link||null,upload_status:"stored",error_detail:null,uploaded_by:billing.appUser.id,deleted_at:null };
+  let record;
+  if (existing) {
+    const { data, error } = await billing.db.from("drive_documents").update(values).eq("id",existing.id).select("*").single(); if(error)throw new Error(error.message);record=data;
+  } else {
+    const { data, error } = await billing.db.from("drive_documents").insert(values).select("*").single(); if(error)throw new Error(error.message);record=data;
+  }
+  return { ok:true,replaced:Boolean(existing),document:record,fileId:uploaded.id,webViewLink:values.web_view_link,folderPath:target.label };
+}
+
+async function handleDeleteHospitalBillingDocument(req: Request, payload: any) {
+  const entityType = hospitalBillingEntity(payload.entityType);
+  const entityId = String(payload.entityId || "").trim();
+  const billing = await hospitalBillingContext(req, entityType, entityId);
+  const { data: permitted } = await billing.caller.rpc("has_permission",{module_code:"hospital-projects",action_code:"delete"});
+  if(!permitted)throw new Error("Hospital billing delete permission required");
+  const { data: rows } = await billing.db.from("drive_documents").select("*").eq("category","HOSPITAL_PROJECT").eq("entity_type",entityType).eq("entity_id",entityId).is("deleted_at",null).limit(1);
+  const document=rows?.[0]||null,token=document?.drive_file_id?await getAccessToken():null;
+  if(document?.drive_file_id)await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?supportsAllDrives=true&fields=id,trashed`,token!,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:true})});
+  const { error: deleteError } = await billing.caller.rpc("hospital_delete_billing_document",{p_entity_type:entityType==="hospital_invoices"?"invoice":"credit_note",p_entity_id:entityId});
+  if(deleteError){if(document?.drive_file_id)await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?supportsAllDrives=true&fields=id,trashed`,token!,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({trashed:false})}).catch(()=>null);throw new Error(deleteError.message);}
+  if(document?.drive_file_id)await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?supportsAllDrives=true`,token!,{method:"DELETE"});
+  if(document)await billing.db.from("drive_documents").update({deleted_at:new Date().toISOString(),upload_status:"deleted",error_detail:null}).eq("id",document.id);
+  return {ok:true,permanentlyDeleted:Boolean(document?.drive_file_id)};
 }
 
 const INTERIORS_UPLOAD_RULES: Record<string, { moduleCode: string; entityType: string; extensions: string[] }> = {
@@ -1514,6 +1764,199 @@ async function handleArchiveTermsAcceptance(req: Request, payload: any) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Public: Professional Tools — Sheet & Area Estimator
+// Creates <Sheet & Area Estimator>/<estimateId>/{photos,pdf} under the
+// professional-tools Drive folder, renders a branded PDF and stores photos.
+// Callable from the public tool page with the Supabase anon key (no EMS user).
+// ---------------------------------------------------------------------------
+function inrPdf(n: unknown) {
+  return "Rs " + (Math.round(Number(n) || 0)).toLocaleString("en-IN");
+}
+function num2(n: unknown) {
+  return (Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function buildSheetEstimatePdf(estimate: any, estimateId: string) {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const navy = rgb(0.035, 0.075, 0.14);
+  const gold = rgb(0.78, 0.61, 0.25);
+  const goldDark = rgb(0.6, 0.45, 0.12);
+  const muted = rgb(0.34, 0.38, 0.44);
+  const light = rgb(0.93, 0.94, 0.96);
+  const width = 595.28, height = 841.89, margin = 42;
+  let page: any, y = 0;
+
+  const addPage = () => {
+    page = pdf.addPage([width, height]);
+    page.drawRectangle({ x: 0, y: height - 70, width, height: 70, color: navy });
+    page.drawRectangle({ x: 0, y: height - 72, width, height: 2, color: gold });
+    page.drawText("VARADA NEXUS PRIVATE LIMITED", { x: margin, y: height - 38, size: 14, font: bold, color: rgb(1, 1, 1) });
+    page.drawText("SHEET & AREA ESTIMATE", { x: margin, y: height - 56, size: 8, font: bold, color: gold });
+    y = height - 96;
+  };
+  const ensure = (need: number) => { if (y - need < 56) addPage(); };
+  const cells = (arr: any[], size = 9, font = regular, color = navy) => {
+    ensure(15);
+    for (const [s, x, align] of arr) {
+      const str = pdfSafe(String(s ?? ""));
+      const xx = align === "r" ? x - font.widthOfTextAtSize(str, size) : x;
+      page.drawText(str, { x: xx, y, size, font, color });
+    }
+    y -= 14;
+  };
+
+  addPage();
+  page.drawText("Estimate ID", { x: margin, y, size: 7.5, font: bold, color: gold });
+  page.drawText(pdfSafe(estimateId), { x: margin + 74, y, size: 10, font: bold, color: navy }); y -= 16;
+  const gen = estimate.generatedAt ? new Date(estimate.generatedAt) : new Date();
+  page.drawText("Generated", { x: margin, y, size: 7.5, font: bold, color: gold });
+  page.drawText(pdfSafe(isNaN(gen.getTime()) ? "-" : gen.toLocaleString("en-IN")), { x: margin + 74, y, size: 9, font: regular, color: navy }); y -= 16;
+  const pj = estimate.project || {};
+  page.drawText("Settings", { x: margin, y, size: 7.5, font: bold, color: gold });
+  page.drawText(pdfSafe(`Sheet ${pj.sheetLabel || "-"}   |   Wastage ${pj.wastage ?? 0}%   |   Labour Rs ${pj.labourRate ?? 0}/sft`), { x: margin + 74, y, size: 9, font: regular, color: navy }); y -= 24;
+
+  const units = Array.isArray(estimate.units) ? estimate.units : [];
+  for (const u of units) {
+    ensure(46);
+    page.drawRectangle({ x: margin, y: y - 4, width: width - margin * 2, height: 18, color: light });
+    page.drawText(pdfSafe(`${u.name || u.type || "Unit"}  (${u.type || ""})  x${u.qty || 1}`), { x: margin + 5, y, size: 10, font: bold, color: navy });
+    const ut = `${num2(u.total)} sft`;
+    page.drawText(pdfSafe(ut), { x: width - margin - 5 - bold.widthOfTextAtSize(ut, 10), y, size: 10, font: bold, color: navy });
+    y -= 22;
+    cells([["Surface", margin + 5], ["Material", margin + 150], ["mm", margin + 252], ["L", margin + 288], ["W", margin + 326], ["Qty", margin + 364], ["Area sft", width - margin - 5, "r"]], 7.5, bold, muted);
+    for (const r of (u.rows || [])) {
+      cells([
+        [String(r.name || "-").slice(0, 28), margin + 5],
+        [String(r.material || "").slice(0, 20), margin + 150],
+        [String(r.thick || ""), margin + 252],
+        [num2(r.l), margin + 288],
+        [num2(r.w), margin + 326],
+        [`${r.qty || 0} ${r.unit || ""}`, margin + 364],
+        [num2(r.sqft), width - margin - 5, "r"]
+      ], 8, regular, navy);
+    }
+    y -= 8;
+  }
+
+  ensure(44);
+  page.drawRectangle({ x: margin, y: y - 4, width: width - margin * 2, height: 18, color: navy });
+  page.drawText("SHEET BREAKDOWN BY TYPE", { x: margin + 5, y, size: 9, font: bold, color: rgb(1, 1, 1) });
+  y -= 22;
+  cells([["Material", margin + 5], ["mm", margin + 190], ["Work sft", margin + 250], ["Sheets", margin + 340], ["Rate", margin + 400], ["Cost", width - margin - 5, "r"]], 7.5, bold, muted);
+  for (const g of (Array.isArray(estimate.breakdown) ? estimate.breakdown : [])) {
+    cells([
+      [String(g.material || "").slice(0, 26), margin + 5],
+      [String(g.thick || ""), margin + 190],
+      [num2(g.work), margin + 250],
+      [String(g.sheets || 0), margin + 340],
+      [inrPdf(g.rate || 0), margin + 400],
+      [inrPdf(g.cost || 0), width - margin - 5, "r"]
+    ], 8, regular, navy);
+  }
+  y -= 12;
+
+  const t = estimate.totals || {};
+  ensure(120);
+  const bx = margin, bw = width - margin * 2, bh = 108;
+  page.drawRectangle({ x: bx, y: y - bh, width: bw, height: bh, borderColor: gold, borderWidth: 1, color: rgb(0.98, 0.97, 0.94) });
+  let ty = y - 16;
+  const tl = (k: string, v: string) => {
+    page.drawText(pdfSafe(k), { x: bx + 12, y: ty, size: 9, font: regular, color: muted });
+    const vs = pdfSafe(v);
+    page.drawText(vs, { x: bx + bw - 12 - bold.widthOfTextAtSize(vs, 10), y: ty, size: 10, font: bold, color: navy });
+    ty -= 15;
+  };
+  tl("Furniture units", String(t.units ?? units.length));
+  tl("Work area done", `${num2(t.work)} sft`);
+  tl("Total sheets required", String(t.sheets ?? 0));
+  tl("Total sheet area", `${num2(t.sheetArea)} sft`);
+  tl("Material cost", inrPdf(t.material || 0));
+  tl("Labour cost", inrPdf(t.labour || 0));
+  ty -= 2;
+  page.drawLine({ start: { x: bx + 12, y: ty + 9 }, end: { x: bx + bw - 12, y: ty + 9 }, thickness: 0.7, color: gold });
+  page.drawText("TOTAL PRICE", { x: bx + 12, y: ty - 4, size: 11, font: bold, color: navy });
+  const gt = inrPdf(t.total || 0);
+  page.drawText(gt, { x: bx + bw - 12 - bold.widthOfTextAtSize(gt, 13), y: ty - 5, size: 13, font: bold, color: goldDark });
+  y -= bh + 10;
+
+  const pages = pdf.getPages();
+  pages.forEach((p: any, i: number) => {
+    p.drawLine({ start: { x: margin, y: 38 }, end: { x: width - margin, y: 38 }, thickness: 0.5, color: gold });
+    p.drawText(pdfSafe(`Varada Nexus Private Limited  |  Sheet & Area Estimator  |  ${estimateId}  |  Page ${i + 1} of ${pages.length}`), { x: margin, y: 24, size: 7, font: regular, color: muted });
+    p.drawText("Indicative estimate only. Sheet sizes, wastage and rates vary by vendor and date. Verify before purchase.", { x: margin, y: 14, size: 6.5, font: regular, color: muted });
+  });
+  return await pdf.save();
+}
+
+async function handleSheetEstimateSave(payload: any) {
+  const estimate = payload.estimate || {};
+  const rawId = String(payload.estimateId || estimate.id || "").trim();
+  const fallbackId = `SAE-${Date.now()}`;
+  const estimateId = safeFolderSegment(rawId || fallbackId, fallbackId);
+  const photos = Array.isArray(payload.photos) ? payload.photos : [];
+  if (photos.length > 40) throw new Error("Too many photos (max 40 per estimate)");
+
+  const rootId = env("GDRIVE_PROFESSIONAL_TOOLS_FOLDER_ID", "1fiGX6FnDxTcfdyYcoHrXM3bNzwvbCTaf");
+  if (!rootId) throw new Error("GDRIVE_PROFESSIONAL_TOOLS_FOLDER_ID is not configured");
+
+  const token = await getAccessToken();
+  const toolRoot = await findOrCreateFolder(token, rootId, "Sheet & Area Estimator");
+  const baseFolder = await findOrCreateFolder(token, toolRoot, estimateId);
+  const photosFolder = await findOrCreateFolder(token, baseFolder, "photos");
+  const pdfFolder = await findOrCreateFolder(token, baseFolder, "pdf");
+
+  const pdfBytes = await buildSheetEstimatePdf(estimate, estimateId);
+  const pdfFile = await uploadFileIfMissing(token, pdfFolder, `${estimateId}.pdf`, "application/pdf", pdfBytes);
+
+  const photoResults: any[] = [];
+  let idx = 0;
+  for (const p of photos) {
+    idx++;
+    const dataUrl = String(p?.dataUrl || "");
+    const match = dataUrl.match(/^data:([^;]+);base64,([\s\S]*)$/);
+    if (!match) continue;
+    const mime = match[1] || "image/jpeg";
+    const bytes = base64ToBytes(match[2].replace(/\s+/g, ""));
+    if (bytes.length > 12 * 1024 * 1024) throw new Error(`Photo ${idx} exceeds the 12MB limit`);
+    const ext = (mime.split("/")[1] || "jpg").replace("jpeg", "jpg");
+    const cleaned = safeFolderSegment(p?.filename || `photo-${idx}`, `photo-${idx}`);
+    const fileName = /\.(jpe?g|png|webp|gif|heic|heif)$/i.test(cleaned) ? cleaned : `${cleaned}.${ext}`;
+    const up = await uploadFile(token, photosFolder, fileName, mime, bytes);
+    photoResults.push({ id: up.id, name: up.name, link: up.webViewLink || null });
+  }
+
+  // Best-effort audit record; ignore if the table/columns differ.
+  try {
+    const db = adminClient();
+    await db.from("drive_documents").insert({
+      category: "INTERIORS_SHEET_ESTIMATE",
+      document_type: "SHEET_AREA_ESTIMATE",
+      document_no: estimateId,
+      file_name: pdfFile.name || `${estimateId}.pdf`,
+      mime_type: "application/pdf",
+      file_size: pdfFile.size ? Number(pdfFile.size) : pdfBytes.length,
+      drive_file_id: pdfFile.id,
+      drive_folder_id: baseFolder,
+      web_view_link: pdfFile.webViewLink || null,
+      metadata: { photos: photoResults.length, totals: estimate.totals || null }
+    });
+  } catch (_e) { /* non-fatal */ }
+
+  return {
+    ok: true,
+    id: estimateId,
+    folderId: baseFolder,
+    folderLink: `https://drive.google.com/drive/folders/${baseFolder}`,
+    pdf: { id: pdfFile.id, name: pdfFile.name, link: pdfFile.webViewLink || null },
+    photos: photoResults,
+    // convenient single link the UI shows first
+    link: `https://drive.google.com/drive/folders/${baseFolder}`
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -1538,6 +1981,14 @@ Deno.serve(async (req) => {
         return json(await handleEnsureHospitalProjectFolders(req, payload));
       case "upload_hospital_project_document":
         return json(await handleUploadHospitalProjectDocument(req, payload));
+      case "upload_hospital_vendor_invoice":
+        return json(await handleUploadHospitalVendorInvoice(req, payload));
+      case "delete_hospital_project_document":
+        return json(await handleDeleteHospitalProjectDocument(req, payload));
+      case "upsert_hospital_billing_document":
+        return json(await handleUpsertHospitalBillingDocument(req, payload));
+      case "delete_hospital_billing_document":
+        return json(await handleDeleteHospitalBillingDocument(req, payload));
       case "preview_interiors_client_document":
         return await handleInteriorsClientDocumentPreview(payload);
       case "preview_interiors_staff_document":
@@ -1554,6 +2005,8 @@ Deno.serve(async (req) => {
         return json(await handleUploadMarketingVendorInvoice(payload));
       case "archive_terms_acceptance":
         return json(await handleArchiveTermsAcceptance(req, payload));
+      case "sheet_estimate_save":
+        return json(await handleSheetEstimateSave(payload));
       default:
         return json({ error: `Unknown action: ${action || "(none)"}` }, 400);
     }

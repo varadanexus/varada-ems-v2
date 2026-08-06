@@ -41,8 +41,47 @@
     else links.appendChild(blog);
   })();
 
+  /* Public WhatsApp product hub: keep it between Contact and Login. */
+  (function () {
+    var links = document.querySelector(".nav-links");
+    if (!links || links.querySelector(".whatsapp-nav-item")) return;
+    var existing = links.querySelector('a[href="/whatsapp-platform"]');
+    if (existing && existing.parentNode === links) existing.remove();
+    var item = document.createElement("div");
+    item.className = "nav-item whatsapp-nav-item";
+    var whatsapp = document.createElement("a");
+    whatsapp.href = "/whatsapp-platform";
+    whatsapp.className = "nav-drop-toggle";
+    whatsapp.innerHTML = 'WhatsApp Solutions<span class="nav-caret" aria-hidden="true"></span>';
+    whatsapp.setAttribute("aria-haspopup", "true");
+    whatsapp.setAttribute("aria-expanded", "false");
+    if (location.pathname.indexOf("/whatsapp-platform") === 0) whatsapp.className = "active";
+    if (location.pathname.indexOf("/whatsapp-platform") === 0) whatsapp.className += " nav-drop-toggle";
+    var drop = document.createElement("div");
+    drop.className = "nav-drop whatsapp-nav-drop";
+    drop.innerHTML =
+      '<a href="/whatsapp-platform">Overview</a>' +
+      '<a href="/whatsapp-platform/features/">Features</a>' +
+      '<a href="/whatsapp-platform/solutions/">Solutions</a>' +
+      '<a href="/whatsapp-platform/pricing/">Pricing</a>' +
+      '<a href="/whatsapp-platform/results/">Results &amp; Playbooks</a>' +
+      '<a href="/whatsapp-platform/developers/">Developers</a>' +
+      '<a href="/whatsapp-platform/trust/">Security &amp; Trust</a>' +
+      '<a href="/whatsapp-platform/access/" class="nav-drop-all">Login / Sign up &rarr;</a>';
+    item.appendChild(whatsapp);
+    item.appendChild(drop);
+    var login = links.querySelector('a[href="/login.html"]');
+    var contact = links.querySelector('a[href="/contact.html"]');
+    if (login && login.parentNode === links) links.insertBefore(item, login);
+    else if (contact && contact.parentNode === links) links.insertBefore(item, contact.nextSibling);
+    else links.appendChild(item);
+  })();
+
   /* Keep the service menu aligned with the grouped service catalogue. */
-  document.querySelectorAll(".nav-drop").forEach(function (drop) {
+  document.querySelectorAll(".nav-item").forEach(function (item) {
+    var toggle = item.querySelector('.nav-drop-toggle[href="/services.html"]');
+    var drop = item.querySelector(".nav-drop");
+    if (!toggle || !drop) return;
     drop.innerHTML =
       '<a href="/residential-construction.html">Residential Construction</a>' +
       '<a href="/commercial-construction.html">Commercial Construction</a>' +
@@ -75,6 +114,34 @@
     else links.appendChild(tools);
   })();
 
+  /* Keep the public navigation in the company-approved order on every page. */
+  (function () {
+    var links = document.querySelector(".nav-links");
+    if (!links) return;
+    var children = Array.prototype.slice.call(links.children);
+    function directLink(href, label) {
+      return children.find(function (child) {
+        return child.tagName === "A" && (child.getAttribute("href") === href || child.textContent.trim().toLowerCase() === label);
+      });
+    }
+    function menuItem(href) {
+      return children.find(function (child) {
+        return child.classList?.contains("nav-item") && child.querySelector('.nav-drop-toggle[href="' + href + '"]');
+      });
+    }
+    [
+      directLink("/", "home"),
+      menuItem("/services.html"),
+      menuItem("/whatsapp-platform"),
+      directLink("/founder.html", "founder"),
+      directLink("/team.html", "team"),
+      directLink("/blog/", "blog"),
+      directLink("/professional-tools/", "professional tools"),
+      directLink("/contact.html", "contact"),
+      links.querySelector(".nav-cta")
+    ].filter(Boolean).forEach(function (item) { links.appendChild(item); });
+  })();
+
   /* mobile menu */
   var toggle = document.querySelector(".nav-toggle");
   if (toggle) {
@@ -88,13 +155,32 @@
     });
     document.querySelectorAll(".nav-drop-toggle").forEach(function (servicesLink) {
       servicesLink.addEventListener("click", function (event) {
-        if (window.innerWidth > 860 || !document.body.classList.contains("menu-open")) return;
         var item = servicesLink.closest(".nav-item");
-        if (!item || item.classList.contains("services-open")) return;
+        if (!item) return;
+        var isWhatsAppMenu = item.classList.contains("whatsapp-nav-item");
+        var desktopWhatsAppClick = window.innerWidth > 860 && isWhatsAppMenu;
+        var mobileMenuClick = window.innerWidth <= 860 && document.body.classList.contains("menu-open");
+        if (!desktopWhatsAppClick && !mobileMenuClick) return;
+        if (item.classList.contains("services-open")) {
+          item.classList.remove("services-open");
+          servicesLink.setAttribute("aria-expanded", "false");
+          return;
+        }
         event.preventDefault();
         event.stopImmediatePropagation();
+        document.querySelectorAll(".nav-item.services-open").forEach(function (openItem) {
+          if (openItem !== item) openItem.classList.remove("services-open");
+        });
         item.classList.add("services-open");
         servicesLink.setAttribute("aria-expanded", "true");
+      });
+    });
+    document.addEventListener("click", function (event) {
+      document.querySelectorAll(".nav-item.services-open").forEach(function (item) {
+        if (!item.contains(event.target)) {
+          item.classList.remove("services-open");
+          item.querySelector(".nav-drop-toggle")?.setAttribute("aria-expanded", "false");
+        }
       });
     });
     document.querySelectorAll(".nav-links a").forEach(function (a) {
@@ -213,6 +299,15 @@
   /* footer year */
   document.querySelectorAll("[data-year]").forEach(function (el) {
     el.textContent = new Date().getFullYear();
+  });
+
+  /* Keep the core legal documents available from every public-site footer. */
+  document.querySelectorAll(".footer-bottom").forEach(function (footer) {
+    if (footer.querySelector(".footer-legal-links")) return;
+    var legal = document.createElement("span");
+    legal.className = "footer-legal-links";
+    legal.innerHTML = '<a href="/terms-of-service.html">Terms of Service</a><span aria-hidden="true">·</span><a href="/privacy-policy.html">Privacy Policy</a>';
+    footer.appendChild(legal);
   });
 
   var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;

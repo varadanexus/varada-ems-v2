@@ -58,9 +58,17 @@ jobs:
           cp -R portals .pages-dist/portals
           cp -R blog .pages-dist/blog
           cp -R professional-tools .pages-dist/professional-tools
+          cp -R whatsapp-platform .pages-dist/whatsapp-platform
           cp favicon.ico .pages-dist/favicon.ico
           cp sw.js .pages-dist/sw.js
           cp -R new-ems/. .pages-dist/new-ems/
+          # Publish runtime assets only. Internal architecture, database and
+          # server implementation files must never be part of the public site.
+          rm -rf .pages-dist/new-ems/docs
+          rm -rf .pages-dist/new-ems/supabase
+          rm -rf .pages-dist/new-ems/output
+          rm -rf .pages-dist/new-ems/tmp
+          rm -f .pages-dist/new-ems/system-schema-dump.sql
           cp CNAME .pages-dist/CNAME
           npm --prefix varada-social run export:pages -- "$GITHUB_WORKSPACE/.pages-dist"
 
@@ -73,6 +81,13 @@ jobs:
           test -f .pages-dist/social-media/dashboard/index.html
           test -f .pages-dist/social-media/accounts/index.html
           test -f .pages-dist/social-media/campaigns/index.html
+          test -f .pages-dist/whatsapp-platform/features/index.html
+          test -f .pages-dist/whatsapp-platform/solutions/index.html
+          test -f .pages-dist/whatsapp-platform/pricing/index.html
+          test -f .pages-dist/whatsapp-platform/access/index.html
+          test ! -e .pages-dist/new-ems/docs
+          test ! -e .pages-dist/new-ems/supabase
+          test ! -e .pages-dist/new-ems/system-schema-dump.sql
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

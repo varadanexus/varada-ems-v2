@@ -202,10 +202,26 @@ async function buildProcurementPdf(snapshot, type) {
 
 export async function downloadHospitalProcurementProposal(snapshot) {
   const doc = await buildProcurementPdf(snapshot, "proposal");
-  savePdf(doc, formatPdfFilename("HSP-PROCUREMENT", snapshot.approvalNumber || snapshot.package?.number));
+  const filename = formatPdfFilename("HSP-PROCUREMENT", snapshot.approvalNumber || snapshot.package?.number);
+  savePdf(doc, filename, {
+    hospitalProject: true,
+    projectId: snapshot.project?.id,
+    documentType: "Procurement Proposals",
+    documentNo: snapshot.approvalNumber || snapshot.package?.number,
+    date: snapshot.generatedAt,
+    mimeType: "application/pdf"
+  });
 }
 
 export async function downloadHospitalPurchaseOrder(snapshot) {
   const doc = await buildProcurementPdf(snapshot, "purchase_order");
-  savePdf(doc, formatPdfFilename("HSP-PO", snapshot.poNumber));
+  const filename = formatPdfFilename("HSP-PO", snapshot.poNumber);
+  savePdf(doc, filename, {
+    hospitalProject: true,
+    projectId: snapshot.project?.id,
+    documentType: "Purchase Orders",
+    documentNo: snapshot.poNumber,
+    date: snapshot.poDate,
+    mimeType: "application/pdf"
+  });
 }

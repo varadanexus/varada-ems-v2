@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sheet &amp; Area Estimator — Plywood Sheets &amp; Sqft for Carpentry | Varada Nexus</title>
+<meta name="description" content="Free carpentry sheet estimator. Enter every surface of a table, wardrobe or cabinet with material and thickness to get total sqft, plywood sheets required and project cost.">
+<meta name="author" content="Varada Nexus Private Limited">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://www.varadanexus.com/professional-tools/interior-design/sheet-area-estimator/">
+<meta property="og:title" content="Sheet &amp; Area Estimator — Plywood Sheets &amp; Sqft for Carpentry | Varada Nexus"><meta property="og:description" content="Enter every surface of a furniture unit with material and thickness to get total sqft, sheets required and project cost.">
+<meta property="og:type" content="website"><meta property="og:image" content="https://www.varadanexus.com/images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/professional-tools/assets/tools.css">
+<link rel="icon" type="image/png" href="/images/logo.png">
+
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.varadanexus.com/"},{"@type":"ListItem","position":2,"name":"Professional Tools","item":"https://www.varadanexus.com/professional-tools/"},{"@type":"ListItem","position":3,"name":"Interior Design","item":"https://www.varadanexus.com/professional-tools/interior-design/"},{"@type":"ListItem","position":4,"name":"Sheet & Area Estimator","item":"https://www.varadanexus.com/professional-tools/interior-design/sheet-area-estimator/"}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"How many square feet is one plywood sheet?","acceptedAnswer":{"@type":"Answer","text":"A standard full plywood/MDF sheet in India is 8 ft × 4 ft = 32 square feet. The tool lets you change the sheet size per project."}},{"@type":"Question","name":"How do you calculate sheets required for furniture?","acceptedAnswer":{"@type":"Answer","text":"Add up the area of every surface (length × width × quantity), add a wastage allowance (typically 10%), then divide by the sheet area and round up. This tool does it separately for each material and thickness."}},{"@type":"Question","name":"Why count sheets by material and thickness separately?","acceptedAnswer":{"@type":"Answer","text":"A carcass may use 18 mm plywood while backs use 6 mm, and shutters may use laminate — each is a different sheet you buy, so they must be counted as separate groups."}}]}</script><script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Sheet & Area Estimator","applicationCategory":"BusinessApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"INR"}}</script>
+
+<style>
+  /* ===== Sheet & Area Estimator — scoped to #vn-sheet-tool, uses site tokens ===== */
+  #vn-sheet-tool{--se-panel:var(--bg-panel);--se-panel2:var(--bg-elev);--se-panel3:#0d0e15;
+    --se-line:var(--border);--se-line-soft:var(--border-soft);--se-txt:var(--text);
+    --se-muted:var(--text-2);--se-muted2:var(--text-3);--se-gold:var(--gold);--se-gold2:var(--gold-2);
+    --se-gold-dim:var(--gold-soft);margin-top:24px;font-family:var(--font);color:var(--se-txt)}
+  #vn-sheet-tool *{box-sizing:border-box}
+  #vn-sheet-tool .se-grid{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start}
+  @media(max-width:980px){#vn-sheet-tool .se-grid{grid-template-columns:1fr}}
+  #vn-sheet-tool .se-card{background:var(--se-panel);border:1px solid var(--se-line);border-radius:16px;padding:22px}
+  #vn-sheet-tool .se-card + .se-card{margin-top:20px}
+  #vn-sheet-tool .se-card h2{font-family:var(--font-serif);font-weight:700;font-size:20px;margin:0 0 4px;color:var(--se-txt)}
+  #vn-sheet-tool .se-card .hint{color:var(--se-muted2);font-size:12.5px;margin:0 0 18px}
+
+  #vn-sheet-tool input,#vn-sheet-tool select{background:var(--se-panel2);border:1px solid var(--se-line);color:var(--se-txt);
+    border-radius:9px;padding:10px 11px;font-family:var(--font);font-size:14px;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+  #vn-sheet-tool input:focus,#vn-sheet-tool select:focus{border-color:var(--se-gold);box-shadow:0 0 0 3px var(--se-gold-dim)}
+  #vn-sheet-tool input::placeholder{color:var(--se-muted2)}
+
+  #vn-sheet-tool .settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:14px}
+  #vn-sheet-tool .field{display:flex;flex-direction:column;gap:6px}
+  #vn-sheet-tool .field label{font-size:11px;letter-spacing:.5px;color:var(--se-muted);text-transform:uppercase}
+  #vn-sheet-tool .sheet-size-row{display:flex;align-items:flex-end;gap:8px}
+  #vn-sheet-tool .sheet-size-row .x{color:var(--se-muted2);padding-bottom:10px;font-size:14px}
+
+  #vn-sheet-tool .unit{background:var(--se-panel2);border:1px solid var(--se-line);border-radius:12px;padding:16px 16px 18px;margin-bottom:16px}
+  #vn-sheet-tool .unit-head{display:grid;grid-template-columns:1.5fr 1fr auto auto;gap:10px;align-items:end;margin-bottom:14px}
+  #vn-sheet-tool .unit-head .field label{color:var(--se-gold)}
+  #vn-sheet-tool .unit-qty{width:72px}
+  #vn-sheet-tool .unit-sub{text-align:right;min-width:96px;padding-bottom:2px}
+  #vn-sheet-tool .unit-sub .n{font-family:var(--font-serif);font-size:22px;color:var(--se-gold);line-height:1;font-variant-numeric:tabular-nums}
+  #vn-sheet-tool .unit-sub .c{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--se-muted2);margin-top:3px}
+  #vn-sheet-tool .unit-del{background:transparent;border:1px solid var(--se-line);color:var(--se-muted2);border-radius:8px;height:40px;padding:0 12px;cursor:pointer;font-size:12px;transition:.15s;white-space:nowrap}
+  #vn-sheet-tool .unit-del:hover{border-color:#5a3a3a;color:#d98a8a;background:#1c1414}
+  @media(max-width:720px){#vn-sheet-tool .unit-head{grid-template-columns:1fr 1fr}#vn-sheet-tool .unit-sub{grid-column:1/-1;text-align:left}}
+
+  #vn-sheet-tool .items-head,#vn-sheet-tool .item-row{display:grid;grid-template-columns:1.3fr 1.1fr .74fr .7fr .7fr .58fr .48fr .8fr 30px;gap:7px;align-items:center}
+  #vn-sheet-tool .items-head{padding:0 2px 8px;font-size:9.5px;letter-spacing:.4px;color:var(--se-muted);text-transform:uppercase;border-bottom:1px solid var(--se-line-soft)}
+  #vn-sheet-tool .items-head span{padding-left:2px}
+  #vn-sheet-tool .item-row{padding:7px 2px;border-bottom:1px solid var(--se-line-soft)}
+  #vn-sheet-tool .item-row input,#vn-sheet-tool .item-row select{padding:7px 7px;font-size:12.5px;background:var(--se-panel3)}
+  #vn-sheet-tool .item-row .sqft{text-align:right;font-variant-numeric:tabular-nums;color:var(--se-gold);font-weight:600;font-size:13px;padding-right:3px}
+  #vn-sheet-tool .del{background:transparent;border:1px solid var(--se-line);color:var(--se-muted2);border-radius:7px;width:30px;height:32px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:.15s}
+  #vn-sheet-tool .del:hover{border-color:#5a3a3a;color:#d98a8a;background:#1c1414}
+  #vn-sheet-tool .add-surface{margin-top:12px;background:transparent;border:1px dashed var(--se-line);color:var(--se-muted);padding:9px;border-radius:9px;width:100%;cursor:pointer;font-family:var(--font);font-size:12.5px;transition:.15s}
+  #vn-sheet-tool .add-surface:hover{border-color:var(--se-gold);color:var(--se-gold)}
+  @media(max-width:720px){
+    #vn-sheet-tool .items-head{display:none}
+    #vn-sheet-tool .item-row{grid-template-columns:1fr 1fr;gap:8px;padding:12px 0}
+    #vn-sheet-tool .item-row .del{grid-column:2;justify-self:end}
+    #vn-sheet-tool .item-row .sqft{grid-column:1/-1;text-align:left}
+  }
+  #vn-sheet-tool .add-unit{margin-top:4px;background:var(--se-gold-dim);border:1px dashed var(--se-gold);color:var(--se-gold);padding:12px;border-radius:10px;width:100%;cursor:pointer;font-family:var(--font);font-size:14px;font-weight:700;transition:.15s}
+  #vn-sheet-tool .add-unit:hover{filter:brightness(1.15)}
+
+  /* photos */
+  #vn-sheet-tool .photos{margin-top:14px;border-top:1px dashed var(--se-line-soft);padding-top:14px}
+  #vn-sheet-tool .photo-add{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12.5px;color:var(--se-muted);border:1px dashed var(--se-line);border-radius:9px;padding:8px 12px;transition:.15s}
+  #vn-sheet-tool .photo-add:hover{border-color:var(--se-gold);color:var(--se-gold)}
+  #vn-sheet-tool .thumbs{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+  #vn-sheet-tool .thumb{position:relative;width:152px;border:1px solid var(--se-line);border-radius:10px;overflow:hidden;background:var(--se-panel3)}
+  #vn-sheet-tool .thumb img{width:100%;height:112px;object-fit:cover;display:block}
+  #vn-sheet-tool .thumb-del{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:6px;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;font-size:14px;line-height:1}
+  #vn-sheet-tool .thumb-del:hover{background:#a33}
+  #vn-sheet-tool .thumb-bar{display:flex;align-items:center;gap:8px;padding:7px 8px;min-height:32px}
+  #vn-sheet-tool .thumb-up{background:var(--se-gold-dim);border:1px solid var(--se-gold);color:var(--se-gold);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:var(--font);white-space:nowrap}
+  #vn-sheet-tool .thumb-up:hover{filter:brightness(1.15)}
+  #vn-sheet-tool .dlink{font-size:11px;color:var(--se-gold)}
+  #vn-sheet-tool .ustatus{font-size:11px;color:var(--se-muted2)}
+  #vn-sheet-tool .thumb-cap{padding:0 8px 8px;font-size:11px;color:var(--se-muted2);word-break:break-word}
+
+  /* breakdown */
+  #vn-sheet-tool .brk-head,#vn-sheet-tool .brk-row{display:grid;grid-template-columns:1.5fr .6fr .8fr .5fr .9fr .95fr;gap:8px;align-items:center}
+  #vn-sheet-tool .brk-head{font-size:10px;letter-spacing:.5px;color:var(--se-muted);text-transform:uppercase;padding:0 2px 9px;border-bottom:1px solid var(--se-line-soft)}
+  #vn-sheet-tool .brk-row{padding:10px 2px;border-bottom:1px solid var(--se-line-soft);font-size:13px;font-variant-numeric:tabular-nums}
+  #vn-sheet-tool .brk-row .mat{color:var(--se-txt)}
+  #vn-sheet-tool .brk-row .mat small{color:var(--se-muted2);display:block;font-size:11px}
+  #vn-sheet-tool .brk-row .num{text-align:right}
+  #vn-sheet-tool .brk-row .sheets{color:var(--se-gold);font-weight:700;text-align:right}
+  #vn-sheet-tool .brk-row input{padding:7px 8px;font-size:12.5px;text-align:right}
+  #vn-sheet-tool .brk-empty{color:var(--se-muted2);font-size:13px;padding:14px 2px}
+
+  #vn-sheet-tool .summary{position:sticky;top:76px}
+  #vn-sheet-tool .summary .lead{display:flex;flex-direction:column;gap:2px;padding:16px 18px;border-radius:12px;background:var(--se-panel2);border:1px solid var(--se-line);margin-bottom:6px}
+  #vn-sheet-tool .summary .lead .big{font-family:var(--font-serif);font-size:34px;color:var(--se-gold);line-height:1.1;font-variant-numeric:tabular-nums}
+  #vn-sheet-tool .summary .lead .cap{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--se-muted)}
+  #vn-sheet-tool .stat{display:flex;justify-content:space-between;align-items:baseline;padding:11px 4px;border-bottom:1px solid var(--se-line-soft);gap:10px}
+  #vn-sheet-tool .stat .k{color:var(--se-muted);font-size:13px}
+  #vn-sheet-tool .stat .v{font-variant-numeric:tabular-nums;font-size:14.5px;font-weight:600;white-space:nowrap}
+  #vn-sheet-tool .stat.total{border-bottom:none;margin-top:6px;padding-top:14px;border-top:1px solid var(--se-line)}
+  #vn-sheet-tool .stat.total .k{color:var(--se-txt);font-weight:600}
+  #vn-sheet-tool .stat.total .v{color:var(--se-gold);font-size:20px;font-family:var(--font-serif)}
+  #vn-sheet-tool .actions{display:flex;gap:10px;margin-top:18px}
+  #vn-sheet-tool .btn{flex:1;padding:11px;border-radius:10px;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:700;border:1px solid var(--se-line);background:var(--se-panel2);color:var(--se-txt);transition:.15s}
+  #vn-sheet-tool .btn:hover{border-color:var(--se-muted2)}
+  #vn-sheet-tool .btn.primary{background:var(--grad-gold);border-color:transparent;color:#1a1206}
+  #vn-sheet-tool .btn.primary:hover{filter:brightness(1.06)}
+  #vn-sheet-tool .btn.primary[disabled]{opacity:.6;cursor:default;filter:none}
+  #vn-sheet-tool .est-id{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--se-panel2);border:1px solid var(--se-line-soft);border-radius:9px;padding:8px 11px;margin-bottom:10px}
+  #vn-sheet-tool .est-id .lbl{font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--se-muted2)}
+  #vn-sheet-tool .est-id .val{font-family:var(--font-serif);font-size:13px;color:var(--se-gold);font-variant-numeric:tabular-nums}
+  #vn-sheet-tool .drive-status{font-size:12px;margin-top:8px;color:var(--se-muted)}
+  #vn-sheet-tool .drive-status a{color:var(--se-gold);font-weight:600}
+  #vn-sheet-tool .drive-status.err{color:#ffbcbc}
+  #vn-sheet-tool .drive-status.ok{color:#7ee6a6}
+
+  @media print{
+    .site-nav,.site-footer,.ambient,.vt-crumb,.eyebrow,.vt-card,.vt-cta{display:none!important}
+    #vn-sheet-tool .actions,#vn-sheet-tool .add-unit,#vn-sheet-tool .add-surface,
+    #vn-sheet-tool .del,#vn-sheet-tool .unit-del,#vn-sheet-tool .thumb-del,
+    #vn-sheet-tool .thumb-up,#vn-sheet-tool .photo-add,#vn-sheet-tool .ustatus{display:none!important}
+    body{background:#fff!important;color:#111!important}
+    #vn-sheet-tool .se-grid{grid-template-columns:1fr}
+    #vn-sheet-tool .se-card,#vn-sheet-tool .unit,#vn-sheet-tool .summary .lead,#vn-sheet-tool .stat,#vn-sheet-tool .thumb{border-color:#ccc!important;background:#fff!important}
+    #vn-sheet-tool .se-card h2,#vn-sheet-tool .summary .lead .big,#vn-sheet-tool .stat.total .v,
+    #vn-sheet-tool .brk-row .sheets,#vn-sheet-tool .item-row .sqft,#vn-sheet-tool .unit-sub .n,#vn-sheet-tool .thumb-cap{color:#111!important}
+    #vn-sheet-tool .summary{position:static}
+    #vn-sheet-tool .thumb{width:180px;break-inside:avoid}
+    #vn-sheet-tool input,#vn-sheet-tool select{border:none;background:#fff;color:#111;padding:2px 0}
+  }
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="/">
+      <img src="/images/logo.png" alt="Varada Nexus logo">
+      <span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span>
+    </a>
+    <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/">Home</a>
+      <a href="/founder.html">Founder</a>
+      <div class="nav-item">
+        <a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a>
+        <div class="nav-drop">
+          <a href="/hospital.html">Hospital Infrastructure</a>
+          <a href="/consultancy.html">Hospital Consultancy</a>
+          <a href="/logistics.html">Mining &amp; Logistics</a>
+          <a href="/import-export.html">Import &amp; Export</a>
+          <a href="/ecommerce.html">E-Commerce</a>
+          <a href="/hr.html">HR &amp; PR</a>
+          <a href="/arbitrage.html">Strategic Arbitrage</a>
+          <a href="/services.html" class="nav-drop-all">All Services &rarr;</a>
+        </div>
+      </div>
+      <a href="/team.html">Team</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/login.html">Login</a>
+      <a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap vt-main">
+<div class="vt-crumb"><a href="/">Home</a> / <a href="/professional-tools/">Professional Tools</a> / <a href="/professional-tools/interior-design/">Interior Design</a> / Sheet &amp; Area Estimator</div>
+<span class="eyebrow reveal">Interior Design</span>
+<h1 class="display reveal reveal-d1" style="font-size:clamp(28px,4.5vw,44px)">Sheet &amp; Area <span class="gold-text">Estimator</span></h1>
+<p class="sub reveal reveal-d2">Build each furniture unit — a table, wardrobe or cabinet — and enter every surface inside it with its material and thickness. Get each unit's total area, the sheets needed of each material, and the full project price.</p>
+
+<div id="vn-sheet-tool">
+  <div class="se-grid">
+    <div>
+      <!-- project settings -->
+      <div class="se-card">
+        <h2>Project settings</h2>
+        <p class="hint">Set sheet size, wastage and labour rate once for this project.</p>
+        <div class="settings">
+          <div class="field"><label>Default unit</label>
+            <select id="globalUnit" onchange="setAllUnits(this.value)">
+              <option value="in">Inches</option><option value="ft">Feet</option><option value="mm">Millimeters</option>
+            </select></div>
+          <div class="field"><label>Sheet size</label>
+            <div class="sheet-size-row">
+              <input id="sheetL" type="number" min="0" step="any" value="8" oninput="calc()" title="Sheet length">
+              <span class="x">×</span>
+              <input id="sheetW" type="number" min="0" step="any" value="4" oninput="calc()" title="Sheet width">
+            </div></div>
+          <div class="field"><label>Sheet unit</label>
+            <select id="sheetUnit" onchange="calc()">
+              <option value="ft">Feet</option><option value="in">Inches</option><option value="mm">Millimeters</option>
+            </select></div>
+          <div class="field"><label>Wastage %</label>
+            <input id="wastage" type="number" min="0" step="any" value="10" oninput="calc()"></div>
+          <div class="field"><label>Labour ₹/sqft</label>
+            <input id="rateSqft" type="number" min="0" step="any" value="0" oninput="calc()" placeholder="optional"></div>
+        </div>
+      </div>
+
+      <!-- units -->
+      <div class="se-card">
+        <h2>Furniture units</h2>
+        <p class="hint">Add a table / wardrobe / cabinet, then list every surface inside it. Unit qty multiplies identical units.</p>
+        <div id="units"></div>
+        <button class="add-unit" onclick="addUnit()">+ Add furniture unit (table, wardrobe…)</button>
+      </div>
+
+      <!-- breakdown -->
+      <div class="se-card">
+        <h2>Sheet breakdown by type</h2>
+        <p class="hint">Sheets are counted per material + thickness across the whole project (after wastage). Enter a rate for each to price the material.</p>
+        <div class="brk-head">
+          <span>Material · thickness</span><span class="num" style="text-align:right">Work sft</span>
+          <span class="num" style="text-align:right">Sheet sft</span><span class="sheets" style="text-align:right">Sheets</span>
+          <span style="text-align:right">Rate/sheet ₹</span><span class="num" style="text-align:right">Cost</span>
+        </div>
+        <div id="breakdown"></div>
+      </div>
+    </div>
+
+    <!-- summary -->
+    <div>
+      <div class="se-card summary">
+        <h2 style="margin-bottom:8px">Estimate</h2>
+        <div class="est-id" title="Unique calculation ID — also the Drive folder name">
+          <span class="lbl">Calculation ID</span>
+          <span class="val" id="estId">—</span>
+        </div>
+        <div class="lead">
+          <div class="big" id="outSheets">0</div>
+          <div class="cap">Total sheets required</div>
+        </div>
+        <div class="stat"><span class="k">Furniture units</span><span class="v" id="outUnits">0</span></div>
+        <div class="stat"><span class="k">Work area done</span><span class="v" id="outWork">0.00 sft</span></div>
+        <div class="stat"><span class="k">+ Wastage buffer</span><span class="v" id="outWaste">0.00 sft</span></div>
+        <div class="stat"><span class="k">Sheet size</span><span class="v" id="outSheetSize">32.00 sft</span></div>
+        <div class="stat"><span class="k">Total sheet area</span><span class="v" id="outSheetArea">0.00 sft</span></div>
+        <div class="stat"><span class="k">Sheet types used</span><span class="v" id="outTypes">0</span></div>
+        <div class="stat"><span class="k">Material cost</span><span class="v" id="outMat">₹0</span></div>
+        <div class="stat"><span class="k">Labour (work sft)</span><span class="v" id="outLab">₹0</span></div>
+        <div class="stat total"><span class="k">Total price</span><span class="v" id="outTotal">₹0</span></div>
+        <button class="btn primary drive" id="driveBtn" onclick="saveToDrive()" style="width:100%;margin-top:16px">Save to Google Drive</button>
+        <div class="drive-status" id="driveStatus"></div>
+        <div class="actions">
+          <button class="btn" onclick="downloadCSV()">Download CSV</button>
+          <button class="btn" onclick="window.print()">Print PDF</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="vt-card" style="margin-top:20px"><b>Related tools:</b> <a href="/professional-tools/interior-design/wood-requirement-calculator/">Wood &amp; Timber Requirement Calculator</a> · <a href="/professional-tools/interior-design/wardrobe-cost-calculator/">Wardrobe Cost Calculator</a> · <a href="/professional-tools/interior-design/modular-kitchen-estimator/">Modular Kitchen Estimator</a> · <a href="/professional-tools/interior-design/material-quantity-estimator/">Material Quantity Estimator</a><br><b>Related services:</b> <a href="/services.html">Interior Design Services</a> · <a href="/contact.html">Contact Us</a><br><b>Browse:</b> <a href="/professional-tools/interior-design/">Interior Design tools</a> · <a href="/professional-tools/">All tools</a></div>
+
+<div class="vt-cta"><h3>Planning a fit-out?</h3><p>Share your measurements and we will help you plan sheets, materials and cost.</p><a href="/contact.html?tool=sheet-area-estimator">Contact Varada Nexus for detailed consultation</a></div>
+
+<div class="vt-card"><h3 style="margin-top:0;font-family:var(--font-serif)">FAQ</h3><details><summary>How many square feet is one plywood sheet?</summary><p>A standard full plywood/MDF sheet in India is 8 ft × 4 ft = 32 square feet. You can change the sheet size per project in the settings.</p></details><details><summary>How do you calculate sheets required for furniture?</summary><p>Add up the area of every surface (length × width × quantity), add a wastage allowance (typically 10%), then divide by the sheet area and round up. This tool does it separately for each material and thickness.</p></details><details><summary>Why count sheets by material and thickness separately?</summary><p>A carcass may use 18&nbsp;mm plywood while backs use 6&nbsp;mm, and shutters may use laminate — each is a different sheet you buy, so they must be counted as separate groups.</p></details></div>
+
+<p class="vt-disc" style="max-width:70ch"><b>Disclaimer:</b> This tool provides an indicative estimate for general planning only and is not professional engineering advice. Sheet sizes, wastage and rates vary by vendor, location and date. Verify critical figures before purchase. Varada Nexus accepts no liability for decisions made using this tool.</p>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">
+          <img src="/images/logo.png" alt="Varada Nexus">
+          <div>
+            <div class="fb-name">Varada Nexus Private Limited</div>
+            <p>Building and operating systems across healthcare, mining, logistics, global trade, and digital commerce.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Company</h4>
+        <a href="/">Home</a>
+        <a href="/founder.html">Founder</a>
+        <a href="/team.html">Team</a>
+        <a href="/contact.html">Contact</a>
+      </div>
+      <div class="footer-col">
+        <h4>Services</h4>
+        <a href="/hospital.html">Hospital Infrastructure</a>
+        <a href="/consultancy.html">Hospital Consultancy</a>
+        <a href="/logistics.html">Mining &amp; Logistics</a>
+        <a href="/import-export.html">Import &amp; Export</a>
+        <a href="/ecommerce.html">E-Commerce</a>
+        <a href="/hr.html">HR &amp; PR</a>
+        <a href="/arbitrage.html">Strategic Arbitrage</a>
+      </div>
+      <div class="footer-col">
+        <h4>Access</h4>
+        <a href="/login.html">EMS Login</a>
+        <a href="/portals/meeting/meeting-login.html">Join Meeting</a>
+        <a href="/services.html">All Services</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span>
+      <span>Rajahmundry, Andhra Pradesh, India</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/assets/site.js"></script>
+<script>
+  function toSqft(l,w,unit){
+    if(!l||!w) return 0;
+    if(unit==='ft') return l*w;
+    if(unit==='in') return (l/12)*(w/12);
+    if(unit==='mm') return (l/304.8)*(w/304.8);
+    return 0;
+  }
+  const UNIT_TYPES=['Table','Wardrobe','Cabinet','TV Unit','Kitchen','Storage','Study Unit','Bed','Partition','Other'];
+  const MATERIALS=['Plywood MR','Plywood BWP','MDF','HDHMR','Particle Board','Blockboard','Laminate','Acrylic','Veneer','WPC','Other'];
+  const THICK=[4,6,8,9,12,16,18,19,25];
+  let seq=0;
+  const rateStore={};
+
+  function surfaceRow(){
+    const gu=document.getElementById('globalUnit').value;
+    const mOpts=MATERIALS.map(m=>`<option>${m}</option>`).join('');
+    const tOpts=THICK.map(t=>`<option ${t===18?'selected':''}>${t}</option>`).join('');
+    const uOpts=['in','ft','mm'].map(u=>`<option value="${u}" ${u===gu?'selected':''}>${u}</option>`).join('');
+    const div=document.createElement('div');
+    div.className='item-row';
+    div.innerHTML=`
+      <input type="text" placeholder="e.g. Table top" oninput="calc()">
+      <select onchange="calc()">${mOpts}</select>
+      <select onchange="calc()">${tOpts}</select>
+      <input type="number" min="0" step="any" placeholder="0" oninput="calc()">
+      <input type="number" min="0" step="any" placeholder="0" oninput="calc()">
+      <select class="u" onchange="calc()">${uOpts}</select>
+      <input type="number" min="0" step="1" value="1" oninput="calc()">
+      <div class="sqft">0.00</div>
+      <button class="del" title="Remove surface" onclick="this.parentElement.remove();calc()">×</button>`;
+    return div;
+  }
+  function addSurface(btn){btn.previousElementSibling.appendChild(surfaceRow());calc();}
+
+  function addUnit(name){
+    const id='u'+(seq++);
+    const tOpts=UNIT_TYPES.map(t=>`<option>${t}</option>`).join('');
+    const unit=document.createElement('div');
+    unit.className='unit';unit.id=id;
+    unit.innerHTML=`
+      <div class="unit-head">
+        <div class="field"><label>Unit name</label>
+          <input type="text" placeholder="e.g. Dining table" value="${name||''}" oninput="calc()"></div>
+        <div class="field"><label>Type</label><select onchange="calc()">${tOpts}</select></div>
+        <div class="field"><label>Qty</label><input class="unit-qty" type="number" min="1" step="1" value="1" oninput="calc()"></div>
+        <button class="unit-del" onclick="this.closest('.unit').remove();calc()">Remove unit</button>
+      </div>
+      <div class="items-head">
+        <span>Surface / part</span><span>Material</span><span>Thick (mm)</span>
+        <span>Length</span><span>Width</span><span>Unit</span><span>Qty</span>
+        <span style="text-align:right">Area (sft)</span><span></span>
+      </div>
+      <div class="unit-rows"></div>
+      <button class="add-surface" onclick="addSurface(this)">+ Add surface to this unit</button>
+      <div class="photos">
+        <label class="photo-add">
+          <input type="file" accept="image/*" multiple onchange="addPhotos(this)" hidden>
+          <span>+ Add photo / measurement of this unit</span>
+        </label>
+        <div class="thumbs"></div>
+      </div>
+      <div style="text-align:right;margin-top:12px">
+        <span class="unit-sub" style="display:inline-block">
+          <span class="n" data-subtotal>0.00</span>
+          <span class="c">unit total sft</span>
+        </span>
+      </div>`;
+    document.getElementById('units').appendChild(unit);
+    unit.querySelector('.unit-rows').appendChild(surfaceRow());
+    calc();
+    return unit;
+  }
+
+  function addPhotos(input){
+    const thumbs=input.closest('.photos').querySelector('.thumbs');
+    [...input.files].forEach(file=>{
+      const reader=new FileReader();
+      reader.onload=e=>{
+        const t=document.createElement('div');t.className='thumb';
+        const safe=(file.name||'photo').replace(/[<>"]/g,'');
+        t.innerHTML=`<img src="${e.target.result}" alt="${safe}" data-name="${safe}">
+          <button class="thumb-del" title="Remove" onclick="this.closest('.thumb').remove()">×</button>
+          <div class="thumb-cap">${safe}</div>`;
+        thumbs.appendChild(t);
+      };
+      reader.readAsDataURL(file);
+    });
+    input.value='';
+  }
+
+  // ---- Drive integration (Varada EMS drive-integrations edge function) ----
+  const DRIVE_ENDPOINT="https://ftejxcycoiagbslnzaab.supabase.co/functions/v1/drive-integrations";
+  const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0ZWp4Y3ljb2lhZ2JzbG56YWFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMzIzMjIsImV4cCI6MjA5NTgwODMyMn0.Fd9O069Gmoi5l-bcImmWUp5hWblQwJV0_s00UdFWscw";
+
+  function makeEstimateId(){
+    const d=new Date(),p=n=>String(n).padStart(2,'0');
+    const stamp=`${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    const rand=Math.random().toString(36).slice(2,6).toUpperCase();
+    return `SAE-${stamp}-${rand}`;
+  }
+  let ESTIMATE_ID=makeEstimateId();
+
+  function collectPhotos(){
+    const out=[];
+    document.querySelectorAll('#vn-sheet-tool .unit').forEach(unit=>{
+      const uname=(unit.querySelector('.unit-head input').value.trim()||'unit').replace(/[^\w\- ]/g,'').slice(0,40);
+      unit.querySelectorAll('.thumb img').forEach((img,i)=>{
+        out.push({filename:`${uname}-${(img.dataset.name||('photo-'+(i+1)))}`,dataUrl:img.src});
+      });
+    });
+    return out;
+  }
+
+  function buildEstimatePayload(){
+    calc();
+    const sL=parseFloat(document.getElementById('sheetL').value)||0;
+    const sW=parseFloat(document.getElementById('sheetW').value)||0;
+    const sU=document.getElementById('sheetUnit').value;
+    return {
+      id:ESTIMATE_ID,
+      generatedAt:new Date().toISOString(),
+      project:{
+        sheetLabel:`${sL} x ${sW} ${sU} = ${document.getElementById('outSheetSize').textContent}`,
+        wastage:parseFloat(document.getElementById('wastage').value)||0,
+        labourRate:parseFloat(document.getElementById('rateSqft').value)||0
+      },
+      units:lastUnits.map(u=>({name:u.name,type:u.type,qty:u.qty,total:u.total,
+        rows:u.rows.map(r=>({name:r.name,material:r.material,thick:r.thick,l:r.l,w:r.w,unit:r.unit,qty:r.qty,sqft:r.sqft}))})),
+      breakdown:lastGroups.map(g=>({material:g.material,thick:g.thick,work:g.work,sheets:g.sheets,sheetArea:g.gArea,rate:g.rate,cost:g.cost})),
+      totals:{
+        units:lastUnits.length,
+        work:parseFloat(document.getElementById('outWork').textContent)||0,
+        sheetArea:parseFloat(document.getElementById('outSheetArea').textContent)||0,
+        sheets:parseInt(document.getElementById('outSheets').textContent)||0,
+        types:parseInt(document.getElementById('outTypes').textContent)||0,
+        material:Number((document.getElementById('outMat').textContent||'').replace(/[^\d.]/g,''))||0,
+        labour:Number((document.getElementById('outLab').textContent||'').replace(/[^\d.]/g,''))||0,
+        total:Number((document.getElementById('outTotal').textContent||'').replace(/[^\d.]/g,''))||0
+      }
+    };
+  }
+
+  async function saveToDrive(){
+    const btn=document.getElementById('driveBtn');
+    const status=document.getElementById('driveStatus');
+    const estimate=buildEstimatePayload();
+    if(!estimate.units.length || estimate.totals.work<=0){
+      status.className='drive-status err';status.textContent='Add at least one surface with dimensions first.';return;
+    }
+    const photos=collectPhotos();
+    btn.disabled=true;status.className='drive-status';status.textContent='Saving to Google Drive… generating PDF and uploading '+photos.length+' photo(s).';
+    try{
+      const res=await fetch(DRIVE_ENDPOINT,{method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY,'apikey':SUPABASE_ANON_KEY},
+        body:JSON.stringify({action:'sheet_estimate_save',estimateId:ESTIMATE_ID,estimate,photos})});
+      const j=await res.json();
+      if(!res.ok||!j.ok) throw new Error(j.error||('HTTP '+res.status));
+      status.className='drive-status ok';
+      status.innerHTML=`Saved to <b>${j.id}</b> — <a href="${j.folderLink}" target="_blank" rel="noopener">open Drive folder ↗</a> · <a href="${j.pdf&&j.pdf.link?j.pdf.link:j.folderLink}" target="_blank" rel="noopener">PDF</a> (${(j.photos||[]).length} photo${(j.photos||[]).length===1?'':'s'})`;
+      btn.textContent='Saved ✓ — Save again';btn.disabled=false;
+    }catch(e){
+      status.className='drive-status err';status.textContent='Save failed: '+e.message;
+      btn.disabled=false;
+    }
+  }
+
+  function setAllUnits(u){document.querySelectorAll('#vn-sheet-tool .item-row .u').forEach(s=>s.value=u);calc();}
+  function fmt(n){return n.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  function money(n){return '₹'+Math.round(n).toLocaleString('en-IN');}
+
+  function rowData(row){
+    const i=row.querySelectorAll('input, select');
+    const l=parseFloat(i[3].value)||0, w=parseFloat(i[4].value)||0, qty=parseFloat(i[6].value)||0;
+    return {name:i[0].value.trim(),material:i[1].value,thick:i[2].value,l,w,unit:i[5].value,qty,
+      sqft:toSqft(l,w,i[5].value)*qty};
+  }
+
+  let lastGroups=[], lastUnits=[];
+
+  function calc(){
+    let projWork=0;
+    const groups={};
+    lastUnits=[];
+    const units=document.querySelectorAll('#vn-sheet-tool .unit');
+
+    units.forEach(unit=>{
+      const uq=parseFloat(unit.querySelector('.unit-qty').value)||0;
+      const uName=unit.querySelector('.unit-head input').value.trim();
+      const uType=unit.querySelector('.unit-head select').value;
+      let uSub=0;
+      const uRows=[];
+      unit.querySelectorAll('.item-row').forEach(row=>{
+        const d=rowData(row);
+        row.querySelector('.sqft').textContent=fmt(d.sqft);
+        uSub+=d.sqft;
+        if(d.sqft>0){
+          const key=d.material+'|'+d.thick;
+          if(!groups[key]) groups[key]={material:d.material,thick:d.thick,work:0};
+          groups[key].work+=d.sqft*uq;
+        }
+        uRows.push(d);
+      });
+      const unitTotal=uSub*uq;
+      unit.querySelector('[data-subtotal]').textContent=fmt(unitTotal);
+      projWork+=unitTotal;
+      lastUnits.push({name:uName||uType,type:uType,qty:uq,perUnit:uSub,total:unitTotal,rows:uRows});
+    });
+
+    const wastage=parseFloat(document.getElementById('wastage').value)||0;
+    const factor=1+wastage/100;
+    const sL=parseFloat(document.getElementById('sheetL').value)||0;
+    const sW=parseFloat(document.getElementById('sheetW').value)||0;
+    const sU=document.getElementById('sheetUnit').value;
+    const sheetArea=toSqft(sL,sW,sU);
+
+    const brk=document.getElementById('breakdown');
+    const keys=Object.keys(groups).sort();
+    let totalSheets=0, matCost=0, totalSheetArea=0;
+    lastGroups=[];
+    if(keys.length===0){
+      brk.innerHTML='<div class="brk-empty">Add surfaces to your units to see the sheet breakdown.</div>';
+    } else {
+      brk.innerHTML='';
+      keys.forEach(k=>{
+        const g=groups[k];
+        const sheets=sheetArea>0?Math.ceil(g.work*factor/sheetArea):0;
+        const gArea=sheets*sheetArea;
+        const rate=rateStore[k]!==undefined?rateStore[k]:0;
+        const cost=sheets*rate;
+        totalSheets+=sheets; totalSheetArea+=gArea; matCost+=cost;
+        lastGroups.push({...g,sheets,gArea,rate,cost});
+        const el=document.createElement('div');
+        el.className='brk-row';
+        el.innerHTML=`
+          <div class="mat">${g.material}<small>${g.thick} mm</small></div>
+          <div class="num">${fmt(g.work)}</div>
+          <div class="num">${fmt(gArea)}</div>
+          <div class="sheets">${sheets}</div>
+          <div><input type="number" min="0" step="any" value="${rate||''}" placeholder="0"
+               oninput="rateStore['${k}']=parseFloat(this.value)||0;calc()"></div>
+          <div class="num">${money(cost)}</div>`;
+        brk.appendChild(el);
+      });
+    }
+
+    const rateSqft=parseFloat(document.getElementById('rateSqft').value)||0;
+    const labCost=projWork*rateSqft;
+    const total=matCost+labCost;
+
+    document.getElementById('outUnits').textContent=units.length;
+    document.getElementById('outWork').textContent=fmt(projWork)+' sft';
+    document.getElementById('outWaste').textContent=fmt(projWork*factor-projWork)+' sft';
+    document.getElementById('outSheetSize').textContent=fmt(sheetArea)+' sft';
+    document.getElementById('outSheetArea').textContent=fmt(totalSheetArea)+' sft';
+    document.getElementById('outSheets').textContent=totalSheets;
+    document.getElementById('outTypes').textContent=keys.length;
+    document.getElementById('outMat').textContent=money(matCost);
+    document.getElementById('outLab').textContent=money(labCost);
+    document.getElementById('outTotal').textContent=money(total);
+  }
+
+  function downloadCSV(){
+    let rows=[['Unit','Unit type','Unit qty','Surface','Material','Thick(mm)','Length','Width','Unit','Pc qty','Area(sft)']];
+    lastUnits.forEach(u=>{
+      u.rows.forEach(d=>rows.push([u.name,u.type,u.qty,d.name||'-',d.material,d.thick,d.l,d.w,d.unit,d.qty,d.sqft.toFixed(2)]));
+      rows.push([u.name,u.type,u.qty,'— UNIT TOTAL —','','','','','','',u.total.toFixed(2)]);
+    });
+    rows.push([]);
+    rows.push(['SHEET BREAKDOWN','Thick(mm)','Work sft','Sheet sft','Sheets','Rate/sheet','Cost']);
+    lastGroups.forEach(g=>rows.push([g.material,g.thick,g.work.toFixed(2),g.gArea.toFixed(2),g.sheets,g.rate,g.cost.toFixed(0)]));
+    rows.push([]);
+    rows.push(['Work area done (sft)',document.getElementById('outWork').textContent]);
+    rows.push(['Total sheet area (sft)',document.getElementById('outSheetArea').textContent]);
+    rows.push(['Total sheets',document.getElementById('outSheets').textContent]);
+    rows.push(['Material cost',document.getElementById('outMat').textContent]);
+    rows.push(['Labour cost',document.getElementById('outLab').textContent]);
+    rows.push(['TOTAL PRICE',document.getElementById('outTotal').textContent]);
+    const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download='sheet-estimate.csv';a.click();
+  }
+
+  document.getElementById('estId').textContent=ESTIMATE_ID;
+  addUnit();
+</script>
+</body>
+</html>

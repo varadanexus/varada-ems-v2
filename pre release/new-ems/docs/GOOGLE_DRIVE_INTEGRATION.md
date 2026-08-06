@@ -35,6 +35,7 @@ sub-structure inside it. Configuration is via two secrets:
 - `GDRIVE_FOLDER_MAP` — JSON mapping a document category to its folder id.
   A `DEFAULT` key catches anything unmapped.
 - `GDRIVE_ROOT_FOLDER_ID` — fallback folder used for any category not in the map.
+- `GDRIVE_HOSPITAL_PROJECTS_FOLDER_ID` — dedicated root for Hospital Projects files, invoices, proposals, purchase orders and project documents.
 
 All currently-wired documents are transport, so the simplest setup is to point
 the transport categories at your **Transportation** folder (either map every
@@ -70,6 +71,9 @@ no date sub-structure.
 `CLIENT_BILL`, `GST_INVOICE`, `CLIENT_RECEIPT`, `CREDIT_NOTE`,
 `TRANSPORTER_STATEMENT`, `TRANSPORTER_PAYMENT`, `TRIP_DOCUMENT`, `CONSOLIDATED`,
 `DEFAULT`.
+
+Hospital Projects uses the `HOSPITAL_PROJECT` category and resolves it through
+`GDRIVE_HOSPITAL_PROJECTS_FOLDER_ID` before the general folder map or fallback.
 
 Example (all transport docs → the Transportation folder):
 ```json

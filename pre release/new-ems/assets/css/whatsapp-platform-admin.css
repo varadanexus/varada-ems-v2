@@ -1,0 +1,51 @@
+.wa-admin-shell { display: grid; gap: 20px; color: #f5f1e7; }
+.wa-admin-hero { position: relative; overflow: hidden; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; min-height: 210px; padding: 30px; border: 1px solid rgba(218,178,83,.28); border-radius: 24px; background: radial-gradient(circle at 86% 12%, rgba(37,211,102,.2), transparent 31%), linear-gradient(135deg,#101410,#080a09 70%); box-shadow: 0 22px 60px rgba(0,0,0,.25); }
+.wa-admin-hero::after { content: "WA"; position: absolute; right: 30px; top: -38px; font: 800 180px/1 system-ui; color: rgba(37,211,102,.045); pointer-events: none; }
+.wa-admin-kicker { display: inline-flex; align-items: center; gap: 8px; color: #54df8b; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.wa-admin-kicker::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #25d366; box-shadow: 0 0 16px #25d366; }
+.wa-admin-hero h2 { margin: 12px 0 8px; max-width: 720px; font-size: clamp(28px,4vw,46px); line-height: 1.05; color: #fff; }
+.wa-admin-hero p { max-width: 720px; margin: 0; color: #a9b4ad; line-height: 1.65; }
+.wa-admin-actions { position: relative; z-index: 1; display: flex; gap: 10px; flex-wrap: wrap; }
+.wa-admin-button { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 16px; border: 1px solid rgba(218,178,83,.34); border-radius: 12px; background: #171712; color: #f4d57a; font-weight: 700; text-decoration: none; cursor: pointer; }
+.wa-admin-button.primary { border-color: #25d366; background: #25d366; color: #06150c; }
+.wa-admin-button:disabled { opacity: .45; cursor: not-allowed; }
+.wa-admin-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 4px; border-bottom: 1px solid rgba(218,178,83,.18); }
+.wa-admin-tab { flex: 0 0 auto; padding: 11px 15px; border: 0; border-radius: 10px; background: transparent; color: #8e958f; font-weight: 700; cursor: pointer; }
+.wa-admin-tab.active { background: rgba(218,178,83,.12); color: #f0cf6b; }
+.wa-admin-stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; }
+.wa-admin-stat { min-height: 120px; padding: 20px; border: 1px solid rgba(218,178,83,.2); border-radius: 18px; background: linear-gradient(145deg,rgba(24,24,20,.96),rgba(11,12,11,.96)); }
+.wa-admin-stat span { display: block; color: #8d958f; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.wa-admin-stat strong { display: block; margin-top: 13px; color: #fff; font-size: 32px; }
+.wa-admin-stat small { display: block; margin-top: 6px; color: #65d990; }
+.wa-admin-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
+.wa-admin-card { padding: 22px; border: 1px solid rgba(218,178,83,.2); border-radius: 18px; background: #10110f; }
+.wa-admin-card h3 { margin: 0 0 7px; color: #fff; font-size: 18px; }
+.wa-admin-card > p { margin: 0 0 18px; color: #8e958f; line-height: 1.6; }
+.wa-admin-list { display: grid; gap: 10px; }
+.wa-admin-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid rgba(255,255,255,.07); }
+.wa-admin-row:last-child { border-bottom: 0; }
+.wa-admin-row strong { color: #e9e6dc; }
+.wa-admin-row span,.wa-admin-row small { color: #89918b; }
+.wa-status { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 999px; background: rgba(37,211,102,.12); color: #6ce59a !important; font-size: 11px; font-weight: 800; text-transform: capitalize; }
+.wa-status.pending,.wa-status.not_connected { background: rgba(231,190,82,.12); color: #e4c266 !important; }
+.wa-status.suspended,.wa-status.restricted,.wa-status.disconnected { background: rgba(239,87,87,.12); color: #f18989 !important; }
+.wa-admin-table-wrap { overflow-x: auto; border: 1px solid rgba(255,255,255,.07); border-radius: 14px; }
+.wa-admin-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.wa-admin-table th,.wa-admin-table td { padding: 14px; border-bottom: 1px solid rgba(255,255,255,.07); text-align: left; vertical-align: middle; }
+.wa-admin-table th { color: #8f968f; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.wa-admin-table td { color: #dedbd2; }
+.wa-admin-table tr:last-child td { border-bottom: 0; }
+.wa-admin-table select { min-width: 116px; padding: 8px 10px; border: 1px solid rgba(218,178,83,.24); border-radius: 8px; background: #080a09; color: #eae5d7; }
+.wa-admin-inline-form { display: flex; gap: 7px; align-items: center; }
+.wa-admin-inline-form button { min-height: 34px; padding: 0 10px; border: 0; border-radius: 8px; background: #d9b654; color: #151209; font-weight: 800; cursor: pointer; }
+.wa-admin-checklist { display: grid; gap: 11px; }
+.wa-admin-check { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: center; padding: 15px; border: 1px solid rgba(255,255,255,.07); border-radius: 13px; background: #0b0d0b; }
+.wa-admin-check-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(37,211,102,.13); color: #56dc88; font-weight: 900; }
+.wa-admin-check.pending .wa-admin-check-icon { background: rgba(218,178,83,.12); color: #d9b654; }
+.wa-admin-check strong { display: block; color: #e9e5da; }
+.wa-admin-check small { display: block; margin-top: 3px; color: #848c86; }
+.wa-admin-empty,.wa-admin-notice { padding: 28px; border: 1px dashed rgba(218,178,83,.28); border-radius: 14px; color: #999f9a; text-align: center; }
+.wa-admin-notice { border-style: solid; background: rgba(218,178,83,.07); text-align: left; }
+.wa-admin-code { padding: 3px 7px; border-radius: 6px; background: #070807; color: #e9c967; font-family: ui-monospace,monospace; font-size: 12px; }
+@media (max-width: 980px) { .wa-admin-stats { grid-template-columns: repeat(2,1fr); } .wa-admin-grid { grid-template-columns: 1fr; } .wa-admin-hero { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 560px) { .wa-admin-stats { grid-template-columns: 1fr; } .wa-admin-hero { padding: 22px; } .wa-admin-actions { width: 100%; } .wa-admin-button { flex: 1; } }

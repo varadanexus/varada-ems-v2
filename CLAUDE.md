@@ -21,3 +21,14 @@ If an emergency direct change is unavoidable, save the exact SQL as a canonical
 migration first and use that migration to deploy it.
 
 Never reuse a migration timestamp, even when filenames differ.
+
+## Permanent authority invariant
+
+- `chairman_managing_director` and `super_admin` always have unrestricted access
+  to every current and future module, page, action, division and protected
+  operation.
+- New features must not depend on a permission seed to make either authority
+  role functional. Enforce the bypass centrally in both frontend authorization
+  and database/RLS helpers.
+- Permission matrices may display explicit grants for clarity, but they may not
+  revoke, narrow or override either authority role.
