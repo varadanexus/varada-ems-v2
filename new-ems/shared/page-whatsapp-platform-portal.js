@@ -244,7 +244,7 @@ function renderAuth(mode = "login", focusAuth = false) {
         </section>
       </section>
 
-      <footer class="wp-sales-footer"><div><strong>Varada Nexus</strong><span>WhatsApp solutions for ambitious teams.</span></div><nav aria-label="WhatsApp solutions footer"><a href="/whatsapp-platform/features/">Features</a><a href="/whatsapp-platform/solutions/">Solutions</a><a href="/whatsapp-platform/pricing/">Pricing</a><a href="/contact.html">Contact</a><a href="/privacy-policy.html">Privacy</a></nav></footer>
+      <footer class="wp-sales-footer"><div><strong>Varada Nexus</strong><span>WhatsApp solutions for ambitious teams.</span></div><nav aria-label="WhatsApp solutions footer"><a href="/whatsapp-platform/features/">Features</a><a href="/whatsapp-platform/solutions/">Solutions</a><a href="/whatsapp-platform/pricing/">Pricing</a><a href="/contact.html">Contact</a><a href="/terms-of-service.html">Terms of Service</a><a href="/privacy-policy.html">Privacy Policy</a></nav></footer>
     </main>
   `;
 

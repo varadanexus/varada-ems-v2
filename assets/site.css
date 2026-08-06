@@ -676,6 +676,7 @@ select option,select optgroup{background-color:#0b0c12;color:#f7f4ec}
   display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;
   font-size:12.5px;color:var(--text-3);
 }
+.footer-legal-links{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}.footer-legal-links a{color:inherit;text-decoration:none}.footer-legal-links a:hover{color:#e6c87e}
 
 /* ------------------------------------------------ reveal animations */
 .reveal{opacity:0;transform:translateY(28px);transition:opacity .9s var(--ease),transform .9s var(--ease)}

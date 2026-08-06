@@ -188,6 +188,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-page-cta p { margin: 0; color: var(--wp-muted); line-height: 1.6; }
 .wp-page-cta .wp-hero-actions { flex: 0 0 auto; margin: 0; }
 .wp-page-footer { width: min(1180px, calc(100% - 3rem)); margin: 0 auto; padding: 2rem 0 3rem; border-top: 1px solid var(--wp-line); color: var(--wp-muted); font-size: .78rem; }
+.wp-page-footer a { color: inherit; text-decoration: none; }
+.wp-page-footer a:hover { color: var(--wp-text); }
 
 .wp-auth-shell {
   min-height: 100vh;

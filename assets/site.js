@@ -298,6 +298,15 @@
     el.textContent = new Date().getFullYear();
   });
 
+  /* Keep the core legal documents available from every public-site footer. */
+  document.querySelectorAll(".footer-bottom").forEach(function (footer) {
+    if (footer.querySelector(".footer-legal-links")) return;
+    var legal = document.createElement("span");
+    legal.className = "footer-legal-links";
+    legal.innerHTML = '<a href="/terms-of-service.html">Terms of Service</a><span aria-hidden="true">·</span><a href="/privacy-policy.html">Privacy Policy</a>';
+    footer.appendChild(legal);
+  });
+
   var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var finePointer = window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 
