@@ -49,3 +49,22 @@
 .wa-admin-code { padding: 3px 7px; border-radius: 6px; background: #070807; color: #e9c967; font-family: ui-monospace,monospace; font-size: 12px; }
 @media (max-width: 980px) { .wa-admin-stats { grid-template-columns: repeat(2,1fr); } .wa-admin-grid { grid-template-columns: 1fr; } .wa-admin-hero { align-items: flex-start; flex-direction: column; } }
 @media (max-width: 560px) { .wa-admin-stats { grid-template-columns: 1fr; } .wa-admin-hero { padding: 22px; } .wa-admin-actions { width: 100%; } .wa-admin-button { flex: 1; } }
+
+/* Packages & Offers editor */
+.wa-pkg-list { display: grid; gap: 14px; }
+.wa-pkg-form { padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; background: #0b0d0b; display: grid; gap: 12px; }
+.wa-pkg-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.wa-pkg-head strong { color: #f0ede3; font-size: 15px; }
+.wa-pkg-del { border: 1px solid rgba(239,87,87,.4); background: transparent; color: #f18989; border-radius: 8px; padding: 6px 10px; cursor: pointer; font-weight: 700; }
+.wa-pkg-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.wa-pkg-form label { display: grid; gap: 5px; color: #a9b1ab; font-size: 12px; font-weight: 600; }
+.wa-pkg-full { grid-column: 1 / -1; }
+.wa-pkg-form input, .wa-pkg-form textarea { width: 100%; padding: 9px 11px; border: 1px solid rgba(218,178,83,.24); border-radius: 9px; background: #080a09; color: #eae5d7; font: inherit; }
+.wa-pkg-form textarea { resize: vertical; }
+.wa-pkg-form input:focus, .wa-pkg-form textarea:focus { outline: none; border-color: #25d366; }
+.wa-pkg-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.wa-pkg-check { flex-direction: row !important; align-items: center; gap: 8px !important; color: #cfd4ce !important; }
+.wa-pkg-check input { width: auto !important; accent-color: #25d366; }
+.wa-pkg-foot .wa-admin-button { margin-left: auto; }
+@media (max-width: 760px) { .wa-pkg-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .wa-pkg-grid { grid-template-columns: 1fr; } }

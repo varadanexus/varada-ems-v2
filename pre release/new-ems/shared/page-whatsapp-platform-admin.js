@@ -3,8 +3,8 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 
-const VIEWS = new Set(["overview", "customers", "connections", "meta", "security"]);
-const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false };
+const VIEWS = new Set(["overview", "customers", "connections", "packages", "meta", "security"]);
+const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, catalog: null, catalogError: "", catalogLoading: false };
 const db = getSupabaseClient();
 
 function escapeHtml(value) {
@@ -23,7 +23,7 @@ function status(value) {
 }
 
 function tabs() {
-  const items = [["overview","Overview"],["customers","Customers"],["connections","Meta Connections"],["meta","Meta App Setup"],["security","Security"]];
+  const items = [["overview","Overview"],["customers","Customers"],["connections","Meta Connections"],["packages","Packages & Offers"],["meta","Meta App Setup"],["security","Security"]];
   return `<nav class="wa-admin-tabs" aria-label="Platform management">${items.map(([id,label]) => `<button class="wa-admin-tab ${state.view === id ? "active" : ""}" type="button" data-view="${id}">${label}</button>`).join("")}</nav>`;
 }
 
@@ -71,7 +71,175 @@ function security() {
   return `<section class="wa-admin-grid"><article class="wa-admin-card"><h3>Customer access boundary</h3><p>The sellable product maintains a dedicated, protected access boundary separate from staff operations.</p><div class="wa-admin-list"><div class="wa-admin-row"><strong>Access controls</strong><span>Protected</span></div><div class="wa-admin-row"><strong>Credential handling</strong><span>Restricted</span></div><div class="wa-admin-row"><strong>Access lifecycle</strong><span>Managed</span></div><div class="wa-admin-row"><strong>Business separation</strong><span>Enforced</span></div><div class="wa-admin-row"><strong>Provider secrets</strong><span>Protected</span></div></div></article><article class="wa-admin-card"><h3>Security activity</h3><p>Aggregate access signals are shown without exposing credentials or security implementation details.</p><div class="wa-admin-list"><div class="wa-admin-row"><strong>Sign-in attempts · 24h</strong><span>${Number(auth.loginAttempts24h || 0)}</span></div><div class="wa-admin-row"><strong>Signup attempts · 24h</strong><span>${Number(auth.signupAttempts24h || 0)}</span></div><div class="wa-admin-row"><strong>Active access grants</strong><span>${Number(state.snapshot?.totals?.activeSessions || 0)}</span></div><div class="wa-admin-row"><strong>Inactive access grants</strong><span>${Number(auth.inactiveSessions || 0)}</span></div></div></article></section>`;
 }
 
+async function loadCatalog() {
+  state.catalogLoading = true;
+  const { data, error } = await db.rpc("whatsapp_platform_admin_catalog");
+  state.catalogLoading = false;
+  if (error) { state.catalogError = error.message || "Could not load packages."; state.catalog = null; }
+  else { state.catalog = data || { plans: [], addons: [], rates: {} }; state.catalogError = ""; }
+  render();
+}
+
+function planForm(plan) {
+  const p = plan || {};
+  const val = (k) => escapeHtml(p[k] ?? "");
+  const feat = Array.isArray(p.features) ? p.features.join("\n") : "";
+  const isNew = !p.id;
+  return `<form class="wa-pkg-form" data-plan-form="${escapeHtml(p.id || "")}">
+    <div class="wa-pkg-head"><strong>${isNew ? "➕ Add a new plan" : escapeHtml(p.label || p.code)}</strong>${isNew ? "" : `<button type="button" class="wa-pkg-del" data-plan-delete="${escapeHtml(p.id)}">Delete</button>`}</div>
+    <div class="wa-pkg-grid">
+      <label>Label<input name="label" value="${val("label")}" placeholder="Growth" /></label>
+      <label>Code<input name="code" value="${val("code")}" placeholder="growth" /></label>
+      <label>Heading<input name="name" value="${val("name")}" placeholder="For scaling customer teams" /></label>
+      <label>Badge<input name="badge" value="${val("badge")}" placeholder="Most popular" /></label>
+      <label>Price / month (₹)<input name="price_monthly" type="number" step="1" value="${escapeHtml(p.priceMonthly ?? 0)}" /></label>
+      <label>Price / month ($)<input name="price_monthly_usd" type="number" step="0.01" value="${escapeHtml(p.priceMonthlyUsd ?? 0)}" /></label>
+      <label>Price prefix<input name="price_prefix" value="${val("pricePrefix")}" placeholder="from " /></label>
+      <label>Price suffix<input name="price_suffix" value="${escapeHtml(p.priceSuffix ?? "/mo")}" /></label>
+      <label>Annual note<input name="annual_note" value="${val("annualNote")}" /></label>
+      <label>Sort order<input name="sort_order" type="number" value="${escapeHtml(p.sortOrder ?? 0)}" /></label>
+      <label>CTA label<input name="cta_label" value="${val("ctaLabel")}" /></label>
+      <label>CTA link<input name="cta_href" value="${val("ctaHref")}" /></label>
+    </div>
+    <label class="wa-pkg-full">Tagline<textarea name="tagline" rows="2">${val("tagline")}</textarea></label>
+    <label class="wa-pkg-full">Features (one per line)<textarea name="features" rows="6">${escapeHtml(feat)}</textarea></label>
+    <div class="wa-pkg-foot">
+      <label class="wa-pkg-check"><input type="checkbox" name="is_featured" ${p.isFeatured ? "checked" : ""} /> Featured</label>
+      <label class="wa-pkg-check"><input type="checkbox" name="is_active" ${p.isActive === false ? "" : "checked"} /> Active</label>
+      <button type="submit" class="wa-admin-button primary">${isNew ? "Add plan" : "Save"}</button>
+    </div>
+  </form>`;
+}
+
+function addonForm(addon) {
+  const a = addon || {};
+  const val = (k) => escapeHtml(a[k] ?? "");
+  const isNew = !a.id;
+  return `<form class="wa-pkg-form" data-addon-form="${escapeHtml(a.id || "")}">
+    <div class="wa-pkg-head"><strong>${isNew ? "➕ Add a new add-on" : escapeHtml(a.name)}</strong>${isNew ? "" : `<button type="button" class="wa-pkg-del" data-addon-delete="${escapeHtml(a.id)}">Delete</button>`}</div>
+    <div class="wa-pkg-grid">
+      <label>Name<input name="name" value="${val("name")}" /></label>
+      <label>Short description<input name="description" value="${val("description")}" /></label>
+      <label>Price display<input name="price_display" value="${val("priceDisplay")}" placeholder="₹400" /></label>
+      <label>Price unit<input name="price_unit" value="${val("priceUnit")}" placeholder="/number/mo" /></label>
+      <label>Sort order<input name="sort_order" type="number" value="${escapeHtml(a.sortOrder ?? 0)}" /></label>
+    </div>
+    <label class="wa-pkg-full">Tooltip (the “i” explanation)<textarea name="tooltip" rows="3">${val("tooltip")}</textarea></label>
+    <div class="wa-pkg-foot">
+      <label class="wa-pkg-check"><input type="checkbox" name="is_active" ${a.isActive === false ? "" : "checked"} /> Active</label>
+      <button type="submit" class="wa-admin-button primary">${isNew ? "Add add-on" : "Save"}</button>
+    </div>
+  </form>`;
+}
+
+function ratesForm(rates) {
+  const inr = (rates && rates.INR) || {};
+  const usd = (rates && rates.USD) || {};
+  const n = (v) => escapeHtml(v ?? 0);
+  return `<section class="wa-admin-card"><h3>Calculator rates</h3><p>Per-message rates the customer pays you — used by the public pricing calculator. Service / user-initiated messages are always free.</p>
+    <form data-rates-form>
+      <div class="wa-pkg-grid">
+        <label>Marketing (₹)<input name="inr_marketing" type="number" step="0.01" value="${n(inr.marketing)}" /></label>
+        <label>Utility (₹)<input name="inr_utility" type="number" step="0.01" value="${n(inr.utility)}" /></label>
+        <label>Authentication (₹)<input name="inr_authentication" type="number" step="0.01" value="${n(inr.authentication)}" /></label>
+        <label>Marketing ($)<input name="usd_marketing" type="number" step="0.0001" value="${n(usd.marketing)}" /></label>
+        <label>Utility ($)<input name="usd_utility" type="number" step="0.0001" value="${n(usd.utility)}" /></label>
+        <label>Authentication ($)<input name="usd_authentication" type="number" step="0.0001" value="${n(usd.authentication)}" /></label>
+      </div>
+      <div class="wa-pkg-foot"><button type="submit" class="wa-admin-button primary">Save rates</button></div>
+    </form>
+  </section>`;
+}
+
+function packages() {
+  if (!state.canManage) return '<section class="wa-admin-card"><h3>Packages &amp; Offers</h3><div class="wa-admin-empty">You have view-only access. A manage permission is required to edit packages and pricing.</div></section>';
+  if (!state.catalog && !state.catalogError) { if (!state.catalogLoading) loadCatalog(); return '<div class="wa-admin-empty">Loading packages…</div>'; }
+  if (state.catalogError) return `<div class="wa-admin-notice"><strong>Packages data is not active yet.</strong><br>${escapeHtml(state.catalogError)}<br><br>Apply the pending WhatsApp Platform packages migration to activate management.</div>`;
+  const plans = state.catalog.plans || [];
+  const addons = state.catalog.addons || [];
+  return `<section class="wa-admin-card"><h3>Plans</h3><p>These render on the public pricing page. Price is monthly; the calculator uses each plan's monthly price as the subscription line.</p><div class="wa-pkg-list">${plans.map(planForm).join("")}${planForm(null)}</div></section>
+    <section class="wa-admin-card"><h3>Add-ons</h3><p>Shown in the “Extend any plan” grid, each with an info tooltip. Price display is free text (e.g. ₹400) plus a unit (e.g. /number/mo or one-time).</p><div class="wa-pkg-list">${addons.map(addonForm).join("")}${addonForm(null)}</div></section>
+    ${ratesForm(state.catalog.rates || {})}`;
+}
+
+async function savePlan(event, form) {
+  event.preventDefault();
+  const btn = form.querySelector("button[type=submit]"); btn.disabled = true;
+  const v = new FormData(form);
+  const features = String(v.get("features") || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_upsert_plan", {
+      p_id: form.dataset.planForm || null,
+      p_code: v.get("code"), p_label: v.get("label"), p_name: v.get("name"), p_tagline: v.get("tagline"),
+      p_price_monthly: Number(v.get("price_monthly") || 0), p_price_monthly_usd: Number(v.get("price_monthly_usd") || 0),
+      p_price_prefix: v.get("price_prefix"), p_price_suffix: v.get("price_suffix"),
+      p_annual_note: v.get("annual_note"), p_badge: v.get("badge"),
+      p_cta_label: v.get("cta_label"), p_cta_href: v.get("cta_href"),
+      p_features: features, p_is_featured: v.get("is_featured") === "on",
+      p_is_active: v.get("is_active") === "on", p_sort_order: Number(v.get("sort_order") || 0)
+    });
+    if (error) throw error;
+    showToast("Plan saved.", TOAST_TYPES.SUCCESS);
+    state.catalog = null; await loadCatalog();
+  } catch (error) { showToast(error?.message || "Could not save plan.", TOAST_TYPES.ERROR); btn.disabled = false; }
+}
+
+async function deletePlan(id) {
+  if (!id || !window.confirm("Delete this plan? This cannot be undone.")) return;
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_delete_plan", { p_id: id });
+    if (error) throw error;
+    showToast("Plan deleted.", TOAST_TYPES.SUCCESS);
+    state.catalog = null; await loadCatalog();
+  } catch (error) { showToast(error?.message || "Could not delete plan.", TOAST_TYPES.ERROR); }
+}
+
+async function saveAddon(event, form) {
+  event.preventDefault();
+  const btn = form.querySelector("button[type=submit]"); btn.disabled = true;
+  const v = new FormData(form);
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_upsert_addon", {
+      p_id: form.dataset.addonForm || null,
+      p_name: v.get("name"), p_description: v.get("description"), p_tooltip: v.get("tooltip"),
+      p_price_display: v.get("price_display"), p_price_unit: v.get("price_unit"),
+      p_is_active: v.get("is_active") === "on", p_sort_order: Number(v.get("sort_order") || 0)
+    });
+    if (error) throw error;
+    showToast("Add-on saved.", TOAST_TYPES.SUCCESS);
+    state.catalog = null; await loadCatalog();
+  } catch (error) { showToast(error?.message || "Could not save add-on.", TOAST_TYPES.ERROR); btn.disabled = false; }
+}
+
+async function deleteAddon(id) {
+  if (!id || !window.confirm("Delete this add-on? This cannot be undone.")) return;
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_delete_addon", { p_id: id });
+    if (error) throw error;
+    showToast("Add-on deleted.", TOAST_TYPES.SUCCESS);
+    state.catalog = null; await loadCatalog();
+  } catch (error) { showToast(error?.message || "Could not delete add-on.", TOAST_TYPES.ERROR); }
+}
+
+async function saveRates(event) {
+  event.preventDefault();
+  const form = event.currentTarget; const btn = form.querySelector("button[type=submit]"); btn.disabled = true;
+  const v = new FormData(form);
+  const num = (k) => Number(v.get(k) || 0);
+  const rates = {
+    INR: { marketing: num("inr_marketing"), utility: num("inr_utility"), authentication: num("inr_authentication"), service: 0 },
+    USD: { marketing: num("usd_marketing"), utility: num("usd_utility"), authentication: num("usd_authentication"), service: 0 }
+  };
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_save_rates", { p_rates: rates });
+    if (error) throw error;
+    showToast("Calculator rates saved.", TOAST_TYPES.SUCCESS);
+    state.catalog = null; await loadCatalog();
+  } catch (error) { showToast(error?.message || "Could not save rates.", TOAST_TYPES.ERROR); btn.disabled = false; }
+}
+
 function content() {
+  if (state.view === "packages") return packages();
   if (state.loading) return '<div class="wa-admin-empty">Loading platform operations…</div>';
   if (state.error) return `<div class="wa-admin-notice"><strong>Management data is not active yet.</strong><br>${escapeHtml(state.error)}<br><br>The internal console is ready; apply the pending WhatsApp Platform database migrations to activate live customer data.</div>${state.view === "meta" ? metaSetup() : state.view === "security" ? security() : overview()}`;
   if (state.view === "customers") return customers();
@@ -107,6 +275,11 @@ function bind() {
       await loadSnapshot();
     } catch (error) { showToast(error?.message || "Could not update workspace.", TOAST_TYPES.ERROR); button.disabled = false; }
   }));
+  document.querySelectorAll("[data-plan-form]").forEach((form) => form.addEventListener("submit", (event) => savePlan(event, form)));
+  document.querySelectorAll("[data-plan-delete]").forEach((btn) => btn.addEventListener("click", () => deletePlan(btn.dataset.planDelete)));
+  document.querySelectorAll("[data-addon-form]").forEach((form) => form.addEventListener("submit", (event) => saveAddon(event, form)));
+  document.querySelectorAll("[data-addon-delete]").forEach((btn) => btn.addEventListener("click", () => deleteAddon(btn.dataset.addonDelete)));
+  document.querySelector("[data-rates-form]")?.addEventListener("submit", (event) => saveRates(event));
 }
 
 async function loadSnapshot() {

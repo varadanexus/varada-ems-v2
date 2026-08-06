@@ -186,7 +186,8 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Platform Overview", href: ROUTES.WHATSAPP_PLATFORM_ADMIN },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Customers", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=customers` },
-        { module: MODULES.WHATSAPP_PLATFORM, label: "Meta Connections", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=connections` }
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Meta Connections", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=connections` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Packages & Offers", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=packages` }
       ]
     },
     {
