@@ -419,7 +419,7 @@ const MENU_BY_WORKSPACE = {
       items: [
         { module: MODULES.HOSPITAL_PROJECTS, label: "Billing", href: ROUTES.HOSPITAL_BILLING },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Receipt", href: ROUTES.HOSPITAL_CLIENT_PAYMENTS },
-        { module: MODULES.HOSPITAL_PROJECTS, label: "Ledger", disabled: true },
+        { module: MODULES.HOSPITAL_PROJECTS, label: "Ledger", href: ROUTES.HOSPITAL_CLIENT_LEDGER },
         { module: MODULES.HOSPITAL_PROJECTS, label: "Credit Note", href: ROUTES.HOSPITAL_CREDIT_NOTES }
       ]
     },
@@ -503,7 +503,7 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
 
   const hospitalModuleHeader = workspace === WORKSPACES.HOSPITAL_PROJECTS;
   const contextTitle = context?.title || (hospitalModuleHeader ? "Hospital Projects" : "");
-  const contextBackHref = context?.backHref || (hospitalModuleHeader ? ROUTES.DASHBOARD : "");
+  const contextBackHref = context?.showBack === false || (hospitalModuleHeader && !context?.backHref) ? "" : (context?.backHref || "");
   const contextBackLabel = context?.backLabel || (hospitalModuleHeader ? "← Back to EMS" : "");
   const contextSubtitle = context?.subtitle || "";
 

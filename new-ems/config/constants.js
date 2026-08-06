@@ -174,6 +174,7 @@ export const ROUTES = {
   ,HOSPITAL_REPORTS: "/new-ems/modules/hospital-reports/index.html"
   ,HOSPITAL_SETTINGS: "/new-ems/modules/hospital-settings/index.html"
   ,HOSPITAL_BILLING: "/new-ems/modules/hospital-billing/index.html"
+  ,HOSPITAL_CLIENT_LEDGER: "/new-ems/modules/hospital-client-ledger/index.html"
   ,HOSPITAL_CREDIT_NOTES: "/new-ems/modules/hospital-credit-notes/index.html"
   ,HOSPITAL_QUERIES: "/new-ems/modules/hospital-queries/index.html"
   ,HOSPITAL_PORTAL_ACCESS: "/new-ems/modules/portal-access/index.html?tab=create&division=hospital-projects"

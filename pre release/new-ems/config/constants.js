@@ -54,6 +54,8 @@ export const ROUTES = {
   WHATSAPP_HISTORY: "/new-ems/modules/whatsapp-history/index.html",
   WHATSAPP_TEMPLATES: "/new-ems/modules/whatsapp-templates/index.html",
   WHATSAPP_SETTINGS: "/new-ems/modules/whatsapp-settings/index.html",
+  WHATSAPP_PLATFORM_ADMIN: "/new-ems/modules/whatsapp-platform-admin/index.html",
+  WHATSAPP_PLATFORM_PORTAL: "/whatsapp-platform",
   EMAIL_COMMAND_CENTER: "/new-ems/modules/email-command-center/index.html",
   EMAIL_COMPOSE: "/new-ems/modules/email-compose/index.html",
   EMAIL_INBOX: "/new-ems/modules/email-inbox/index.html",
@@ -172,6 +174,7 @@ export const ROUTES = {
   ,HOSPITAL_REPORTS: "/new-ems/modules/hospital-reports/index.html"
   ,HOSPITAL_SETTINGS: "/new-ems/modules/hospital-settings/index.html"
   ,HOSPITAL_BILLING: "/new-ems/modules/hospital-billing/index.html"
+  ,HOSPITAL_CLIENT_LEDGER: "/new-ems/modules/hospital-client-ledger/index.html"
   ,HOSPITAL_CREDIT_NOTES: "/new-ems/modules/hospital-credit-notes/index.html"
   ,HOSPITAL_QUERIES: "/new-ems/modules/hospital-queries/index.html"
   ,HOSPITAL_PORTAL_ACCESS: "/new-ems/modules/portal-access/index.html?tab=create&division=hospital-projects"
@@ -252,6 +255,7 @@ export const MODULES = {
   WHATSAPP_HISTORY: "whatsapp-history",
   WHATSAPP_TEMPLATES: "whatsapp-templates",
   WHATSAPP_SETTINGS: "whatsapp-settings",
+  WHATSAPP_PLATFORM: "whatsapp-platform",
   EMAIL: "email",
   EMAIL_COMMAND_CENTER: "email-command-center",
   EMAIL_COMPOSE: "email-compose",
@@ -376,9 +380,10 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.DIGITAL_SERVICES, title: "Digital Marketing & Services", subtitle: "Lead-to-billing delivery, white-label partners, client portals, and queries", href: ROUTES.DIGITAL_SERVICES_DASHBOARD },
   { module: MODULES.SOCIAL_MEDIA_MANAGER, title: "Nexus Social", subtitle: "AI content research, creation, approvals, publishing, and performance intelligence", href: ROUTES.SOCIAL_MEDIA_MANAGER },
   { module: MODULES.WORLD_MONITOR, title: "Nexus Intelligence", subtitle: "Internal geopolitical, military, climate, market, cyber, maritime, and aviation command system", href: ROUTES.WORLD_MONITOR },
+  { module: MODULES.WHATSAPP_PLATFORM, title: "WhatsApp Business Platform", subtitle: "Manage the customer product, tenants, Meta onboarding, plans, and platform security", href: ROUTES.WHATSAPP_PLATFORM_ADMIN },
   { module: MODULES.LEGAL, title: "Legal", subtitle: "Drafting, KYC, signing evidence and secure archive", href: ROUTES.LEGAL_COMMAND_CENTER },
   { module: MODULES.SUPPORT_TICKETS, title: "Support", subtitle: "EMS help desk, ticket triage, assignment and resolution", href: ROUTES.SUPPORT_TICKETS },
-  { module: MODULES.WHATSAPP, title: "WhatsApp", subtitle: "Inbox, templates, Twilio health and outbound delivery", href: ROUTES.WHATSAPP_COMMAND_CENTER },
+  { module: MODULES.WHATSAPP, title: "WhatsApp", subtitle: "Internal company inbox, templates and outbound communication", href: ROUTES.WHATSAPP_COMMAND_CENTER },
   { module: MODULES.EMAIL, title: "Email", subtitle: "Compose, templates, inbox, history and ZeptoMail delivery", href: ROUTES.EMAIL_COMMAND_CENTER },
   { module: MODULES.MEETINGS, title: "Meetings", subtitle: "Scheduling, waiting room control, and Jitsi video sessions", href: ROUTES.MEETINGS_COMMAND_CENTER },
   { module: MODULES.NOTIFICATIONS_CENTER, title: "Notification Studio", subtitle: "Custom campaigns, scheduling, staff and portal push analytics", href: ROUTES.NOTIFICATION_STUDIO },
@@ -403,6 +408,7 @@ export const WORKSPACES = {
   HOSPITAL_PROJECTS: "hospital-projects",
   LEGAL: "legal",
   WHATSAPP: "whatsapp",
+  WHATSAPP_PLATFORM: "whatsapp-platform",
   EMAIL: "email",
   MEETINGS: "meetings",
   NOTIFICATIONS: "notifications",

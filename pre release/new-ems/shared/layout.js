@@ -207,6 +207,8 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
           ? "Legal"
           : workspace === WORKSPACES.SUPPORT
             ? "Support"
+          : workspace === WORKSPACES.WHATSAPP_PLATFORM
+            ? "WhatsApp Business Platform"
           : (workspace === WORKSPACES.WHATSAPP || workspace === WORKSPACES.EMAIL || workspace === WORKSPACES.MEETINGS || workspace === WORKSPACES.NOTIFICATIONS || workspace === WORKSPACES.ONBOARDING)
             ? "Communications"
             : workspace === WORKSPACES.DIGITAL_SERVICES
@@ -340,7 +342,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   // Sprint 13F.14: full (module, action) grant set — makes the Roles matrix
   // authoritative for edit/create/delete checks, not just view.
   const myPermissions = await getMyPermissions().catch(() => []);
-  setDbPermissionSet(myPermissions);
+  setDbPermissionSet(myPermissions, roleCodes);
   const accessibleModules = getAccessibleModules(roleCodes, allowedModules).filter((candidate) => !isFinanceRestricted || !isCooRestrictedModuleCode(candidate));
   debugLog("rbac resolution", { roleCodes, allowedModules, moduleCode });
   const primaryRole = roleCodes[0] || "user";

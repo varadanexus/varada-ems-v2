@@ -664,7 +664,13 @@ async function queueDriveArchive(doc, filename, driveMeta) {
     const mod = await import("./drive-api.js");
     if (!mod.isDriveAutoSaveEnabled()) return;
     const base64 = mod.pdfDocToBase64(doc);
-    await mod.uploadDocumentToDrive({ ...driveMeta, fileName: driveMeta.fileName || filename }, base64);
+    const meta = { ...driveMeta, fileName: driveMeta.fileName || filename };
+    if (meta.hospitalProject) {
+      delete meta.hospitalProject;
+      await mod.uploadHospitalProjectDocumentToDrive(meta, base64);
+    } else {
+      await mod.uploadDocumentToDrive(meta, base64);
+    }
   } catch (error) {
     console.warn("Drive auto-save skipped:", error?.message || error);
   }

@@ -1749,6 +1749,16 @@ export async function postCentralAccountsInteriorsDocument(financialDocumentId) 
   return Array.isArray(data) ? (data[0] || null) : data;
 }
 
+export async function postCentralAccountsHospitalDocument(financialDocumentId) {
+  if (!financialDocumentId) throw new Error("Financial document id is required");
+  const client = getSupabaseClient();
+  const { data, error } = await client.rpc("execute_central_accounts_hospital_posting", {
+    p_financial_document_id: financialDocumentId
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : data;
+}
+
 export async function listCentralJournals({ search = "" } = {}) {
   const client = getSupabaseClient();
   let query = client

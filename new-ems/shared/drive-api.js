@@ -94,6 +94,29 @@ export function uploadHospitalProjectDocumentToDrive(meta = {}, base64) {
   return driveIntegration("upload_hospital_project_document", { ...meta, base64 });
 }
 
+export function deleteHospitalProjectDocumentFromDrive(documentId) {
+  if (!documentId) return Promise.reject(new Error("Missing Hospital project document id"));
+  return driveIntegration("delete_hospital_project_document", { documentId });
+}
+
+export function upsertHospitalBillingDocumentToDrive(meta = {}, base64) {
+  if (!base64) return Promise.reject(new Error("Missing Hospital billing PDF"));
+  return driveIntegration("upsert_hospital_billing_document", { ...meta, base64 });
+}
+
+export function deleteHospitalBillingDocumentFromDrive(entityType, entityId) {
+  if (!entityType || !entityId) return Promise.reject(new Error("Missing Hospital billing document identity"));
+  return driveIntegration("delete_hospital_billing_document", { entityType, entityId });
+}
+
+// Unified Hospital vendor-invoice upload. Staff calls are authenticated by the
+// EMS JWT; portal calls provide the external portal session token. Both are
+// stored in the project's Vendor Bills folder and create the same bill record.
+export function uploadHospitalVendorInvoiceToDrive(meta = {}, base64) {
+  if (!base64) return Promise.reject(new Error("Missing Hospital vendor invoice file"));
+  return driveIntegration("upload_hospital_vendor_invoice", { ...meta, base64 });
+}
+
 // Architect-portal design upload. The Edge Function validates the external
 // portal session, project assignment, and design ownership before touching
 // Drive. Files are stored below the dedicated Interiors root folder.
