@@ -144,8 +144,9 @@ async function createTemplate(admin: any, customer: any, body: any) {
   const buttons = Array.isArray(body.buttons) ? body.buttons : [];
   if (!/^[a-z0-9_]{1,512}$/.test(name)) throw new Error("Template names can contain only lowercase letters, numbers and underscores.");
   if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(language)) throw new Error("Enter a valid language code, such as en_US.");
-  if (!["MARKETING","UTILITY"].includes(category)) throw new Error("Select a valid template category.");
-  if (!bodyText || bodyText.length > 1024) throw new Error("Template body must contain between 1 and 1,024 characters.");
+  if (!["MARKETING","UTILITY","AUTHENTICATION"].includes(category)) throw new Error("Select a valid template category.");
+  const authentication = category === "AUTHENTICATION";
+  if (!authentication && (!bodyText || bodyText.length > 1024)) throw new Error("Template body must contain between 1 and 1,024 characters.");
   if (headerText.length > 60) throw new Error("Template header cannot exceed 60 characters.");
   if (footerText.length > 60) throw new Error("Template footer cannot exceed 60 characters.");
   const placeholderNumbers = [...bodyText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((match) => Number(match[1]));
@@ -167,11 +168,21 @@ async function createTemplate(admin: any, customer: any, body: any) {
   });
   if (graphButtons.some((button: any) => button.type === "QUICK_REPLY") && graphButtons.some((button: any) => button.type !== "QUICK_REPLY")) throw new Error("Quick replies and call-to-action buttons cannot be combined.");
   const components: any[] = [];
-  if (headerText) components.push({ type: "HEADER", format: "TEXT", text: headerText, ...(headerVariables.length ? { example: { header_text: [String(body.headerExample || "").trim()] } } : {}) });
-  if (headerVariables.length && (!String(body.headerExample || "").trim() || String(body.headerExample).trim().length > 100)) throw new Error("Provide a realistic header variable example.");
-  components.push({ type: "BODY", text: bodyText, ...(uniqueNumbers.length ? { example: { body_text: [variableExamples.slice(0, uniqueNumbers.length)] } } : {}) });
-  if (footerText) components.push({ type: "FOOTER", text: footerText });
-  if (graphButtons.length) components.push({ type: "BUTTONS", buttons: graphButtons });
+  if (authentication) {
+    const expiration = Number(body.codeExpirationMinutes || 10);
+    const otpText = String(body.otpButtonText || "Copy Code").trim();
+    if (!Number.isInteger(expiration) || expiration < 1 || expiration > 90) throw new Error("Authentication code expiry must be between 1 and 90 minutes.");
+    if (!otpText || otpText.length > 25) throw new Error("The OTP button label must contain between 1 and 25 characters.");
+    components.push({ type: "BODY", add_security_recommendation: body.addSecurityRecommendation !== false });
+    components.push({ type: "FOOTER", code_expiration_minutes: expiration });
+    components.push({ type: "BUTTONS", buttons: [{ type: "OTP", otp_type: "COPY_CODE", text: otpText }] });
+  } else {
+    if (headerText) components.push({ type: "HEADER", format: "TEXT", text: headerText, ...(headerVariables.length ? { example: { header_text: [String(body.headerExample || "").trim()] } } : {}) });
+    if (headerVariables.length && (!String(body.headerExample || "").trim() || String(body.headerExample).trim().length > 100)) throw new Error("Provide a realistic header variable example.");
+    components.push({ type: "BODY", text: bodyText, ...(uniqueNumbers.length ? { example: { body_text: [variableExamples.slice(0, uniqueNumbers.length)] } } : {}) });
+    if (footerText) components.push({ type: "FOOTER", text: footerText });
+    if (graphButtons.length) components.push({ type: "BUTTONS", buttons: graphButtons });
+  }
   const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`, {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
