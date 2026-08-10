@@ -67,6 +67,7 @@ let workspaceVerification = null;
 let workspaceInbox = { conversations: [], thread: null, error: "" };
 let workspaceContacts = { contacts: [], error: "" };
 let workspaceTemplates = { templates: [], connectionId: "", error: "" };
+let workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
 const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
 
 function countryDialEntries() {
@@ -1026,20 +1027,23 @@ function templateBuilderDialog(readyConnections, selectedId) {
           <label><span>WhatsApp Business account</span><select name="connectionId" required>${accountOptions}</select></label>
           <div class="wp-form-row"><label><span>Template name</span><input name="name" maxlength="512" pattern="[a-z0-9_]+" placeholder="order_confirmation" required /><small>Lowercase letters, numbers and underscores.</small></label><label><span>Language</span><select name="language" required><option value="en_US">English (US)</option><option value="en_GB">English (UK)</option><option value="hi">Hindi</option><option value="te">Telugu</option><option value="ta">Tamil</option><option value="kn">Kannada</option><option value="ml">Malayalam</option></select></label></div>
           <label><span>Category</span><select name="category"><option value="UTILITY">Utility — account and transaction updates</option><option value="MARKETING">Marketing — offers and engagement</option><option value="AUTHENTICATION">Authentication — one-time passcodes</option></select></label>
+          <fieldset class="wp-content-type-picker"><legend>Content type</legend><div><label><input type="radio" name="contentType" value="TEXT" checked /><span><i>¶</i><strong>Text</strong><small>Header, body and footer</small></span></label><label><input type="radio" name="contentType" value="MEDIA" /><span><i>▧</i><strong>Media</strong><small>Image, video or document</small></span></label><label><input type="radio" name="contentType" value="CTA" /><span><i>↗</i><strong>Call to action</strong><small>Website or phone buttons</small></span></label><label><input type="radio" name="contentType" value="QUICK_REPLY" /><span><i>↩</i><strong>Quick Reply</strong><small>Up to three replies</small></span></label><label><input type="radio" name="contentType" value="CATALOG" /><span><i>🛒</i><strong>Catalog</strong><small>Open the business catalog</small></span></label><label><input type="radio" name="contentType" value="MPM" /><span><i>▦</i><strong>WhatsApp Card</strong><small>Multi-product message</small></span></label><label><input type="radio" name="contentType" value="AUTHENTICATION" /><span><i>♢</i><strong>Authentication</strong><small>One-time passcode</small></span></label><label><input type="radio" name="contentType" value="FLOW" /><span><i>⌁</i><strong>Flows</strong><small>Launch a WhatsApp Flow</small></span></label><label class="is-unavailable"><input type="radio" disabled /><span><i>☷</i><strong>List Picker</strong><small>Available in session messages</small></span></label><label class="is-unavailable"><input type="radio" disabled /><span><i>▤</i><strong>Carousel</strong><small>Separate builder coming next</small></span></label></div></fieldset>
         </section>
         <section class="wp-template-section" data-standard-template><div class="wp-template-section-title"><span>02</span><div><strong>Message content</strong><small>Build the message customers will receive</small></div></div>
-          <label><span>Header</span><select name="headerType"><option value="NONE">No header</option><option value="TEXT">Text header</option></select></label>
+          <label data-standard-header><span>Header</span><select name="headerType"><option value="NONE">No header</option><option value="TEXT">Text header</option></select></label>
           <div class="wp-template-conditional" data-template-header hidden><label><span>Header text</span><input name="headerText" maxlength="60" placeholder="Order update for {{1}}" /><small>Up to 60 characters. One {{1}} variable is supported.</small></label><label><span>Header variable example <em>Only if {{1}} is used</em></span><input name="headerExample" maxlength="100" placeholder="Order 1048" /></label></div>
+          <div class="wp-template-conditional wp-media-template-settings" data-media-template hidden><div class="wp-form-row"><label><span>Media format</span><select name="mediaFormat"><option value="IMAGE">Image</option><option value="VIDEO">Video</option><option value="DOCUMENT">Document</option></select></label><label><span>Meta sample media handle</span><input name="mediaHandle" placeholder="4::aW1hZ2U..." /><small>Use the handle returned by Meta's resumable upload API.</small></label></div></div>
           <label><span>Message body</span><div class="wp-template-field-tools"><button type="button" class="wp-secondary" data-insert-template-variable>＋ Add variable</button><span data-template-body-count>0 / 1024</span></div><textarea name="bodyText" maxlength="1024" rows="7" placeholder="Hi {{1}}, your order {{2}} is confirmed and will arrive on {{3}}." required></textarea><small>Variables must be sequential: {{1}}, {{2}}, {{3}}. Provide a realistic example for every variable.</small></label>
           <div class="wp-template-examples" data-template-examples hidden><div><strong>Variable examples</strong><small>Used only to help Meta review the template.</small></div><div data-template-example-list></div></div>
           <label><span>Footer <em>Optional</em></span><input name="footerText" maxlength="60" placeholder="Varada Nexus • Reply STOP to opt out" /></label>
         </section>
-        <section class="wp-template-section" data-standard-template><div class="wp-template-section-title"><span>03</span><div><strong>Actions</strong><small>Add replies or a call to action</small></div></div>
+        <section class="wp-template-section" data-standard-template data-template-actions><div class="wp-template-section-title"><span>03</span><div><strong>Actions</strong><small>Add replies or a call to action</small></div></div>
           <label><span>Button type</span><select name="buttonType"><option value="NONE">No buttons</option><option value="QUICK_REPLY">Quick replies</option><option value="CALL_TO_ACTION">Call to action</option></select></label>
           <div class="wp-template-conditional" data-template-quick-replies hidden><label><span>Quick reply 1</span><input name="quickReply1" maxlength="25" placeholder="Track order" /></label><label><span>Quick reply 2 <em>Optional</em></span><input name="quickReply2" maxlength="25" placeholder="Contact support" /></label><label><span>Quick reply 3 <em>Optional</em></span><input name="quickReply3" maxlength="25" placeholder="Not now" /></label></div>
           <div class="wp-template-conditional" data-template-cta hidden><div class="wp-form-row"><label><span>Website button</span><input name="urlButtonText" maxlength="25" placeholder="View order" /></label><label><span>Website URL</span><input name="urlButtonValue" type="url" placeholder="https://example.com/order" /></label></div><div class="wp-form-row"><label><span>Call button</span><input name="phoneButtonText" maxlength="25" placeholder="Call support" /></label><label><span>Phone number</span><input name="phoneButtonValue" type="tel" placeholder="+918125625629" /></label></div></div>
         </section>
         <section class="wp-template-section wp-auth-template-settings" data-auth-template hidden><div class="wp-template-section-title"><span>02</span><div><strong>Authentication settings</strong><small>Configure the one-time passcode experience</small></div></div><div class="wp-auth-template-callout"><strong>Meta controls the message wording</strong><p>Authentication templates use Meta's preset OTP format. Your application supplies the code when sending the approved template.</p></div><label class="wp-check-row"><input name="addSecurityRecommendation" type="checkbox" checked /><span><strong>Add security recommendation</strong><small>Tell customers not to share their verification code.</small></span></label><div class="wp-form-row"><label><span>Code expiry</span><select name="codeExpirationMinutes"><option value="5">5 minutes</option><option value="10" selected>10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option></select></label><label><span>Copy button text</span><input name="otpButtonText" maxlength="25" value="Copy Code" required /></label></div></section>
+        <section class="wp-template-section wp-flow-template-settings" data-flow-template hidden><div class="wp-template-section-title"><span>03</span><div><strong>WhatsApp Flow</strong><small>Connect an existing Flow or build one from JSON</small></div></div><label><span>Flow source</span><select name="flowSource"><option value="id">Existing Flow ID</option><option value="json">Build with Flow JSON</option></select></label><div data-flow-id-fields><div class="wp-form-row"><label><span>Flow ID</span><input name="flowId" inputmode="numeric" placeholder="123456789012345" /></label><label><span>Button text</span><input name="flowButtonText" maxlength="25" value="Open form" /></label></div></div><div data-flow-json-fields hidden><label><span>Flow JSON</span><textarea name="flowJson" rows="10" maxlength="20000" spellcheck="false" placeholder='{"version":"5.0","screens":[{"id":"WELCOME_SCREEN","title":"Welcome","terminal":true,"success":true,"data":{},"layout":{"type":"SingleColumnLayout","children":[{"type":"TextHeading","text":"Welcome"},{"type":"Footer","label":"Complete","on-click-action":{"name":"complete","payload":{}}}]}}]}'></textarea><small>Use Meta Flow JSON with a version and at least one screen.</small></label></div><div class="wp-form-row"><label><span>Starting screen ID</span><input name="flowScreenId" maxlength="200" placeholder="WELCOME_SCREEN" /></label><label><span>Flow action</span><select name="flowAction"><option value="navigate">Navigate to screen</option><option value="data_exchange">Data exchange</option></select></label></div></section>
       </div>
       <aside class="wp-template-preview-panel"><div class="wp-template-preview-label"><span>Live preview</span><small>Customer view</small></div><div class="wp-template-phone"><div class="wp-template-phone-bar"><i></i><strong>WhatsApp</strong><span>•••</span></div><div class="wp-template-phone-chat"><div class="wp-template-bubble"><strong data-preview-header hidden></strong><p data-preview-body>Start typing your message to see a preview.</p><small data-preview-footer hidden></small><time>12:45 ✓✓</time></div><div data-preview-buttons></div></div></div><div class="wp-template-review-note"><strong>Ready for review</strong><p>Meta checks category, clarity, variable examples and policy compliance before approval.</p></div></aside>
     </div>
@@ -1047,16 +1051,25 @@ function templateBuilderDialog(readyConnections, selectedId) {
   </form></dialog><dialog class="wp-contact-dialog wp-template-samples-dialog" id="wpTemplateSamplesDialog"><form method="dialog" novalidate><header><div><span class="wp-card-eyebrow">Variable samples</span><h2>Add examples for Meta review</h2><p>Examples show Meta how dynamic values will look. They are not sent to customers.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close samples">×</button></header><div class="wp-template-sample-intro"><span>{{ }}</span><p>Enter one realistic value for every variable in the message body.</p></div><div class="wp-template-sample-fields" data-template-sample-fields></div><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Back</button><button class="wp-primary" type="submit" value="save_samples">Save samples & continue</button></footer></form></dialog>`;
 }
 
+function libraryTemplateCard(template, index) {
+  const samples = Array.isArray(template.bodyParams) ? template.bodyParams : [];
+  const preview = String(template.body || "Meta pre-approved template").replace(/\{\{\s*(\d+)\s*\}\}/g, (_, number) => samples[Number(number) - 1] || `sample ${number}`);
+  return `<article class="wp-meta-library-card" data-library-card><div class="wp-meta-library-preview"><span>${escapeHtml(template.header || template.usecase || "Utility message")}</span><p>${escapeHtml(preview)}</p>${template.footer ? `<small>${escapeHtml(template.footer)}</small>` : ""}${(template.buttons || []).map((button) => `<button type="button" tabindex="-1">${escapeHtml(button.text || button.type || "Open")}</button>`).join("")}</div><footer><div><strong>${escapeHtml(String(template.name || "").replaceAll("_", " "))}</strong><span>${escapeHtml(template.topic || template.usecase || template.category)}</span></div><button class="wp-secondary" type="button" data-use-library-template="${index}">Use template</button></footer></article>`;
+}
+function libraryCloneDialog(readyConnections, selectedId) {
+  const options = readyConnections.map((connection) => `<option value="${escapeHtml(connection.id)}" ${connection.id === selectedId ? "selected" : ""}>${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}</option>`).join("");
+  return `<dialog class="wp-contact-dialog wp-library-clone-dialog" id="wpLibraryCloneDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Meta Template Library</span><h2>Add pre-approved template</h2><p>The fixed wording and category come from Meta.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input type="hidden" name="libraryTemplateName" /><input type="hidden" name="category" /><label><span>WhatsApp Business account</span><select name="connectionId" required>${options}</select></label><div class="wp-form-row"><label><span>Template name</span><input name="name" maxlength="512" pattern="[a-z0-9_]+" required /></label><label><span>Language</span><input name="language" maxlength="6" readonly required /></label></div><article class="wp-library-selected-preview"><strong data-library-preview-title></strong><p data-library-preview-body></p></article><div data-library-button-inputs></div><div class="wp-policy-note"><strong>Pre-approved structure</strong><p>Meta supplies the wording and category. Your account copy may appear briefly as pending while Meta provisions it.</p></div><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="clone">Add to my templates</button></footer></form></dialog>`;
+}
 function templatesViewV2(connections) {
   const readyConnections = connections.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId));
   const selectedId = workspaceTemplates.connectionId || readyConnections[0]?.id || "";
   const templates = workspaceTemplates.templates || [];
+  const libraryTemplates = workspaceTemplateLibrary.templates || [];
   const count = (statuses) => templates.filter((template) => statuses.includes(template.status)).length;
   const rows = templates.map((template) => `<article class="wp-template-row" data-template-row><div class="wp-template-icon">${escapeHtml((template.category || "T").charAt(0))}</div><div class="wp-template-copy"><div><strong>${escapeHtml(template.name)}</strong><span class="wp-template-status ${escapeHtml(String(template.status).toLowerCase())}">${escapeHtml(String(template.status).replaceAll("_", " "))}</span></div><p>${escapeHtml(templateBody(template))}</p><footer><span>${escapeHtml(template.category)}</span><span>${escapeHtml(template.language)}</span><span>Meta template</span></footer></div></article>`).join("");
   const selector = readyConnections.length > 1 ? `<select id="wpTemplateConnection" aria-label="WhatsApp Business account">${readyConnections.map((connection) => `<option value="${escapeHtml(connection.id)}" ${connection.id === selectedId ? "selected" : ""}>${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}</option>`).join("")}</select>` : "";
-  return `<section class="wp-route-page wp-templates-page"><div class="wp-route-heading"><div><span class="wp-kicker">Approved messaging</span><h1>Message templates</h1><p>Create, review and use Meta-approved templates for business-initiated conversations.</p></div>${readyConnections.length ? `<button class="wp-primary" id="wpCreateTemplateBtn" type="button">＋ Create template</button>` : `<a class="wp-primary wp-button-link" href="${workspacePath("accounts")}">Connect account</a>`}</div>${workspaceTemplates.error ? `<div class="wp-verification-notice"><strong>Templates unavailable</strong><p>${escapeHtml(workspaceTemplates.error)}</p></div>` : ""}<section class="wp-template-stats"><article><span>Total</span><strong>${templates.length}</strong></article><article><span>Approved</span><strong>${count(["APPROVED"])}</strong></article><article><span>In review</span><strong>${count(["PENDING","IN_APPEAL"])}</strong></article><article><span>Rejected</span><strong>${count(["REJECTED"])}</strong></article></section><section class="wp-card wp-template-library"><header><div><span class="wp-card-eyebrow">Template library</span><h2>WhatsApp message templates</h2></div><div class="wp-template-tools">${selector}<label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search templates" data-template-search /></label><button class="wp-secondary" id="wpRefreshTemplatesBtn" type="button">Refresh</button></div></header><div class="wp-template-list">${rows || `<div class="wp-inbox-empty"><span>✦</span><strong>${readyConnections.length ? "No templates yet" : "Connect a business account"}</strong><p>${readyConnections.length ? "Create your first template with the guided template studio." : "Templates become available after a WhatsApp Business account is connected."}</p></div>`}</div></section>${templateBuilderDialog(readyConnections, selectedId)}</section>`;
+  return `<section class="wp-route-page wp-templates-page"><div class="wp-route-heading"><div><span class="wp-kicker">Approved messaging</span><h1>Message templates</h1><p>Create custom templates, use Meta's pre-approved library, and build document or Flow experiences.</p></div>${readyConnections.length ? `<div class="wp-template-create-actions"><button class="wp-secondary" id="wpCreateDocumentTemplateBtn" type="button">▧ Document</button><button class="wp-secondary" id="wpCreateFlowTemplateBtn" type="button">⌁ Flow</button><button class="wp-primary" id="wpCreateTemplateBtn" type="button">＋ Custom</button></div>` : `<a class="wp-primary wp-button-link" href="${workspacePath("accounts")}">Connect account</a>`}</div>${workspaceTemplates.error ? `<div class="wp-verification-notice"><strong>Templates unavailable</strong><p>${escapeHtml(workspaceTemplates.error)}</p></div>` : ""}<section class="wp-template-stats"><article><span>Total</span><strong>${templates.length}</strong></article><article><span>Approved</span><strong>${count(["APPROVED"])}</strong></article><article><span>In review</span><strong>${count(["PENDING","IN_APPEAL"])}</strong></article><article><span>Rejected</span><strong>${count(["REJECTED"])}</strong></article></section><nav class="wp-template-mode-tabs"><button class="active" type="button" data-template-panel-tab="owned">My templates</button><button type="button" data-template-panel-tab="library">Meta pre-approved library <span>${libraryTemplates.length}</span></button></nav><section class="wp-card wp-template-library" data-template-panel="owned"><header><div><span class="wp-card-eyebrow">My templates</span><h2>WhatsApp message templates</h2></div><div class="wp-template-tools">${selector}<label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search templates" data-template-search /></label><button class="wp-secondary" id="wpRefreshTemplatesBtn" type="button">Refresh</button></div></header><div class="wp-template-list">${rows || `<div class="wp-inbox-empty"><span>✦</span><strong>No templates yet</strong><p>Create a custom template or choose one from Meta's library.</p></div>`}</div></section><section class="wp-card wp-meta-library" data-template-panel="library" hidden><header><div><span class="wp-card-eyebrow">Pre-approved by Meta</span><h2>Template library</h2><p>Fixed Utility and Authentication structures for common use cases.</p></div><div class="wp-template-tools"><select id="wpLibraryCategory"><option value="UTILITY" ${workspaceTemplateLibrary.category === "UTILITY" ? "selected" : ""}>Utility</option><option value="AUTHENTICATION" ${workspaceTemplateLibrary.category === "AUTHENTICATION" ? "selected" : ""}>Authentication</option></select><select id="wpLibraryLanguage"><option value="en_US">English (US)</option><option value="en_GB">English (UK)</option><option value="hi">Hindi</option><option value="te">Telugu</option></select><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search library" data-library-search /></label></div></header>${workspaceTemplateLibrary.error ? `<div class="wp-verification-notice"><strong>Library unavailable</strong><p>${escapeHtml(workspaceTemplateLibrary.error)}</p></div>` : ""}<div class="wp-meta-library-grid">${libraryTemplates.map(libraryTemplateCard).join("") || `<div class="wp-inbox-empty"><span>⌕</span><strong>No library templates found</strong><p>Try another category or language.</p></div>`}</div></section>${templateBuilderDialog(readyConnections, selectedId)}${libraryCloneDialog(readyConnections, selectedId)}</section>`;
 }
-
 function plannedView(view) {
   const [title, description, capabilities] = PLANNED_WORKSPACE_VIEWS[view];
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Product preview</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="wp-planned-badge">Coming soon</span></div><article class="wp-card wp-planned-card"><div class="wp-planned-visual" aria-hidden="true"><span>${escapeHtml(WORKSPACE_VIEW_LABELS[view].charAt(0))}</span></div><div><span class="wp-card-eyebrow">Designed for focused work</span><h2>Everything your team needs, in one clear workspace</h2><p>This module is being prepared as a dedicated experience with fast navigation, clear ownership and the same protected company context across your workspace.</p><ul>${capabilities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article></section>`;
@@ -1147,8 +1160,20 @@ async function renderDashboard() {
       } catch (error) {
         workspaceTemplates = { templates: [], connectionId, error: error?.message || "Message templates could not be loaded." };
       }
+      if (view === "templates") {
+        const params = new URLSearchParams(location.search);
+        const category = params.get("library_category") === "AUTHENTICATION" ? "AUTHENTICATION" : "UTILITY";
+        const language = /^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(params.get("library_language") || "") ? params.get("library_language") : "en_US";
+        try {
+          const library = await messagingRequest("list_template_library", { connectionId, category, language });
+          workspaceTemplateLibrary = { templates: library?.templates || [], connectionId, category, language, error: "" };
+        } catch (error) {
+          workspaceTemplateLibrary = { templates: [], connectionId, category, language, error: error?.message || "Meta's template library could not be loaded." };
+        }
+      }
     } else {
       workspaceTemplates = { templates: [], connectionId: "", error: "" };
+      workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
     }
   }
   document.body.classList.add("wp-workspace-mode");
@@ -1314,6 +1339,56 @@ async function renderDashboard() {
     try { button.disabled = true; button.textContent = "Refreshing…"; await renderDashboard(); showToast("Templates refreshed from Meta."); }
     catch (error) { showToast(error?.message || "Templates could not be refreshed.", "error"); button.disabled = false; button.textContent = "Refresh"; }
   });
+  app.querySelectorAll("[data-template-panel-tab]").forEach((tab) => tab.addEventListener("click", () => {
+    app.querySelectorAll("[data-template-panel-tab]").forEach((item) => item.classList.toggle("active", item === tab));
+    app.querySelectorAll("[data-template-panel]").forEach((panel) => { panel.hidden = panel.dataset.templatePanel !== tab.dataset.templatePanelTab; });
+  }));
+  const updateLibraryQuery = () => {
+    const url = new URL(location.href);
+    url.searchParams.set("library_category", app.querySelector("#wpLibraryCategory")?.value || "UTILITY");
+    url.searchParams.set("library_language", app.querySelector("#wpLibraryLanguage")?.value || "en_US");
+    location.assign(url.pathname + url.search);
+  };
+  app.querySelector("#wpLibraryCategory")?.addEventListener("change", updateLibraryQuery);
+  app.querySelector("#wpLibraryLanguage")?.addEventListener("change", updateLibraryQuery);
+  app.querySelector("[data-library-search]")?.addEventListener("input", (event) => {
+    const query = String(event.currentTarget.value || "").trim().toLowerCase();
+    app.querySelectorAll("[data-library-card]").forEach((card) => { card.hidden = Boolean(query && !card.textContent.toLowerCase().includes(query)); });
+  });
+  const libraryDialog = app.querySelector("#wpLibraryCloneDialog");
+  const libraryForm = libraryDialog?.querySelector("form");
+  app.querySelectorAll("[data-use-library-template]").forEach((button) => button.addEventListener("click", () => {
+    const template = workspaceTemplateLibrary.templates[Number(button.dataset.useLibraryTemplate)];
+    if (!template || !libraryForm) return;
+    libraryForm.elements.libraryTemplateName.value = template.name;
+    libraryForm.elements.name.value = template.name;
+    libraryForm.elements.language.value = template.language || workspaceTemplateLibrary.language;
+    libraryForm.elements.category.value = template.category || workspaceTemplateLibrary.category;
+    libraryForm.querySelector("[data-library-preview-title]").textContent = String(template.name || "").replaceAll("_", " ");
+    libraryForm.querySelector("[data-library-preview-body]").textContent = template.body || "Meta pre-approved template";
+    const inputs = libraryForm.querySelector("[data-library-button-inputs]");
+    inputs.innerHTML = (template.buttons || []).map((item, index) => {
+      const type = String(item.type || "").toUpperCase();
+      if (type === "URL") return `<fieldset class="wp-library-button-input" data-library-button-input data-type="URL"><legend>${escapeHtml(item.text || "Website button")}</legend><div class="wp-form-row"><label><span>Base URL</span><input name="libraryBaseUrl_${index}" type="url" placeholder="https://example.com" required /></label><label><span>Example URL</span><input name="libraryExampleUrl_${index}" type="url" placeholder="https://example.com/orders/1048" required /></label></div></fieldset>`;
+      if (type === "PHONE_NUMBER") return `<fieldset class="wp-library-button-input" data-library-button-input data-type="PHONE_NUMBER"><legend>${escapeHtml(item.text || "Phone button")}</legend><label><span>Phone number</span><input name="libraryPhone_${index}" type="tel" placeholder="+918125625629" required /></label></fieldset>`;
+      return "";
+    }).join("");
+    libraryDialog.showModal();
+  }));
+  libraryForm?.addEventListener("submit", async (event) => {
+    if (event.submitter?.value !== "clone") return;
+    event.preventDefault();
+    const submit = event.submitter;
+    try {
+      submit.disabled = true; submit.textContent = "Adding…";
+      const libraryButtonInputs = [...libraryForm.querySelectorAll("[data-library-button-input]")].map((field) => {
+        if (field.dataset.type === "URL") return { type: "URL", baseUrl: field.querySelector('input[name^="libraryBaseUrl"]').value.trim(), example: field.querySelector('input[name^="libraryExampleUrl"]').value.trim() };
+        return { type: "PHONE_NUMBER", phoneNumber: field.querySelector('input[name^="libraryPhone"]').value.trim() };
+      });
+      await messagingRequest("create_template", { connectionId: libraryForm.elements.connectionId.value, name: libraryForm.elements.name.value.trim(), language: libraryForm.elements.language.value, category: libraryForm.elements.category.value, libraryTemplateName: libraryForm.elements.libraryTemplateName.value, libraryButtonInputs });
+      libraryDialog.close(); showToast("Pre-approved template added to your WhatsApp account."); await renderDashboard();
+    } catch (error) { showToast(error?.message || "The library template could not be added.", "error"); submit.disabled = false; submit.textContent = "Add to my templates"; }
+  });
   const createTemplateDialog = app.querySelector("#wpCreateTemplateDialog");
   const templateForm = createTemplateDialog?.querySelector("form");
   const templateSamplesDialog = app.querySelector("#wpTemplateSamplesDialog");
@@ -1326,11 +1401,27 @@ async function renderDashboard() {
   const previewValue = (text) => String(text || "").replace(/\{\{\s*(\d+)\s*\}\}/g, (_, number) => templateExampleValues.get(String(number)) || `sample ${number}`);
   const updateTemplateBuilder = () => {
     if (!templateForm) return;
-    const authentication = templateForm.elements.category.value === "AUTHENTICATION";
+    const contentType = templateForm.querySelector('input[name="contentType"]:checked')?.value || "TEXT";
+    const authentication = contentType === "AUTHENTICATION";
     const headerEnabled = templateForm.elements.headerType.value === "TEXT";
     const buttonType = templateForm.elements.buttonType.value;
-    templateForm.querySelector("[data-template-header]").hidden = !headerEnabled;
+    const media = contentType === "MEDIA";
+    const flow = contentType === "FLOW";
+    templateForm.querySelector("[data-standard-header]").hidden = media;
+    templateForm.querySelector("[data-template-header]").hidden = media || !headerEnabled;
+    templateForm.querySelector("[data-media-template]").hidden = !media;
+    templateForm.querySelector("[data-flow-template]").hidden = !flow;
+    templateForm.elements.mediaHandle.required = media;
+    const flowUsesJson = flow && templateForm.elements.flowSource.value === "json";
+    templateForm.querySelector("[data-flow-id-fields]").hidden = flowUsesJson;
+    templateForm.querySelector("[data-flow-json-fields]").hidden = !flowUsesJson;
+    templateForm.elements.flowId.required = flow && !flowUsesJson;
+    templateForm.elements.flowJson.required = flowUsesJson;
+    templateForm.elements.flowButtonText.required = flow;
+    templateForm.elements.flowScreenId.required = flow && templateForm.elements.flowAction.value === "navigate";
     templateForm.querySelectorAll("[data-standard-template]").forEach((section) => { section.hidden = authentication; });
+    const actionSection = templateForm.querySelector("[data-template-actions]");
+    if (actionSection) actionSection.hidden = authentication || ["CATALOG","MPM","FLOW"].includes(contentType);
     templateForm.querySelector("[data-auth-template]").hidden = !authentication;
     templateBodyInput.required = !authentication;
     templateForm.elements.otpButtonText.required = authentication;
@@ -1352,21 +1443,52 @@ async function renderDashboard() {
     const body = templateForm.querySelector("[data-preview-body]");
     const footer = templateForm.querySelector("[data-preview-footer]");
     const buttonList = templateForm.querySelector("[data-preview-buttons]");
-    const authentication = templateForm.elements.category.value === "AUTHENTICATION";
+    const contentType = templateForm.querySelector('input[name="contentType"]:checked')?.value || "TEXT";
+    const authentication = contentType === "AUTHENTICATION";
     const headerText = !authentication && templateForm.elements.headerType.value === "TEXT" ? templateHeaderInput.value.trim() : "";
     header.textContent = previewValue(headerText); header.hidden = !headerText;
     body.textContent = authentication ? "123456 is your verification code." : (previewValue(templateBodyInput.value.trim()) || "Start typing your message to see a preview.");
     footer.textContent = authentication ? `This code expires in ${templateForm.elements.codeExpirationMinutes.value} minutes.` : templateFooterInput.value.trim(); footer.hidden = !footer.textContent;
     let labels = [];
     if (authentication) labels = [templateForm.elements.otpButtonText.value || "Copy Code"];
+    else if (contentType === "CATALOG") labels = ["View catalog"];
+    else if (contentType === "MPM") labels = ["View items"];
+    else if (contentType === "FLOW") labels = [templateForm.elements.flowButtonText.value || "Open form"];
     else if (templateForm.elements.buttonType.value === "QUICK_REPLY") labels = [templateForm.elements.quickReply1.value, templateForm.elements.quickReply2.value, templateForm.elements.quickReply3.value];
     else if (templateForm.elements.buttonType.value === "CALL_TO_ACTION") labels = [templateForm.elements.urlButtonText.value, templateForm.elements.phoneButtonText.value];
     buttonList.innerHTML = labels.filter((label) => label.trim()).map((label) => `<span>↗ ${escapeHtml(label.trim())}</span>`).join("");
   };
-  app.querySelector("#wpCreateTemplateBtn")?.addEventListener("click", () => { createTemplateDialog?.showModal(); updateTemplateBuilder(); });
+  const openTemplateBuilder = (type = "TEXT", mediaFormat = "IMAGE") => {
+    if (!templateForm || !createTemplateDialog) return;
+    const radio = templateForm.querySelector(`input[name="contentType"][value="${type}"]`);
+    if (radio) radio.checked = true;
+    templateForm.elements.mediaFormat.value = mediaFormat;
+    if (type === "FLOW") templateForm.elements.category.value = "UTILITY";
+    createTemplateDialog.showModal();
+    updateTemplateBuilder();
+  };
+  app.querySelector("#wpCreateTemplateBtn")?.addEventListener("click", () => openTemplateBuilder("TEXT"));
+  app.querySelector("#wpCreateDocumentTemplateBtn")?.addEventListener("click", () => openTemplateBuilder("MEDIA", "DOCUMENT"));
+  app.querySelector("#wpCreateFlowTemplateBtn")?.addEventListener("click", () => openTemplateBuilder("FLOW"));
   templateForm?.elements.headerType?.addEventListener("change", updateTemplateBuilder);
   templateForm?.elements.buttonType?.addEventListener("change", updateTemplateBuilder);
-  templateForm?.elements.category?.addEventListener("change", updateTemplateBuilder);
+  templateForm?.elements.flowAction?.addEventListener("change", updateTemplateBuilder);
+  templateForm?.elements.flowSource?.addEventListener("change", updateTemplateBuilder);
+  templateForm?.elements.category?.addEventListener("change", () => {
+    if (templateForm.elements.category.value === "AUTHENTICATION") templateForm.querySelector('input[name="contentType"][value="AUTHENTICATION"]').checked = true;
+    else if (templateForm.querySelector('input[name="contentType"]:checked')?.value === "AUTHENTICATION") templateForm.querySelector('input[name="contentType"][value="TEXT"]').checked = true;
+    updateTemplateBuilder();
+  });
+  templateForm?.querySelectorAll('input[name="contentType"]').forEach((radio) => radio.addEventListener("change", () => {
+    const type = radio.value;
+    if (type === "AUTHENTICATION") templateForm.elements.category.value = "AUTHENTICATION";
+    else if (templateForm.elements.category.value === "AUTHENTICATION") templateForm.elements.category.value = "UTILITY";
+    if (["CATALOG","MPM"].includes(type)) templateForm.elements.category.value = "MARKETING";
+    if (type === "CTA") templateForm.elements.buttonType.value = "CALL_TO_ACTION";
+    else if (type === "QUICK_REPLY") templateForm.elements.buttonType.value = "QUICK_REPLY";
+    else if (!["TEXT","MEDIA"].includes(type)) templateForm.elements.buttonType.value = "NONE";
+    updateTemplateBuilder();
+  }));
   templateForm?.querySelector("[data-insert-template-variable]")?.addEventListener("click", () => {
     const numbers = [...templateBodyInput.value.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((match) => Number(match[1]));
     const token = `{{${numbers.length ? Math.max(...numbers) + 1 : 1}}}`;
@@ -1412,7 +1534,8 @@ async function renderDashboard() {
           ? [{ type: "URL", text: form.elements.urlButtonText.value.trim(), url: form.elements.urlButtonValue.value.trim() }, { type: "PHONE_NUMBER", text: form.elements.phoneButtonText.value.trim(), phone_number: form.elements.phoneButtonValue.value.trim() }].filter((button) => button.text || button.url || button.phone_number)
           : [];
       const variableExamples = [...form.querySelectorAll("[data-template-example]")].sort((a, b) => Number(a.dataset.templateExample) - Number(b.dataset.templateExample)).map((input) => input.value.trim());
-      await messagingRequest("create_template", { connectionId: form.elements.connectionId.value, name: form.elements.name.value.trim(), language: form.elements.language.value, category: form.elements.category.value, headerText: form.elements.headerType.value === "TEXT" ? form.elements.headerText.value.trim() : "", headerExample: form.elements.headerExample?.value?.trim() || "", bodyText: form.elements.bodyText.value.trim(), variableExamples, footerText: form.elements.footerText.value.trim(), buttons, addSecurityRecommendation: form.elements.addSecurityRecommendation.checked, codeExpirationMinutes: Number(form.elements.codeExpirationMinutes.value), otpButtonText: form.elements.otpButtonText.value.trim() });
+      const contentType = form.querySelector('input[name="contentType"]:checked')?.value || "TEXT";
+      await messagingRequest("create_template", { connectionId: form.elements.connectionId.value, name: form.elements.name.value.trim(), language: form.elements.language.value, category: form.elements.category.value, contentType, headerText: form.elements.headerType.value === "TEXT" ? form.elements.headerText.value.trim() : "", headerExample: form.elements.headerExample?.value?.trim() || "", mediaFormat: form.elements.mediaFormat.value, mediaHandle: form.elements.mediaHandle.value.trim(), bodyText: form.elements.bodyText.value.trim(), variableExamples, footerText: form.elements.footerText.value.trim(), buttons, addSecurityRecommendation: form.elements.addSecurityRecommendation.checked, codeExpirationMinutes: Number(form.elements.codeExpirationMinutes.value), otpButtonText: form.elements.otpButtonText.value.trim(), flowId: form.elements.flowId.value.trim(), flowSource: form.elements.flowSource.value, flowJson: form.elements.flowJson.value.trim(), flowButtonText: form.elements.flowButtonText.value.trim(), flowScreenId: form.elements.flowScreenId.value.trim(), flowAction: form.elements.flowAction.value });
       createTemplateDialog.close(); showToast("Template submitted to Meta for review."); await renderDashboard();
     } catch (error) { showToast(error?.message || "Template could not be submitted.", "error"); submitter.disabled = false; submitter.textContent = "Submit to Meta"; }
   });

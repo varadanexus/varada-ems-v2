@@ -132,6 +132,31 @@ async function listTemplates(admin: any, customer: any, body: any) {
   }));
   return { connection: { id: connection.id, displayPhoneNumber: connection.display_phone_number, verifiedName: connection.verified_name }, templates };
 }
+// Meta's own pre-approved utility and authentication template catalogue.
+async function listTemplateLibrary(admin: any, customer: any, body: any) {
+  const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
+  const category = String(body.category || "UTILITY").trim().toUpperCase();
+  const language = String(body.language || "en_US").trim();
+  if (!["UTILITY", "AUTHENTICATION"].includes(category)) throw new Error("The Meta library supports Utility and Authentication templates.");
+  if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(language)) throw new Error("Enter a valid template library language.");
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/message_template_library`);
+  url.searchParams.set("category", category);
+  url.searchParams.set("language", language);
+  url.searchParams.set("limit", "100");
+  const search = String(body.search || "").trim();
+  if (search) url.searchParams.set("search", search.slice(0, 120));
+  const graphResponse = await fetch(url, { headers: { Authorization: `Bearer ${secret.accessToken}` } });
+  const graph = await graphResponse.json().catch(() => ({}));
+  if (!graphResponse.ok) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Meta's template library could not be loaded.");
+  const templates = (Array.isArray(graph?.data) ? graph.data : []).map((template: any) => ({
+    id: String(template.id || ""), name: String(template.name || ""), language: String(template.language || language),
+    category: String(template.category || category).toUpperCase(), topic: String(template.topic || ""), usecase: String(template.usecase || ""),
+    industry: Array.isArray(template.industry) ? template.industry.map(String) : [], header: String(template.header || ""),
+    body: String(template.body || ""), footer: String(template.footer || ""), bodyParams: Array.isArray(template.body_params) ? template.body_params.map(String) : [],
+    bodyParamTypes: Array.isArray(template.body_param_types) ? template.body_param_types.map(String) : [], buttons: Array.isArray(template.buttons) ? template.buttons : [],
+  }));
+  return { connection: { id: connection.id }, templates };
+}
 async function createTemplate(admin: any, customer: any, body: any) {
   if (!['owner','admin'].includes(customer.role_code)) throw new Error("Only workspace administrators can create templates.");
   const name = String(body.name || "").trim().toLowerCase();
@@ -140,12 +165,46 @@ async function createTemplate(admin: any, customer: any, body: any) {
   const bodyText = String(body.bodyText || "").trim();
   const headerText = String(body.headerText || "").trim();
   const footerText = String(body.footerText || "").trim();
+  const contentType = String(body.contentType || "TEXT").trim().toUpperCase();
   const variableExamples = Array.isArray(body.variableExamples) ? body.variableExamples.map((value: any) => String(value || "").trim()) : [];
   const buttons = Array.isArray(body.buttons) ? body.buttons : [];
+  const libraryTemplateName = String(body.libraryTemplateName || "").trim();
   if (!/^[a-z0-9_]{1,512}$/.test(name)) throw new Error("Template names can contain only lowercase letters, numbers and underscores.");
   if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(language)) throw new Error("Enter a valid language code, such as en_US.");
   if (!["MARKETING","UTILITY","AUTHENTICATION"].includes(category)) throw new Error("Select a valid template category.");
-  const authentication = category === "AUTHENTICATION";
+  if (libraryTemplateName) {
+    if (!/^[a-z0-9_]{1,512}$/.test(libraryTemplateName)) throw new Error("Select a valid Meta library template.");
+    if (!["UTILITY", "AUTHENTICATION"].includes(category)) throw new Error("Meta library templates must use their Utility or Authentication category.");
+    const libraryButtonInputs = Array.isArray(body.libraryButtonInputs) ? body.libraryButtonInputs.slice(0, 3).map((input: any) => {
+      const type = String(input?.type || "").toUpperCase();
+      if (type === "URL") {
+        const baseUrl = String(input?.baseUrl || "").trim();
+        const example = String(input?.example || "").trim();
+        if (!/^https:\/\/[^\s]+$/i.test(baseUrl) || !/^https:\/\/[^\s]+$/i.test(example)) throw new Error("Library URL buttons require a valid HTTPS base URL and example URL.");
+        return { type: "URL", url: { base_url: baseUrl, url_suffix_example: example } };
+      }
+      if (type === "PHONE_NUMBER") {
+        const phoneNumber = String(input?.phoneNumber || "").trim();
+        if (!/^\+[1-9][0-9]{6,14}$/.test(phoneNumber)) throw new Error("Library phone buttons require an international phone number.");
+        return { type: "PHONE_NUMBER", phone_number: phoneNumber };
+      }
+      throw new Error("Select a supported library button input.");
+    }) : [];
+    const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
+    const requestBody: any = { name, language, category, library_template_name: libraryTemplateName };
+    if (libraryButtonInputs.length) requestBody.library_template_button_inputs = libraryButtonInputs;
+    const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`, {
+      method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(requestBody),
+    });
+    const graph = await graphResponse.json().catch(() => ({}));
+    if (!graphResponse.ok || !graph?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "The library template could not be added to this account.");
+    return { template: { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), libraryTemplateName } };
+  }
+  if (!["TEXT","MEDIA","CTA","QUICK_REPLY","CATALOG","MPM","AUTHENTICATION","FLOW"].includes(contentType)) throw new Error("Select a supported WhatsApp template content type.");
+  const authentication = contentType === "AUTHENTICATION";
+  if (authentication && category !== "AUTHENTICATION") throw new Error("Authentication content must use the Authentication category.");
+  if (!authentication && category === "AUTHENTICATION") throw new Error("Select the Authentication content type for this category.");
+  if (["CATALOG","MPM"].includes(contentType) && category !== "MARKETING") throw new Error("Catalog templates must use the Marketing category.");
   if (!authentication && (!bodyText || bodyText.length > 1024)) throw new Error("Template body must contain between 1 and 1,024 characters.");
   if (headerText.length > 60) throw new Error("Template header cannot exceed 60 characters.");
   if (footerText.length > 60) throw new Error("Template footer cannot exceed 60 characters.");
@@ -177,11 +236,38 @@ async function createTemplate(admin: any, customer: any, body: any) {
     components.push({ type: "FOOTER", code_expiration_minutes: expiration });
     components.push({ type: "BUTTONS", buttons: [{ type: "OTP", otp_type: "COPY_CODE", text: otpText }] });
   } else {
-    if (headerText) components.push({ type: "HEADER", format: "TEXT", text: headerText, ...(headerVariables.length ? { example: { header_text: [String(body.headerExample || "").trim()] } } : {}) });
-    if (headerVariables.length && (!String(body.headerExample || "").trim() || String(body.headerExample).trim().length > 100)) throw new Error("Provide a realistic header variable example.");
+    if (contentType === "MEDIA") {
+      const mediaFormat = String(body.mediaFormat || "").toUpperCase();
+      const mediaHandle = String(body.mediaHandle || "").trim();
+      if (!["IMAGE","VIDEO","DOCUMENT"].includes(mediaFormat)) throw new Error("Select a valid media header format.");
+      if (!mediaHandle || mediaHandle.length > 4096) throw new Error("Provide the Meta sample media handle returned by the resumable upload API.");
+      components.push({ type: "HEADER", format: mediaFormat, example: { header_handle: [mediaHandle] } });
+    } else if (headerText) {
+      components.push({ type: "HEADER", format: "TEXT", text: headerText, ...(headerVariables.length ? { example: { header_text: [String(body.headerExample || "").trim()] } } : {}) });
+      if (headerVariables.length && (!String(body.headerExample || "").trim() || String(body.headerExample).trim().length > 100)) throw new Error("Provide a realistic header variable example.");
+    }
     components.push({ type: "BODY", text: bodyText, ...(uniqueNumbers.length ? { example: { body_text: [variableExamples.slice(0, uniqueNumbers.length)] } } : {}) });
     if (footerText) components.push({ type: "FOOTER", text: footerText });
-    if (graphButtons.length) components.push({ type: "BUTTONS", buttons: graphButtons });
+    if (contentType === "CATALOG") components.push({ type: "BUTTONS", buttons: [{ type: "CATALOG", text: "View catalog" }] });
+    else if (contentType === "MPM") components.push({ type: "BUTTONS", buttons: [{ type: "MPM", text: "View items" }] });
+    else if (contentType === "FLOW") {
+      const flowId = String(body.flowId || "").trim();
+      const flowJson = String(body.flowJson || "").trim();
+      const flowSource = String(body.flowSource || "id").trim().toLowerCase();
+      const flowText = String(body.flowButtonText || "Open form").trim();
+      const navigateScreen = String(body.flowScreenId || "").trim();
+      const flowAction = String(body.flowAction || "navigate").trim().toLowerCase();
+      if (!["id","json"].includes(flowSource)) throw new Error("Select a valid Flow source.");
+      if (flowSource === "id" && !/^[0-9]{5,30}$/.test(flowId)) throw new Error("Enter a valid WhatsApp Flow ID.");
+      if (flowSource === "json") {
+        if (!flowJson || flowJson.length > 20000) throw new Error("Flow JSON must contain between 1 and 20,000 characters.");
+        try { const parsed = JSON.parse(flowJson); if (!parsed?.version || !Array.isArray(parsed?.screens) || !parsed.screens.length) throw new Error(); } catch { throw new Error("Flow JSON must contain a version and at least one screen."); }
+      }
+      if (!flowText || flowText.length > 25) throw new Error("Flow button text must contain between 1 and 25 characters.");
+      if (!["navigate","data_exchange"].includes(flowAction)) throw new Error("Select a valid Flow action.");
+      if (flowAction === "navigate" && !/^[A-Za-z0-9_\-]{1,200}$/.test(navigateScreen)) throw new Error("Enter the starting screen ID for this Flow.");
+      components.push({ type: "BUTTONS", buttons: [{ type: "FLOW", text: flowText, ...(flowSource === "json" ? { flow_json: flowJson } : { flow_id: flowId }), flow_action: flowAction, ...(navigateScreen ? { navigate_screen: navigateScreen } : {}) }] });
+    } else if (graphButtons.length) components.push({ type: "BUTTONS", buttons: graphButtons });
   }
   const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`, {
@@ -405,6 +491,7 @@ Deno.serve(async (req) => {
     if (action === "list_team") return json(req, await listTeam(admin, customer));
     if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));
     if (action === "list_templates") return json(req, await listTemplates(admin, customer, body));
+    if (action === "list_template_library") return json(req, await listTemplateLibrary(admin, customer, body));
     if (action === "create_template") return json(req, await createTemplate(admin, customer, body));
     if (action === "thread") return json(req, await thread(admin, customer, body));
     if (action === "send_text") return json(req, await sendText(admin, customer, body));
