@@ -174,7 +174,7 @@ async function configurationStatus(admin: any, customer: any) {
   const version = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
   const { data: connections, error } = await admin
     .from("whatsapp_platform_connections")
-    .select("id,status,phone_number_id,display_phone_number,verified_name,connected_at,created_at")
+    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at")
     .eq("tenant_id", customer.tenant_id)
     .order("created_at", { ascending: false });
   if (error) throw error;

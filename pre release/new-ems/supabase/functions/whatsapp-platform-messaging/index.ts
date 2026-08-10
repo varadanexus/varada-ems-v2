@@ -106,6 +106,52 @@ async function listContacts(admin: any, customer: any, body: any) {
   const conversationMap = new Map((conversations || []).map((row: any) => [row.contact_id, row]));
   return { contacts: (contacts || []).map((row: any) => ({ ...row, conversation: conversationMap.get(row.id) || null })) };
 }
+async function templateConnection(admin: any, customer: any, connectionId: unknown) {
+  const id = cleanUuid(connectionId, "connection");
+  const [{ data: connection, error: connectionError }, { data: credential, error: credentialError }] = await Promise.all([
+    admin.from("whatsapp_platform_connections").select("id,whatsapp_business_account_id,display_phone_number,verified_name,status").eq("id", id).eq("tenant_id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_provider_credentials").select("credential_ciphertext,expires_at").eq("connection_id", id).eq("tenant_id", customer.tenant_id).single(),
+  ]);
+  if (connectionError || !connection?.whatsapp_business_account_id || connection.status !== "connected") throw new Error("Select a connected WhatsApp Business account.");
+  if (credentialError || !credential) throw new Error("The WhatsApp connection credential is unavailable.");
+  if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
+  return { connection, credential, secret: await decryptCredential(credential.credential_ciphertext) };
+}
+async function listTemplates(admin: any, customer: any, body: any) {
+  const connectionId = cleanUuid(body.connectionId, "connection");
+  const { connection, secret } = await templateConnection(admin, customer, connectionId);
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`);
+  url.searchParams.set("limit", "100");
+  const graphResponse = await fetch(url, { headers: { Authorization: `Bearer ${secret.accessToken}` } });
+  const graph = await graphResponse.json().catch(() => ({}));
+  if (!graphResponse.ok) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Message templates could not be loaded.");
+  const templates = (Array.isArray(graph?.data) ? graph.data : []).map((template: any) => ({
+    id: String(template.id || ""), name: String(template.name || ""), status: String(template.status || "UNKNOWN").toUpperCase(),
+    category: String(template.category || "UNKNOWN").toUpperCase(), language: String(template.language || ""),
+    components: Array.isArray(template.components) ? template.components : [],
+  }));
+  return { connection: { id: connection.id, displayPhoneNumber: connection.display_phone_number, verifiedName: connection.verified_name }, templates };
+}
+async function createTemplate(admin: any, customer: any, body: any) {
+  if (!['owner','admin'].includes(customer.role_code)) throw new Error("Only workspace administrators can create templates.");
+  const name = String(body.name || "").trim().toLowerCase();
+  const language = String(body.language || "en_US").trim();
+  const category = String(body.category || "UTILITY").trim().toUpperCase();
+  const bodyText = String(body.bodyText || "").trim();
+  if (!/^[a-z0-9_]{1,512}$/.test(name)) throw new Error("Template names can contain only lowercase letters, numbers and underscores.");
+  if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(language)) throw new Error("Enter a valid language code, such as en_US.");
+  if (!["MARKETING","UTILITY"].includes(category)) throw new Error("Select a valid template category.");
+  if (!bodyText || bodyText.length > 1024) throw new Error("Template body must contain between 1 and 1,024 characters.");
+  if (/\{\{\s*\d+\s*\}\}/.test(bodyText)) throw new Error("Variable examples are not available in this first template builder. Remove placeholders before submitting.");
+  const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
+  const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`, {
+    method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name, language, category, components: [{ type: "BODY", text: bodyText }] }),
+  });
+  const graph = await graphResponse.json().catch(() => ({}));
+  if (!graphResponse.ok || !graph?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Template could not be submitted to Meta.");
+  return { template: { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), components: [{ type: "BODY", text: bodyText }] } };
+}
 async function thread(admin: any, customer: any, body: any) {
   const conversationId = cleanUuid(body.conversationId, "conversation");
   const { data: conversation, error } = await admin.from("whatsapp_platform_conversations")
@@ -318,6 +364,8 @@ Deno.serve(async (req) => {
     if (action === "list") return json(req, await listConversations(admin, customer, body));
     if (action === "list_team") return json(req, await listTeam(admin, customer));
     if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));
+    if (action === "list_templates") return json(req, await listTemplates(admin, customer, body));
+    if (action === "create_template") return json(req, await createTemplate(admin, customer, body));
     if (action === "thread") return json(req, await thread(admin, customer, body));
     if (action === "send_text") return json(req, await sendText(admin, customer, body));
     if (action === "create_contact") return json(req, await createContact(admin, customer, body));
