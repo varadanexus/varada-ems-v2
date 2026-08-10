@@ -412,6 +412,10 @@ async function verificationState(admin: any, customer: any) {
     documents = data || [];
   }
   const entityType = verification?.entity_type || tenant.business_type || "other";
+  const { data: gate, error: gateError } = await admin.from("whatsapp_platform_verification_gate_settings")
+    .select("gate_enabled,bypass_expires_at").eq("singleton", true).maybeSingle();
+  if (gateError && gateError.code !== "42P01") throw gateError;
+  const bypassActive = gate?.gate_enabled === false && gate?.bypass_expires_at && new Date(gate.bypass_expires_at).getTime() > Date.now();
   return {
     companyName: tenant.name,
     legalName: tenant.legal_name || tenant.name,
@@ -429,6 +433,8 @@ async function verificationState(admin: any, customer: any) {
     requirements: VERIFICATION_REQUIREMENTS[entityType] || VERIFICATION_REQUIREMENTS.other,
     documents: documents.map((item) => ({ id: item.id, type: item.document_type, name: item.original_file_name, mimeType: item.mime_type, size: item.file_size, uploadedAt: item.created_at })),
     canEdit: ["not_started", "draft", "changes_requested", "rejected"].includes(verification?.status || tenant.verification_status || "not_started"),
+    gateRequired: !bypassActive,
+    gateTemporarilyPaused: Boolean(bypassActive),
   };
 }
 

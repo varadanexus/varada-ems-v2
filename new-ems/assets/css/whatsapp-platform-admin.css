@@ -108,5 +108,12 @@
 .wa-verification-review button { min-height: 36px; padding: 0 11px; border: 1px solid rgba(218,178,83,.28); border-radius: 9px; background: #151711; color: #e8cb72; font-weight: 800; cursor: pointer; }
 .wa-verification-review button.approve { border-color: #25d366; background: #25d366; color: #07150c; }
 .wa-verification-review button.danger { border-color: rgba(239,87,87,.4); color: #f18989; }
+.wa-gate-card { margin-bottom: 16px; }
+.wa-gate-card.paused { border-color: rgba(239,87,87,.48); box-shadow: inset 4px 0 0 #ef5757; }
+.wa-gate-warning { padding: 12px 14px; border-radius: 10px; background: rgba(218,178,83,.08); color: #c8b77f !important; }
+.wa-gate-form { display: grid; grid-template-columns: minmax(0,1fr) 190px auto; gap: 12px; align-items: end; }
+.wa-gate-form label { display: grid; gap: 6px; color: #a9b1ab; font-size: 12px; font-weight: 700; }
+.wa-gate-form textarea,.wa-gate-form select { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid rgba(218,178,83,.22); border-radius: 10px; background: #070907; color: #eeeae0; font: inherit; }
+@media (max-width: 800px) { .wa-gate-form { grid-template-columns: 1fr; } }
 @media (max-width: 900px) { .wa-verification-case dl { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .wa-verification-case dl { grid-template-columns: 1fr; } .wa-verification-case > header { flex-direction: column; } }

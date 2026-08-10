@@ -198,6 +198,19 @@ async function recordEvent(admin: any, customer: any, eventCode: string, metadat
   });
 }
 
+async function enforceVerificationGate(admin: any, customer: any) {
+  const [{ data: tenant, error: tenantError }, { data: gate, error: gateError }] = await Promise.all([
+    admin.from("whatsapp_platform_tenants").select("verification_status").eq("id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_verification_gate_settings").select("gate_enabled,bypass_expires_at").eq("singleton", true).maybeSingle(),
+  ]);
+  if (tenantError) throw tenantError;
+  if (gateError && gateError.code !== "42P01") throw gateError;
+  const bypassActive = gate?.gate_enabled === false && gate?.bypass_expires_at && new Date(gate.bypass_expires_at).getTime() > Date.now();
+  if (!bypassActive && tenant?.verification_status !== "verified") {
+    throw new Error("Complete the provider business pre-check before connecting Meta Business.");
+  }
+}
+
 async function completeOnboarding(admin: any, customer: any, body: any) {
   const appId = env("WHATSAPP_PLATFORM_META_APP_ID");
   const appSecret = await providerAppSecret(admin);
@@ -324,10 +337,14 @@ Deno.serve(async (req) => {
     const action = String(body.action || "status");
     if (action === "status") return json(req, await configurationStatus(admin, customer));
     if (action === "begin") {
+      await enforceVerificationGate(admin, customer);
       await recordEvent(admin, customer, "onboarding_started", { source: "customer_workspace" });
       return json(req, { ok: true });
     }
-    if (action === "complete") return json(req, await completeOnboarding(admin, customer, body));
+    if (action === "complete") {
+      await enforceVerificationGate(admin, customer);
+      return json(req, await completeOnboarding(admin, customer, body));
+    }
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";
