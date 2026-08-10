@@ -1118,7 +1118,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-contact-status.opted_out { color: #d6a85d; }
 .wp-contact-actions { display: flex; gap: .35rem; }
 .wp-contact-actions a,.wp-contact-actions button { padding: .45rem .55rem; border: 1px solid var(--wp-workspace-line); border-radius: 8px; background: var(--wp-workspace-surface-soft); color: var(--wp-workspace-text); font: inherit; font-size: .58rem; font-weight: 750; text-decoration: none; cursor: pointer; }
-.wp-contact-dialog { width: min(480px,calc(100% - 2rem)); padding: 0; border: 1px solid var(--wp-workspace-line-strong); border-radius: 18px; background: var(--wp-workspace-surface-solid); color: var(--wp-workspace-text); box-shadow: 0 30px 90px rgba(0,0,0,.38); }
+.wp-contact-dialog { width: min(480px,calc(100% - 2rem)); padding: 0; overflow: visible; border: 1px solid var(--wp-workspace-line-strong); border-radius: 18px; background: var(--wp-workspace-surface-solid); color: var(--wp-workspace-text); box-shadow: 0 30px 90px rgba(0,0,0,.38); }
 .wp-contact-dialog::backdrop { background: rgba(2,8,6,.66); backdrop-filter: blur(5px); }
 .wp-contact-dialog form { display: grid; gap: .9rem; padding: 1.1rem; }
 .wp-contact-dialog header,.wp-contact-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
@@ -1130,6 +1130,24 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-contact-dialog input,.wp-contact-dialog select { width: 100%; min-height: 42px; padding: 0 .7rem; border: 1px solid var(--wp-workspace-line); border-radius: 10px; background: var(--wp-workspace-surface-soft); color: var(--wp-workspace-text); font: inherit; font-size: .7rem; }
 .wp-phone-input { display: grid; grid-template-columns: minmax(180px,.9fr) minmax(150px,1fr); gap: .55rem; }
 .wp-phone-input select { text-overflow: ellipsis; }
+.wp-country-picker { position: relative; min-width: 0; }
+.wp-country-trigger { width: 100%; min-height: 42px; display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: .45rem; padding: 0 .65rem; border: 1px solid var(--wp-workspace-line); border-radius: 10px; background: var(--wp-workspace-surface-soft); color: var(--wp-workspace-text); font: inherit; font-size: .68rem; cursor: pointer; }
+.wp-country-trigger span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.wp-country-trigger strong { color: var(--wp-workspace-accent-strong); font-size: .65rem; }
+.wp-country-trigger i { color: var(--wp-workspace-muted); font-style: normal; transition: transform .18s ease; }
+.wp-country-trigger[aria-expanded="true"] { border-color: color-mix(in srgb,var(--wp-workspace-accent) 55%,var(--wp-workspace-line)); box-shadow: 0 0 0 3px color-mix(in srgb,var(--wp-workspace-accent) 10%,transparent); }
+.wp-country-trigger[aria-expanded="true"] i { transform: rotate(180deg); }
+.wp-country-panel { position: absolute; z-index: 20; top: calc(100% + .4rem); left: 0; width: min(360px,calc(100vw - 4rem)); padding: .55rem; border: 1px solid var(--wp-workspace-line-strong); border-radius: 13px; background: var(--wp-workspace-surface-solid); box-shadow: 0 18px 55px rgba(0,0,0,.38); }
+.wp-country-panel[hidden],.wp-country-options [hidden],.wp-country-empty[hidden] { display: none !important; }
+.wp-country-search { display: grid !important; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: .4rem; margin-bottom: .45rem; padding: 0 .55rem; border: 1px solid var(--wp-workspace-line); border-radius: 9px; background: var(--wp-workspace-surface-soft); }
+.wp-country-search span { margin: 0 !important; color: var(--wp-workspace-muted); }
+.wp-country-search input { min-height: 36px; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.wp-country-options { max-height: 245px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.wp-country-options button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .58rem .6rem; border: 0; border-radius: 8px; background: transparent; color: var(--wp-workspace-text); font: inherit; font-size: .64rem; cursor: pointer; }
+.wp-country-options button:hover,.wp-country-options button:focus-visible { outline: 0; background: color-mix(in srgb,var(--wp-workspace-accent) 10%,var(--wp-workspace-surface-soft)); }
+.wp-country-options button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wp-country-options button strong { flex: 0 0 auto; color: var(--wp-workspace-muted); font-size: .62rem; }
+.wp-country-empty { margin: .6rem 0; color: var(--wp-workspace-muted); font-size: .62rem; text-align: center; }
 .wp-contact-dialog footer { justify-content: flex-end; padding-top: .3rem; }
 .wp-new-chat-dialog { width: min(620px,calc(100% - 2rem)); }
 .wp-new-chat-dialog .wp-form-row { display: grid; grid-template-columns: 1.5fr .7fr; gap: .75rem; }
