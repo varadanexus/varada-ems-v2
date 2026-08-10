@@ -138,19 +138,48 @@ async function createTemplate(admin: any, customer: any, body: any) {
   const language = String(body.language || "en_US").trim();
   const category = String(body.category || "UTILITY").trim().toUpperCase();
   const bodyText = String(body.bodyText || "").trim();
+  const headerText = String(body.headerText || "").trim();
+  const footerText = String(body.footerText || "").trim();
+  const variableExamples = Array.isArray(body.variableExamples) ? body.variableExamples.map((value: any) => String(value || "").trim()) : [];
+  const buttons = Array.isArray(body.buttons) ? body.buttons : [];
   if (!/^[a-z0-9_]{1,512}$/.test(name)) throw new Error("Template names can contain only lowercase letters, numbers and underscores.");
   if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(language)) throw new Error("Enter a valid language code, such as en_US.");
   if (!["MARKETING","UTILITY"].includes(category)) throw new Error("Select a valid template category.");
   if (!bodyText || bodyText.length > 1024) throw new Error("Template body must contain between 1 and 1,024 characters.");
-  if (/\{\{\s*\d+\s*\}\}/.test(bodyText)) throw new Error("Variable examples are not available in this first template builder. Remove placeholders before submitting.");
+  if (headerText.length > 60) throw new Error("Template header cannot exceed 60 characters.");
+  if (footerText.length > 60) throw new Error("Template footer cannot exceed 60 characters.");
+  const placeholderNumbers = [...bodyText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((match) => Number(match[1]));
+  const uniqueNumbers = [...new Set(placeholderNumbers)].sort((a, b) => a - b);
+  if (uniqueNumbers.some((number, index) => number !== index + 1)) throw new Error("Body variables must be sequential, starting with {{1}}.");
+  if (uniqueNumbers.length > 20) throw new Error("A template can contain no more than 20 body variables.");
+  if (variableExamples.length < uniqueNumbers.length || variableExamples.slice(0, uniqueNumbers.length).some((value: string) => !value || value.length > 100)) throw new Error("Provide a realistic example of up to 100 characters for every body variable.");
+  const headerVariables = [...headerText.matchAll(/\{\{\s*(\d+)\s*\}\}/g)];
+  if (headerVariables.length > 1 || (headerVariables.length === 1 && headerVariables[0][1] !== "1")) throw new Error("A text header supports only the {{1}} variable.");
+  if (buttons.length > 3) throw new Error("A template can contain no more than three buttons.");
+  const graphButtons = buttons.map((button: any) => {
+    const type = String(button?.type || "").toUpperCase();
+    const text = String(button?.text || "").trim();
+    if (!text || text.length > 25) throw new Error("Every button needs a label of up to 25 characters.");
+    if (type === "QUICK_REPLY") return { type, text };
+    if (type === "URL") { const url = String(button?.url || "").trim(); if (!/^https:\/\/[^\s]+$/i.test(url)) throw new Error("Website buttons require a valid HTTPS URL."); return { type, text, url }; }
+    if (type === "PHONE_NUMBER") { const phone_number = String(button?.phone_number || "").trim(); if (!/^\+[1-9][0-9]{6,14}$/.test(phone_number)) throw new Error("Call buttons require a valid international phone number."); return { type, text, phone_number }; }
+    throw new Error("Select a supported template button type.");
+  });
+  if (graphButtons.some((button: any) => button.type === "QUICK_REPLY") && graphButtons.some((button: any) => button.type !== "QUICK_REPLY")) throw new Error("Quick replies and call-to-action buttons cannot be combined.");
+  const components: any[] = [];
+  if (headerText) components.push({ type: "HEADER", format: "TEXT", text: headerText, ...(headerVariables.length ? { example: { header_text: [String(body.headerExample || "").trim()] } } : {}) });
+  if (headerVariables.length && (!String(body.headerExample || "").trim() || String(body.headerExample).trim().length > 100)) throw new Error("Provide a realistic header variable example.");
+  components.push({ type: "BODY", text: bodyText, ...(uniqueNumbers.length ? { example: { body_text: [variableExamples.slice(0, uniqueNumbers.length)] } } : {}) });
+  if (footerText) components.push({ type: "FOOTER", text: footerText });
+  if (graphButtons.length) components.push({ type: "BUTTONS", buttons: graphButtons });
   const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`, {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ name, language, category, components: [{ type: "BODY", text: bodyText }] }),
+    body: JSON.stringify({ name, language, category, components }),
   });
   const graph = await graphResponse.json().catch(() => ({}));
   if (!graphResponse.ok || !graph?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Template could not be submitted to Meta.");
-  return { template: { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), components: [{ type: "BODY", text: bodyText }] } };
+  return { template: { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), components } };
 }
 async function thread(admin: any, customer: any, body: any) {
   const conversationId = cleanUuid(body.conversationId, "conversation");
