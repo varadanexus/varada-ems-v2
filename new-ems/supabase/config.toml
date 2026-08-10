@@ -391,6 +391,12 @@ verify_jwt = false
 [functions.whatsapp-customer-auth]
 verify_jwt = false
 
+[functions.whatsapp-platform-onboarding]
+verify_jwt = false
+
+[functions.whatsapp-platform-admin-secrets]
+verify_jwt = false
+
 # Legal public signing links and provider webhooks need to receive browser
 # preflight requests and unauthenticated public/provider callbacks. The function
 # performs its own action-level authorization internally.

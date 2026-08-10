@@ -10,11 +10,20 @@ const MAX_BODY_BYTES = 16 * 1024;
 const ALLOWED_ORIGINS = new Set([
   "https://www.varadanexus.com",
   "https://varadanexus.com",
-  "http://localhost:5501",
-  "http://127.0.0.1:5501",
-  "http://localhost:5500",
-  "http://127.0.0.1:5500",
 ]);
+
+function isLoopbackDevelopmentOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    const loopbackHost = url.hostname === "localhost" ||
+      url.hostname === "127.0.0.1" ||
+      url.hostname === "[::1]" ||
+      url.hostname === "::1";
+    return loopbackHost && (url.protocol === "http:" || url.protocol === "https:");
+  } catch {
+    return false;
+  }
+}
 
 function env(name: string) {
   return Deno.env.get(name) || "";
@@ -23,7 +32,7 @@ function env(name: string) {
 function allowedOrigin(req: Request) {
   const origin = req.headers.get("origin") || "";
   if (!origin) return "https://www.varadanexus.com";
-  return ALLOWED_ORIGINS.has(origin) ? origin : "";
+  return ALLOWED_ORIGINS.has(origin) || isLoopbackDevelopmentOrigin(origin) ? origin : "";
 }
 
 function headers(req: Request) {

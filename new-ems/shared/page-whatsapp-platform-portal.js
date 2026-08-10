@@ -1,6 +1,7 @@
 const SESSION_KEY = "vn_whatsapp_platform_session";
 const OVERVIEW_PATH = "/whatsapp-platform";
 const ACCESS_PATH = "/whatsapp-platform/access/";
+const WORKSPACE_PATH = "/whatsapp-platform/workspace/";
 const runtime = window.WHATSAPP_PLATFORM_CONFIG || {};
 const platformConfig = runtime;
 const app = document.querySelector("#app");
@@ -31,11 +32,48 @@ let session = readSession();
 let refreshTimer = null;
 let signupStep = 1;
 let signupDraft = {};
+let metaOnboardingStatus = null;
+let facebookSdkPromise = null;
 
 if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
 function isAccessPage() {
   return location.pathname === ACCESS_PATH || location.pathname === ACCESS_PATH.slice(0, -1);
+}
+
+function isWorkspacePage() {
+  return location.pathname === WORKSPACE_PATH.slice(0, -1) || location.pathname.startsWith(WORKSPACE_PATH);
+}
+
+const WORKSPACE_VIEW_LABELS = {
+  overview: "Overview",
+  onboarding: "Onboarding",
+  inbox: "Team inbox",
+  contacts: "Contacts",
+  campaigns: "Campaigns",
+  templates: "Message templates",
+  automations: "Automations",
+  analytics: "Analytics",
+  accounts: "Business accounts",
+  team: "Team & roles",
+  integrations: "Integrations",
+  billing: "Billing & usage",
+  settings: "Workspace settings",
+};
+
+function currentWorkspaceView() {
+  const relativePath = location.pathname.slice(WORKSPACE_PATH.length).replace(/^\/+|\/+$/g, "");
+  const view = relativePath.split("/")[0] || "overview";
+  return Object.hasOwn(WORKSPACE_VIEW_LABELS, view) ? view : "overview";
+}
+
+function workspacePath(view) {
+  return view === "overview" ? WORKSPACE_PATH : `${WORKSPACE_PATH}${view}/`;
+}
+
+function workspaceNavItem(view, icon, badge = "") {
+  const active = currentWorkspaceView() === view;
+  return `<a class="${active ? "active" : ""}" href="${workspacePath(view)}" ${active ? 'aria-current="page"' : ""}><span class="wp-nav-icon" aria-hidden="true">${icon}</span>${WORKSPACE_VIEW_LABELS[view]}${badge ? `<em>${badge}</em>` : ""}</a>`;
 }
 
 // Keep the public overview and customer access surfaces on distinct clean URLs.
@@ -102,6 +140,143 @@ async function authRequest(action, payload = {}) {
   return data;
 }
 
+function onboardingEndpoint() {
+  return `${runtime.supabaseUrl}/functions/v1/whatsapp-platform-onboarding`;
+}
+
+async function onboardingRequest(action, payload = {}) {
+  if (!session?.sessionToken) throw new Error("Your workspace session has expired.");
+  const response = await fetch(onboardingEndpoint(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: runtime.supabaseAnonKey || "" },
+    credentials: "omit",
+    cache: "no-store",
+    referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, sessionToken: session.sessionToken, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Meta onboarding request failed.");
+  return data;
+}
+
+function loadFacebookSdk() {
+  if (window.FB) return Promise.resolve(window.FB);
+  if (facebookSdkPromise) return facebookSdkPromise;
+  facebookSdkPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector("#facebook-jssdk");
+    const timeout = setTimeout(() => reject(new Error("Meta connection tools could not be loaded.")), 15_000);
+    window.fbAsyncInit = () => {
+      clearTimeout(timeout);
+      window.FB.init({
+        appId: metaOnboardingStatus?.publicAppId || runtime.metaAppId,
+        autoLogAppEvents: false,
+        xfbml: false,
+        version: metaOnboardingStatus?.publicGraphVersion || runtime.metaGraphVersion || "v25.0",
+      });
+      resolve(window.FB);
+    };
+    if (!existing) {
+      const script = document.createElement("script");
+      script.id = "facebook-jssdk";
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = "anonymous";
+      script.src = "https://connect.facebook.net/en_US/sdk.js";
+      script.onerror = () => { clearTimeout(timeout); reject(new Error("Meta connection tools could not be loaded.")); };
+      document.head.appendChild(script);
+    }
+  });
+  return facebookSdkPromise;
+}
+
+function embeddedSignupResult(FB, configurationId) {
+  return new Promise((resolve, reject) => {
+    let authorizationCode = "";
+    let signupData = null;
+    let settled = false;
+    const cleanup = () => {
+      window.removeEventListener("message", messageHandler);
+      clearTimeout(timeout);
+    };
+    const finish = () => {
+      if (!settled && authorizationCode && signupData?.wabaId) {
+        settled = true;
+        cleanup();
+        resolve({ code: authorizationCode, ...signupData });
+      }
+    };
+    const messageHandler = (event) => {
+      if (!["https://www.facebook.com", "https://web.facebook.com"].includes(event.origin)) return;
+      let payload = event.data;
+      try { if (typeof payload === "string") payload = JSON.parse(payload); } catch { return; }
+      if (payload?.type !== "WA_EMBEDDED_SIGNUP") return;
+      if (["FINISH", "FINISH_ONLY_WABA"].includes(payload.event)) {
+        signupData = {
+          wabaId: String(payload.data?.waba_id || ""),
+          phoneNumberId: String(payload.data?.phone_number_id || ""),
+          businessId: String(payload.data?.business_id || ""),
+        };
+        finish();
+      } else if (["CANCEL", "ERROR"].includes(payload.event)) {
+        settled = true;
+        cleanup();
+        reject(new Error(payload.event === "CANCEL" ? "Meta onboarding was cancelled." : "Meta could not complete onboarding."));
+      }
+    };
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("Meta onboarding timed out. Please try again."));
+    }, 5 * 60_000);
+    window.addEventListener("message", messageHandler);
+    FB.login((response) => {
+      if (response?.authResponse?.code) {
+        authorizationCode = String(response.authResponse.code);
+        finish();
+      } else if (!settled) {
+        settled = true;
+        cleanup();
+        reject(new Error("Meta authorization was not completed."));
+      }
+    }, {
+      config_id: configurationId,
+      auth_type: "rerequest",
+      response_type: "code",
+      override_default_response_type: true,
+      extras: { version: "v3", setup: {}, sessionInfoVersion: "3" },
+    });
+  });
+}
+
+async function startMetaOnboarding(button) {
+  const configurationId = metaOnboardingStatus?.publicConfigurationId || runtime.embeddedSignupConfigId;
+  const appId = metaOnboardingStatus?.publicAppId || runtime.metaAppId;
+  if (!configurationId || !appId || !metaOnboardingStatus?.configured) {
+    showToast("Checking the Meta connection configuration…");
+    await renderDashboard();
+    if (!metaOnboardingStatus?.configured) {
+      showToast("Meta customer onboarding is being configured. Your workspace is ready and no action is required yet.");
+    }
+    return;
+  }
+  const originalText = button?.textContent || "Connect Meta Business";
+  if (button) { button.disabled = true; button.textContent = "Opening Meta…"; }
+  onboardingRequest("begin").catch(() => {});
+  try {
+    const FB = await loadFacebookSdk();
+    const result = await embeddedSignupResult(FB, configurationId);
+    if (button) button.textContent = "Securing connection…";
+    await onboardingRequest("complete", result);
+    showToast("Your WhatsApp Business account is connected.");
+    await renderDashboard();
+  } catch (error) {
+    showToast(error?.message || "Meta onboarding could not be completed.", "error");
+  } finally {
+    if (button?.isConnected) { button.disabled = false; button.textContent = originalText; }
+  }
+}
+
 function scheduleRefresh(expiresIn = 3600) {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => restoreSession().catch(() => signOut(false)), Math.max(30_000, expiresIn * 1000 - 600_000));
@@ -122,6 +297,10 @@ async function signOut(callServer = true) {
   const token = session?.sessionToken;
   clearSession();
   if (callServer && token) authRequest("logout", { sessionToken: token }).catch(() => {});
+  if (isWorkspacePage()) {
+    location.replace(`${ACCESS_PATH}#signin`);
+    return;
+  }
   renderAuth("login");
 }
 
@@ -559,7 +738,7 @@ async function submitAuthForm(event) {
     signupDraft = {};
     signupStep = 1;
     storeSession(data.session);
-    await restoreSession();
+    location.replace(WORKSPACE_PATH);
   } catch (error) {
     message.textContent = error?.message || "Authentication failed.";
   } finally {
@@ -571,7 +750,7 @@ async function submitAuthForm(event) {
 async function loadConnections() {
   if (!accessToken || !session?.tenantId) return [];
   const query = new URLSearchParams({
-    select: "id,status,display_phone_number,verified_name,connected_at,created_at",
+    select: "id,status,phone_number_id,display_phone_number,verified_name,connected_at,created_at",
     tenant_id: `eq.${session.tenantId}`,
     order: "created_at.desc"
   });
@@ -589,38 +768,103 @@ async function loadConnections() {
   return response.json();
 }
 
+function onboardingView(setupReady, connections) {
+  const metaConnected = connections.length > 0;
+  const phoneConnected = connections.some((row) => row.phone_number_id);
+  const completed = 1 + Number(metaConnected) + Number(phoneConnected);
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Workspace setup</span><h1>Onboarding</h1><p>Complete each stage before your team starts managing customer conversations.</p></div><strong class="wp-route-progress">${completed} of 4 complete</strong></div><div class="wp-readiness-banner ${setupReady ? "ready" : "pending"}"><span>${setupReady ? "✓" : "◷"}</span><div><strong>${setupReady ? "Meta connection is ready for testing" : "Meta connection setup is in progress"}</strong><p>${setupReady ? "App administrators and testers can launch the customer onboarding flow while production approval is completed." : "Your customer workspace is active. The connection button will unlock after the Meta configuration is completed."}</p></div>${!metaConnected ? `<button class="wp-primary" type="button" data-connect-meta>${setupReady ? "Connect Meta Business" : "Check connection status"}</button>` : ""}</div><article class="wp-card wp-route-card"><ol class="wp-steps wp-route-steps"><li class="complete"><span class="wp-step-no">✓</span><div><strong>Create your business workspace</strong><span>Completed for ${escapeHtml(session.email)}.</span></div></li><li class="${metaConnected ? "complete" : ""}"><span class="wp-step-no">${metaConnected ? "✓" : "2"}</span><div><strong>Connect Meta Business</strong><span>${metaConnected ? "Your WhatsApp Business account is connected." : setupReady ? "Ready to launch secure business onboarding." : "Available after the Meta customer configuration is completed."}</span></div></li><li class="${phoneConnected ? "complete" : ""}"><span class="wp-step-no">${phoneConnected ? "✓" : "3"}</span><div><strong>Confirm your WhatsApp number</strong><span>${phoneConnected ? "A WhatsApp business number is connected." : "Select or register a number owned by your business."}</span></div></li><li><span class="wp-step-no">4</span><div><strong>Invite your team</strong><span>Prepare roles for customer conversations and operations.</span></div></li></ol></article></section>`;
+}
+
+function accountsView(connections, setupReady) {
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Connected assets</span><h1>Business accounts</h1><p>Connect and manage WhatsApp Business assets owned by your company.</p></div><button class="wp-primary" id="wpConnectMetaBtn" type="button">${setupReady ? "Connect Meta Business" : "Connection setup pending"}</button></div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">WhatsApp Business Accounts</span><h2>Your connected accounts</h2></div><strong>${connections.length}</strong></div><p>Only accounts connected to this company workspace appear here.</p>${connections.length ? connections.map((row) => `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(row.verified_name || row.display_phone_number || "WhatsApp Business Account")}</strong><small>${escapeHtml(row.display_phone_number || "Business number")}</small></div><em>${escapeHtml(row.status)}</em></div>`).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business account connected</strong><p>${setupReady ? "Connect your company’s Meta Business account to start configuring WhatsApp." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p><button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Connect account" : "Check connection status"}</button></div>`}</article></section>`;
+}
+
+function settingsView() {
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Review your workspace identity and account-level preferences.</p></div></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(session.email)}</dd></div><div><dt>Plan</dt><dd>Starter</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div></article></section></section>`;
+}
+
+const PLANNED_WORKSPACE_VIEWS = {
+  inbox: ["Customer conversations", "Manage assigned conversations, queues and response ownership from one shared team inbox.", ["Conversation assignment", "Team notes and mentions", "SLA and queue controls"]],
+  contacts: ["Customer directory", "Keep customer identities, consent and conversation context organised for your team.", ["Customer profiles", "Tags and segments", "Consent history"]],
+  campaigns: ["Campaign workspace", "Plan governed, opt-in WhatsApp campaigns with approvals and delivery visibility.", ["Audience selection", "Campaign approvals", "Delivery monitoring"]],
+  templates: ["Message templates", "Create, submit and manage approved WhatsApp message templates from your workspace.", ["Template library", "Approval status", "Language variants"]],
+  automations: ["Workflow automation", "Build event-driven customer journeys without losing operational control.", ["Visual workflow builder", "Routing rules", "Event triggers"]],
+  analytics: ["Performance analytics", "Understand conversation volume, responsiveness and messaging outcomes.", ["Team performance", "Conversation trends", "Campaign outcomes"]],
+  team: ["Team and roles", "Invite users and control what each person can access inside this company workspace.", ["Member invitations", "Role-based access", "Activity history"]],
+  integrations: ["Business integrations", "Connect approved business systems and route events into WhatsApp workflows.", ["Webhooks", "CRM and ERP connectors", "Integration health"]],
+  billing: ["Billing and usage", "Review your subscription, platform usage and invoices in one place.", ["Plan management", "Usage summary", "Invoices and payments"]],
+};
+
+function plannedView(view) {
+  const [title, description, capabilities] = PLANNED_WORKSPACE_VIEWS[view];
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Planned workspace module</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="wp-planned-badge">Planned</span></div><article class="wp-card wp-planned-card"><div class="wp-planned-visual"><span>${escapeHtml(WORKSPACE_VIEW_LABELS[view].charAt(0))}</span></div><div><span class="wp-card-eyebrow">Module foundation reserved</span><h2>This section has its own permanent route</h2><p>It is already part of the workspace navigation and will be expanded here without turning the overview into a long scrolling page.</p><ul>${capabilities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article></section>`;
+}
+
+function overviewView(connections, setupReady) {
+  const metaConnected = connections.length > 0;
+  const phoneConnected = connections.some((row) => row.phone_number_id);
+  const progress = 25 + Number(metaConnected) * 25 + Number(phoneConnected) * 25;
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Business messaging workspace</span><h1>${escapeHtml(session.companyName)}</h1><p>Your operational summary and next actions. Use the sidebar to open each dedicated module.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("onboarding")}">Continue setup</a></div><section class="wp-status-grid" aria-label="Workspace status"><article class="wp-stat"><span>Workspace</span><strong><i class="wp-status-dot"></i> Active</strong></article><article class="wp-stat"><span>Business accounts</span><strong>${connections.length}</strong></article><article class="wp-stat"><span>Current plan</span><strong>Starter</strong></article><article class="wp-stat"><span>Setup progress</span><strong>${progress}%</strong></article></section><section class="wp-overview-actions"><a class="wp-card wp-action-card" href="${workspacePath("onboarding")}"><span class="wp-card-eyebrow">Next step</span><h2>${setupReady ? "Connect Meta Business" : "Prepare your workspace"}</h2><p>Open the dedicated onboarding section to continue setup.</p><strong>Open onboarding →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("accounts")}"><span class="wp-card-eyebrow">Connected assets</span><h2>Business accounts</h2><p>${connections.length ? `${connections.length} account${connections.length === 1 ? "" : "s"} connected.` : "No account connected yet."}</p><strong>Manage accounts →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("inbox")}"><span class="wp-card-eyebrow">Communication</span><h2>Team inbox</h2><p>Your future shared customer conversation workspace.</p><strong>View module →</strong></a></section><section class="wp-workspace-note"><div><strong>Dedicated product workspace</strong><p>Every sidebar option opens a separate module route; overview remains a concise command surface.</p></div><a href="${workspacePath("settings")}">Workspace settings</a></section></section>`;
+}
+
+function workspaceViewContent(view, connections, setupReady) {
+  if (view === "onboarding") return onboardingView(setupReady, connections.filter((row) => ["connected", "pending"].includes(row.status)));
+  if (view === "accounts") return accountsView(connections, setupReady);
+  if (view === "settings") return settingsView();
+  if (Object.hasOwn(PLANNED_WORKSPACE_VIEWS, view)) return plannedView(view);
+  return overviewView(connections.filter((row) => ["connected", "pending"].includes(row.status)), setupReady);
+}
+
 async function renderDashboard() {
   let connections = [];
   try { connections = await loadConnections(); } catch { connections = []; }
-  const connected = connections.filter((row) => row.status === "connected");
-  const setupReady = Boolean(platformConfig.embeddedSignupConfigId);
-  app.innerHTML = `
-    <main class="wp-dashboard">
-      <header class="wp-topbar">
-        <div class="wp-brand"><span class="wp-brand-mark">VN</span><div><strong>WhatsApp Platform</strong><small>Customer workspace</small></div></div>
-        <div class="wp-topbar-actions"><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.companyName)}</small></div><button class="wp-secondary" id="wpLogoutBtn" type="button">Sign out</button></div>
-      </header>
-      <section class="wp-main">
-        <div class="wp-hero"><div><span class="wp-kicker">Secure business messaging</span><h1>${escapeHtml(session.companyName)}</h1><p>Connect and manage your own Meta WhatsApp Business Account.</p></div><button class="wp-primary" id="wpConnectMetaBtn" type="button" ${setupReady ? "" : "disabled"}>Connect Meta Business</button></div>
-        <section class="wp-status-grid">
-          <article class="wp-stat"><span>Workspace</span><strong>Active</strong></article>
-          <article class="wp-stat"><span>Meta connections</span><strong>${connected.length}</strong></article>
-          <article class="wp-stat"><span>Plan</span><strong>Starter</strong></article>
-          <article class="wp-stat"><span>Access protection</span><strong>Active</strong></article>
-        </section>
-        <section class="wp-content-grid">
-          <article class="wp-card"><h2>Onboarding checklist</h2><p>Your company owns its WhatsApp assets. Varada Nexus receives only the permissions needed to provide the platform.</p><ol class="wp-steps"><li><span class="wp-step-no">1</span><div><strong>Create your secure workspace</strong><span>Completed for ${escapeHtml(session.email)}.</span></div></li><li><span class="wp-step-no">2</span><div><strong>Connect Meta Business</strong><span>${setupReady ? "Ready to launch Embedded Signup." : "Available after Meta Tech Provider configuration is approved."}</span></div></li><li><span class="wp-step-no">3</span><div><strong>Add a WhatsApp number</strong><span>Select or register a number owned by your business.</span></div></li><li><span class="wp-step-no">4</span><div><strong>Configure inbox and templates</strong><span>Team features unlock after the Meta connection is verified.</span></div></li></ol></article>
-          <article class="wp-card"><h2>WhatsApp Business Accounts</h2><p>Tenant-scoped connections visible only to your company.</p>${connections.length ? connections.map((row) => `<div class="wp-empty"><strong>${escapeHtml(row.verified_name || row.display_phone_number || "Meta WhatsApp Account")}</strong><br>${escapeHtml(row.status)}</div>`).join("") : `<div class="wp-empty">No Meta account connected yet.</div>`}</article>
-        </section>
-        <p class="wp-domain">Secure customer portal · https://www.varadanexus.com/whatsapp-platform/access/</p>
-      </section>
-    </main>
-  `;
-  app.querySelector("#wpLogoutBtn")?.addEventListener("click", () => signOut(true));
-  app.querySelector("#wpConnectMetaBtn")?.addEventListener("click", () => showToast("Meta Embedded Signup will be enabled after the configuration ID and App Review are complete."));
+  try {
+    metaOnboardingStatus = await onboardingRequest("status");
+    if (Array.isArray(metaOnboardingStatus.connections)) connections = metaOnboardingStatus.connections;
+  } catch {
+    metaOnboardingStatus = {
+      configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
+      publicAppId: runtime.metaAppId || null,
+      publicConfigurationId: runtime.embeddedSignupConfigId || null,
+      publicGraphVersion: runtime.metaGraphVersion || null,
+      environment: "testing",
+    };
+  }
+  const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
+  const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
+  const view = currentWorkspaceView();
+  document.body.classList.add("wp-workspace-mode");
+  document.title = `${WORKSPACE_VIEW_LABELS[view]} | Varada Nexus WhatsApp Solutions`;
+  app.innerHTML = `<main class="wp-workspace-shell"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>WhatsApp Solutions</strong><small>Business workspace</small></span></a><div class="wp-workspace-account"><span>${escapeHtml((session.companyName || "W").charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>Starter workspace</small></div></div><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", "Planned")}${workspaceNavItem("contacts", "◎", "Planned")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", "Planned")}${workspaceNavItem("templates", "✦", "Planned")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁", "Planned")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
+  app.querySelector("#wpSidebarLogoutBtn")?.addEventListener("click", () => signOut(true));
+  const shell = app.querySelector(".wp-workspace-shell");
+  const toggleSidebar = (open) => {
+    shell?.classList.toggle("sidebar-open", open);
+    app.querySelector("#wpSidebarToggle")?.setAttribute("aria-expanded", String(open));
+  };
+  app.querySelector("#wpSidebarToggle")?.addEventListener("click", () => toggleSidebar(!shell?.classList.contains("sidebar-open")));
+  app.querySelector("#wpSidebarScrim")?.addEventListener("click", () => toggleSidebar(false));
+  app.querySelectorAll("#wpConnectMetaBtn,[data-connect-meta]").forEach((button) => button.addEventListener("click", () => startMetaOnboarding(button)));
+  if (setupReady) loadFacebookSdk().catch(() => {});
 }
 
 async function init() {
+  if (isWorkspacePage()) {
+    if (!session) {
+      location.replace(`${ACCESS_PATH}#signin`);
+      return;
+    }
+    if (!runtime.supabaseUrl || !runtime.supabaseAnonKey) {
+      clearSession();
+      location.replace(`${ACCESS_PATH}#signin`);
+      return;
+    }
+    app.innerHTML = `<div class="wp-loading">Opening your business workspace…</div>`;
+    try { await restoreSession(); }
+    catch { clearSession(); location.replace(`${ACCESS_PATH}#signin`); }
+    return;
+  }
+  document.body.classList.remove("wp-workspace-mode");
   if (!isAccessPage()) {
     if (["#signup", "#signin", "#get-started"].includes(location.hash)) {
       const accessHash = location.hash === "#signin" ? "#signin" : "#signup";
@@ -630,21 +874,14 @@ async function init() {
     renderAuth("login", false);
     return;
   }
-  if (!session) {
-    const requestedSignup = location.hash === "#signup" || location.hash === "#get-started";
-    const requestedAuth = requestedSignup || location.hash === "#signin";
-    renderAuth(requestedSignup ? "signup" : "login", requestedAuth);
+  if (session) {
+    location.replace(WORKSPACE_PATH);
     return;
   }
-  if (!runtime.supabaseUrl || !runtime.supabaseAnonKey) {
-    clearSession();
-    renderAuth("login", true);
-    showToast("Workspace sign-in is temporarily unavailable. Please contact our solutions team.", "error");
-    return;
-  }
-  app.innerHTML = `<div class="wp-loading">Restoring your secure workspace…</div>`;
-  try { await restoreSession(); }
-  catch { clearSession(); renderAuth("login"); showToast("Your session expired. Sign in again.", "error"); }
+  const requestedSignup = location.hash === "#signup" || location.hash === "#get-started";
+  const requestedAuth = requestedSignup || location.hash === "#signin";
+  renderAuth(requestedSignup ? "signup" : "login", requestedAuth);
+  return;
 }
 
 init();

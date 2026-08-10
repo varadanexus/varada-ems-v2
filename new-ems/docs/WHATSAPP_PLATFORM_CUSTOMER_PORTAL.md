@@ -62,12 +62,29 @@ collected by this form; those belong in Meta Embedded Signup.
    `new-ems/supabase/config.toml`.
 4. In Meta Developer, complete Tech Provider onboarding and create an Embedded
    Signup configuration.
-5. Put only the public configuration ID in
-   `window.WHATSAPP_PLATFORM_CONFIG.embeddedSignupConfigId` inside
-   `new-ems/config/whatsapp-platform-runtime.js`.
-6. Keep the Meta App Secret and customer access tokens in Edge Function secrets.
-7. Add the production callback and allowed domain:
+5. Apply `20260810123000_whatsapp_platform_meta_onboarding.sql` and deploy the
+   `whatsapp-platform-onboarding` Edge Function.
+6. Configure dedicated Edge Function secrets (do not reuse the internal-company
+   WhatsApp integration or social-media application credentials):
+   `WHATSAPP_PLATFORM_META_APP_ID`, `WHATSAPP_PLATFORM_META_APP_SECRET`,
+   `WHATSAPP_PLATFORM_META_CONFIG_ID`, `WHATSAPP_PLATFORM_META_GRAPH_VERSION`,
+   and a separately generated 32-byte-or-longer
+   `WHATSAPP_PLATFORM_TOKEN_ENCRYPTION_KEY`.
+7. Set `WHATSAPP_PLATFORM_META_PRODUCTION_READY=false` during app review and
+   testing. Change it only after production approval.
+8. Keep the optional public runtime configuration ID empty in production; the
+   authenticated onboarding status endpoint supplies the public App ID,
+   configuration ID and pinned Graph version without exposing any secret.
+9. Add the production callback and allowed domain:
    `https://www.varadanexus.com/whatsapp-platform`.
+
+The Meta App Secret may be entered only through **WhatsApp Business Platform →
+Meta App Setup** in the protected EMS console. That control is hard-restricted
+to `chairman_managing_director` and `super_admin`. The browser sends the value
+once to `whatsapp-platform-admin-secrets`; the function encrypts it with the
+dedicated platform encryption key and stores only ciphertext in the server-only
+provider settings table. Neither the EMS page nor the customer workspace can
+read it back.
 
 ## Required hardening before public launch
 
