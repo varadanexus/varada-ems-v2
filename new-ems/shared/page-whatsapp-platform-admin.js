@@ -3,8 +3,8 @@ import { getSupabaseAccessToken, getSupabaseClient } from "../config/supabase.js
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 
-const VIEWS = new Set(["overview", "customers", "connections", "packages", "meta", "security"]);
-const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, providerSecretStatus: null, providerSecretLoading: false };
+const VIEWS = new Set(["overview", "customers", "verification", "connections", "packages", "meta", "security"]);
+const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, providerSecretStatus: null, providerSecretLoading: false };
 const db = getSupabaseClient();
 
 function escapeHtml(value) {
@@ -23,7 +23,7 @@ function status(value) {
 }
 
 function tabs() {
-  const items = [["overview","Overview"],["customers","Customers"],["connections","Meta Connections"],["packages","Packages & Offers"],["meta","Meta App Setup"],["security","Security"]];
+  const items = [["overview","Overview"],["customers","Customers"],["verification","Business Verification"],["connections","Meta Connections"],["packages","Packages & Offers"],["meta","Meta App Setup"],["security","Security"]];
   return `<nav class="wa-admin-tabs" aria-label="Platform management">${items.map(([id,label]) => `<button class="wa-admin-tab ${state.view === id ? "active" : ""}" type="button" data-view="${id}">${label}</button>`).join("")}</nav>`;
 }
 
@@ -58,6 +58,29 @@ function customers() {
 function connections() {
   const rows = state.snapshot?.connections || [];
   return `<section class="wa-admin-card"><h3>Customer Meta connections</h3><p>Safe operational view of customer-owned WhatsApp Business Accounts. Provider secrets are never displayed.</p>${rows.length ? `<div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Company</th><th>Verified name</th><th>Phone</th><th>WABA ID</th><th>Status</th><th>Connected</th></tr></thead><tbody>${rows.map((item) => `<tr><td>${escapeHtml(item.tenantName)}</td><td>${escapeHtml(item.verifiedName || "—")}</td><td>${escapeHtml(item.displayPhoneNumber || "—")}</td><td><span class="wa-admin-code">${escapeHtml(item.whatsappBusinessAccountId || "not assigned")}</span></td><td>${status(item.status)}</td><td>${escapeHtml(formatDate(item.connectedAt))}</td></tr>`).join("")}</tbody></table></div>` : '<div class="wa-admin-empty">No customer has connected a Meta Business Account.</div>'}</section>`;
+}
+
+function verification() {
+  const rows = state.snapshot?.verifications || [];
+  const pending = rows.filter((item) => ["submitted", "in_review", "changes_requested", "rejected"].includes(item.status));
+  if (!rows.length) return '<section class="wa-admin-card"><h3>Business verification</h3><p>Review entity details and evidence submitted by customer organisations.</p><div class="wa-admin-empty">No verification cases have been created.</div></section>';
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Business verification</h3><p>Review only the evidence necessary to confirm the customer organisation. Personal identity documents are not requested by default.</p></div>${status(`${pending.length}_pending`)}</div><div class="wa-verification-list">${rows.map((item) => `<article class="wa-verification-case"><header><div><strong>${escapeHtml(item.tenantName)}</strong><small>${escapeHtml(item.ownerEmail)} · ${escapeHtml(String(item.entityType || "other").replaceAll("_", " "))}</small></div>${status(item.status)}</header><dl><div><dt>Registration</dt><dd>${escapeHtml(item.registrationNumber || "—")}</dd></div><div><dt>GSTIN</dt><dd>${escapeHtml(item.gstin || "Not provided")}</dd></div><div><dt>Representative</dt><dd>${escapeHtml(item.representativeName || "—")} · ${escapeHtml(item.representativeTitle || "—")}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDate(item.submittedAt))}</dd></div></dl><div class="wa-verification-address"><strong>Registered address</strong><p>${escapeHtml(item.registeredAddress || "Not provided")}</p></div><div class="wa-verification-files">${(item.documents || []).map((document) => `<button type="button" data-verification-document="${escapeHtml(document.id)}" title="Open ${escapeHtml(document.name)}">${escapeHtml(String(document.type || "document").replaceAll("_", " "))}<small>${Math.ceil(Number(document.size || 0) / 1024)} KB</small></button>`).join("") || '<em>No active documents</em>'}</div>${item.reviewNotes ? `<div class="wa-admin-notice"><strong>Review notes</strong><br>${escapeHtml(item.reviewNotes)}</div>` : ""}${state.canApprove && item.status !== "verified" ? `<form class="wa-verification-review" data-verification-review="${escapeHtml(item.tenantId)}"><label>Reviewer notes<textarea name="notes" rows="3" maxlength="2000" placeholder="Required when requesting changes or rejecting"></textarea></label><div><button type="submit" name="decision" value="in_review">Start review</button><button type="submit" name="decision" value="changes_requested">Request changes</button><button type="submit" name="decision" value="rejected" class="danger">Reject</button><button type="submit" name="decision" value="verified" class="approve">Verify business</button></div></form>` : ""}</article>`).join("")}</div></section>`;
+}
+
+async function downloadVerificationDocument(documentId, button) {
+  const token = await getSupabaseAccessToken();
+  if (!token) throw new Error("Your EMS session has expired.");
+  const original = button.textContent;
+  try {
+    button.disabled = true; button.textContent = "Opening…";
+    const response = await fetch(`${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-admin-verification`, { method: "POST", headers: { Authorization: `Bearer ${token}`, apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || "", "Content-Type": "application/json" }, credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer", body: JSON.stringify({ documentId }) });
+    if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data?.error || "Document could not be opened."); }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = ""; link.target = "_blank"; link.rel = "noopener"; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  } finally { button.disabled = false; button.textContent = original; }
 }
 
 function metaSetup() {
@@ -301,6 +324,7 @@ function content() {
   if (state.loading) return '<div class="wa-admin-empty">Loading platform operations…</div>';
   if (state.error) return `<div class="wa-admin-notice"><strong>Management data is not active yet.</strong><br>${escapeHtml(state.error)}<br><br>The internal console is ready; apply the pending WhatsApp Platform database migrations to activate live customer data.</div>${state.view === "meta" ? metaSetup() : state.view === "security" ? security() : overview()}`;
   if (state.view === "customers") return customers();
+  if (state.view === "verification") return verification();
   if (state.view === "connections") return connections();
   if (state.view === "meta") return metaSetup();
   if (state.view === "security") return security();
@@ -334,6 +358,20 @@ function bind() {
       await loadSnapshot();
     } catch (error) { showToast(error?.message || "Could not update workspace.", TOAST_TYPES.ERROR); button.disabled = false; }
   }));
+  document.querySelectorAll("[data-verification-review]").forEach((form) => form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const decision = event.submitter?.value;
+    const notes = String(new FormData(form).get("notes") || "").trim();
+    if (["changes_requested", "rejected"].includes(decision) && notes.length < 10) return showToast("Add clear reviewer notes before this decision.", TOAST_TYPES.ERROR);
+    event.submitter.disabled = true;
+    try {
+      const { error } = await db.rpc("whatsapp_platform_admin_review_verification", { p_tenant_id: form.dataset.verificationReview, p_decision: decision, p_notes: notes || null });
+      if (error) throw error;
+      showToast(decision === "verified" ? "Business verified." : "Verification review updated.", TOAST_TYPES.SUCCESS);
+      await loadSnapshot();
+    } catch (error) { showToast(error?.message || "Verification review could not be updated.", TOAST_TYPES.ERROR); event.submitter.disabled = false; }
+  }));
+  document.querySelectorAll("[data-verification-document]").forEach((button) => button.addEventListener("click", () => downloadVerificationDocument(button.dataset.verificationDocument, button).catch((error) => showToast(error?.message || "Document could not be opened.", TOAST_TYPES.ERROR))));
   document.querySelectorAll("[data-plan-form]").forEach((form) => form.addEventListener("submit", (event) => savePlan(event, form)));
   document.querySelectorAll("[data-plan-delete]").forEach((btn) => btn.addEventListener("click", () => deletePlan(btn.dataset.planDelete)));
   document.querySelectorAll("[data-addon-form]").forEach((form) => form.addEventListener("submit", (event) => saveAddon(event, form)));
@@ -365,6 +403,7 @@ async function init() {
   if (!boot) return;
   state.hasFullAuthority = boot.roleCodes.some((role) => ["chairman_managing_director", "super_admin"].includes(role));
   state.canManage = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && ["edit", "approve"].includes(permission.action_code));
+  state.canApprove = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && permission.action_code === "approve");
   await loadSnapshot();
   if (state.view === "meta" && state.hasFullAuthority) await loadProviderSecretStatus();
 }

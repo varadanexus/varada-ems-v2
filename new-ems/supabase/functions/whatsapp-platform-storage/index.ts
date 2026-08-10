@@ -6,7 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ROOT_FOLDER_ID = Deno.env.get("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID") || "1Tnq1agDpaLCIT_ZGiDRjVOXa7KYDASQp";
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
-const MAX_BODY_BYTES = 3 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const MAX_BODY_BYTES = 7 * 1024 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
 
 const env = (name: string) => Deno.env.get(name) || "";
@@ -161,6 +162,59 @@ function validateLogo(bytes: Uint8Array, requestedMime: string) {
   const detected = png ? "image/png" : jpeg ? "image/jpeg" : webp ? "image/webp" : "";
   if (!detected || detected !== requestedMime) throw new Error("Upload a valid PNG, JPG, or WebP logo.");
   return detected;
+}
+
+const VERIFICATION_REQUIREMENTS: Record<string, Array<{ type: string; label: string; group?: string }>> = {
+  private_limited: [
+    { type: "incorporation_certificate", label: "Certificate of incorporation" },
+    { type: "business_address_proof", label: "Registered office address proof" },
+    { type: "signatory_authorisation", label: "Authorised signatory letter or board authorisation" },
+  ],
+  public_limited: [
+    { type: "incorporation_certificate", label: "Certificate of incorporation" },
+    { type: "business_address_proof", label: "Registered office address proof" },
+    { type: "signatory_authorisation", label: "Authorised signatory letter or board authorisation" },
+  ],
+  partnership: [
+    { type: "partnership_deed", label: "Partnership deed or constitution proof" },
+    { type: "business_address_proof", label: "Business address proof" },
+    { type: "signatory_authorisation", label: "Partner authorisation" },
+  ],
+  sole_proprietor: [
+    { type: "business_registration", label: "GST registration, Udyam certificate, or valid trade licence" },
+    { type: "business_address_proof", label: "Business address proof" },
+    { type: "signatory_authorisation", label: "Proprietor declaration" },
+  ],
+  nonprofit: [
+    { type: "business_registration", label: "Trust, society, Section 8, or other registration certificate" },
+    { type: "governing_instrument", label: "Governing instrument, deed, or memorandum" },
+    { type: "business_address_proof", label: "Registered address proof" },
+    { type: "signatory_authorisation", label: "Authorised signatory resolution" },
+  ],
+  government: [
+    { type: "establishment_order", label: "Department establishment or official registration order" },
+    { type: "business_address_proof", label: "Official office address proof" },
+    { type: "signatory_authorisation", label: "Authorisation letter" },
+  ],
+  other: [
+    { type: "business_registration", label: "Constitution or registration proof" },
+    { type: "business_address_proof", label: "Business address proof" },
+    { type: "signatory_authorisation", label: "Authorised signatory letter" },
+  ],
+};
+
+function validateVerificationDocument(bytes: Uint8Array, requestedMime: string) {
+  const pdf = bytes.length > 5 && String.fromCharCode(...bytes.slice(0, 5)) === "%PDF-";
+  const png = bytes.length > 8 && [137,80,78,71,13,10,26,10].every((value, index) => bytes[index] === value);
+  const jpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const detected = pdf ? "application/pdf" : png ? "image/png" : jpeg ? "image/jpeg" : "";
+  if (!detected || detected !== requestedMime) throw new Error("Upload a valid PDF, PNG, or JPG document.");
+  return detected;
+}
+
+async function sha256Hex(bytes: Uint8Array) {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(digest).map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 async function uploadFile(token: string, folderId: string, name: string, mimeType: string, bytes: Uint8Array) {
@@ -344,6 +398,152 @@ async function removeLogo(admin: any, customer: any) {
   return { ok: true, profile: { companyName: tenant.name, logoDataUrl: "", logoFileName: "", logoUpdatedAt: null } };
 }
 
+function requireVerificationManager(customer: any) {
+  if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage business verification.");
+}
+
+async function verificationState(admin: any, customer: any) {
+  const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
+    .select("name,legal_name,business_type,verification_status")
+    .eq("id", customer.tenant_id).single();
+  if (tenantError) throw tenantError;
+  const { data: verification, error } = await admin.from("whatsapp_platform_business_verifications")
+    .select("id,entity_type,registration_number,gstin,registered_address,authorised_representative_name,authorised_representative_title,status,declaration_accepted_at,submitted_at,reviewed_at,review_notes,updated_at")
+    .eq("tenant_id", customer.tenant_id).maybeSingle();
+  if (error) throw error;
+  let documents: any[] = [];
+  if (verification?.id) {
+    const { data, error: documentError } = await admin.from("whatsapp_platform_verification_documents")
+      .select("id,document_type,original_file_name,mime_type,file_size,created_at")
+      .eq("tenant_id", customer.tenant_id).eq("verification_id", verification.id).eq("status", "active").order("created_at", { ascending: false });
+    if (documentError) throw documentError;
+    documents = data || [];
+  }
+  const entityType = verification?.entity_type || tenant.business_type || "other";
+  return {
+    companyName: tenant.name,
+    legalName: tenant.legal_name || tenant.name,
+    entityType,
+    status: verification?.status || tenant.verification_status || "not_started",
+    registrationNumber: verification?.registration_number || "",
+    gstin: verification?.gstin || "",
+    registeredAddress: verification?.registered_address || "",
+    representativeName: verification?.authorised_representative_name || "",
+    representativeTitle: verification?.authorised_representative_title || "",
+    declarationAcceptedAt: verification?.declaration_accepted_at || null,
+    submittedAt: verification?.submitted_at || null,
+    reviewedAt: verification?.reviewed_at || null,
+    reviewNotes: verification?.review_notes || "",
+    requirements: VERIFICATION_REQUIREMENTS[entityType] || VERIFICATION_REQUIREMENTS.other,
+    documents: documents.map((item) => ({ id: item.id, type: item.document_type, name: item.original_file_name, mimeType: item.mime_type, size: item.file_size, uploadedAt: item.created_at })),
+    canEdit: ["not_started", "draft", "changes_requested", "rejected"].includes(verification?.status || tenant.verification_status || "not_started"),
+  };
+}
+
+async function saveVerification(admin: any, customer: any, body: any) {
+  requireVerificationManager(customer);
+  const current = await verificationState(admin, customer);
+  if (!["not_started", "draft", "changes_requested", "rejected"].includes(current.status)) throw new Error("This verification is currently locked for review.");
+  const entityType = String(body.entityType || current.entityType || "");
+  if (!VERIFICATION_REQUIREMENTS[entityType]) throw new Error("Select a valid entity type.");
+  const clean = (value: unknown, max: number) => String(value || "").normalize("NFKC").trim().slice(0, max);
+  const registrationNumber = clean(body.registrationNumber, 80);
+  const gstin = clean(body.gstin, 20).toUpperCase();
+  const registeredAddress = clean(body.registeredAddress, 800);
+  const representativeName = clean(body.representativeName, 120);
+  const representativeTitle = clean(body.representativeTitle, 120);
+  if (gstin && !/^[0-9A-Z]{15}$/.test(gstin)) throw new Error("Enter a valid 15-character GSTIN or leave it blank.");
+  const now = new Date().toISOString();
+  const { error } = await admin.from("whatsapp_platform_business_verifications").upsert({
+    tenant_id: customer.tenant_id, entity_type: entityType, registration_number: registrationNumber || null,
+    gstin: gstin || null, registered_address: registeredAddress || null,
+    authorised_representative_name: representativeName || null, authorised_representative_title: representativeTitle || null,
+    status: current.status === "changes_requested" ? "changes_requested" : "draft", updated_at: now,
+  }, { onConflict: "tenant_id" });
+  if (error) throw error;
+  await admin.from("whatsapp_platform_tenants").update({ business_type: entityType, verification_status: current.status === "changes_requested" ? "changes_requested" : "draft", updated_at: now }).eq("id", customer.tenant_id);
+  return { ok: true, verification: await verificationState(admin, customer) };
+}
+
+async function uploadVerificationDocument(admin: any, customer: any, body: any) {
+  requireVerificationManager(customer);
+  let current = await verificationState(admin, customer);
+  if (!["not_started", "draft", "changes_requested", "rejected"].includes(current.status)) throw new Error("This verification is currently locked for review.");
+  if (current.status === "not_started") {
+    await saveVerification(admin, customer, { entityType: current.entityType });
+    current = await verificationState(admin, customer);
+  }
+  const documentType = String(body.documentType || "");
+  const allowedTypes = new Set([...(VERIFICATION_REQUIREMENTS[current.entityType] || []).map((item) => item.type), "gst_certificate"]);
+  if (!allowedTypes.has(documentType)) throw new Error("This document type is not required for the selected entity.");
+  const mimeType = String(body.mimeType || "").toLowerCase();
+  const rawBase64 = String(body.base64 || "");
+  if (!rawBase64 || rawBase64.length > Math.ceil(MAX_DOCUMENT_BYTES * 4 / 3) + 16) throw new Error("Document must be 5 MB or smaller.");
+  const bytes = base64ToBytes(rawBase64);
+  if (!bytes.length || bytes.length > MAX_DOCUMENT_BYTES) throw new Error("Document must be 5 MB or smaller.");
+  validateVerificationDocument(bytes, mimeType);
+  const originalName = safeSegment(body.fileName, "verification-document");
+  const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("name,drive_root_folder_id").eq("id", customer.tenant_id).single();
+  if (tenantError) throw tenantError;
+  const token = await driveAccessToken();
+  const tenantFolderName = `${safeSegment(tenant.name, "Business")} - ${String(customer.tenant_id).slice(0, 8)}`;
+  const tenantFolderId = tenant.drive_root_folder_id || await findOrCreateFolder(token, ROOT_FOLDER_ID, tenantFolderName);
+  const verificationFolderId = await findOrCreateFolder(token, tenantFolderId, "Verification");
+  const documentsFolderId = await findOrCreateFolder(token, verificationFolderId, "Documents");
+  const extension = mimeType === "application/pdf" ? "pdf" : mimeType === "image/png" ? "png" : "jpg";
+  const storedName = `${documentType}-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
+  const uploaded = await uploadFile(token, documentsFolderId, storedName, mimeType, bytes);
+  const now = new Date().toISOString();
+  const { error: insertError } = await admin.from("whatsapp_platform_verification_documents").insert({
+    verification_id: (await admin.from("whatsapp_platform_business_verifications").select("id").eq("tenant_id", customer.tenant_id).single()).data.id,
+    tenant_id: customer.tenant_id, uploaded_by_user_id: customer.user_id, document_type: documentType,
+    original_file_name: originalName, stored_file_name: uploaded.name || storedName, mime_type: mimeType,
+    file_size: Number(uploaded.size || bytes.length), sha256: await sha256Hex(bytes), drive_file_id: uploaded.id,
+    drive_folder_id: documentsFolderId, drive_folder_path: `${tenantFolderName} / Verification / Documents`,
+  });
+  if (insertError) { await trashFile(token, uploaded.id).catch(() => {}); throw insertError; }
+  const previous = current.documents.filter((item: any) => item.type === documentType);
+  if (previous.length) {
+    await admin.from("whatsapp_platform_verification_documents").update({ status: "replaced", updated_at: now })
+      .eq("tenant_id", customer.tenant_id).eq("document_type", documentType).eq("status", "active").neq("drive_file_id", uploaded.id);
+  }
+  await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenantFolderName, updated_at: now }).eq("id", customer.tenant_id);
+  return { ok: true, verification: await verificationState(admin, customer) };
+}
+
+async function removeVerificationDocument(admin: any, customer: any, body: any) {
+  requireVerificationManager(customer);
+  const current = await verificationState(admin, customer);
+  if (!current.canEdit) throw new Error("This verification is currently locked for review.");
+  const documentId = String(body.documentId || "");
+  const { data: document, error } = await admin.from("whatsapp_platform_verification_documents")
+    .select("id,drive_file_id").eq("id", documentId).eq("tenant_id", customer.tenant_id).eq("status", "active").single();
+  if (error || !document) throw new Error("Verification document was not found.");
+  await admin.from("whatsapp_platform_verification_documents").update({ status: "deleted", updated_at: new Date().toISOString() }).eq("id", document.id).eq("tenant_id", customer.tenant_id);
+  try { await trashFile(await driveAccessToken(), document.drive_file_id); } catch (error) { console.error("Verification document cleanup failed", error); }
+  return { ok: true, verification: await verificationState(admin, customer) };
+}
+
+async function submitVerification(admin: any, customer: any, body: any) {
+  requireVerificationManager(customer);
+  await saveVerification(admin, customer, body);
+  const current = await verificationState(admin, customer);
+  if (!current.registrationNumber || current.registrationNumber.length < 2) throw new Error("Enter the entity registration or licence number.");
+  if (!current.registeredAddress || current.registeredAddress.length < 10) throw new Error("Enter the full registered business address.");
+  if (!current.representativeName || !current.representativeTitle) throw new Error("Enter the authorised representative details.");
+  if (body.declarationAccepted !== true) throw new Error("Accept the verification declaration before submitting.");
+  const uploadedTypes = new Set(current.documents.map((item: any) => item.type));
+  const missing = current.requirements.filter((item: any) => !uploadedTypes.has(item.type));
+  if (missing.length) throw new Error(`Upload the required document: ${missing[0].label}.`);
+  const now = new Date().toISOString();
+  const { error } = await admin.from("whatsapp_platform_business_verifications").update({
+    status: "submitted", declaration_accepted_at: now, submitted_at: now, review_notes: null, updated_at: now,
+  }).eq("tenant_id", customer.tenant_id).in("status", ["draft", "changes_requested", "rejected"]);
+  if (error) throw error;
+  await admin.from("whatsapp_platform_tenants").update({ verification_status: "submitted", updated_at: now }).eq("id", customer.tenant_id);
+  return { ok: true, verification: await verificationState(admin, customer) };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     if (!allowedOrigin(req)) return json(req, { error: "Origin not allowed" }, 403);
@@ -363,6 +563,11 @@ Deno.serve(async (req) => {
     if (action === "profile") return json(req, { profile: await tenantProfile(admin, customer) });
     if (action === "upload_logo") return json(req, await uploadLogo(admin, customer, body));
     if (action === "remove_logo") return json(req, await removeLogo(admin, customer));
+    if (action === "verification_status") return json(req, { verification: await verificationState(admin, customer) });
+    if (action === "save_verification") return json(req, await saveVerification(admin, customer, body));
+    if (action === "upload_verification_document") return json(req, await uploadVerificationDocument(admin, customer, body));
+    if (action === "remove_verification_document") return json(req, await removeVerificationDocument(admin, customer, body));
+    if (action === "submit_verification") return json(req, await submitVerification(admin, customer, body));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Storage request failed";
