@@ -55,13 +55,13 @@ async function encryptionKey() {
   const material = env("WHATSAPP_PLATFORM_TOKEN_ENCRYPTION_KEY");
   if (material.length < 32) throw new Error("Secure provider storage is not configured.");
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(material));
-  return crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["encrypt"]);
+  return crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
-async function encryptSecret(value: string) {
+async function encryptSecret(value: string, context = "meta_app_secret") {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv, additionalData: new TextEncoder().encode("meta_app_secret") },
+    { name: "AES-GCM", iv, additionalData: new TextEncoder().encode(context) },
     await encryptionKey(),
     new TextEncoder().encode(value),
   );
@@ -104,9 +104,22 @@ Deno.serve(async (req) => {
     const action = String(body.action || "status");
     if (action === "status") {
       const { data, error } = await admin.from("whatsapp_platform_provider_settings")
-        .select("updated_at").eq("setting_key", "meta_app_secret").maybeSingle();
+        .select("setting_key,updated_at").in("setting_key", ["meta_app_secret", "webhook_verify_token"]);
       if (error) throw error;
-      return json(req, { configured: Boolean(data), updatedAt: data?.updated_at || null });
+      const appSecret = (data || []).find((item: any) => item.setting_key === "meta_app_secret");
+      const webhookToken = (data || []).find((item: any) => item.setting_key === "webhook_verify_token");
+      return json(req, { configured: Boolean(appSecret), updatedAt: appSecret?.updated_at || null, webhookConfigured: Boolean(webhookToken), webhookUpdatedAt: webhookToken?.updated_at || null });
+    }
+    if (action === "generate_webhook_token") {
+      const token = Array.from(crypto.getRandomValues(new Uint8Array(32))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+      const now = new Date().toISOString();
+      const { error } = await admin.from("whatsapp_platform_provider_settings").upsert({
+        setting_key: "webhook_verify_token", encrypted_value: await encryptSecret(token, "webhook_verify_token"),
+        updated_by: appUserId, updated_at: now,
+      }, { onConflict: "setting_key" });
+      if (error) throw error;
+      await admin.from("audit_logs").insert({ event_type: "whatsapp_platform_webhook_token_rotated", action: "webhook_token_rotated", module_code: "whatsapp-platform", actor_app_user_id: appUserId, entity_type: "whatsapp_platform_provider_settings", details: { setting_key: "webhook_verify_token", secret_recorded: true }, user_agent: req.headers.get("user-agent") || null, ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null });
+      return json(req, { success: true, webhookConfigured: true, webhookUpdatedAt: now, token });
     }
     if (action !== "set") return json(req, { error: "Unsupported action" }, 400);
     const secret = String(body.secret || "").trim();

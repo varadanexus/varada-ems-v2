@@ -115,5 +115,11 @@
 .wa-gate-form label { display: grid; gap: 6px; color: #a9b1ab; font-size: 12px; font-weight: 700; }
 .wa-gate-form textarea,.wa-gate-form select { width: 100%; min-height: 42px; padding: 10px 12px; border: 1px solid rgba(218,178,83,.22); border-radius: 10px; background: #070907; color: #eeeae0; font: inherit; }
 @media (max-width: 800px) { .wa-gate-form { grid-template-columns: 1fr; } }
+.wa-webhook-token { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: end; margin: 14px 0; padding: 13px; border: 1px solid rgba(37,211,102,.25); border-radius: 12px; background: rgba(37,211,102,.06); }
+.wa-webhook-token[hidden] { display: none; }
+.wa-webhook-token label { display: grid; gap: 6px; color: #a9b1ab; font-size: 11px; font-weight: 800; }
+.wa-webhook-token input { width: 100%; padding: 10px 11px; border: 1px solid rgba(255,255,255,.12); border-radius: 9px; background: #070907; color: #d9f6e3; font-family: ui-monospace,SFMono-Regular,Consolas,monospace; }
+.wa-webhook-token small { grid-column: 1 / -1; color: #7f8781; font-size: 10px; }
+@media (max-width: 650px) { .wa-webhook-token { grid-template-columns: 1fr; } .wa-webhook-token small { grid-column: auto; } }
 @media (max-width: 900px) { .wa-verification-case dl { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 560px) { .wa-verification-case dl { grid-template-columns: 1fr; } .wa-verification-case > header { flex-direction: column; } }

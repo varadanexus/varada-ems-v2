@@ -64,6 +64,7 @@ let metaOnboardingStatus = null;
 let facebookSdkPromise = null;
 let workspaceProfile = { planCode: "starter", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
 let workspaceVerification = null;
+let workspaceInbox = { conversations: [], thread: null, error: "" };
 
 if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
@@ -237,6 +238,25 @@ async function storageRequest(action, payload = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || "Workspace storage request failed.");
+  return data;
+}
+
+function messagingEndpoint() {
+  return `${runtime.supabaseUrl}/functions/v1/whatsapp-platform-messaging`;
+}
+
+async function messagingRequest(action, payload = {}) {
+  if (!session?.sessionToken) throw new Error("Your workspace session has expired.");
+  const response = await fetch(messagingEndpoint(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: runtime.supabaseAnonKey || "" },
+    credentials: "omit",
+    cache: "no-store",
+    referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, sessionToken: session.sessionToken, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Team Inbox request failed.");
   return data;
 }
 
@@ -909,7 +929,6 @@ function verificationView(verification) {
 }
 
 const PLANNED_WORKSPACE_VIEWS = {
-  inbox: ["Customer conversations", "Manage assigned conversations, queues and response ownership from one shared team inbox.", ["Conversation assignment", "Team notes and mentions", "SLA and queue controls"]],
   contacts: ["Customer directory", "Keep customer identities, consent and conversation context organised for your team.", ["Customer profiles", "Tags and segments", "Consent history"]],
   campaigns: ["Campaign workspace", "Plan governed, opt-in WhatsApp campaigns with approvals and delivery visibility.", ["Audience selection", "Campaign approvals", "Delivery monitoring"]],
   templates: ["Message templates", "Create, submit and manage approved WhatsApp message templates from your workspace.", ["Template library", "Approval status", "Language variants"]],
@@ -919,6 +938,41 @@ const PLANNED_WORKSPACE_VIEWS = {
   integrations: ["Business integrations", "Connect approved business systems and route events into WhatsApp workflows.", ["Webhooks", "CRM and ERP connectors", "Integration health"]],
   billing: ["Billing and usage", "Review your subscription, platform usage and invoices in one place.", ["Plan management", "Usage summary", "Invoices and payments"]],
 };
+
+function inboxTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const today = new Date();
+  return date.toDateString() === today.toDateString()
+    ? new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(date)
+    : new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(date);
+}
+
+function inboxContactName(contact) {
+  return contact?.display_name || contact?.profile_name || contact?.phone_e164 || "WhatsApp customer";
+}
+
+function inboxView() {
+  const conversations = workspaceInbox?.conversations || [];
+  const thread = workspaceInbox?.thread || null;
+  const activeId = thread?.conversation?.id || "";
+  const filters = ["all", "open", "pending", "resolved"];
+  const activeFilter = new URLSearchParams(location.search).get("status") || "all";
+  const conversationRows = conversations.map((item) => {
+    const name = inboxContactName(item.contact);
+    const initial = name.charAt(0).toUpperCase();
+    const url = new URL(workspacePath("inbox"), location.origin);
+    url.searchParams.set("conversation", item.id);
+    if (activeFilter !== "all") url.searchParams.set("status", activeFilter);
+    return `<a class="wp-inbox-conversation ${item.id === activeId ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}"><span class="wp-inbox-avatar">${escapeHtml(initial)}</span><span class="wp-inbox-conversation-copy"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(item.last_message_preview || "No message preview")}</small></span><span class="wp-inbox-conversation-meta"><time>${escapeHtml(inboxTime(item.last_message_at))}</time>${Number(item.unread_count || 0) ? `<b>${Number(item.unread_count)}</b>` : `<em>${escapeHtml(item.status)}</em>`}</span></a>`;
+  }).join("");
+  const messages = (thread?.messages || []).map((message) => `<article class="wp-inbox-message ${message.direction}"><div><p>${escapeHtml(message.body || `[${message.message_type} message]`)}</p><footer><time>${escapeHtml(inboxTime(message.provider_timestamp || message.created_at))}</time>${message.direction === "outbound" ? `<span class="${escapeHtml(message.status)}">${escapeHtml(message.status)}</span>` : ""}</footer></div></article>`).join("");
+  const contactName = inboxContactName(thread?.contact);
+  const serviceWindow = thread?.serviceWindowOpen;
+  const threadPanel = thread ? `<section class="wp-inbox-thread"><header><div class="wp-inbox-avatar large">${escapeHtml(contactName.charAt(0).toUpperCase())}</div><div><strong>${escapeHtml(contactName)}</strong><small>${escapeHtml(thread.contact?.phone_e164 || "")}</small></div><select data-conversation-status aria-label="Conversation status"><option value="open" ${thread.conversation.status === "open" ? "selected" : ""}>Open</option><option value="pending" ${thread.conversation.status === "pending" ? "selected" : ""}>Pending</option><option value="resolved" ${thread.conversation.status === "resolved" ? "selected" : ""}>Resolved</option></select></header><div class="wp-inbox-window-banner ${serviceWindow ? "open" : "closed"}"><span>${serviceWindow ? "Customer-service window open" : "Customer-service window closed"}</span><small>${serviceWindow ? `Free-form replies available until ${escapeHtml(inboxTime(thread.conversation.service_window_expires_at))}` : "An approved template is required to restart this conversation."}</small></div><div class="wp-inbox-messages" id="wpInboxMessages">${messages || '<div class="wp-inbox-empty"><span>◌</span><strong>No messages yet</strong><p>The conversation history will appear here.</p></div>'}</div><form class="wp-inbox-composer" id="wpInboxComposer"><textarea name="message" rows="1" maxlength="4096" placeholder="${serviceWindow ? "Write a reply…" : "Customer-service window is closed"}" ${serviceWindow ? "" : "disabled"} required></textarea><button class="wp-primary" type="submit" ${serviceWindow ? "" : "disabled"} aria-label="Send message">Send</button></form></section>` : `<section class="wp-inbox-thread wp-inbox-no-selection"><div><span>◌</span><h2>Select a conversation</h2><p>Choose a customer conversation to view messages and reply from the shared inbox.</p></div></section>`;
+  return `<section class="wp-route-page wp-inbox-page"><div class="wp-route-heading wp-inbox-heading"><div><span class="wp-kicker">Customer conversations</span><h1>Team inbox</h1><p>Receive, organise and answer customer messages from one protected workspace.</p></div><div class="wp-inbox-live"><i></i><span>Webhook ready</span></div></div>${workspaceInbox?.error ? `<div class="wp-verification-notice"><strong>Inbox unavailable</strong><p>${escapeHtml(workspaceInbox.error)}</p></div>` : ""}<div class="wp-inbox-shell"><aside class="wp-inbox-list"><div class="wp-inbox-list-head"><strong>Conversations</strong><span>${conversations.length}</span></div><nav class="wp-inbox-filters" aria-label="Conversation filters">${filters.map((filter) => { const url = new URL(workspacePath("inbox"), location.origin); if (filter !== "all") url.searchParams.set("status", filter); return `<a class="${activeFilter === filter ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}">${escapeHtml(filter)}</a>`; }).join("")}</nav><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search conversations" data-inbox-search /></label><div class="wp-inbox-conversations" data-inbox-conversations>${conversationRows || '<div class="wp-inbox-empty"><span>◌</span><strong>No conversations yet</strong><p>Incoming WhatsApp messages will appear here after the webhook is connected.</p></div>'}</div></aside>${threadPanel}</div></section>`;
+}
 
 function plannedView(view) {
   const [title, description, capabilities] = PLANNED_WORKSPACE_VIEWS[view];
@@ -940,11 +994,13 @@ function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "onboarding") return onboardingView(setupReady, connections.filter((row) => ["connected", "pending"].includes(row.status)));
   if (view === "accounts") return accountsView(connections, setupReady);
   if (view === "settings") return settingsView(profile);
+  if (view === "inbox") return inboxView();
   if (Object.hasOwn(PLANNED_WORKSPACE_VIEWS, view)) return plannedView(view);
   return overviewView(connections.filter((row) => ["connected", "pending"].includes(row.status)), setupReady, profile);
 }
 
 async function renderDashboard() {
+  const view = currentWorkspaceView();
   let connections = [];
   try { connections = await loadConnections(); } catch { connections = []; }
   try {
@@ -973,13 +1029,23 @@ async function renderDashboard() {
   }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
-  const view = currentWorkspaceView();
+  if (view === "inbox") {
+    try {
+      const status = new URLSearchParams(location.search).get("status") || "all";
+      const listed = await messagingRequest("list", { status });
+      const conversationId = new URLSearchParams(location.search).get("conversation");
+      workspaceInbox = { conversations: listed?.conversations || [], thread: null, error: "" };
+      if (conversationId) workspaceInbox.thread = await messagingRequest("thread", { conversationId });
+    } catch (error) {
+      workspaceInbox = { conversations: [], thread: null, error: error?.message || "The Team Inbox could not be loaded." };
+    }
+  }
   document.body.classList.add("wp-workspace-mode");
   document.title = `${WORKSPACE_VIEW_LABELS[view]} | Varada Nexus WhatsApp Solutions`;
   const sidebarLogo = workspaceProfile?.logoDataUrl
     ? `<img src="${escapeHtml(workspaceProfile.logoDataUrl)}" alt="" />`
     : escapeHtml((session.companyName || "W").charAt(0).toUpperCase());
-  app.innerHTML = `<main class="wp-workspace-shell"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(planName(workspaceProfile?.planCode))}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", "Planned")}${workspaceNavItem("contacts", "◎", "Planned")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", "Planned")}${workspaceNavItem("templates", "✦", "Planned")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁", "Planned")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
+  app.innerHTML = `<main class="wp-workspace-shell"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(planName(workspaceProfile?.planCode))}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", String((workspaceInbox?.conversations || []).reduce((total, item) => total + Number(item.unread_count || 0), 0)))}${workspaceNavItem("contacts", "◎", "Planned")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", "Planned")}${workspaceNavItem("templates", "✦", "Planned")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁", "Planned")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
   applyTheme(document.documentElement.dataset.wpTheme || preferredTheme());
   app.querySelector("#wpThemeToggle")?.addEventListener("click", () => {
     const nextTheme = document.documentElement.dataset.wpTheme === "dark" ? "light" : "dark";
@@ -1101,6 +1167,36 @@ async function renderDashboard() {
       await renderDashboard();
     } catch (error) { showToast(error?.message || "Document could not be removed.", "error"); button.disabled = false; }
   }));
+  app.querySelector("[data-inbox-search]")?.addEventListener("input", (event) => {
+    const query = String(event.currentTarget.value || "").trim().toLowerCase();
+    app.querySelectorAll(".wp-inbox-conversation").forEach((row) => { row.hidden = Boolean(query && !row.textContent.toLowerCase().includes(query)); });
+  });
+  const activeConversationId = workspaceInbox?.thread?.conversation?.id;
+  if (activeConversationId && Number(workspaceInbox.thread.conversation.unread_count || 0) > 0) {
+    messagingRequest("update_conversation", { conversationId: activeConversationId, markRead: true }).catch(() => {});
+  }
+  app.querySelector("[data-conversation-status]")?.addEventListener("change", async (event) => {
+    const select = event.currentTarget;
+    try {
+      select.disabled = true;
+      await messagingRequest("update_conversation", { conversationId: activeConversationId, status: select.value });
+      showToast("Conversation status updated.");
+      await renderDashboard();
+    } catch (error) { showToast(error?.message || "Conversation could not be updated.", "error"); select.disabled = false; }
+  });
+  app.querySelector("#wpInboxComposer")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget; const input = form.elements.message; const button = event.submitter || form.querySelector("button");
+    const message = String(input?.value || "").trim();
+    if (!message) return;
+    try {
+      button.disabled = true; button.textContent = "Sending…";
+      await messagingRequest("send_text", { conversationId: activeConversationId, text: message });
+      input.value = ""; showToast("Message sent."); await renderDashboard();
+    } catch (error) { showToast(error?.message || "Message could not be sent.", "error"); button.disabled = false; button.textContent = "Send"; }
+  });
+  const messagePanel = app.querySelector("#wpInboxMessages");
+  if (messagePanel) messagePanel.scrollTop = messagePanel.scrollHeight;
   app.querySelectorAll("#wpConnectMetaBtn,[data-connect-meta]").forEach((button) => button.addEventListener("click", () => startMetaOnboarding(button)));
   if (setupReady) loadFacebookSdk().catch(() => {});
 }
