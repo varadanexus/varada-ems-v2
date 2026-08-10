@@ -3,7 +3,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const MAX_BODY_BYTES = 32 * 1024;
+const MAX_BODY_BYTES = 192 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
 
 function env(name: string) { return Deno.env.get(name) || ""; }
@@ -200,7 +200,7 @@ async function createTemplate(admin: any, customer: any, body: any) {
     if (!graphResponse.ok || !graph?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "The library template could not be added to this account.");
     return { template: { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), libraryTemplateName } };
   }
-  if (!["TEXT","MEDIA","CTA","QUICK_REPLY","CATALOG","MPM","AUTHENTICATION","FLOW"].includes(contentType)) throw new Error("Select a supported WhatsApp template content type.");
+  if (!["TEXT","MEDIA","CTA","QUICK_REPLY","CATALOG","MPM","AUTHENTICATION"].includes(contentType)) throw new Error("Select a supported WhatsApp template content type.");
   const authentication = contentType === "AUTHENTICATION";
   if (authentication && category !== "AUTHENTICATION") throw new Error("Authentication content must use the Authentication category.");
   if (!authentication && category === "AUTHENTICATION") throw new Error("Select the Authentication content type for this category.");
@@ -250,24 +250,7 @@ async function createTemplate(admin: any, customer: any, body: any) {
     if (footerText) components.push({ type: "FOOTER", text: footerText });
     if (contentType === "CATALOG") components.push({ type: "BUTTONS", buttons: [{ type: "CATALOG", text: "View catalog" }] });
     else if (contentType === "MPM") components.push({ type: "BUTTONS", buttons: [{ type: "MPM", text: "View items" }] });
-    else if (contentType === "FLOW") {
-      const flowId = String(body.flowId || "").trim();
-      const flowJson = String(body.flowJson || "").trim();
-      const flowSource = String(body.flowSource || "id").trim().toLowerCase();
-      const flowText = String(body.flowButtonText || "Open form").trim();
-      const navigateScreen = String(body.flowScreenId || "").trim();
-      const flowAction = String(body.flowAction || "navigate").trim().toLowerCase();
-      if (!["id","json"].includes(flowSource)) throw new Error("Select a valid Flow source.");
-      if (flowSource === "id" && !/^[0-9]{5,30}$/.test(flowId)) throw new Error("Enter a valid WhatsApp Flow ID.");
-      if (flowSource === "json") {
-        if (!flowJson || flowJson.length > 20000) throw new Error("Flow JSON must contain between 1 and 20,000 characters.");
-        try { const parsed = JSON.parse(flowJson); if (!parsed?.version || !Array.isArray(parsed?.screens) || !parsed.screens.length) throw new Error(); } catch { throw new Error("Flow JSON must contain a version and at least one screen."); }
-      }
-      if (!flowText || flowText.length > 25) throw new Error("Flow button text must contain between 1 and 25 characters.");
-      if (!["navigate","data_exchange"].includes(flowAction)) throw new Error("Select a valid Flow action.");
-      if (flowAction === "navigate" && !/^[A-Za-z0-9_\-]{1,200}$/.test(navigateScreen)) throw new Error("Enter the starting screen ID for this Flow.");
-      components.push({ type: "BUTTONS", buttons: [{ type: "FLOW", text: flowText, ...(flowSource === "json" ? { flow_json: flowJson } : { flow_id: flowId }), flow_action: flowAction, ...(navigateScreen ? { navigate_screen: navigateScreen } : {}) }] });
-    } else if (graphButtons.length) components.push({ type: "BUTTONS", buttons: graphButtons });
+    else if (graphButtons.length) components.push({ type: "BUTTONS", buttons: graphButtons });
   }
   const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`, {
@@ -471,6 +454,87 @@ async function updateContact(admin: any, customer: any, body: any) {
   return { contact: data };
 }
 
+async function listFlows(admin: any, customer: any) {
+  const { data, error } = await admin.from("whatsapp_platform_flows")
+    .select("id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at")
+    .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).limit(200);
+  if (error) throw error;
+  return { flows: data || [] };
+}
+
+function validatedFlow(body: any) {
+  const name = String(body.name || "").trim();
+  const description = String(body.description || "").trim();
+  const status = String(body.status || "draft").trim().toLowerCase();
+  const triggerType = String(body.triggerType || "keyword").trim().toLowerCase();
+  const triggerConfig = body.triggerConfig && typeof body.triggerConfig === "object" && !Array.isArray(body.triggerConfig) ? body.triggerConfig : {};
+  const nodes = Array.isArray(body.nodes) ? body.nodes : [];
+  const edges = Array.isArray(body.edges) ? body.edges : [];
+  if (!name || name.length > 120) throw new Error("Flow name must contain between 1 and 120 characters.");
+  if (description.length > 500) throw new Error("Flow description cannot exceed 500 characters.");
+  if (!["draft","active","paused"].includes(status)) throw new Error("Select a valid flow status.");
+  if (!["keyword","any_message","template_reply","manual","webhook"].includes(triggerType)) throw new Error("Select a valid flow trigger.");
+  if (!nodes.length || nodes.length > 100) throw new Error("A flow must contain between 1 and 100 blocks.");
+  if (status === "active" && nodes.length < 2) throw new Error("Add at least one action before activating this flow.");
+  const ids = new Set<string>();
+  const cleanNodes = nodes.map((node: any, index: number) => {
+    const id = String(node?.id || "").trim(); const type = String(node?.type || "").trim().toLowerCase();
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(id) || ids.has(id)) throw new Error(`Flow block ${index + 1} has an invalid identifier.`);
+    ids.add(id);
+    if (!["start","message","media","list","catalog","single_product","multi_product","template","question","address","location","ask_media","condition","api","attribute","tag","handoff","connect","delay","end"].includes(type)) throw new Error(`Flow block ${index + 1} has an unsupported type.`);
+    const title = String(node?.title || "").trim().slice(0, 80); const content = String(node?.body || "").trim().slice(0, 2048);
+    const x = Math.max(0, Math.min(10000, Number(node?.x) || 0)); const y = Math.max(0, Math.min(10000, Number(node?.y) || 0));
+    const config = node?.config && typeof node.config === "object" && !Array.isArray(node.config) ? node.config : {};
+    if (type === "api" && config.endpoint && !/^https:\/\/[^\s]+$/i.test(String(config.endpoint))) throw new Error("API request blocks require a valid HTTPS endpoint.");
+    return { id, type, title: title || "Untitled block", body: content, x, y, config };
+  });
+  if (cleanNodes.filter((node: any) => node.type === "start").length !== 1) throw new Error("Every flow must contain exactly one Flow start block.");
+  const cleanEdges = edges.slice(0, 200).map((edge: any) => {
+    const from = String(edge?.from || ""); const to = String(edge?.to || "");
+    if (!ids.has(from) || !ids.has(to) || from === to) throw new Error("A flow connection references an invalid block.");
+    return { id: String(edge?.id || `${from}:${to}`).slice(0, 180), from, to };
+  });
+  if (new TextEncoder().encode(JSON.stringify({ triggerConfig, nodes: cleanNodes, edges: cleanEdges })).byteLength > 150000) throw new Error("Flow definition is too large.");
+  return { name, description: description || null, status, trigger_type: triggerType, trigger_config: triggerConfig, nodes: cleanNodes, edges: cleanEdges };
+}
+
+async function saveFlow(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can create or edit flows.");
+  const values = validatedFlow(body); const now = new Date().toISOString();
+  if (body.flowId) {
+    const flowId = cleanUuid(body.flowId, "flow");
+    const { data, error } = await admin.from("whatsapp_platform_flows").update({ ...values, updated_by_user_id: customer.user_id, updated_at: now })
+      .eq("id", flowId).eq("tenant_id", customer.tenant_id)
+      .select("id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at").single();
+    if (error || !data) throw new Error(error?.code === "23505" ? "A flow with this name already exists." : "Flow could not be updated.");
+    return { flow: data };
+  }
+  const { data, error } = await admin.from("whatsapp_platform_flows").insert({ ...values, tenant_id: customer.tenant_id, created_by_user_id: customer.user_id, updated_by_user_id: customer.user_id })
+    .select("id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at").single();
+  if (error || !data) throw new Error(error?.code === "23505" ? "A flow with this name already exists." : "Flow could not be created.");
+  return { flow: data };
+}
+
+async function setFlowStatus(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can activate or pause flows.");
+  const flowId = cleanUuid(body.flowId, "flow"); const status = String(body.status || "").toLowerCase();
+  if (!["active","paused"].includes(status)) throw new Error("Select a valid flow status.");
+  const { data: current, error: currentError } = await admin.from("whatsapp_platform_flows").select("id,nodes").eq("id", flowId).eq("tenant_id", customer.tenant_id).single();
+  if (currentError || !current) throw new Error("Flow not found.");
+  if (status === "active" && (!Array.isArray(current.nodes) || current.nodes.length < 2)) throw new Error("Add at least one action before activating this flow.");
+  const { data, error } = await admin.from("whatsapp_platform_flows").update({ status, updated_by_user_id: customer.user_id, updated_at: new Date().toISOString() }).eq("id", flowId).eq("tenant_id", customer.tenant_id).select("id,status,updated_at").single();
+  if (error || !data) throw new Error("Flow status could not be updated.");
+  return { flow: data };
+}
+
+async function deleteFlow(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can delete flows.");
+  const flowId = cleanUuid(body.flowId, "flow");
+  const { data, error } = await admin.from("whatsapp_platform_flows").delete().eq("id", flowId).eq("tenant_id", customer.tenant_id).select("id").single();
+  if (error || !data) throw new Error("Flow not found.");
+  return { deleted: true, flowId };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     if (!allowedOrigin(req)) return json(req, { error: "Origin not allowed" }, 403);
@@ -493,6 +557,10 @@ Deno.serve(async (req) => {
     if (action === "list_templates") return json(req, await listTemplates(admin, customer, body));
     if (action === "list_template_library") return json(req, await listTemplateLibrary(admin, customer, body));
     if (action === "create_template") return json(req, await createTemplate(admin, customer, body));
+    if (action === "list_flows") return json(req, await listFlows(admin, customer));
+    if (action === "save_flow") return json(req, await saveFlow(admin, customer, body));
+    if (action === "set_flow_status") return json(req, await setFlowStatus(admin, customer, body));
+    if (action === "delete_flow") return json(req, await deleteFlow(admin, customer, body));
     if (action === "thread") return json(req, await thread(admin, customer, body));
     if (action === "send_text") return json(req, await sendText(admin, customer, body));
     if (action === "create_contact") return json(req, await createContact(admin, customer, body));
