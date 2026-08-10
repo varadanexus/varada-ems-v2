@@ -66,6 +66,14 @@ let workspaceProfile = { planCode: "starter", logoDataUrl: "", logoFileName: "",
 let workspaceVerification = null;
 let workspaceInbox = { conversations: [], thread: null, error: "" };
 let workspaceContacts = { contacts: [], error: "" };
+const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
+
+function countryDialOptions() {
+  const names = typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
+  return COUNTRY_DIAL_CODES.map((country) => ({ ...country, name: names?.of(country.code) || country.code }))
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map((country) => `<option value="${country.dial}" ${country.code === "IN" ? "selected" : ""}>${escapeHtml(country.name)} (${country.dial})</option>`).join("");
+}
 
 if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
@@ -1051,6 +1059,8 @@ async function renderDashboard() {
       const conversationId = new URLSearchParams(location.search).get("conversation");
       workspaceInbox = { conversations: listed?.conversations || [], thread: null, error: "" };
       if (conversationId) workspaceInbox.thread = await messagingRequest("thread", { conversationId });
+      const listedContacts = await messagingRequest("list_contacts", { status: "all" });
+      workspaceContacts = { contacts: listedContacts?.contacts || [], error: "" };
     } catch (error) {
       workspaceInbox = { conversations: [], thread: null, error: error?.message || "The Team Inbox could not be loaded." };
     }
@@ -1072,6 +1082,16 @@ async function renderDashboard() {
   const inboxUnread = (workspaceInbox?.conversations || []).reduce((total, item) => total + Number(item.unread_count || 0), 0);
   const contactCount = (workspaceContacts?.contacts || []).length;
   app.innerHTML = `<main class="wp-workspace-shell"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(planName(workspaceProfile?.planCode))}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", "Planned")}${workspaceNavItem("templates", "✦", "Planned")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁", "Planned")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
+  if (view === "contacts") {
+    app.querySelector(".wp-route-heading")?.insertAdjacentHTML("beforeend", '<button class="wp-primary" id="wpAddContactBtn" type="button">＋ Add contact</button>');
+    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog" id="wpAddContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Add contact</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Contact name</span><input name="displayName" maxlength="200" autocomplete="name" required /></label><label><span>WhatsApp number</span><input name="phone" type="tel" inputmode="tel" maxlength="24" placeholder="+91 98765 43210" autocomplete="tel" required /><small>Include the country code. We will store the number in international format.</small></label><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="save">Add contact</button></footer></form></dialog>`);
+  }
+  if (view === "inbox") {
+    const activeContacts = (workspaceContacts?.contacts || []).filter((contact) => contact.status === "active");
+    const readyConnections = connected.filter((connection) => connection.status === "connected" && connection.phone_number_id);
+    app.querySelector(".wp-inbox-heading")?.insertAdjacentHTML("beforeend", '<button class="wp-primary" id="wpNewChatBtn" type="button">＋ New chat</button>');
+    app.querySelector(".wp-inbox-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-new-chat-dialog" id="wpNewChatDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Business-initiated message</span><h2>Start a new chat</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Contact</span><select name="contactId" required><option value="">Select contact</option>${activeContacts.map((contact) => `<option value="${escapeHtml(contact.id)}">${escapeHtml(inboxContactName(contact))} · ${escapeHtml(contact.phone_e164 || "")}</option>`).join("")}</select><small>${activeContacts.length ? "Choose an active WhatsApp contact." : "Add an active contact before starting a chat."}</small></label><label><span>Send from</span><select name="connectionId" required><option value="">Select business number</option>${readyConnections.map((connection) => `<option value="${escapeHtml(connection.id)}">${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}${connection.display_phone_number ? ` · ${escapeHtml(connection.display_phone_number)}` : ""}</option>`).join("")}</select><small>${readyConnections.length ? "Only connected business numbers are available." : "Connect a WhatsApp Business number before starting a chat."}</small></label><div class="wp-form-row"><label><span>Approved template name</span><input name="templateName" maxlength="512" placeholder="hello_world" pattern="[a-z0-9_]+" required /></label><label><span>Language code</span><input name="languageCode" maxlength="6" value="en_US" placeholder="en_US" required /></label></div><div class="wp-policy-note"><strong>WhatsApp requirement</strong><p>A business-initiated conversation must begin with an approved template. Free-form replies become available after the customer responds and opens the 24-hour service window.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="send" ${activeContacts.length && readyConnections.length ? "" : "disabled"}>Send template</button></footer></form></dialog>`);
+  }
   applyTheme(document.documentElement.dataset.wpTheme || preferredTheme());
   app.querySelector("#wpThemeToggle")?.addEventListener("click", () => {
     const nextTheme = document.documentElement.dataset.wpTheme === "dark" ? "light" : "dark";
@@ -1200,6 +1220,51 @@ async function renderDashboard() {
   app.querySelector("[data-contact-search]")?.addEventListener("input", (event) => {
     const query = String(event.currentTarget.value || "").trim().toLowerCase();
     app.querySelectorAll("[data-contact-row]").forEach((row) => { row.hidden = Boolean(query && !row.textContent.toLowerCase().includes(query)); });
+  });
+  const addContactDialog = app.querySelector("#wpAddContactDialog");
+  const addContactPhoneLabel = addContactDialog?.querySelector("input[name='phone']")?.closest("label");
+  if (addContactPhoneLabel) addContactPhoneLabel.innerHTML = `<span>WhatsApp number</span><div class="wp-phone-input"><select name="countryDialCode" aria-label="Country calling code" required>${countryDialOptions()}</select><input name="nationalNumber" type="tel" inputmode="numeric" maxlength="18" placeholder="98765 43210" autocomplete="tel-national" required /></div><small>Select the country code, then enter the mobile number without a leading zero.</small>`;
+  app.querySelector("#wpAddContactBtn")?.addEventListener("click", () => addContactDialog?.showModal());
+  addContactDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
+    const submitter = event.submitter;
+    if (submitter?.value !== "save") return;
+    event.preventDefault();
+    const form = event.currentTarget;
+    try {
+      submitter.disabled = true; submitter.textContent = "Adding…";
+      const nationalNumber = form.elements.nationalNumber.value.replace(/\D/g, "").replace(/^0+/, "");
+      const phone = `${form.elements.countryDialCode.value}${nationalNumber}`;
+      const result = await messagingRequest("create_contact", { displayName: form.elements.displayName.value.trim(), phone });
+      addContactDialog.close();
+      showToast(result?.existing ? "Existing contact updated." : "Contact added.");
+      await renderDashboard();
+    } catch (error) {
+      showToast(error?.message || "Contact could not be added.", "error");
+      submitter.disabled = false; submitter.textContent = "Add contact";
+    }
+  });
+  const newChatDialog = app.querySelector("#wpNewChatDialog");
+  app.querySelector("#wpNewChatBtn")?.addEventListener("click", () => newChatDialog?.showModal());
+  newChatDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
+    const submitter = event.submitter;
+    if (submitter?.value !== "send") return;
+    event.preventDefault();
+    const form = event.currentTarget;
+    try {
+      submitter.disabled = true; submitter.textContent = "Sending…";
+      const result = await messagingRequest("start_chat", {
+        contactId: form.elements.contactId.value,
+        connectionId: form.elements.connectionId.value,
+        templateName: form.elements.templateName.value.trim(),
+        languageCode: form.elements.languageCode.value.trim(),
+      });
+      newChatDialog.close();
+      showToast("Template sent. Conversation opened.");
+      location.href = `${workspacePath("inbox")}?conversation=${encodeURIComponent(result.conversationId)}`;
+    } catch (error) {
+      showToast(error?.message || "The new conversation could not be started.", "error");
+      submitter.disabled = false; submitter.textContent = "Send template";
+    }
   });
   const contactDialog = app.querySelector("#wpContactDialog");
   const canManageContactStatus = ["owner", "admin"].includes(session.roleCode);

@@ -161,6 +161,84 @@ async function sendText(admin: any, customer: any, body: any) {
   ]);
   return { message };
 }
+async function createContact(admin: any, customer: any, body: any) {
+  if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot add contacts.");
+  const digits = String(body.phone || "").replace(/\D/g, "");
+  if (!/^[1-9][0-9]{6,14}$/.test(digits)) throw new Error("Enter a valid international phone number including country code.");
+  const displayName = String(body.displayName || "").trim();
+  if (!displayName || displayName.length > 200) throw new Error("Contact name must contain between 1 and 200 characters.");
+  const { data: existing, error: existingError } = await admin.from("whatsapp_platform_contacts")
+    .select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at,created_at,updated_at")
+    .eq("tenant_id", customer.tenant_id).eq("wa_id", digits).maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) {
+    const { data, error } = await admin.from("whatsapp_platform_contacts")
+      .update({ display_name: displayName, updated_at: new Date().toISOString() })
+      .eq("id", existing.id).eq("tenant_id", customer.tenant_id)
+      .select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at,created_at,updated_at").single();
+    if (error || !data) throw new Error("Contact could not be updated.");
+    return { contact: data, existing: true };
+  }
+  const { data, error } = await admin.from("whatsapp_platform_contacts").insert({
+    tenant_id: customer.tenant_id, wa_id: digits, phone_e164: `+${digits}`, display_name: displayName, status: "active",
+  }).select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at,created_at,updated_at").single();
+  if (error || !data) throw new Error("Contact could not be created.");
+  return { contact: data, existing: false };
+}
+async function startChat(admin: any, customer: any, body: any) {
+  if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot start conversations.");
+  const contactId = cleanUuid(body.contactId, "contact");
+  const connectionId = cleanUuid(body.connectionId, "connection");
+  const templateName = String(body.templateName || "").trim();
+  const languageCode = String(body.languageCode || "en_US").trim();
+  if (!/^[a-z0-9_]{1,512}$/.test(templateName)) throw new Error("Enter the exact name of an approved WhatsApp template.");
+  if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(languageCode)) throw new Error("Enter a valid template language code, such as en_US.");
+  const [{ data: contact, error: contactError }, { data: connection, error: connectionError }, { data: credential, error: credentialError }] = await Promise.all([
+    admin.from("whatsapp_platform_contacts").select("id,wa_id,status").eq("id", contactId).eq("tenant_id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_connections").select("id,phone_number_id,status").eq("id", connectionId).eq("tenant_id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_provider_credentials").select("credential_ciphertext,expires_at").eq("connection_id", connectionId).eq("tenant_id", customer.tenant_id).single(),
+  ]);
+  if (contactError || !contact) throw new Error("Contact not found.");
+  if (contact.status !== "active") throw new Error("Messages cannot be sent to this contact.");
+  if (connectionError || connection?.status !== "connected" || !connection?.phone_number_id) throw new Error("Select a connected WhatsApp business number.");
+  if (credentialError || !credential) throw new Error("The WhatsApp connection credential is unavailable.");
+  if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
+  let { data: conversation, error: conversationError } = await admin.from("whatsapp_platform_conversations")
+    .select("id,connection_id,contact_id").eq("tenant_id", customer.tenant_id).eq("connection_id", connectionId).eq("contact_id", contactId).maybeSingle();
+  if (conversationError) throw conversationError;
+  let conversationCreated = false;
+  if (!conversation) {
+    const created = await admin.from("whatsapp_platform_conversations").insert({ tenant_id: customer.tenant_id, connection_id: connectionId, contact_id: contactId, status: "open", priority: "normal" })
+      .select("id,connection_id,contact_id").single();
+    if (created.error || !created.data) throw new Error("Conversation could not be created.");
+    conversation = created.data;
+    conversationCreated = true;
+  }
+  const secret = await decryptCredential(credential.credential_ciphertext);
+  const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+    method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: { name: templateName, language: { code: languageCode } } }),
+  });
+  const graph = await graphResponse.json().catch(() => ({}));
+  if (!graphResponse.ok || !graph?.messages?.[0]?.id) {
+    if (conversationCreated) await admin.from("whatsapp_platform_conversations").delete().eq("id", conversation.id).eq("tenant_id", customer.tenant_id);
+    throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Template message could not be sent.");
+  }
+  const now = new Date().toISOString();
+  const preview = `Template: ${templateName}`;
+  const { data: message, error: messageError } = await admin.from("whatsapp_platform_messages").insert({
+    tenant_id: customer.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
+    meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: "template", body: preview,
+    status: "accepted", provider_timestamp: now, created_by_user_id: customer.user_id,
+    safe_metadata: { template_name: templateName, language_code: languageCode },
+  }).select("id,meta_message_id,direction,message_type,body,status,provider_timestamp,created_at").single();
+  if (messageError) throw messageError;
+  await Promise.all([
+    admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: preview, last_outbound_at: now, updated_at: now }).eq("id", conversation.id).eq("tenant_id", customer.tenant_id),
+    admin.from("whatsapp_platform_contacts").update({ last_outbound_at: now, updated_at: now }).eq("id", contact.id).eq("tenant_id", customer.tenant_id),
+  ]);
+  return { conversationId: conversation.id, message };
+}
 async function updateConversation(admin: any, customer: any, body: any) {
   if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot update conversations.");
   const conversationId = cleanUuid(body.conversationId, "conversation");
@@ -242,6 +320,8 @@ Deno.serve(async (req) => {
     if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));
     if (action === "thread") return json(req, await thread(admin, customer, body));
     if (action === "send_text") return json(req, await sendText(admin, customer, body));
+    if (action === "create_contact") return json(req, await createContact(admin, customer, body));
+    if (action === "start_chat") return json(req, await startChat(admin, customer, body));
     if (action === "update_conversation") return json(req, await updateConversation(admin, customer, body));
     if (action === "add_note") return json(req, await addNote(admin, customer, body));
     if (action === "update_contact") return json(req, await updateContact(admin, customer, body));

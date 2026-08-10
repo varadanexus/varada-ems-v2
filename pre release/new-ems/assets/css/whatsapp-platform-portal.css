@@ -1128,7 +1128,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-contact-dialog label > span { margin-bottom: .35rem; font-size: .66rem; font-weight: 800; }
 .wp-contact-dialog label > small { margin-top: .3rem; color: var(--wp-workspace-muted); font-size: .58rem; line-height: 1.45; }
 .wp-contact-dialog input,.wp-contact-dialog select { width: 100%; min-height: 42px; padding: 0 .7rem; border: 1px solid var(--wp-workspace-line); border-radius: 10px; background: var(--wp-workspace-surface-soft); color: var(--wp-workspace-text); font: inherit; font-size: .7rem; }
+.wp-phone-input { display: grid; grid-template-columns: minmax(180px,.9fr) minmax(150px,1fr); gap: .55rem; }
+.wp-phone-input select { text-overflow: ellipsis; }
 .wp-contact-dialog footer { justify-content: flex-end; padding-top: .3rem; }
+.wp-new-chat-dialog { width: min(620px,calc(100% - 2rem)); }
+.wp-new-chat-dialog .wp-form-row { display: grid; grid-template-columns: 1.5fr .7fr; gap: .75rem; }
+.wp-policy-note { border: 1px solid var(--wp-workspace-line); border-radius: 12px; padding: .75rem .85rem; background: color-mix(in srgb,var(--wp-workspace-accent) 6%,var(--wp-workspace-surface-soft)); }
+.wp-policy-note strong { display: block; margin-bottom: .25rem; color: var(--wp-workspace-text); font-size: .68rem; }
+.wp-policy-note p { margin: 0; color: var(--wp-workspace-muted); font-size: .62rem; line-height: 1.55; }
+.wp-contact-dialog button:disabled { cursor: not-allowed; opacity: .48; }
 
 @media (max-width: 960px) {
   .wp-inbox-shell { height: auto; min-height: 0; grid-template-columns: 1fr; }
@@ -1152,6 +1160,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .wp-inbox-message > div { max-width: 90%; }
   .wp-inbox-notes form { grid-template-columns: 1fr; }
   .wp-contact-stats { grid-template-columns: 1fr; }
+  .wp-new-chat-dialog .wp-form-row { grid-template-columns: 1fr; }
+  .wp-phone-input { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 980px) { .wp-verification-layout { grid-template-columns: 1fr; } .wp-provider-flow { grid-template-columns: 1fr 1fr; } }
