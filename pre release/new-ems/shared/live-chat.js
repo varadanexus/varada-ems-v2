@@ -123,11 +123,12 @@ function injectStyles() {
   style.id = "emsLiveChatStyles";
   style.textContent = `
     #emsLiveChatRoot{--chat-gold:#e1bd68;--chat-gold-soft:#f3dea1;--chat-gold-deep:#9e762b;--chat-ink:#050606;--chat-panel:#0b0c0d;--chat-raised:#111214;--chat-line:rgba(225,189,104,.2);--chat-muted:#96938a;--chat-text:#f4f0e7;font-family:Manrope,"Segoe UI",sans-serif}
-    .ems-chat-launcher{position:fixed;right:1.1rem;bottom:1.1rem;z-index:1200;border:1px solid rgba(225,189,104,.62);background:linear-gradient(145deg,#1b1810 0%,#0b0c0d 52%,#15130e 100%);color:var(--chat-text);border-radius:999px;padding:.68rem .9rem .68rem .7rem;box-shadow:0 18px 52px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,240,195,.1);display:flex;align-items:center;gap:.58rem;font-weight:750;letter-spacing:.02em;cursor:pointer;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
-    .ems-chat-launcher:hover{transform:translateY(-2px);border-color:var(--chat-gold);box-shadow:0 22px 65px rgba(0,0,0,.65),0 0 0 3px rgba(225,189,104,.07)}
-    .ems-chat-launcher-icon{width:30px;height:30px;border:1px solid rgba(225,189,104,.45);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:radial-gradient(circle at 35% 25%,rgba(243,222,161,.25),rgba(225,189,104,.04) 55%);color:var(--chat-gold-soft)}
-    .ems-chat-launcher-copy{display:flex;flex-direction:column;align-items:flex-start;line-height:1.05}.ems-chat-launcher-copy small{color:var(--chat-gold);font-size:.55rem;text-transform:uppercase;letter-spacing:.18em;margin-bottom:.2rem}.ems-chat-launcher-copy strong{font-size:.78rem}
-    .ems-chat-badge{min-width:1.25rem;height:1.25rem;border-radius:999px;background:var(--chat-gold);color:#17130a;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:900;padding:0 .28rem;box-shadow:0 0 0 3px #0b0c0d}
+    .ems-chat-launcher{position:fixed;right:1.1rem;bottom:1.1rem;z-index:1200;width:54px;height:54px;padding:0;border:0;background:linear-gradient(135deg,#f0d493,#cba553);color:#12100a;border-radius:50%;box-shadow:0 14px 36px rgba(201,154,68,.42),inset 0 0 0 1px rgba(255,240,195,.58);display:grid;place-items:center;cursor:pointer;transition:transform .2s ease,box-shadow .2s ease}
+    .ems-chat-launcher::after{content:"";position:absolute;inset:-4px;border:1px solid rgba(225,189,104,.4);border-radius:50%;pointer-events:none}
+    .ems-chat-launcher:hover{transform:translateY(-2px) scale(1.04);box-shadow:0 20px 50px rgba(217,180,95,.54),inset 0 0 0 1px rgba(255,240,195,.75)}
+    .ems-chat-launcher-icon{width:27px;height:27px;display:grid;place-items:center;color:#12100a}
+    .ems-chat-launcher-icon svg{width:100%;height:100%;display:block}
+    .ems-chat-badge{position:absolute;top:-5px;right:-5px;min-width:1.25rem;height:1.25rem;border-radius:999px;background:#2fd07a;color:#07130c;display:inline-flex;align-items:center;justify-content:center;font-size:.66rem;font-weight:900;padding:0 .28rem;box-shadow:0 0 0 3px #080909}
     .ems-chat-panel{position:fixed;right:1rem;bottom:5.2rem;z-index:1200;width:min(980px,calc(100vw - 2rem));height:min(720px,calc(100vh - 6.5rem));background:linear-gradient(145deg,#0d0e0f,#070808);border:1px solid rgba(225,189,104,.34);box-shadow:0 36px 110px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,244,210,.06);border-radius:24px;overflow:hidden;color:var(--chat-text);display:grid;grid-template-columns:330px 1fr;transition:width .25s ease,height .25s ease,border-radius .25s ease}
     .ems-chat-panel.expanded{width:calc(100vw - 2rem);height:calc(100vh - 2rem);right:1rem;bottom:1rem;border-radius:20px}
     .ems-chat-panel.hidden{display:none}
@@ -160,7 +161,7 @@ function injectStyles() {
     .ems-chat-pill{font-size:.66rem;border:1px solid rgba(225,189,104,.25);border-radius:999px;padding:.12rem .4rem;color:var(--chat-gold-soft)}.ems-chat-policy{margin:.45rem .8rem 0;padding:.58rem .65rem;color:#99958b;font-size:.7rem;border:1px solid rgba(225,189,104,.13);border-radius:10px;line-height:1.45;background:rgba(225,189,104,.025)}.ems-chat-pings{padding:.5rem .8rem;border-bottom:1px solid var(--chat-line)}
     .ems-chat-ping-item{font-size:.78rem;border:1px solid rgba(250,204,21,.28);border-radius:12px;background:rgba(250,204,21,.08);padding:.5rem;margin-bottom:.35rem;cursor:pointer}
     .ems-chat-side-foot{border-top:1px solid var(--chat-line);padding:.6rem .8rem;color:#716e67;font-size:.61rem;text-align:center;letter-spacing:.08em;text-transform:uppercase}.ems-chat-side-foot span{color:var(--chat-gold)}
-    @media(max-width:760px){html.ems-chat-open,html.ems-chat-open body{overflow:hidden!important}.ems-chat-panel,.ems-chat-panel.expanded{grid-template-columns:1fr;inset:0;width:100vw;height:100vh;height:100dvh;border:0;border-radius:0}.ems-chat-panel.has-active-thread .ems-chat-side{display:none}.ems-chat-panel:not(.has-active-thread) .ems-chat-main{display:none}.ems-chat-panel.has-active-thread .ems-chat-main{display:flex}.ems-chat-main{height:100%;min-height:0}.ems-chat-thread-head{padding:max(.8rem,env(safe-area-inset-top)) .85rem .8rem}.ems-chat-messages{padding:.85rem}.ems-chat-compose-wrap{padding:.6rem max(.65rem,env(safe-area-inset-right)) max(.65rem,env(safe-area-inset-bottom)) max(.65rem,env(safe-area-inset-left))}.ems-chat-compose{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch}.ems-chat-compose.dual-action .ems-chat-input{grid-row:span 2}.ems-chat-input{resize:none;max-height:96px}.ems-chat-btn{min-width:66px;padding:.65rem}.ems-chat-composer-meta{display:none}.ems-chat-launcher-copy small{display:none}.ems-chat-launcher{right:.75rem;bottom:.75rem}.ems-chat-msg{max-width:86%}}
+    @media(max-width:760px){html.ems-chat-open,html.ems-chat-open body{overflow:hidden!important}.ems-chat-panel,.ems-chat-panel.expanded{grid-template-columns:1fr;inset:0;width:100vw;height:100vh;height:100dvh;border:0;border-radius:0}.ems-chat-panel.has-active-thread .ems-chat-side{display:none}.ems-chat-panel:not(.has-active-thread) .ems-chat-main{display:none}.ems-chat-panel.has-active-thread .ems-chat-main{display:flex}.ems-chat-main{height:100%;min-height:0}.ems-chat-thread-head{padding:max(.8rem,env(safe-area-inset-top)) .85rem .8rem}.ems-chat-messages{padding:.85rem}.ems-chat-compose-wrap{padding:.6rem max(.65rem,env(safe-area-inset-right)) max(.65rem,env(safe-area-inset-bottom)) max(.65rem,env(safe-area-inset-left))}.ems-chat-compose{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch}.ems-chat-compose.dual-action .ems-chat-input{grid-row:span 2}.ems-chat-input{resize:none;max-height:96px}.ems-chat-btn{min-width:66px;padding:.65rem}.ems-chat-composer-meta{display:none}.ems-chat-launcher{right:.75rem;bottom:.75rem;width:50px;height:50px}.ems-chat-launcher-icon{width:25px;height:25px}.ems-chat-msg{max-width:86%}}
   `;
   document.head.appendChild(style);
 }
@@ -168,9 +169,8 @@ function injectStyles() {
 function renderLauncher() {
   const badge = totalBadge();
   return `
-    <button class="ems-chat-launcher" id="emsChatLauncher" type="button" title="Live Chat & Pings">
-      <span class="ems-chat-launcher-icon" aria-hidden="true">✦</span>
-      <span class="ems-chat-launcher-copy"><small>Varada Nexus</small><strong>Chat</strong></span>
+    <button class="ems-chat-launcher" id="emsChatLauncher" type="button" title="Open Varada Nexus Chat" aria-label="Open Varada Nexus Chat">
+      <span class="ems-chat-launcher-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.99 3 3 6.29 3 10.4c0 2.3 1.27 4.35 3.29 5.7-.11.85-.49 2-1.44 3.06-.22.24-.05.62.28.57 1.58-.23 3.16-.85 4.35-1.64.78.2 1.62.3 2.52.3 5.01 0 9-3.29 9-7.99S17.01 3 12 3z"/><circle cx="8.4" cy="10.4" r="1.15" fill="#f6e6ad"/><circle cx="12" cy="10.4" r="1.15" fill="#f6e6ad"/><circle cx="15.6" cy="10.4" r="1.15" fill="#f6e6ad"/></svg></span>
       ${badge ? `<span class="ems-chat-badge">${badge > 99 ? "99+" : badge}</span>` : ""}
     </button>
   `;
@@ -296,7 +296,7 @@ function renderPanel() {
       <aside class="ems-chat-side">
         <div class="ems-chat-head">
           <div class="ems-chat-brand"><img class="ems-chat-brand-mark" src="/images/logo.png" alt="Varada Nexus logo" /><span class="ems-chat-brand-copy"><span class="ems-chat-eyebrow">Secure communications</span><h3>Nexus Concierge</h3></span></div>
-          <div class="ems-chat-head-tools"><button class="ems-chat-tool" id="emsChatRefresh" type="button" title="Refresh conversations" aria-label="Refresh conversations">↻</button><button class="ems-chat-tool" id="emsChatExpand" type="button" title="${STATE.expanded ? "Restore window" : "Expand window"}" aria-label="${STATE.expanded ? "Restore window" : "Expand window"}">${STATE.expanded ? "↙" : "↗"}</button><button class="ems-chat-close" id="emsChatClose" type="button" title="Close" aria-label="Close chat">✕</button></div>
+          <div class="ems-chat-head-tools"><button class="ems-chat-tool" id="emsChatMinimize" type="button" title="Minimize chat" aria-label="Minimize chat">−</button><button class="ems-chat-tool" id="emsChatRefresh" type="button" title="Refresh conversations" aria-label="Refresh conversations">↻</button><button class="ems-chat-tool" id="emsChatExpand" type="button" title="${STATE.expanded ? "Restore window" : "Expand window"}" aria-label="${STATE.expanded ? "Restore window" : "Expand window"}">${STATE.expanded ? "↙" : "↗"}</button><button class="ems-chat-close" id="emsChatClose" type="button" title="Close" aria-label="Close chat">✕</button></div>
         </div>
         ${renderPings()}
         <div class="ems-chat-tabs">
@@ -378,6 +378,7 @@ function bindEvents() {
     render();
   });
   document.getElementById("emsChatClose")?.addEventListener("click", () => { STATE.open = false; render(); });
+  document.getElementById("emsChatMinimize")?.addEventListener("click", () => { STATE.open = false; render(); });
   document.getElementById("emsChatExpand")?.addEventListener("click", () => { STATE.expanded = !STATE.expanded; render(); });
   document.getElementById("emsChatRefresh")?.addEventListener("click", async () => {
     const button = document.getElementById("emsChatRefresh");

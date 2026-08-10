@@ -1,4 +1,4 @@
-import { initLiveChat } from "./live-chat.js?v=sprint15-chat-2";
+import { initLiveChat } from "./live-chat.js?v=sprint15-chat-22";
 
 function shouldBootChat() {
   const path = window.location.pathname || "";
