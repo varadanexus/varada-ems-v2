@@ -1,4 +1,5 @@
 const SESSION_KEY = "vn_whatsapp_platform_session";
+const THEME_KEY = "vn_whatsapp_platform_theme";
 const OVERVIEW_PATH = "/whatsapp-platform";
 const ACCESS_PATH = "/whatsapp-platform/access/";
 const WORKSPACE_PATH = "/whatsapp-platform/workspace/";
@@ -6,6 +7,33 @@ const runtime = window.WHATSAPP_PLATFORM_CONFIG || {};
 const platformConfig = runtime;
 const app = document.querySelector("#app");
 const toast = document.querySelector("#portalToast");
+
+function preferredTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch { saved = null; }
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function applyTheme(theme, persist = false) {
+  const resolved = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.wpTheme = resolved;
+  document.documentElement.style.colorScheme = resolved;
+  if (persist) {
+    try { localStorage.setItem(THEME_KEY, resolved); } catch { /* Theme still applies for this visit. */ }
+  }
+  const toggle = document.querySelector("#wpThemeToggle");
+  if (toggle) {
+    const isDark = resolved === "dark";
+    toggle.setAttribute("aria-pressed", String(isDark));
+    toggle.setAttribute("aria-label", `Switch to ${isDark ? "light" : "dark"} theme`);
+    toggle.setAttribute("title", `Switch to ${isDark ? "light" : "dark"} theme`);
+    toggle.querySelector(".wp-theme-icon")?.replaceChildren(document.createTextNode(isDark ? "☾" : "☀"));
+    toggle.querySelector(".wp-theme-label")?.replaceChildren(document.createTextNode(isDark ? "Dark" : "Light"));
+  }
+}
+
+applyTheme(isWorkspacePage() ? preferredTheme() : "dark");
 
 // Curated natural photography (hotlinked from a stable image CDN). Each <img>
 // carries an onerror hook that swaps to a brand gradient so a failed request
@@ -797,7 +825,7 @@ const PLANNED_WORKSPACE_VIEWS = {
 
 function plannedView(view) {
   const [title, description, capabilities] = PLANNED_WORKSPACE_VIEWS[view];
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Planned workspace module</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="wp-planned-badge">Planned</span></div><article class="wp-card wp-planned-card"><div class="wp-planned-visual"><span>${escapeHtml(WORKSPACE_VIEW_LABELS[view].charAt(0))}</span></div><div><span class="wp-card-eyebrow">Module foundation reserved</span><h2>This section has its own permanent route</h2><p>It is already part of the workspace navigation and will be expanded here without turning the overview into a long scrolling page.</p><ul>${capabilities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article></section>`;
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Product preview</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="wp-planned-badge">Coming soon</span></div><article class="wp-card wp-planned-card"><div class="wp-planned-visual" aria-hidden="true"><span>${escapeHtml(WORKSPACE_VIEW_LABELS[view].charAt(0))}</span></div><div><span class="wp-card-eyebrow">Designed for focused work</span><h2>Everything your team needs, in one clear workspace</h2><p>This module is being prepared as a dedicated experience with fast navigation, clear ownership and the same protected company context across your workspace.</p><ul>${capabilities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article></section>`;
 }
 
 function overviewView(connections, setupReady) {
@@ -835,7 +863,12 @@ async function renderDashboard() {
   const view = currentWorkspaceView();
   document.body.classList.add("wp-workspace-mode");
   document.title = `${WORKSPACE_VIEW_LABELS[view]} | Varada Nexus WhatsApp Solutions`;
-  app.innerHTML = `<main class="wp-workspace-shell"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>WhatsApp Solutions</strong><small>Business workspace</small></span></a><div class="wp-workspace-account"><span>${escapeHtml((session.companyName || "W").charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>Starter workspace</small></div></div><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", "Planned")}${workspaceNavItem("contacts", "◎", "Planned")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", "Planned")}${workspaceNavItem("templates", "✦", "Planned")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁", "Planned")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
+  app.innerHTML = `<main class="wp-workspace-shell"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>WhatsApp Solutions</strong><small>Business workspace</small></span></a><div class="wp-workspace-account"><span>${escapeHtml((session.companyName || "W").charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>Starter workspace</small></div></div><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", "Planned")}${workspaceNavItem("contacts", "◎", "Planned")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", "Planned")}${workspaceNavItem("templates", "✦", "Planned")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁", "Planned")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
+  applyTheme(document.documentElement.dataset.wpTheme || preferredTheme());
+  app.querySelector("#wpThemeToggle")?.addEventListener("click", () => {
+    const nextTheme = document.documentElement.dataset.wpTheme === "dark" ? "light" : "dark";
+    applyTheme(nextTheme, true);
+  });
   app.querySelector("#wpSidebarLogoutBtn")?.addEventListener("click", () => signOut(true));
   const shell = app.querySelector(".wp-workspace-shell");
   const toggleSidebar = (open) => {
