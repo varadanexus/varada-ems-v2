@@ -946,6 +946,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-file-picker input:focus-visible + span { outline: 2px solid var(--wp-workspace-accent); outline-offset: 2px; }
 .wp-file-picker:hover span { border-color: var(--wp-workspace-line-strong); }
 .wp-logo-upload-form .wp-secondary { min-height: 38px; padding: .55rem .78rem; font-size: .72rem; font-weight: 750; }
+.wp-remove-logo { min-height: 38px; padding: .55rem .78rem; border: 1px solid color-mix(in srgb, #e04f5f 45%, var(--wp-workspace-line)); border-radius: 10px; background: transparent; color: #e66a76; font: inherit; font-size: .72rem; font-weight: 750; cursor: pointer; }
+.wp-remove-logo:hover { border-color: #e66a76; background: color-mix(in srgb, #e04f5f 10%, transparent); }
+.wp-remove-logo:focus-visible { outline: 2px solid #e66a76; outline-offset: 2px; }
+.wp-remove-logo:disabled { opacity: .6; cursor: wait; }
 
 :root[data-wp-theme="light"] .wp-workspace-brand img { filter: sepia(.15) saturate(1.1) drop-shadow(0 7px 14px rgba(155, 118, 36, .14)); }
 :root[data-wp-theme="light"] .wp-sidebar-scrim { background: rgba(20, 32, 27, .3); }

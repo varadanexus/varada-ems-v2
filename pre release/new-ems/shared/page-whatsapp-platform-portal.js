@@ -841,7 +841,7 @@ function settingsView(profile) {
   const logo = profile?.logoDataUrl
     ? `<img src="${escapeHtml(profile.logoDataUrl)}" alt="${escapeHtml(session.companyName)} logo" />`
     : `<span aria-hidden="true">${escapeHtml((session.companyName || "B").charAt(0).toUpperCase())}</span>`;
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button></form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(session.email)}</dd></div><div><dt>Plan</dt><dd>Starter</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div></article></section></section>`;
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button>${profile?.logoDataUrl ? `<button class="wp-remove-logo" id="wpRemoveLogoBtn" type="button">Remove logo</button>` : ""}</form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(session.email)}</dd></div><div><dt>Plan</dt><dd>Starter</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div></article></section></section>`;
 }
 
 const PLANNED_WORKSPACE_VIEWS = {
@@ -943,6 +943,23 @@ async function renderDashboard() {
     } catch (error) {
       showToast(error?.message || "The logo could not be uploaded.", "error");
       if (button) { button.disabled = false; button.textContent = originalText; }
+    }
+  });
+  app.querySelector("#wpRemoveLogoBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (!window.confirm("Remove this business logo from the workspace?")) return;
+    const originalText = button.textContent || "Remove logo";
+    try {
+      button.disabled = true;
+      button.textContent = "Removing…";
+      const result = await storageRequest("remove_logo");
+      workspaceProfile = result.profile || { logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+      showToast("Business logo removed.");
+      await renderDashboard();
+    } catch (error) {
+      showToast(error?.message || "The logo could not be removed.", "error");
+      button.disabled = false;
+      button.textContent = originalText;
     }
   });
   app.querySelectorAll("#wpConnectMetaBtn,[data-connect-meta]").forEach((button) => button.addEventListener("click", () => startMetaOnboarding(button)));

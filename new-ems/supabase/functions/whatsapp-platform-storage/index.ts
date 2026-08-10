@@ -275,6 +275,41 @@ async function uploadLogo(admin: any, customer: any, body: any) {
   return { ok: true, profile: { companyName: tenant.name, logoDataUrl: `data:${mimeType};base64,${rawBase64}`, logoFileName: originalName, logoUpdatedAt: now } };
 }
 
+async function removeLogo(admin: any, customer: any) {
+  if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can remove the logo.");
+  const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
+    .select("name,logo_drive_file_id")
+    .eq("id", customer.tenant_id)
+    .single();
+  if (tenantError) throw tenantError;
+  if (!tenant.logo_drive_file_id) {
+    return { ok: true, profile: { companyName: tenant.name, logoDataUrl: "", logoFileName: "", logoUpdatedAt: null } };
+  }
+
+  const removedAt = new Date().toISOString();
+  const { error: updateError } = await admin.from("whatsapp_platform_tenants").update({
+    logo_drive_file_id: null,
+    logo_file_name: null,
+    logo_mime_type: null,
+    logo_updated_at: null,
+    updated_at: removedAt,
+  }).eq("id", customer.tenant_id).eq("logo_drive_file_id", tenant.logo_drive_file_id);
+  if (updateError) throw updateError;
+
+  const { error: documentError } = await admin.from("whatsapp_platform_documents").update({
+    status: "deleted",
+    updated_at: removedAt,
+  }).eq("tenant_id", customer.tenant_id).eq("drive_file_id", tenant.logo_drive_file_id);
+  if (documentError) console.error("WhatsApp logo document retirement failed", documentError);
+
+  try {
+    await trashFile(await driveAccessToken(), tenant.logo_drive_file_id);
+  } catch (error) {
+    console.error("Removed WhatsApp logo Drive cleanup failed", error);
+  }
+  return { ok: true, profile: { companyName: tenant.name, logoDataUrl: "", logoFileName: "", logoUpdatedAt: null } };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     if (!allowedOrigin(req)) return json(req, { error: "Origin not allowed" }, 403);
@@ -293,6 +328,7 @@ Deno.serve(async (req) => {
     const action = String(body.action || "profile");
     if (action === "profile") return json(req, { profile: await tenantProfile(admin, customer) });
     if (action === "upload_logo") return json(req, await uploadLogo(admin, customer, body));
+    if (action === "remove_logo") return json(req, await removeLogo(admin, customer));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Storage request failed";
