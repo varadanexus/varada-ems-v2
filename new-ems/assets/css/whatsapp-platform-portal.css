@@ -1089,7 +1089,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-inbox-empty > span { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: .65rem; border-radius: 15px; background: var(--wp-workspace-accent-soft); color: var(--wp-workspace-accent-strong); font-size: 1.2rem; }
 .wp-inbox-empty strong { color: var(--wp-workspace-text); font-size: .78rem; }
 .wp-inbox-empty p { max-width: 290px; margin: .35rem 0 0; font-size: .66rem; line-height: 1.55; }
-.wp-inbox-no-selection { grid-template-rows: 1fr; place-items: center; }
+.wp-inbox-no-selection { display: flex; align-items: center; justify-content: center; padding: clamp(1.5rem,5vw,4rem); }
+.wp-inbox-no-selection > div { width: min(100%,430px); display: grid; justify-items: center; text-align: center; }
+.wp-inbox-no-selection > div > span { width: 54px; height: 54px; display: grid; place-items: center; margin-bottom: .9rem; border: 1px solid color-mix(in srgb,var(--wp-workspace-accent) 22%,var(--wp-workspace-line)); border-radius: 17px; background: var(--wp-workspace-accent-soft); color: var(--wp-workspace-accent-strong); font-size: 1.2rem; }
+.wp-inbox-no-selection h2 { margin: 0; color: var(--wp-workspace-text); font-size: clamp(1.15rem,2vw,1.5rem); }
+.wp-inbox-no-selection p { max-width: 390px; margin: .55rem 0 0; color: var(--wp-workspace-muted); font-size: .72rem; line-height: 1.6; }
 
 /* Contacts */
 .wp-contact-summary { display: grid; justify-items: end; }
