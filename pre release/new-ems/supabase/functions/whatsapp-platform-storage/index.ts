@@ -188,10 +188,16 @@ async function trashFile(token: string, fileId: string) {
 
 async function tenantProfile(admin: any, customer: any) {
   const { data: tenant, error } = await admin.from("whatsapp_platform_tenants")
-    .select("name,logo_drive_file_id,logo_file_name,logo_mime_type,logo_updated_at")
+    .select("name,legal_name,owner_email,website_url,country,business_type,company_size,timezone,use_case,expected_monthly_messages,existing_whatsapp,launch_timeline,contact_phone,onboarding_status,status,plan_code,created_at,logo_drive_file_id,logo_file_name,logo_mime_type,logo_updated_at")
     .eq("id", customer.tenant_id)
     .single();
   if (error) throw error;
+  const { data: user, error: userError } = await admin.from("whatsapp_platform_users")
+    .select("display_name,email,job_title,contact_phone,role_code,last_login_at,created_at")
+    .eq("id", customer.user_id)
+    .eq("tenant_id", customer.tenant_id)
+    .single();
+  if (userError) throw userError;
   let logoDataUrl = "";
   if (tenant.logo_drive_file_id && ["image/png", "image/jpeg", "image/webp"].includes(tenant.logo_mime_type)) {
     try {
@@ -201,7 +207,35 @@ async function tenantProfile(admin: any, customer: any) {
       console.error("WhatsApp tenant logo load failed", error);
     }
   }
-  return { companyName: tenant.name, logoDataUrl, logoFileName: tenant.logo_file_name || "", logoUpdatedAt: tenant.logo_updated_at || null };
+  return {
+    companyName: tenant.name,
+    legalName: tenant.legal_name || "",
+    ownerEmail: tenant.owner_email || "",
+    websiteUrl: tenant.website_url || "",
+    country: tenant.country || "",
+    businessType: tenant.business_type || "",
+    companySize: tenant.company_size || "",
+    timezone: tenant.timezone || "",
+    useCase: tenant.use_case || "",
+    expectedMonthlyMessages: tenant.expected_monthly_messages || null,
+    existingWhatsApp: tenant.existing_whatsapp || "",
+    launchTimeline: tenant.launch_timeline || "",
+    contactPhone: tenant.contact_phone || "",
+    onboardingStatus: tenant.onboarding_status || "",
+    workspaceStatus: tenant.status || "",
+    planCode: tenant.plan_code || "starter",
+    workspaceCreatedAt: tenant.created_at || null,
+    displayName: user.display_name || "",
+    email: user.email || "",
+    jobTitle: user.job_title || "",
+    userPhone: user.contact_phone || "",
+    roleCode: user.role_code || "",
+    lastLoginAt: user.last_login_at || null,
+    memberSince: user.created_at || null,
+    logoDataUrl,
+    logoFileName: tenant.logo_file_name || "",
+    logoUpdatedAt: tenant.logo_updated_at || null,
+  };
 }
 
 async function uploadLogo(admin: any, customer: any, body: any) {
