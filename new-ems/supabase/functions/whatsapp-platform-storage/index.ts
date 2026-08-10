@@ -166,40 +166,32 @@ function validateLogo(bytes: Uint8Array, requestedMime: string) {
 
 const VERIFICATION_REQUIREMENTS: Record<string, Array<{ type: string; label: string; group?: string }>> = {
   private_limited: [
-    { type: "incorporation_certificate", label: "Certificate of incorporation" },
-    { type: "business_address_proof", label: "Registered office address proof" },
-    { type: "signatory_authorisation", label: "Authorised signatory letter or board authorisation" },
+    { type: "incorporation_certificate", label: "Certificate of incorporation or government business registration" },
+    { type: "business_address_proof", label: "Business address or phone proof" },
   ],
   public_limited: [
-    { type: "incorporation_certificate", label: "Certificate of incorporation" },
-    { type: "business_address_proof", label: "Registered office address proof" },
-    { type: "signatory_authorisation", label: "Authorised signatory letter or board authorisation" },
+    { type: "incorporation_certificate", label: "Certificate of incorporation or government business registration" },
+    { type: "business_address_proof", label: "Business address or phone proof" },
   ],
   partnership: [
-    { type: "partnership_deed", label: "Partnership deed or constitution proof" },
-    { type: "business_address_proof", label: "Business address proof" },
-    { type: "signatory_authorisation", label: "Partner authorisation" },
+    { type: "partnership_deed", label: "Registered partnership deed or business registration" },
+    { type: "business_address_proof", label: "Business address or phone proof" },
   ],
   sole_proprietor: [
     { type: "business_registration", label: "GST registration, Udyam certificate, or valid trade licence" },
-    { type: "business_address_proof", label: "Business address proof" },
-    { type: "signatory_authorisation", label: "Proprietor declaration" },
+    { type: "business_address_proof", label: "Business address or phone proof" },
   ],
   nonprofit: [
     { type: "business_registration", label: "Trust, society, Section 8, or other registration certificate" },
-    { type: "governing_instrument", label: "Governing instrument, deed, or memorandum" },
-    { type: "business_address_proof", label: "Registered address proof" },
-    { type: "signatory_authorisation", label: "Authorised signatory resolution" },
+    { type: "business_address_proof", label: "Business address or phone proof" },
   ],
   government: [
     { type: "establishment_order", label: "Department establishment or official registration order" },
-    { type: "business_address_proof", label: "Official office address proof" },
-    { type: "signatory_authorisation", label: "Authorisation letter" },
+    { type: "business_address_proof", label: "Official address or phone proof" },
   ],
   other: [
     { type: "business_registration", label: "Constitution or registration proof" },
-    { type: "business_address_proof", label: "Business address proof" },
-    { type: "signatory_authorisation", label: "Authorised signatory letter" },
+    { type: "business_address_proof", label: "Business address or phone proof" },
   ],
 };
 
