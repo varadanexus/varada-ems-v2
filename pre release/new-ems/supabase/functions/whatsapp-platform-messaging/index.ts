@@ -63,7 +63,7 @@ function graphVersion() {
 async function listConversations(admin: any, customer: any, body: any) {
   const status = ["open","pending","resolved"].includes(String(body.status || "")) ? String(body.status) : null;
   let query = admin.from("whatsapp_platform_conversations")
-    .select("id,connection_id,contact_id,status,assigned_user_id,unread_count,last_message_at,last_message_preview,last_inbound_at,last_outbound_at,service_window_expires_at,created_at")
+    .select("id,connection_id,contact_id,status,priority,assigned_user_id,unread_count,last_message_at,last_message_preview,last_inbound_at,last_outbound_at,service_window_expires_at,created_at")
     .eq("tenant_id", customer.tenant_id).order("last_message_at", { ascending: false, nullsFirst: false }).limit(100);
   if (status) query = query.eq("status", status);
   const { data: conversations, error } = await query;
@@ -82,18 +82,45 @@ async function listConversations(admin: any, customer: any, body: any) {
   const connectionMap = new Map((connections || []).map((row: any) => [row.id, row]));
   return { conversations: (conversations || []).map((row: any) => ({ ...row, contact: contactMap.get(row.contact_id) || null, assignee: userMap.get(row.assigned_user_id) || null, connection: connectionMap.get(row.connection_id) || null })) };
 }
+async function listTeam(admin: any, customer: any) {
+  const { data, error } = await admin.from("whatsapp_platform_users")
+    .select("id,display_name,email,role_code,status,last_login_at")
+    .eq("tenant_id", customer.tenant_id).in("status", ["active","invited"])
+    .order("display_name", { ascending: true }).limit(250);
+  if (error) throw error;
+  return { members: data || [] };
+}
+async function listContacts(admin: any, customer: any, body: any) {
+  const status = ["active","blocked","opted_out"].includes(String(body.status || "")) ? String(body.status) : null;
+  let query = admin.from("whatsapp_platform_contacts")
+    .select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at,created_at,updated_at")
+    .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).limit(500);
+  if (status) query = query.eq("status", status);
+  const { data: contacts, error } = await query;
+  if (error) throw error;
+  const contactIds = (contacts || []).map((row: any) => row.id);
+  const { data: conversations, error: conversationError } = contactIds.length
+    ? await admin.from("whatsapp_platform_conversations").select("id,contact_id,status,last_message_at,unread_count").eq("tenant_id", customer.tenant_id).in("contact_id", contactIds)
+    : { data: [], error: null };
+  if (conversationError) throw conversationError;
+  const conversationMap = new Map((conversations || []).map((row: any) => [row.contact_id, row]));
+  return { contacts: (contacts || []).map((row: any) => ({ ...row, conversation: conversationMap.get(row.id) || null })) };
+}
 async function thread(admin: any, customer: any, body: any) {
   const conversationId = cleanUuid(body.conversationId, "conversation");
   const { data: conversation, error } = await admin.from("whatsapp_platform_conversations")
-    .select("id,connection_id,contact_id,status,assigned_user_id,unread_count,last_message_at,last_inbound_at,last_outbound_at,service_window_expires_at")
+    .select("id,connection_id,contact_id,status,priority,assigned_user_id,unread_count,last_message_at,last_inbound_at,last_outbound_at,service_window_expires_at")
     .eq("id", conversationId).eq("tenant_id", customer.tenant_id).single();
   if (error || !conversation) throw new Error("Conversation not found.");
-  const [{ data: contact, error: contactError }, { data: messages, error: messagesError }] = await Promise.all([
+  const [{ data: contact, error: contactError }, { data: messages, error: messagesError }, { data: notes, error: notesError }, { data: members, error: membersError }] = await Promise.all([
     admin.from("whatsapp_platform_contacts").select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at").eq("id", conversation.contact_id).eq("tenant_id", customer.tenant_id).single(),
     admin.from("whatsapp_platform_messages").select("id,meta_message_id,direction,message_type,body,media_id,media_mime_type,media_file_name,reply_to_meta_message_id,status,error_code,error_title,provider_timestamp,created_at").eq("conversation_id", conversationId).eq("tenant_id", customer.tenant_id).order("provider_timestamp", { ascending: true, nullsFirst: false }).order("created_at", { ascending: true }).limit(250),
+    admin.from("whatsapp_platform_conversation_notes").select("id,author_user_id,body,created_at,updated_at").eq("conversation_id", conversationId).eq("tenant_id", customer.tenant_id).order("created_at", { ascending: true }).limit(100),
+    admin.from("whatsapp_platform_users").select("id,display_name,email,role_code,status").eq("tenant_id", customer.tenant_id).in("status", ["active","invited"]).order("display_name", { ascending: true }).limit(250),
   ]);
-  if (contactError) throw contactError; if (messagesError) throw messagesError;
-  return { conversation, contact, messages: messages || [], serviceWindowOpen: Boolean(conversation.service_window_expires_at && new Date(conversation.service_window_expires_at).getTime() > Date.now()) };
+  if (contactError) throw contactError; if (messagesError) throw messagesError; if (notesError) throw notesError; if (membersError) throw membersError;
+  const memberMap = new Map((members || []).map((row: any) => [row.id, row]));
+  return { conversation, contact, messages: messages || [], notes: (notes || []).map((row: any) => ({ ...row, author: memberMap.get(row.author_user_id) || null })), members: members || [], serviceWindowOpen: Boolean(conversation.service_window_expires_at && new Date(conversation.service_window_expires_at).getTime() > Date.now()) };
 }
 async function sendText(admin: any, customer: any, body: any) {
   if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot send messages.");
@@ -144,10 +171,54 @@ async function updateConversation(admin: any, customer: any, body: any) {
     if (!["open","pending","resolved"].includes(value)) throw new Error("Invalid conversation status.");
     updates.status = value;
   }
+  if (body.priority !== undefined) {
+    const value = String(body.priority);
+    if (!["low","normal","high","urgent"].includes(value)) throw new Error("Invalid conversation priority.");
+    updates.priority = value;
+  }
+  if (body.assignedUserId !== undefined) {
+    const assignedUserId = body.assignedUserId === null || body.assignedUserId === "" ? null : cleanUuid(body.assignedUserId, "assignee");
+    if (!["owner","admin"].includes(customer.role_code) && assignedUserId !== customer.user_id) throw new Error("Your workspace role cannot assign this conversation.");
+    if (assignedUserId) {
+      const { data: member, error: memberError } = await admin.from("whatsapp_platform_users").select("id").eq("id", assignedUserId).eq("tenant_id", customer.tenant_id).eq("status", "active").maybeSingle();
+      if (memberError || !member) throw new Error("Assignee is not an active workspace member.");
+    }
+    updates.assigned_user_id = assignedUserId;
+  }
   const { data, error } = await admin.from("whatsapp_platform_conversations").update(updates)
-    .eq("id", conversationId).eq("tenant_id", customer.tenant_id).select("id,status,unread_count,updated_at").single();
+    .eq("id", conversationId).eq("tenant_id", customer.tenant_id).select("id,status,priority,assigned_user_id,unread_count,updated_at").single();
   if (error || !data) throw new Error("Conversation could not be updated.");
   return { conversation: data };
+}
+async function addNote(admin: any, customer: any, body: any) {
+  if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot add notes.");
+  const conversationId = cleanUuid(body.conversationId, "conversation");
+  const noteBody = String(body.body || "").trim();
+  if (!noteBody || noteBody.length > 4000) throw new Error("Note must contain between 1 and 4,000 characters.");
+  const { data: conversation, error: conversationError } = await admin.from("whatsapp_platform_conversations").select("id").eq("id", conversationId).eq("tenant_id", customer.tenant_id).maybeSingle();
+  if (conversationError || !conversation) throw new Error("Conversation not found.");
+  const { data, error } = await admin.from("whatsapp_platform_conversation_notes").insert({ tenant_id: customer.tenant_id, conversation_id: conversationId, author_user_id: customer.user_id, body: noteBody }).select("id,author_user_id,body,created_at,updated_at").single();
+  if (error) throw error;
+  return { note: data };
+}
+async function updateContact(admin: any, customer: any, body: any) {
+  if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot update contacts.");
+  const contactId = cleanUuid(body.contactId, "contact");
+  const updates: any = { updated_at: new Date().toISOString() };
+  if (body.displayName !== undefined) {
+    const displayName = String(body.displayName || "").trim();
+    if (displayName.length > 200) throw new Error("Contact name is too long.");
+    updates.display_name = displayName || null;
+  }
+  if (body.status !== undefined) {
+    if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can change contact messaging status.");
+    const status = String(body.status);
+    if (!["active","blocked","opted_out"].includes(status)) throw new Error("Invalid contact status.");
+    updates.status = status;
+  }
+  const { data, error } = await admin.from("whatsapp_platform_contacts").update(updates).eq("id", contactId).eq("tenant_id", customer.tenant_id).select("id,display_name,status,updated_at").single();
+  if (error || !data) throw new Error("Contact could not be updated.");
+  return { contact: data };
 }
 
 Deno.serve(async (req) => {
@@ -167,13 +238,17 @@ Deno.serve(async (req) => {
     const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "list");
     if (action === "list") return json(req, await listConversations(admin, customer, body));
+    if (action === "list_team") return json(req, await listTeam(admin, customer));
+    if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));
     if (action === "thread") return json(req, await thread(admin, customer, body));
     if (action === "send_text") return json(req, await sendText(admin, customer, body));
     if (action === "update_conversation") return json(req, await updateConversation(admin, customer, body));
+    if (action === "add_note") return json(req, await addNote(admin, customer, body));
+    if (action === "update_contact") return json(req, await updateContact(admin, customer, body));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";
-    const status = /unauthorized/i.test(message) ? 401 : /cannot send|role/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 400;
+    const status = /unauthorized/i.test(message) ? 401 : /cannot send|role|only workspace administrators/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 400;
     return json(req, { error: message }, status);
   }
 });

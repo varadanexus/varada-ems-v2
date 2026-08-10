@@ -1042,12 +1042,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-inbox-conversation-meta time { color: var(--wp-workspace-subtle); font-size: .56rem; }
 .wp-inbox-conversation-meta b { min-width: 19px; height: 19px; display: grid; place-items: center; border-radius: 999px; background: var(--wp-workspace-accent); color: #04150d; font-size: .56rem; }
 .wp-inbox-conversation-meta em { color: var(--wp-workspace-subtle); font-size: .53rem; font-style: normal; text-transform: capitalize; }
-.wp-inbox-thread { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0,1fr) auto; background: radial-gradient(circle at 70% 0,var(--wp-workspace-accent-soft),transparent 28rem); }
+.wp-inbox-thread { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0,1fr) auto auto; background: radial-gradient(circle at 70% 0,var(--wp-workspace-accent-soft),transparent 28rem); }
 .wp-inbox-thread > header { min-width: 0; display: grid; grid-template-columns: 42px minmax(0,1fr) auto; gap: .75rem; align-items: center; padding: .75rem 1rem; border-bottom: 1px solid var(--wp-workspace-line); background: color-mix(in srgb,var(--wp-workspace-surface-solid) 72%,transparent); }
 .wp-inbox-thread > header strong,.wp-inbox-thread > header small { display: block; }
 .wp-inbox-thread > header strong { color: var(--wp-workspace-text); font-size: .78rem; }
 .wp-inbox-thread > header small { margin-top: .2rem; color: var(--wp-workspace-muted); font-size: .62rem; }
 .wp-inbox-thread > header select { min-height: 36px; padding: 0 .65rem; border: 1px solid var(--wp-workspace-line); border-radius: 9px; background: var(--wp-workspace-surface-solid); color: var(--wp-workspace-text); font: inherit; font-size: .65rem; font-weight: 750; }
+.wp-inbox-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; }
+.wp-inbox-controls select { max-width: 150px; }
 .wp-inbox-window-banner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .48rem 1rem; border-bottom: 1px solid var(--wp-workspace-line); background: var(--wp-workspace-surface-soft); }
 .wp-inbox-window-banner span { color: var(--wp-workspace-text); font-size: .62rem; font-weight: 800; }
 .wp-inbox-window-banner small { color: var(--wp-workspace-muted); font-size: .57rem; }
@@ -1067,24 +1069,89 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-inbox-composer textarea:focus { border-color: var(--wp-workspace-accent); box-shadow: 0 0 0 3px var(--wp-workspace-accent-soft); }
 .wp-inbox-composer button { min-height: 44px; padding: 0 1rem; border: 0; border-radius: 11px; font: inherit; font-size: .68rem; font-weight: 900; }
 .wp-inbox-composer :disabled { opacity: .55; cursor: not-allowed; }
+.wp-inbox-notes { max-height: 210px; overflow-y: auto; padding: .7rem .8rem; border-top: 1px solid var(--wp-workspace-line); background: color-mix(in srgb,var(--wp-workspace-gold-soft) 38%,var(--wp-workspace-surface-solid)); }
+.wp-inbox-notes > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .55rem; }
+.wp-inbox-notes > header strong,.wp-inbox-notes > header small { display: block; }
+.wp-inbox-notes > header strong { color: var(--wp-workspace-text); font-size: .68rem; }
+.wp-inbox-notes > header small { margin-top: .12rem; color: var(--wp-workspace-muted); font-size: .56rem; }
+.wp-inbox-notes > header > span { min-width: 22px; padding: .18rem .4rem; border-radius: 999px; background: var(--wp-workspace-gold-soft); color: var(--wp-workspace-gold); font-size: .57rem; font-weight: 850; text-align: center; }
+.wp-inbox-note-list { display: grid; gap: .4rem; }
+.wp-inbox-note-list > p { margin: 0; color: var(--wp-workspace-muted); font-size: .62rem; }
+.wp-inbox-note { padding: .55rem .65rem; border: 1px solid var(--wp-workspace-line); border-radius: 10px; background: var(--wp-workspace-surface-soft); }
+.wp-inbox-note > div { display: flex; justify-content: space-between; gap: .5rem; }
+.wp-inbox-note strong { color: var(--wp-workspace-gold); font-size: .6rem; }
+.wp-inbox-note time { color: var(--wp-workspace-subtle); font-size: .54rem; }
+.wp-inbox-note p { margin: .28rem 0 0; color: var(--wp-workspace-text); font-size: .66rem; line-height: 1.45; white-space: pre-wrap; }
+.wp-inbox-notes form { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .45rem; margin-top: .55rem; }
+.wp-inbox-notes textarea { min-height: 38px; padding: .55rem .65rem; border: 1px solid var(--wp-workspace-line); border-radius: 9px; resize: vertical; background: var(--wp-workspace-surface-solid); color: var(--wp-workspace-text); font: inherit; font-size: .65rem; }
+.wp-inbox-notes button { align-self: end; min-height: 38px; padding: .5rem .7rem; font-size: .62rem; }
 .wp-inbox-empty { min-height: 220px; display: grid; place-content: center; justify-items: center; padding: 1.5rem; color: var(--wp-workspace-muted); text-align: center; }
 .wp-inbox-empty > span { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: .65rem; border-radius: 15px; background: var(--wp-workspace-accent-soft); color: var(--wp-workspace-accent-strong); font-size: 1.2rem; }
 .wp-inbox-empty strong { color: var(--wp-workspace-text); font-size: .78rem; }
 .wp-inbox-empty p { max-width: 290px; margin: .35rem 0 0; font-size: .66rem; line-height: 1.55; }
 .wp-inbox-no-selection { grid-template-rows: 1fr; place-items: center; }
 
+/* Contacts */
+.wp-contact-summary { display: grid; justify-items: end; }
+.wp-contact-summary strong { color: var(--wp-workspace-text); font-size: 1.55rem; line-height: 1; }
+.wp-contact-summary span { margin-top: .25rem; color: var(--wp-workspace-muted); font-size: .64rem; }
+.wp-contact-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .75rem; margin-bottom: 1rem; }
+.wp-contact-stats article { padding: .9rem 1rem; border: 1px solid var(--wp-workspace-line); border-radius: 14px; background: var(--wp-workspace-surface); box-shadow: var(--wp-workspace-shadow-soft); }
+.wp-contact-stats span,.wp-contact-stats strong { display: block; }
+.wp-contact-stats span { color: var(--wp-workspace-muted); font-size: .64rem; }
+.wp-contact-stats strong { margin-top: .3rem; color: var(--wp-workspace-text); font-size: 1.3rem; }
+.wp-contact-directory { padding: 0; overflow: hidden; }
+.wp-contact-directory > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; }
+.wp-contact-directory h2 { margin: .25rem 0 0; color: var(--wp-workspace-text); font-size: 1rem; }
+.wp-contact-directory .wp-inbox-search { width: min(330px,100%); margin: 0; }
+.wp-contact-directory > .wp-inbox-filters { padding: 0 1rem .8rem; }
+.wp-contact-list { border-top: 1px solid var(--wp-workspace-line); }
+.wp-contact-row { display: grid; grid-template-columns: 40px minmax(160px,1.3fr) minmax(160px,1fr) auto auto; gap: .8rem; align-items: center; padding: .85rem 1rem; border-bottom: 1px solid var(--wp-workspace-line); }
+.wp-contact-row:last-child { border-bottom: 0; }
+.wp-contact-identity strong,.wp-contact-identity small,.wp-contact-activity span,.wp-contact-activity small { display: block; }
+.wp-contact-identity strong { color: var(--wp-workspace-text); font-size: .72rem; }
+.wp-contact-identity small,.wp-contact-activity small { margin-top: .2rem; color: var(--wp-workspace-subtle); font-size: .59rem; }
+.wp-contact-activity span { color: var(--wp-workspace-muted); font-size: .65rem; }
+.wp-contact-status { padding: .28rem .5rem; border: 1px solid var(--wp-workspace-line); border-radius: 999px; color: var(--wp-workspace-muted); font-size: .58rem; font-weight: 800; text-transform: capitalize; }
+.wp-contact-status.active { border-color: color-mix(in srgb,var(--wp-workspace-accent) 30%,var(--wp-workspace-line)); color: var(--wp-workspace-accent-strong); }
+.wp-contact-status.blocked { color: #e66a76; }
+.wp-contact-status.opted_out { color: #d6a85d; }
+.wp-contact-actions { display: flex; gap: .35rem; }
+.wp-contact-actions a,.wp-contact-actions button { padding: .45rem .55rem; border: 1px solid var(--wp-workspace-line); border-radius: 8px; background: var(--wp-workspace-surface-soft); color: var(--wp-workspace-text); font: inherit; font-size: .58rem; font-weight: 750; text-decoration: none; cursor: pointer; }
+.wp-contact-dialog { width: min(480px,calc(100% - 2rem)); padding: 0; border: 1px solid var(--wp-workspace-line-strong); border-radius: 18px; background: var(--wp-workspace-surface-solid); color: var(--wp-workspace-text); box-shadow: 0 30px 90px rgba(0,0,0,.38); }
+.wp-contact-dialog::backdrop { background: rgba(2,8,6,.66); backdrop-filter: blur(5px); }
+.wp-contact-dialog form { display: grid; gap: .9rem; padding: 1.1rem; }
+.wp-contact-dialog header,.wp-contact-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.wp-contact-dialog h2 { margin: .2rem 0 0; font-size: 1.05rem; }
+.wp-contact-dialog header button { width: 34px; height: 34px; border: 1px solid var(--wp-workspace-line); border-radius: 9px; background: transparent; color: var(--wp-workspace-muted); font-size: 1rem; cursor: pointer; }
+.wp-contact-dialog label > span,.wp-contact-dialog label > small { display: block; }
+.wp-contact-dialog label > span { margin-bottom: .35rem; font-size: .66rem; font-weight: 800; }
+.wp-contact-dialog label > small { margin-top: .3rem; color: var(--wp-workspace-muted); font-size: .58rem; line-height: 1.45; }
+.wp-contact-dialog input,.wp-contact-dialog select { width: 100%; min-height: 42px; padding: 0 .7rem; border: 1px solid var(--wp-workspace-line); border-radius: 10px; background: var(--wp-workspace-surface-soft); color: var(--wp-workspace-text); font: inherit; font-size: .7rem; }
+.wp-contact-dialog footer { justify-content: flex-end; padding-top: .3rem; }
+
 @media (max-width: 960px) {
   .wp-inbox-shell { height: auto; min-height: 0; grid-template-columns: 1fr; }
   .wp-inbox-list { max-height: 420px; border-right: 0; border-bottom: 1px solid var(--wp-workspace-line); }
   .wp-inbox-thread { min-height: 600px; }
 }
+@media (max-width: 820px) {
+  .wp-contact-directory > header { align-items: stretch; flex-direction: column; }
+  .wp-contact-directory .wp-inbox-search { width: 100%; }
+  .wp-contact-row { grid-template-columns: 40px minmax(0,1fr) auto; }
+  .wp-contact-activity { grid-column: 2; }
+  .wp-contact-actions { grid-column: 2 / -1; }
+}
 @media (max-width: 560px) {
   .wp-inbox-heading { align-items: flex-start; }
   .wp-inbox-live { display: none; }
   .wp-inbox-thread > header { grid-template-columns: 42px minmax(0,1fr); }
-  .wp-inbox-thread > header select { grid-column: 1 / -1; }
+  .wp-inbox-controls { grid-column: 1 / -1; justify-content: stretch; }
+  .wp-inbox-controls select { max-width: none; flex: 1 1 120px; }
   .wp-inbox-window-banner { align-items: flex-start; flex-direction: column; gap: .2rem; }
   .wp-inbox-message > div { max-width: 90%; }
+  .wp-inbox-notes form { grid-template-columns: 1fr; }
+  .wp-contact-stats { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 980px) { .wp-verification-layout { grid-template-columns: 1fr; } .wp-provider-flow { grid-template-columns: 1fr 1fr; } }
