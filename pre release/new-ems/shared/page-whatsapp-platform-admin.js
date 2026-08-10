@@ -1,10 +1,10 @@
 import { MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
-import { getSupabaseClient } from "../config/supabase.js";
+import { getSupabaseAccessToken, getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 
 const VIEWS = new Set(["overview", "customers", "connections", "packages", "meta", "security"]);
-const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, catalog: null, catalogError: "", catalogLoading: false };
+const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, providerSecretStatus: null, providerSecretLoading: false };
 const db = getSupabaseClient();
 
 function escapeHtml(value) {
@@ -44,7 +44,7 @@ function overview() {
     <article class="wa-admin-card"><h3>Product readiness</h3><p>Operational controls for launching the customer-facing application.</p><div class="wa-admin-checklist">
       <div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Customer access controls</strong><small>Protected and independently managed</small></div>${status("ready")}</div>
       <div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Tenant isolation</strong><small>Customer data separated at database level</small></div>${status("ready")}</div>
-      <div class="wa-admin-check pending"><span class="wa-admin-check-icon">2</span><div><strong>Meta App Review</strong><small>Tech Provider onboarding and production approval</small></div>${status("pending")}</div>
+      <div class="wa-admin-check pending"><span class="wa-admin-check-icon">2</span><div><strong>Meta App Review</strong><small>Tech Provider submission is currently with Meta</small></div>${status("in_review")}</div>
     </div></article>
   </section>`;
 }
@@ -63,7 +63,65 @@ function connections() {
 function metaSetup() {
   const config = window.WHATSAPP_PLATFORM_CONFIG || {};
   const embeddedReady = Boolean(config.embeddedSignupConfigId);
-  return `<section class="wa-admin-grid"><article class="wa-admin-card"><h3>Meta application</h3><p>Production configuration for the sellable WhatsApp Business Platform product.</p><div class="wa-admin-list"><div class="wa-admin-row"><strong>Meta App ID</strong><span class="wa-admin-code">${escapeHtml(config.metaAppId || "Not configured")}</span></div><div class="wa-admin-row"><strong>Business verification</strong>${status("complete")}</div><div class="wa-admin-row"><strong>Tech Provider App Review</strong>${status("pending")}</div><div class="wa-admin-row"><strong>Embedded Signup Configuration</strong>${status(embeddedReady ? "ready" : "not_configured")}</div><div class="wa-admin-row"><strong>Public portal</strong><a class="wa-admin-button" href="${escapeHtml(ROUTES.WHATSAPP_PLATFORM_PORTAL)}" target="_blank" rel="noopener">Open portal</a></div></div></article><article class="wa-admin-card"><h3>Launch checklist</h3><p>Complete these controls before accepting production customers.</p><div class="wa-admin-checklist"><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Dedicated Meta app created</strong><small>Varada Nexus Connect</small></div></div><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Business verification</strong><small>Verified in Meta Business Manager</small></div></div><div class="wa-admin-check pending"><span class="wa-admin-check-icon">3</span><div><strong>Complete Tech Provider review</strong><small>Submit product workflow and requested permissions</small></div></div><div class="wa-admin-check pending"><span class="wa-admin-check-icon">4</span><div><strong>Create Embedded Signup config</strong><small>Add its configuration ID to public runtime settings</small></div></div></div></article></section>`;
+  const provider = state.providerSecretStatus;
+  const providerState = state.providerSecretLoading ? "checking" : provider?.configured ? "configured" : "not_configured";
+  const secretControl = state.hasFullAuthority ? `<article class="wa-admin-card wa-admin-secret-card"><div class="wa-admin-secret-heading"><div><h3>Meta App Secret</h3><p>Enter the current secret from Meta. It is sent directly to protected server storage and is never returned to this page.</p></div>${status(providerState)}</div><form data-meta-secret-form autocomplete="off"><label class="wa-admin-secret-field"><span>App Secret</span><span class="wa-admin-secret-input"><input name="meta_app_secret" type="password" autocomplete="new-password" inputmode="text" minlength="32" maxlength="128" pattern="[A-Fa-f0-9]{32,128}" required /><button type="button" data-meta-secret-toggle aria-label="Show App Secret" aria-pressed="false">Show</button></span><small>Paste the value directly from Meta. Do not send it in chat, email, or support messages.</small></label><div class="wa-admin-secret-footer"><span>${provider?.updatedAt ? `Last securely updated ${escapeHtml(formatDate(provider.updatedAt))}` : "No server-side secret is currently configured."}</span><button class="wa-admin-button primary" type="submit">Encrypt &amp; save</button></div></form></article>` : `<article class="wa-admin-card"><h3>Meta App Secret</h3><div class="wa-admin-empty">Only the Chairman &amp; Managing Director or Super Admin can configure this server credential.</div></article>`;
+  return `<section class="wa-admin-grid"><article class="wa-admin-card"><h3>Meta application</h3><p>Production configuration for the sellable WhatsApp Business Platform product.</p><div class="wa-admin-list"><div class="wa-admin-row"><strong>Meta App ID</strong><span class="wa-admin-code">${escapeHtml(config.metaAppId || "Not configured")}</span></div><div class="wa-admin-row"><strong>Business verification</strong>${status("complete")}</div><div class="wa-admin-row"><strong>Tech Provider App Review</strong>${status("in_review")}</div><div class="wa-admin-row"><strong>Embedded Signup Configuration</strong>${status(embeddedReady ? "ready" : "not_configured")}</div><div class="wa-admin-row"><strong>Server credential</strong>${status(providerState)}</div><div class="wa-admin-row"><strong>Public portal</strong><a class="wa-admin-button" href="${escapeHtml(ROUTES.WHATSAPP_PLATFORM_PORTAL)}" target="_blank" rel="noopener">Open portal</a></div></div></article><article class="wa-admin-card"><h3>Launch checklist</h3><p>Complete these controls before accepting production customers.</p><div class="wa-admin-checklist"><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Dedicated Meta app created</strong><small>Varada Nexus Connect</small></div></div><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Business verification</strong><small>Verified in Meta Business Manager</small></div></div><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Embedded Signup configuration</strong><small>Configuration ID ${escapeHtml(config.embeddedSignupConfigId || "pending")}</small></div></div><div class="wa-admin-check pending"><span class="wa-admin-check-icon">4</span><div><strong>Complete Tech Provider review</strong><small>Submission is in review; Meta may request additional evidence</small></div></div></div></article>${secretControl}</section>`;
+}
+
+function providerSecretEndpoint() {
+  return `${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-admin-secrets`;
+}
+
+async function providerSecretRequest(action, payload = {}) {
+  const token = await getSupabaseAccessToken();
+  if (!token) throw new Error("Your EMS session has expired.");
+  const response = await fetch(providerSecretEndpoint(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || "",
+      "Content-Type": "application/json",
+    },
+    credentials: "omit",
+    cache: "no-store",
+    referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Provider configuration request failed.");
+  return data;
+}
+
+async function loadProviderSecretStatus() {
+  if (!state.hasFullAuthority || state.providerSecretLoading) return;
+  state.providerSecretLoading = true;
+  render();
+  try { state.providerSecretStatus = await providerSecretRequest("status"); }
+  catch (error) { state.providerSecretStatus = { configured: false, error: error?.message || "Could not check server configuration." }; }
+  state.providerSecretLoading = false;
+  render();
+}
+
+async function saveProviderSecret(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const input = form.elements.meta_app_secret;
+  const button = form.querySelector("button[type=submit]");
+  const secret = String(input.value || "").trim();
+  if (!/^[a-f0-9]{32,128}$/i.test(secret)) { showToast("Enter the valid Meta App Secret.", TOAST_TYPES.ERROR); return; }
+  button.disabled = true; button.textContent = "Encrypting…";
+  try {
+    state.providerSecretStatus = await providerSecretRequest("set", { secret });
+    form.reset();
+    input.type = "password";
+    showToast("Meta App Secret encrypted and saved.", TOAST_TYPES.SUCCESS);
+    render();
+  } catch (error) {
+    input.value = "";
+    showToast(error?.message || "Could not save the Meta App Secret.", TOAST_TYPES.ERROR);
+    button.disabled = false; button.textContent = "Encrypt & save";
+  }
 }
 
 function security() {
@@ -261,6 +319,7 @@ function bind() {
     if (state.view === "overview") url.searchParams.delete("view"); else url.searchParams.set("view", state.view);
     history.pushState({}, "", url);
     render();
+    if (state.view === "meta" && state.hasFullAuthority && !state.providerSecretStatus) loadProviderSecretStatus();
   }));
   document.querySelector("#waRefresh")?.addEventListener("click", () => loadSnapshot());
   document.querySelectorAll("[data-tenant-form]").forEach((form) => form.addEventListener("submit", async (event) => {
@@ -280,6 +339,15 @@ function bind() {
   document.querySelectorAll("[data-addon-form]").forEach((form) => form.addEventListener("submit", (event) => saveAddon(event, form)));
   document.querySelectorAll("[data-addon-delete]").forEach((btn) => btn.addEventListener("click", () => deleteAddon(btn.dataset.addonDelete)));
   document.querySelector("[data-rates-form]")?.addEventListener("submit", (event) => saveRates(event));
+  document.querySelector("[data-meta-secret-form]")?.addEventListener("submit", saveProviderSecret);
+  document.querySelector("[data-meta-secret-toggle]")?.addEventListener("click", (event) => {
+    const input = document.querySelector('[name="meta_app_secret"]');
+    if (!input) return;
+    const showing = input.type === "text";
+    input.type = showing ? "password" : "text";
+    event.currentTarget.textContent = showing ? "Show" : "Hide";
+    event.currentTarget.setAttribute("aria-pressed", String(!showing));
+  });
 }
 
 async function loadSnapshot() {
@@ -295,8 +363,10 @@ async function init() {
   state.view = VIEWS.has(requested) ? requested : "overview";
   const boot = await bootstrapProtectedPage({ moduleCode: MODULES.WHATSAPP_PLATFORM, pageTitle: "WhatsApp Business Platform", pageDescription: "Customer product management and Meta application operations", workspace: WORKSPACES.WHATSAPP_PLATFORM });
   if (!boot) return;
-  state.canManage = boot.roleCodes.some((role) => ["chairman_managing_director", "super_admin"].includes(role)) || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && ["edit", "approve"].includes(permission.action_code));
+  state.hasFullAuthority = boot.roleCodes.some((role) => ["chairman_managing_director", "super_admin"].includes(role));
+  state.canManage = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && ["edit", "approve"].includes(permission.action_code));
   await loadSnapshot();
+  if (state.view === "meta" && state.hasFullAuthority) await loadProviderSecretStatus();
 }
 
 init().catch((error) => { state.loading = false; state.error = error?.message || "The management console could not start."; render(); });

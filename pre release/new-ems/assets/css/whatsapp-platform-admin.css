@@ -28,6 +28,7 @@
 .wa-admin-row span,.wa-admin-row small { color: #89918b; }
 .wa-status { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 999px; background: rgba(37,211,102,.12); color: #6ce59a !important; font-size: 11px; font-weight: 800; text-transform: capitalize; }
 .wa-status.pending,.wa-status.not_connected { background: rgba(231,190,82,.12); color: #e4c266 !important; }
+.wa-status.checking,.wa-status.not_configured { background: rgba(231,190,82,.12); color: #e4c266 !important; }
 .wa-status.suspended,.wa-status.restricted,.wa-status.disconnected { background: rgba(239,87,87,.12); color: #f18989 !important; }
 .wa-admin-table-wrap { overflow-x: auto; border: 1px solid rgba(255,255,255,.07); border-radius: 14px; }
 .wa-admin-table { width: 100%; border-collapse: collapse; min-width: 760px; }
@@ -68,3 +69,17 @@
 .wa-pkg-foot .wa-admin-button { margin-left: auto; }
 @media (max-width: 760px) { .wa-pkg-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 520px) { .wa-pkg-grid { grid-template-columns: 1fr; } }
+
+/* Ultimate-authority provider credential control */
+.wa-admin-secret-card { grid-column: 1 / -1; }
+.wa-admin-secret-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.wa-admin-secret-heading p { max-width: 720px; margin: 0; color: #8e958f; line-height: 1.6; }
+.wa-admin-secret-field { display: grid; gap: 8px; color: #d7d9d4; font-size: 12px; font-weight: 750; }
+.wa-admin-secret-input { display: grid; grid-template-columns: minmax(0,1fr) auto; overflow: hidden; border: 1px solid rgba(218,178,83,.28); border-radius: 12px; background: #070907; }
+.wa-admin-secret-input:focus-within { border-color: #25d366; box-shadow: 0 0 0 3px rgba(37,211,102,.1); }
+.wa-admin-secret-input input { min-width: 0; padding: 13px 14px; border: 0; outline: none; background: transparent; color: #f1eee4; font: 600 14px/1.3 ui-monospace,monospace; letter-spacing: .04em; }
+.wa-admin-secret-input button { min-width: 72px; border: 0; border-left: 1px solid rgba(218,178,83,.2); background: #151711; color: #e8cb72; font-weight: 800; cursor: pointer; }
+.wa-admin-secret-field small { color: #7f8781; font-weight: 500; line-height: 1.5; }
+.wa-admin-secret-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 18px; }
+.wa-admin-secret-footer > span { color: #7f8781; font-size: 12px; }
+@media (max-width: 640px) { .wa-admin-secret-heading,.wa-admin-secret-footer { align-items: stretch; flex-direction: column; } .wa-admin-secret-footer .wa-admin-button { width: 100%; } }
