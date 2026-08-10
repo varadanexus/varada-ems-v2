@@ -13,7 +13,6 @@ const env = (name: string) => Deno.env.get(name) || "";
 const adminClient = () => createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-
 function isLoopbackOrigin(origin: string) {
   try {
     const url = new URL(origin);
@@ -302,4 +301,3 @@ Deno.serve(async (req) => {
     return json(req, { error: safeMessage }, status);
   }
 });
-

@@ -43,4 +43,3 @@ comment on table public.whatsapp_platform_documents is
   'Tenant-owned WhatsApp Platform file metadata. Bytes are stored below the dedicated Google Drive root and accessed only through the customer storage Edge Function.';
 comment on column public.whatsapp_platform_tenants.drive_root_folder_id is
   'Tenant subfolder below the dedicated WhatsApp Business Platform Google Drive root.';
-
