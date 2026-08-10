@@ -62,6 +62,7 @@ let signupStep = 1;
 let signupDraft = {};
 let metaOnboardingStatus = null;
 let facebookSdkPromise = null;
+let workspaceProfile = { logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
 
 if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
@@ -185,6 +186,34 @@ async function onboardingRequest(action, payload = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || "Meta onboarding request failed.");
   return data;
+}
+
+function storageEndpoint() {
+  return `${runtime.supabaseUrl}/functions/v1/whatsapp-platform-storage`;
+}
+
+async function storageRequest(action, payload = {}) {
+  if (!session?.sessionToken) throw new Error("Your workspace session has expired.");
+  const response = await fetch(storageEndpoint(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: runtime.supabaseAnonKey || "" },
+    credentials: "omit",
+    cache: "no-store",
+    referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, sessionToken: session.sessionToken, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Workspace storage request failed.");
+  return data;
+}
+
+function readFileBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",").pop() || "");
+    reader.onerror = () => reject(new Error("The selected file could not be read."));
+    reader.readAsDataURL(file);
+  });
 }
 
 function loadFacebookSdk() {
@@ -807,8 +836,12 @@ function accountsView(connections, setupReady) {
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Connected assets</span><h1>Business accounts</h1><p>Connect and manage WhatsApp Business assets owned by your company.</p></div><button class="wp-primary" id="wpConnectMetaBtn" type="button">${setupReady ? "Connect Meta Business" : "Connection setup pending"}</button></div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">WhatsApp Business Accounts</span><h2>Your connected accounts</h2></div><strong>${connections.length}</strong></div><p>Only accounts connected to this company workspace appear here.</p>${connections.length ? connections.map((row) => `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(row.verified_name || row.display_phone_number || "WhatsApp Business Account")}</strong><small>${escapeHtml(row.display_phone_number || "Business number")}</small></div><em>${escapeHtml(row.status)}</em></div>`).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business account connected</strong><p>${setupReady ? "Connect your company’s Meta Business account to start configuring WhatsApp." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p><button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Connect account" : "Check connection status"}</button></div>`}</article></section>`;
 }
 
-function settingsView() {
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Review your workspace identity and account-level preferences.</p></div></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(session.email)}</dd></div><div><dt>Plan</dt><dd>Starter</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div></article></section></section>`;
+function settingsView(profile) {
+  const canManageBranding = ["owner", "admin"].includes(session.roleCode);
+  const logo = profile?.logoDataUrl
+    ? `<img src="${escapeHtml(profile.logoDataUrl)}" alt="${escapeHtml(session.companyName)} logo" />`
+    : `<span aria-hidden="true">${escapeHtml((session.companyName || "B").charAt(0).toUpperCase())}</span>`;
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button></form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(session.email)}</dd></div><div><dt>Plan</dt><dd>Starter</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div></article></section></section>`;
 }
 
 const PLANNED_WORKSPACE_VIEWS = {
@@ -835,10 +868,10 @@ function overviewView(connections, setupReady) {
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Business messaging workspace</span><h1>${escapeHtml(session.companyName)}</h1><p>Your operational summary and next actions. Use the sidebar to open each dedicated module.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("onboarding")}">Continue setup</a></div><section class="wp-status-grid" aria-label="Workspace status"><article class="wp-stat"><span>Workspace</span><strong><i class="wp-status-dot"></i> Active</strong></article><article class="wp-stat"><span>Business accounts</span><strong>${connections.length}</strong></article><article class="wp-stat"><span>Current plan</span><strong>Starter</strong></article><article class="wp-stat"><span>Setup progress</span><strong>${progress}%</strong></article></section><section class="wp-overview-actions"><a class="wp-card wp-action-card" href="${workspacePath("onboarding")}"><span class="wp-card-eyebrow">Next step</span><h2>${setupReady ? "Connect Meta Business" : "Prepare your workspace"}</h2><p>Open the dedicated onboarding section to continue setup.</p><strong>Open onboarding →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("accounts")}"><span class="wp-card-eyebrow">Connected assets</span><h2>Business accounts</h2><p>${connections.length ? `${connections.length} account${connections.length === 1 ? "" : "s"} connected.` : "No account connected yet."}</p><strong>Manage accounts →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("inbox")}"><span class="wp-card-eyebrow">Communication</span><h2>Team inbox</h2><p>Your future shared customer conversation workspace.</p><strong>View module →</strong></a></section><section class="wp-workspace-note"><div><strong>Dedicated product workspace</strong><p>Every sidebar option opens a separate module route; overview remains a concise command surface.</p></div><a href="${workspacePath("settings")}">Workspace settings</a></section></section>`;
 }
 
-function workspaceViewContent(view, connections, setupReady) {
+function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "onboarding") return onboardingView(setupReady, connections.filter((row) => ["connected", "pending"].includes(row.status)));
   if (view === "accounts") return accountsView(connections, setupReady);
-  if (view === "settings") return settingsView();
+  if (view === "settings") return settingsView(profile);
   if (Object.hasOwn(PLANNED_WORKSPACE_VIEWS, view)) return plannedView(view);
   return overviewView(connections.filter((row) => ["connected", "pending"].includes(row.status)), setupReady);
 }
@@ -858,12 +891,21 @@ async function renderDashboard() {
       environment: "testing",
     };
   }
+  try {
+    const storage = await storageRequest("profile");
+    workspaceProfile = storage?.profile || workspaceProfile;
+  } catch {
+    workspaceProfile = workspaceProfile || { logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+  }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
   const view = currentWorkspaceView();
   document.body.classList.add("wp-workspace-mode");
   document.title = `${WORKSPACE_VIEW_LABELS[view]} | Varada Nexus WhatsApp Solutions`;
-  app.innerHTML = `<main class="wp-workspace-shell"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>WhatsApp Solutions</strong><small>Business workspace</small></span></a><div class="wp-workspace-account"><span>${escapeHtml((session.companyName || "W").charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>Starter workspace</small></div></div><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", "Planned")}${workspaceNavItem("contacts", "◎", "Planned")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", "Planned")}${workspaceNavItem("templates", "✦", "Planned")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁", "Planned")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
+  const sidebarLogo = workspaceProfile?.logoDataUrl
+    ? `<img src="${escapeHtml(workspaceProfile.logoDataUrl)}" alt="" />`
+    : escapeHtml((session.companyName || "W").charAt(0).toUpperCase());
+  app.innerHTML = `<main class="wp-workspace-shell"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>WhatsApp Solutions</strong><small>Business workspace</small></span></a><div class="wp-workspace-account"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>Starter workspace</small></div></div><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", "Planned")}${workspaceNavItem("contacts", "◎", "Planned")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", "Planned")}${workspaceNavItem("templates", "✦", "Planned")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁", "Planned")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
   applyTheme(document.documentElement.dataset.wpTheme || preferredTheme());
   app.querySelector("#wpThemeToggle")?.addEventListener("click", () => {
     const nextTheme = document.documentElement.dataset.wpTheme === "dark" ? "light" : "dark";
@@ -877,6 +919,32 @@ async function renderDashboard() {
   };
   app.querySelector("#wpSidebarToggle")?.addEventListener("click", () => toggleSidebar(!shell?.classList.contains("sidebar-open")));
   app.querySelector("#wpSidebarScrim")?.addEventListener("click", () => toggleSidebar(false));
+  app.querySelector("#wpLogoFile")?.addEventListener("change", (event) => {
+    const fileName = event.currentTarget.files?.[0]?.name || "Choose logo";
+    const label = event.currentTarget.closest("label")?.querySelector("span");
+    if (label) label.textContent = fileName.length > 28 ? `${fileName.slice(0, 25)}…` : fileName;
+  });
+  app.querySelector("#wpLogoUploadForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const file = form.elements.logo?.files?.[0];
+    const button = event.submitter || form.querySelector("button[type='submit']");
+    if (!file) return showToast("Choose a logo file.", "error");
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return showToast("Upload a PNG, JPG, or WebP logo.", "error");
+    if (!file.size || file.size > 2 * 1024 * 1024) return showToast("Logo must be 2 MB or smaller.", "error");
+    const originalText = button?.textContent || "Upload logo";
+    try {
+      if (button) { button.disabled = true; button.textContent = "Uploading…"; }
+      const base64 = await readFileBase64(file);
+      const result = await storageRequest("upload_logo", { fileName: file.name, mimeType: file.type, base64 });
+      workspaceProfile = result.profile || workspaceProfile;
+      showToast("Business logo updated.");
+      await renderDashboard();
+    } catch (error) {
+      showToast(error?.message || "The logo could not be uploaded.", "error");
+      if (button) { button.disabled = false; button.textContent = originalText; }
+    }
+  });
   app.querySelectorAll("#wpConnectMetaBtn,[data-connect-meta]").forEach((button) => button.addEventListener("click", () => startMetaOnboarding(button)));
   if (setupReady) loadFacebookSdk().catch(() => {});
 }
