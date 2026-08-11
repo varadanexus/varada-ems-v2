@@ -1488,6 +1488,69 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-flow-branches { grid-template-columns: 1fr 1fr; color: var(--wp-text); font-size: .68rem; text-align: center; }
 .wp-flow-node footer[role="button"] { cursor: pointer; }
 
+.wp-flow-inline-buttons label {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, .75fr) 24px 30px;
+  gap: 5px;
+  align-items: center;
+}
+.wp-flow-button-port {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--wp-panel);
+  border-radius: 50%;
+  background: var(--wp-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wp-accent) 24%, transparent);
+  cursor: crosshair;
+}
+.wp-flow-button-port::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--wp-bg) 80%, #fff);
+}
+.wp-flow-button-port:hover,
+.wp-flow-button-port:focus-visible,
+.wp-flow-button-port.connecting {
+  outline: 0;
+  transform: scale(1.12);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 20%, transparent);
+}
+.wp-flow-node.connect-target {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wp-accent) 18%, transparent), 0 14px 34px rgba(0,0,0,.18);
+}
+.wp-flow-node.connect-hover {
+  border-color: var(--wp-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 22%, transparent), 0 18px 38px rgba(0,0,0,.2);
+}
+.wp-flow-canvas>[data-flow-lines] path.button-edge {
+  stroke-width: 2.8;
+  stroke-dasharray: none;
+}
+.wp-flow-canvas-grid { z-index: 0; }
+.wp-flow-canvas>[data-flow-lines] {
+  z-index: 1;
+  opacity: 1;
+}
+.wp-flow-canvas>[data-flow-lines] path {
+  fill: none;
+  stroke: #00a870;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 7 5;
+  filter: drop-shadow(0 1px 0 rgba(255,255,255,.5));
+}
+.wp-flow-canvas>[data-flow-lines] path.button-edge {
+  stroke: #008a66;
+  stroke-width: 3.2;
+  stroke-dasharray: none;
+}
+.wp-flow-nodes { z-index: 2; }
+
 /* Dedicated flow builder route */
 .wp-flow-builder-workspace {
   grid-template-columns: 58px minmax(0, 1fr);
@@ -1751,6 +1814,48 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .wp-flow-inline-buttons select {
   min-width: 0;
+}
+.wp-flow-inline-buttons label {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, .75fr) 24px 30px;
+  gap: 5px;
+  align-items: center;
+}
+.wp-flow-button-port {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--wp-panel);
+  border-radius: 50%;
+  background: var(--wp-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wp-accent) 24%, transparent);
+  cursor: crosshair;
+}
+.wp-flow-button-port::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--wp-bg) 80%, #fff);
+}
+.wp-flow-button-port:hover,
+.wp-flow-button-port:focus-visible,
+.wp-flow-button-port.connecting {
+  outline: 0;
+  transform: scale(1.12);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 20%, transparent);
+}
+.wp-flow-node.connect-target {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wp-accent) 18%, transparent), 0 14px 34px rgba(0,0,0,.18);
+}
+.wp-flow-node.connect-hover {
+  border-color: var(--wp-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 22%, transparent), 0 18px 38px rgba(0,0,0,.2);
+}
+.wp-flow-canvas>[data-flow-lines] path.button-edge {
+  stroke-width: 2.8;
+  stroke-dasharray: none;
 }
 .wp-flow-live-panel {
   padding: 18px 14px;

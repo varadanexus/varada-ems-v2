@@ -63,7 +63,7 @@ function nodeOptions(nodes, escapeHtml, selected = "") {
 }
 function renderQuickButtons(node, escapeHtml, nodes = []) {
   const buttons = buttonValues(node);
-  return `<div class="wp-flow-inline-buttons"><span>Reply buttons</span>${buttons.map((button, index) => `<label><input data-node-button-label="${index}" maxlength="20" value="${escapeHtml(button.label)}" placeholder="Button ${index + 1}" /><select data-node-button-next="${index}" title="Route this button">${nodeOptions(nodes, escapeHtml, button.next)}</select><button type="button" data-flow-remove-button="${index}" aria-label="Remove button">×</button></label>`).join("")}<button type="button" data-flow-add-button>＋ Add Button</button></div>`;
+  return `<div class="wp-flow-inline-buttons"><span>Reply buttons</span>${buttons.map((button, index) => `<label><input data-node-button-label="${index}" maxlength="20" value="${escapeHtml(button.label)}" placeholder="Button ${index + 1}" /><select data-node-button-next="${index}" title="Route this button">${nodeOptions(nodes, escapeHtml, button.next)}</select><i class="wp-flow-button-port" data-flow-button-port="${index}" role="button" tabindex="0" title="Drag to connect this button"></i><button type="button" data-flow-remove-button="${index}" aria-label="Remove button">×</button></label>`).join("")}<button type="button" data-flow-add-button>＋ Add Button</button></div>`;
 }
 function renderNodeFields(node, escapeHtml, nodes = []) {
   const config = node.config || {};
@@ -195,7 +195,21 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     node.config[field] = element.type === "checkbox" ? element.checked : element.value;
   };
 
-  const normalizedEdges = () => state.nodes.slice(0, -1).map((node, index) => ({ id: `${node.id}:${state.nodes[index + 1].id}`, from: node.id, to: state.nodes[index + 1].id }));
+  const normalizedEdges = () => {
+    const validIds = new Set(state.nodes.map((node) => node.id));
+    const routed = [];
+    state.nodes.forEach((node, nodeIndex) => {
+      buttonValues(node).forEach((button, buttonIndex) => {
+        if (button.next && validIds.has(button.next) && button.next !== node.id) {
+          routed.push({ id: `${node.id}:button:${buttonIndex}:${button.next}`, from: node.id, to: button.next, fromButton: buttonIndex });
+        }
+      });
+      if (!buttonValues(node).some((button) => button.next) && nodeIndex < state.nodes.length - 1) {
+        routed.push({ id: `${node.id}:next:${state.nodes[nodeIndex + 1].id}`, from: node.id, to: state.nodes[nodeIndex + 1].id });
+      }
+    });
+    return routed;
+  };
   const nextNodeAfter = (node) => state.nodes[state.nodes.findIndex((item) => item.id === node.id) + 1] || null;
   const renderLiveNode = (node) => {
     if (!node || !liveMessages) return;
@@ -264,10 +278,32 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     const world = getWorldBounds(state.nodes);
     centerCanvasOn(world.left + (x / mapWidth) * world.width, world.top + (y / mapHeight) * world.height);
   };
+  const worldPointFromElement = (element) => {
+    const canvasRect = canvas.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
+    return {
+      x: ((rect.left + rect.width / 2) - canvasRect.left - (state.panX || 0)) / state.scale,
+      y: ((rect.top + rect.height / 2) - canvasRect.top - (state.panY || 0)) / state.scale
+    };
+  };
+  const edgeStartPoint = (edge, node) => {
+    if (Number.isInteger(edge.fromButton)) {
+      const port = nodeLayer.querySelector(`[data-flow-node="${CSS.escape(node.id)}"] [data-flow-button-port="${edge.fromButton}"]`);
+      if (port) return worldPointFromElement(port);
+    }
+    return { x: Number(node.x || 0) + NODE_WIDTH / 2, y: Number(node.y || 0) + 154 };
+  };
   const drawLines = () => {
-    lines.innerHTML = normalizedEdges().map((edge) => { const a = state.nodes.find((n) => n.id === edge.from); const b = state.nodes.find((n) => n.id === edge.to); if (!a || !b) return ""; return `<path d="M ${a.x + 110} ${a.y + 154} C ${a.x + 110} ${a.y + 205}, ${b.x + 110} ${b.y - 50}, ${b.x + 110} ${b.y}" />`; }).join("");
-    const world = getWorldBounds(state.nodes);
-    lines.setAttribute("viewBox", `${world.left} ${world.top} ${world.width} ${world.height}`);
+    lines.setAttribute("viewBox", "0 0 2400 1600");
+    lines.innerHTML = normalizedEdges().map((edge) => {
+      const a = state.nodes.find((n) => n.id === edge.from);
+      const b = state.nodes.find((n) => n.id === edge.to);
+      if (!a || !b) return "";
+      const start = edgeStartPoint(edge, a);
+      const end = { x: Number(b.x || 0) + NODE_WIDTH / 2, y: Number(b.y || 0) };
+      const curve = Math.max(72, Math.abs(end.y - start.y) * .45);
+      return `<path class="${Number.isInteger(edge.fromButton) ? "button-edge" : ""}" d="M ${start.x} ${start.y} C ${start.x + 44} ${start.y + curve}, ${end.x - 44} ${end.y - curve}, ${end.x} ${end.y}" />`;
+    }).join("");
     drawMiniMap();
   };
   const selectNode = (id) => {
@@ -293,9 +329,28 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     const node = state.nodes.find((item) => item.id === id);
     if (!node || node.type === "start") return;
     state.nodes = state.nodes.filter((item) => item.id !== id);
+    state.nodes.forEach((item) => {
+      const buttons = buttonValues(item);
+      if (!buttons.some((button) => button.next === id)) return;
+      item.config = { ...(item.config || {}), buttons: buttons.map((button) => button.next === id ? { ...button, next: "" } : button) };
+    });
     selectedId = state.nodes[Math.max(0, Math.min(state.nodes.length - 1, state.nodes.findIndex((item) => item.id === id)))]?.id || state.nodes[0]?.id;
     markDraftChanged();
     renderNodes();
+  };
+  const connectButtonToNode = (fromId, buttonIndex, toId) => {
+    if (!fromId || !toId || fromId === toId) return false;
+    const source = state.nodes.find((item) => item.id === fromId);
+    if (!source) return false;
+    source.config = { ...(source.config || {}) };
+    const buttons = buttonValues(source).slice();
+    buttons[buttonIndex] = { ...(buttons[buttonIndex] || { label: `Button ${buttonIndex + 1}`, next: "" }), next: toId };
+    source.config.buttons = buttons;
+    selectedId = fromId;
+    markDraftChanged();
+    renderNodes(false);
+    toast("Button connected to the next block.");
+    return true;
   };
   const renderNodes = (refreshInspector = true) => {
     applyViewport();
@@ -345,9 +400,42 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
           buttons[index] = { ...(buttons[index] || { label: "", next: "" }), [field.dataset.nodeButtonLabel !== undefined ? "label" : "next"]: field.value };
           node.config.buttons = buttons;
           markDraftChanged();
+          if (field.dataset.nodeButtonNext !== undefined) drawLines();
         };
         field.addEventListener("input", updateButton);
         field.addEventListener("change", updateButton);
+      });
+      card.querySelectorAll("[data-flow-button-port]").forEach((port) => {
+        port.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const sourceId = card.dataset.flowNode;
+          const buttonIndex = Number(port.dataset.flowButtonPort);
+          port.classList.add("connecting");
+          nodeLayer.querySelectorAll("[data-flow-node]").forEach((item) => {
+            item.classList.toggle("connect-target", item.dataset.flowNode !== sourceId);
+          });
+          port.setPointerCapture(event.pointerId);
+          const move = (moveEvent) => {
+            const targetCard = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY)?.closest("[data-flow-node]");
+            nodeLayer.querySelectorAll("[data-flow-node]").forEach((item) => {
+              item.classList.toggle("connect-hover", targetCard === item && item.dataset.flowNode !== sourceId);
+            });
+          };
+          const stop = (upEvent) => {
+            port.classList.remove("connecting");
+            nodeLayer.querySelectorAll("[data-flow-node]").forEach((item) => item.classList.remove("connect-target", "connect-hover"));
+            const targetCard = document.elementFromPoint(upEvent.clientX, upEvent.clientY)?.closest("[data-flow-node]");
+            port.removeEventListener("pointermove", move);
+            port.removeEventListener("pointerup", stop);
+            port.removeEventListener("pointercancel", stop);
+            if (!targetCard || targetCard.dataset.flowNode === sourceId) return;
+            connectButtonToNode(sourceId, buttonIndex, targetCard.dataset.flowNode);
+          };
+          port.addEventListener("pointermove", move);
+          port.addEventListener("pointerup", stop);
+          port.addEventListener("pointercancel", stop);
+        });
       });
       card.querySelector("[data-flow-add-button]")?.addEventListener("click", (event) => {
         event.stopPropagation();
