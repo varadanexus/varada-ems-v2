@@ -101,7 +101,7 @@ export function renderFlowBuilderPage({ escapeHtml }) {
 
 function builderSurface(escapeHtml) {
   const groups = ["Message types", "Actions"].map((group) => `<section class="wp-flow-palette-group"><h3>${group}</h3><div>${BLOCKS.filter((item) => item[3] === group).map(([type, icon, label]) => `<button type="button" draggable="true" data-flow-block="${type}"><i>${icon}</i><span>${escapeHtml(label)}</span></button>`).join("")}</div></section>`).join("");
-  return `<div class="wp-flow-builder-dialog" id="wpFlowBuilderDialog" data-flow-builder-surface><form novalidate><header class="wp-flow-builder-top"><button type="button" class="wp-flow-back" aria-label="Back to flows" data-flow-exit>←</button><div><input name="name" maxlength="120" value="Untitled flow" aria-label="Flow name" /><small data-flow-save-state>Draft not saved</small></div><label class="wp-flow-active-switch"><span>Inactive</span><input name="active" type="checkbox" /><i></i><strong>Active</strong></label><button class="wp-secondary" type="button" data-flow-settings>Triggers &amp; fallback</button><button class="wp-primary" type="submit" value="save">Save changes</button></header><div class="wp-flow-builder-shell"><aside class="wp-flow-palette"><div class="wp-flow-builder-tabs"><button class="active" type="button" data-flow-tab="builder">Builder</button><button type="button" data-flow-tab="live">Live view</button></div><div data-flow-panel="builder">${groups}</div><div class="wp-flow-live-panel" data-flow-panel="live" hidden><h3>Live flow test</h3><p>Preview how a customer will experience this automation before saving or activating it.</p><button type="button" class="wp-primary" data-flow-live-start>Start preview</button><div class="wp-flow-live-phone" data-flow-live-phone><header><span>WhatsApp</span><strong>Customer preview</strong></header><main data-flow-live-messages><div class="wp-flow-live-empty">Press Start preview to run this flow.</div></main><footer><input value="Customer reply…" readonly /></footer></div></div></aside><button class="wp-flow-palette-toggle" type="button" data-flow-palette-toggle aria-label="Collapse builder sidebar" aria-expanded="true">›</button><main class="wp-flow-canvas" data-flow-canvas><div class="wp-flow-canvas-grid"></div><svg aria-hidden="true" data-flow-lines></svg><div class="wp-flow-nodes" data-flow-nodes></div><div class="wp-flow-zoom"><button type="button" data-flow-zoom="in">＋</button><button type="button" data-flow-zoom="out">−</button><button type="button" data-flow-fit>Fit</button></div></main></div></form></div><dialog class="wp-flow-settings-dialog" data-flow-settings-dialog><div><header><div><span class="wp-card-eyebrow">Entry &amp; recovery</span><h2>Triggers and fallback</h2></div><button type="button" data-flow-settings-close>×</button></header><label><span>Start this flow when</span><select name="triggerType"><option value="keyword">Customer sends a keyword</option><option value="any_message">Any new message arrives</option><option value="template_reply">Customer taps a template reply</option><option value="manual">Team starts it manually</option><option value="webhook">A secure webhook calls it</option></select></label><label><span>Keywords</span><input name="keywords" maxlength="500" placeholder="pricing, support, book demo" /><small>Comma-separated. Matching is case-insensitive.</small></label><label><span>Fallback message</span><textarea name="fallback" rows="4" maxlength="1024" placeholder="I didn't understand that. Please choose one of the options."></textarea></label><footer><button class="wp-primary" type="button" data-flow-settings-apply>Apply settings</button></footer></div></dialog>`;
+  return `<div class="wp-flow-builder-dialog" id="wpFlowBuilderDialog" data-flow-builder-surface><form novalidate><header class="wp-flow-builder-top"><button type="button" class="wp-flow-back" aria-label="Back to flows" data-flow-exit>←</button><div><input name="name" maxlength="120" value="Untitled flow" aria-label="Flow name" /><small data-flow-save-state>Draft not saved</small></div><label class="wp-flow-active-switch"><span>Inactive</span><input name="active" type="checkbox" /><i></i><strong>Active</strong></label><button class="wp-secondary" type="button" data-flow-settings>Triggers &amp; fallback</button><button class="wp-primary" type="submit" value="save">Save changes</button></header><div class="wp-flow-builder-shell"><aside class="wp-flow-palette"><div class="wp-flow-builder-tabs"><button class="active" type="button" data-flow-tab="builder">Builder</button><button type="button" data-flow-tab="live">Live view</button></div><div data-flow-panel="builder">${groups}</div><div class="wp-flow-live-panel" data-flow-panel="live" hidden><h3>Live flow test</h3><p>Preview how a customer will experience this automation before saving or activating it.</p><button type="button" class="wp-primary" data-flow-live-start>Start preview</button><div class="wp-flow-live-phone" data-flow-live-phone><header><span>WhatsApp</span><strong>Customer preview</strong></header><main data-flow-live-messages><div class="wp-flow-live-empty">Press Start preview to run this flow.</div></main><footer><input value="Customer reply…" readonly /></footer></div></div></aside><button class="wp-flow-palette-toggle" type="button" data-flow-palette-toggle aria-label="Collapse builder sidebar" aria-expanded="true">›</button><main class="wp-flow-canvas" data-flow-canvas><div class="wp-flow-canvas-grid"></div><svg aria-hidden="true" data-flow-lines></svg><div class="wp-flow-nodes" data-flow-nodes></div><div class="wp-flow-connect-menu" data-flow-connect-menu hidden></div><div class="wp-flow-zoom"><button type="button" data-flow-zoom="in">＋</button><button type="button" data-flow-zoom="out">−</button><button type="button" data-flow-fit>Fit</button></div></main></div></form></div><dialog class="wp-flow-settings-dialog" data-flow-settings-dialog><div><header><div><span class="wp-card-eyebrow">Entry &amp; recovery</span><h2>Triggers and fallback</h2></div><button type="button" data-flow-settings-close>×</button></header><label><span>Start this flow when</span><select name="triggerType"><option value="keyword">Customer sends a keyword</option><option value="any_message">Any new message arrives</option><option value="template_reply">Customer taps a template reply</option><option value="manual">Team starts it manually</option><option value="webhook">A secure webhook calls it</option></select></label><label><span>Keywords</span><input name="keywords" maxlength="500" placeholder="pricing, support, book demo" /><small>Comma-separated. Matching is case-insensitive.</small></label><label><span>Fallback message</span><textarea name="fallback" rows="4" maxlength="1024" placeholder="I didn't understand that. Please choose one of the options."></textarea></label><footer><button class="wp-primary" type="button" data-flow-settings-apply>Apply settings</button></footer></div></dialog>`;
 }
 
 export function bindFlowsView({ root, flows = [], request, onRefresh, toast, escapeHtml, builderId = "", listUrl = "/whatsapp-platform/workspace/flows/" }) {
@@ -129,7 +129,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   const canvas = dialog.querySelector("[data-flow-canvas]");
   const nodeLayer = dialog.querySelector("[data-flow-nodes]");
   const lines = dialog.querySelector("[data-flow-lines]");
-  const miniMap = dialog.querySelector("[data-flow-minimap]");
+  const connectMenu = dialog.querySelector("[data-flow-connect-menu]");
   const liveMessages = dialog.querySelector("[data-flow-live-messages]");
   const settingsDialog = root.querySelector("[data-flow-settings-dialog]");
   const paletteToggle = dialog.querySelector("[data-flow-palette-toggle]");
@@ -216,6 +216,40 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     if (changed) node.config = { ...(node.config || {}), buttons: nextButtons };
     return changed;
   };
+  const visibleEdges = () => normalizedEdges().filter((edge) => {
+    if (Number.isInteger(edge.fromButton)) return true;
+    return !buttonValues(state.nodes.find((node) => node.id === edge.from)).length;
+  });
+  const reachableNodeIds = () => {
+    const reachable = new Set([state.nodes[0]?.id].filter(Boolean));
+    let changed = true;
+    while (changed) {
+      changed = false;
+      visibleEdges().forEach((edge) => {
+        if (reachable.has(edge.from) && !reachable.has(edge.to)) {
+          reachable.add(edge.to);
+          changed = true;
+        }
+      });
+    }
+    return reachable;
+  };
+  const nodeHasContent = (node) => {
+    if (!node) return false;
+    const meaningfulBody = Boolean((node.body || "").trim()) && node.body !== DEFAULT_COPY[node.type];
+    if (node.type === "start") return Boolean((fieldValue(node, "keywords") || fieldValue(node, "regex") || "").trim()) || visibleEdges().some((edge) => edge.from === node.id);
+    if (["message", "media", "ask_media", "question", "address", "location", "attribute", "tag", "connect", "handoff", "end"].includes(node.type)) {
+      return meaningfulBody || Boolean((fieldValue(node, "target") || fieldValue(node, "mediaUrl")).trim());
+    }
+    if (node.type === "condition") return Boolean(fieldValue(node, "expression").trim());
+    if (node.type === "api") return Boolean(fieldValue(node, "endpoint").trim());
+    if (node.type === "delay") return Boolean(fieldValue(node, "seconds").trim());
+    return meaningfulBody;
+  };
+  const validationClassFor = (node, reachable = reachableNodeIds()) => {
+    const connected = node.type === "start" || reachable.has(node.id);
+    return connected && nodeHasContent(node) ? "ready" : "needs-attention";
+  };
 
   const normalizedEdges = () => {
     const validIds = new Set(state.nodes.map((node) => node.id));
@@ -261,27 +295,6 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     liveMessages.innerHTML = "";
     renderLiveNode(state.nodes[0]);
   };
-  const drawMiniMap = () => {
-    if (!miniMap) return;
-    const inset = 9;
-    const mapWidth = Math.max(1, miniMap.clientWidth - inset * 2);
-    const mapHeight = Math.max(1, miniMap.clientHeight - inset * 2);
-    const world = getWorldBounds(state.nodes);
-    const scaleX = mapWidth / world.width;
-    const scaleY = mapHeight / world.height;
-    const viewportLeft = ((canvas.scrollLeft - (state.panX || 0)) / state.scale) - world.left;
-    const viewportTop = ((canvas.scrollTop - (state.panY || 0)) / state.scale) - world.top;
-    const viewportWidth = canvas.clientWidth / state.scale;
-    const viewportHeight = canvas.clientHeight / state.scale;
-    const nodes = state.nodes.map((node) => {
-      const left = inset + (Number(node.x || 0) - world.left) * scaleX;
-      const top = inset + (Number(node.y || 0) - world.top) * scaleY;
-      const width = Math.max(12, NODE_WIDTH * scaleX);
-      const height = Math.max(8, NODE_HEIGHT * scaleY);
-      return `<span class="${node.id === selectedId ? "active" : ""}" style="left:${left}px;top:${top}px;width:${width}px;height:${height}px" title="${escapeHtml(node.title)}"></span>`;
-    }).join("");
-    miniMap.innerHTML = `${nodes}<i class="wp-flow-minimap-view" style="left:${inset + viewportLeft * scaleX}px;top:${inset + viewportTop * scaleY}px;width:${Math.max(18, viewportWidth * scaleX)}px;height:${Math.max(14, viewportHeight * scaleY)}px"></i>`;
-  };
   const centerCanvasOn = (worldX, worldY) => {
     state.panX = Math.round((canvas.clientWidth / 2) - (worldX * state.scale));
     state.panY = Math.round((canvas.clientHeight / 2) - (worldY * state.scale));
@@ -289,16 +302,12 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     applyViewport();
     drawLines();
   };
-  const navigateMiniMap = (event) => {
-    if (!miniMap) return;
-    const rect = miniMap.getBoundingClientRect();
-    const inset = 9;
-    const mapWidth = Math.max(1, rect.width - inset * 2);
-    const mapHeight = Math.max(1, rect.height - inset * 2);
-    const x = Math.max(0, Math.min(mapWidth, event.clientX - rect.left - inset));
-    const y = Math.max(0, Math.min(mapHeight, event.clientY - rect.top - inset));
-    const world = getWorldBounds(state.nodes);
-    centerCanvasOn(world.left + (x / mapWidth) * world.width, world.top + (y / mapHeight) * world.height);
+  const worldPointFromPointer = (event) => {
+    const canvasRect = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - canvasRect.left - (state.panX || 0)) / state.scale,
+      y: (event.clientY - canvasRect.top - (state.panY || 0)) / state.scale
+    };
   };
   const worldPointFromElement = (element) => {
     const canvasRect = canvas.getBoundingClientRect();
@@ -315,9 +324,9 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     }
     return { x: Number(node.x || 0) + NODE_WIDTH / 2, y: Number(node.y || 0) + 154 };
   };
-  const drawLines = () => {
+  const drawLines = (preview = null) => {
     lines.setAttribute("viewBox", "0 0 2400 1600");
-    lines.innerHTML = normalizedEdges().map((edge) => {
+    const edgeMarkup = visibleEdges().map((edge) => {
       const a = state.nodes.find((n) => n.id === edge.from);
       const b = state.nodes.find((n) => n.id === edge.to);
       if (!a || !b) return "";
@@ -330,9 +339,29 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
       const d = isButtonEdge
         ? `M ${start.x} ${start.y} C ${start.x + spread} ${start.y}, ${end.x - spread} ${end.y}, ${end.x} ${end.y}`
         : `M ${start.x} ${start.y} C ${start.x + 44} ${start.y + 72}, ${end.x - 44} ${end.y - 72}, ${end.x} ${end.y}`;
-      return `<path class="${isButtonEdge ? "button-edge" : ""}" d="${d}" />`;
+      const midX = (start.x + end.x) / 2;
+      const midY = (start.y + end.y) / 2;
+      return `<g data-flow-edge="${edge.id}"><path class="${isButtonEdge ? "button-edge" : ""}" d="${d}" />${isButtonEdge ? `<foreignObject x="${midX - 10}" y="${midY - 10}" width="20" height="20"><button xmlns="http://www.w3.org/1999/xhtml" type="button" class="wp-flow-edge-clear" data-flow-edge-clear="${edge.from}:${edge.fromButton}" title="Remove line">×</button></foreignObject>` : ""}</g>`;
     }).join("");
-    drawMiniMap();
+    let previewMarkup = "";
+    if (preview) {
+      const source = state.nodes.find((node) => node.id === preview.from);
+      if (source) {
+        const start = edgeStartPoint({ fromButton: preview.fromButton }, source);
+        const end = preview.to;
+        const spread = Math.max(54, Math.min(150, Math.abs(end.x - start.x) * .42));
+        previewMarkup = `<path class="button-edge preview-edge" d="M ${start.x} ${start.y} C ${start.x + spread} ${start.y}, ${end.x - spread} ${end.y}, ${end.x} ${end.y}" />`;
+      }
+    }
+    lines.innerHTML = edgeMarkup + previewMarkup;
+    lines.querySelectorAll("[data-flow-edge-clear]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const [fromId, buttonIndex] = button.dataset.flowEdgeClear.split(":");
+        clearButtonConnection(fromId, Number(buttonIndex));
+      });
+    });
   };
   const selectNode = (id) => {
     selectedId = id; renderNodes(false);
@@ -398,10 +427,32 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     toast("Connection cancelled.");
     return true;
   };
+  const hideConnectMenu = () => {
+    if (!connectMenu) return;
+    connectMenu.hidden = true;
+    connectMenu.innerHTML = "";
+  };
+  const showConnectMenu = ({ fromId, buttonIndex, clientX, clientY, worldPoint }) => {
+    if (!connectMenu) return;
+    const choices = BLOCKS.filter((block) => !["end"].includes(block[0]));
+    connectMenu.innerHTML = `<header><strong>Content Block</strong><button type="button" data-flow-connect-close aria-label="Close">×</button></header>${choices.map(([type, icon, title]) => `<button type="button" data-flow-connect-type="${type}"><i>${icon}</i><span>${title}</span></button>`).join("")}`;
+    connectMenu.style.left = `${Math.min(clientX, window.innerWidth - 260)}px`;
+    connectMenu.style.top = `${Math.min(clientY, window.innerHeight - 360)}px`;
+    connectMenu.hidden = false;
+    connectMenu.querySelector("[data-flow-connect-close]")?.addEventListener("click", hideConnectMenu);
+    connectMenu.querySelectorAll("[data-flow-connect-type]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const node = addBlock(button.dataset.flowConnectType, { x: worldPoint.x, y: worldPoint.y }, fromId, false);
+        if (node) connectButtonToNode(fromId, buttonIndex, node.id);
+        hideConnectMenu();
+      });
+    });
+  };
   const renderNodes = (refreshInspector = true) => {
     state.nodes.forEach(normalizeButtonRoutes);
+    const reachable = reachableNodeIds();
     applyViewport();
-    nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""}" data-flow-node="${node.id}">${node.id === selectedId && node.type !== "start" ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">${COPY_ICON}</button><button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">${DELETE_ICON}</button></div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
+    nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""} ${validationClassFor(node, reachable)}" data-flow-node="${node.id}">${node.id === selectedId && node.type !== "start" ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">${COPY_ICON}</button><button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">${DELETE_ICON}</button></div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
       const positionedNode = state.nodes.find((item) => item.id === card.dataset.flowNode);
       if (positionedNode) applyTransform(card, `translate(${positionedNode.x}px, ${positionedNode.y}px)`);
@@ -464,6 +515,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
         port.addEventListener("pointerdown", (event) => {
           event.preventDefault();
           event.stopPropagation();
+          hideConnectMenu();
           const sourceId = card.dataset.flowNode;
           const buttonIndex = Number(port.dataset.flowButtonPort);
           port.classList.add("connecting");
@@ -476,6 +528,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
             nodeLayer.querySelectorAll("[data-flow-node]").forEach((item) => {
               item.classList.toggle("connect-hover", targetCard === item && item.dataset.flowNode !== sourceId);
             });
+            drawLines({ from: sourceId, fromButton: buttonIndex, to: worldPointFromPointer(moveEvent) });
           };
           const stop = (upEvent) => {
             port.classList.remove("connecting");
@@ -484,8 +537,13 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
             port.removeEventListener("pointermove", move);
             port.removeEventListener("pointerup", stop);
             port.removeEventListener("pointercancel", stop);
-            if (!targetCard || targetCard.dataset.flowNode === sourceId) return;
-            connectButtonToNode(sourceId, buttonIndex, targetCard.dataset.flowNode);
+            drawLines();
+            if (targetCard && targetCard.dataset.flowNode !== sourceId) {
+              connectButtonToNode(sourceId, buttonIndex, targetCard.dataset.flowNode);
+              return;
+            }
+            const worldPoint = worldPointFromPointer(upEvent);
+            showConnectMenu({ fromId: sourceId, buttonIndex, clientX: upEvent.clientX, clientY: upEvent.clientY, worldPoint });
           };
           port.addEventListener("pointermove", move);
           port.addEventListener("pointerup", stop);
@@ -564,11 +622,11 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     window.requestAnimationFrame(drawLines);
     if (refreshInspector && selectedId) selectNode(selectedId);
   };
-  const addBlock = (type, point = {}, afterId = null) => {
+  const addBlock = (type, point = {}, afterId = null, shouldRender = true) => {
     const insertIndex = afterId ? Math.max(0, state.nodes.findIndex((item) => item.id === afterId)) + 1 : state.nodes.length;
     const index = insertIndex; const previous = state.nodes[index - 1] || state.nodes[state.nodes.length - 1];
     const node = { id: crypto.randomUUID(), type, title: BLOCKS.find((item) => item[0] === type)?.[2] || "Message", body: DEFAULT_COPY[type] || "Configure this step.", x: point.x ?? Math.max(80, (previous?.x || 80) + (index % 3 === 0 ? 280 : 0)), y: point.y ?? ((previous?.y || 20) + 210), config: {} };
-    state.nodes.splice(insertIndex, 0, node); selectedId = node.id; markDraftChanged(); renderNodes();
+    state.nodes.splice(insertIndex, 0, node); selectedId = node.id; markDraftChanged(); if (shouldRender) renderNodes(); return node;
   };
   const open = (flow = null) => {
     state = flow ? { id: flow.id, description: flow.description || "", status: flow.status || "draft", triggerType: flow.trigger_type || "keyword", triggerConfig: flow.trigger_config || {}, nodes: Array.isArray(flow.nodes) && flow.nodes.length ? structuredClone(flow.nodes) : starterNodes(), edges: flow.edges || [], scale: 1, panX: 0, panY: 0 } : { id: null, description: "", status: "draft", triggerType: "keyword", triggerConfig: { keywords: [], fallback: "" }, nodes: starterNodes(), edges: [], scale: 1, panX: 0, panY: 0 };
@@ -609,6 +667,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   canvas.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || event.target.closest("[data-flow-node],button,input,textarea,select")) return;
     event.preventDefault();
+    hideConnectMenu();
     isPanningCanvas = true;
     canvas.classList.add("panning");
     const startX = event.clientX;
@@ -634,22 +693,6 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     canvas.addEventListener("pointerup", stop);
     canvas.addEventListener("pointercancel", stop);
   });
-  miniMap?.addEventListener("pointerdown", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    navigateMiniMap(event);
-    miniMap.setPointerCapture(event.pointerId);
-    const move = (moveEvent) => navigateMiniMap(moveEvent);
-    const stop = () => {
-      miniMap.removeEventListener("pointermove", move);
-      miniMap.removeEventListener("pointerup", stop);
-      miniMap.removeEventListener("pointercancel", stop);
-    };
-    miniMap.addEventListener("pointermove", move);
-    miniMap.addEventListener("pointerup", stop);
-    miniMap.addEventListener("pointercancel", stop);
-  });
-  canvas.addEventListener("scroll", drawMiniMap, { passive: true });
   dialog.querySelector("[data-flow-settings]").addEventListener("click", () => { settingsDialog.querySelector('[name="triggerType"]').value = state.triggerType; settingsDialog.querySelector('[name="keywords"]').value = (state.triggerConfig.keywords || []).join(", "); settingsDialog.querySelector('[name="fallback"]').value = state.triggerConfig.fallback || ""; settingsDialog.showModal(); });
   settingsDialog.querySelector("[data-flow-settings-close]").addEventListener("click", () => settingsDialog.close());
   settingsDialog.querySelector("[data-flow-settings-apply]").addEventListener("click", () => { state.triggerType = settingsDialog.querySelector('[name="triggerType"]').value; state.triggerConfig = { keywords: settingsDialog.querySelector('[name="keywords"]').value.split(",").map((item) => item.trim()).filter(Boolean), fallback: settingsDialog.querySelector('[name="fallback"]').value.trim() }; settingsDialog.close(); toast("Trigger settings applied to this draft."); });
