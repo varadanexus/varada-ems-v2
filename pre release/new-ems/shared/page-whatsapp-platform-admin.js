@@ -4,6 +4,56 @@ import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 
 const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", "meta", "security"]);
+const VIEW_META = Object.freeze({
+  overview: {
+    title: "Platform overview",
+    description: "Monitor customer workspaces, product readiness and the operational health of WhatsApp Solutions.",
+    section: "Product management",
+    marker: "PO",
+  },
+  customers: {
+    title: "Customers",
+    description: "Manage customer companies, operational package assignments, seat capacity and workspace status.",
+    section: "Product management",
+    marker: "CU",
+  },
+  verification: {
+    title: "Business verification",
+    description: "Review customer identity evidence and control the verification gate used before Meta onboarding.",
+    section: "Risk & onboarding",
+    marker: "BV",
+  },
+  connections: {
+    title: "Meta connections",
+    description: "Inspect tenant-scoped WhatsApp Business Accounts and connection readiness without exposing credentials.",
+    section: "Product management",
+    marker: "MC",
+  },
+  "package-master": {
+    title: "Package Master",
+    description: "Maintain the central source of truth for customer entitlements, limits, billing and add-ons.",
+    section: "Commercial control",
+    marker: "PM",
+  },
+  packages: {
+    title: "Packages & Offers",
+    description: "Manage the public pricing and offer catalogue independently from operational customer access.",
+    section: "Public website",
+    marker: "P&",
+  },
+  meta: {
+    title: "Meta App Setup",
+    description: "Operate the provider application, Embedded Signup, webhook and protected server configuration.",
+    section: "Application control",
+    marker: "MA",
+  },
+  security: {
+    title: "Security",
+    description: "Review product isolation, privileged access controls and security operating requirements.",
+    section: "Application control",
+    marker: "SE",
+  },
+});
 const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false };
 const db = getSupabaseClient();
 
@@ -20,11 +70,6 @@ function formatDate(value) {
 function status(value) {
   const safe = escapeHtml(value || "unknown");
   return `<span class="wa-status ${safe}">${safe.replaceAll("_", " ")}</span>`;
-}
-
-function tabs() {
-  const items = [["overview","Overview"],["customers","Customers"],["verification","Business Verification"],["connections","Meta Connections"],["package-master","Package Master"],["packages","Packages & Offers"],["meta","Meta App Setup"],["security","Security"]];
-  return `<nav class="wa-admin-tabs" aria-label="Platform management">${items.map(([id,label]) => `<button class="wa-admin-tab ${state.view === id ? "active" : ""}" type="button" data-view="${id}">${label}</button>`).join("")}</nav>`;
 }
 
 function metrics() {
@@ -520,19 +565,22 @@ function content() {
 }
 
 function render() {
-  renderModuleContent(`<div class="wa-admin-shell"><section class="wa-admin-hero"><div><span class="wa-admin-kicker">Internal product operations</span><h2>WhatsApp Business Platform</h2><p>Build, launch, and operate the customer-facing application without mixing it with Varada Nexus internal company communications.</p></div><div class="wa-admin-actions"><a class="wa-admin-button" href="${ROUTES.WHATSAPP_PLATFORM_PORTAL}" target="_blank" rel="noopener">View public portal</a><button class="wa-admin-button primary" id="waRefresh" type="button">Refresh data</button></div></section>${tabs()}<div id="waAdminContent">${content()}</div></div>`);
+  const meta = VIEW_META[state.view] || VIEW_META.overview;
+  const pageHead = document.querySelector(".page-head");
+  if (pageHead) {
+    const title = pageHead.querySelector("h1");
+    const description = pageHead.querySelector("p");
+    const scope = pageHead.querySelector(".meta-pill");
+    if (title) title.textContent = meta.title;
+    if (description) description.textContent = meta.description;
+    if (scope) scope.textContent = `WhatsApp Business Platform · ${meta.section}`;
+  }
+  document.title = `${meta.title} | WhatsApp Business Platform | Varada Nexus`;
+  renderModuleContent(`<div class="wa-admin-shell" data-admin-view="${escapeHtml(state.view)}"><section class="wa-admin-commandbar"><div class="wa-admin-command-context"><span class="wa-admin-command-marker" aria-hidden="true">${escapeHtml(meta.marker)}</span><div><span class="wa-admin-kicker">${escapeHtml(meta.section)}</span><strong>${escapeHtml(meta.title)}</strong></div></div><div class="wa-admin-actions"><a class="wa-admin-button" href="${ROUTES.WHATSAPP_PLATFORM_PORTAL}" target="_blank" rel="noopener">View public portal</a><button class="wa-admin-button primary" id="waRefresh" type="button">Refresh data</button></div></section><main class="wa-admin-view" id="waAdminContent">${content()}</main></div>`);
   bind();
 }
 
 function bind() {
-  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => {
-    state.view = button.dataset.view;
-    const url = new URL(location.href);
-    if (state.view === "overview") url.searchParams.delete("view"); else url.searchParams.set("view", state.view);
-    history.pushState({}, "", url);
-    render();
-    if (state.view === "meta" && state.hasFullAuthority && !state.providerSecretStatus) loadProviderSecretStatus();
-  }));
   document.querySelector("#waRefresh")?.addEventListener("click", () => loadSnapshot());
   document.querySelectorAll("[data-tenant-form]").forEach((form) => form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -636,7 +684,17 @@ async function loadSnapshot() {
 async function init() {
   const requested = new URLSearchParams(location.search).get("view") || "overview";
   state.view = VIEWS.has(requested) ? requested : "overview";
-  const boot = await bootstrapProtectedPage({ moduleCode: MODULES.WHATSAPP_PLATFORM, pageTitle: "WhatsApp Business Platform", pageDescription: "Customer product management and Meta application operations", workspace: WORKSPACES.WHATSAPP_PLATFORM });
+  const boot = await bootstrapProtectedPage({
+    moduleCode: MODULES.WHATSAPP_PLATFORM,
+    pageTitle: "Platform overview",
+    pageDescription: "Customer product management and Meta application operations",
+    workspace: WORKSPACES.WHATSAPP_PLATFORM,
+    sidebarContext: {
+      title: "WhatsApp Business Platform",
+      subtitle: "Customer product operations",
+      showBack: false,
+    },
+  });
   if (!boot) return;
   state.hasFullAuthority = boot.roleCodes.some((role) => ["chairman_managing_director", "super_admin"].includes(role));
   state.canManage = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && ["edit", "approve"].includes(permission.action_code));
