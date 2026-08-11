@@ -1532,6 +1532,36 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   transform: translateY(-50%) scale(1.12);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 20%, transparent);
 }
+.wp-flow-button-port.connected {
+  background: #078766;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #078766 28%, transparent);
+}
+.wp-flow-line-clear {
+  position: absolute;
+  right: -35px;
+  top: 50%;
+  z-index: 4;
+  min-width: 20px !important;
+  width: 20px;
+  height: 20px;
+  min-height: 20px !important;
+  padding: 0;
+  transform: translateY(-50%);
+  border-radius: 50% !important;
+  border-color: color-mix(in srgb, #ef4444 38%, var(--wp-border)) !important;
+  background: color-mix(in srgb, #ef4444 12%, var(--wp-panel)) !important;
+  color: #ef4444 !important;
+  font-size: .78rem !important;
+  font-weight: 900 !important;
+  line-height: 1;
+  cursor: pointer;
+}
+.wp-flow-line-clear:hover,
+.wp-flow-line-clear:focus-visible {
+  outline: 0;
+  background: #ef4444 !important;
+  color: #fff !important;
+}
 .wp-flow-node.connect-target {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--wp-accent) 18%, transparent), 0 14px 34px rgba(0,0,0,.18);
 }
@@ -1864,6 +1894,36 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   outline: 0;
   transform: translateY(-50%) scale(1.12);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 20%, transparent);
+}
+.wp-flow-button-port.connected {
+  background: #078766;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #078766 28%, transparent);
+}
+.wp-flow-line-clear {
+  position: absolute;
+  right: -35px;
+  top: 50%;
+  z-index: 4;
+  min-width: 20px !important;
+  width: 20px;
+  height: 20px;
+  min-height: 20px !important;
+  padding: 0;
+  transform: translateY(-50%);
+  border-radius: 50% !important;
+  border-color: color-mix(in srgb, #ef4444 38%, var(--wp-border)) !important;
+  background: color-mix(in srgb, #ef4444 12%, var(--wp-panel)) !important;
+  color: #ef4444 !important;
+  font-size: .78rem !important;
+  font-weight: 900 !important;
+  line-height: 1;
+  cursor: pointer;
+}
+.wp-flow-line-clear:hover,
+.wp-flow-line-clear:focus-visible {
+  outline: 0;
+  background: #ef4444 !important;
+  color: #fff !important;
 }
 .wp-flow-node.connect-target {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--wp-accent) 18%, transparent), 0 14px 34px rgba(0,0,0,.18);

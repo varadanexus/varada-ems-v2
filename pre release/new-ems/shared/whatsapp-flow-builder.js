@@ -63,7 +63,7 @@ function nodeOptions(nodes, escapeHtml, selected = "") {
 }
 function renderQuickButtons(node, escapeHtml, nodes = []) {
   const buttons = buttonValues(node);
-  return `<div class="wp-flow-inline-buttons"><span>Reply buttons</span>${buttons.map((button, index) => `<label><input data-node-button-label="${index}" maxlength="20" value="${escapeHtml(button.label)}" placeholder="Button ${index + 1}" /><select class="wp-flow-route-select" data-node-button-next="${index}" title="Route this button">${nodeOptions(nodes, escapeHtml, button.next)}</select><i class="wp-flow-button-port" data-flow-button-port="${index}" role="button" tabindex="0" title="Drag to connect this button"></i><button type="button" data-flow-remove-button="${index}" aria-label="Remove button">×</button></label>`).join("")}<button type="button" data-flow-add-button>＋ Add Button</button></div>`;
+  return `<div class="wp-flow-inline-buttons"><span>Reply buttons</span>${buttons.map((button, index) => `<label class="${button.next ? "has-route" : ""}"><input data-node-button-label="${index}" maxlength="20" value="${escapeHtml(button.label)}" placeholder="Button ${index + 1}" /><select class="wp-flow-route-select" data-node-button-next="${index}" title="Route this button">${nodeOptions(nodes, escapeHtml, button.next)}</select><i class="wp-flow-button-port ${button.next ? "connected" : ""}" data-flow-button-port="${index}" role="button" tabindex="0" title="${button.next ? "Drag to change this route" : "Drag to connect this button"}"></i>${button.next ? `<button type="button" class="wp-flow-line-clear" data-flow-clear-button="${index}" aria-label="Cancel this line" title="Cancel this line">×</button>` : ""}<button type="button" data-flow-remove-button="${index}" aria-label="Remove button">×</button></label>`).join("")}<button type="button" data-flow-add-button>＋ Add Button</button></div>`;
 }
 function renderNodeFields(node, escapeHtml, nodes = []) {
   const config = node.config || {};
@@ -192,6 +192,23 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     }
     node.config = { ...(node.config || {}) };
     node.config[field] = element.type === "checkbox" ? element.checked : element.value;
+  };
+  const normalizeButtonRoutes = (node) => {
+    if (!node) return false;
+    const buttons = buttonValues(node);
+    const seenTargets = new Set();
+    let changed = false;
+    const nextButtons = buttons.map((button) => {
+      const next = button.next || "";
+      if (next && seenTargets.has(next)) {
+        changed = true;
+        return { ...button, next: "" };
+      }
+      if (next) seenTargets.add(next);
+      return button;
+    });
+    if (changed) node.config = { ...(node.config || {}), buttons: nextButtons };
+    return changed;
   };
 
   const normalizedEdges = () => {
@@ -349,6 +366,11 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     if (!source) return false;
     source.config = { ...(source.config || {}) };
     const buttons = buttonValues(source).slice();
+    const duplicateIndex = buttons.findIndex((button, index) => index !== buttonIndex && button.next === toId);
+    if (duplicateIndex >= 0) {
+      toast("That block is already connected from another button. Cancel the existing line first.", "error");
+      return false;
+    }
     buttons[buttonIndex] = { ...(buttons[buttonIndex] || { label: `Button ${buttonIndex + 1}`, next: "" }), next: toId };
     source.config.buttons = buttons;
     selectedId = fromId;
@@ -357,7 +379,21 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     toast("Button connected to the next block.");
     return true;
   };
+  const clearButtonConnection = (fromId, buttonIndex) => {
+    const source = state.nodes.find((item) => item.id === fromId);
+    if (!source) return false;
+    const buttons = buttonValues(source).slice();
+    if (!buttons[buttonIndex]?.next) return false;
+    buttons[buttonIndex] = { ...buttons[buttonIndex], next: "" };
+    source.config = { ...(source.config || {}), buttons };
+    selectedId = fromId;
+    markDraftChanged();
+    renderNodes(false);
+    toast("Connection cancelled.");
+    return true;
+  };
   const renderNodes = (refreshInspector = true) => {
+    state.nodes.forEach(normalizeButtonRoutes);
     applyViewport();
     nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""}" data-flow-node="${node.id}">${node.id === selectedId && node.type !== "start" ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">${COPY_ICON}</button><button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">${DELETE_ICON}</button></div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
@@ -401,6 +437,10 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
           node.config = { ...(node.config || {}) };
           const buttons = buttonValues(node).slice();
           const index = Number(field.dataset.nodeButtonLabel ?? field.dataset.nodeButtonNext);
+          if (field.dataset.nodeButtonNext !== undefined && field.value && buttons.some((button, buttonIndex) => buttonIndex !== index && button.next === field.value)) {
+            field.value = "";
+            toast("That block is already connected from another button. Cancel the existing line first.", "error");
+          }
           buttons[index] = { ...(buttons[index] || { label: "", next: "" }), [field.dataset.nodeButtonLabel !== undefined ? "label" : "next"]: field.value };
           node.config.buttons = buttons;
           markDraftChanged();
@@ -439,6 +479,13 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
           port.addEventListener("pointermove", move);
           port.addEventListener("pointerup", stop);
           port.addEventListener("pointercancel", stop);
+        });
+      });
+      card.querySelectorAll("[data-flow-clear-button]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          clearButtonConnection(card.dataset.flowNode, Number(button.dataset.flowClearButton));
         });
       });
       card.querySelector("[data-flow-add-button]")?.addEventListener("click", (event) => {
