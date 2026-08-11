@@ -125,21 +125,31 @@ async function listTeam(admin: any, customer: any) {
     admin.from("whatsapp_platform_users")
       .select("id,display_name,email,role_code,status,last_login_at,created_at,invited_at,invite_expires_at")
       .eq("tenant_id", customer.tenant_id).order("display_name", { ascending: true }).limit(250),
-    admin.from("whatsapp_platform_tenants").select("plan_code,additional_team_seats").eq("id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_tenants").select("plan_code").eq("id", customer.tenant_id).single(),
   ]);
   if (error) throw error;
   if (tenantError || !tenant) throw new Error("Workspace package information is unavailable.");
   const catalogCode = tenant.plan_code === "starter" ? "launch" : tenant.plan_code;
-  const { data: plan } = await admin.from("whatsapp_platform_plans").select("label,team_member_limit").eq("code", catalogCode).maybeSingle();
+  const master = await packageMaster(admin, customer);
+  const plan = master?.package || null;
   const fallbackLimit = tenant.plan_code === "enterprise" ? null : tenant.plan_code === "growth" ? 10 : 3;
   const includedLimit = plan && Object.hasOwn(plan, "team_member_limit") ? plan.team_member_limit : fallbackLimit;
-  const additionalSeats = Math.max(0, Number(tenant.additional_team_seats || 0));
+  const additionalSeats = Math.max(0, (master?.addons || []).reduce((total: number, addon: any) => total + Number(addon?.entitlement_effects?.team_member_limit || 0) * Number(addon?.quantity || 0), 0));
   const seatLimit = includedLimit === null ? null : Number(includedLimit) + additionalSeats;
   const seatsUsed = (data || []).filter((member: any) => ["active", "invited"].includes(member.status)).length;
   return {
     members: data || [], currentUserId: customer.user_id, currentRole: customer.role_code,
-    capacity: { planCode: catalogCode, planLabel: plan?.label || catalogCode, includedSeats: includedLimit, additionalSeats, seatLimit, seatsUsed, availableSeats: seatLimit === null ? null : Math.max(0, seatLimit - seatsUsed) },
+    capacity: { planCode: catalogCode, planLabel: plan?.name || catalogCode, includedSeats: includedLimit, additionalSeats, seatLimit, seatsUsed, availableSeats: seatLimit === null ? null : Math.max(0, seatLimit - seatsUsed) },
   };
+}
+
+async function packageMaster(admin: any, customer: any) {
+  const { data, error } = await admin.rpc("whatsapp_platform_customer_package_master", {
+    p_tenant_id: customer.tenant_id,
+    p_user_id: customer.user_id,
+  });
+  if (error) throw error;
+  return data || { package: null, addons: [], availableAddons: [] };
 }
 async function inviteTeamMember(admin: any, customer: any, body: any) {
   if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can invite members.");
@@ -666,6 +676,7 @@ Deno.serve(async (req) => {
     const action = String(body.action || "list");
     if (action === "list") return json(req, await listConversations(admin, customer, body));
     if (action === "list_team") return json(req, await listTeam(admin, customer));
+    if (action === "package_master") return json(req, await packageMaster(admin, customer));
     if (action === "invite_team_member") return json(req, await inviteTeamMember(admin, customer, body));
     if (action === "update_team_member") return json(req, await updateTeamMember(admin, customer, body));
     if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));

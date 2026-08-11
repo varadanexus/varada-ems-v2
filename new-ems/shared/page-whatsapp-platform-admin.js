@@ -3,8 +3,8 @@ import { getSupabaseAccessToken, getSupabaseClient } from "../config/supabase.js
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 
-const VIEWS = new Set(["overview", "customers", "verification", "connections", "packages", "meta", "security"]);
-const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, providerSecretStatus: null, providerSecretLoading: false };
+const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", "meta", "security"]);
+const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false };
 const db = getSupabaseClient();
 
 function escapeHtml(value) {
@@ -23,7 +23,7 @@ function status(value) {
 }
 
 function tabs() {
-  const items = [["overview","Overview"],["customers","Customers"],["verification","Business Verification"],["connections","Meta Connections"],["packages","Packages & Offers"],["meta","Meta App Setup"],["security","Security"]];
+  const items = [["overview","Overview"],["customers","Customers"],["verification","Business Verification"],["connections","Meta Connections"],["package-master","Package Master"],["packages","Packages & Offers"],["meta","Meta App Setup"],["security","Security"]];
   return `<nav class="wa-admin-tabs" aria-label="Platform management">${items.map(([id,label]) => `<button class="wa-admin-tab ${state.view === id ? "active" : ""}" type="button" data-view="${id}">${label}</button>`).join("")}</nav>`;
 }
 
@@ -50,14 +50,19 @@ function overview() {
 }
 
 function customers() {
+  if (!state.packageMaster && !state.packageMasterError && !state.packageMasterLoading) loadPackageMaster();
+  const masterPackages = (state.packageMaster?.packages || []).filter((pkg) => pkg.status === "active");
   const rows = state.snapshot?.tenants || [];
   if (!rows.length) return '<section class="wa-admin-card"><h3>Customer companies</h3><p>Manage product tenants, plans and access status.</p><div class="wa-admin-empty">No customers yet. New public signups will appear here.</div></section>';
   return `<section class="wa-admin-card"><h3>Customer companies</h3><p>Plans supply included team seats. Extra purchased seats can be assigned per customer; active members and pending invitations both consume capacity.</p><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Company</th><th>Owner</th><th>Team seats</th><th>Connections</th><th>Plan, extra seats &amp; status</th><th>Created</th></tr></thead><tbody>${rows.map((item) => {
-    const included = item.includedTeamSeats == null ? null : Number(item.includedTeamSeats);
-    const extra = Number(item.additionalTeamSeats || 0);
-    const capacity = included == null ? "Unlimited" : String(included + extra);
     const planCode = item.planCode === "starter" ? "launch" : item.planCode;
-    return `<tr><td><strong>${escapeHtml(item.name)}</strong><br><small>${escapeHtml(item.slug)}</small></td><td>${escapeHtml(item.ownerEmail)}</td><td><strong>${Number(item.userCount || 0)} / ${capacity}</strong><br><small>${included == null ? "Enterprise unlimited" : `${included} included + ${extra} extra`}</small></td><td>${Number(item.connectionCount || 0)}</td><td>${state.canManage ? `<form class="wa-admin-inline-form" data-tenant-form="${escapeHtml(item.id)}"><label><span>Package</span><select name="plan"><option value="launch" ${planCode === "launch" ? "selected" : ""}>Launch</option><option value="growth" ${planCode === "growth" ? "selected" : ""}>Growth</option><option value="enterprise" ${planCode === "enterprise" ? "selected" : ""}>Enterprise</option></select></label><label><span>Extra seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extra}" /></label><label><span>Status</span><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select></label><button type="submit">Save</button></form>` : `${escapeHtml(planCode)} · ${capacity} seats · ${status(item.status)}`}</td><td>${escapeHtml(formatDate(item.createdAt))}</td></tr>`;
+    const masterPackage = masterPackages.find((pkg) => pkg.code === planCode);
+    const included = masterPackage ? (masterPackage.team_member_limit == null ? null : Number(masterPackage.team_member_limit)) : (item.includedTeamSeats == null ? null : Number(item.includedTeamSeats));
+    const seatAssignment = (state.packageMaster?.assignments || []).find((entry) => entry.tenantId === item.id && entry.addonCode === "extra_agent_seat" && entry.status === "active");
+    const extra = seatAssignment ? Number(seatAssignment.quantity || 0) : Number(item.additionalTeamSeats || 0);
+    const capacity = included == null ? "Unlimited" : String(included + extra);
+    const packageOptions = masterPackages.length ? masterPackages.map((pkg) => `<option value="${escapeHtml(pkg.code)}" ${planCode === pkg.code ? "selected" : ""}>${escapeHtml(pkg.name)}${pkg.status === "draft" ? " (draft)" : ""}</option>`).join("") : `<option value="${escapeHtml(planCode)}" selected>${escapeHtml(masterPackage?.name || planCode)}</option>`;
+    return `<tr><td><strong>${escapeHtml(item.name)}</strong><br><small>${escapeHtml(item.slug)}</small></td><td>${escapeHtml(item.ownerEmail)}</td><td><strong>${Number(item.userCount || 0)} / ${capacity}</strong><br><small>${included == null ? "Package unlimited" : `${included} included + ${extra} extra`}</small></td><td>${Number(item.connectionCount || 0)}</td><td>${state.canManage ? `<form class="wa-admin-inline-form" data-tenant-form="${escapeHtml(item.id)}"><label><span>Package Master assignment</span><select name="plan">${packageOptions}</select></label><label><span>Extra seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extra}" /></label><label><span>Status</span><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select></label><button type="submit">Save</button></form>` : `${escapeHtml(masterPackage?.name || planCode)} · ${capacity} seats · ${status(item.status)}`}</td><td>${escapeHtml(formatDate(item.createdAt))}</td></tr>`;
   }).join("")}</tbody></table></div></section>`;
 }
 
@@ -161,6 +166,179 @@ function security() {
   return `<section class="wa-admin-grid"><article class="wa-admin-card"><h3>Customer access boundary</h3><p>The sellable product maintains a dedicated, protected access boundary separate from staff operations.</p><div class="wa-admin-list"><div class="wa-admin-row"><strong>Access controls</strong><span>Protected</span></div><div class="wa-admin-row"><strong>Credential handling</strong><span>Restricted</span></div><div class="wa-admin-row"><strong>Access lifecycle</strong><span>Managed</span></div><div class="wa-admin-row"><strong>Business separation</strong><span>Enforced</span></div><div class="wa-admin-row"><strong>Provider secrets</strong><span>Protected</span></div></div></article><article class="wa-admin-card"><h3>Security activity</h3><p>Aggregate access signals are shown without exposing credentials or security implementation details.</p><div class="wa-admin-list"><div class="wa-admin-row"><strong>Sign-in attempts · 24h</strong><span>${Number(auth.loginAttempts24h || 0)}</span></div><div class="wa-admin-row"><strong>Signup attempts · 24h</strong><span>${Number(auth.signupAttempts24h || 0)}</span></div><div class="wa-admin-row"><strong>Active access grants</strong><span>${Number(state.snapshot?.totals?.activeSessions || 0)}</span></div><div class="wa-admin-row"><strong>Inactive access grants</strong><span>${Number(auth.inactiveSessions || 0)}</span></div></div></article></section>`;
 }
 
+async function loadPackageMaster() {
+  state.packageMasterLoading = true;
+  const { data, error } = await db.rpc("whatsapp_platform_admin_package_master");
+  state.packageMasterLoading = false;
+  if (error) { state.packageMasterError = error.message || "Could not load Package Master."; state.packageMaster = null; }
+  else { state.packageMaster = data || { packages: [], addons: [], assignments: [] }; state.packageMasterError = ""; }
+  render();
+}
+
+function masterValue(record, key) { return escapeHtml(record?.[key] ?? ""); }
+function masterLimit(record, key) { return record?.[key] == null ? "" : escapeHtml(record[key]); }
+function masterOption(value, current, label = value) { return `<option value="${escapeHtml(value)}" ${String(current) === value ? "selected" : ""}>${escapeHtml(label)}</option>`; }
+
+function masterPackageForm(pkg) {
+  const p = pkg || {};
+  const isNew = !p.id;
+  const access = p.entitlements || {};
+  const accessToggle = (key, label) => `<label class="wa-master-toggle"><input type="checkbox" name="access_${key}" ${access[key] === true ? "checked" : ""}/><span>${escapeHtml(label)}</span></label>`;
+  return `<form class="wa-master-record" data-master-package-form="${escapeHtml(p.id || "")}">
+    <header><div><span class="wa-admin-kicker">${isNew ? "New operational package" : `Package · ${escapeHtml(p.code)}`}</span><h3>${escapeHtml(p.name || "Create package")}</h3><p>${isNew ? "Create an internal package definition. It will not appear on the public website." : "Controls customer access, limits and recurring billing."}</p></div><span class="wa-master-state ${escapeHtml(p.status || "draft")}">${escapeHtml(p.status || "draft")}</span></header>
+    <div class="wa-master-section"><h4>Identity &amp; lifecycle</h4><div class="wa-pkg-grid">
+      <label>Package code<input name="code" required pattern="[a-z0-9][a-z0-9_-]{1,49}" value="${masterValue(p,"code")}" placeholder="launch" ${isNew ? "" : "readonly"}/><small>Immutable key used by customer assignments.</small></label>
+      <label>Customer portal name<input name="name" required value="${masterValue(p,"name")}" placeholder="Launch"/></label>
+      <label>Status<select name="status">${masterOption("draft",p.status,"Draft")}${masterOption("active",p.status,"Active")}${masterOption("retired",p.status,"Retired")}</select></label>
+      <label class="wa-pkg-full">Internal description<textarea name="description" rows="2">${masterValue(p,"description")}</textarea></label>
+    </div></div>
+    <div class="wa-master-section"><h4>Billing authority</h4><div class="wa-pkg-grid">
+      <label>Billing model<select name="billingModel">${masterOption("subscription",p.billing_model,"Subscription")}${masterOption("contact_sales",p.billing_model,"Contact sales")}${masterOption("free",p.billing_model,"Free")}</select></label>
+      <label>Currency<input name="currency" maxlength="3" pattern="[A-Z]{3}" value="${masterValue(p,"currency") || "INR"}"/></label>
+      <label>Trial days<input name="trialDays" type="number" min="0" max="365" value="${masterValue(p,"trial_days") || 0}"/></label>
+      <label>Monthly amount<input name="monthlyAmount" type="number" min="0" step="0.01" value="${masterValue(p,"monthly_amount") || 0}"/></label>
+      <label>Annual amount<input name="annualAmount" type="number" min="0" step="0.01" value="${masterValue(p,"annual_amount") || 0}"/></label>
+      <label>Sort order<input name="sortOrder" type="number" value="${masterValue(p,"sort_order") || 0}"/></label>
+    </div></div>
+    <div class="wa-master-section"><h4>Enforced resource limits</h4><p class="wa-master-help">Blank means unlimited. Zero disables a metered capability.</p><div class="wa-master-limits">
+      <label>Team seats<input name="teamMemberLimit" type="number" min="1" value="${masterLimit(p,"team_member_limit")}" placeholder="Unlimited"/></label>
+      <label>WhatsApp numbers<input name="whatsappNumberLimit" type="number" min="1" value="${masterLimit(p,"whatsapp_number_limit")}" placeholder="Unlimited"/></label>
+      <label>Contacts<input name="contactLimit" type="number" min="0" value="${masterLimit(p,"contact_limit")}" placeholder="Unlimited"/></label>
+      <label>Messages / month<input name="monthlyMessageLimit" type="number" min="0" value="${masterLimit(p,"monthly_message_limit")}" placeholder="Unlimited"/></label>
+      <label>Templates<input name="templateLimit" type="number" min="0" value="${masterLimit(p,"template_limit")}" placeholder="Unlimited"/></label>
+      <label>Flows<input name="flowLimit" type="number" min="0" value="${masterLimit(p,"flow_limit")}" placeholder="Unlimited"/></label>
+      <label>Campaigns<input name="campaignLimit" type="number" min="0" value="${masterLimit(p,"campaign_limit")}" placeholder="Unlimited"/></label>
+      <label>Automations<input name="automationLimit" type="number" min="0" value="${masterLimit(p,"automation_limit")}" placeholder="Unlimited"/></label>
+      <label>Integrations<input name="integrationLimit" type="number" min="0" value="${masterLimit(p,"integration_limit")}" placeholder="Unlimited"/></label>
+      <label>Storage (MB)<input name="storageLimitMb" type="number" min="0" value="${masterLimit(p,"storage_limit_mb")}" placeholder="Unlimited"/></label>
+    </div></div>
+    <div class="wa-master-section"><h4>Feature access</h4><div class="wa-master-toggles">${accessToggle("team_inbox","Team inbox")}${accessToggle("contacts","Contacts")}${accessToggle("templates","Message templates")}${accessToggle("campaigns","Campaigns")}${accessToggle("flows","Flows")}${accessToggle("automations","Automations")}${accessToggle("api_access","API access")}${accessToggle("priority_support","Priority support")}</div></div>
+    <footer><span>Last updated ${escapeHtml(formatDate(p.updated_at))}</span><button class="wa-admin-button primary" type="submit">${isNew ? "Create package" : "Save master package"}</button></footer>
+  </form>`;
+}
+
+function masterAddonForm(addon, packages) {
+  const a = addon || {};
+  const isNew = !a.id;
+  const eligible = Array.isArray(a.eligible_plan_codes) ? a.eligible_plan_codes : [];
+  const effects = a.entitlement_effects || {};
+  return `<form class="wa-master-record compact" data-master-addon-form="${escapeHtml(a.id || "")}">
+    <header><div><span class="wa-admin-kicker">${isNew ? "New operational add-on" : `Add-on · ${escapeHtml(a.code)}`}</span><h3>${escapeHtml(a.name || "Create add-on")}</h3><p>Defines billing and the exact access or capacity change.</p></div><span class="wa-master-state ${escapeHtml(a.status || "draft")}">${escapeHtml(a.status || "draft")}</span></header>
+    <div class="wa-pkg-grid">
+      <label>Add-on code<input name="code" required pattern="[a-z0-9][a-z0-9_-]{1,79}" value="${masterValue(a,"code")}" ${isNew ? "" : "readonly"}/></label>
+      <label>Customer portal name<input name="name" required value="${masterValue(a,"name")}"/></label>
+      <label>Status<select name="status">${masterOption("draft",a.status,"Draft")}${masterOption("active",a.status,"Active")}${masterOption("retired",a.status,"Retired")}</select></label>
+      <label>Billing model<select name="billingModel">${masterOption("recurring",a.billing_model,"Recurring")}${masterOption("one_time",a.billing_model,"One-time")}${masterOption("usage",a.billing_model,"Usage")}${masterOption("contact_sales",a.billing_model,"Contact sales")}</select></label>
+      <label>Interval<select name="billingInterval">${masterOption("month",a.billing_interval,"Monthly")}${masterOption("year",a.billing_interval,"Annual")}${masterOption("one_time",a.billing_interval,"One-time")}${masterOption("usage",a.billing_interval,"Usage")}${masterOption("custom",a.billing_interval,"Custom")}</select></label>
+      <label>Currency<input name="currency" maxlength="3" value="${masterValue(a,"currency") || "INR"}"/></label>
+      <label>Unit amount<input name="unitAmount" type="number" min="0" step="0.01" value="${masterValue(a,"unit_amount") || 0}"/></label>
+      <label>Billing unit<input name="unitName" value="${masterValue(a,"unit_name") || "unit"}"/></label>
+      <label>Quantity step<input name="quantityStep" type="number" min="1" value="${masterValue(a,"quantity_step") || 1}"/></label>
+      <label>Minimum quantity<input name="minimumQuantity" type="number" min="0" value="${masterValue(a,"minimum_quantity") || 1}"/></label>
+      <label>Maximum quantity<input name="maximumQuantity" type="number" min="1" value="${masterLimit(a,"maximum_quantity")}" placeholder="Unlimited"/></label>
+      <label>Sort order<input name="sortOrder" type="number" value="${masterValue(a,"sort_order") || 0}"/></label>
+      <label class="wa-pkg-full">Description<textarea name="description" rows="2">${masterValue(a,"description")}</textarea></label>
+    </div>
+    <div class="wa-master-section"><h4>Eligible packages</h4><div class="wa-master-toggles">${packages.map((p) => `<label class="wa-master-toggle"><input type="checkbox" name="eligible_${escapeHtml(p.code)}" ${eligible.includes(p.code) ? "checked" : ""}/><span>${escapeHtml(p.name)}</span></label>`).join("") || "<span>Create a package first.</span>"}</div></div>
+    <div class="wa-master-section"><h4>Entitlement effect per unit</h4><div class="wa-master-limits"><label>Extra seats<input name="effect_team_member_limit" type="number" min="0" value="${escapeHtml(effects.team_member_limit ?? 0)}"/></label><label>Extra numbers<input name="effect_whatsapp_number_limit" type="number" min="0" value="${escapeHtml(effects.whatsapp_number_limit ?? 0)}"/></label><label>Extra integrations<input name="effect_integration_limit" type="number" min="0" value="${escapeHtml(effects.integration_limit ?? 0)}"/></label><label class="wa-master-toggle"><input name="effect_priority_support" type="checkbox" ${effects.priority_support ? "checked" : ""}/><span>Enable priority support</span></label></div></div>
+    <footer><label class="wa-master-toggle"><input name="isSelfService" type="checkbox" ${a.is_self_service ? "checked" : ""}/><span>Customer can purchase</span></label><button class="wa-admin-button primary" type="submit">${isNew ? "Create add-on" : "Save master add-on"}</button></footer>
+  </form>`;
+}
+
+function masterAssignments(tenants, addons, assignments) {
+  const addonMap = new Map(addons.map((addon) => [addon.code, addon]));
+  const assignmentRows = assignments.map((item) => {
+    const addon = addonMap.get(item.addonCode);
+    return `<form class="wa-master-assignment" data-master-assignment><input type="hidden" name="tenantId" value="${escapeHtml(item.tenantId)}"/><input type="hidden" name="addonCode" value="${escapeHtml(item.addonCode)}"/><div><strong>${escapeHtml(item.tenantName)}</strong><small>${escapeHtml(item.planCode)}</small></div><div><strong>${escapeHtml(addon?.name || item.addonCode)}</strong><small>${escapeHtml(item.addonCode)}</small></div><label>Quantity<input name="quantity" type="number" min="0" max="10000" value="${Number(item.quantity || 0)}"/></label><label>Status<select name="status">${masterOption("active",item.status,"Active")}${masterOption("pending",item.status,"Pending")}${masterOption("paused",item.status,"Paused")}${masterOption("cancelled",item.status,"Cancelled")}</select></label><button class="wa-admin-button" type="submit">Update</button></form>`;
+  }).join("");
+  const tenantOptions = tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}">${escapeHtml(tenant.name)} · ${escapeHtml(tenant.planCode)}</option>`).join("");
+  const addonOptions = addons.filter((addon) => addon.status === "active").map((addon) => `<option value="${escapeHtml(addon.code)}">${escapeHtml(addon.name)}</option>`).join("");
+  return `<section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Customer add-on assignments</h3><p>This ledger is the billing and entitlement source used by customer workspaces.</p></div></div><div class="wa-master-assignment-list">${assignmentRows || '<div class="wa-admin-empty">No customer add-ons assigned.</div>'}</div>${state.canManage ? `<form class="wa-master-assignment create" data-master-assignment><div><strong>Assign an add-on</strong><small>Eligibility is checked against the customer package.</small></div><label>Customer<select name="tenantId" required><option value="">Select customer</option>${tenantOptions}</select></label><label>Add-on<select name="addonCode" required><option value="">Select add-on</option>${addonOptions}</select></label><label>Quantity<input name="quantity" type="number" min="1" max="10000" value="1" required/></label><label>Status<select name="status"><option value="active">Active</option><option value="pending">Pending</option></select></label><button class="wa-admin-button primary" type="submit">Assign add-on</button></form>` : ""}</section>`;
+}
+
+function packageMaster() {
+  if (!state.packageMaster && !state.packageMasterError) { if (!state.packageMasterLoading) loadPackageMaster(); return '<div class="wa-admin-empty">Loading Package Master…</div>'; }
+  if (state.packageMasterError) return `<div class="wa-admin-notice"><strong>Package Master is not active yet.</strong><br>${escapeHtml(state.packageMasterError)}</div>`;
+  const packages = state.packageMaster?.packages || [];
+  const addons = state.packageMaster?.addons || [];
+  const tenants = state.packageMaster?.tenants || [];
+  const assignments = state.packageMaster?.assignments || [];
+  const active = packages.filter((item) => item.status === "active").length;
+  return `<section class="wa-master-intro"><div><span class="wa-admin-kicker">Central source of truth</span><h3>Package Master</h3><p>Customer portal access and billing are resolved from these operational records. Public Packages &amp; Offers are maintained separately.</p></div><div class="wa-master-summary"><span><strong>${packages.length}</strong> packages</span><span><strong>${active}</strong> active</span><span><strong>${addons.length}</strong> add-ons</span></div></section>
+    ${!state.canManage ? '<div class="wa-admin-notice">You have view-only access to Package Master.</div>' : ""}
+    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Customer packages</h3><p>Entitlements, hard limits, trials and subscription amounts.</p></div></div>${packages.map(masterPackageForm).join("")}${state.canManage ? masterPackageForm(null) : ""}</section>
+    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Add-on master</h3><p>Billable capacity and feature extensions eligible for each package.</p></div></div>${addons.map((addon) => masterAddonForm(addon,packages)).join("")}${state.canManage ? masterAddonForm(null,packages) : ""}</section>${masterAssignments(tenants,addons,assignments)}`;
+}
+
+function nullableNumber(formData, name) {
+  const raw = String(formData.get(name) ?? "").trim();
+  return raw === "" ? "" : Number(raw);
+}
+
+async function saveMasterPackage(event, form) {
+  event.preventDefault();
+  const button = form.querySelector('button[type="submit"]');
+  if (!form.reportValidity()) return;
+  button.disabled = true;
+  const values = new FormData(form);
+  const entitlements = {};
+  ["team_inbox","contacts","templates","campaigns","flows","automations","api_access","priority_support"].forEach((key) => { entitlements[key] = values.get(`access_${key}`) === "on"; });
+  const payload = {
+    code: values.get("code"), name: values.get("name"), description: values.get("description"), status: values.get("status"),
+    billingModel: values.get("billingModel"), currency: String(values.get("currency") || "INR").toUpperCase(),
+    monthlyAmount: Number(values.get("monthlyAmount") || 0), annualAmount: Number(values.get("annualAmount") || 0), trialDays: Number(values.get("trialDays") || 0),
+    teamMemberLimit: nullableNumber(values,"teamMemberLimit"), whatsappNumberLimit: nullableNumber(values,"whatsappNumberLimit"), contactLimit: nullableNumber(values,"contactLimit"),
+    monthlyMessageLimit: nullableNumber(values,"monthlyMessageLimit"), templateLimit: nullableNumber(values,"templateLimit"), flowLimit: nullableNumber(values,"flowLimit"),
+    campaignLimit: nullableNumber(values,"campaignLimit"), automationLimit: nullableNumber(values,"automationLimit"), integrationLimit: nullableNumber(values,"integrationLimit"),
+    storageLimitMb: nullableNumber(values,"storageLimitMb"), entitlements, sortOrder: Number(values.get("sortOrder") || 0),
+  };
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_save_master_package", { p_id: form.dataset.masterPackageForm || null, p_payload: payload });
+    if (error) throw error;
+    showToast("Package Master updated. Customer access will use this definition.", TOAST_TYPES.SUCCESS);
+    state.packageMaster = null; await loadPackageMaster();
+  } catch (error) { showToast(error?.message || "Could not save master package.", TOAST_TYPES.ERROR); button.disabled = false; }
+}
+
+async function saveMasterAddon(event, form) {
+  event.preventDefault();
+  const button = form.querySelector('button[type="submit"]');
+  if (!form.reportValidity()) return;
+  button.disabled = true;
+  const values = new FormData(form);
+  const packages = state.packageMaster?.packages || [];
+  const eligiblePlanCodes = packages.filter((p) => values.get(`eligible_${p.code}`) === "on").map((p) => p.code);
+  const entitlementEffects = {};
+  [["team_member_limit","effect_team_member_limit"],["whatsapp_number_limit","effect_whatsapp_number_limit"],["integration_limit","effect_integration_limit"]].forEach(([key,name]) => { const number = Number(values.get(name) || 0); if (number) entitlementEffects[key] = number; });
+  if (values.get("effect_priority_support") === "on") entitlementEffects.priority_support = true;
+  const payload = {
+    code: values.get("code"), name: values.get("name"), description: values.get("description"), status: values.get("status"), billingModel: values.get("billingModel"),
+    billingInterval: values.get("billingInterval"), currency: String(values.get("currency") || "INR").toUpperCase(), unitAmount: Number(values.get("unitAmount") || 0),
+    unitName: values.get("unitName"), minimumQuantity: Number(values.get("minimumQuantity") || 1), maximumQuantity: nullableNumber(values,"maximumQuantity"), quantityStep: Number(values.get("quantityStep") || 1),
+    eligiblePlanCodes, entitlementEffects, isSelfService: values.get("isSelfService") === "on", sortOrder: Number(values.get("sortOrder") || 0),
+  };
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_save_master_addon", { p_id: form.dataset.masterAddonForm || null, p_payload: payload });
+    if (error) throw error;
+    showToast("Add-on Master updated.", TOAST_TYPES.SUCCESS);
+    state.packageMaster = null; await loadPackageMaster();
+  } catch (error) { showToast(error?.message || "Could not save master add-on.", TOAST_TYPES.ERROR); button.disabled = false; }
+}
+
+async function saveMasterAssignment(event, form) {
+  event.preventDefault();
+  if (!form.reportValidity()) return;
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  const values = new FormData(form);
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_set_tenant_addon", { p_tenant_id: values.get("tenantId"), p_addon_code: values.get("addonCode"), p_quantity: Number(values.get("quantity") || 0), p_status: values.get("status") || "active" });
+    if (error) throw error;
+    showToast("Customer add-on assignment updated.", TOAST_TYPES.SUCCESS);
+    state.packageMaster = null; await loadPackageMaster(); await loadSnapshot();
+  } catch (error) { showToast(error?.message || "Could not update customer add-on.", TOAST_TYPES.ERROR); button.disabled = false; }
+}
+
 async function loadCatalog() {
   state.catalogLoading = true;
   const { data, error } = await db.rpc("whatsapp_platform_admin_catalog");
@@ -184,7 +362,6 @@ function planForm(plan) {
       <label>Badge<input name="badge" value="${val("badge")}" placeholder="Most popular" /></label>
       <label>Price / month (₹)<input name="price_monthly" type="number" step="1" value="${escapeHtml(p.priceMonthly ?? 0)}" /></label>
       <label>Price / month ($)<input name="price_monthly_usd" type="number" step="0.01" value="${escapeHtml(p.priceMonthlyUsd ?? 0)}" /></label>
-      <label>Included team seats<input name="team_member_limit" type="number" min="1" max="10000" step="1" value="${escapeHtml(p.teamMemberLimit ?? (isNew ? 3 : ""))}" placeholder="Blank = unlimited" /><small>Leave blank only for an unlimited package.</small></label>
       <label>Price prefix<input name="price_prefix" value="${val("pricePrefix")}" placeholder="from " /></label>
       <label>Price suffix<input name="price_suffix" value="${escapeHtml(p.priceSuffix ?? "/mo")}" /></label>
       <label>Annual note<input name="annual_note" value="${val("annualNote")}" /></label>
@@ -248,7 +425,7 @@ function packages() {
   if (state.catalogError) return `<div class="wa-admin-notice"><strong>Packages data is not active yet.</strong><br>${escapeHtml(state.catalogError)}<br><br>Apply the pending WhatsApp Platform packages migration to activate management.</div>`;
   const plans = state.catalog.plans || [];
   const addons = state.catalog.addons || [];
-  return `<section class="wa-admin-card"><h3>Plans</h3><p>These render on the public pricing page. Price is monthly; the calculator uses each plan's monthly price as the subscription line.</p><div class="wa-pkg-list">${plans.map(planForm).join("")}${planForm(null)}</div></section>
+  return `<section class="wa-admin-notice"><strong>Public website content only.</strong><br>Changes here control public pricing cards and calculator presentation. Customer access, limits and billing are controlled exclusively in Package Master.</section><section class="wa-admin-card"><h3>Plans</h3><p>These render on the public pricing page. Price is monthly; the calculator uses each plan's monthly price as the subscription line.</p><div class="wa-pkg-list">${plans.map(planForm).join("")}${planForm(null)}</div></section>
     <section class="wa-admin-card"><h3>Add-ons</h3><p>Shown in the “Extend any plan” grid, each with an info tooltip. Price display is free text (e.g. ₹400) plus a unit (e.g. /number/mo or one-time).</p><div class="wa-pkg-list">${addons.map(addonForm).join("")}${addonForm(null)}</div></section>
     ${ratesForm(state.catalog.rates || {})}`;
 }
@@ -270,12 +447,6 @@ async function savePlan(event, form) {
       p_is_active: v.get("is_active") === "on", p_sort_order: Number(v.get("sort_order") || 0)
     });
     if (error) throw error;
-    const rawTeamLimit = String(v.get("team_member_limit") || "").trim();
-    const { error: limitError } = await db.rpc("whatsapp_platform_admin_set_plan_team_limit", {
-      p_plan_id: planId,
-      p_team_member_limit: rawTeamLimit ? Number(rawTeamLimit) : null,
-    });
-    if (limitError) throw limitError;
     showToast("Plan saved.", TOAST_TYPES.SUCCESS);
     state.catalog = null; await loadCatalog();
   } catch (error) { showToast(error?.message || "Could not save plan.", TOAST_TYPES.ERROR); btn.disabled = false; }
@@ -336,6 +507,7 @@ async function saveRates(event) {
 }
 
 function content() {
+  if (state.view === "package-master") return packageMaster();
   if (state.view === "packages") return packages();
   if (state.loading) return '<div class="wa-admin-empty">Loading platform operations…</div>';
   if (state.error) return `<div class="wa-admin-notice"><strong>Management data is not active yet.</strong><br>${escapeHtml(state.error)}<br><br>The internal console is ready; apply the pending WhatsApp Platform database migrations to activate live customer data.</div>${state.view === "meta" ? metaSetup() : state.view === "security" ? security() : overview()}`;
@@ -370,9 +542,12 @@ function bind() {
     try {
       const { error } = await db.rpc("whatsapp_platform_admin_update_tenant", { p_tenant_id: form.dataset.tenantForm, p_status: values.get("status"), p_plan_code: values.get("plan") });
       if (error) throw error;
-      const { error: capacityError } = await db.rpc("whatsapp_platform_admin_set_team_capacity", { p_tenant_id: form.dataset.tenantForm, p_additional_seats: Number(values.get("additionalSeats") || 0) });
+      const extraSeats = Number(values.get("additionalSeats") || 0);
+      const { error: capacityError } = await db.rpc("whatsapp_platform_admin_set_tenant_addon", { p_tenant_id: form.dataset.tenantForm, p_addon_code: "extra_agent_seat", p_quantity: extraSeats, p_status: extraSeats > 0 ? "active" : "cancelled" });
       if (capacityError) throw capacityError;
       showToast("Customer workspace updated.", TOAST_TYPES.SUCCESS);
+      state.packageMaster = null;
+      await loadPackageMaster();
       await loadSnapshot();
     } catch (error) { showToast(error?.message || "Could not update workspace.", TOAST_TYPES.ERROR); button.disabled = false; }
   }));
@@ -415,6 +590,9 @@ function bind() {
   document.querySelectorAll("[data-addon-form]").forEach((form) => form.addEventListener("submit", (event) => saveAddon(event, form)));
   document.querySelectorAll("[data-addon-delete]").forEach((btn) => btn.addEventListener("click", () => deleteAddon(btn.dataset.addonDelete)));
   document.querySelector("[data-rates-form]")?.addEventListener("submit", (event) => saveRates(event));
+  document.querySelectorAll("[data-master-package-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterPackage(event, form)));
+  document.querySelectorAll("[data-master-addon-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAddon(event, form)));
+  document.querySelectorAll("[data-master-assignment]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAssignment(event, form)));
   document.querySelector("[data-meta-secret-form]")?.addEventListener("submit", saveProviderSecret);
   document.querySelector("[data-meta-secret-toggle]")?.addEventListener("click", (event) => {
     const input = document.querySelector('[name="meta_app_secret"]');

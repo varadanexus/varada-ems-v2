@@ -63,7 +63,7 @@
 .wa-pkg-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
 .wa-pkg-form label { display: grid; gap: 5px; color: #a9b1ab; font-size: 12px; font-weight: 600; }
 .wa-pkg-full { grid-column: 1 / -1; }
-.wa-pkg-form input, .wa-pkg-form textarea { width: 100%; padding: 9px 11px; border: 1px solid rgba(218,178,83,.24); border-radius: 9px; background: #080a09; color: #eae5d7; font: inherit; }
+.wa-pkg-form input, .wa-pkg-form textarea, .wa-pkg-form select, .wa-master-record input, .wa-master-record textarea, .wa-master-record select { width: 100%; padding: 9px 11px; border: 1px solid rgba(218,178,83,.24); border-radius: 9px; background: #080a09; color: #eae5d7; font: inherit; }
 .wa-pkg-form textarea { resize: vertical; }
 .wa-pkg-form input:focus, .wa-pkg-form textarea:focus { outline: none; border-color: #25d366; }
 .wa-pkg-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -72,6 +72,50 @@
 .wa-pkg-foot .wa-admin-button { margin-left: auto; }
 @media (max-width: 760px) { .wa-pkg-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 520px) { .wa-pkg-grid { grid-template-columns: 1fr; } }
+
+/* Operational Package Master — separate from public marketing packages. */
+.wa-master-intro { display:flex; justify-content:space-between; gap:24px; align-items:center; padding:24px; border:1px solid rgba(37,211,102,.22); border-radius:18px; background:linear-gradient(135deg,rgba(37,211,102,.09),rgba(218,178,83,.04)); }
+.wa-master-intro h3 { margin:6px 0 7px; color:#f4f1e8; font-size:28px; }
+.wa-master-intro p,.wa-master-heading p { margin:0; color:#929b94; line-height:1.55; }
+.wa-master-summary { display:flex; gap:9px; flex-wrap:wrap; justify-content:flex-end; }
+.wa-master-summary span { min-width:88px; padding:12px 14px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:#0b0d0b; color:#8e9790; font-size:11px; text-align:center; }
+.wa-master-summary strong { display:block; margin-bottom:3px; color:#58dc8a; font-size:20px; }
+.wa-master-stack { display:grid; gap:14px; margin-top:18px; }
+.wa-master-heading { display:flex; align-items:end; justify-content:space-between; padding:0 4px; }
+.wa-master-heading h3 { margin:0 0 4px; color:#f0ede3; }
+.wa-master-record { display:grid; gap:16px; padding:20px; border:1px solid rgba(255,255,255,.09); border-radius:17px; background:linear-gradient(145deg,#0d100e,#090b0a); box-shadow:0 14px 35px rgba(0,0,0,.18); }
+.wa-master-record > header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding-bottom:15px; border-bottom:1px solid rgba(255,255,255,.07); }
+.wa-master-record > header h3 { margin:5px 0 4px; color:#f3efe5; font-size:20px; }
+.wa-master-record > header p { margin:0; color:#8d958f; font-size:12px; }
+.wa-master-state { padding:6px 9px; border:1px solid rgba(218,178,83,.25); border-radius:999px; color:#d8ba63; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; }
+.wa-master-state.active { border-color:rgba(37,211,102,.3); background:rgba(37,211,102,.08); color:#57dc89; }
+.wa-master-state.retired { border-color:rgba(239,87,87,.3); color:#ee8d8d; }
+.wa-master-section { display:grid; gap:10px; padding:14px; border:1px solid rgba(255,255,255,.065); border-radius:13px; background:rgba(255,255,255,.018); }
+.wa-master-section h4 { margin:0; color:#dddacf; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
+.wa-master-help { margin:0; color:#78817b; font-size:11px; }
+.wa-master-record label { display:grid; gap:5px; color:#a9b1ab; font-size:11px; font-weight:700; }
+.wa-master-record label small { color:#6f7872; font-weight:500; }
+.wa-master-record input:focus,.wa-master-record textarea:focus,.wa-master-record select:focus { outline:none; border-color:#25d366; box-shadow:0 0 0 3px rgba(37,211,102,.09); }
+.wa-master-record input[readonly] { color:#aaa17f; background:#0d0e0c; cursor:not-allowed; }
+.wa-master-limits { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:9px; }
+.wa-master-toggles { display:flex; flex-wrap:wrap; gap:8px; }
+.wa-master-toggle { display:flex !important; grid-template-columns:none !important; flex-direction:row !important; align-items:center; gap:7px !important; padding:8px 10px; border:1px solid rgba(255,255,255,.08); border-radius:9px; color:#c8cec9 !important; background:#0a0c0a; }
+.wa-master-toggle input { width:auto !important; margin:0; accent-color:#25d366; }
+.wa-master-record > footer { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.wa-master-record > footer > span { color:#737c75; font-size:10px; }
+.wa-master-assignment-list { display:grid; gap:8px; }
+.wa-master-assignment { display:grid; grid-template-columns:minmax(170px,1.2fr) minmax(170px,1.2fr) 100px 130px auto; gap:10px; align-items:end; padding:13px; border:1px solid rgba(255,255,255,.08); border-radius:13px; background:#0c0f0d; }
+.wa-master-assignment.create { grid-template-columns:minmax(180px,1.2fr) minmax(180px,1fr) minmax(180px,1fr) 100px 120px auto; margin-top:4px; border-color:rgba(37,211,102,.22); background:rgba(37,211,102,.035); }
+.wa-master-assignment > div { align-self:center; }
+.wa-master-assignment strong,.wa-master-assignment small { display:block; }
+.wa-master-assignment strong { color:#ece9df; }
+.wa-master-assignment small { margin-top:3px; color:#788079; font-size:10px; }
+.wa-master-assignment label { display:grid; gap:5px; color:#8f9991; font-size:10px; font-weight:800; }
+.wa-master-assignment input,.wa-master-assignment select { width:100%; padding:9px; border:1px solid rgba(218,178,83,.22); border-radius:8px; background:#080a09; color:#eae5d7; }
+@media (max-width:1050px){.wa-master-limits{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media (max-width:1100px){.wa-master-assignment,.wa-master-assignment.create{grid-template-columns:1fr 1fr 1fr}.wa-master-assignment>div:first-child{grid-column:1/-1}}
+@media (max-width:720px){.wa-master-intro,.wa-master-record>header,.wa-master-record>footer{align-items:stretch;flex-direction:column}.wa-master-summary{justify-content:flex-start}.wa-master-limits{grid-template-columns:1fr 1fr}}
+@media (max-width:480px){.wa-master-limits{grid-template-columns:1fr}}
 
 /* Ultimate-authority provider credential control */
 .wa-admin-secret-card { grid-column: 1 / -1; }
