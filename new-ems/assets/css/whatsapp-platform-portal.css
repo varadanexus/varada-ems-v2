@@ -1506,6 +1506,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   width: 44px;
   justify-content: center;
   padding-inline: 0;
+  overflow: hidden;
 }
 .wp-flow-builder-workspace .wp-workspace-brand span,
 .wp-flow-builder-workspace .wp-workspace-account div,
@@ -1539,11 +1540,16 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   gap: .2rem;
 }
 .wp-flow-builder-workspace .wp-workspace-nav a {
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
   min-height: 43px;
   margin-inline: auto;
   border-radius: 10px;
   color: rgba(255,255,255,.84);
   background: transparent;
+  font-size: 0;
+  gap: 0;
 }
 .wp-flow-builder-workspace .wp-workspace-nav a:hover,
 .wp-flow-builder-workspace .wp-workspace-nav a:focus-visible,
@@ -1554,6 +1560,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 .wp-flow-builder-workspace .wp-nav-icon {
   font-size: 1.05rem;
+  line-height: 1;
 }
 .wp-flow-builder-workspace .wp-workspace-content {
   grid-column: 2;
