@@ -36,6 +36,44 @@ function cleanUuid(value: unknown, label: string) {
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id)) throw new Error(`Invalid ${label}.`);
   return id;
 }
+function cleanText(value: unknown, max: number) { return String(value || "").trim().replace(/\s+/g, " ").slice(0, max); }
+function cleanEmail(value: unknown) {
+  const email = cleanText(value, 254).toLowerCase();
+  if (!/^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/i.test(email)) throw new Error("Enter a valid work email address.");
+  return email;
+}
+function randomHex(byteLength = 32) {
+  const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
+  return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+async function sha256(value: string) {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(bytes)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function htmlEscape(value: unknown) {
+  return String(value || "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] || character));
+}
+function zeptoAuthorization() {
+  const raw = env("ZEPTO_SEND_MAIL_TOKEN").trim();
+  if (!raw) throw new Error("Email delivery is not configured.");
+  return raw.toLowerCase().startsWith("zoho-enczapikey") ? raw : `Zoho-enczapikey ${raw}`;
+}
+async function sendTeamInviteEmail(details: { email: string; displayName: string; companyName: string; roleCode: string; inviteUrl: string; expiresAt: string }) {
+  const apiBase = (env("ZEPTO_API_BASE_URL") || "https://api.zeptomail.in").replace(/\/+$/, "");
+  const authorization = zeptoAuthorization();
+  const roleLabel = ({ admin: "Administrator", agent: "Agent", viewer: "Viewer" } as Record<string, string>)[details.roleCode] || "Member";
+  const subject = `You're invited to ${details.companyName} on Varada Nexus WhatsApp Solutions`;
+  const htmlBody = `<div style="margin:0;background:#f4f7f5;padding:32px 16px;font-family:Arial,sans-serif;color:#14211c"><div style="max-width:620px;margin:auto;background:#ffffff;border:1px solid #dce6e0;border-radius:18px;overflow:hidden"><div style="padding:28px 32px;background:#071d15;color:#ffffff"><div style="font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#37dc93">Varada Nexus</div><h1 style="margin:10px 0 4px;font-size:27px">Join your WhatsApp Solutions workspace</h1><p style="margin:0;color:#b9d1c7">A secure invitation from ${htmlEscape(details.companyName)}</p></div><div style="padding:30px 32px"><p>Hello ${htmlEscape(details.displayName)},</p><p>You have been invited to join <strong>${htmlEscape(details.companyName)}</strong> as a <strong>${htmlEscape(roleLabel)}</strong>.</p><p style="margin:28px 0"><a href="${htmlEscape(details.inviteUrl)}" style="display:inline-block;background:#12b76a;color:#ffffff;text-decoration:none;font-weight:700;padding:14px 22px;border-radius:10px">Accept invitation</a></p><p style="font-size:13px;color:#62736b">This single-use link expires in seven days. If you were not expecting this invitation, you can ignore this email.</p><p style="font-size:12px;color:#7b8d84;word-break:break-all">If the button does not work, copy this address:<br>${htmlEscape(details.inviteUrl)}</p></div></div></div>`;
+  const textBody = `Hello ${details.displayName},\n\nYou have been invited to join ${details.companyName} as a ${roleLabel}.\n\nAccept the invitation: ${details.inviteUrl}\n\nThis single-use link expires in seven days.`;
+  const sendFrom = async (address: string) => {
+    const response = await fetch(`${apiBase}/v1.1/email`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: authorization }, body: JSON.stringify({ from: { address, name: "Varada Nexus Connect" }, to: [{ email_address: { address: details.email, name: details.displayName } }], reply_to: [{ address: "noreply@varadanexus.com", name: "Varada Nexus" }], subject, htmlbody: htmlBody, textbody: textBody, track_clicks: true, track_opens: true, client_reference: `whatsapp-team-invite-${Date.now()}` }) });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error?.message || payload?.message || "Invitation email delivery failed.");
+    return payload;
+  };
+  try { return await sendFrom("nexusconnect@varadanexus.com"); }
+  catch { return await sendFrom("noreply@varadanexus.com"); }
+}
 function decodeBase64Url(value: string) {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
   const binary = atob(base64);
@@ -84,11 +122,89 @@ async function listConversations(admin: any, customer: any, body: any) {
 }
 async function listTeam(admin: any, customer: any) {
   const { data, error } = await admin.from("whatsapp_platform_users")
-    .select("id,display_name,email,role_code,status,last_login_at")
-    .eq("tenant_id", customer.tenant_id).in("status", ["active","invited"])
+    .select("id,display_name,email,role_code,status,last_login_at,created_at,invited_at,invite_expires_at")
+    .eq("tenant_id", customer.tenant_id)
     .order("display_name", { ascending: true }).limit(250);
   if (error) throw error;
-  return { members: data || [] };
+  return { members: data || [], currentUserId: customer.user_id, currentRole: customer.role_code };
+}
+async function inviteTeamMember(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can invite members.");
+  const displayName = cleanText(body.displayName, 100);
+  if (displayName.length < 2) throw new Error("Enter the member's full name.");
+  const email = cleanEmail(body.email);
+  const roleCode = String(body.roleCode || "agent");
+  if (!["admin","agent","viewer"].includes(roleCode)) throw new Error("Select a valid workspace role.");
+  if (roleCode === "admin" && customer.role_code !== "owner") throw new Error("Only the workspace owner can invite administrators.");
+
+  const { data: existing, error: existingError } = await admin.from("whatsapp_platform_users")
+    .select("id,tenant_id,status,role_code").ilike("email", email).maybeSingle();
+  if (existingError) throw existingError;
+  if (existing && existing.tenant_id !== customer.tenant_id) throw new Error("This email already belongs to another workspace.");
+  if (existing?.status === "active") throw new Error("This person is already an active workspace member.");
+  if (existing?.role_code === "owner") throw new Error("The workspace owner cannot be reinvited.");
+
+  const inviteToken = randomHex(32);
+  const tokenHash = await sha256(inviteToken);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString();
+  let userId = existing?.id || "";
+  if (existing) {
+    const { data, error } = await admin.from("whatsapp_platform_users").update({
+      display_name: displayName, role_code: roleCode, status: "invited",
+      invite_token_hash: tokenHash, invite_expires_at: expiresAt,
+      invited_at: new Date().toISOString(), invited_by_user_id: customer.user_id,
+      updated_at: new Date().toISOString(),
+    }).eq("id", existing.id).eq("tenant_id", customer.tenant_id).select("id").single();
+    if (error || !data) throw new Error("The invitation could not be renewed.");
+    userId = data.id;
+  } else {
+    const { data, error } = await admin.rpc("whatsapp_platform_create_invite", {
+      p_tenant_id: customer.tenant_id, p_display_name: displayName, p_email: email,
+      p_role_code: roleCode, p_invite_token_hash: tokenHash,
+      p_invite_expires_at: expiresAt, p_invited_by_user_id: customer.user_id,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    userId = row?.user_id || "";
+  }
+  if (!userId) throw new Error("The invitation could not be created.");
+  const inviteUrl = `https://www.varadanexus.com/whatsapp-platform/access/?invite=${inviteToken}`;
+  let emailSent = false;
+  let deliveryError = "";
+  try {
+    await sendTeamInviteEmail({ email, displayName, companyName: customer.company_name || "your company", roleCode, inviteUrl, expiresAt });
+    emailSent = true;
+  } catch (error) {
+    deliveryError = error instanceof Error ? error.message : "Invitation email delivery failed.";
+  }
+  return { member: { id: userId, display_name: displayName, email, role_code: roleCode, status: "invited", invite_expires_at: expiresAt }, inviteUrl, emailSent, deliveryError };
+}
+async function updateTeamMember(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can manage members.");
+  const memberId = cleanUuid(body.memberId, "member");
+  if (memberId === customer.user_id) throw new Error("You cannot change your own role or access status.");
+  const { data: target, error: targetError } = await admin.from("whatsapp_platform_users")
+    .select("id,role_code,status").eq("id", memberId).eq("tenant_id", customer.tenant_id).single();
+  if (targetError || !target) throw new Error("Workspace member not found.");
+  if (target.role_code === "owner") throw new Error("The workspace owner cannot be changed here.");
+  if (customer.role_code === "admin" && target.role_code === "admin") throw new Error("Only the workspace owner can manage administrators.");
+  const roleCode = String(body.roleCode || target.role_code);
+  const status = String(body.status || target.status);
+  if (!["admin","agent","viewer"].includes(roleCode)) throw new Error("Select a valid workspace role.");
+  if (!["active","invited","disabled"].includes(status)) throw new Error("Select a valid member status.");
+  if (roleCode === "admin" && customer.role_code !== "owner") throw new Error("Only the workspace owner can assign administrator access.");
+  if (status === "active" && target.status === "invited") throw new Error("An invited member must accept their secure link before activation.");
+
+  const update: Record<string, unknown> = { role_code: roleCode, status, updated_at: new Date().toISOString() };
+  if (status === "disabled") { update.invite_token_hash = null; update.invite_expires_at = null; }
+  const { data, error } = await admin.from("whatsapp_platform_users").update(update)
+    .eq("id", memberId).eq("tenant_id", customer.tenant_id).select("id,display_name,email,role_code,status,last_login_at,created_at,invited_at,invite_expires_at").single();
+  if (error || !data) throw new Error("The member could not be updated.");
+  if (status === "disabled") {
+    const { error: revokeError } = await admin.from("whatsapp_platform_sessions").update({ revoked_at: new Date().toISOString() }).eq("user_id", memberId).is("revoked_at", null);
+    if (revokeError) throw revokeError;
+  }
+  return { member: data };
 }
 async function listContacts(admin: any, customer: any, body: any) {
   const status = ["active","blocked","opted_out"].includes(String(body.status || "")) ? String(body.status) : null;
@@ -553,6 +669,8 @@ Deno.serve(async (req) => {
     const action = String(body.action || "list");
     if (action === "list") return json(req, await listConversations(admin, customer, body));
     if (action === "list_team") return json(req, await listTeam(admin, customer));
+    if (action === "invite_team_member") return json(req, await inviteTeamMember(admin, customer, body));
+    if (action === "update_team_member") return json(req, await updateTeamMember(admin, customer, body));
     if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));
     if (action === "list_templates") return json(req, await listTemplates(admin, customer, body));
     if (action === "list_template_library") return json(req, await listTemplateLibrary(admin, customer, body));

@@ -73,6 +73,7 @@ let workspaceContacts = { contacts: [], error: "" };
 let workspaceTemplates = { templates: [], connectionId: "", error: "" };
 let workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
 let workspaceFlows = { flows: [], error: "" };
+let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
 const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
 
 function countryDialEntries() {
@@ -675,7 +676,36 @@ function authForm(mode) {
   </form>`;
 }
 
+function renderInviteAcceptance(inviteToken) {
+  app.innerHTML = `<main class="wp-invite-page"><section class="wp-invite-shell"><div class="wp-invite-intro"><a class="wp-brand" href="/whatsapp-platform/"><img src="/images/logo.png" alt="Varada Nexus" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><span class="wp-kicker">Workspace invitation</span><h1>Join your team’s customer workspace.</h1><p>Create your member profile to collaborate on conversations, campaigns and customer journeys with the access assigned by your workspace administrator.</p><ul><li>One protected company workspace</li><li>Role-based access from day one</li><li>Invitation expires automatically</li></ul></div><section class="wp-auth-card wp-invite-card"><div><span class="wp-card-eyebrow">Accept invitation</span><h2>Set up your access</h2><p>This link can be used once. If it has expired, ask your workspace administrator for a new invitation.</p></div><form class="wp-form" id="wpInviteAcceptForm" novalidate><label class="wp-field"><span>Full name</span><input name="displayName" autocomplete="name" minlength="2" maxlength="100" required autofocus /></label><label class="wp-field"><span>Create password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><button type="button" data-password-toggle aria-label="Show password">Show</button></span><small>10+ characters with uppercase, lowercase and a number.</small></label><label class="wp-field"><span>Confirm password</span><span class="wp-password-control"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><button type="button" data-password-toggle aria-label="Show confirm password">Show</button></span></label><label class="wp-check"><input name="terms" type="checkbox" required /><span>I agree to the <a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label><p class="wp-form-message" id="wpInviteMessage" role="alert"></p><button class="wp-submit" type="submit">Join workspace</button></form><a class="wp-customer-signin" href="${ACCESS_PATH}#signin">Already a member? Sign in →</a></section></section></main>`;
+  document.body.classList.add("wp-access-page");
+  app.querySelectorAll("[data-password-toggle]").forEach((button) => button.addEventListener("click", () => {
+    const input = button.closest(".wp-password-control")?.querySelector("input");
+    if (!input) return;
+    input.type = input.type === "password" ? "text" : "password";
+    button.textContent = input.type === "password" ? "Show" : "Hide";
+  }));
+  app.querySelector("#wpInviteAcceptForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const message = form.querySelector("#wpInviteMessage");
+    if (!form.reportValidity()) return;
+    if (form.elements.password.value !== form.elements.confirmPassword.value) { message.textContent = "Passwords do not match."; return; }
+    const submit = form.querySelector("button[type=submit]");
+    submit.disabled = true; submit.textContent = "Joining workspace…"; message.textContent = "";
+    try {
+      const result = await authRequest("accept_invite", { inviteToken, displayName: form.elements.displayName.value.trim(), password: form.elements.password.value, termsAccepted: form.elements.terms.checked });
+      session = result.session; storeSession(session); location.replace(WORKSPACE_PATH);
+    } catch (error) {
+      message.textContent = error?.message || "The invitation could not be accepted.";
+      submit.disabled = false; submit.textContent = "Join workspace";
+    }
+  });
+}
+
 function renderAuth(mode = "login", focusAuth = false) {
+  const inviteToken = new URLSearchParams(location.search).get("invite") || "";
+  if (isAccessPage() && /^[a-f0-9]{64}$/i.test(inviteToken)) { renderInviteAcceptance(inviteToken.toLowerCase()); return; }
   const signup = mode === "signup";
   app.innerHTML = `
     <main class="wp-marketing">
@@ -1141,7 +1171,6 @@ function verificationView(verification) {
 
 const PLANNED_WORKSPACE_VIEWS = {
   templates: ["Message templates", "Create, submit and manage approved WhatsApp message templates from your workspace.", ["Template library", "Approval status", "Language variants"]],
-  team: ["Team and roles", "Invite users and control what each person can access inside this company workspace.", ["Member invitations", "Role-based access", "Activity history"]],
   integrations: ["Business integrations", "Connect approved business systems and route events into WhatsApp workflows.", ["Webhooks", "CRM and ERP connectors", "Integration health"]],
   billing: ["Billing and usage", "Review your subscription, platform usage and invoices in one place.", ["Plan management", "Usage summary", "Invoices and payments"]],
 };
@@ -1445,6 +1474,22 @@ function automationsView() {
     </section>
   </section>`;
 }
+function teamView() {
+  const members = workspaceTeam?.members || [];
+  const roleLabels = { owner: "Owner", admin: "Administrator", agent: "Agent", viewer: "Viewer" };
+  const active = members.filter((member) => member.status === "active").length;
+  const invited = members.filter((member) => member.status === "invited").length;
+  const admins = members.filter((member) => ["owner", "admin"].includes(member.role_code) && member.status === "active").length;
+  const canManage = ["owner", "admin"].includes(workspaceTeam.currentRole || session.roleCode);
+  const rows = members.map((member) => {
+    const isSelf = member.id === workspaceTeam.currentUserId;
+    const canEdit = canManage && !isSelf && member.role_code !== "owner" && !((workspaceTeam.currentRole || session.roleCode) === "admin" && member.role_code === "admin");
+    const activity = member.status === "invited" ? `Invite expires ${formatProfileDate(member.invite_expires_at)}` : member.last_login_at ? `Last active ${formatProfileDate(member.last_login_at)}` : "Has not signed in yet";
+    return `<article class="wp-team-row" data-team-member="${escapeHtml(member.id)}"><span class="wp-team-avatar">${escapeHtml((member.display_name || member.email || "M").charAt(0).toUpperCase())}</span><div class="wp-team-identity"><strong>${escapeHtml(member.display_name || "Workspace member")}${isSelf ? " <em>You</em>" : ""}</strong><small>${escapeHtml(member.email || "")}</small></div><span class="wp-team-role">${escapeHtml(roleLabels[member.role_code] || member.role_code)}</span><span class="wp-team-status ${escapeHtml(member.status)}">${escapeHtml(member.status)}</span><small class="wp-team-activity">${escapeHtml(activity)}</small>${canEdit ? `<button class="wp-secondary" type="button" data-edit-team-member="${escapeHtml(member.id)}">Manage</button>` : `<span class="wp-team-protected">${member.role_code === "owner" ? "Protected" : ""}</span>`}</article>`;
+  }).join("");
+  const roleOptions = `<option value="agent">Agent</option><option value="viewer">Viewer</option>${(workspaceTeam.currentRole || session.roleCode) === "owner" ? '<option value="admin">Administrator</option>' : ""}`;
+  return `<section class="wp-route-page wp-team-page"><div class="wp-route-heading"><div><span class="wp-kicker">Workspace administration</span><h1>Team &amp; roles</h1><p>Invite colleagues and keep access aligned with each person’s responsibilities.</p></div>${canManage ? '<button class="wp-primary" id="wpInviteMemberBtn" type="button">＋ Invite member</button>' : ""}</div>${workspaceTeam?.error ? `<div class="wp-verification-notice"><strong>Team unavailable</strong><p>${escapeHtml(workspaceTeam.error)}</p></div>` : ""}<section class="wp-analytics-kpis wp-team-kpis"><article><span>Members</span><strong>${members.length}</strong><small>All workspace identities</small></article><article><span>Active</span><strong>${active}</strong><small>Can currently sign in</small></article><article><span>Invited</span><strong>${invited}</strong><small>Awaiting acceptance</small></article><article><span>Administrators</span><strong>${admins}</strong><small>Owner and active admins</small></article></section><section class="wp-team-layout"><article class="wp-card wp-team-directory"><header><div><span class="wp-card-eyebrow">Member directory</span><h2>Workspace access</h2><p>Disabling a member revokes their active sessions immediately.</p></div><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search members" data-team-search /></label></header><div class="wp-team-list">${rows || '<div class="wp-inbox-empty"><span>♙</span><strong>No members found</strong></div>'}</div></article><aside class="wp-card wp-role-guide"><span class="wp-card-eyebrow">Access model</span><h2>Role capabilities</h2><dl><div><dt>Owner</dt><dd>Full workspace control and administrator management.</dd></div><div><dt>Administrator</dt><dd>Manage members, workflows, templates and operations.</dd></div><div><dt>Agent</dt><dd>Handle customer conversations and daily inbox work.</dd></div><div><dt>Viewer</dt><dd>Read operational information without changing it.</dd></div></dl><p>Owner access is protected and cannot be changed from this screen.</p></aside></section>${canManage ? `<dialog class="wp-contact-dialog wp-team-dialog" id="wpInviteMemberDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Secure workspace invitation</span><h2>Invite a team member</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Full name</span><input name="displayName" minlength="2" maxlength="100" autocomplete="name" required /></label><label><span>Work email</span><input name="email" type="email" maxlength="254" autocomplete="email" required /></label><label><span>Workspace role</span><select name="roleCode" required>${roleOptions}</select></label><div class="wp-policy-note"><strong>Single-use invitation</strong><p>The secure link expires after seven days and is only shown once after creation.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="invite">Create invitation</button></footer></form></dialog><dialog class="wp-contact-dialog wp-team-dialog" id="wpManageMemberDialog"><form method="dialog"><input name="memberId" type="hidden" /><header><div><span class="wp-card-eyebrow">Member access</span><h2 data-member-dialog-title>Manage member</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Workspace role</span><select name="roleCode" required>${roleOptions}</select></label><label><span>Access status</span><select name="status" required><option value="active">Active</option><option value="invited">Invited</option><option value="disabled">Disabled</option></select></label><div class="wp-policy-note"><strong>Immediate enforcement</strong><p>Disabling access signs the member out from every active workspace session.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="save">Save access</button></footer></form></dialog><dialog class="wp-contact-dialog wp-team-dialog" id="wpInviteLinkDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Invitation created</span><h2>Share the secure link</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Single-use invitation link</span><textarea name="inviteUrl" rows="4" readonly></textarea><small>Send this link directly to the intended person. It expires after seven days.</small></label><footer><button class="wp-secondary" type="submit" value="cancel">Done</button><button class="wp-primary" id="wpCopyInviteLinkBtn" type="button">Copy link</button></footer></form></dialog>` : ""}</section>`;
+}
 function plannedView(view) {
   const [title, description, capabilities] = PLANNED_WORKSPACE_VIEWS[view];
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Product preview</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="wp-planned-badge">Coming soon</span></div><article class="wp-card wp-planned-card"><div class="wp-planned-visual" aria-hidden="true"><span>${escapeHtml(WORKSPACE_VIEW_LABELS[view].charAt(0))}</span></div><div><span class="wp-card-eyebrow">Designed for focused work</span><h2>Everything your team needs, in one clear workspace</h2><p>This module is being prepared as a dedicated experience with fast navigation, clear ownership and the same protected company context across your workspace.</p><ul>${capabilities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article></section>`;
@@ -1470,6 +1515,7 @@ function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "campaigns") return campaignsView();
   if (view === "analytics") return analyticsView();
   if (view === "automations") return automationsView();
+  if (view === "team") return teamView();
   if (view === "templates") return templatesViewV2(connections);
   if (view === "flows") return currentFlowBuilderId() ? renderFlowBuilderPage({ escapeHtml }) : renderFlowsView({ flows: workspaceFlows.flows, escapeHtml });
   if (Object.hasOwn(PLANNED_WORKSPACE_VIEWS, view)) return plannedView(view);
@@ -1563,6 +1609,14 @@ async function renderDashboard() {
       workspaceFlows = { flows: [], error: error?.message || "Flows could not be loaded." };
     }
   }
+  if (view === "team") {
+    try {
+      const result = await messagingRequest("list_team");
+      workspaceTeam = { members: result?.members || [], currentUserId: result?.currentUserId || "", currentRole: result?.currentRole || session.roleCode || "", error: "" };
+    } catch (error) {
+      workspaceTeam = { members: [], currentUserId: "", currentRole: session.roleCode || "", error: error?.message || "The member directory could not be loaded." };
+    }
+  }
   document.body.classList.add("wp-workspace-mode");
   document.title = `${WORKSPACE_VIEW_LABELS[view]} | Varada Nexus WhatsApp Solutions`;
   const sidebarLogo = workspaceProfile?.logoDataUrl
@@ -1572,7 +1626,7 @@ async function renderDashboard() {
   const contactCount = (workspaceContacts?.contacts || []).length;
   const campaignCount = readCampaignDrafts().length;
   const isFlowBuilderRoute = Boolean(currentFlowBuilderId());
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(planName(workspaceProfile?.planCode))}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", workspaceTemplates.templates.length ? String(workspaceTemplates.templates.length) : "")}${workspaceNavItem("flows", "⌁", workspaceFlows.flows.length ? String(workspaceFlows.flows.length) : "")}${workspaceNavItem("automations", "↻", workspaceFlows.flows.filter((flow) => flow.status === "active").length ? String(workspaceFlows.flows.filter((flow) => flow.status === "active").length) : "")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(planName(workspaceProfile?.planCode))}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", workspaceTemplates.templates.length ? String(workspaceTemplates.templates.length) : "")}${workspaceNavItem("flows", "⌁", workspaceFlows.flows.length ? String(workspaceFlows.flows.length) : "")}${workspaceNavItem("automations", "↻", workspaceFlows.flows.filter((flow) => flow.status === "active").length ? String(workspaceFlows.flows.filter((flow) => flow.status === "active").length) : "")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", workspaceTeam.members.length ? String(workspaceTeam.members.length) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
   if (view === "flows") bindFlowsView({ root: app, flows: workspaceFlows.flows, request: messagingRequest, onRefresh: renderDashboard, toast: showToast, escapeHtml, builderId: currentFlowBuilderId(), listUrl: workspacePath("flows") });
   if (view === "automations") {
     app.querySelector("[data-automation-search]")?.addEventListener("input", (event) => {
@@ -1593,6 +1647,59 @@ async function renderDashboard() {
         showToast(error?.message || "Automation status could not be changed.", "error");
       }
     }));
+  }
+  if (view === "team") {
+    const inviteDialog = app.querySelector("#wpInviteMemberDialog");
+    const manageDialog = app.querySelector("#wpManageMemberDialog");
+    const linkDialog = app.querySelector("#wpInviteLinkDialog");
+    app.querySelector("[data-team-search]")?.addEventListener("input", (event) => {
+      const query = event.target.value.trim().toLowerCase();
+      app.querySelectorAll("[data-team-member]").forEach((row) => { row.hidden = Boolean(query && !row.textContent.toLowerCase().includes(query)); });
+    });
+    app.querySelector("#wpInviteMemberBtn")?.addEventListener("click", () => inviteDialog?.showModal());
+    inviteDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
+      if (event.submitter?.value !== "invite") return;
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const submit = event.submitter;
+      submit.disabled = true; submit.textContent = "Sending invitation…";
+      try {
+        const result = await messagingRequest("invite_team_member", { displayName: form.elements.displayName.value.trim(), email: form.elements.email.value.trim(), roleCode: form.elements.roleCode.value });
+        inviteDialog.close(); form.reset();
+        const linkField = linkDialog?.querySelector('[name="inviteUrl"]');
+        if (linkField) linkField.value = result.inviteUrl || "";
+        linkDialog?.querySelector("h2")?.replaceChildren(document.createTextNode(result.emailSent ? "Invitation email sent" : "Copy the invitation link"));
+        linkDialog?.querySelector("small")?.replaceChildren(document.createTextNode(result.emailSent ? "The email was sent through Varada Nexus. You may also copy this backup link." : `Email delivery was not completed${result.deliveryError ? `: ${result.deliveryError}` : "."} Share this link directly instead.`));
+        linkDialog?.showModal();
+      } catch (error) { showToast(error?.message || "The invitation could not be created.", "error"); }
+      finally { submit.disabled = false; submit.textContent = "Create invitation"; }
+    });
+    app.querySelectorAll("[data-edit-team-member]").forEach((button) => button.addEventListener("click", () => {
+      const member = workspaceTeam.members.find((item) => item.id === button.dataset.editTeamMember);
+      const form = manageDialog?.querySelector("form");
+      if (!member || !form) return;
+      form.elements.memberId.value = member.id; form.elements.roleCode.value = member.role_code; form.elements.status.value = member.status;
+      manageDialog.querySelector("[data-member-dialog-title]")?.replaceChildren(document.createTextNode(member.display_name || member.email));
+      manageDialog.showModal();
+    }));
+    manageDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
+      if (event.submitter?.value !== "save") return;
+      event.preventDefault();
+      const form = event.currentTarget;
+      const submit = event.submitter; submit.disabled = true; submit.textContent = "Saving…";
+      try {
+        await messagingRequest("update_team_member", { memberId: form.elements.memberId.value, roleCode: form.elements.roleCode.value, status: form.elements.status.value });
+        manageDialog.close(); showToast("Member access updated."); await renderDashboard();
+      } catch (error) { showToast(error?.message || "Member access could not be updated.", "error"); }
+      finally { submit.disabled = false; submit.textContent = "Save access"; }
+    });
+    app.querySelector("#wpCopyInviteLinkBtn")?.addEventListener("click", async () => {
+      const value = linkDialog?.querySelector('[name="inviteUrl"]')?.value || "";
+      try { await navigator.clipboard.writeText(value); showToast("Invitation link copied."); }
+      catch { linkDialog?.querySelector('[name="inviteUrl"]')?.select(); showToast("Select and copy the invitation link."); }
+    });
+    linkDialog?.addEventListener("close", () => renderDashboard());
   }
   if (view === "contacts") {
     app.querySelector(".wp-route-heading")?.insertAdjacentHTML("beforeend", '<button class="wp-primary" id="wpAddContactBtn" type="button">＋ Add contact</button>');
@@ -2382,6 +2489,11 @@ async function init() {
       return;
     }
     renderAuth("login", false);
+    return;
+  }
+  const inviteToken = new URLSearchParams(location.search).get("invite") || "";
+  if (/^[a-f0-9]{64}$/i.test(inviteToken)) {
+    renderInviteAcceptance(inviteToken.toLowerCase());
     return;
   }
   if (session) {

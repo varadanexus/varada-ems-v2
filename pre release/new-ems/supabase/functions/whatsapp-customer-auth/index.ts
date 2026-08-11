@@ -209,6 +209,22 @@ Deno.serve(async (req) => {
     const action = String(body?.action || "");
     const admin = adminClient();
 
+    if (action === "accept_invite") {
+      const inviteToken = String(body.inviteToken || "").trim().toLowerCase();
+      if (!/^[a-f0-9]{64}$/.test(inviteToken)) throw new Error("This invitation is invalid or has expired.");
+      await enforceRateLimit(admin, req, "signup", await sha256(inviteToken));
+      if (body.termsAccepted !== true) throw new Error("You must accept the Terms of Service and Privacy Policy.");
+      const { data, error } = await admin.rpc("whatsapp_platform_accept_invite", {
+        p_invite_token_hash: await sha256(inviteToken),
+        p_display_name: cleanText(body.displayName, 100),
+        p_password: String(body.password || "").slice(0, 128),
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.session_token) throw new Error("This invitation is invalid or has expired.");
+      return json(req, { session: publicSession(row) });
+    }
+
     if (action === "signup") {
       const email = normalizeEmail(body.email);
       await enforceRateLimit(admin, req, "signup", email);
