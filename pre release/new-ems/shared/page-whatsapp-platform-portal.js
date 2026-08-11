@@ -191,6 +191,14 @@ function campaignStatusLabel(status) {
   return ({ draft: "Draft", review: "Ready for approval", approved: "Approved", rejected: "Rejected", paused: "Paused" })[status] || "Draft";
 }
 
+function campaignDetailUrl(id) {
+  return `${workspacePath("campaigns")}?campaign=${encodeURIComponent(id || "")}`;
+}
+
+function campaignListUrl() {
+  return workspacePath("campaigns");
+}
+
 function campaignDecisionActor() {
   return {
     name: session?.displayName || session?.email || "Workspace user",
@@ -234,6 +242,28 @@ function campaignReadinessItems(draft, templates = [], optedInContacts = []) {
     { label: "Schedule window reviewed", done: Boolean(draft?.scheduledAt) },
     { label: "Production sending still locked", done: true },
   ];
+}
+
+function campaignAuditMarkup(draft) {
+  const auditLog = Array.isArray(draft?.approvalLog) ? draft.approvalLog : [];
+  return auditLog.length ? auditLog.map((entry) => `<li><div><strong>${escapeHtml(campaignStatusLabel(entry.status))}</strong><small>${escapeHtml(campaignDraftDate(entry.at))} · ${escapeHtml(entry.actorName || "Workspace user")}${entry.actorEmail ? ` · ${escapeHtml(entry.actorEmail)}` : ""}</small></div>${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : `<p>No note added.</p>`}</li>`).join("") : `<li class="empty"><p>No approval or status audit recorded yet.</p></li>`;
+}
+
+function campaignDetailMarkup(draft, templates = [], optedInContacts = []) {
+  const readiness = campaignReadinessItems(draft, templates, optedInContacts);
+  const readinessDone = readiness.filter((item) => item.done).length;
+  return `<section class="wp-campaign-detail-grid">
+    <article><span>Status</span><strong>${escapeHtml(campaignStatusLabel(draft.status))}</strong></article>
+    <article><span>Type</span><strong>${escapeHtml(campaignTypeLabel(draft.type))}</strong></article>
+    <article><span>Audience</span><strong>${escapeHtml(draft.audienceLabel || "Campaign audience")}</strong><small>${Number(draft.estimatedAudience || 0)} estimated contacts</small></article>
+    <article><span>Schedule</span><strong>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</strong></article>
+    <article><span>Owner</span><strong>${escapeHtml(draft.owner || session.displayName || "Workspace owner")}</strong></article>
+    <article><span>Template</span><strong>${escapeHtml(draft.templateName || "Template pending")}</strong></article>
+  </section>
+  <article class="wp-campaign-detail-objective"><span>Objective</span><p>${escapeHtml(draft.objective || "No objective documented yet.")}</p></article>
+  <article class="wp-campaign-detail-preview"><span>Message preview</span><p>${escapeHtml(draft.previewBody || "No template preview available.")}</p></article>
+  <section class="wp-campaign-detail-readiness"><header><strong>${readinessDone}/${readiness.length} checks ready</strong><small>Production sending remains disabled until launch controls are completed.</small></header><ul>${readiness.map((item) => `<li class="${item.done ? "done" : ""}">${escapeHtml(item.label)}</li>`).join("")}</ul></section>
+  <section class="wp-campaign-audit"><header><strong>Approval history</strong><small>Reviewer decisions and status changes are kept with the draft.</small></header><ol>${campaignAuditMarkup(draft)}</ol></section>`;
 }
 
 function currentFlowBuilderId() {
@@ -1230,10 +1260,34 @@ function campaignsView() {
       </div>
       <div class="wp-campaign-row-footer">
         <label class="wp-campaign-status-control"><span>Workflow status</span><select data-campaign-status="${escapeHtml(draft.id)}" aria-label="Campaign status"><option value="draft" ${(!draft.status || draft.status === "draft") ? "selected" : ""}>Draft</option><option value="review" ${draft.status === "review" ? "selected" : ""}>Ready for approval</option><option value="approved" ${draft.status === "approved" ? "selected" : ""}>Approved</option><option value="rejected" ${draft.status === "rejected" ? "selected" : ""}>Rejected</option><option value="paused" ${draft.status === "paused" ? "selected" : ""}>Paused</option></select></label>
-        <div class="wp-campaign-row-actions"><button type="button" data-view-campaign="${escapeHtml(draft.id)}">View</button><button type="button" data-edit-campaign="${escapeHtml(draft.id)}">Edit</button><button type="button" data-approve-campaign="${escapeHtml(draft.id)}">Approve</button><button type="button" data-reject-campaign="${escapeHtml(draft.id)}">Reject</button><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
+        <div class="wp-campaign-row-actions"><a href="${escapeHtml(campaignDetailUrl(draft.id))}" data-view-campaign="${escapeHtml(draft.id)}">View</a><button type="button" data-edit-campaign="${escapeHtml(draft.id)}">Edit</button><button type="button" data-approve-campaign="${escapeHtml(draft.id)}">Approve</button><button type="button" data-reject-campaign="${escapeHtml(draft.id)}">Reject</button><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
       </div>
     </article>`;
   }).join("");
+  const selectedCampaignId = new URLSearchParams(location.search).get("campaign") || "";
+  const selectedDraft = selectedCampaignId ? drafts.find((draft) => draft.id === selectedCampaignId) : null;
+  if (selectedCampaignId) {
+    const campaignBody = selectedDraft ? campaignDetailMarkup(selectedDraft, templates, optedInContacts) : `<article class="wp-card wp-campaign-missing"><span>⌕</span><h2>Campaign draft not found</h2><p>This draft may have been deleted or exists in another workspace.</p><a class="wp-primary wp-button-link" href="${campaignListUrl()}">Back to campaigns</a></article>`;
+    const selectedReadiness = selectedDraft ? campaignReadinessItems(selectedDraft, templates, optedInContacts) : [];
+    const selectedReady = selectedReadiness.filter((item) => item.done).length;
+    return `<section class="wp-route-page wp-campaign-page wp-campaign-detail-page">
+      <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Campaign review</span><h1>${escapeHtml(selectedDraft?.name || "Campaign details")}</h1><p>${selectedDraft ? "Review audience, template, schedule, approval history and launch readiness from one focused workspace." : "The requested campaign draft is not available."}</p></div><div class="wp-campaign-actions"><a class="wp-secondary wp-button-link" href="${campaignListUrl()}">← Campaigns</a>${selectedDraft ? `<button class="wp-secondary" type="button" data-edit-campaign="${escapeHtml(selectedDraft.id)}">Edit draft</button><button class="wp-secondary" type="button" data-reject-campaign="${escapeHtml(selectedDraft.id)}">Reject</button><button class="wp-primary" type="button" data-approve-campaign="${escapeHtml(selectedDraft.id)}">Approve</button>` : ""}</div></div>
+      ${selectedDraft ? `<section class="wp-template-stats"><article><span>Status</span><strong>${escapeHtml(campaignStatusLabel(selectedDraft.status))}</strong></article><article><span>Readiness</span><strong>${selectedReady}/${selectedReadiness.length}</strong></article><article><span>Audience</span><strong>${Number(selectedDraft.estimatedAudience || 0)}</strong></article><article><span>Updated</span><strong>${escapeHtml(campaignDraftDate(selectedDraft.updatedAt))}</strong></article></section>` : ""}
+      <article class="wp-card wp-campaign-detail-workspace">${campaignBody}</article>
+      <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignDraftDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign planner</span><h2 data-campaign-dialog-title>Edit campaign draft</h2><p>Prepare campaign details before approval and production sending.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input name="campaignId" type="hidden" />
+        <div class="wp-form-row"><label><span>Campaign name</span><input name="name" maxlength="120" placeholder="August onboarding reminder" required /></label><label><span>Campaign type</span><select name="type"><option value="announcement">Announcement</option><option value="reminder">Reminder</option><option value="follow_up">Follow-up</option><option value="offer">Offer</option><option value="reactivation">Reactivation</option></select></label></div>
+        <label><span>Objective</span><textarea name="objective" maxlength="400" rows="3" placeholder="Explain why this campaign is being sent and what action customers should take."></textarea></label>
+        <div class="wp-form-row"><label><span>Audience segment</span><select name="audience">${segmentOptions}</select></label><label><span>Schedule window</span><input name="scheduledAt" type="datetime-local" /></label></div>
+        <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Approval status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="approved">Approved</option><option value="paused">Paused</option></select></label></div>
+        <label><span>Approved template</span><select name="templateKey" ${templates.length ? "required" : "disabled"}><option value="">Select template</option>${templateOptions}</select><small>${templates.length ? "Only templates already approved by Meta are available here." : `No approved template is available yet. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label>
+        <div class="wp-campaign-live-preview"><span>Preview</span><p data-campaign-preview>${escapeHtml(previewTemplate ? templateBody(previewTemplate) : "Select an approved template to preview its body.")}</p></div>
+        <div class="wp-policy-note"><strong>Campaign safety gate</strong><p>This creates a planning draft only. Sending will require approved templates, eligible opt-in contacts, production approval and final operator confirmation.</p></div>
+        <label class="wp-check-row"><input name="confirmOptIn" type="checkbox" required /><span><strong>Audience has opted in</strong><small>I will send only to contacts who expect this WhatsApp message.</small></span></label>
+        <label class="wp-check-row"><input name="confirmPolicy" type="checkbox" required /><span><strong>Content follows WhatsApp policies</strong><small>No prohibited, misleading, sensitive or unsupported campaign content.</small></span></label>
+        <footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save">Save draft</button></footer></form></dialog>
+      <dialog class="wp-contact-dialog wp-campaign-approval-dialog" id="wpCampaignApprovalDialog"><form method="dialog" novalidate><header><div><span class="wp-card-eyebrow">Campaign decision</span><h2 data-campaign-decision-title>Approve campaign</h2><p data-campaign-decision-copy>Record the approval note before this draft moves forward.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input name="campaignId" type="hidden" /><input name="decision" type="hidden" /><label><span>Decision note</span><textarea name="note" maxlength="500" rows="4" placeholder="Add the reason, reviewer context, or changes required."></textarea><small data-campaign-decision-help>Approval notes are optional. Rejections require a clear reason.</small></label><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save" data-campaign-decision-submit>Approve</button></footer></form></dialog>
+    </section>`;
+  }
   return `<section class="wp-route-page wp-campaign-page">
     <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Engagement planning</span><h1>Campaigns</h1><p>Build opt-in WhatsApp campaign drafts with audience segments, approval checks, template previews and scheduling readiness. Sending stays locked until production gates are complete.</p></div><div class="wp-campaign-actions"><button class="wp-secondary" id="wpCreateSegmentBtn" type="button">＋ Segment</button><button class="wp-primary" id="wpCreateCampaignBtn" type="button">＋ Campaign draft</button></div></div>
     <section class="wp-template-stats"><article><span>Opt-in audience</span><strong>${optedInContacts.length}</strong></article><article><span>Segments</span><strong>${segments.length}</strong></article><article><span>Approved templates</span><strong>${templates.length}</strong></article><article><span>Ready drafts</span><strong>${readyDrafts}</strong></article></section>
@@ -1455,23 +1509,8 @@ async function renderDashboard() {
     const renderCampaignDetail = (draft) => {
       const detail = detailDialog?.querySelector("[data-campaign-detail]");
       if (!detail) return;
-      const readiness = campaignReadinessItems(draft, templates, workspaceContacts?.contacts?.filter((contact) => contact.status === "active" && contact.opted_in !== false && contact.status !== "opted_out") || []);
-      const readinessDone = readiness.filter((item) => item.done).length;
-      const auditLog = Array.isArray(draft.approvalLog) ? draft.approvalLog : [];
-      const auditMarkup = auditLog.length ? auditLog.map((entry) => `<li><div><strong>${escapeHtml(campaignStatusLabel(entry.status))}</strong><small>${escapeHtml(campaignDraftDate(entry.at))} · ${escapeHtml(entry.actorName || "Workspace user")}${entry.actorEmail ? ` · ${escapeHtml(entry.actorEmail)}` : ""}</small></div>${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : `<p>No note added.</p>`}</li>`).join("") : `<li class="empty"><p>No approval or status audit recorded yet.</p></li>`;
       detailDialog.querySelector("[data-campaign-detail-title]")?.replaceChildren(document.createTextNode(draft.name || "Campaign details"));
-      detail.innerHTML = `<section class="wp-campaign-detail-grid">
-        <article><span>Status</span><strong>${escapeHtml(campaignStatusLabel(draft.status))}</strong></article>
-        <article><span>Type</span><strong>${escapeHtml(campaignTypeLabel(draft.type))}</strong></article>
-        <article><span>Audience</span><strong>${escapeHtml(draft.audienceLabel || "Campaign audience")}</strong><small>${Number(draft.estimatedAudience || 0)} estimated contacts</small></article>
-        <article><span>Schedule</span><strong>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</strong></article>
-        <article><span>Owner</span><strong>${escapeHtml(draft.owner || session.displayName || "Workspace owner")}</strong></article>
-        <article><span>Template</span><strong>${escapeHtml(draft.templateName || "Template pending")}</strong></article>
-      </section>
-      <article class="wp-campaign-detail-objective"><span>Objective</span><p>${escapeHtml(draft.objective || "No objective documented yet.")}</p></article>
-      <article class="wp-campaign-detail-preview"><span>Message preview</span><p>${escapeHtml(draft.previewBody || "No template preview available.")}</p></article>
-      <section class="wp-campaign-detail-readiness"><header><strong>${readinessDone}/${readiness.length} checks ready</strong><small>Production sending remains disabled until launch controls are completed.</small></header><ul>${readiness.map((item) => `<li class="${item.done ? "done" : ""}">${escapeHtml(item.label)}</li>`).join("")}</ul></section>
-      <section class="wp-campaign-audit"><header><strong>Approval history</strong><small>Reviewer decisions and status changes are kept with the draft.</small></header><ol>${auditMarkup}</ol></section>`;
+      detail.innerHTML = campaignDetailMarkup(draft, templates, workspaceContacts?.contacts?.filter((contact) => contact.status === "active" && contact.opted_in !== false && contact.status !== "opted_out") || []);
       detailDialog.querySelector("[data-detail-edit-campaign]")?.setAttribute("data-detail-edit-campaign", draft.id);
       detailDialog.querySelector("[data-detail-approve-campaign]")?.setAttribute("data-detail-approve-campaign", draft.id);
       detailDialog.querySelector("[data-detail-reject-campaign]")?.setAttribute("data-detail-reject-campaign", draft.id);
@@ -1575,6 +1614,7 @@ async function renderDashboard() {
       openCampaignDialog(draft);
     }));
     app.querySelectorAll("[data-view-campaign]").forEach((button) => button.addEventListener("click", () => {
+      if (button.tagName === "A") return;
       const draft = readCampaignDrafts().find((item) => item.id === button.dataset.viewCampaign);
       if (!draft) return showToast("Campaign draft not found.", "error");
       renderCampaignDetail(draft);
