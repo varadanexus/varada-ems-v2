@@ -95,9 +95,10 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   const miniMap = dialog.querySelector("[data-flow-minimap]");
   const liveMessages = dialog.querySelector("[data-flow-live-messages]");
   const settingsDialog = root.querySelector("[data-flow-settings-dialog]");
-  let state = { id: null, description: "", status: "draft", triggerType: "keyword", triggerConfig: { keywords: [], fallback: "" }, nodes: starterNodes(), edges: [], scale: 1 };
+  let state = { id: null, description: "", status: "draft", triggerType: "keyword", triggerConfig: { keywords: [], fallback: "" }, nodes: starterNodes(), edges: [], scale: 1, panX: 0, panY: 0 };
   let selectedId = state.nodes[0].id;
   let suppressNodeClick = false;
+  let isPanningCanvas = false;
   const applyTransform = (element, transform) => {
     element.getAnimations().filter((animation) => animation.id === "wp-flow-layout").forEach((animation) => animation.cancel());
     const animation = element.animate({ transform }, { duration: 0, fill: "forwards" });
@@ -106,6 +107,11 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   const markDraftChanged = () => {
     const saveState = dialog.querySelector("[data-flow-save-state]");
     if (saveState) saveState.textContent = "Draft changed";
+  };
+  const applyViewport = () => {
+    const transform = `translate(${state.panX || 0}px, ${state.panY || 0}px) scale(${state.scale})`;
+    applyTransform(nodeLayer, transform);
+    applyTransform(lines, transform);
   };
   const focusInspectorField = (id, fieldName = "nodeBody") => {
     const node = state.nodes.find((item) => item.id === id);
@@ -178,10 +184,31 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     const node = state.nodes.find((item) => item.id === id);
     if (!node) return;
   };
+  const duplicateNode = (id) => {
+    const sourceIndex = state.nodes.findIndex((item) => item.id === id);
+    const source = state.nodes[sourceIndex];
+    if (!source) return;
+    const clone = structuredClone(source);
+    clone.id = crypto.randomUUID();
+    clone.title = `${source.title || "Block"} copy`;
+    clone.x = Math.max(20, Number(source.x || 80) + 36);
+    clone.y = Math.max(20, Number(source.y || 90) + 46);
+    state.nodes.splice(sourceIndex + 1, 0, clone);
+    selectedId = clone.id;
+    markDraftChanged();
+    renderNodes();
+  };
+  const deleteNode = (id) => {
+    const node = state.nodes.find((item) => item.id === id);
+    if (!node || node.type === "start") return;
+    state.nodes = state.nodes.filter((item) => item.id !== id);
+    selectedId = state.nodes[Math.max(0, Math.min(state.nodes.length - 1, state.nodes.findIndex((item) => item.id === id)))]?.id || state.nodes[0]?.id;
+    markDraftChanged();
+    renderNodes();
+  };
   const renderNodes = (refreshInspector = true) => {
-    applyTransform(nodeLayer, `scale(${state.scale})`);
-    applyTransform(lines, `scale(${state.scale})`);
-    nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""}" data-flow-node="${node.id}"><header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
+    applyViewport();
+    nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""}" data-flow-node="${node.id}">${node.id === selectedId ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">⧉</button>${node.type !== "start" ? `<button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">⌫</button>` : ""}</div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
     drawLines();
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
       const positionedNode = state.nodes.find((item) => item.id === card.dataset.flowNode);
@@ -196,6 +223,14 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
       card.querySelector("[data-flow-edit-title]")?.addEventListener("click", (event) => {
         event.stopPropagation();
         focusInspectorField(card.dataset.flowNode, "nodeTitle");
+      });
+      card.querySelector("[data-flow-copy-node]")?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        duplicateNode(card.dataset.flowNode);
+      });
+      card.querySelector("[data-flow-delete-node]")?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteNode(card.dataset.flowNode);
       });
       card.querySelectorAll("[data-node-field]").forEach((field) => {
         field.addEventListener("input", () => {
@@ -253,7 +288,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
         });
       });
       card.addEventListener("pointerdown", (event) => {
-        if (event.target.closest("button,input,textarea,select,[data-flow-add-next]")) return;
+        if (event.target.closest("button,input,textarea,select,[data-flow-add-next],[data-flow-copy-node],[data-flow-delete-node]")) return;
         const node = state.nodes.find((item) => item.id === card.dataset.flowNode); if (!node) return;
         event.preventDefault();
         selectedId = node.id;
@@ -294,7 +329,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     state.nodes.splice(insertIndex, 0, node); selectedId = node.id; markDraftChanged(); renderNodes();
   };
   const open = (flow = null) => {
-    state = flow ? { id: flow.id, description: flow.description || "", status: flow.status || "draft", triggerType: flow.trigger_type || "keyword", triggerConfig: flow.trigger_config || {}, nodes: Array.isArray(flow.nodes) && flow.nodes.length ? structuredClone(flow.nodes) : starterNodes(), edges: flow.edges || [], scale: 1 } : { id: null, description: "", status: "draft", triggerType: "keyword", triggerConfig: { keywords: [], fallback: "" }, nodes: starterNodes(), edges: [], scale: 1 };
+    state = flow ? { id: flow.id, description: flow.description || "", status: flow.status || "draft", triggerType: flow.trigger_type || "keyword", triggerConfig: flow.trigger_config || {}, nodes: Array.isArray(flow.nodes) && flow.nodes.length ? structuredClone(flow.nodes) : starterNodes(), edges: flow.edges || [], scale: 1, panX: 0, panY: 0 } : { id: null, description: "", status: "draft", triggerType: "keyword", triggerConfig: { keywords: [], fallback: "" }, nodes: starterNodes(), edges: [], scale: 1, panX: 0, panY: 0 };
     form.elements.name.value = flow?.name || "Untitled flow"; form.elements.active.checked = state.status === "active"; selectedId = state.nodes[0].id; dialog.showModal(); renderNodes();
   };
   const generateDraft = () => {
@@ -328,9 +363,57 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   }));
   dialog.querySelector("[data-flow-live-start]")?.addEventListener("click", startLivePreview);
   canvas.addEventListener("dragover", (event) => event.preventDefault()); canvas.addEventListener("drop", (event) => { event.preventDefault(); const type = event.dataTransfer.getData("text/plain"); if (!type) return; const rect = canvas.getBoundingClientRect(); addBlock(type, { x: (event.clientX - rect.left) / state.scale, y: (event.clientY - rect.top) / state.scale }); });
-  dialog.querySelector('[data-flow-zoom="in"]').addEventListener("click", () => { state.scale = Math.min(1.4, state.scale + .1); renderNodes(false); });
-  dialog.querySelector('[data-flow-zoom="out"]').addEventListener("click", () => { state.scale = Math.max(.5, state.scale - .1); renderNodes(false); });
-  dialog.querySelector("[data-flow-fit]").addEventListener("click", () => { state.scale = .75; canvas.scrollTo({ top: 0, left: 0, behavior: "smooth" }); renderNodes(false); });
+  const zoomCanvas = (delta, origin = null) => {
+    const previous = state.scale;
+    const next = Math.max(.35, Math.min(1.8, Number((state.scale + delta).toFixed(2))));
+    if (next === previous) return;
+    if (origin) {
+      const rect = canvas.getBoundingClientRect();
+      const ox = origin.clientX - rect.left;
+      const oy = origin.clientY - rect.top;
+      state.panX = ox - ((ox - (state.panX || 0)) / previous) * next;
+      state.panY = oy - ((oy - (state.panY || 0)) / previous) * next;
+    }
+    state.scale = next;
+    applyViewport();
+    drawLines();
+  };
+  dialog.querySelector('[data-flow-zoom="in"]').addEventListener("click", () => zoomCanvas(.1));
+  dialog.querySelector('[data-flow-zoom="out"]').addEventListener("click", () => zoomCanvas(-.1));
+  dialog.querySelector("[data-flow-fit]").addEventListener("click", () => { state.scale = .75; state.panX = 0; state.panY = 0; canvas.scrollTo({ top: 0, left: 0, behavior: "smooth" }); renderNodes(false); });
+  canvas.addEventListener("wheel", (event) => {
+    if (event.target.closest(".wp-flow-palette,.wp-flow-live-panel,input,textarea,select")) return;
+    event.preventDefault();
+    zoomCanvas(event.deltaY > 0 ? -.06 : .06, event);
+  }, { passive: false });
+  canvas.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("[data-flow-node],button,input,textarea,select")) return;
+    event.preventDefault();
+    isPanningCanvas = true;
+    canvas.classList.add("panning");
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originX = state.panX || 0;
+    const originY = state.panY || 0;
+    canvas.setPointerCapture(event.pointerId);
+    const move = (moveEvent) => {
+      if (!isPanningCanvas) return;
+      state.panX = originX + (moveEvent.clientX - startX);
+      state.panY = originY + (moveEvent.clientY - startY);
+      applyViewport();
+      drawLines();
+    };
+    const stop = () => {
+      isPanningCanvas = false;
+      canvas.classList.remove("panning");
+      canvas.removeEventListener("pointermove", move);
+      canvas.removeEventListener("pointerup", stop);
+      canvas.removeEventListener("pointercancel", stop);
+    };
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerup", stop);
+    canvas.addEventListener("pointercancel", stop);
+  });
   dialog.querySelector("[data-flow-settings]").addEventListener("click", () => { settingsDialog.querySelector('[name="triggerType"]').value = state.triggerType; settingsDialog.querySelector('[name="keywords"]').value = (state.triggerConfig.keywords || []).join(", "); settingsDialog.querySelector('[name="fallback"]').value = state.triggerConfig.fallback || ""; settingsDialog.showModal(); });
   settingsDialog.querySelector("[data-flow-settings-close]").addEventListener("click", () => settingsDialog.close());
   settingsDialog.querySelector("[data-flow-settings-apply]").addEventListener("click", () => { state.triggerType = settingsDialog.querySelector('[name="triggerType"]').value; state.triggerConfig = { keywords: settingsDialog.querySelector('[name="keywords"]').value.split(",").map((item) => item.trim()).filter(Boolean), fallback: settingsDialog.querySelector('[name="fallback"]').value.trim() }; settingsDialog.close(); toast("Trigger settings applied to this draft."); });
