@@ -1176,7 +1176,7 @@ function campaignsView() {
     <span>${escapeHtml(draft.templateName || "Template pending")}</span>
     <span>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</span>
     <label class="wp-campaign-status-control"><span class="wp-campaign-status ${escapeHtml(draft.status || "draft")}">${escapeHtml(campaignStatusLabel(draft.status))}</span><select data-campaign-status="${escapeHtml(draft.id)}" aria-label="Campaign status"><option value="draft" ${(!draft.status || draft.status === "draft") ? "selected" : ""}>Draft</option><option value="review" ${draft.status === "review" ? "selected" : ""}>Ready for approval</option><option value="approved" ${draft.status === "approved" ? "selected" : ""}>Approved</option><option value="paused" ${draft.status === "paused" ? "selected" : ""}>Paused</option></select></label>
-    <div class="wp-campaign-row-actions"><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
+    <div class="wp-campaign-row-actions"><button type="button" data-edit-campaign="${escapeHtml(draft.id)}">Edit</button><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
   </article>`).join("");
   return `<section class="wp-route-page wp-campaign-page">
     <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Engagement planning</span><h1>Campaigns</h1><p>Build opt-in WhatsApp campaign drafts with audience segments, approval checks, template previews and scheduling readiness. Sending stays locked until production gates are complete.</p></div><div class="wp-campaign-actions"><button class="wp-secondary" id="wpCreateSegmentBtn" type="button">＋ Segment</button><button class="wp-primary" id="wpCreateCampaignBtn" type="button">＋ Campaign draft</button></div></div>
@@ -1189,11 +1189,11 @@ function campaignsView() {
         <article class="wp-card wp-campaign-segments"><header><div><span class="wp-card-eyebrow">Audience controls</span><h2>Segments</h2></div></header><div>${segmentCards}</div></article>
       </aside>
     </section>
-    <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignDraftDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign planner</span><h2>Create campaign draft</h2><p>Prepare campaign details before approval and production sending.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header>
+    <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignDraftDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign planner</span><h2 data-campaign-dialog-title>Create campaign draft</h2><p>Prepare campaign details before approval and production sending.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input name="campaignId" type="hidden" />
       <div class="wp-form-row"><label><span>Campaign name</span><input name="name" maxlength="120" placeholder="August onboarding reminder" required /></label><label><span>Campaign type</span><select name="type"><option value="announcement">Announcement</option><option value="reminder">Reminder</option><option value="follow_up">Follow-up</option><option value="offer">Offer</option><option value="reactivation">Reactivation</option></select></label></div>
       <label><span>Objective</span><textarea name="objective" maxlength="400" rows="3" placeholder="Explain why this campaign is being sent and what action customers should take."></textarea></label>
       <div class="wp-form-row"><label><span>Audience segment</span><select name="audience">${segmentOptions}</select></label><label><span>Schedule window</span><input name="scheduledAt" type="datetime-local" /></label></div>
-      <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Approval status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="paused">Paused</option></select></label></div>
+      <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Approval status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="approved">Approved</option><option value="paused">Paused</option></select></label></div>
       <label><span>Approved template</span><select name="templateKey" ${templates.length ? "required" : "disabled"}><option value="">Select template</option>${templateOptions}</select><small>${templates.length ? "Only templates already approved by Meta are available here." : `No approved template is available yet. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label>
       <div class="wp-campaign-live-preview"><span>Preview</span><p data-campaign-preview>${escapeHtml(previewTemplate ? templateBody(previewTemplate) : "Select an approved template to preview its body.")}</p></div>
       <div class="wp-policy-note"><strong>Campaign safety gate</strong><p>This creates a planning draft only. Sending will require approved templates, eligible opt-in contacts, production approval and final operator confirmation.</p></div>
@@ -1354,11 +1354,32 @@ async function renderDashboard() {
     const segmentForm = segmentDialog?.querySelector("form");
     const templates = approvedWorkspaceTemplates();
     const preview = dialog?.querySelector("[data-campaign-preview]");
+    const setFormValue = (name, value) => {
+      const field = form?.elements?.[name];
+      if (field) field.value = value ?? "";
+    };
     const updatePreview = () => {
       const selected = templates.find((template) => `${template.name}|${template.language}` === form?.elements.templateKey?.value);
       if (preview) preview.textContent = selected ? templateBody(selected) : "Select an approved template to preview its body.";
     };
-    app.querySelector("#wpCreateCampaignBtn")?.addEventListener("click", () => { form?.reset(); updatePreview(); dialog?.showModal(); });
+    const openCampaignDialog = (draft = null) => {
+      form?.reset();
+      setFormValue("campaignId", draft?.id || "");
+      setFormValue("name", draft?.name || "");
+      setFormValue("type", draft?.type || "announcement");
+      setFormValue("objective", draft?.objective || "");
+      setFormValue("audience", draft?.audience || "active");
+      setFormValue("scheduledAt", draft?.scheduledAt || "");
+      setFormValue("owner", draft?.owner || session.displayName || "");
+      setFormValue("status", draft?.status || "draft");
+      setFormValue("templateKey", draft?.templateKey || "");
+      if (form?.elements.confirmOptIn) form.elements.confirmOptIn.checked = Boolean(draft);
+      if (form?.elements.confirmPolicy) form.elements.confirmPolicy.checked = Boolean(draft);
+      dialog?.querySelector("[data-campaign-dialog-title]")?.replaceChildren(document.createTextNode(draft ? "Edit campaign draft" : "Create campaign draft"));
+      updatePreview();
+      dialog?.showModal();
+    };
+    app.querySelector("#wpCreateCampaignBtn")?.addEventListener("click", () => openCampaignDialog());
     app.querySelector("#wpCreateSegmentBtn")?.addEventListener("click", () => { segmentForm?.reset(); segmentDialog?.showModal(); });
     form?.elements.templateKey?.addEventListener("change", updatePreview);
     form?.addEventListener("submit", (event) => {
@@ -1371,8 +1392,10 @@ async function renderDashboard() {
       const audience = form.elements.audience?.value || "active";
       const segment = segments.find((item) => item.id === audience);
       const drafts = readCampaignDrafts();
-      drafts.unshift({
-        id: `camp_${Date.now()}`,
+      const existingId = form.elements.campaignId?.value || "";
+      const existingDraft = drafts.find((draft) => draft.id === existingId);
+      const nextDraft = {
+        id: existingId || `camp_${Date.now()}`,
         name: form.elements.name.value.trim(),
         type: form.elements.type?.value || "announcement",
         objective: form.elements.objective?.value.trim() || "",
@@ -1384,12 +1407,13 @@ async function renderDashboard() {
         templateName: selected.name,
         previewBody: templateBody(selected),
         scheduledAt: form.elements.scheduledAt?.value || "",
-        createdAt: new Date().toISOString(),
+        createdAt: existingDraft?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         status: form.elements.status?.value || "draft",
-      });
-      writeCampaignDrafts(drafts);
+      };
+      writeCampaignDrafts(existingId ? drafts.map((draft) => draft.id === existingId ? nextDraft : draft) : [nextDraft, ...drafts]);
       dialog?.close("save");
-      showToast("Campaign draft saved.");
+      showToast(existingId ? "Campaign draft updated." : "Campaign draft saved.");
       renderDashboard();
     });
     segmentForm?.addEventListener("submit", (event) => {
@@ -1423,6 +1447,11 @@ async function renderDashboard() {
       writeCampaignDrafts([{ ...source, id: `camp_${Date.now()}`, name: `${source.name} copy`, createdAt: new Date().toISOString() }, ...readCampaignDrafts()]);
       showToast("Campaign draft copied.");
       renderDashboard();
+    }));
+    app.querySelectorAll("[data-edit-campaign]").forEach((button) => button.addEventListener("click", () => {
+      const draft = readCampaignDrafts().find((item) => item.id === button.dataset.editCampaign);
+      if (!draft) return showToast("Campaign draft not found.", "error");
+      openCampaignDialog(draft);
     }));
     app.querySelectorAll("[data-campaign-status]").forEach((select) => select.addEventListener("change", () => {
       const drafts = readCampaignDrafts().map((draft) => draft.id === select.dataset.campaignStatus ? { ...draft, status: select.value, updatedAt: new Date().toISOString() } : draft);
