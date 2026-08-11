@@ -188,7 +188,7 @@ function campaignDraftDate(value) {
 }
 
 function campaignStatusLabel(status) {
-  return ({ draft: "Draft", review: "Ready for approval", approved: "Approved", paused: "Paused" })[status] || "Draft";
+  return ({ draft: "Draft", review: "Ready for approval", approved: "Approved", rejected: "Rejected", paused: "Paused" })[status] || "Draft";
 }
 
 function campaignTypeLabel(type) {
@@ -1181,19 +1181,34 @@ function campaignsView() {
     return counts;
   }, {});
   const readyDrafts = drafts.filter((draft) => draft.status === "review" || draft.status === "approved").length;
-  const draftRows = drafts.map((draft) => `<article class="wp-campaign-row">
-    <div><strong>${escapeHtml(draft.name || "Untitled campaign")}</strong><small>${escapeHtml(draft.objective || "No objective added")}</small></div>
-    <span>${escapeHtml(campaignTypeLabel(draft.type))}</span>
-    <span>${escapeHtml(draft.audienceLabel || "All active contacts")}</span>
-    <span>${escapeHtml(draft.templateName || "Template pending")}</span>
-    <span>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</span>
-    <label class="wp-campaign-status-control"><span class="wp-campaign-status ${escapeHtml(draft.status || "draft")}">${escapeHtml(campaignStatusLabel(draft.status))}</span><select data-campaign-status="${escapeHtml(draft.id)}" aria-label="Campaign status"><option value="draft" ${(!draft.status || draft.status === "draft") ? "selected" : ""}>Draft</option><option value="review" ${draft.status === "review" ? "selected" : ""}>Ready for approval</option><option value="approved" ${draft.status === "approved" ? "selected" : ""}>Approved</option><option value="paused" ${draft.status === "paused" ? "selected" : ""}>Paused</option></select></label>
-    <div class="wp-campaign-row-actions"><button type="button" data-view-campaign="${escapeHtml(draft.id)}">View</button><button type="button" data-edit-campaign="${escapeHtml(draft.id)}">Edit</button><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
-  </article>`).join("");
+  const draftRows = drafts.map((draft) => {
+    const readiness = campaignReadinessItems(draft, templates, optedInContacts);
+    const readinessDone = readiness.filter((item) => item.done).length;
+    return `<article class="wp-campaign-row">
+      <div class="wp-campaign-row-main">
+        <div class="wp-campaign-row-title">
+          <strong>${escapeHtml(draft.name || "Untitled campaign")}</strong>
+          <small>${escapeHtml(draft.objective || "No objective added")}</small>
+        </div>
+        <span class="wp-campaign-status ${escapeHtml(draft.status || "draft")}">${escapeHtml(campaignStatusLabel(draft.status))}</span>
+      </div>
+      <div class="wp-campaign-row-meta" aria-label="Campaign draft details">
+        <span><em>Type</em><strong>${escapeHtml(campaignTypeLabel(draft.type))}</strong></span>
+        <span><em>Audience</em><strong>${escapeHtml(draft.audienceLabel || "All active contacts")}</strong></span>
+        <span><em>Template</em><strong>${escapeHtml(draft.templateName || "Template pending")}</strong></span>
+        <span><em>Schedule</em><strong>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</strong></span>
+        <span><em>Readiness</em><strong>${readinessDone} of ${readiness.length} checks</strong></span>
+      </div>
+      <div class="wp-campaign-row-footer">
+        <label class="wp-campaign-status-control"><span>Workflow status</span><select data-campaign-status="${escapeHtml(draft.id)}" aria-label="Campaign status"><option value="draft" ${(!draft.status || draft.status === "draft") ? "selected" : ""}>Draft</option><option value="review" ${draft.status === "review" ? "selected" : ""}>Ready for approval</option><option value="approved" ${draft.status === "approved" ? "selected" : ""}>Approved</option><option value="rejected" ${draft.status === "rejected" ? "selected" : ""}>Rejected</option><option value="paused" ${draft.status === "paused" ? "selected" : ""}>Paused</option></select></label>
+        <div class="wp-campaign-row-actions"><button type="button" data-view-campaign="${escapeHtml(draft.id)}">View</button><button type="button" data-edit-campaign="${escapeHtml(draft.id)}">Edit</button><button type="button" data-approve-campaign="${escapeHtml(draft.id)}">Approve</button><button type="button" data-reject-campaign="${escapeHtml(draft.id)}">Reject</button><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
+      </div>
+    </article>`;
+  }).join("");
   return `<section class="wp-route-page wp-campaign-page">
     <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Engagement planning</span><h1>Campaigns</h1><p>Build opt-in WhatsApp campaign drafts with audience segments, approval checks, template previews and scheduling readiness. Sending stays locked until production gates are complete.</p></div><div class="wp-campaign-actions"><button class="wp-secondary" id="wpCreateSegmentBtn" type="button">＋ Segment</button><button class="wp-primary" id="wpCreateCampaignBtn" type="button">＋ Campaign draft</button></div></div>
     <section class="wp-template-stats"><article><span>Opt-in audience</span><strong>${optedInContacts.length}</strong></article><article><span>Segments</span><strong>${segments.length}</strong></article><article><span>Approved templates</span><strong>${templates.length}</strong></article><article><span>Ready drafts</span><strong>${readyDrafts}</strong></article></section>
-    <section class="wp-campaign-readiness"><article><span>Draft</span><strong>${statusCounts.draft || 0}</strong></article><article><span>Ready for approval</span><strong>${statusCounts.review || 0}</strong></article><article><span>Approved</span><strong>${statusCounts.approved || 0}</strong></article><article><span>Paused</span><strong>${statusCounts.paused || 0}</strong></article></section>
+    <section class="wp-campaign-readiness"><article><span>Draft</span><strong>${statusCounts.draft || 0}</strong></article><article><span>Ready for approval</span><strong>${statusCounts.review || 0}</strong></article><article><span>Approved</span><strong>${statusCounts.approved || 0}</strong></article><article><span>Rejected</span><strong>${statusCounts.rejected || 0}</strong></article><article><span>Paused</span><strong>${statusCounts.paused || 0}</strong></article></section>
     <section class="wp-campaign-grid">
       <article class="wp-card wp-campaign-list"><header><div><span class="wp-card-eyebrow">Campaign command table</span><h2>Campaign drafts</h2></div><small>Drafts are stored for planning. No campaign blast is sent here.</small></header><div class="wp-campaign-table">${draftRows || `<div class="wp-inbox-empty"><span>◈</span><strong>No campaign drafts yet</strong><p>Create a draft to plan audience, template, schedule and approval checks.</p></div>`}</div></article>
       <aside class="wp-campaign-side-stack">
@@ -1472,6 +1487,14 @@ async function renderDashboard() {
       const drafts = readCampaignDrafts().filter((draft) => draft.id !== button.dataset.deleteCampaign);
       writeCampaignDrafts(drafts);
       showToast("Campaign draft deleted.");
+      renderDashboard();
+    }));
+    app.querySelectorAll("[data-approve-campaign],[data-reject-campaign]").forEach((button) => button.addEventListener("click", () => {
+      const id = button.dataset.approveCampaign || button.dataset.rejectCampaign;
+      const nextStatus = button.dataset.approveCampaign ? "approved" : "rejected";
+      const drafts = readCampaignDrafts().map((draft) => draft.id === id ? { ...draft, status: nextStatus, updatedAt: new Date().toISOString() } : draft);
+      writeCampaignDrafts(drafts);
+      showToast(nextStatus === "approved" ? "Campaign draft approved." : "Campaign draft rejected.");
       renderDashboard();
     }));
     app.querySelectorAll("[data-duplicate-campaign]").forEach((button) => button.addEventListener("click", () => {
