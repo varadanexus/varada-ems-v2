@@ -3,6 +3,7 @@ import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsap
 const SESSION_KEY = "vn_whatsapp_platform_session";
 const THEME_KEY = "vn_whatsapp_platform_theme";
 const CAMPAIGN_DRAFTS_KEY = "vn_whatsapp_campaign_drafts";
+const CAMPAIGN_SEGMENTS_KEY = "vn_whatsapp_campaign_segments";
 const OVERVIEW_PATH = "/whatsapp-platform";
 const ACCESS_PATH = "/whatsapp-platform/access/";
 const WORKSPACE_PATH = "/whatsapp-platform/workspace/";
@@ -141,6 +142,40 @@ function writeCampaignDrafts(drafts) {
   try { localStorage.setItem(campaignDraftsKey(), JSON.stringify(drafts.slice(0, 80))); } catch { /* Drafts remain in memory only. */ }
 }
 
+function campaignSegmentsKey() {
+  return `${CAMPAIGN_SEGMENTS_KEY}:${session?.tenantId || session?.email || "local"}`;
+}
+
+function defaultCampaignSegments(contacts = []) {
+  const activeContacts = contacts.filter((contact) => contact.status === "active");
+  const optedInContacts = activeContacts.filter((contact) => contact.opted_in !== false && contact.status !== "opted_out");
+  const recentCutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  const recentContacts = activeContacts.filter((contact) => {
+    const created = new Date(contact.created_at || contact.createdAt || 0).getTime();
+    return created && created >= recentCutoff;
+  });
+  return [
+    { id: "active", name: "All active contacts", description: "Contacts available for customer communication.", count: activeContacts.length, system: true, rule: "status:active" },
+    { id: "opted_in", name: "Opt-in audience", description: "Contacts who have not opted out of WhatsApp messaging.", count: optedInContacts.length, system: true, rule: "opted_in:true" },
+    { id: "recent", name: "Recently added", description: "Active contacts added in the last 30 days.", count: recentContacts.length, system: true, rule: "created:last_30_days" },
+  ];
+}
+
+function readCampaignSegments(contacts = []) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(campaignSegmentsKey()) || "[]");
+    const custom = Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    return [...defaultCampaignSegments(contacts), ...custom];
+  } catch {
+    return defaultCampaignSegments(contacts);
+  }
+}
+
+function writeCampaignSegments(segments) {
+  const custom = segments.filter((segment) => !segment.system).slice(0, 60);
+  try { localStorage.setItem(campaignSegmentsKey(), JSON.stringify(custom)); } catch { /* Segments remain in memory only. */ }
+}
+
 function approvedWorkspaceTemplates() {
   return (workspaceTemplates?.templates || []).filter((template) => String(template.status || "").toUpperCase() === "APPROVED");
 }
@@ -150,6 +185,14 @@ function campaignDraftDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not scheduled";
   return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+function campaignStatusLabel(status) {
+  return ({ draft: "Draft", review: "Ready for approval", approved: "Approved", paused: "Paused" })[status] || "Draft";
+}
+
+function campaignTypeLabel(type) {
+  return ({ announcement: "Announcement", reminder: "Reminder", follow_up: "Follow-up", offer: "Offer", reactivation: "Reactivation" })[type] || "Campaign";
 }
 
 function currentFlowBuilderId() {
@@ -1113,12 +1156,57 @@ function campaignsView() {
   const activeContacts = contacts.filter((contact) => contact.status === "active");
   const optedInContacts = activeContacts.filter((contact) => contact.opted_in !== false && contact.status !== "opted_out");
   const templates = approvedWorkspaceTemplates();
+  const segments = readCampaignSegments(contacts);
   const firstDraft = drafts[0] || {};
   const previewTemplate = templates.find((template) => `${template.name}|${template.language}` === firstDraft.templateKey) || templates[0];
   const previewBody = firstDraft.previewBody || (previewTemplate ? templateBody(previewTemplate) : "Choose an approved template to preview the message your audience will receive.");
   const templateOptions = templates.map((template) => `<option value="${escapeHtml(`${template.name}|${template.language}`)}">${escapeHtml(template.name)} · ${escapeHtml(template.language)} · ${escapeHtml(template.category || "Template")}</option>`).join("");
-  const draftRows = drafts.map((draft) => `<article class="wp-campaign-row"><div><strong>${escapeHtml(draft.name || "Untitled campaign")}</strong><small>${escapeHtml(draft.objective || "No objective added")}</small></div><span>${escapeHtml(draft.audienceLabel || "All active contacts")}</span><span>${escapeHtml(draft.templateName || "Template pending")}</span><span>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</span><div class="wp-campaign-row-actions"><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div></article>`).join("");
-  return `<section class="wp-route-page wp-campaign-page"><div class="wp-route-heading"><div><span class="wp-kicker">Engagement planning</span><h1>Campaigns</h1><p>Plan opt-in WhatsApp campaigns, pick approved templates, and prepare launch checklists before anything is sent.</p></div><button class="wp-primary" id="wpCreateCampaignBtn" type="button">＋ Create campaign draft</button></div><section class="wp-template-stats"><article><span>Active contacts</span><strong>${activeContacts.length}</strong></article><article><span>Opt-in audience</span><strong>${optedInContacts.length}</strong></article><article><span>Approved templates</span><strong>${templates.length}</strong></article><article><span>Campaign drafts</span><strong>${drafts.length}</strong></article></section><section class="wp-campaign-grid"><article class="wp-card wp-campaign-list"><header><div><span class="wp-card-eyebrow">Draft workspace</span><h2>Campaign drafts</h2></div><small>No message will be sent from this page yet.</small></header><div class="wp-campaign-table">${draftRows || `<div class="wp-inbox-empty"><span>◈</span><strong>No campaign drafts yet</strong><p>Create a draft to plan audience, template, schedule and approval checks.</p></div>`}</div></article><article class="wp-card wp-campaign-preview-card"><span class="wp-card-eyebrow">WhatsApp preview</span><div class="wp-campaign-phone"><div><strong>${escapeHtml(firstDraft.name || "Campaign preview")}</strong><small>${escapeHtml(firstDraft.templateName || "Approved template")}</small></div><p>${escapeHtml(previewBody)}</p><time>Preview only</time></div><ul class="wp-campaign-checklist"><li class="${workspaceVerification?.status === "verified" ? "done" : ""}">Business verification complete</li><li class="${templates.length ? "done" : ""}">Approved template selected</li><li class="${optedInContacts.length ? "done" : ""}">Opt-in audience available</li><li>Final sending controls disabled until production gates are ready</li></ul></article></section><dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignDraftDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign planner</span><h2>Create campaign draft</h2></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><label><span>Campaign name</span><input name="name" maxlength="120" placeholder="August onboarding reminder" required /></label><label><span>Objective</span><textarea name="objective" maxlength="400" rows="3" placeholder="Explain why this campaign is being sent and what the customer should do next."></textarea></label><div class="wp-form-row"><label><span>Audience</span><select name="audience"><option value="active">All active contacts (${activeContacts.length})</option><option value="opted_in">Opt-in contacts (${optedInContacts.length})</option><option value="manual">Manual segment</option></select></label><label><span>Schedule</span><input name="scheduledAt" type="datetime-local" /></label></div><label><span>Approved template</span><select name="templateKey" ${templates.length ? "required" : "disabled"}><option value="">Select template</option>${templateOptions}</select><small>${templates.length ? "Only templates already approved by Meta are available here." : `No approved template is available yet. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label><div class="wp-campaign-live-preview"><span>Preview</span><p data-campaign-preview>${escapeHtml(previewTemplate ? templateBody(previewTemplate) : "Select an approved template to preview its body.")}</p></div><div class="wp-policy-note"><strong>Campaign safety gate</strong><p>This creates a planning draft only. Sending will require approved templates, eligible opt-in contacts, and production sending controls.</p></div><label class="wp-check-row"><input name="confirmOptIn" type="checkbox" required /><span><strong>Audience has opted in</strong><small>I will send only to contacts who expect this WhatsApp message.</small></span></label><label class="wp-check-row"><input name="confirmPolicy" type="checkbox" required /><span><strong>Content follows WhatsApp policies</strong><small>No prohibited, misleading, sensitive or unsupported campaign content.</small></span></label><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save">Save draft</button></footer></form></dialog></section>`;
+  const segmentOptions = segments.map((segment) => `<option value="${escapeHtml(segment.id)}">${escapeHtml(segment.name)} (${Number(segment.count || 0)})</option>`).join("");
+  const segmentCards = segments.map((segment) => `<article class="wp-campaign-segment-card"><div><strong>${escapeHtml(segment.name)}</strong><p>${escapeHtml(segment.description || "Custom campaign audience.")}</p></div><span>${Number(segment.count || 0)}</span>${segment.system ? "" : `<button type="button" aria-label="Delete ${escapeHtml(segment.name)} segment" data-delete-segment="${escapeHtml(segment.id)}">×</button>`}</article>`).join("");
+  const statusCounts = drafts.reduce((counts, draft) => {
+    const key = draft.status || "draft";
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
+  const readyDrafts = drafts.filter((draft) => draft.status === "review" || draft.status === "approved").length;
+  const draftRows = drafts.map((draft) => `<article class="wp-campaign-row">
+    <div><strong>${escapeHtml(draft.name || "Untitled campaign")}</strong><small>${escapeHtml(draft.objective || "No objective added")}</small></div>
+    <span>${escapeHtml(campaignTypeLabel(draft.type))}</span>
+    <span>${escapeHtml(draft.audienceLabel || "All active contacts")}</span>
+    <span>${escapeHtml(draft.templateName || "Template pending")}</span>
+    <span>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</span>
+    <label class="wp-campaign-status-control"><span class="wp-campaign-status ${escapeHtml(draft.status || "draft")}">${escapeHtml(campaignStatusLabel(draft.status))}</span><select data-campaign-status="${escapeHtml(draft.id)}" aria-label="Campaign status"><option value="draft" ${(!draft.status || draft.status === "draft") ? "selected" : ""}>Draft</option><option value="review" ${draft.status === "review" ? "selected" : ""}>Ready for approval</option><option value="approved" ${draft.status === "approved" ? "selected" : ""}>Approved</option><option value="paused" ${draft.status === "paused" ? "selected" : ""}>Paused</option></select></label>
+    <div class="wp-campaign-row-actions"><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
+  </article>`).join("");
+  return `<section class="wp-route-page wp-campaign-page">
+    <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Engagement planning</span><h1>Campaigns</h1><p>Build opt-in WhatsApp campaign drafts with audience segments, approval checks, template previews and scheduling readiness. Sending stays locked until production gates are complete.</p></div><div class="wp-campaign-actions"><button class="wp-secondary" id="wpCreateSegmentBtn" type="button">＋ Segment</button><button class="wp-primary" id="wpCreateCampaignBtn" type="button">＋ Campaign draft</button></div></div>
+    <section class="wp-template-stats"><article><span>Opt-in audience</span><strong>${optedInContacts.length}</strong></article><article><span>Segments</span><strong>${segments.length}</strong></article><article><span>Approved templates</span><strong>${templates.length}</strong></article><article><span>Ready drafts</span><strong>${readyDrafts}</strong></article></section>
+    <section class="wp-campaign-readiness"><article><span>Draft</span><strong>${statusCounts.draft || 0}</strong></article><article><span>Ready for approval</span><strong>${statusCounts.review || 0}</strong></article><article><span>Approved</span><strong>${statusCounts.approved || 0}</strong></article><article><span>Paused</span><strong>${statusCounts.paused || 0}</strong></article></section>
+    <section class="wp-campaign-grid">
+      <article class="wp-card wp-campaign-list"><header><div><span class="wp-card-eyebrow">Campaign command table</span><h2>Campaign drafts</h2></div><small>Drafts are stored for planning. No campaign blast is sent here.</small></header><div class="wp-campaign-table">${draftRows || `<div class="wp-inbox-empty"><span>◈</span><strong>No campaign drafts yet</strong><p>Create a draft to plan audience, template, schedule and approval checks.</p></div>`}</div></article>
+      <aside class="wp-campaign-side-stack">
+        <article class="wp-card wp-campaign-preview-card"><span class="wp-card-eyebrow">WhatsApp preview</span><div class="wp-campaign-phone"><div><strong>${escapeHtml(firstDraft.name || "Campaign preview")}</strong><small>${escapeHtml(firstDraft.templateName || "Approved template")}</small></div><p>${escapeHtml(previewBody)}</p><time>Preview only</time></div><ul class="wp-campaign-checklist"><li class="${workspaceVerification?.status === "verified" ? "done" : ""}">Business verification complete</li><li class="${templates.length ? "done" : ""}">Approved template available</li><li class="${optedInContacts.length ? "done" : ""}">Opt-in audience available</li><li>Production sending switch remains off until review and billing gates are ready</li></ul></article>
+        <article class="wp-card wp-campaign-segments"><header><div><span class="wp-card-eyebrow">Audience controls</span><h2>Segments</h2></div></header><div>${segmentCards}</div></article>
+      </aside>
+    </section>
+    <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignDraftDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign planner</span><h2>Create campaign draft</h2><p>Prepare campaign details before approval and production sending.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header>
+      <div class="wp-form-row"><label><span>Campaign name</span><input name="name" maxlength="120" placeholder="August onboarding reminder" required /></label><label><span>Campaign type</span><select name="type"><option value="announcement">Announcement</option><option value="reminder">Reminder</option><option value="follow_up">Follow-up</option><option value="offer">Offer</option><option value="reactivation">Reactivation</option></select></label></div>
+      <label><span>Objective</span><textarea name="objective" maxlength="400" rows="3" placeholder="Explain why this campaign is being sent and what action customers should take."></textarea></label>
+      <div class="wp-form-row"><label><span>Audience segment</span><select name="audience">${segmentOptions}</select></label><label><span>Schedule window</span><input name="scheduledAt" type="datetime-local" /></label></div>
+      <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Approval status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="paused">Paused</option></select></label></div>
+      <label><span>Approved template</span><select name="templateKey" ${templates.length ? "required" : "disabled"}><option value="">Select template</option>${templateOptions}</select><small>${templates.length ? "Only templates already approved by Meta are available here." : `No approved template is available yet. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label>
+      <div class="wp-campaign-live-preview"><span>Preview</span><p data-campaign-preview>${escapeHtml(previewTemplate ? templateBody(previewTemplate) : "Select an approved template to preview its body.")}</p></div>
+      <div class="wp-policy-note"><strong>Campaign safety gate</strong><p>This creates a planning draft only. Sending will require approved templates, eligible opt-in contacts, production approval and final operator confirmation.</p></div>
+      <label class="wp-check-row"><input name="confirmOptIn" type="checkbox" required /><span><strong>Audience has opted in</strong><small>I will send only to contacts who expect this WhatsApp message.</small></span></label>
+      <label class="wp-check-row"><input name="confirmPolicy" type="checkbox" required /><span><strong>Content follows WhatsApp policies</strong><small>No prohibited, misleading, sensitive or unsupported campaign content.</small></span></label>
+      <footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save">Save draft</button></footer></form></dialog>
+    <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignSegmentDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Audience segment</span><h2>Create segment</h2><p>Use this for planning named campaign audiences before production targeting is enabled.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header>
+      <label><span>Segment name</span><input name="name" maxlength="80" placeholder="High-intent enquiries" required /></label>
+      <label><span>Description</span><textarea name="description" maxlength="240" rows="3" placeholder="Who belongs in this audience and when should they receive campaigns?"></textarea></label>
+      <div class="wp-form-row"><label><span>Audience rule</span><select name="rule"><option value="manual">Manual upload / operator selected</option><option value="tag">Customer tag</option><option value="source">Lead source</option><option value="last_message">Recent conversation</option></select></label><label><span>Estimated contacts</span><input name="count" type="number" min="0" step="1" value="0" /></label></div>
+      <div class="wp-policy-note"><strong>Planning only</strong><p>Final production targeting will be enforced server-side after Meta review and billing gates are completed.</p></div>
+      <footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save_segment">Save segment</button></footer></form></dialog>
+  </section>`;
 }
 function plannedView(view) {
   const [title, description, capabilities] = PLANNED_WORKSPACE_VIEWS[view];
@@ -1192,7 +1280,7 @@ async function renderDashboard() {
       workspaceInbox = { conversations: [], thread: null, error: error?.message || "The Team Inbox could not be loaded." };
     }
   }
-  if (view === "contacts") {
+  if (["contacts","campaigns"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
       const listed = await messagingRequest("list_contacts", { status });
@@ -1201,7 +1289,7 @@ async function renderDashboard() {
       workspaceContacts = { contacts: [], error: error?.message || "The contact directory could not be loaded." };
     }
   }
-  if (["templates","inbox"].includes(view)) {
+  if (["templates","inbox","campaigns"].includes(view)) {
     const templateConnections = connected.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId));
     const requestedConnection = new URLSearchParams(location.search).get("connection");
     const connectionId = templateConnections.some((connection) => connection.id === requestedConnection) ? requestedConnection : templateConnections[0]?.id;
@@ -1261,7 +1349,9 @@ async function renderDashboard() {
   }
   if (view === "campaigns") {
     const dialog = app.querySelector("#wpCampaignDraftDialog");
+    const segmentDialog = app.querySelector("#wpCampaignSegmentDialog");
     const form = dialog?.querySelector("form");
+    const segmentForm = segmentDialog?.querySelector("form");
     const templates = approvedWorkspaceTemplates();
     const preview = dialog?.querySelector("[data-campaign-preview]");
     const updatePreview = () => {
@@ -1269,6 +1359,7 @@ async function renderDashboard() {
       if (preview) preview.textContent = selected ? templateBody(selected) : "Select an approved template to preview its body.";
     };
     app.querySelector("#wpCreateCampaignBtn")?.addEventListener("click", () => { form?.reset(); updatePreview(); dialog?.showModal(); });
+    app.querySelector("#wpCreateSegmentBtn")?.addEventListener("click", () => { segmentForm?.reset(); segmentDialog?.showModal(); });
     form?.elements.templateKey?.addEventListener("change", updatePreview);
     form?.addEventListener("submit", (event) => {
       if (event.submitter?.value !== "save") return;
@@ -1276,25 +1367,48 @@ async function renderDashboard() {
       const selected = templates.find((template) => `${template.name}|${template.language}` === form.elements.templateKey?.value);
       if (!selected) return showToast("Choose an approved template first.", "error");
       if (!form.reportValidity()) return;
+      const segments = readCampaignSegments(workspaceContacts?.contacts || []);
       const audience = form.elements.audience?.value || "active";
-      const audienceLabels = { active: "All active contacts", opted_in: "Opt-in contacts", manual: "Manual segment" };
+      const segment = segments.find((item) => item.id === audience);
       const drafts = readCampaignDrafts();
       drafts.unshift({
         id: `camp_${Date.now()}`,
         name: form.elements.name.value.trim(),
+        type: form.elements.type?.value || "announcement",
         objective: form.elements.objective?.value.trim() || "",
+        owner: form.elements.owner?.value.trim() || session.displayName || "",
         audience,
-        audienceLabel: audienceLabels[audience] || "Campaign audience",
+        audienceLabel: segment?.name || "Campaign audience",
+        estimatedAudience: Number(segment?.count || 0),
         templateKey: `${selected.name}|${selected.language}`,
         templateName: selected.name,
         previewBody: templateBody(selected),
         scheduledAt: form.elements.scheduledAt?.value || "",
         createdAt: new Date().toISOString(),
-        status: "draft",
+        status: form.elements.status?.value || "draft",
       });
       writeCampaignDrafts(drafts);
       dialog?.close("save");
       showToast("Campaign draft saved.");
+      renderDashboard();
+    });
+    segmentForm?.addEventListener("submit", (event) => {
+      if (event.submitter?.value !== "save_segment") return;
+      event.preventDefault();
+      if (!segmentForm.reportValidity()) return;
+      const segments = readCampaignSegments(workspaceContacts?.contacts || []);
+      segments.push({
+        id: `seg_${Date.now()}`,
+        name: segmentForm.elements.name.value.trim(),
+        description: segmentForm.elements.description?.value.trim() || "Custom campaign audience.",
+        rule: segmentForm.elements.rule?.value || "manual",
+        count: Math.max(0, Number(segmentForm.elements.count?.value || 0)),
+        system: false,
+        createdAt: new Date().toISOString(),
+      });
+      writeCampaignSegments(segments);
+      segmentDialog?.close("save_segment");
+      showToast("Audience segment saved.");
       renderDashboard();
     });
     app.querySelectorAll("[data-delete-campaign]").forEach((button) => button.addEventListener("click", () => {
@@ -1308,6 +1422,18 @@ async function renderDashboard() {
       if (!source) return;
       writeCampaignDrafts([{ ...source, id: `camp_${Date.now()}`, name: `${source.name} copy`, createdAt: new Date().toISOString() }, ...readCampaignDrafts()]);
       showToast("Campaign draft copied.");
+      renderDashboard();
+    }));
+    app.querySelectorAll("[data-campaign-status]").forEach((select) => select.addEventListener("change", () => {
+      const drafts = readCampaignDrafts().map((draft) => draft.id === select.dataset.campaignStatus ? { ...draft, status: select.value, updatedAt: new Date().toISOString() } : draft);
+      writeCampaignDrafts(drafts);
+      showToast("Campaign status updated.");
+      renderDashboard();
+    }));
+    app.querySelectorAll("[data-delete-segment]").forEach((button) => button.addEventListener("click", () => {
+      const segments = readCampaignSegments(workspaceContacts?.contacts || []).filter((segment) => segment.id !== button.dataset.deleteSegment);
+      writeCampaignSegments(segments);
+      showToast("Audience segment deleted.");
       renderDashboard();
     }));
   }
