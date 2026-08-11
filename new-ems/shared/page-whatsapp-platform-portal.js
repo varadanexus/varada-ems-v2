@@ -195,6 +195,18 @@ function campaignTypeLabel(type) {
   return ({ announcement: "Announcement", reminder: "Reminder", follow_up: "Follow-up", offer: "Offer", reactivation: "Reactivation" })[type] || "Campaign";
 }
 
+function campaignReadinessItems(draft, templates = [], optedInContacts = []) {
+  const hasTemplate = Boolean(draft?.templateKey && templates.some((template) => `${template.name}|${template.language}` === draft.templateKey));
+  const hasAudience = Number(draft?.estimatedAudience || 0) > 0 || optedInContacts.length > 0;
+  return [
+    { label: "Approved template selected", done: hasTemplate },
+    { label: "Eligible opt-in audience available", done: hasAudience },
+    { label: "Campaign objective documented", done: Boolean(String(draft?.objective || "").trim()) },
+    { label: "Schedule window reviewed", done: Boolean(draft?.scheduledAt) },
+    { label: "Production sending still locked", done: true },
+  ];
+}
+
 function currentFlowBuilderId() {
   return currentWorkspaceView() === "flows" ? (new URLSearchParams(location.search).get("builder") || "") : "";
 }
@@ -1176,7 +1188,7 @@ function campaignsView() {
     <span>${escapeHtml(draft.templateName || "Template pending")}</span>
     <span>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</span>
     <label class="wp-campaign-status-control"><span class="wp-campaign-status ${escapeHtml(draft.status || "draft")}">${escapeHtml(campaignStatusLabel(draft.status))}</span><select data-campaign-status="${escapeHtml(draft.id)}" aria-label="Campaign status"><option value="draft" ${(!draft.status || draft.status === "draft") ? "selected" : ""}>Draft</option><option value="review" ${draft.status === "review" ? "selected" : ""}>Ready for approval</option><option value="approved" ${draft.status === "approved" ? "selected" : ""}>Approved</option><option value="paused" ${draft.status === "paused" ? "selected" : ""}>Paused</option></select></label>
-    <div class="wp-campaign-row-actions"><button type="button" data-edit-campaign="${escapeHtml(draft.id)}">Edit</button><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
+    <div class="wp-campaign-row-actions"><button type="button" data-view-campaign="${escapeHtml(draft.id)}">View</button><button type="button" data-edit-campaign="${escapeHtml(draft.id)}">Edit</button><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
   </article>`).join("");
   return `<section class="wp-route-page wp-campaign-page">
     <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Engagement planning</span><h1>Campaigns</h1><p>Build opt-in WhatsApp campaign drafts with audience segments, approval checks, template previews and scheduling readiness. Sending stays locked until production gates are complete.</p></div><div class="wp-campaign-actions"><button class="wp-secondary" id="wpCreateSegmentBtn" type="button">＋ Segment</button><button class="wp-primary" id="wpCreateCampaignBtn" type="button">＋ Campaign draft</button></div></div>
@@ -1206,6 +1218,7 @@ function campaignsView() {
       <div class="wp-form-row"><label><span>Audience rule</span><select name="rule"><option value="manual">Manual upload / operator selected</option><option value="tag">Customer tag</option><option value="source">Lead source</option><option value="last_message">Recent conversation</option></select></label><label><span>Estimated contacts</span><input name="count" type="number" min="0" step="1" value="0" /></label></div>
       <div class="wp-policy-note"><strong>Planning only</strong><p>Final production targeting will be enforced server-side after Meta review and billing gates are completed.</p></div>
       <footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save_segment">Save segment</button></footer></form></dialog>
+    <dialog class="wp-contact-dialog wp-campaign-detail-dialog" id="wpCampaignDetailDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign brief</span><h2 data-campaign-detail-title>Campaign details</h2><p>Review the draft before editing or moving it into approval.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><div data-campaign-detail></div><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Close</button><button class="wp-primary" type="button" data-detail-edit-campaign>Edit draft</button></footer></form></dialog>
   </section>`;
 }
 function plannedView(view) {
@@ -1350,6 +1363,7 @@ async function renderDashboard() {
   if (view === "campaigns") {
     const dialog = app.querySelector("#wpCampaignDraftDialog");
     const segmentDialog = app.querySelector("#wpCampaignSegmentDialog");
+    const detailDialog = app.querySelector("#wpCampaignDetailDialog");
     const form = dialog?.querySelector("form");
     const segmentForm = segmentDialog?.querySelector("form");
     const templates = approvedWorkspaceTemplates();
@@ -1378,6 +1392,25 @@ async function renderDashboard() {
       dialog?.querySelector("[data-campaign-dialog-title]")?.replaceChildren(document.createTextNode(draft ? "Edit campaign draft" : "Create campaign draft"));
       updatePreview();
       dialog?.showModal();
+    };
+    const renderCampaignDetail = (draft) => {
+      const detail = detailDialog?.querySelector("[data-campaign-detail]");
+      if (!detail) return;
+      const readiness = campaignReadinessItems(draft, templates, workspaceContacts?.contacts?.filter((contact) => contact.status === "active" && contact.opted_in !== false && contact.status !== "opted_out") || []);
+      const readinessDone = readiness.filter((item) => item.done).length;
+      detailDialog.querySelector("[data-campaign-detail-title]")?.replaceChildren(document.createTextNode(draft.name || "Campaign details"));
+      detail.innerHTML = `<section class="wp-campaign-detail-grid">
+        <article><span>Status</span><strong>${escapeHtml(campaignStatusLabel(draft.status))}</strong></article>
+        <article><span>Type</span><strong>${escapeHtml(campaignTypeLabel(draft.type))}</strong></article>
+        <article><span>Audience</span><strong>${escapeHtml(draft.audienceLabel || "Campaign audience")}</strong><small>${Number(draft.estimatedAudience || 0)} estimated contacts</small></article>
+        <article><span>Schedule</span><strong>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</strong></article>
+        <article><span>Owner</span><strong>${escapeHtml(draft.owner || session.displayName || "Workspace owner")}</strong></article>
+        <article><span>Template</span><strong>${escapeHtml(draft.templateName || "Template pending")}</strong></article>
+      </section>
+      <article class="wp-campaign-detail-objective"><span>Objective</span><p>${escapeHtml(draft.objective || "No objective documented yet.")}</p></article>
+      <article class="wp-campaign-detail-preview"><span>Message preview</span><p>${escapeHtml(draft.previewBody || "No template preview available.")}</p></article>
+      <section class="wp-campaign-detail-readiness"><header><strong>${readinessDone}/${readiness.length} checks ready</strong><small>Production sending remains disabled until launch controls are completed.</small></header><ul>${readiness.map((item) => `<li class="${item.done ? "done" : ""}">${escapeHtml(item.label)}</li>`).join("")}</ul></section>`;
+      detailDialog.querySelector("[data-detail-edit-campaign]")?.setAttribute("data-detail-edit-campaign", draft.id);
     };
     app.querySelector("#wpCreateCampaignBtn")?.addEventListener("click", () => openCampaignDialog());
     app.querySelector("#wpCreateSegmentBtn")?.addEventListener("click", () => { segmentForm?.reset(); segmentDialog?.showModal(); });
@@ -1453,6 +1486,17 @@ async function renderDashboard() {
       if (!draft) return showToast("Campaign draft not found.", "error");
       openCampaignDialog(draft);
     }));
+    app.querySelectorAll("[data-view-campaign]").forEach((button) => button.addEventListener("click", () => {
+      const draft = readCampaignDrafts().find((item) => item.id === button.dataset.viewCampaign);
+      if (!draft) return showToast("Campaign draft not found.", "error");
+      renderCampaignDetail(draft);
+      detailDialog?.showModal();
+    }));
+    detailDialog?.querySelector("[data-detail-edit-campaign]")?.addEventListener("click", (event) => {
+      const draft = readCampaignDrafts().find((item) => item.id === event.currentTarget.dataset.detailEditCampaign);
+      detailDialog.close("edit");
+      if (draft) openCampaignDialog(draft);
+    });
     app.querySelectorAll("[data-campaign-status]").forEach((select) => select.addEventListener("change", () => {
       const drafts = readCampaignDrafts().map((draft) => draft.id === select.dataset.campaignStatus ? { ...draft, status: select.value, updatedAt: new Date().toISOString() } : draft);
       writeCampaignDrafts(drafts);
