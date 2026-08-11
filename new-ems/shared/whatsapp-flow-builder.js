@@ -194,6 +194,23 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     }).join("");
     miniMap.innerHTML = `${nodes}<i class="wp-flow-minimap-view" style="left:${inset + viewportLeft * scaleX}px;top:${inset + viewportTop * scaleY}px;width:${Math.max(18, viewportWidth * scaleX)}px;height:${Math.max(14, viewportHeight * scaleY)}px"></i>`;
   };
+  const centerCanvasOn = (worldX, worldY) => {
+    state.panX = Math.round((canvas.clientWidth / 2) - (worldX * state.scale));
+    state.panY = Math.round((canvas.clientHeight / 2) - (worldY * state.scale));
+    canvas.scrollTo({ left: 0, top: 0, behavior: "auto" });
+    applyViewport();
+    drawLines();
+  };
+  const navigateMiniMap = (event) => {
+    if (!miniMap) return;
+    const rect = miniMap.getBoundingClientRect();
+    const inset = 9;
+    const mapWidth = Math.max(1, rect.width - inset * 2);
+    const mapHeight = Math.max(1, rect.height - inset * 2);
+    const x = Math.max(0, Math.min(mapWidth, event.clientX - rect.left - inset));
+    const y = Math.max(0, Math.min(mapHeight, event.clientY - rect.top - inset));
+    centerCanvasOn((x / mapWidth) * 2400, (y / mapHeight) * 1600);
+  };
   const drawLines = () => {
     lines.innerHTML = normalizedEdges().map((edge) => { const a = state.nodes.find((n) => n.id === edge.from); const b = state.nodes.find((n) => n.id === edge.to); if (!a || !b) return ""; return `<path d="M ${a.x + 110} ${a.y + 154} C ${a.x + 110} ${a.y + 205}, ${b.x + 110} ${b.y - 50}, ${b.x + 110} ${b.y}" />`; }).join("");
     lines.setAttribute("viewBox", "0 0 2400 1600");
@@ -433,6 +450,21 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     canvas.addEventListener("pointermove", move);
     canvas.addEventListener("pointerup", stop);
     canvas.addEventListener("pointercancel", stop);
+  });
+  miniMap?.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    navigateMiniMap(event);
+    miniMap.setPointerCapture(event.pointerId);
+    const move = (moveEvent) => navigateMiniMap(moveEvent);
+    const stop = () => {
+      miniMap.removeEventListener("pointermove", move);
+      miniMap.removeEventListener("pointerup", stop);
+      miniMap.removeEventListener("pointercancel", stop);
+    };
+    miniMap.addEventListener("pointermove", move);
+    miniMap.addEventListener("pointerup", stop);
+    miniMap.addEventListener("pointercancel", stop);
   });
   canvas.addEventListener("scroll", drawMiniMap, { passive: true });
   dialog.querySelector("[data-flow-settings]").addEventListener("click", () => { settingsDialog.querySelector('[name="triggerType"]').value = state.triggerType; settingsDialog.querySelector('[name="keywords"]').value = (state.triggerConfig.keywords || []).join(", "); settingsDialog.querySelector('[name="fallback"]').value = state.triggerConfig.fallback || ""; settingsDialog.showModal(); });
