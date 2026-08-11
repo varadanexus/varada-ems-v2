@@ -10,7 +10,7 @@ const PDF_ASSET_PATHS = {
 };
 const COMPANY_NAME = "VARADA NEXUS PRIVATE LIMITED";
 const COMPANY_GST = "GST: 37AAKCV7495B1ZV";
-const COMPANY_ADDRESS_LINE_1 = "Address: 80-17-28, K B Nagar, A V A Road,";
+const COMPANY_ADDRESS_LINE_1 = "Address: K B Nagar, A V A Road,";
 const COMPANY_ADDRESS_LINE_2 = "Rajahmundry, Andhra Pradesh - 533101";
 const COMPANY_CIN = "CIN: U43121AP2025PTC117741";
 const COMPANY_PHONE = "Phone: N/A";
