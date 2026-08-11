@@ -33,6 +33,39 @@ function starterNodes() {
 
 function iconFor(type) { return BLOCKS.find((item) => item[0] === type)?.[1] || (type === "start" ? "⚡" : "▤"); }
 function statusLabel(value) { return value === "active" ? "Active" : value === "paused" ? "Paused" : "Draft"; }
+function fieldValue(node, name, fallback = "") {
+  if (name === "body") return node.body || "";
+  return node.config?.[name] ?? fallback;
+}
+function buttonValues(node) {
+  return Array.isArray(node.config?.buttons) ? node.config.buttons : [];
+}
+function renderQuickButtons(node, escapeHtml) {
+  const buttons = buttonValues(node);
+  return `<div class="wp-flow-inline-buttons">${buttons.map((button, index) => `<label><input data-node-button="${index}" maxlength="20" value="${escapeHtml(button)}" placeholder="Button ${index + 1}" /><button type="button" data-flow-remove-button="${index}" aria-label="Remove button">×</button></label>`).join("")}<button type="button" data-flow-add-button>＋ Add Button</button></div>`;
+}
+function renderNodeFields(node, escapeHtml) {
+  const config = node.config || {};
+  if (node.type === "start") {
+    return `<div class="wp-flow-inline-editor"><label><span>Keyword trigger</span><input data-node-field="keywords" maxlength="240" placeholder="Type, press enter to add keyword" value="${escapeHtml(fieldValue(node, "keywords"))}" /></label><label><span>Regex trigger</span><input data-node-field="regex" maxlength="240" placeholder="Enter regex to match substring trigger" value="${escapeHtml(fieldValue(node, "regex"))}" /></label><label class="wp-flow-inline-check"><input data-node-field="caseSensitive" type="checkbox" ${config.caseSensitive ? "checked" : ""} /><span>Case sensitive</span></label><div class="wp-flow-inline-note"><strong>Begin flow with</strong><button type="button" data-flow-add-next="template">Approved template</button><button type="button" data-flow-add-next="message">Message</button></div></div>`;
+  }
+  if (node.type === "media" || node.type === "ask_media") {
+    return `<div class="wp-flow-inline-editor"><label><span>AI keywords</span><input data-node-field="aiKeywords" maxlength="240" placeholder="Enter AI keywords" value="${escapeHtml(fieldValue(node, "aiKeywords"))}" /></label><label><span>Media type</span><select data-node-field="mediaType"><option value="image" ${config.mediaType === "image" ? "selected" : ""}>Image</option><option value="video" ${config.mediaType === "video" ? "selected" : ""}>Video</option><option value="document" ${config.mediaType === "document" ? "selected" : ""}>Document</option></select></label><label><span>Media URL</span><input data-node-field="mediaUrl" type="url" placeholder="Paste secure media URL" value="${escapeHtml(fieldValue(node, "mediaUrl"))}" /></label><label><span>Caption</span><textarea data-node-field="body" maxlength="1024" placeholder="Caption...">${escapeHtml(node.body || "")}</textarea><em data-flow-count>${Number((node.body || "").length)}/1024</em></label>${renderQuickButtons(node, escapeHtml)}</div>`;
+  }
+  if (node.type === "condition") {
+    return `<div class="wp-flow-inline-editor"><label><span>Condition</span><input data-node-field="expression" maxlength="240" placeholder="customer.intent equals pricing" value="${escapeHtml(fieldValue(node, "expression"))}" /></label><div class="wp-flow-branches"><span>Yes branch</span><span>No branch</span></div><label><span>Fallback instruction</span><textarea data-node-field="body" maxlength="1024" placeholder="What should happen when no branch matches?">${escapeHtml(node.body || "")}</textarea></label></div>`;
+  }
+  if (node.type === "api") {
+    return `<div class="wp-flow-inline-editor"><label><span>Method</span><select data-node-field="method"><option value="POST" ${config.method !== "GET" ? "selected" : ""}>POST</option><option value="GET" ${config.method === "GET" ? "selected" : ""}>GET</option></select></label><label><span>HTTPS endpoint</span><input data-node-field="endpoint" type="url" placeholder="https://api.example.com/orders" value="${escapeHtml(fieldValue(node, "endpoint"))}" /></label><label><span>Notes</span><textarea data-node-field="body" maxlength="1024">${escapeHtml(node.body || "")}</textarea></label></div>`;
+  }
+  if (node.type === "delay") {
+    return `<div class="wp-flow-inline-editor"><label><span>Delay</span><input data-node-field="seconds" type="number" min="1" max="86400" placeholder="Type delay in seconds..." value="${escapeHtml(fieldValue(node, "seconds", "60"))}" /></label><label><span>Instruction</span><textarea data-node-field="body" maxlength="1024">${escapeHtml(node.body || "")}</textarea></label></div>`;
+  }
+  if (["question", "address", "location", "attribute", "tag", "connect", "handoff", "end"].includes(node.type)) {
+    return `<div class="wp-flow-inline-editor"><label><span>${node.type === "handoff" ? "Team note" : node.type === "connect" ? "Flow name" : node.type === "tag" ? "Tag name" : node.type === "attribute" ? "Attribute name" : "Prompt"}</span><input data-node-field="target" maxlength="120" placeholder="${escapeHtml(DEFAULT_COPY[node.type])}" value="${escapeHtml(fieldValue(node, "target"))}" /></label><label><span>Message</span><textarea data-node-field="body" maxlength="1024" placeholder="Type message...">${escapeHtml(node.body || "")}</textarea><em data-flow-count>${Number((node.body || "").length)}/1024</em></label></div>`;
+  }
+  return `<div class="wp-flow-inline-editor"><label><span>AI keywords</span><input data-node-field="aiKeywords" maxlength="240" placeholder="Enter AI keywords" value="${escapeHtml(fieldValue(node, "aiKeywords"))}" /></label><label><span>Message body</span><textarea data-node-field="body" maxlength="1024" placeholder="Type message...">${escapeHtml(node.body || "")}</textarea><em data-flow-count>${Number((node.body || "").length)}/1024</em></label>${renderQuickButtons(node, escapeHtml)}<label><span>Delay</span><input data-node-field="seconds" type="number" min="0" max="86400" placeholder="Type delay in seconds..." value="${escapeHtml(fieldValue(node, "seconds"))}" /></label><label class="wp-flow-inline-check"><input data-node-field="timeoutEnabled" type="checkbox" ${config.timeoutEnabled ? "checked" : ""} /><span>Set timeout</span></label></div>`;
+}
 
 export function renderFlowsView({ flows = [], escapeHtml }) {
   const active = flows.filter((flow) => flow.status === "active").length;
@@ -67,6 +100,31 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     const saveState = dialog.querySelector("[data-flow-save-state]");
     if (saveState) saveState.textContent = "Draft changed";
   };
+  const focusInspectorField = (id, fieldName = "nodeBody") => {
+    selectNode(id);
+    requestAnimationFrame(() => {
+      const field = inspector.querySelector(`[name="${fieldName}"]`);
+      field?.focus();
+      field?.select?.();
+    });
+  };
+  const updateSelectedCardPreview = (node) => {
+    const card = nodeLayer.querySelector(`[data-flow-node="${CSS.escape(node.id)}"]`);
+    if (!card) return;
+    const title = card.querySelector("header strong");
+    if (title) title.textContent = node.title;
+    card.querySelectorAll("[data-flow-count]").forEach((counter) => {
+      counter.textContent = `${Number((node.body || "").length)}/1024`;
+    });
+  };
+  const setNodeField = (node, field, element) => {
+    if (field === "body") {
+      node.body = element.value || "";
+      return;
+    }
+    node.config = { ...(node.config || {}) };
+    node.config[field] = element.type === "checkbox" ? element.checked : element.value;
+  };
 
   const normalizedEdges = () => state.nodes.slice(0, -1).map((node, index) => ({ id: `${node.id}:${state.nodes[index + 1].id}`, from: node.id, to: state.nodes[index + 1].id }));
   const drawLines = () => {
@@ -77,14 +135,14 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     selectedId = id; renderNodes(false);
     const node = state.nodes.find((item) => item.id === id);
     if (!node) return;
-    inspector.innerHTML = `<header><span>${iconFor(node.type)}</span><div><small>${escapeHtml(node.type.replaceAll("_", " "))}</small><strong>${escapeHtml(node.title)}</strong></div>${node.type !== "start" ? `<button type="button" data-inspector-delete aria-label="Delete block">×</button>` : ""}</header><label><span>Block title</span><input name="nodeTitle" maxlength="80" value="${escapeHtml(node.title)}" /></label><label><span>Content or instruction</span><textarea name="nodeBody" rows="7" maxlength="2048">${escapeHtml(node.body)}</textarea></label>${node.type === "delay" ? `<label><span>Delay in minutes</span><input name="delayMinutes" type="number" min="1" max="10080" value="${Number(node.config?.minutes || 5)}" /></label>` : ""}${node.type === "api" ? `<label><span>HTTPS endpoint</span><input name="endpoint" type="url" placeholder="https://api.example.com/orders" value="${escapeHtml(node.config?.endpoint || "")}" /></label>` : ""}<div class="wp-flow-inspector-note"><strong>Next block</strong><p>Blocks follow the visual connection order. Drag them to arrange the journey.</p></div>`;
-    inspector.querySelectorAll("input,textarea").forEach((input) => input.addEventListener("input", () => { node.title = inspector.querySelector('[name="nodeTitle"]')?.value || node.title; node.body = inspector.querySelector('[name="nodeBody"]')?.value || ""; node.config = { ...(node.config || {}), minutes: Number(inspector.querySelector('[name="delayMinutes"]')?.value || node.config?.minutes || 5), endpoint: inspector.querySelector('[name="endpoint"]')?.value || node.config?.endpoint || "" }; renderNodes(false); }));
+    inspector.innerHTML = `<header><span>${iconFor(node.type)}</span><div><small>${escapeHtml(node.type.replaceAll("_", " "))}</small><strong>${escapeHtml(node.title)}</strong></div>${node.type !== "start" ? `<button type="button" data-inspector-delete aria-label="Delete block">×</button>` : ""}</header><label><span>Block title</span><input name="nodeTitle" maxlength="80" value="${escapeHtml(node.title)}" /></label><label><span>Internal note</span><textarea name="nodeBody" rows="5" maxlength="2048">${escapeHtml(node.body)}</textarea></label><div class="wp-flow-inspector-note"><strong>Inline card editor</strong><p>Edit the customer-facing content directly inside each canvas card. Use this panel for block naming and deletion.</p></div>`;
+    inspector.querySelectorAll("input,textarea").forEach((input) => input.addEventListener("input", () => { node.title = inspector.querySelector('[name="nodeTitle"]')?.value || node.title; node.body = inspector.querySelector('[name="nodeBody"]')?.value || ""; node.config = { ...(node.config || {}), minutes: Number(inspector.querySelector('[name="delayMinutes"]')?.value || node.config?.minutes || 5), endpoint: inspector.querySelector('[name="endpoint"]')?.value || node.config?.endpoint || "" }; updateSelectedCardPreview(node); drawLines(); markDraftChanged(); }));
     inspector.querySelector("[data-inspector-delete]")?.addEventListener("click", () => { state.nodes = state.nodes.filter((item) => item.id !== node.id); selectedId = state.nodes[0]?.id; renderNodes(); selectNode(selectedId); });
   };
   const renderNodes = (refreshInspector = true) => {
     applyTransform(nodeLayer, `scale(${state.scale})`);
     applyTransform(lines, `scale(${state.scale})`);
-    nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""}" data-flow-node="${node.id}"><header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" aria-label="More options">•••</button></header><p>${escapeHtml(node.body || DEFAULT_COPY[node.type])}</p>${node.type === "message" ? `<button type="button" tabindex="-1">＋ Add button</button>` : ""}<footer><span>${node.type === "condition" ? "Yes / No branches" : node.type === "handoff" ? "Assign team" : "＋ Add content"}</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
+    nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""}" data-flow-node="${node.id}"><header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
     drawLines();
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
       const positionedNode = state.nodes.find((item) => item.id === card.dataset.flowNode);
@@ -96,8 +154,64 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
         }
         selectNode(card.dataset.flowNode);
       });
+      card.querySelector("[data-flow-edit-title]")?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        focusInspectorField(card.dataset.flowNode, "nodeTitle");
+      });
+      card.querySelectorAll("[data-node-field]").forEach((field) => {
+        field.addEventListener("input", () => {
+          const node = state.nodes.find((item) => item.id === card.dataset.flowNode); if (!node) return;
+          setNodeField(node, field.dataset.nodeField, field);
+          updateSelectedCardPreview(node);
+          markDraftChanged();
+        });
+        field.addEventListener("change", () => {
+          const node = state.nodes.find((item) => item.id === card.dataset.flowNode); if (!node) return;
+          setNodeField(node, field.dataset.nodeField, field);
+          markDraftChanged();
+        });
+      });
+      card.querySelectorAll("[data-node-button]").forEach((field) => {
+        field.addEventListener("input", () => {
+          const node = state.nodes.find((item) => item.id === card.dataset.flowNode); if (!node) return;
+          node.config = { ...(node.config || {}) };
+          const buttons = buttonValues(node).slice();
+          buttons[Number(field.dataset.nodeButton)] = field.value;
+          node.config.buttons = buttons;
+          markDraftChanged();
+        });
+      });
+      card.querySelector("[data-flow-add-button]")?.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const node = state.nodes.find((item) => item.id === card.dataset.flowNode); if (!node) return;
+        node.config = { ...(node.config || {}), buttons: [...buttonValues(node), ""] };
+        markDraftChanged();
+        renderNodes(false);
+      });
+      card.querySelectorAll("[data-flow-remove-button]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const node = state.nodes.find((item) => item.id === card.dataset.flowNode); if (!node) return;
+          const buttons = buttonValues(node).slice();
+          buttons.splice(Number(button.dataset.flowRemoveButton), 1);
+          node.config = { ...(node.config || {}), buttons };
+          markDraftChanged();
+          renderNodes(false);
+        });
+      });
+      card.querySelectorAll("[data-flow-add-next]").forEach((control) => {
+        const add = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          addBlock(control.dataset.flowAddNext || "message", {}, card.dataset.flowNode);
+        };
+        control.addEventListener("click", add);
+        control.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") add(event);
+        });
+      });
       card.addEventListener("pointerdown", (event) => {
-        if (event.target.closest("button")) return;
+        if (event.target.closest("button,input,textarea,select,[data-flow-add-next]")) return;
         const node = state.nodes.find((item) => item.id === card.dataset.flowNode); if (!node) return;
         event.preventDefault();
         selectedId = node.id;
@@ -131,10 +245,11 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     });
     if (refreshInspector && selectedId) selectNode(selectedId);
   };
-  const addBlock = (type, point = {}) => {
-    const index = state.nodes.length; const previous = state.nodes[index - 1];
+  const addBlock = (type, point = {}, afterId = null) => {
+    const insertIndex = afterId ? Math.max(0, state.nodes.findIndex((item) => item.id === afterId)) + 1 : state.nodes.length;
+    const index = insertIndex; const previous = state.nodes[index - 1] || state.nodes[state.nodes.length - 1];
     const node = { id: crypto.randomUUID(), type, title: BLOCKS.find((item) => item[0] === type)?.[2] || "Message", body: DEFAULT_COPY[type] || "Configure this step.", x: point.x ?? Math.max(80, (previous?.x || 80) + (index % 3 === 0 ? 280 : 0)), y: point.y ?? ((previous?.y || 20) + 210), config: {} };
-    state.nodes.push(node); selectedId = node.id; renderNodes();
+    state.nodes.splice(insertIndex, 0, node); selectedId = node.id; markDraftChanged(); renderNodes();
   };
   const open = (flow = null) => {
     state = flow ? { id: flow.id, description: flow.description || "", status: flow.status || "draft", triggerType: flow.trigger_type || "keyword", triggerConfig: flow.trigger_config || {}, nodes: Array.isArray(flow.nodes) && flow.nodes.length ? structuredClone(flow.nodes) : starterNodes(), edges: flow.edges || [], scale: 1 } : { id: null, description: "", status: "draft", triggerType: "keyword", triggerConfig: { keywords: [], fallback: "" }, nodes: starterNodes(), edges: [], scale: 1 };
