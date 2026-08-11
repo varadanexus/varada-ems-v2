@@ -52,7 +52,12 @@ function overview() {
 function customers() {
   const rows = state.snapshot?.tenants || [];
   if (!rows.length) return '<section class="wa-admin-card"><h3>Customer companies</h3><p>Manage product tenants, plans and access status.</p><div class="wa-admin-empty">No customers yet. New public signups will appear here.</div></section>';
-  return `<section class="wa-admin-card"><h3>Customer companies</h3><p>Manage product tenants, plans and access status. Suspending a tenant blocks customer sign-in while preserving its data.</p><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Company</th><th>Owner</th><th>Users</th><th>Connections</th><th>Plan & status</th><th>Created</th></tr></thead><tbody>${rows.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><br><small>${escapeHtml(item.slug)}</small></td><td>${escapeHtml(item.ownerEmail)}</td><td>${Number(item.userCount || 0)}</td><td>${Number(item.connectionCount || 0)}</td><td>${state.canManage ? `<form class="wa-admin-inline-form" data-tenant-form="${escapeHtml(item.id)}"><select name="plan"><option ${item.planCode === "starter" ? "selected" : ""}>starter</option><option ${item.planCode === "growth" ? "selected" : ""}>growth</option><option ${item.planCode === "enterprise" ? "selected" : ""}>enterprise</option></select><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select><button type="submit">Save</button></form>` : `${escapeHtml(item.planCode)} · ${status(item.status)}`}</td><td>${escapeHtml(formatDate(item.createdAt))}</td></tr>`).join("")}</tbody></table></div></section>`;
+  return `<section class="wa-admin-card"><h3>Customer companies</h3><p>Plans supply included team seats. Extra purchased seats can be assigned per customer; active members and pending invitations both consume capacity.</p><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Company</th><th>Owner</th><th>Team seats</th><th>Connections</th><th>Plan, extra seats &amp; status</th><th>Created</th></tr></thead><tbody>${rows.map((item) => {
+    const included = item.includedTeamSeats == null ? null : Number(item.includedTeamSeats);
+    const extra = Number(item.additionalTeamSeats || 0);
+    const capacity = included == null ? "Unlimited" : String(included + extra);
+    return `<tr><td><strong>${escapeHtml(item.name)}</strong><br><small>${escapeHtml(item.slug)}</small></td><td>${escapeHtml(item.ownerEmail)}</td><td><strong>${Number(item.userCount || 0)} / ${capacity}</strong><br><small>${included == null ? "Enterprise unlimited" : `${included} included + ${extra} extra`}</small></td><td>${Number(item.connectionCount || 0)}</td><td>${state.canManage ? `<form class="wa-admin-inline-form" data-tenant-form="${escapeHtml(item.id)}"><label><span>Package</span><select name="plan"><option ${item.planCode === "starter" ? "selected" : ""}>starter</option><option ${item.planCode === "growth" ? "selected" : ""}>growth</option><option ${item.planCode === "enterprise" ? "selected" : ""}>enterprise</option></select></label><label><span>Extra seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extra}" /></label><label><span>Status</span><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select></label><button type="submit">Save</button></form>` : `${escapeHtml(item.planCode)} · ${capacity} seats · ${status(item.status)}`}</td><td>${escapeHtml(formatDate(item.createdAt))}</td></tr>`;
+  }).join("")}</tbody></table></div></section>`;
 }
 
 function connections() {
@@ -178,6 +183,7 @@ function planForm(plan) {
       <label>Badge<input name="badge" value="${val("badge")}" placeholder="Most popular" /></label>
       <label>Price / month (₹)<input name="price_monthly" type="number" step="1" value="${escapeHtml(p.priceMonthly ?? 0)}" /></label>
       <label>Price / month ($)<input name="price_monthly_usd" type="number" step="0.01" value="${escapeHtml(p.priceMonthlyUsd ?? 0)}" /></label>
+      <label>Included team seats<input name="team_member_limit" type="number" min="1" max="10000" step="1" value="${escapeHtml(p.teamMemberLimit ?? (isNew ? 3 : ""))}" placeholder="Blank = unlimited" /><small>Leave blank only for an unlimited package.</small></label>
       <label>Price prefix<input name="price_prefix" value="${val("pricePrefix")}" placeholder="from " /></label>
       <label>Price suffix<input name="price_suffix" value="${escapeHtml(p.priceSuffix ?? "/mo")}" /></label>
       <label>Annual note<input name="annual_note" value="${val("annualNote")}" /></label>
@@ -252,7 +258,7 @@ async function savePlan(event, form) {
   const v = new FormData(form);
   const features = String(v.get("features") || "").split("\n").map((s) => s.trim()).filter(Boolean);
   try {
-    const { error } = await db.rpc("whatsapp_platform_admin_upsert_plan", {
+    const { data: planId, error } = await db.rpc("whatsapp_platform_admin_upsert_plan", {
       p_id: form.dataset.planForm || null,
       p_code: v.get("code"), p_label: v.get("label"), p_name: v.get("name"), p_tagline: v.get("tagline"),
       p_price_monthly: Number(v.get("price_monthly") || 0), p_price_monthly_usd: Number(v.get("price_monthly_usd") || 0),
@@ -263,6 +269,12 @@ async function savePlan(event, form) {
       p_is_active: v.get("is_active") === "on", p_sort_order: Number(v.get("sort_order") || 0)
     });
     if (error) throw error;
+    const rawTeamLimit = String(v.get("team_member_limit") || "").trim();
+    const { error: limitError } = await db.rpc("whatsapp_platform_admin_set_plan_team_limit", {
+      p_plan_id: planId,
+      p_team_member_limit: rawTeamLimit ? Number(rawTeamLimit) : null,
+    });
+    if (limitError) throw limitError;
     showToast("Plan saved.", TOAST_TYPES.SUCCESS);
     state.catalog = null; await loadCatalog();
   } catch (error) { showToast(error?.message || "Could not save plan.", TOAST_TYPES.ERROR); btn.disabled = false; }
@@ -357,6 +369,8 @@ function bind() {
     try {
       const { error } = await db.rpc("whatsapp_platform_admin_update_tenant", { p_tenant_id: form.dataset.tenantForm, p_status: values.get("status"), p_plan_code: values.get("plan") });
       if (error) throw error;
+      const { error: capacityError } = await db.rpc("whatsapp_platform_admin_set_team_capacity", { p_tenant_id: form.dataset.tenantForm, p_additional_seats: Number(values.get("additionalSeats") || 0) });
+      if (capacityError) throw capacityError;
       showToast("Customer workspace updated.", TOAST_TYPES.SUCCESS);
       await loadSnapshot();
     } catch (error) { showToast(error?.message || "Could not update workspace.", TOAST_TYPES.ERROR); button.disabled = false; }

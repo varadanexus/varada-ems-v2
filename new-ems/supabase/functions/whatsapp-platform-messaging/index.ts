@@ -121,12 +121,25 @@ async function listConversations(admin: any, customer: any, body: any) {
   return { conversations: (conversations || []).map((row: any) => ({ ...row, contact: contactMap.get(row.contact_id) || null, assignee: userMap.get(row.assigned_user_id) || null, connection: connectionMap.get(row.connection_id) || null })) };
 }
 async function listTeam(admin: any, customer: any) {
-  const { data, error } = await admin.from("whatsapp_platform_users")
-    .select("id,display_name,email,role_code,status,last_login_at,created_at,invited_at,invite_expires_at")
-    .eq("tenant_id", customer.tenant_id)
-    .order("display_name", { ascending: true }).limit(250);
+  const [{ data, error }, { data: tenant, error: tenantError }] = await Promise.all([
+    admin.from("whatsapp_platform_users")
+      .select("id,display_name,email,role_code,status,last_login_at,created_at,invited_at,invite_expires_at")
+      .eq("tenant_id", customer.tenant_id).order("display_name", { ascending: true }).limit(250),
+    admin.from("whatsapp_platform_tenants").select("plan_code,additional_team_seats").eq("id", customer.tenant_id).single(),
+  ]);
   if (error) throw error;
-  return { members: data || [], currentUserId: customer.user_id, currentRole: customer.role_code };
+  if (tenantError || !tenant) throw new Error("Workspace package information is unavailable.");
+  const catalogCode = tenant.plan_code === "starter" ? "launch" : tenant.plan_code;
+  const { data: plan } = await admin.from("whatsapp_platform_plans").select("label,team_member_limit").eq("code", catalogCode).maybeSingle();
+  const fallbackLimit = tenant.plan_code === "enterprise" ? null : tenant.plan_code === "growth" ? 10 : 3;
+  const includedLimit = plan && Object.hasOwn(plan, "team_member_limit") ? plan.team_member_limit : fallbackLimit;
+  const additionalSeats = Math.max(0, Number(tenant.additional_team_seats || 0));
+  const seatLimit = includedLimit === null ? null : Number(includedLimit) + additionalSeats;
+  const seatsUsed = (data || []).filter((member: any) => ["active", "invited"].includes(member.status)).length;
+  return {
+    members: data || [], currentUserId: customer.user_id, currentRole: customer.role_code,
+    capacity: { planCode: tenant.plan_code, planLabel: plan?.label || tenant.plan_code, includedSeats: includedLimit, additionalSeats, seatLimit, seatsUsed, availableSeats: seatLimit === null ? null : Math.max(0, seatLimit - seatsUsed) },
+  };
 }
 async function inviteTeamMember(admin: any, customer: any, body: any) {
   if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can invite members.");
@@ -137,36 +150,17 @@ async function inviteTeamMember(admin: any, customer: any, body: any) {
   if (!["admin","agent","viewer"].includes(roleCode)) throw new Error("Select a valid workspace role.");
   if (roleCode === "admin" && customer.role_code !== "owner") throw new Error("Only the workspace owner can invite administrators.");
 
-  const { data: existing, error: existingError } = await admin.from("whatsapp_platform_users")
-    .select("id,tenant_id,status,role_code").ilike("email", email).maybeSingle();
-  if (existingError) throw existingError;
-  if (existing && existing.tenant_id !== customer.tenant_id) throw new Error("This email already belongs to another workspace.");
-  if (existing?.status === "active") throw new Error("This person is already an active workspace member.");
-  if (existing?.role_code === "owner") throw new Error("The workspace owner cannot be reinvited.");
-
   const inviteToken = randomHex(32);
   const tokenHash = await sha256(inviteToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60_000).toISOString();
-  let userId = existing?.id || "";
-  if (existing) {
-    const { data, error } = await admin.from("whatsapp_platform_users").update({
-      display_name: displayName, role_code: roleCode, status: "invited",
-      invite_token_hash: tokenHash, invite_expires_at: expiresAt,
-      invited_at: new Date().toISOString(), invited_by_user_id: customer.user_id,
-      updated_at: new Date().toISOString(),
-    }).eq("id", existing.id).eq("tenant_id", customer.tenant_id).select("id").single();
-    if (error || !data) throw new Error("The invitation could not be renewed.");
-    userId = data.id;
-  } else {
-    const { data, error } = await admin.rpc("whatsapp_platform_create_invite", {
-      p_tenant_id: customer.tenant_id, p_display_name: displayName, p_email: email,
-      p_role_code: roleCode, p_invite_token_hash: tokenHash,
-      p_invite_expires_at: expiresAt, p_invited_by_user_id: customer.user_id,
-    });
-    if (error) throw error;
-    const row = Array.isArray(data) ? data[0] : data;
-    userId = row?.user_id || "";
-  }
+  const { data, error } = await admin.rpc("whatsapp_platform_create_invite", {
+    p_tenant_id: customer.tenant_id, p_display_name: displayName, p_email: email,
+    p_role_code: roleCode, p_invite_token_hash: tokenHash,
+    p_invite_expires_at: expiresAt, p_invited_by_user_id: customer.user_id,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  const userId = row?.user_id || "";
   if (!userId) throw new Error("The invitation could not be created.");
   const inviteUrl = `https://www.varadanexus.com/whatsapp-platform/access/?invite=${inviteToken}`;
   let emailSent = false;
@@ -195,11 +189,14 @@ async function updateTeamMember(admin: any, customer: any, body: any) {
   if (roleCode === "admin" && customer.role_code !== "owner") throw new Error("Only the workspace owner can assign administrator access.");
   if (status === "active" && target.status === "invited") throw new Error("An invited member must accept their secure link before activation.");
 
-  const update: Record<string, unknown> = { role_code: roleCode, status, updated_at: new Date().toISOString() };
-  if (status === "disabled") { update.invite_token_hash = null; update.invite_expires_at = null; }
-  const { data, error } = await admin.from("whatsapp_platform_users").update(update)
-    .eq("id", memberId).eq("tenant_id", customer.tenant_id).select("id,display_name,email,role_code,status,last_login_at,created_at,invited_at,invite_expires_at").single();
-  if (error || !data) throw new Error("The member could not be updated.");
+  const { data, error } = await admin.rpc("whatsapp_platform_update_member_access", {
+    p_tenant_id: customer.tenant_id,
+    p_actor_user_id: customer.user_id,
+    p_member_id: memberId,
+    p_role_code: roleCode,
+    p_status: status,
+  });
+  if (error || !data) throw new Error(error?.message || "The member could not be updated.");
   if (status === "disabled") {
     const { error: revokeError } = await admin.from("whatsapp_platform_sessions").update({ revoked_at: new Date().toISOString() }).eq("user_id", memberId).is("revoked_at", null);
     if (revokeError) throw revokeError;
