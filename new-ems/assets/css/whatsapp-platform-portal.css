@@ -1773,13 +1773,67 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 
 /* Team and role governance */
-.wp-team-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;align-items:start}.wp-team-directory,.wp-role-guide{padding:26px}.wp-team-directory>header{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:20px}.wp-team-directory h2,.wp-role-guide h2{margin:5px 0 6px}.wp-team-directory p,.wp-role-guide p{margin:0;color:var(--wp-muted)}.wp-team-list{display:grid}.wp-team-row{display:grid;grid-template-columns:42px minmax(180px,1.5fr) 130px 100px minmax(130px,1fr) auto;gap:14px;align-items:center;padding:15px 0;border-top:1px solid var(--wp-line)}.wp-team-avatar{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb,var(--wp-accent) 17%,var(--wp-card));color:var(--wp-accent);font-weight:800}.wp-team-identity{display:grid;min-width:0}.wp-team-identity strong,.wp-team-identity small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wp-team-identity em{display:inline-block;margin-left:6px;padding:2px 7px;border-radius:999px;background:var(--wp-chip);color:var(--wp-accent);font-size:10px;font-style:normal;text-transform:uppercase}.wp-team-identity small,.wp-team-activity{color:var(--wp-muted)}.wp-team-role{font-weight:700}.wp-team-status{justify-self:start;padding:5px 9px;border:1px solid var(--wp-line);border-radius:999px;font-size:11px;text-transform:capitalize}.wp-team-status.active{color:var(--wp-accent);background:color-mix(in srgb,var(--wp-accent) 9%,transparent)}.wp-team-status.invited{color:#c49332}.wp-team-status.disabled{color:#e05c63}.wp-team-protected{font-size:11px;color:var(--wp-muted);text-transform:uppercase}.wp-role-guide dl{display:grid;gap:0;margin:18px 0}.wp-role-guide dl div{padding:15px 0;border-top:1px solid var(--wp-line)}.wp-role-guide dt{font-weight:800}.wp-role-guide dd{margin:5px 0 0;color:var(--wp-muted);line-height:1.55}.wp-role-guide>p{padding:14px;border-radius:12px;background:var(--wp-soft);font-size:13px}.wp-team-dialog textarea{resize:none;word-break:break-all}.wp-team-dialog .wp-policy-note{margin-top:4px}
-.wp-team-capacity{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0 0 20px;padding:16px 18px;border:1px solid var(--wp-line);border-radius:16px;background:var(--wp-soft)}.wp-team-capacity strong{display:block;margin-bottom:4px}.wp-team-capacity p{margin:0;color:var(--wp-muted);line-height:1.5}.wp-team-capacity>span,.wp-team-capacity>a{white-space:nowrap;color:var(--wp-accent);font-weight:800}.wp-team-capacity.is-full{border-color:color-mix(in srgb,#d19b3b 45%,var(--wp-line));background:color-mix(in srgb,#d19b3b 8%,var(--wp-card))}.wp-primary:disabled{cursor:not-allowed;opacity:.55;filter:saturate(.35)}
+.wp-team-page .wp-route-heading { align-items: flex-end; }
+.wp-team-heading-actions { display: flex; align-items: center; gap: 12px; }
+.wp-team-plan-pill { padding: 9px 12px; border: 1px solid var(--wp-border); border-radius: 999px; background: var(--wp-panel); color: var(--wp-muted); font-size: .7rem; font-weight: 800; white-space: nowrap; }
+.wp-team-kpis { margin-bottom: 16px; }
+.wp-team-kpis article { position: relative; min-height: 118px; overflow: hidden; padding: 19px 20px; background: var(--wp-panel); box-shadow: var(--wp-shadow-sm); }
+.wp-team-kpis article::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: color-mix(in srgb, var(--wp-muted) 42%, transparent); }
+.wp-team-kpis article:nth-child(2)::before { background: var(--wp-gold); }
+.wp-team-kpis article:nth-child(4)::before { background: var(--wp-accent); }
+.wp-team-kpis strong { margin: 14px 0 7px; font-size: 1.85rem; letter-spacing: -.035em; }
+.wp-team-kpis small { line-height: 1.4; }
+.wp-team-layout { display: grid; grid-template-columns: minmax(0, 1fr) 292px; gap: 18px; align-items: start; }
+.wp-team-directory,.wp-role-guide { padding: 24px; }
+.wp-team-directory > header { display: flex; justify-content: space-between; gap: 20px; align-items: flex-end; margin-bottom: 18px; }
+.wp-team-directory > header > div { max-width: 520px; }
+.wp-team-directory h2,.wp-role-guide h2 { margin: 5px 0 6px; }
+.wp-team-directory p,.wp-role-guide p { margin: 0; color: var(--wp-muted); line-height: 1.55; }
+.wp-team-directory .wp-inbox-search { width: min(210px, 38%); min-width: 170px; flex: 0 0 auto; }
+.wp-team-list { display: grid; }
+.wp-team-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-rows: auto auto auto; column-gap: 14px; row-gap: 3px; align-items: center; padding: 17px 2px; border-top: 1px solid var(--wp-line); }
+.wp-team-avatar { grid-column: 1; grid-row: 1 / 4; align-self: start; width: 42px; height: 42px; border: 1px solid color-mix(in srgb, var(--wp-accent) 26%, var(--wp-border)); border-radius: 14px; display: grid; place-items: center; background: color-mix(in srgb,var(--wp-accent) 12%,var(--wp-panel)); color: var(--wp-accent); font-weight: 850; }
+.wp-team-identity { grid-column: 2; grid-row: 1; display: grid; min-width: 0; }
+.wp-team-identity strong,.wp-team-identity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wp-team-identity strong { font-size: .88rem; }
+.wp-team-identity em { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 999px; background: var(--wp-chip); color: var(--wp-accent); font-size: 9px; font-style: normal; text-transform: uppercase; }
+.wp-team-identity small,.wp-team-activity { color: var(--wp-muted); }
+.wp-team-role { grid-column: 2; grid-row: 2; color: var(--wp-text); font-size: .72rem; font-weight: 750; }
+.wp-team-activity { grid-column: 2; grid-row: 3; font-size: .65rem; }
+.wp-team-status { grid-column: 3; grid-row: 1; justify-self: end; padding: 5px 9px; border: 1px solid var(--wp-line); border-radius: 999px; font-size: 10px; text-transform: capitalize; }
+.wp-team-status.active { color: var(--wp-accent); background: color-mix(in srgb,var(--wp-accent) 9%,transparent); }
+.wp-team-status.invited { color: #c49332; }
+.wp-team-status.disabled { color: #e05c63; }
+.wp-team-row > .wp-secondary,.wp-team-protected { grid-column: 3; grid-row: 2 / 4; justify-self: end; align-self: end; }
+.wp-team-row > .wp-secondary { min-height: 34px; padding: 7px 11px; }
+.wp-team-protected { color: var(--wp-muted); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+.wp-role-guide { position: sticky; top: 92px; background: linear-gradient(155deg, color-mix(in srgb, var(--wp-panel) 97%, var(--wp-gold) 3%), var(--wp-panel)); }
+.wp-role-guide dl { display: grid; gap: 8px; margin: 18px 0; counter-reset: role; }
+.wp-role-guide dl div { position: relative; padding: 13px 12px 13px 46px; border: 1px solid var(--wp-border); border-radius: 13px; background: color-mix(in srgb, var(--wp-surface) 72%, transparent); counter-increment: role; }
+.wp-role-guide dl div::before { content: counter(role, decimal-leading-zero); position: absolute; top: 13px; left: 13px; color: var(--wp-accent); font-size: .62rem; font-weight: 850; }
+.wp-role-guide dt { font-size: .8rem; font-weight: 850; }
+.wp-role-guide dd { margin: 4px 0 0; color: var(--wp-muted); font-size: .68rem; line-height: 1.48; }
+.wp-role-guide > p { padding: 13px 14px; border-left: 3px solid var(--wp-gold); border-radius: 10px; background: var(--wp-soft); font-size: .67rem; }
+.wp-team-dialog textarea { resize: none; word-break: break-all; }
+.wp-team-dialog .wp-policy-note { margin-top: 4px; }
+.wp-team-capacity { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 26px; margin: 0 0 18px; padding: 18px 20px; border: 1px solid var(--wp-line); border-radius: 16px; background: var(--wp-soft); }
+.wp-team-capacity-copy > strong { display: block; margin-bottom: 4px; }
+.wp-team-capacity p { margin: 0; color: var(--wp-muted); font-size: .74rem; line-height: 1.5; }
+.wp-team-capacity progress { display: block; width: 100%; height: 5px; margin-top: 13px; overflow: hidden; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--wp-muted) 15%, transparent); }
+.wp-team-capacity progress::-webkit-progress-bar { border-radius: inherit; background: color-mix(in srgb, var(--wp-muted) 15%, transparent); }
+.wp-team-capacity progress::-webkit-progress-value { border-radius: inherit; background: linear-gradient(90deg, var(--wp-accent), color-mix(in srgb, var(--wp-accent) 65%, var(--wp-gold))); }
+.wp-team-capacity progress::-moz-progress-bar { border-radius: inherit; background: var(--wp-accent); }
+.wp-team-capacity-count { min-width: 118px; text-align: right; }
+.wp-team-capacity-count > strong { display: block; color: var(--wp-text); font-size: 1.45rem; line-height: 1; }
+.wp-team-capacity-count > span { display: block; margin-top: 5px; color: var(--wp-accent); font-size: .67rem; font-weight: 800; }
+.wp-team-capacity-count > a { color: var(--wp-accent); font-size: .72rem; font-weight: 800; text-decoration: none; }
+.wp-team-capacity.is-full { border-color: color-mix(in srgb,#d19b3b 45%,var(--wp-line)); background: color-mix(in srgb,#d19b3b 8%,var(--wp-card)); }
+.wp-primary:disabled { cursor:not-allowed; opacity:.55; filter:saturate(.35); }
 
 /* Dedicated invitation acceptance */
 .wp-invite-page{min-height:100vh;background:radial-gradient(circle at 15% 10%,rgba(25,197,116,.16),transparent 35%),#06140f;color:#edf8f2;display:grid;place-items:center;padding:32px}.wp-invite-shell{width:min(1060px,100%);display:grid;grid-template-columns:1fr 470px;gap:48px;align-items:center}.wp-invite-intro .wp-brand{display:inline-flex;align-items:center;gap:13px;color:inherit;text-decoration:none;margin-bottom:70px}.wp-invite-intro .wp-brand img{width:52px;height:52px;object-fit:contain}.wp-invite-intro .wp-brand span{display:grid}.wp-invite-intro .wp-brand small{color:#9db4aa}.wp-invite-intro h1{font-family:var(--wp-display);font-size:clamp(44px,6vw,76px);line-height:.98;max-width:680px;margin:18px 0}.wp-invite-intro>p{font-size:18px;line-height:1.7;color:#a9c2b7;max-width:620px}.wp-invite-intro ul{display:flex;flex-wrap:wrap;gap:10px;padding:0;margin:26px 0;list-style:none}.wp-invite-intro li{padding:9px 12px;border:1px solid #244a3a;border-radius:999px;color:#c6d9d0;font-size:13px}.wp-invite-card{padding:30px;background:#0b2118;border:1px solid #28513f;border-radius:22px}.wp-invite-card h2{font-size:28px;margin:6px 0}.wp-invite-card>div>p{color:#a9c2b7;line-height:1.55;margin-bottom:22px}.wp-invite-card .wp-customer-signin{display:block;text-align:center;margin-top:18px;color:#92d9b7}
 
-@media(max-width:1050px){.wp-team-layout{grid-template-columns:1fr}.wp-team-row{grid-template-columns:42px minmax(160px,1fr) 120px 90px auto}.wp-team-activity{display:none}}@media(max-width:760px){.wp-team-directory>header{align-items:stretch;flex-direction:column}.wp-team-row{grid-template-columns:42px 1fr auto}.wp-team-role,.wp-team-activity{display:none}.wp-team-status{grid-column:2}.wp-team-row>.wp-secondary,.wp-team-protected{grid-column:3;grid-row:1/3}.wp-invite-page{padding:20px}.wp-invite-shell{grid-template-columns:1fr;gap:24px}.wp-invite-intro .wp-brand{margin-bottom:30px}.wp-invite-intro h1{font-size:44px}.wp-invite-intro>p,.wp-invite-intro ul{display:none}}
+@media(max-width:1050px){.wp-team-layout{grid-template-columns:1fr}.wp-role-guide{position:static}.wp-role-guide dl{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.wp-team-page .wp-route-heading{align-items:stretch}.wp-team-heading-actions{align-items:stretch;flex-direction:column}.wp-team-plan-pill{text-align:center}.wp-team-capacity{grid-template-columns:1fr}.wp-team-capacity-count{text-align:left}.wp-team-directory>header{align-items:stretch;flex-direction:column}.wp-team-directory .wp-inbox-search{width:100%;min-width:0}.wp-role-guide dl{grid-template-columns:1fr}.wp-team-row{grid-template-columns:42px minmax(0,1fr) auto}.wp-invite-page{padding:20px}.wp-invite-shell{grid-template-columns:1fr;gap:24px}.wp-invite-intro .wp-brand{margin-bottom:30px}.wp-invite-intro h1{font-size:44px}.wp-invite-intro>p,.wp-invite-intro ul{display:none}}
 
 /* Automation governance */
 .wp-automation-kpis article { min-height: 120px; }
