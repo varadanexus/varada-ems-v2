@@ -174,7 +174,25 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   };
   const drawMiniMap = () => {
     if (!miniMap) return;
-    miniMap.innerHTML = state.nodes.map((node) => `<span class="${node.id === selectedId ? "active" : ""}" style="left:${Math.max(4, Math.min(172, node.x / 13.5))}px;top:${Math.max(4, Math.min(92, node.y / 16))}px" title="${escapeHtml(node.title)}"></span>`).join("");
+    const inset = 9;
+    const mapWidth = Math.max(1, miniMap.clientWidth - inset * 2);
+    const mapHeight = Math.max(1, miniMap.clientHeight - inset * 2);
+    const worldWidth = 2400;
+    const worldHeight = 1600;
+    const scaleX = mapWidth / worldWidth;
+    const scaleY = mapHeight / worldHeight;
+    const viewportLeft = Math.max(0, (canvas.scrollLeft - (state.panX || 0)) / state.scale);
+    const viewportTop = Math.max(0, (canvas.scrollTop - (state.panY || 0)) / state.scale);
+    const viewportWidth = Math.min(worldWidth, canvas.clientWidth / state.scale);
+    const viewportHeight = Math.min(worldHeight, canvas.clientHeight / state.scale);
+    const nodes = state.nodes.map((node) => {
+      const left = inset + Math.max(0, Math.min(worldWidth - 260, Number(node.x || 0))) * scaleX;
+      const top = inset + Math.max(0, Math.min(worldHeight - 180, Number(node.y || 0))) * scaleY;
+      const width = Math.max(12, 260 * scaleX);
+      const height = Math.max(8, 170 * scaleY);
+      return `<span class="${node.id === selectedId ? "active" : ""}" style="left:${left}px;top:${top}px;width:${width}px;height:${height}px" title="${escapeHtml(node.title)}"></span>`;
+    }).join("");
+    miniMap.innerHTML = `${nodes}<i class="wp-flow-minimap-view" style="left:${inset + viewportLeft * scaleX}px;top:${inset + viewportTop * scaleY}px;width:${Math.max(18, viewportWidth * scaleX)}px;height:${Math.max(14, viewportHeight * scaleY)}px"></i>`;
   };
   const drawLines = () => {
     lines.innerHTML = normalizedEdges().map((edge) => { const a = state.nodes.find((n) => n.id === edge.from); const b = state.nodes.find((n) => n.id === edge.to); if (!a || !b) return ""; return `<path d="M ${a.x + 110} ${a.y + 154} C ${a.x + 110} ${a.y + 205}, ${b.x + 110} ${b.y - 50}, ${b.x + 110} ${b.y}" />`; }).join("");
@@ -373,7 +391,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
       const rect = canvas.getBoundingClientRect();
       const ox = origin.clientX - rect.left;
       const oy = origin.clientY - rect.top;
-      state.panX = ox - ((ox - (state.panX || 0)) / previous) * next;
+    state.panX = ox - ((ox - (state.panX || 0)) / previous) * next;
       state.panY = oy - ((oy - (state.panY || 0)) / previous) * next;
     }
     state.scale = next;
@@ -416,6 +434,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     canvas.addEventListener("pointerup", stop);
     canvas.addEventListener("pointercancel", stop);
   });
+  canvas.addEventListener("scroll", drawMiniMap, { passive: true });
   dialog.querySelector("[data-flow-settings]").addEventListener("click", () => { settingsDialog.querySelector('[name="triggerType"]').value = state.triggerType; settingsDialog.querySelector('[name="keywords"]').value = (state.triggerConfig.keywords || []).join(", "); settingsDialog.querySelector('[name="fallback"]').value = state.triggerConfig.fallback || ""; settingsDialog.showModal(); });
   settingsDialog.querySelector("[data-flow-settings-close]").addEventListener("click", () => settingsDialog.close());
   settingsDialog.querySelector("[data-flow-settings-apply]").addEventListener("click", () => { state.triggerType = settingsDialog.querySelector('[name="triggerType"]').value; state.triggerConfig = { keywords: settingsDialog.querySelector('[name="keywords"]').value.split(",").map((item) => item.trim()).filter(Boolean), fallback: settingsDialog.querySelector('[name="fallback"]').value.trim() }; settingsDialog.close(); toast("Trigger settings applied to this draft."); });
