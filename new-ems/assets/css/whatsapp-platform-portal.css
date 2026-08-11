@@ -1421,6 +1421,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-size: .95rem;
   cursor: pointer;
 }
+.wp-flow-card-actions button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .wp-flow-card-actions button:hover,
 .wp-flow-card-actions button:focus-visible {
   outline: 0;

@@ -32,6 +32,8 @@ function starterNodes() {
 }
 
 function iconFor(type) { return BLOCKS.find((item) => item[0] === type)?.[1] || (type === "start" ? "⚡" : "▤"); }
+const COPY_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="10" height="10" rx="2"></rect><path d="M6 14H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"></path></svg>`;
+const DELETE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"></path><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path></svg>`;
 function statusLabel(value) { return value === "active" ? "Active" : value === "paused" ? "Paused" : "Draft"; }
 function fieldValue(node, name, fallback = "") {
   if (name === "body") return node.body || "";
@@ -187,7 +189,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   const duplicateNode = (id) => {
     const sourceIndex = state.nodes.findIndex((item) => item.id === id);
     const source = state.nodes[sourceIndex];
-    if (!source) return;
+    if (!source || source.type === "start") return;
     const clone = structuredClone(source);
     clone.id = crypto.randomUUID();
     clone.title = `${source.title || "Block"} copy`;
@@ -208,7 +210,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   };
   const renderNodes = (refreshInspector = true) => {
     applyViewport();
-    nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""}" data-flow-node="${node.id}">${node.id === selectedId ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">⧉</button>${node.type !== "start" ? `<button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">⌫</button>` : ""}</div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
+    nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""}" data-flow-node="${node.id}">${node.id === selectedId && node.type !== "start" ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">${COPY_ICON}</button><button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">${DELETE_ICON}</button></div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
     drawLines();
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
       const positionedNode = state.nodes.find((item) => item.id === card.dataset.flowNode);
