@@ -448,6 +448,12 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
       });
     });
   };
+  connectMenu?.addEventListener("wheel", (event) => {
+    event.stopPropagation();
+  }, { passive: true });
+  connectMenu?.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
   const renderNodes = (refreshInspector = true) => {
     state.nodes.forEach(normalizeButtonRoutes);
     const reachable = reachableNodeIds();
@@ -660,12 +666,12 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   dialog.querySelector('[data-flow-zoom="out"]').addEventListener("click", () => zoomCanvas(-.1));
   dialog.querySelector("[data-flow-fit]").addEventListener("click", () => { state.scale = .75; state.panX = 0; state.panY = 0; canvas.scrollTo({ top: 0, left: 0, behavior: "smooth" }); renderNodes(false); });
   canvas.addEventListener("wheel", (event) => {
-    if (event.target.closest(".wp-flow-palette,.wp-flow-live-panel,input,textarea,select")) return;
+    if (event.target.closest(".wp-flow-palette,.wp-flow-live-panel,.wp-flow-connect-menu,input,textarea,select")) return;
     event.preventDefault();
     zoomCanvas(event.deltaY > 0 ? -.06 : .06, event);
   }, { passive: false });
   canvas.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || event.target.closest("[data-flow-node],button,input,textarea,select")) return;
+    if (event.button !== 0 || event.target.closest("[data-flow-node],[data-flow-connect-menu],button,input,textarea,select")) return;
     event.preventDefault();
     hideConnectMenu();
     isPanningCanvas = true;
