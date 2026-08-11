@@ -101,7 +101,7 @@ export function renderFlowBuilderPage({ escapeHtml }) {
 
 function builderSurface(escapeHtml) {
   const groups = ["Message types", "Actions"].map((group) => `<section class="wp-flow-palette-group"><h3>${group}</h3><div>${BLOCKS.filter((item) => item[3] === group).map(([type, icon, label]) => `<button type="button" draggable="true" data-flow-block="${type}"><i>${icon}</i><span>${escapeHtml(label)}</span></button>`).join("")}</div></section>`).join("");
-  return `<div class="wp-flow-builder-dialog" id="wpFlowBuilderDialog" data-flow-builder-surface><form novalidate><header class="wp-flow-builder-top"><button type="button" class="wp-flow-back" aria-label="Back to flows" data-flow-exit>←</button><div><input name="name" maxlength="120" value="Untitled flow" aria-label="Flow name" /><small data-flow-save-state>Draft not saved</small></div><label class="wp-flow-active-switch"><span>Inactive</span><input name="active" type="checkbox" /><i></i><strong>Active</strong></label><button class="wp-secondary" type="button" data-flow-settings>Triggers &amp; fallback</button><button class="wp-primary" type="submit" value="save">Save changes</button></header><div class="wp-flow-builder-shell"><aside class="wp-flow-palette"><div class="wp-flow-builder-tabs"><button class="active" type="button" data-flow-tab="builder">Builder</button><button type="button" data-flow-tab="live">Live view</button></div><div data-flow-panel="builder">${groups}</div><div class="wp-flow-live-panel" data-flow-panel="live" hidden><h3>Live flow test</h3><p>Preview how a customer will experience this automation before saving or activating it.</p><button type="button" class="wp-primary" data-flow-live-start>Start preview</button><div class="wp-flow-live-phone" data-flow-live-phone><header><span>WhatsApp</span><strong>Customer preview</strong></header><main data-flow-live-messages><div class="wp-flow-live-empty">Press Start preview to run this flow.</div></main><footer><input value="Customer reply…" readonly /></footer></div></div></aside><button class="wp-flow-palette-toggle" type="button" data-flow-palette-toggle aria-label="Collapse builder sidebar" aria-expanded="true">›</button><main class="wp-flow-canvas" data-flow-canvas><div class="wp-flow-canvas-grid"></div><svg aria-hidden="true" data-flow-lines></svg><div class="wp-flow-nodes" data-flow-nodes></div><div class="wp-flow-minimap" data-flow-minimap aria-label="Flow overview"></div><div class="wp-flow-zoom"><button type="button" data-flow-zoom="in">＋</button><button type="button" data-flow-zoom="out">−</button><button type="button" data-flow-fit>Fit</button></div></main></div></form></div><dialog class="wp-flow-settings-dialog" data-flow-settings-dialog><div><header><div><span class="wp-card-eyebrow">Entry &amp; recovery</span><h2>Triggers and fallback</h2></div><button type="button" data-flow-settings-close>×</button></header><label><span>Start this flow when</span><select name="triggerType"><option value="keyword">Customer sends a keyword</option><option value="any_message">Any new message arrives</option><option value="template_reply">Customer taps a template reply</option><option value="manual">Team starts it manually</option><option value="webhook">A secure webhook calls it</option></select></label><label><span>Keywords</span><input name="keywords" maxlength="500" placeholder="pricing, support, book demo" /><small>Comma-separated. Matching is case-insensitive.</small></label><label><span>Fallback message</span><textarea name="fallback" rows="4" maxlength="1024" placeholder="I didn't understand that. Please choose one of the options."></textarea></label><footer><button class="wp-primary" type="button" data-flow-settings-apply>Apply settings</button></footer></div></dialog>`;
+  return `<div class="wp-flow-builder-dialog" id="wpFlowBuilderDialog" data-flow-builder-surface><form novalidate><header class="wp-flow-builder-top"><button type="button" class="wp-flow-back" aria-label="Back to flows" data-flow-exit>←</button><div><input name="name" maxlength="120" value="Untitled flow" aria-label="Flow name" /><small data-flow-save-state>Draft not saved</small></div><label class="wp-flow-active-switch"><span>Inactive</span><input name="active" type="checkbox" /><i></i><strong>Active</strong></label><button class="wp-secondary" type="button" data-flow-settings>Triggers &amp; fallback</button><button class="wp-primary" type="submit" value="save">Save changes</button></header><div class="wp-flow-builder-shell"><aside class="wp-flow-palette"><div class="wp-flow-builder-tabs"><button class="active" type="button" data-flow-tab="builder">Builder</button><button type="button" data-flow-tab="live">Live view</button></div><div data-flow-panel="builder">${groups}</div><div class="wp-flow-live-panel" data-flow-panel="live" hidden><h3>Live flow test</h3><p>Preview how a customer will experience this automation before saving or activating it.</p><button type="button" class="wp-primary" data-flow-live-start>Start preview</button><div class="wp-flow-live-phone" data-flow-live-phone><header><span>WhatsApp</span><strong>Customer preview</strong></header><main data-flow-live-messages><div class="wp-flow-live-empty">Press Start preview to run this flow.</div></main><footer><input value="Customer reply…" readonly /></footer></div></div></aside><button class="wp-flow-palette-toggle" type="button" data-flow-palette-toggle aria-label="Collapse builder sidebar" aria-expanded="true">›</button><main class="wp-flow-canvas" data-flow-canvas><div class="wp-flow-canvas-grid"></div><svg aria-hidden="true" data-flow-lines></svg><div class="wp-flow-nodes" data-flow-nodes></div><div class="wp-flow-zoom"><button type="button" data-flow-zoom="in">＋</button><button type="button" data-flow-zoom="out">−</button><button type="button" data-flow-fit>Fit</button></div></main></div></form></div><dialog class="wp-flow-settings-dialog" data-flow-settings-dialog><div><header><div><span class="wp-card-eyebrow">Entry &amp; recovery</span><h2>Triggers and fallback</h2></div><button type="button" data-flow-settings-close>×</button></header><label><span>Start this flow when</span><select name="triggerType"><option value="keyword">Customer sends a keyword</option><option value="any_message">Any new message arrives</option><option value="template_reply">Customer taps a template reply</option><option value="manual">Team starts it manually</option><option value="webhook">A secure webhook calls it</option></select></label><label><span>Keywords</span><input name="keywords" maxlength="500" placeholder="pricing, support, book demo" /><small>Comma-separated. Matching is case-insensitive.</small></label><label><span>Fallback message</span><textarea name="fallback" rows="4" maxlength="1024" placeholder="I didn't understand that. Please choose one of the options."></textarea></label><footer><button class="wp-primary" type="button" data-flow-settings-apply>Apply settings</button></footer></div></dialog>`;
 }
 
 export function bindFlowsView({ root, flows = [], request, onRefresh, toast, escapeHtml, builderId = "", listUrl = "/whatsapp-platform/workspace/flows/" }) {
@@ -167,14 +167,20 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     applyTransform(nodeLayer, transform);
     applyTransform(lines, transform);
   };
-  const focusInspectorField = (id, fieldName = "nodeBody") => {
-    const node = state.nodes.find((item) => item.id === id);
-    if (!node) return;
-    const nextTitle = prompt("Block title", node.title || "");
-    if (nextTitle === null) return;
-    node.title = nextTitle.trim() || node.title;
-    markDraftChanged();
+  const focusInlineCardField = (id) => {
+    selectedId = id;
     renderNodes(false);
+    window.requestAnimationFrame(() => {
+      const selector = typeof CSS !== "undefined" && CSS.escape ? `[data-flow-node="${CSS.escape(id)}"]` : `[data-flow-node="${id}"]`;
+      const card = nodeLayer.querySelector(selector);
+      const field = card?.querySelector('textarea[data-node-field="body"], input[data-node-field="keywords"], input[data-node-field], textarea[data-node-field], select[data-node-field], [data-node-button-label], input:not([type="checkbox"]), textarea, select');
+      card?.classList.add("editing");
+      if (field) {
+        field.focus({ preventScroll: true });
+        if (typeof field.select === "function") field.select();
+      }
+      window.setTimeout(() => card?.classList.remove("editing"), 900);
+    });
   };
   const updateSelectedCardPreview = (node) => {
     const card = nodeLayer.querySelector(`[data-flow-node="${CSS.escape(node.id)}"]`);
@@ -399,16 +405,21 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
       const positionedNode = state.nodes.find((item) => item.id === card.dataset.flowNode);
       if (positionedNode) applyTransform(card, `translate(${positionedNode.x}px, ${positionedNode.y}px)`);
-      card.addEventListener("click", () => {
+      card.addEventListener("click", (event) => {
         if (suppressNodeClick) {
           suppressNodeClick = false;
+          return;
+        }
+        if (event.target.closest("button,input,textarea,select,label,[contenteditable]")) {
+          selectedId = card.dataset.flowNode;
+          nodeLayer.querySelectorAll("[data-flow-node]").forEach((item) => item.classList.toggle("selected", item === card));
           return;
         }
         selectNode(card.dataset.flowNode);
       });
       card.querySelector("[data-flow-edit-title]")?.addEventListener("click", (event) => {
         event.stopPropagation();
-        focusInspectorField(card.dataset.flowNode, "nodeTitle");
+        focusInlineCardField(card.dataset.flowNode);
       });
       card.querySelector("[data-flow-copy-node]")?.addEventListener("click", (event) => {
         event.stopPropagation();

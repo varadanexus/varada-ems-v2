@@ -1794,6 +1794,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   bottom: 78px;
 }
 
+.wp-flow-builder-route .wp-flow-minimap,
+.wp-flow-minimap[data-flow-minimap] {
+  display: none !important;
+}
+
 /* Flow builder upgrade: routing and live preview */
 .wp-flow-builder-top { grid-template-columns: 44px minmax(220px, 1fr) auto auto auto; }
 .wp-flow-minimap {
@@ -1845,6 +1850,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   border-radius: 5px;
   background: rgba(0, 168, 112, .055);
   z-index: 1;
+}
+.wp-flow-node.editing {
+  box-shadow: 0 18px 38px rgba(0, 168, 112, .14), 0 0 0 4px rgba(0, 168, 112, .1);
+}
+.wp-flow-node.editing input:focus,
+.wp-flow-node.editing textarea:focus,
+.wp-flow-node.editing select:focus {
+  border-color: rgba(0, 168, 112, .72);
+  box-shadow: 0 0 0 3px rgba(0, 168, 112, .12);
 }
 .wp-flow-inline-buttons > span {
   color: var(--wp-muted);
