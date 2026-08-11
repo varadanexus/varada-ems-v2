@@ -1536,6 +1536,35 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: #078766;
   box-shadow: 0 0 0 2px color-mix(in srgb, #078766 28%, transparent);
 }
+.wp-flow-port.out[data-flow-node-port] {
+  left: auto;
+  right: -9px;
+  top: 50%;
+  bottom: auto;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  border: 2px solid var(--wp-panel);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wp-accent) 24%, transparent);
+  cursor: crosshair;
+  z-index: 5;
+}
+.wp-flow-port.out[data-flow-node-port]::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--wp-bg) 80%, #fff);
+}
+.wp-flow-port.out[data-flow-node-port]:hover,
+.wp-flow-port.out[data-flow-node-port]:focus-visible,
+.wp-flow-port.out[data-flow-node-port].connecting {
+  outline: 0;
+  transform: translateY(-50%) scale(1.12);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 20%, transparent);
+}
 .wp-flow-line-clear {
   position: absolute;
   right: -35px;
@@ -2024,6 +2053,35 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-flow-button-port.connected {
   background: #078766;
   box-shadow: 0 0 0 2px color-mix(in srgb, #078766 28%, transparent);
+}
+.wp-flow-port.out[data-flow-node-port] {
+  left: auto;
+  right: -9px;
+  top: 50%;
+  bottom: auto;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  border: 2px solid var(--wp-panel);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--wp-accent) 24%, transparent);
+  cursor: crosshair;
+  z-index: 5;
+}
+.wp-flow-port.out[data-flow-node-port]::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--wp-bg) 80%, #fff);
+}
+.wp-flow-port.out[data-flow-node-port]:hover,
+.wp-flow-port.out[data-flow-node-port]:focus-visible,
+.wp-flow-port.out[data-flow-node-port].connecting {
+  outline: 0;
+  transform: translateY(-50%) scale(1.12);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 20%, transparent);
 }
 .wp-flow-line-clear {
   position: absolute;

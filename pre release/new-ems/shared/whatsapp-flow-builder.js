@@ -72,7 +72,7 @@ function nodeOptions(nodes, escapeHtml, selected = "") {
 }
 function renderQuickButtons(node, escapeHtml, nodes = []) {
   const buttons = buttonValues(node);
-  return `<div class="wp-flow-inline-buttons"><span>Reply buttons</span>${buttons.map((button, index) => `<label class="${button.next ? "has-route" : ""}"><input data-node-button-label="${index}" maxlength="20" value="${escapeHtml(button.label)}" placeholder="Button ${index + 1}" /><select class="wp-flow-route-select" data-node-button-next="${index}" title="Route this button">${nodeOptions(nodes, escapeHtml, button.next)}</select><i class="wp-flow-button-port ${button.next ? "connected" : ""}" data-flow-button-port="${index}" role="button" tabindex="0" title="${button.next ? "Drag to change this route" : "Drag to connect this button"}"></i>${button.next ? `<button type="button" class="wp-flow-line-clear" data-flow-clear-button="${index}" aria-label="Cancel this line" title="Cancel this line">×</button>` : ""}<button type="button" data-flow-remove-button="${index}" aria-label="Remove button">×</button></label>`).join("")}<button type="button" data-flow-add-button>＋ Add Button</button></div>`;
+  return `<div class="wp-flow-inline-buttons"><span>Reply buttons</span>${buttons.map((button, index) => `<label class="${button.next ? "has-route" : ""}"><input data-node-button-label="${index}" maxlength="20" value="${escapeHtml(button.label)}" placeholder="Button ${index + 1}" /><select class="wp-flow-route-select" data-node-button-next="${index}" title="Route this button">${nodeOptions(nodes, escapeHtml, button.next)}</select><i class="wp-flow-button-port ${button.next ? "connected" : ""}" data-flow-button-port="${index}" role="button" tabindex="0" title="${button.next ? "Drag to change this route" : "Drag to connect this button"}"></i><button type="button" data-flow-remove-button="${index}" aria-label="Remove button">×</button></label>`).join("")}<button type="button" data-flow-add-button>＋ Add Button</button></div>`;
 }
 function renderNodeFields(node, escapeHtml, nodes = []) {
   const config = node.config || {};
@@ -260,10 +260,21 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   const normalizedEdges = () => {
     const validIds = new Set(state.nodes.map((node) => node.id));
     const routed = [];
+    const seen = new Set();
+    (Array.isArray(state.edges) ? state.edges : []).forEach((edge) => {
+      if (!edge?.from || !edge?.to || edge.from === edge.to || !validIds.has(edge.from) || !validIds.has(edge.to)) return;
+      const key = `${edge.from}:direct:${edge.to}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      routed.push({ id: key, from: edge.from, to: edge.to });
+    });
     state.nodes.forEach((node) => {
       buttonValues(node).forEach((button, buttonIndex) => {
         if (button.next && validIds.has(button.next) && button.next !== node.id) {
-          routed.push({ id: `${node.id}:button:${buttonIndex}:${button.next}`, from: node.id, to: button.next, fromButton: buttonIndex });
+          const key = `${node.id}:button:${buttonIndex}:${button.next}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          routed.push({ id: key, from: node.id, to: button.next, fromButton: buttonIndex });
         }
       });
     });
@@ -287,6 +298,11 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
       const routed = state.nodes.find((item) => item.id === chosen.next);
       if (routed) window.setTimeout(() => renderLiveNode(routed), 260);
     }));
+    if (node.type === "start" || !buttons.length) {
+      const nextEdge = normalizedEdges().find((edge) => edge.from === node.id && !Number.isInteger(edge.fromButton));
+      const nextNode = state.nodes.find((item) => item.id === nextEdge?.to);
+      if (nextNode) window.setTimeout(() => renderLiveNode(nextNode), node.type === "start" ? 260 : 420);
+    }
   };
   const startLivePreview = () => {
     if (!liveMessages) return;
@@ -320,7 +336,9 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
       const port = nodeLayer.querySelector(`[data-flow-node="${CSS.escape(node.id)}"] [data-flow-button-port="${edge.fromButton}"]`);
       if (port) return worldPointFromElement(port);
     }
-    return { x: Number(node.x || 0) + NODE_WIDTH / 2, y: Number(node.y || 0) + 154 };
+    const port = nodeLayer.querySelector(`[data-flow-node="${CSS.escape(node.id)}"] [data-flow-node-port]`);
+    if (port) return worldPointFromElement(port);
+    return { x: Number(node.x || 0) + NODE_WIDTH, y: Number(node.y || 0) + 58 };
   };
   const drawLines = (preview = null) => {
     lines.setAttribute("viewBox", "0 0 2400 1600");
@@ -339,7 +357,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
         : `M ${start.x} ${start.y} C ${start.x + 44} ${start.y + 72}, ${end.x - 44} ${end.y - 72}, ${end.x} ${end.y}`;
       const midX = (start.x + end.x) / 2;
       const midY = (start.y + end.y) / 2;
-      return `<g data-flow-edge="${edge.id}"><path class="${isButtonEdge ? "button-edge" : ""}" d="${d}" />${isButtonEdge ? `<foreignObject x="${midX - 10}" y="${midY - 10}" width="20" height="20"><button xmlns="http://www.w3.org/1999/xhtml" type="button" class="wp-flow-edge-clear" data-flow-edge-clear="${edge.from}:${edge.fromButton}" title="Remove line">×</button></foreignObject>` : ""}</g>`;
+      return `<g data-flow-edge="${edge.id}"><path class="${isButtonEdge ? "button-edge" : ""}" d="${d}" /><foreignObject x="${midX - 10}" y="${midY - 10}" width="20" height="20"><button xmlns="http://www.w3.org/1999/xhtml" type="button" class="wp-flow-edge-clear" data-flow-edge-clear="${edge.from}:${isButtonEdge ? edge.fromButton : ""}:${edge.to}" title="Remove line">×</button></foreignObject></g>`;
     }).join("");
     let previewMarkup = "";
     if (preview) {
@@ -356,8 +374,9 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const [fromId, buttonIndex] = button.dataset.flowEdgeClear.split(":");
-        clearButtonConnection(fromId, Number(buttonIndex));
+        const [fromId, buttonIndex, toId] = button.dataset.flowEdgeClear.split(":");
+        if (buttonIndex === "") clearNodeConnection(fromId, toId);
+        else clearButtonConnection(fromId, Number(buttonIndex));
       });
     });
   };
@@ -412,6 +431,19 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     toast("Button route connected.");
     return true;
   };
+  const connectNodeToNode = (fromId, toId) => {
+    if (!fromId || !toId || fromId === toId) return false;
+    const source = state.nodes.find((item) => item.id === fromId);
+    const target = state.nodes.find((item) => item.id === toId);
+    if (!source || !target) return false;
+    state.edges = (Array.isArray(state.edges) ? state.edges : []).filter((edge) => edge.from !== fromId || Number.isInteger(edge.fromButton));
+    state.edges.push({ id: `${fromId}:direct:${toId}`, from: fromId, to: toId });
+    selectedId = fromId;
+    markDraftChanged();
+    renderNodes(false);
+    toast("Flow path connected.");
+    return true;
+  };
   const clearButtonConnection = (fromId, buttonIndex) => {
     const source = state.nodes.find((item) => item.id === fromId);
     if (!source) return false;
@@ -425,12 +457,22 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     toast("Connection cancelled.");
     return true;
   };
+  const clearNodeConnection = (fromId, toId = "") => {
+    const before = Array.isArray(state.edges) ? state.edges.length : 0;
+    state.edges = (Array.isArray(state.edges) ? state.edges : []).filter((edge) => edge.from !== fromId || (toId && edge.to !== toId) || Number.isInteger(edge.fromButton));
+    if (state.edges.length === before) return false;
+    selectedId = fromId;
+    markDraftChanged();
+    renderNodes(false);
+    toast("Connection cancelled.");
+    return true;
+  };
   const hideConnectMenu = () => {
     if (!connectMenu) return;
     connectMenu.hidden = true;
     connectMenu.innerHTML = "";
   };
-  const showConnectMenu = ({ fromId, buttonIndex, clientX, clientY, worldPoint }) => {
+  const showConnectMenu = ({ fromId, buttonIndex = null, clientX, clientY, worldPoint }) => {
     if (!connectMenu) return;
     const choices = BLOCKS.filter((block) => !["end"].includes(block[0]));
     connectMenu.innerHTML = `<header><strong>Content Block</strong><button type="button" data-flow-connect-close aria-label="Close">×</button></header>${choices.map(([type, icon, title]) => `<button type="button" data-flow-connect-type="${type}"><i>${icon}</i><span>${title}</span></button>`).join("")}`;
@@ -441,7 +483,10 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     connectMenu.querySelectorAll("[data-flow-connect-type]").forEach((button) => {
       button.addEventListener("click", () => {
         const node = addBlock(button.dataset.flowConnectType, { x: worldPoint.x, y: worldPoint.y }, fromId, false);
-        if (node) connectButtonToNode(fromId, buttonIndex, node.id);
+        if (node) {
+          if (Number.isInteger(buttonIndex)) connectButtonToNode(fromId, buttonIndex, node.id);
+          else connectNodeToNode(fromId, node.id);
+        }
         hideConnectMenu();
       });
     });
@@ -456,7 +501,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     state.nodes.forEach(normalizeButtonRoutes);
     const reachable = reachableNodeIds();
     applyViewport();
-    nodeLayer.innerHTML = state.nodes.map((node) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""} ${validationClassFor(node, reachable)}" data-flow-node="${node.id}">${node.id === selectedId && node.type !== "start" ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">${COPY_ICON}</button><button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">${DELETE_ICON}</button></div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${blockLabelFor(node)}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
+    nodeLayer.innerHTML = state.nodes.map((node) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""} ${validationClassFor(node, reachable)}" data-flow-node="${node.id}">${node.id === selectedId && node.type !== "start" ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">${COPY_ICON}</button><button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">${DELETE_ICON}</button></div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${blockLabelFor(node)}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out" ${node.type === "start" ? `data-flow-node-port role="button" tabindex="0" title="Drag to connect Flow start"` : ""}></i></article>`).join("");
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
       const positionedNode = state.nodes.find((item) => item.id === card.dataset.flowNode);
       if (positionedNode) applyTransform(card, `translate(${positionedNode.x}px, ${positionedNode.y}px)`);
@@ -554,12 +599,41 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
           port.addEventListener("pointercancel", stop);
         });
       });
-      card.querySelectorAll("[data-flow-clear-button]").forEach((button) => {
-        button.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          clearButtonConnection(card.dataset.flowNode, Number(button.dataset.flowClearButton));
+      card.querySelector("[data-flow-node-port]")?.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        hideConnectMenu();
+        const sourceId = card.dataset.flowNode;
+        const port = event.currentTarget;
+        port.classList.add("connecting");
+        nodeLayer.querySelectorAll("[data-flow-node]").forEach((item) => {
+          item.classList.toggle("connect-target", item.dataset.flowNode !== sourceId);
         });
+        port.setPointerCapture(event.pointerId);
+        const move = (moveEvent) => {
+          const targetCard = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY)?.closest("[data-flow-node]");
+          nodeLayer.querySelectorAll("[data-flow-node]").forEach((item) => {
+            item.classList.toggle("connect-hover", targetCard === item && item.dataset.flowNode !== sourceId);
+          });
+          drawLines({ from: sourceId, to: worldPointFromPointer(moveEvent) });
+        };
+        const stop = (upEvent) => {
+          port.classList.remove("connecting");
+          nodeLayer.querySelectorAll("[data-flow-node]").forEach((item) => item.classList.remove("connect-target", "connect-hover"));
+          const targetCard = document.elementFromPoint(upEvent.clientX, upEvent.clientY)?.closest("[data-flow-node]");
+          port.removeEventListener("pointermove", move);
+          port.removeEventListener("pointerup", stop);
+          port.removeEventListener("pointercancel", stop);
+          drawLines();
+          if (targetCard && targetCard.dataset.flowNode !== sourceId) {
+            connectNodeToNode(sourceId, targetCard.dataset.flowNode);
+            return;
+          }
+          showConnectMenu({ fromId: sourceId, clientX: upEvent.clientX, clientY: upEvent.clientY, worldPoint: worldPointFromPointer(upEvent) });
+        };
+        port.addEventListener("pointermove", move);
+        port.addEventListener("pointerup", stop);
+        port.addEventListener("pointercancel", stop);
       });
       card.querySelector("[data-flow-add-button]")?.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -630,7 +704,12 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     const insertIndex = afterId ? Math.max(0, state.nodes.findIndex((item) => item.id === afterId)) + 1 : state.nodes.length;
     const index = insertIndex; const previous = state.nodes[index - 1] || state.nodes[state.nodes.length - 1];
     const node = { id: crypto.randomUUID(), type, title: BLOCKS.find((item) => item[0] === type)?.[2] || "Message", body: DEFAULT_COPY[type] || "Configure this step.", x: point.x ?? Math.max(80, (previous?.x || 80) + (index % 3 === 0 ? 280 : 0)), y: point.y ?? ((previous?.y || 20) + 210), config: {} };
-    state.nodes.splice(insertIndex, 0, node); selectedId = node.id; markDraftChanged(); if (shouldRender) renderNodes(); return node;
+    state.nodes.splice(insertIndex, 0, node);
+    if (afterId) {
+      state.edges = (Array.isArray(state.edges) ? state.edges : []).filter((edge) => edge.from !== afterId || Number.isInteger(edge.fromButton));
+      state.edges.push({ id: `${afterId}:direct:${node.id}`, from: afterId, to: node.id });
+    }
+    selectedId = node.id; markDraftChanged(); if (shouldRender) renderNodes(); return node;
   };
   const open = (flow = null) => {
     state = flow ? { id: flow.id, description: flow.description || "", status: flow.status || "draft", triggerType: flow.trigger_type || "keyword", triggerConfig: flow.trigger_config || {}, nodes: Array.isArray(flow.nodes) && flow.nodes.length ? structuredClone(flow.nodes) : starterNodes(), edges: flow.edges || [], scale: 1, panX: 0, panY: 0 } : { id: null, description: "", status: "draft", triggerType: "keyword", triggerConfig: { keywords: [], fallback: "" }, nodes: starterNodes(), edges: [], scale: 1, panX: 0, panY: 0 };
