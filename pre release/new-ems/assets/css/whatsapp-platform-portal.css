@@ -1490,15 +1490,28 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 
 .wp-flow-inline-buttons label {
   position: relative;
-  grid-template-columns: minmax(0, 1fr) minmax(92px, .75fr) 24px 30px;
+  grid-template-columns: minmax(0, 1fr) 30px;
   gap: 5px;
   align-items: center;
+  padding-right: 13px;
+  overflow: visible;
+}
+.wp-flow-route-select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 .wp-flow-button-port {
   display: grid;
   place-items: center;
+  position: absolute;
+  top: 50%;
+  right: -8px;
   width: 18px;
   height: 18px;
+  transform: translateY(-50%);
   border: 2px solid var(--wp-panel);
   border-radius: 50%;
   background: var(--wp-accent);
@@ -1516,7 +1529,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-flow-button-port:focus-visible,
 .wp-flow-button-port.connecting {
   outline: 0;
-  transform: scale(1.12);
+  transform: translateY(-50%) scale(1.12);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 20%, transparent);
 }
 .wp-flow-node.connect-target {
@@ -1809,23 +1822,29 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   font-weight: 800;
 }
 .wp-flow-inline-buttons label {
-  grid-template-columns: minmax(0, 1fr) minmax(92px, .75fr) 30px;
-  gap: 5px;
-}
-.wp-flow-inline-buttons select {
-  min-width: 0;
-}
-.wp-flow-inline-buttons label {
   position: relative;
-  grid-template-columns: minmax(0, 1fr) minmax(92px, .75fr) 24px 30px;
+  grid-template-columns: minmax(0, 1fr) 30px;
   gap: 5px;
   align-items: center;
+  padding-right: 13px;
+  overflow: visible;
+}
+.wp-flow-route-select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 .wp-flow-button-port {
   display: grid;
   place-items: center;
+  position: absolute;
+  top: 50%;
+  right: -8px;
   width: 18px;
   height: 18px;
+  transform: translateY(-50%);
   border: 2px solid var(--wp-panel);
   border-radius: 50%;
   background: var(--wp-accent);
@@ -1843,7 +1862,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-flow-button-port:focus-visible,
 .wp-flow-button-port.connecting {
   outline: 0;
-  transform: scale(1.12);
+  transform: translateY(-50%) scale(1.12);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--wp-accent) 20%, transparent);
 }
 .wp-flow-node.connect-target {

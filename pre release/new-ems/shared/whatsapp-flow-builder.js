@@ -63,7 +63,7 @@ function nodeOptions(nodes, escapeHtml, selected = "") {
 }
 function renderQuickButtons(node, escapeHtml, nodes = []) {
   const buttons = buttonValues(node);
-  return `<div class="wp-flow-inline-buttons"><span>Reply buttons</span>${buttons.map((button, index) => `<label><input data-node-button-label="${index}" maxlength="20" value="${escapeHtml(button.label)}" placeholder="Button ${index + 1}" /><select data-node-button-next="${index}" title="Route this button">${nodeOptions(nodes, escapeHtml, button.next)}</select><i class="wp-flow-button-port" data-flow-button-port="${index}" role="button" tabindex="0" title="Drag to connect this button"></i><button type="button" data-flow-remove-button="${index}" aria-label="Remove button">×</button></label>`).join("")}<button type="button" data-flow-add-button>＋ Add Button</button></div>`;
+  return `<div class="wp-flow-inline-buttons"><span>Reply buttons</span>${buttons.map((button, index) => `<label><input data-node-button-label="${index}" maxlength="20" value="${escapeHtml(button.label)}" placeholder="Button ${index + 1}" /><select class="wp-flow-route-select" data-node-button-next="${index}" title="Route this button">${nodeOptions(nodes, escapeHtml, button.next)}</select><i class="wp-flow-button-port" data-flow-button-port="${index}" role="button" tabindex="0" title="Drag to connect this button"></i><button type="button" data-flow-remove-button="${index}" aria-label="Remove button">×</button></label>`).join("")}<button type="button" data-flow-add-button>＋ Add Button</button></div>`;
 }
 function renderNodeFields(node, escapeHtml, nodes = []) {
   const config = node.config || {};
@@ -156,8 +156,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   };
   const applyTransform = (element, transform) => {
     element.getAnimations().filter((animation) => animation.id === "wp-flow-layout").forEach((animation) => animation.cancel());
-    const animation = element.animate({ transform }, { duration: 0, fill: "forwards" });
-    animation.id = "wp-flow-layout";
+    element.style.transform = transform;
   };
   const markDraftChanged = () => {
     const saveState = dialog.querySelector("[data-flow-save-state]");
@@ -300,9 +299,15 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
       const b = state.nodes.find((n) => n.id === edge.to);
       if (!a || !b) return "";
       const start = edgeStartPoint(edge, a);
-      const end = { x: Number(b.x || 0) + NODE_WIDTH / 2, y: Number(b.y || 0) };
-      const curve = Math.max(72, Math.abs(end.y - start.y) * .45);
-      return `<path class="${Number.isInteger(edge.fromButton) ? "button-edge" : ""}" d="M ${start.x} ${start.y} C ${start.x + 44} ${start.y + curve}, ${end.x - 44} ${end.y - curve}, ${end.x} ${end.y}" />`;
+      const isButtonEdge = Number.isInteger(edge.fromButton);
+      const end = isButtonEdge
+        ? { x: Number(b.x || 0) - 8, y: Number(b.y || 0) + 58 }
+        : { x: Number(b.x || 0) + NODE_WIDTH / 2, y: Number(b.y || 0) };
+      const spread = Math.max(54, Math.min(150, Math.abs(end.x - start.x) * .42));
+      const d = isButtonEdge
+        ? `M ${start.x} ${start.y} C ${start.x + spread} ${start.y}, ${end.x - spread} ${end.y}, ${end.x} ${end.y}`
+        : `M ${start.x} ${start.y} C ${start.x + 44} ${start.y + 72}, ${end.x - 44} ${end.y - 72}, ${end.x} ${end.y}`;
+      return `<path class="${isButtonEdge ? "button-edge" : ""}" d="${d}" />`;
     }).join("");
     drawMiniMap();
   };
@@ -355,7 +360,6 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   const renderNodes = (refreshInspector = true) => {
     applyViewport();
     nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""}" data-flow-node="${node.id}">${node.id === selectedId && node.type !== "start" ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">${COPY_ICON}</button><button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">${DELETE_ICON}</button></div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
-    drawLines();
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
       const positionedNode = state.nodes.find((item) => item.id === card.dataset.flowNode);
       if (positionedNode) applyTransform(card, `translate(${positionedNode.x}px, ${positionedNode.y}px)`);
@@ -499,6 +503,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
         card.addEventListener("pointercancel", stop);
       });
     });
+    window.requestAnimationFrame(drawLines);
     if (refreshInspector && selectedId) selectNode(selectedId);
   };
   const addBlock = (type, point = {}, afterId = null) => {
