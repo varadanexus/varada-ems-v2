@@ -32,6 +32,15 @@ function starterNodes() {
 }
 
 function iconFor(type) { return BLOCKS.find((item) => item[0] === type)?.[1] || (type === "start" ? "⚡" : "▤"); }
+
+function blockLabelFor(node) {
+  if (node.type === "start") return "Trigger";
+  if (["message", "media", "list", "catalog", "single_product", "multi_product", "template"].includes(node.type)) return "Message block";
+  if (["question", "address", "location", "ask_media"].includes(node.type)) return "Input block";
+  if (node.type === "condition") return "Branch block";
+  if (["api", "attribute", "tag", "handoff", "connect", "delay", "end"].includes(node.type)) return "Action block";
+  return "Flow block";
+}
 const COPY_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="10" height="10" rx="2"></rect><path d="M6 14H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"></path></svg>`;
 const DELETE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"></path><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path></svg>`;
 const CANVAS_LIMIT = 10000;
@@ -59,7 +68,7 @@ function buttonValues(node) {
   });
 }
 function nodeOptions(nodes, escapeHtml, selected = "") {
-  return `<option value="" ${!selected ? "selected" : ""}>Auto next step</option>${nodes.filter((item) => item.id !== selected).map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === selected ? "selected" : ""}>${escapeHtml(item.title || item.type)}</option>`).join("")}`;
+  return `<option value="" ${!selected ? "selected" : ""}>No route selected</option>${nodes.filter((item) => item.id !== selected).map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === selected ? "selected" : ""}>${escapeHtml(item.title || item.type)}</option>`).join("")}`;
 }
 function renderQuickButtons(node, escapeHtml, nodes = []) {
   const buttons = buttonValues(node);
@@ -216,10 +225,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     if (changed) node.config = { ...(node.config || {}), buttons: nextButtons };
     return changed;
   };
-  const visibleEdges = () => normalizedEdges().filter((edge) => {
-    if (Number.isInteger(edge.fromButton)) return true;
-    return !buttonValues(state.nodes.find((node) => node.id === edge.from)).length;
-  });
+  const visibleEdges = () => normalizedEdges();
   const reachableNodeIds = () => {
     const reachable = new Set([state.nodes[0]?.id].filter(Boolean));
     let changed = true;
@@ -254,19 +260,15 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   const normalizedEdges = () => {
     const validIds = new Set(state.nodes.map((node) => node.id));
     const routed = [];
-    state.nodes.forEach((node, nodeIndex) => {
+    state.nodes.forEach((node) => {
       buttonValues(node).forEach((button, buttonIndex) => {
         if (button.next && validIds.has(button.next) && button.next !== node.id) {
           routed.push({ id: `${node.id}:button:${buttonIndex}:${button.next}`, from: node.id, to: button.next, fromButton: buttonIndex });
         }
       });
-      if (!buttonValues(node).some((button) => button.next) && nodeIndex < state.nodes.length - 1) {
-        routed.push({ id: `${node.id}:next:${state.nodes[nodeIndex + 1].id}`, from: node.id, to: state.nodes[nodeIndex + 1].id });
-      }
     });
     return routed;
   };
-  const nextNodeAfter = (node) => state.nodes[state.nodes.findIndex((item) => item.id === node.id) + 1] || null;
   const renderLiveNode = (node) => {
     if (!node || !liveMessages) return;
     const body = node.type === "start" ? "Customer starts the flow" : node.body || DEFAULT_COPY[node.type] || "Message";
@@ -282,13 +284,9 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
       reply.className = "wp-flow-live-message customer";
       reply.innerHTML = `<p>${escapeHtml(chosen.label)}</p>`;
       liveMessages.appendChild(reply);
-      const routed = state.nodes.find((item) => item.id === chosen.next) || nextNodeAfter(node);
+      const routed = state.nodes.find((item) => item.id === chosen.next);
       if (routed) window.setTimeout(() => renderLiveNode(routed), 260);
     }));
-    if (!buttons.length && node.type !== "end") {
-      const next = nextNodeAfter(node);
-      if (next) window.setTimeout(() => renderLiveNode(next), 480);
-    }
   };
   const startLivePreview = () => {
     if (!liveMessages) return;
@@ -411,7 +409,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     selectedId = fromId;
     markDraftChanged();
     renderNodes(false);
-    toast("Button connected to the next block.");
+    toast("Button route connected.");
     return true;
   };
   const clearButtonConnection = (fromId, buttonIndex) => {
@@ -458,7 +456,7 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     state.nodes.forEach(normalizeButtonRoutes);
     const reachable = reachableNodeIds();
     applyViewport();
-    nodeLayer.innerHTML = state.nodes.map((node, index) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""} ${validationClassFor(node, reachable)}" data-flow-node="${node.id}">${node.id === selectedId && node.type !== "start" ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">${COPY_ICON}</button><button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">${DELETE_ICON}</button></div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${node.type === "start" ? "Trigger" : `Step ${index}`}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
+    nodeLayer.innerHTML = state.nodes.map((node) => `<article class="wp-flow-node ${node.id === selectedId ? "selected" : ""} ${validationClassFor(node, reachable)}" data-flow-node="${node.id}">${node.id === selectedId && node.type !== "start" ? `<div class="wp-flow-card-actions"><button type="button" data-flow-copy-node aria-label="Copy block" title="Copy block">${COPY_ICON}</button><button type="button" data-flow-delete-node aria-label="Delete block" title="Delete block">${DELETE_ICON}</button></div>` : ""}<header><span>${iconFor(node.type)}</span><div><small>${blockLabelFor(node)}</small><strong>${escapeHtml(node.title)}</strong></div><button type="button" data-flow-edit-title aria-label="Edit block title">•••</button></header>${renderNodeFields(node, escapeHtml, state.nodes)}<footer data-flow-add-next="message" role="button" tabindex="0"><span>＋ Add content</span></footer><i class="wp-flow-port in"></i><i class="wp-flow-port out"></i></article>`).join("");
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
       const positionedNode = state.nodes.find((item) => item.id === card.dataset.flowNode);
       if (positionedNode) applyTransform(card, `translate(${positionedNode.x}px, ${positionedNode.y}px)`);
