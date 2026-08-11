@@ -1487,6 +1487,90 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-flow-branches { grid-template-columns: 1fr 1fr; color: var(--wp-text); font-size: .68rem; text-align: center; }
 .wp-flow-node footer[role="button"] { cursor: pointer; }
 
+/* Dedicated flow builder route */
+.wp-flow-builder-workspace {
+  grid-template-columns: 76px minmax(0, 1fr);
+}
+.wp-flow-builder-workspace .wp-workspace-sidebar {
+  width: 76px;
+  padding: 1rem .55rem;
+  align-items: center;
+  overflow-x: hidden;
+}
+.wp-flow-builder-workspace .wp-workspace-brand,
+.wp-flow-builder-workspace .wp-workspace-account,
+.wp-flow-builder-workspace .wp-workspace-nav a {
+  width: 48px;
+  justify-content: center;
+  padding-inline: 0;
+}
+.wp-flow-builder-workspace .wp-workspace-brand span,
+.wp-flow-builder-workspace .wp-workspace-account div,
+.wp-flow-builder-workspace .wp-workspace-account .wp-account-chevron,
+.wp-flow-builder-workspace .wp-workspace-nav a em,
+.wp-flow-builder-workspace .wp-nav-label,
+.wp-flow-builder-workspace .wp-sidebar-footer {
+  display: none;
+}
+.wp-flow-builder-workspace .wp-workspace-brand img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+.wp-flow-builder-workspace .wp-workspace-account {
+  min-height: 54px;
+  margin-block: .65rem 1rem;
+}
+.wp-flow-builder-workspace .wp-workspace-account-logo {
+  margin: 0;
+}
+.wp-flow-builder-workspace .wp-workspace-nav {
+  width: 100%;
+  align-items: center;
+}
+.wp-flow-builder-workspace .wp-workspace-nav a {
+  min-height: 44px;
+  margin-inline: auto;
+  border-radius: 14px;
+}
+.wp-flow-builder-workspace .wp-workspace-content {
+  grid-column: 2;
+}
+.wp-flow-builder-workspace .wp-workspace-content .wp-main {
+  width: 100%;
+  height: calc(100vh - 74px);
+  padding: 0;
+}
+.wp-flow-builder-route {
+  height: 100%;
+  min-height: 0;
+}
+.wp-flow-builder-route .wp-flow-builder-dialog {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  background: var(--wp-bg);
+}
+.wp-flow-builder-route .wp-flow-builder-dialog > form {
+  display: grid;
+  grid-template-rows: 74px minmax(0, 1fr);
+  height: 100%;
+}
+.wp-flow-builder-route .wp-flow-builder-shell {
+  min-height: 0;
+  height: 100%;
+}
+.wp-flow-builder-route .wp-flow-zoom {
+  right: 28px;
+  bottom: 28px;
+}
+.wp-flow-builder-route .wp-flow-minimap {
+  right: 28px;
+  bottom: 78px;
+}
+
 /* Flow builder upgrade: routing and live preview */
 .wp-flow-builder-top { grid-template-columns: 44px minmax(220px, 1fr) auto auto auto; }
 .wp-flow-minimap {
