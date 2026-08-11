@@ -191,6 +191,35 @@ function campaignStatusLabel(status) {
   return ({ draft: "Draft", review: "Ready for approval", approved: "Approved", rejected: "Rejected", paused: "Paused" })[status] || "Draft";
 }
 
+function campaignDecisionActor() {
+  return {
+    name: session?.displayName || session?.email || "Workspace user",
+    email: session?.email || "",
+  };
+}
+
+function campaignAuditEntry(status, note = "") {
+  const actor = campaignDecisionActor();
+  return {
+    id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    status,
+    note: String(note || "").trim(),
+    actorName: actor.name,
+    actorEmail: actor.email,
+    at: new Date().toISOString(),
+  };
+}
+
+function appendCampaignAudit(draft, status, note = "") {
+  const entry = campaignAuditEntry(status, note);
+  return {
+    ...draft,
+    status,
+    updatedAt: entry.at,
+    approvalLog: [entry, ...(Array.isArray(draft.approvalLog) ? draft.approvalLog : [])],
+  };
+}
+
 function campaignTypeLabel(type) {
   return ({ announcement: "Announcement", reminder: "Reminder", follow_up: "Follow-up", offer: "Offer", reactivation: "Reactivation" })[type] || "Campaign";
 }
@@ -1233,7 +1262,8 @@ function campaignsView() {
       <div class="wp-form-row"><label><span>Audience rule</span><select name="rule"><option value="manual">Manual upload / operator selected</option><option value="tag">Customer tag</option><option value="source">Lead source</option><option value="last_message">Recent conversation</option></select></label><label><span>Estimated contacts</span><input name="count" type="number" min="0" step="1" value="0" /></label></div>
       <div class="wp-policy-note"><strong>Planning only</strong><p>Final production targeting will be enforced server-side after Meta review and billing gates are completed.</p></div>
       <footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save_segment">Save segment</button></footer></form></dialog>
-    <dialog class="wp-contact-dialog wp-campaign-detail-dialog" id="wpCampaignDetailDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign brief</span><h2 data-campaign-detail-title>Campaign details</h2><p>Review the draft before editing or moving it into approval.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><div data-campaign-detail></div><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Close</button><button class="wp-primary" type="button" data-detail-edit-campaign>Edit draft</button></footer></form></dialog>
+    <dialog class="wp-contact-dialog wp-campaign-detail-dialog" id="wpCampaignDetailDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign brief</span><h2 data-campaign-detail-title>Campaign details</h2><p>Review the draft before editing or moving it into approval.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><div data-campaign-detail></div><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Close</button><button class="wp-secondary" type="button" data-detail-reject-campaign>Reject</button><button class="wp-secondary" type="button" data-detail-approve-campaign>Approve</button><button class="wp-primary" type="button" data-detail-edit-campaign>Edit draft</button></footer></form></dialog>
+    <dialog class="wp-contact-dialog wp-campaign-approval-dialog" id="wpCampaignApprovalDialog"><form method="dialog" novalidate><header><div><span class="wp-card-eyebrow">Campaign decision</span><h2 data-campaign-decision-title>Approve campaign</h2><p data-campaign-decision-copy>Record the approval note before this draft moves forward.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input name="campaignId" type="hidden" /><input name="decision" type="hidden" /><label><span>Decision note</span><textarea name="note" maxlength="500" rows="4" placeholder="Add the reason, reviewer context, or changes required."></textarea><small data-campaign-decision-help>Approval notes are optional. Rejections require a clear reason.</small></label><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save" data-campaign-decision-submit>Approve</button></footer></form></dialog>
   </section>`;
 }
 function plannedView(view) {
@@ -1379,8 +1409,10 @@ async function renderDashboard() {
     const dialog = app.querySelector("#wpCampaignDraftDialog");
     const segmentDialog = app.querySelector("#wpCampaignSegmentDialog");
     const detailDialog = app.querySelector("#wpCampaignDetailDialog");
+    const approvalDialog = app.querySelector("#wpCampaignApprovalDialog");
     const form = dialog?.querySelector("form");
     const segmentForm = segmentDialog?.querySelector("form");
+    const approvalForm = approvalDialog?.querySelector("form");
     const templates = approvedWorkspaceTemplates();
     const preview = dialog?.querySelector("[data-campaign-preview]");
     const setFormValue = (name, value) => {
@@ -1408,11 +1440,25 @@ async function renderDashboard() {
       updatePreview();
       dialog?.showModal();
     };
+    const openCampaignDecisionDialog = (draft, decision) => {
+      if (!approvalForm || !approvalDialog) return;
+      approvalForm.reset();
+      approvalForm.elements.campaignId.value = draft.id;
+      approvalForm.elements.decision.value = decision;
+      const isReject = decision === "rejected";
+      approvalDialog.querySelector("[data-campaign-decision-title]")?.replaceChildren(document.createTextNode(isReject ? "Reject campaign draft" : "Approve campaign draft"));
+      approvalDialog.querySelector("[data-campaign-decision-copy]")?.replaceChildren(document.createTextNode(isReject ? "Tell the campaign owner what must change before it can be approved." : "Record reviewer context before this campaign is marked approved."));
+      approvalDialog.querySelector("[data-campaign-decision-help]")?.replaceChildren(document.createTextNode(isReject ? "A rejection note is required so the owner knows what to fix." : "Approval notes are optional, but useful for audit history."));
+      approvalDialog.querySelector("[data-campaign-decision-submit]")?.replaceChildren(document.createTextNode(isReject ? "Reject draft" : "Approve draft"));
+      approvalDialog.showModal();
+    };
     const renderCampaignDetail = (draft) => {
       const detail = detailDialog?.querySelector("[data-campaign-detail]");
       if (!detail) return;
       const readiness = campaignReadinessItems(draft, templates, workspaceContacts?.contacts?.filter((contact) => contact.status === "active" && contact.opted_in !== false && contact.status !== "opted_out") || []);
       const readinessDone = readiness.filter((item) => item.done).length;
+      const auditLog = Array.isArray(draft.approvalLog) ? draft.approvalLog : [];
+      const auditMarkup = auditLog.length ? auditLog.map((entry) => `<li><div><strong>${escapeHtml(campaignStatusLabel(entry.status))}</strong><small>${escapeHtml(campaignDraftDate(entry.at))} · ${escapeHtml(entry.actorName || "Workspace user")}${entry.actorEmail ? ` · ${escapeHtml(entry.actorEmail)}` : ""}</small></div>${entry.note ? `<p>${escapeHtml(entry.note)}</p>` : `<p>No note added.</p>`}</li>`).join("") : `<li class="empty"><p>No approval or status audit recorded yet.</p></li>`;
       detailDialog.querySelector("[data-campaign-detail-title]")?.replaceChildren(document.createTextNode(draft.name || "Campaign details"));
       detail.innerHTML = `<section class="wp-campaign-detail-grid">
         <article><span>Status</span><strong>${escapeHtml(campaignStatusLabel(draft.status))}</strong></article>
@@ -1424,8 +1470,11 @@ async function renderDashboard() {
       </section>
       <article class="wp-campaign-detail-objective"><span>Objective</span><p>${escapeHtml(draft.objective || "No objective documented yet.")}</p></article>
       <article class="wp-campaign-detail-preview"><span>Message preview</span><p>${escapeHtml(draft.previewBody || "No template preview available.")}</p></article>
-      <section class="wp-campaign-detail-readiness"><header><strong>${readinessDone}/${readiness.length} checks ready</strong><small>Production sending remains disabled until launch controls are completed.</small></header><ul>${readiness.map((item) => `<li class="${item.done ? "done" : ""}">${escapeHtml(item.label)}</li>`).join("")}</ul></section>`;
+      <section class="wp-campaign-detail-readiness"><header><strong>${readinessDone}/${readiness.length} checks ready</strong><small>Production sending remains disabled until launch controls are completed.</small></header><ul>${readiness.map((item) => `<li class="${item.done ? "done" : ""}">${escapeHtml(item.label)}</li>`).join("")}</ul></section>
+      <section class="wp-campaign-audit"><header><strong>Approval history</strong><small>Reviewer decisions and status changes are kept with the draft.</small></header><ol>${auditMarkup}</ol></section>`;
       detailDialog.querySelector("[data-detail-edit-campaign]")?.setAttribute("data-detail-edit-campaign", draft.id);
+      detailDialog.querySelector("[data-detail-approve-campaign]")?.setAttribute("data-detail-approve-campaign", draft.id);
+      detailDialog.querySelector("[data-detail-reject-campaign]")?.setAttribute("data-detail-reject-campaign", draft.id);
     };
     app.querySelector("#wpCreateCampaignBtn")?.addEventListener("click", () => openCampaignDialog());
     app.querySelector("#wpCreateSegmentBtn")?.addEventListener("click", () => { segmentForm?.reset(); segmentDialog?.showModal(); });
@@ -1442,7 +1491,7 @@ async function renderDashboard() {
       const drafts = readCampaignDrafts();
       const existingId = form.elements.campaignId?.value || "";
       const existingDraft = drafts.find((draft) => draft.id === existingId);
-      const nextDraft = {
+      let nextDraft = {
         id: existingId || `camp_${Date.now()}`,
         name: form.elements.name.value.trim(),
         type: form.elements.type?.value || "announcement",
@@ -1458,7 +1507,11 @@ async function renderDashboard() {
         createdAt: existingDraft?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: form.elements.status?.value || "draft",
+        approvalLog: existingDraft?.approvalLog || [],
       };
+      if (existingDraft && existingDraft.status !== nextDraft.status) {
+        nextDraft = appendCampaignAudit(nextDraft, nextDraft.status, `Status changed from ${campaignStatusLabel(existingDraft.status)} to ${campaignStatusLabel(nextDraft.status)} while editing the draft.`);
+      }
       writeCampaignDrafts(existingId ? drafts.map((draft) => draft.id === existingId ? nextDraft : draft) : [nextDraft, ...drafts]);
       dialog?.close("save");
       showToast(existingId ? "Campaign draft updated." : "Campaign draft saved.");
@@ -1489,13 +1542,25 @@ async function renderDashboard() {
       showToast("Campaign draft deleted.");
       renderDashboard();
     }));
+    approvalForm?.addEventListener("submit", (event) => {
+      if (event.submitter?.value !== "save") return;
+      event.preventDefault();
+      const id = approvalForm.elements.campaignId?.value || "";
+      const decision = approvalForm.elements.decision?.value || "approved";
+      const note = approvalForm.elements.note?.value.trim() || "";
+      if (decision === "rejected" && !note) return showToast("Add a rejection note before rejecting the campaign.", "error");
+      const drafts = readCampaignDrafts().map((draft) => draft.id === id ? appendCampaignAudit(draft, decision, note) : draft);
+      writeCampaignDrafts(drafts);
+      approvalDialog?.close("save");
+      showToast(decision === "approved" ? "Campaign draft approved." : "Campaign draft rejected.");
+      renderDashboard();
+    });
     app.querySelectorAll("[data-approve-campaign],[data-reject-campaign]").forEach((button) => button.addEventListener("click", () => {
       const id = button.dataset.approveCampaign || button.dataset.rejectCampaign;
       const nextStatus = button.dataset.approveCampaign ? "approved" : "rejected";
-      const drafts = readCampaignDrafts().map((draft) => draft.id === id ? { ...draft, status: nextStatus, updatedAt: new Date().toISOString() } : draft);
-      writeCampaignDrafts(drafts);
-      showToast(nextStatus === "approved" ? "Campaign draft approved." : "Campaign draft rejected.");
-      renderDashboard();
+      const draft = readCampaignDrafts().find((item) => item.id === id);
+      if (!draft) return showToast("Campaign draft not found.", "error");
+      openCampaignDecisionDialog(draft, nextStatus);
     }));
     app.querySelectorAll("[data-duplicate-campaign]").forEach((button) => button.addEventListener("click", () => {
       const source = readCampaignDrafts().find((draft) => draft.id === button.dataset.duplicateCampaign);
@@ -1520,8 +1585,18 @@ async function renderDashboard() {
       detailDialog.close("edit");
       if (draft) openCampaignDialog(draft);
     });
+    detailDialog?.querySelector("[data-detail-approve-campaign]")?.addEventListener("click", (event) => {
+      const draft = readCampaignDrafts().find((item) => item.id === event.currentTarget.dataset.detailApproveCampaign);
+      detailDialog.close("approve");
+      if (draft) openCampaignDecisionDialog(draft, "approved");
+    });
+    detailDialog?.querySelector("[data-detail-reject-campaign]")?.addEventListener("click", (event) => {
+      const draft = readCampaignDrafts().find((item) => item.id === event.currentTarget.dataset.detailRejectCampaign);
+      detailDialog.close("reject");
+      if (draft) openCampaignDecisionDialog(draft, "rejected");
+    });
     app.querySelectorAll("[data-campaign-status]").forEach((select) => select.addEventListener("change", () => {
-      const drafts = readCampaignDrafts().map((draft) => draft.id === select.dataset.campaignStatus ? { ...draft, status: select.value, updatedAt: new Date().toISOString() } : draft);
+      const drafts = readCampaignDrafts().map((draft) => draft.id === select.dataset.campaignStatus ? appendCampaignAudit(draft, select.value, `Status changed to ${campaignStatusLabel(select.value)} from the campaign command table.`) : draft);
       writeCampaignDrafts(drafts);
       showToast("Campaign status updated.");
       renderDashboard();
