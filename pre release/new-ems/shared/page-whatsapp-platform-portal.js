@@ -66,7 +66,7 @@ let signupStep = 1;
 let signupDraft = {};
 let metaOnboardingStatus = null;
 let facebookSdkPromise = null;
-let workspaceProfile = { planCode: "starter", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+let workspaceProfile = { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
 let workspaceVerification = null;
 let workspaceInbox = { conversations: [], thread: null, error: "" };
 let workspaceContacts = { contacts: [], error: "" };
@@ -335,7 +335,7 @@ function profileValue(group, value, fallback = "Not provided") {
 }
 
 function planName(code) {
-  return ({ starter: "Starter", growth: "Growth", enterprise: "Enterprise" })[String(code || "").toLowerCase()] || "Starter";
+  return ({ starter: "Launch", launch: "Launch", growth: "Growth", enterprise: "Enterprise" })[String(code || "").toLowerCase()] || "Launch";
 }
 
 function formatProfileDate(value) {
@@ -1488,7 +1488,7 @@ function teamView() {
   const additionalSeats = Number(capacity.additionalSeats || 0);
   const availableSeats = seatLimit == null ? null : Math.max(0, seatLimit - seatsUsed);
   const teamFull = seatLimit != null && seatsUsed >= seatLimit;
-  const packageLabel = capacity.planLabel || planName(capacity.planCode || "starter");
+  const packageLabel = capacity.planLabel || planName(capacity.planCode || "launch");
   const rows = members.map((member) => {
     const isSelf = member.id === workspaceTeam.currentUserId;
     const canEdit = canManage && !isSelf && member.role_code !== "owner" && !((workspaceTeam.currentRole || session.roleCode) === "admin" && member.role_code === "admin");
@@ -1550,7 +1550,7 @@ async function renderDashboard() {
     const storage = await storageRequest("profile");
     workspaceProfile = storage?.profile || workspaceProfile;
   } catch {
-    workspaceProfile = workspaceProfile || { planCode: "starter", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+    workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
   }
   try {
     const result = await storageRequest("verification_status");
@@ -1620,7 +1620,7 @@ async function renderDashboard() {
   if (view === "team") {
     try {
       const result = await messagingRequest("list_team");
-      workspaceTeam = { members: result?.members || [], currentUserId: result?.currentUserId || "", currentRole: result?.currentRole || session.roleCode || "", error: "" };
+      workspaceTeam = { members: result?.members || [], currentUserId: result?.currentUserId || "", currentRole: result?.currentRole || session.roleCode || "", capacity: result?.capacity || {}, error: "" };
     } catch (error) {
       workspaceTeam = { members: [], currentUserId: "", currentRole: session.roleCode || "", error: error?.message || "The member directory could not be loaded." };
     }

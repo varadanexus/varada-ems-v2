@@ -138,7 +138,7 @@ async function listTeam(admin: any, customer: any) {
   const seatsUsed = (data || []).filter((member: any) => ["active", "invited"].includes(member.status)).length;
   return {
     members: data || [], currentUserId: customer.user_id, currentRole: customer.role_code,
-    capacity: { planCode: tenant.plan_code, planLabel: plan?.label || tenant.plan_code, includedSeats: includedLimit, additionalSeats, seatLimit, seatsUsed, availableSeats: seatLimit === null ? null : Math.max(0, seatLimit - seatsUsed) },
+    capacity: { planCode: catalogCode, planLabel: plan?.label || catalogCode, includedSeats: includedLimit, additionalSeats, seatLimit, seatsUsed, availableSeats: seatLimit === null ? null : Math.max(0, seatLimit - seatsUsed) },
   };
 }
 async function inviteTeamMember(admin: any, customer: any, body: any) {
