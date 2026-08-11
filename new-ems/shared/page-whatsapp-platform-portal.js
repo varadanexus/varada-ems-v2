@@ -129,7 +129,8 @@ function currentFlowBuilderId() {
 
 function workspaceNavItem(view, icon, badge = "") {
   const active = currentWorkspaceView() === view;
-  return `<a class="${active ? "active" : ""}" href="${workspacePath(view)}" ${active ? 'aria-current="page"' : ""}><span class="wp-nav-icon" aria-hidden="true">${icon}</span>${WORKSPACE_VIEW_LABELS[view]}${badge ? `<em>${badge}</em>` : ""}</a>`;
+  const label = WORKSPACE_VIEW_LABELS[view];
+  return `<a class="${active ? "active" : ""}" href="${workspacePath(view)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" ${active ? 'aria-current="page"' : ""}><span class="wp-nav-icon" aria-hidden="true">${icon}</span><span class="wp-nav-text">${escapeHtml(label)}</span>${badge ? `<em>${badge}</em>` : ""}</a>`;
 }
 
 const PROFILE_LABELS = {
