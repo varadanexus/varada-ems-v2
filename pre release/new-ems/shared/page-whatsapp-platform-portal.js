@@ -1142,7 +1142,6 @@ function verificationView(verification) {
 const PLANNED_WORKSPACE_VIEWS = {
   templates: ["Message templates", "Create, submit and manage approved WhatsApp message templates from your workspace.", ["Template library", "Approval status", "Language variants"]],
   automations: ["Workflow automation", "Build event-driven customer journeys without losing operational control.", ["Visual workflow builder", "Routing rules", "Event triggers"]],
-  analytics: ["Performance analytics", "Understand conversation volume, responsiveness and messaging outcomes.", ["Team performance", "Conversation trends", "Campaign outcomes"]],
   team: ["Team and roles", "Invite users and control what each person can access inside this company workspace.", ["Member invitations", "Role-based access", "Activity history"]],
   integrations: ["Business integrations", "Connect approved business systems and route events into WhatsApp workflows.", ["Webhooks", "CRM and ERP connectors", "Integration health"]],
   billing: ["Billing and usage", "Review your subscription, platform usage and invoices in one place.", ["Plan management", "Usage summary", "Invoices and payments"]],
@@ -1368,6 +1367,56 @@ function campaignsView() {
     <dialog class="wp-contact-dialog wp-campaign-approval-dialog" id="wpCampaignApprovalDialog"><form method="dialog" novalidate><header><div><span class="wp-card-eyebrow">Campaign decision</span><h2 data-campaign-decision-title>Approve campaign</h2><p data-campaign-decision-copy>Record the approval note before this draft moves forward.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input name="campaignId" type="hidden" /><input name="decision" type="hidden" /><label><span>Decision note</span><textarea name="note" maxlength="500" rows="4" placeholder="Add the reason, reviewer context, or changes required."></textarea><small data-campaign-decision-help>Approval notes are optional. Rejections require a clear reason.</small></label><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save" data-campaign-decision-submit>Approve</button></footer></form></dialog>
   </section>`;
 }
+
+function analyticsView() {
+  const contacts = workspaceContacts?.contacts || [];
+  const conversations = workspaceInbox?.conversations || [];
+  const templates = workspaceTemplates?.templates || [];
+  const campaigns = readCampaignDrafts();
+  const activeContacts = contacts.filter((contact) => contact.status === "active");
+  const optedInContacts = activeContacts.filter((contact) => contact.opted_in !== false && contact.status !== "opted_out");
+  const openConversations = conversations.filter((conversation) => conversation.status === "open");
+  const pendingConversations = conversations.filter((conversation) => conversation.status === "pending");
+  const resolvedConversations = conversations.filter((conversation) => conversation.status === "resolved");
+  const unreadMessages = conversations.reduce((total, conversation) => total + Number(conversation.unread_count || 0), 0);
+  const approvedTemplates = templates.filter((template) => String(template.status || "").toUpperCase() === "APPROVED");
+  const campaignStatuses = campaigns.reduce((counts, campaign) => {
+    const status = campaign.status || "draft";
+    counts[status] = Number(counts[status] || 0) + 1;
+    return counts;
+  }, {});
+  const readyCampaigns = campaigns.filter((campaign) => campaign.status === "approved" && new Date(campaign.scheduledAt || 0).getTime() > Date.now());
+  const campaignTotal = Math.max(campaigns.length, 1);
+  const statusBars = ["draft", "review", "approved", "rejected", "paused"].map((status) => {
+    const count = Number(campaignStatuses[status] || 0);
+    const width = Math.round((count / campaignTotal) * 100);
+    return `<li><div><span>${escapeHtml(campaignStatusLabel(status))}</span><strong>${count}</strong></div><i><b style="width:${width}%"></b></i></li>`;
+  }).join("");
+  const workloadTotal = Math.max(conversations.length, 1);
+  const workloadRows = [
+    ["Open", openConversations.length],
+    ["Pending", pendingConversations.length],
+    ["Resolved", resolvedConversations.length],
+  ].map(([label, count]) => `<li><span>${label}</span><i><b style="width:${Math.round((Number(count) / workloadTotal) * 100)}%"></b></i><strong>${count}</strong></li>`).join("");
+  const recentCampaigns = [...campaigns].sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0)).slice(0, 5).map((campaign) => `<a href="${escapeHtml(campaignDetailUrl(campaign.id))}"><span><strong>${escapeHtml(campaign.name || "Untitled campaign")}</strong><small>${escapeHtml(campaignDraftDate(campaign.updatedAt || campaign.createdAt))} · ${Number(campaign.estimatedAudience || 0)} contacts</small></span><em class="wp-campaign-status ${escapeHtml(campaign.status || "draft")}">${escapeHtml(campaignStatusLabel(campaign.status))}</em></a>`).join("");
+  const dataError = workspaceInbox?.error || workspaceContacts?.error || workspaceTemplates?.error || "";
+  return `<section class="wp-route-page wp-analytics-page">
+    <div class="wp-route-heading"><div><span class="wp-kicker">Operational intelligence</span><h1>Analytics</h1><p>Track audience health, team workload and campaign readiness using current workspace data.</p></div><span class="wp-analytics-live"><i></i> Live workspace snapshot</span></div>
+    ${dataError ? `<div class="wp-verification-notice"><strong>Some analytics are unavailable</strong><p>${escapeHtml(dataError)}</p></div>` : ""}
+    <section class="wp-analytics-kpis" aria-label="Workspace analytics summary">
+      <article><span>Opt-in contacts</span><strong>${optedInContacts.length}</strong><small>${activeContacts.length} active contact${activeContacts.length === 1 ? "" : "s"}</small></article>
+      <article><span>Open workload</span><strong>${openConversations.length + pendingConversations.length}</strong><small>${unreadMessages} unread message${unreadMessages === 1 ? "" : "s"}</small></article>
+      <article><span>Approved templates</span><strong>${approvedTemplates.length}</strong><small>${templates.length} template${templates.length === 1 ? "" : "s"} in workspace</small></article>
+      <article><span>Ready campaigns</span><strong>${readyCampaigns.length}</strong><small>${campaigns.length} campaign draft${campaigns.length === 1 ? "" : "s"}</small></article>
+    </section>
+    <section class="wp-analytics-grid">
+      <article class="wp-card wp-analytics-panel"><header><div><span class="wp-card-eyebrow">Campaign operations</span><h2>Approval pipeline</h2></div><a href="${workspacePath("campaigns")}">Open campaigns →</a></header><ul class="wp-analytics-bars">${statusBars}</ul></article>
+      <article class="wp-card wp-analytics-panel"><header><div><span class="wp-card-eyebrow">Customer operations</span><h2>Conversation workload</h2></div><a href="${workspacePath("inbox")}">Open inbox →</a></header><ul class="wp-analytics-workload">${workloadRows}</ul><footer><span>Unread across workspace</span><strong>${unreadMessages}</strong></footer></article>
+      <article class="wp-card wp-analytics-panel wp-analytics-activity"><header><div><span class="wp-card-eyebrow">Recent activity</span><h2>Campaign updates</h2></div></header><div>${recentCampaigns || '<div class="wp-inbox-empty"><span>◈</span><strong>No campaign activity yet</strong><p>Create a campaign draft to begin tracking its readiness.</p></div>'}</div></article>
+      <article class="wp-card wp-analytics-panel wp-analytics-locked"><span class="wp-card-eyebrow">Production performance</span><div class="wp-analytics-lock-icon" aria-hidden="true">◇</div><h2>Messaging outcomes activate after launch</h2><p>Delivery, read, reply, failure and campaign-conversion metrics will appear only after production sending is enabled and real events are received.</p><ul><li>Delivery and failure rate</li><li>Read and response rate</li><li>Template and campaign comparison</li></ul><small>No simulated performance data is shown.</small></article>
+    </section>
+  </section>`;
+}
 function plannedView(view) {
   const [title, description, capabilities] = PLANNED_WORKSPACE_VIEWS[view];
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Product preview</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="wp-planned-badge">Coming soon</span></div><article class="wp-card wp-planned-card"><div class="wp-planned-visual" aria-hidden="true"><span>${escapeHtml(WORKSPACE_VIEW_LABELS[view].charAt(0))}</span></div><div><span class="wp-card-eyebrow">Designed for focused work</span><h2>Everything your team needs, in one clear workspace</h2><p>This module is being prepared as a dedicated experience with fast navigation, clear ownership and the same protected company context across your workspace.</p><ul>${capabilities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article></section>`;
@@ -1391,6 +1440,7 @@ function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "inbox") return inboxView();
   if (view === "contacts") return contactsView();
   if (view === "campaigns") return campaignsView();
+  if (view === "analytics") return analyticsView();
   if (view === "templates") return templatesViewV2(connections);
   if (view === "flows") return currentFlowBuilderId() ? renderFlowBuilderPage({ escapeHtml }) : renderFlowsView({ flows: workspaceFlows.flows, escapeHtml });
   if (Object.hasOwn(PLANNED_WORKSPACE_VIEWS, view)) return plannedView(view);
@@ -1427,13 +1477,13 @@ async function renderDashboard() {
   }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
-  if (view === "inbox") {
+  if (["inbox", "analytics"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
       const listed = await messagingRequest("list", { status });
       const conversationId = new URLSearchParams(location.search).get("conversation");
       workspaceInbox = { conversations: listed?.conversations || [], thread: null, error: "" };
-      if (conversationId) workspaceInbox.thread = await messagingRequest("thread", { conversationId });
+      if (view === "inbox" && conversationId) workspaceInbox.thread = await messagingRequest("thread", { conversationId });
       const listedContacts = await messagingRequest("list_contacts", { status: "all" });
       workspaceContacts = { contacts: listedContacts?.contacts || [], error: "" };
     } catch (error) {
@@ -1449,7 +1499,7 @@ async function renderDashboard() {
       workspaceContacts = { contacts: [], error: error?.message || "The contact directory could not be loaded." };
     }
   }
-  if (["templates","inbox","campaigns"].includes(view)) {
+  if (["templates","inbox","campaigns","analytics"].includes(view)) {
     const templateConnections = connected.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId));
     const requestedConnection = new URLSearchParams(location.search).get("connection");
     const connectionId = templateConnections.some((connection) => connection.id === requestedConnection) ? requestedConnection : templateConnections[0]?.id;
@@ -1493,7 +1543,7 @@ async function renderDashboard() {
   const contactCount = (workspaceContacts?.contacts || []).length;
   const campaignCount = readCampaignDrafts().length;
   const isFlowBuilderRoute = Boolean(currentFlowBuilderId());
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(planName(workspaceProfile?.planCode))}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", workspaceTemplates.templates.length ? String(workspaceTemplates.templates.length) : "")}${workspaceNavItem("flows", "⌁", workspaceFlows.flows.length ? String(workspaceFlows.flows.length) : "")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁", "Planned")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(planName(workspaceProfile?.planCode))}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", workspaceTemplates.templates.length ? String(workspaceTemplates.templates.length) : "")}${workspaceNavItem("flows", "⌁", workspaceFlows.flows.length ? String(workspaceFlows.flows.length) : "")}${workspaceNavItem("automations", "↻", "Planned")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", "Planned")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", "Planned")}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
   if (view === "flows") bindFlowsView({ root: app, flows: workspaceFlows.flows, request: messagingRequest, onRefresh: renderDashboard, toast: showToast, escapeHtml, builderId: currentFlowBuilderId(), listUrl: workspacePath("flows") });
   if (view === "contacts") {
     app.querySelector(".wp-route-heading")?.insertAdjacentHTML("beforeend", '<button class="wp-primary" id="wpAddContactBtn" type="button">＋ Add contact</button>');
