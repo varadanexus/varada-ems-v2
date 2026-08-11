@@ -57,10 +57,15 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
   const settingsDialog = root.querySelector("[data-flow-settings-dialog]");
   let state = { id: null, description: "", status: "draft", triggerType: "keyword", triggerConfig: { keywords: [], fallback: "" }, nodes: starterNodes(), edges: [], scale: 1 };
   let selectedId = state.nodes[0].id;
+  let suppressNodeClick = false;
   const applyTransform = (element, transform) => {
     element.getAnimations().filter((animation) => animation.id === "wp-flow-layout").forEach((animation) => animation.cancel());
     const animation = element.animate({ transform }, { duration: 0, fill: "forwards" });
     animation.id = "wp-flow-layout";
+  };
+  const markDraftChanged = () => {
+    const saveState = dialog.querySelector("[data-flow-save-state]");
+    if (saveState) saveState.textContent = "Draft changed";
   };
 
   const normalizedEdges = () => state.nodes.slice(0, -1).map((node, index) => ({ id: `${node.id}:${state.nodes[index + 1].id}`, from: node.id, to: state.nodes[index + 1].id }));
@@ -84,15 +89,44 @@ export function bindFlowsView({ root, flows = [], request, onRefresh, toast, esc
     nodeLayer.querySelectorAll("[data-flow-node]").forEach((card) => {
       const positionedNode = state.nodes.find((item) => item.id === card.dataset.flowNode);
       if (positionedNode) applyTransform(card, `translate(${positionedNode.x}px, ${positionedNode.y}px)`);
-      card.addEventListener("click", () => selectNode(card.dataset.flowNode));
+      card.addEventListener("click", () => {
+        if (suppressNodeClick) {
+          suppressNodeClick = false;
+          return;
+        }
+        selectNode(card.dataset.flowNode);
+      });
       card.addEventListener("pointerdown", (event) => {
         if (event.target.closest("button")) return;
         const node = state.nodes.find((item) => item.id === card.dataset.flowNode); if (!node) return;
+        event.preventDefault();
+        selectedId = node.id;
+        nodeLayer.querySelectorAll("[data-flow-node]").forEach((item) => item.classList.toggle("selected", item.dataset.flowNode === node.id));
         const startX = event.clientX; const startY = event.clientY; const originX = node.x; const originY = node.y;
+        let moved = false;
         card.setPointerCapture(event.pointerId);
-        const move = (moveEvent) => { node.x = Math.max(20, originX + (moveEvent.clientX - startX) / state.scale); node.y = Math.max(20, originY + (moveEvent.clientY - startY) / state.scale); applyTransform(card, `translate(${node.x}px, ${node.y}px)`); drawLines(); };
+        const move = (moveEvent) => {
+          const deltaX = (moveEvent.clientX - startX) / state.scale;
+          const deltaY = (moveEvent.clientY - startY) / state.scale;
+          if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) moved = true;
+          node.x = Math.max(20, Math.round(originX + deltaX));
+          node.y = Math.max(20, Math.round(originY + deltaY));
+          applyTransform(card, `translate(${node.x}px, ${node.y}px)`);
+          drawLines();
+        };
+        const stop = () => {
+          card.removeEventListener("pointermove", move);
+          card.removeEventListener("pointerup", stop);
+          card.removeEventListener("pointercancel", stop);
+          if (moved) {
+            suppressNodeClick = true;
+            markDraftChanged();
+            selectNode(node.id);
+          }
+        };
         card.addEventListener("pointermove", move);
-        card.addEventListener("pointerup", () => card.removeEventListener("pointermove", move), { once: true });
+        card.addEventListener("pointerup", stop);
+        card.addEventListener("pointercancel", stop);
       });
     });
     if (refreshInspector && selectedId) selectNode(selectedId);
