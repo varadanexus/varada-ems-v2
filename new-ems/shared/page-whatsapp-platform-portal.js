@@ -176,6 +176,48 @@ function writeCampaignSegments(segments) {
   try { localStorage.setItem(campaignSegmentsKey(), JSON.stringify(custom)); } catch { /* Segments remain in memory only. */ }
 }
 
+function campaignSegmentRuleLabel(segment) {
+  const value = String(segment?.ruleValue || "").trim();
+  const labels = {
+    manual: "Operator-managed estimate",
+    active: "Active contacts",
+    opted_in: "WhatsApp opt-in contacts",
+    recent_contact: "Added in the last 30 days",
+    recent_message: "Messaged in the last 30 days",
+    country_code: value ? `Number begins with ${value}` : "Country calling code",
+    name_contains: value ? `Name contains “${value}”` : "Name contains text",
+    "status:active": "Active contacts",
+    "opted_in:true": "WhatsApp opt-in contacts",
+    "created:last_30_days": "Added in the last 30 days",
+  };
+  return labels[segment?.rule] || segment?.rule || "Custom rule";
+}
+
+function contactMatchesCampaignSegment(contact, segment) {
+  const rule = segment?.rule || "manual";
+  const value = String(segment?.ruleValue || "").trim().toLowerCase();
+  const isActive = contact?.status === "active";
+  const isOptedIn = isActive && contact?.opted_in !== false && contact?.status !== "opted_out";
+  const recentCutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
+  if (rule === "active") return isActive;
+  if (rule === "opted_in") return isOptedIn;
+  if (rule === "recent_contact") return isActive && new Date(contact?.created_at || contact?.createdAt || 0).getTime() >= recentCutoff;
+  if (rule === "recent_message") return isOptedIn && new Date(contact?.last_inbound_at || contact?.lastInboundAt || 0).getTime() >= recentCutoff;
+  if (rule === "country_code") return isOptedIn && String(contact?.phone_e164 || "").replace(/\s+/g, "").startsWith(value.replace(/\s+/g, ""));
+  if (rule === "name_contains") return isOptedIn && String(contact?.display_name || contact?.name || "").toLowerCase().includes(value);
+  return false;
+}
+
+function campaignSegmentCount(segment, contacts = []) {
+  if (segment?.system) return Number(segment.count || 0);
+  if (!segment || segment.rule === "manual") return Math.max(0, Number(segment?.count || 0));
+  return contacts.filter((contact) => contactMatchesCampaignSegment(contact, segment)).length;
+}
+
+function campaignSegmentsWithCounts(contacts = []) {
+  return readCampaignSegments(contacts).map((segment) => ({ ...segment, count: campaignSegmentCount(segment, contacts) }));
+}
+
 function approvedWorkspaceTemplates() {
   return (workspaceTemplates?.templates || []).filter((template) => String(template.status || "").toUpperCase() === "APPROVED");
 }
@@ -234,12 +276,14 @@ function campaignTypeLabel(type) {
 
 function campaignReadinessItems(draft, templates = [], optedInContacts = []) {
   const hasTemplate = Boolean(draft?.templateKey && templates.some((template) => `${template.name}|${template.language}` === draft.templateKey));
-  const hasAudience = Number(draft?.estimatedAudience || 0) > 0 || optedInContacts.length > 0;
+  const hasAudience = Number(draft?.estimatedAudience || 0) > 0;
+  const scheduledAt = draft?.scheduledAt ? new Date(draft.scheduledAt).getTime() : 0;
+  const hasFutureSchedule = Boolean(scheduledAt && !Number.isNaN(scheduledAt) && scheduledAt > Date.now());
   return [
     { label: "Approved template selected", done: hasTemplate },
     { label: "Eligible opt-in audience available", done: hasAudience },
     { label: "Campaign objective documented", done: Boolean(String(draft?.objective || "").trim()) },
-    { label: "Schedule window reviewed", done: Boolean(draft?.scheduledAt) },
+    { label: "Future schedule and delivery window reviewed", done: hasFutureSchedule && Boolean(draft?.sendWindowStart && draft?.sendWindowEnd) },
     { label: "Production sending still locked", done: true },
   ];
 }
@@ -256,7 +300,7 @@ function campaignDetailMarkup(draft, templates = [], optedInContacts = []) {
     <article><span>Status</span><strong>${escapeHtml(campaignStatusLabel(draft.status))}</strong></article>
     <article><span>Type</span><strong>${escapeHtml(campaignTypeLabel(draft.type))}</strong></article>
     <article><span>Audience</span><strong>${escapeHtml(draft.audienceLabel || "Campaign audience")}</strong><small>${Number(draft.estimatedAudience || 0)} estimated contacts</small></article>
-    <article><span>Schedule</span><strong>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</strong></article>
+    <article><span>Schedule</span><strong>${escapeHtml(campaignDraftDate(draft.scheduledAt))}</strong><small>${escapeHtml(draft.timezone || "Asia/Kolkata")} · ${escapeHtml(draft.sendWindowStart || "09:00")}–${escapeHtml(draft.sendWindowEnd || "18:00")}</small></article>
     <article><span>Owner</span><strong>${escapeHtml(draft.owner || session.displayName || "Workspace owner")}</strong></article>
     <article><span>Template</span><strong>${escapeHtml(draft.templateName || "Template pending")}</strong></article>
   </section>
@@ -1227,13 +1271,13 @@ function campaignsView() {
   const activeContacts = contacts.filter((contact) => contact.status === "active");
   const optedInContacts = activeContacts.filter((contact) => contact.opted_in !== false && contact.status !== "opted_out");
   const templates = approvedWorkspaceTemplates();
-  const segments = readCampaignSegments(contacts);
+  const segments = campaignSegmentsWithCounts(contacts);
   const firstDraft = drafts[0] || {};
   const previewTemplate = templates.find((template) => `${template.name}|${template.language}` === firstDraft.templateKey) || templates[0];
   const previewBody = firstDraft.previewBody || (previewTemplate ? templateBody(previewTemplate) : "Choose an approved template to preview the message your audience will receive.");
   const templateOptions = templates.map((template) => `<option value="${escapeHtml(`${template.name}|${template.language}`)}">${escapeHtml(template.name)} · ${escapeHtml(template.language)} · ${escapeHtml(template.category || "Template")}</option>`).join("");
   const segmentOptions = segments.map((segment) => `<option value="${escapeHtml(segment.id)}">${escapeHtml(segment.name)} (${Number(segment.count || 0)})</option>`).join("");
-  const segmentCards = segments.map((segment) => `<article class="wp-campaign-segment-card"><div><strong>${escapeHtml(segment.name)}</strong><p>${escapeHtml(segment.description || "Custom campaign audience.")}</p></div><span>${Number(segment.count || 0)}</span>${segment.system ? "" : `<button type="button" aria-label="Delete ${escapeHtml(segment.name)} segment" data-delete-segment="${escapeHtml(segment.id)}">×</button>`}</article>`).join("");
+  const segmentCards = segments.map((segment) => `<article class="wp-campaign-segment-card"><div><strong>${escapeHtml(segment.name)}</strong><p>${escapeHtml(segment.description || "Custom campaign audience.")}</p><small>${escapeHtml(campaignSegmentRuleLabel(segment))}</small></div><span>${Number(segment.count || 0)}</span>${segment.system ? "" : `<button type="button" aria-label="Delete ${escapeHtml(segment.name)} segment" data-delete-segment="${escapeHtml(segment.id)}">×</button>`}</article>`).join("");
   const statusCounts = drafts.reduce((counts, draft) => {
     const key = draft.status || "draft";
     counts[key] = (counts[key] || 0) + 1;
@@ -1277,8 +1321,9 @@ function campaignsView() {
       <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignDraftDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign planner</span><h2 data-campaign-dialog-title>Edit campaign draft</h2><p>Prepare campaign details before approval and production sending.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input name="campaignId" type="hidden" />
         <div class="wp-form-row"><label><span>Campaign name</span><input name="name" maxlength="120" placeholder="August onboarding reminder" required /></label><label><span>Campaign type</span><select name="type"><option value="announcement">Announcement</option><option value="reminder">Reminder</option><option value="follow_up">Follow-up</option><option value="offer">Offer</option><option value="reactivation">Reactivation</option></select></label></div>
         <label><span>Objective</span><textarea name="objective" maxlength="400" rows="3" placeholder="Explain why this campaign is being sent and what action customers should take."></textarea></label>
-        <div class="wp-form-row"><label><span>Audience segment</span><select name="audience">${segmentOptions}</select></label><label><span>Schedule window</span><input name="scheduledAt" type="datetime-local" /></label></div>
-        <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Approval status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="approved">Approved</option><option value="paused">Paused</option></select></label></div>
+        <div class="wp-form-row"><label><span>Audience segment</span><select name="audience">${segmentOptions}</select><small data-campaign-audience-estimate>Select a segment to review eligible contacts.</small></label><label><span>Schedule date and time</span><input name="scheduledAt" type="datetime-local" /><small>Optional while drafting; required before approval.</small></label></div>
+        <div class="wp-form-row wp-campaign-schedule-row"><label><span>Timezone</span><select name="timezone"><option value="Asia/Kolkata">India · Asia/Kolkata</option><option value="Asia/Dubai">UAE · Asia/Dubai</option><option value="Europe/London">UK · Europe/London</option><option value="America/New_York">USA · America/New_York</option><option value="UTC">UTC</option></select></label><label><span>Daily delivery window</span><span class="wp-campaign-time-window"><input name="sendWindowStart" type="time" value="09:00" required aria-label="Delivery window start" /><b>to</b><input name="sendWindowEnd" type="time" value="18:00" required aria-label="Delivery window end" /></span><small>Messages stay within this local-time window.</small></label></div>
+        <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Workflow status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="paused">Paused</option></select><small>Approval is recorded through the campaign review action.</small></label></div>
         <label><span>Approved template</span><select name="templateKey" ${templates.length ? "required" : "disabled"}><option value="">Select template</option>${templateOptions}</select><small>${templates.length ? "Only templates already approved by Meta are available here." : `No approved template is available yet. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label>
         <div class="wp-campaign-live-preview"><span>Preview</span><p data-campaign-preview>${escapeHtml(previewTemplate ? templateBody(previewTemplate) : "Select an approved template to preview its body.")}</p></div>
         <div class="wp-policy-note"><strong>Campaign safety gate</strong><p>This creates a planning draft only. Sending will require approved templates, eligible opt-in contacts, production approval and final operator confirmation.</p></div>
@@ -1302,8 +1347,9 @@ function campaignsView() {
     <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignDraftDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign planner</span><h2 data-campaign-dialog-title>Create campaign draft</h2><p>Prepare campaign details before approval and production sending.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input name="campaignId" type="hidden" />
       <div class="wp-form-row"><label><span>Campaign name</span><input name="name" maxlength="120" placeholder="August onboarding reminder" required /></label><label><span>Campaign type</span><select name="type"><option value="announcement">Announcement</option><option value="reminder">Reminder</option><option value="follow_up">Follow-up</option><option value="offer">Offer</option><option value="reactivation">Reactivation</option></select></label></div>
       <label><span>Objective</span><textarea name="objective" maxlength="400" rows="3" placeholder="Explain why this campaign is being sent and what action customers should take."></textarea></label>
-      <div class="wp-form-row"><label><span>Audience segment</span><select name="audience">${segmentOptions}</select></label><label><span>Schedule window</span><input name="scheduledAt" type="datetime-local" /></label></div>
-      <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Approval status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="approved">Approved</option><option value="paused">Paused</option></select></label></div>
+      <div class="wp-form-row"><label><span>Audience segment</span><select name="audience">${segmentOptions}</select><small data-campaign-audience-estimate>Select a segment to review eligible contacts.</small></label><label><span>Schedule date and time</span><input name="scheduledAt" type="datetime-local" /><small>Optional while drafting; required before approval.</small></label></div>
+      <div class="wp-form-row wp-campaign-schedule-row"><label><span>Timezone</span><select name="timezone"><option value="Asia/Kolkata">India · Asia/Kolkata</option><option value="Asia/Dubai">UAE · Asia/Dubai</option><option value="Europe/London">UK · Europe/London</option><option value="America/New_York">USA · America/New_York</option><option value="UTC">UTC</option></select></label><label><span>Daily delivery window</span><span class="wp-campaign-time-window"><input name="sendWindowStart" type="time" value="09:00" required aria-label="Delivery window start" /><b>to</b><input name="sendWindowEnd" type="time" value="18:00" required aria-label="Delivery window end" /></span><small>Messages stay within this local-time window.</small></label></div>
+      <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Workflow status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="paused">Paused</option></select><small>Approval is recorded through the campaign review action.</small></label></div>
       <label><span>Approved template</span><select name="templateKey" ${templates.length ? "required" : "disabled"}><option value="">Select template</option>${templateOptions}</select><small>${templates.length ? "Only templates already approved by Meta are available here." : `No approved template is available yet. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label>
       <div class="wp-campaign-live-preview"><span>Preview</span><p data-campaign-preview>${escapeHtml(previewTemplate ? templateBody(previewTemplate) : "Select an approved template to preview its body.")}</p></div>
       <div class="wp-policy-note"><strong>Campaign safety gate</strong><p>This creates a planning draft only. Sending will require approved templates, eligible opt-in contacts, production approval and final operator confirmation.</p></div>
@@ -1313,7 +1359,9 @@ function campaignsView() {
     <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignSegmentDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Audience segment</span><h2>Create segment</h2><p>Use this for planning named campaign audiences before production targeting is enabled.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header>
       <label><span>Segment name</span><input name="name" maxlength="80" placeholder="High-intent enquiries" required /></label>
       <label><span>Description</span><textarea name="description" maxlength="240" rows="3" placeholder="Who belongs in this audience and when should they receive campaigns?"></textarea></label>
-      <div class="wp-form-row"><label><span>Audience rule</span><select name="rule"><option value="manual">Manual upload / operator selected</option><option value="tag">Customer tag</option><option value="source">Lead source</option><option value="last_message">Recent conversation</option></select></label><label><span>Estimated contacts</span><input name="count" type="number" min="0" step="1" value="0" /></label></div>
+      <div class="wp-form-row"><label><span>Audience rule</span><select name="rule"><option value="opted_in">WhatsApp opt-in contacts</option><option value="active">All active contacts</option><option value="recent_contact">Added in the last 30 days</option><option value="recent_message">Messaged in the last 30 days</option><option value="country_code">Country calling code</option><option value="name_contains">Contact name contains</option><option value="manual">Operator-managed estimate</option></select></label><label data-segment-rule-value-wrap hidden><span data-segment-rule-value-label>Rule value</span><input name="ruleValue" maxlength="80" placeholder="+91" /></label></div>
+      <label data-segment-manual-count hidden><span>Estimated contacts</span><input name="count" type="number" min="0" step="1" value="0" /></label>
+      <div class="wp-segment-estimate"><span>Matching eligible contacts</span><strong data-segment-estimate>0</strong><small>Calculated from the contacts currently available in this workspace.</small></div>
       <div class="wp-policy-note"><strong>Planning only</strong><p>Final production targeting will be enforced server-side after Meta review and billing gates are completed.</p></div>
       <footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save_segment">Save segment</button></footer></form></dialog>
     <dialog class="wp-contact-dialog wp-campaign-detail-dialog" id="wpCampaignDetailDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign brief</span><h2 data-campaign-detail-title>Campaign details</h2><p>Review the draft before editing or moving it into approval.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><div data-campaign-detail></div><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Close</button><button class="wp-secondary" type="button" data-detail-reject-campaign>Reject</button><button class="wp-secondary" type="button" data-detail-approve-campaign>Approve</button><button class="wp-primary" type="button" data-detail-edit-campaign>Edit draft</button></footer></form></dialog>
@@ -1469,6 +1517,7 @@ async function renderDashboard() {
     const approvalForm = approvalDialog?.querySelector("form");
     const templates = approvedWorkspaceTemplates();
     const preview = dialog?.querySelector("[data-campaign-preview]");
+    const audienceEstimate = dialog?.querySelector("[data-campaign-audience-estimate]");
     const setFormValue = (name, value) => {
       const field = form?.elements?.[name];
       if (field) field.value = value ?? "";
@@ -1476,6 +1525,11 @@ async function renderDashboard() {
     const updatePreview = () => {
       const selected = templates.find((template) => `${template.name}|${template.language}` === form?.elements.templateKey?.value);
       if (preview) preview.textContent = selected ? templateBody(selected) : "Select an approved template to preview its body.";
+    };
+    const updateAudienceEstimate = () => {
+      const segments = campaignSegmentsWithCounts(workspaceContacts?.contacts || []);
+      const selected = segments.find((segment) => segment.id === form?.elements.audience?.value);
+      if (audienceEstimate) audienceEstimate.textContent = selected ? `${Number(selected.count || 0)} eligible contact${Number(selected.count || 0) === 1 ? "" : "s"} currently match this segment.` : "Select a segment to review eligible contacts.";
     };
     const openCampaignDialog = (draft = null) => {
       form?.reset();
@@ -1485,17 +1539,32 @@ async function renderDashboard() {
       setFormValue("objective", draft?.objective || "");
       setFormValue("audience", draft?.audience || "active");
       setFormValue("scheduledAt", draft?.scheduledAt || "");
+      setFormValue("timezone", draft?.timezone || "Asia/Kolkata");
+      setFormValue("sendWindowStart", draft?.sendWindowStart || "09:00");
+      setFormValue("sendWindowEnd", draft?.sendWindowEnd || "18:00");
       setFormValue("owner", draft?.owner || session.displayName || "");
-      setFormValue("status", draft?.status || "draft");
+      setFormValue("status", draft?.status === "approved" ? "review" : draft?.status === "rejected" ? "draft" : draft?.status || "draft");
       setFormValue("templateKey", draft?.templateKey || "");
+      if (form?.elements.scheduledAt) {
+        const minimum = new Date(Date.now() + 5 * 60 * 1000);
+        form.elements.scheduledAt.min = new Date(minimum.getTime() - minimum.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      }
       if (form?.elements.confirmOptIn) form.elements.confirmOptIn.checked = Boolean(draft);
       if (form?.elements.confirmPolicy) form.elements.confirmPolicy.checked = Boolean(draft);
       dialog?.querySelector("[data-campaign-dialog-title]")?.replaceChildren(document.createTextNode(draft ? "Edit campaign draft" : "Create campaign draft"));
       updatePreview();
+      updateAudienceEstimate();
       dialog?.showModal();
     };
     const openCampaignDecisionDialog = (draft, decision) => {
       if (!approvalForm || !approvalDialog) return;
+      if (decision === "approved") {
+        const required = campaignReadinessItems(draft, templates, workspaceContacts?.contacts || []).slice(0, 4);
+        if (required.some((item) => !item.done)) {
+          showToast("Complete the template, audience, objective and future schedule checks before approval.", "error");
+          return;
+        }
+      }
       approvalForm.reset();
       approvalForm.elements.campaignId.value = draft.id;
       approvalForm.elements.decision.value = decision;
@@ -1515,16 +1584,55 @@ async function renderDashboard() {
       detailDialog.querySelector("[data-detail-approve-campaign]")?.setAttribute("data-detail-approve-campaign", draft.id);
       detailDialog.querySelector("[data-detail-reject-campaign]")?.setAttribute("data-detail-reject-campaign", draft.id);
     };
+    const segmentRule = segmentForm?.elements?.rule;
+    const segmentRuleValueWrap = segmentForm?.querySelector("[data-segment-rule-value-wrap]");
+    const segmentRuleValueLabel = segmentForm?.querySelector("[data-segment-rule-value-label]");
+    const segmentManualCount = segmentForm?.querySelector("[data-segment-manual-count]");
+    const segmentEstimate = segmentForm?.querySelector("[data-segment-estimate]");
+    const updateSegmentEstimate = () => {
+      if (!segmentForm) return;
+      const rule = segmentRule?.value || "opted_in";
+      const requiresValue = rule === "country_code" || rule === "name_contains";
+      const isManual = rule === "manual";
+      segmentRuleValueWrap?.toggleAttribute("hidden", !requiresValue);
+      segmentManualCount?.toggleAttribute("hidden", !isManual);
+      if (segmentForm.elements.ruleValue) {
+        segmentForm.elements.ruleValue.required = requiresValue;
+        segmentForm.elements.ruleValue.placeholder = rule === "country_code" ? "+91" : "customer name";
+      }
+      if (segmentRuleValueLabel) segmentRuleValueLabel.textContent = rule === "country_code" ? "Calling code" : "Name contains";
+      const draftSegment = {
+        rule,
+        ruleValue: segmentForm.elements.ruleValue?.value || "",
+        count: Number(segmentForm.elements.count?.value || 0),
+      };
+      const count = campaignSegmentCount(draftSegment, workspaceContacts?.contacts || []);
+      if (segmentEstimate) segmentEstimate.textContent = String(count);
+    };
     app.querySelector("#wpCreateCampaignBtn")?.addEventListener("click", () => openCampaignDialog());
-    app.querySelector("#wpCreateSegmentBtn")?.addEventListener("click", () => { segmentForm?.reset(); segmentDialog?.showModal(); });
+    app.querySelector("#wpCreateSegmentBtn")?.addEventListener("click", () => {
+      segmentForm?.reset();
+      updateSegmentEstimate();
+      segmentDialog?.showModal();
+    });
+    segmentRule?.addEventListener("change", updateSegmentEstimate);
+    segmentForm?.elements?.ruleValue?.addEventListener("input", updateSegmentEstimate);
+    segmentForm?.elements?.count?.addEventListener("input", updateSegmentEstimate);
     form?.elements.templateKey?.addEventListener("change", updatePreview);
+    form?.elements.audience?.addEventListener("change", updateAudienceEstimate);
     form?.addEventListener("submit", (event) => {
       if (event.submitter?.value !== "save") return;
       event.preventDefault();
       const selected = templates.find((template) => `${template.name}|${template.language}` === form.elements.templateKey?.value);
       if (!selected) return showToast("Choose an approved template first.", "error");
       if (!form.reportValidity()) return;
-      const segments = readCampaignSegments(workspaceContacts?.contacts || []);
+      const scheduledValue = form.elements.scheduledAt?.value || "";
+      const scheduledTime = scheduledValue ? new Date(scheduledValue).getTime() : 0;
+      if (scheduledValue && (Number.isNaN(scheduledTime) || scheduledTime <= Date.now())) return showToast("Choose a campaign schedule in the future or leave it blank while drafting.", "error");
+      const sendWindowStart = form.elements.sendWindowStart?.value || "09:00";
+      const sendWindowEnd = form.elements.sendWindowEnd?.value || "18:00";
+      if (sendWindowStart >= sendWindowEnd) return showToast("Delivery window end time must be after its start time.", "error");
+      const segments = campaignSegmentsWithCounts(workspaceContacts?.contacts || []);
       const audience = form.elements.audience?.value || "active";
       const segment = segments.find((item) => item.id === audience);
       const drafts = readCampaignDrafts();
@@ -1543,6 +1651,9 @@ async function renderDashboard() {
         templateName: selected.name,
         previewBody: templateBody(selected),
         scheduledAt: form.elements.scheduledAt?.value || "",
+        timezone: form.elements.timezone?.value || "Asia/Kolkata",
+        sendWindowStart,
+        sendWindowEnd,
         createdAt: existingDraft?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: form.elements.status?.value || "draft",
@@ -1561,15 +1672,18 @@ async function renderDashboard() {
       event.preventDefault();
       if (!segmentForm.reportValidity()) return;
       const segments = readCampaignSegments(workspaceContacts?.contacts || []);
-      segments.push({
+      const nextSegment = {
         id: `seg_${Date.now()}`,
         name: segmentForm.elements.name.value.trim(),
         description: segmentForm.elements.description?.value.trim() || "Custom campaign audience.",
-        rule: segmentForm.elements.rule?.value || "manual",
+        rule: segmentForm.elements.rule?.value || "opted_in",
+        ruleValue: segmentForm.elements.ruleValue?.value.trim() || "",
         count: Math.max(0, Number(segmentForm.elements.count?.value || 0)),
         system: false,
         createdAt: new Date().toISOString(),
-      });
+      };
+      nextSegment.count = campaignSegmentCount(nextSegment, workspaceContacts?.contacts || []);
+      segments.push(nextSegment);
       writeCampaignSegments(segments);
       segmentDialog?.close("save_segment");
       showToast("Audience segment saved.");
