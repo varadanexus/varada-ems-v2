@@ -58,25 +58,24 @@ export function AccountManager() {
   const [healthError, setHealthError] = useState("");
   const [manual, setManual] = useState(false);
   const [busy, setBusy] = useState(false);
-  const activeAccounts = accounts?.filter((account) => account.status !== "disconnected") ?? null;
+  const activeAccounts = accounts?.filter((account) => account.status !== "disconnected");
   const disconnectedAccountCount = accounts?.filter((account) => account.status === "disconnected").length ?? 0;
   const load = useCallback(async () => {
-    const [accountResult, connectionResult] = await Promise.allSettled([
-      socialEdgeFetch<Account[]>("list_accounts"),
-      socialEdgeFetch<MetaConnection[]>("meta_connection_status"),
-    ]);
-    if (accountResult.status === "fulfilled") {
-      setAccounts(accountResult.value);
-      setError("");
-    } else {
-      setError(accountResult.reason instanceof Error ? accountResult.reason.message : "Accounts could not be loaded.");
+    setError("");
+    setHealthError("");
+    try {
+      setAccounts(await socialEdgeFetch<Account[]>("list_accounts"));
+    } catch (reason) {
+      setAccounts([]);
+      setError(reason instanceof Error ? reason.message : "Accounts could not be loaded.");
     }
-    if (connectionResult.status === "fulfilled") {
-      setConnections(connectionResult.value);
+    try {
+      setConnections(await socialEdgeFetch<MetaConnection[]>("meta_connection_status"));
+      setError("");
       setHealthError("");
-    } else {
+    } catch (reason) {
       setConnections([]);
-      setHealthError(connectionResult.reason instanceof Error ? connectionResult.reason.message : "Meta access status could not be checked.");
+      setHealthError(reason instanceof Error ? reason.message : "Meta access status could not be checked.");
     }
   }, []);
   useEffect(() => {
