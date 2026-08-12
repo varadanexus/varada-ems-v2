@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ExternalLink, Link2, LoaderCircle, Plus, Radio, RefreshCw, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ExternalLink, Link2, LoaderCircle, PlugZap, Plus, Radio, RefreshCw, ShieldCheck } from "lucide-react";
 import { socialEdgeFetch } from "@/lib/api/client";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
@@ -130,6 +130,26 @@ export function AccountManager() {
     }
   }
 
+  async function disconnectMeta(connection: MetaConnection) {
+    const confirmed = window.confirm(
+      `Disconnect Meta authorization for ${connection.display_name}?\n\nThis only removes the active Meta token from Nexus Social. EMS users, drafts, schedules, posts, analytics history, and audit logs will be kept.`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setHealthError("");
+    try {
+      await socialEdgeFetch<{ disconnected: boolean }>("disconnect", {
+        connectionId: connection.id,
+      });
+      setSubscriptions([]);
+      await load();
+    } catch (reason) {
+      setHealthError(reason instanceof Error ? reason.message : "Meta connection could not be disconnected.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -197,9 +217,21 @@ export function AccountManager() {
                         <p className="font-semibold">{connection.display_name}</p>
                         <p className="mt-1 text-xs text-muted">Meta authorization · updated {new Date(connection.updated_at).toLocaleString("en-IN")}</p>
                       </div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
-                        <CheckCircle2 size={13} /> Linked
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                          <CheckCircle2 size={13} /> Linked
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => disconnectMeta(connection)}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1 rounded-full border border-amber-400/35 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200 transition hover:border-amber-300 hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                          title="Disconnect only the active Meta authorization so you can record a fresh Meta Login flow for App Review."
+                        >
+                          {busy ? <LoaderCircle size={13} className="animate-spin" /> : <PlugZap size={13} />}
+                          Disconnect Meta
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                       {META_FEATURES.map((feature) => {
