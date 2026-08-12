@@ -58,6 +58,8 @@ export function AccountManager() {
   const [healthError, setHealthError] = useState("");
   const [manual, setManual] = useState(false);
   const [busy, setBusy] = useState(false);
+  const activeAccounts = accounts?.filter((account) => account.status !== "disconnected") ?? null;
+  const disconnectedAccountCount = accounts?.filter((account) => account.status === "disconnected").length ?? 0;
   const load = useCallback(async () => {
     const [accountResult, connectionResult] = await Promise.allSettled([
       socialEdgeFetch<Account[]>("list_accounts"),
@@ -281,11 +283,11 @@ export function AccountManager() {
           <div className="md:col-span-2"><button className="btn-primary" disabled={busy}>Save encrypted connection</button></div>
         </form>
       )}
-      {!accounts ? <LoadingState /> : accounts.length === 0 ? (
+      {!activeAccounts ? <LoadingState /> : activeAccounts.length === 0 ? (
         <EmptyState title="No social accounts connected" description="Connect Meta for Instagram and Facebook publishing, or add another platform for n8n-driven publishing." />
       ) : (
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {accounts.map((account) => (
+          {activeAccounts.map((account) => (
             <article key={account.id} className="rounded-2xl border bg-surface-raised p-5">
               <div className="flex items-start justify-between">
                 <span className="grid size-11 place-items-center rounded-xl bg-accent-soft font-bold uppercase text-accent">{account.platform.slice(0, 2)}</span>
@@ -298,6 +300,11 @@ export function AccountManager() {
             </article>
           ))}
         </section>
+      )}
+      {disconnectedAccountCount > 0 && (
+        <p className="text-xs leading-5 text-muted">
+          {disconnectedAccountCount} disconnected Meta account record{disconnectedAccountCount === 1 ? "" : "s"} hidden from this active workspace and kept only for audit history.
+        </p>
       )}
       <a href="https://developers.facebook.com/docs/instagram-platform/content-publishing/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted">Meta publishing requirements <ExternalLink size={12} /></a>
     </div>
