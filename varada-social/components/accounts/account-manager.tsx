@@ -151,6 +151,29 @@ export function AccountManager() {
     }
   }
 
+  async function cleanupDisconnectedWorkspace() {
+    const confirmed = window.confirm(
+      "Remove disconnected Meta account records and clear unpublished local social campaigns from this workspace?\n\nPublished history and audit logs will be kept.",
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setError("");
+    try {
+      await socialEdgeFetch<{
+        cleaned: boolean;
+        deletedAccountCount: number;
+        deletedContentCount: number;
+        deletedAdAccountCount: number;
+      }>("cleanup_disconnected_workspace");
+      setSubscriptions([]);
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Disconnected workspace could not be cleaned.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -301,9 +324,15 @@ export function AccountManager() {
         </section>
       )}
       {disconnectedAccountCount > 0 && (
-        <p className="text-xs leading-5 text-muted">
-          {disconnectedAccountCount} disconnected Meta account record{disconnectedAccountCount === 1 ? "" : "s"} hidden from this active workspace and kept only for audit history.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-xs text-muted">
+          <p className="leading-5">
+            {disconnectedAccountCount} disconnected Meta account record{disconnectedAccountCount === 1 ? "" : "s"} hidden from this active workspace.
+          </p>
+          <button type="button" onClick={cleanupDisconnectedWorkspace} disabled={busy} className="btn-secondary">
+            {busy ? <LoaderCircle size={16} className="animate-spin" /> : null}
+            Clean disconnected data
+          </button>
+        </div>
       )}
       <a href="https://developers.facebook.com/docs/instagram-platform/content-publishing/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted">Meta publishing requirements <ExternalLink size={12} /></a>
     </div>

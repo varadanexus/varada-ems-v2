@@ -1732,6 +1732,33 @@ async function handleDashboard(req: Request) {
   if (trendsResult.error) throw new Error(trendsResult.error.message);
   if (accountsResult.error) throw new Error(accountsResult.error.message);
 
+  const accountsConnected = accountsResult.count || 0;
+  if (accountsConnected === 0) {
+    return {
+      userName:
+        String(appUser.display_name || appUser.email || "Admin").split(/\s+/)[0],
+      metrics: {
+        today: 0,
+        scheduled: 0,
+        published: 0,
+        drafts: 0,
+        pendingApprovals: 0,
+        reach: 0,
+        impressions: 0,
+        interactions: 0,
+        engagementRate: 0,
+        followerGrowth: 0,
+      },
+      pipeline: {},
+      engagementSeries: [],
+      upcoming: [],
+      trends: [],
+      recommendation: "Connect Meta to activate live content operations for Nexus Social.",
+      accountsConnected: 0,
+      hasAnalytics: false,
+    };
+  }
+
   const content = contentResult.data || [];
   const metrics = metricsResult.data || [];
   const pipeline = content.reduce((result: Record<string, number>, item: any) => {
@@ -1817,7 +1844,7 @@ async function handleDashboard(req: Request) {
     recommendation: metrics.length
       ? "Recommendations will improve as additional live posts and analytics are synchronized."
       : null,
-    accountsConnected: accountsResult.count || 0,
+    accountsConnected,
     hasAnalytics: metrics.length > 0,
   };
 }
@@ -4530,21 +4557,148 @@ async function handleDisconnect(req: Request, payload: any) {
     .eq("id", connectionId)
     .maybeSingle();
   if (!connection) throw new Error("Meta connection was not found");
+
+  const { data: linkedAccounts } = await db
+    .from("social_accounts")
+    .select("id")
+    .contains("metadata", { metaConnectionId: connectionId });
+  const linkedAccountIds = (linkedAccounts || []).map((account: any) => account.id);
+  let deletedContentCount = 0;
+  let deletedAdAccountCount = 0;
+
+  if (linkedAccountIds.length) {
+    const { data: linkedChannels } = await db
+      .from("social_content_channels")
+      .select("content_id")
+      .in("account_id", linkedAccountIds);
+    const contentIds = Array.from(
+      new Set((linkedChannels || []).map((channel: any) => channel.content_id).filter(Boolean)),
+    );
+    if (contentIds.length) {
+      const { count } = await db
+        .from("social_content_items")
+        .delete({ count: "exact" })
+        .in("id", contentIds)
+        .in("status", [
+          "draft",
+          "manager_review",
+          "admin_review",
+          "approved",
+          "scheduled",
+          "publishing",
+          "rejected",
+          "failed",
+        ]);
+      deletedContentCount = count || 0;
+    }
+  }
+
+  const { count: deletedAds } = await db
+    .from("social_ad_accounts")
+    .delete({ count: "exact" })
+    .eq("connection_id", connectionId);
+  deletedAdAccountCount = deletedAds || 0;
+
   await db
     .from("social_meta_connections")
     .update({ status: "revoked", credential_expires_at: new Date().toISOString() })
     .eq("id", connectionId);
-  await db
-    .from("social_accounts")
-    .update({ status: "disconnected" })
-    .contains("metadata", { metaConnectionId: connectionId });
+  if (linkedAccountIds.length) {
+    await db
+      .from("social_accounts")
+      .delete()
+      .in("id", linkedAccountIds);
+  }
   await db.from("social_audit_logs").insert({
     actor_id: appUser.id,
     action: "meta.disconnected",
     resource_type: "social_meta_connection",
     resource_id: connectionId,
+    after_data: {
+      disconnectedAccountCount: linkedAccountIds.length,
+      deletedContentCount,
+      deletedAdAccountCount,
+    },
   });
-  return { disconnected: true };
+  return {
+    disconnected: true,
+    disconnectedAccountCount: linkedAccountIds.length,
+    deletedContentCount,
+    deletedAdAccountCount,
+  };
+}
+
+async function handleCleanupDisconnectedWorkspace(req: Request) {
+  const { db, appUser } = await authenticatedCaller(req, "edit");
+  const { data: disconnectedAccounts } = await db
+    .from("social_accounts")
+    .select("id")
+    .eq("status", "disconnected");
+  const disconnectedAccountIds = (disconnectedAccounts || []).map((account: any) => account.id);
+
+  let deletedContentCount = 0;
+  if (disconnectedAccountIds.length) {
+    const { data: channels } = await db
+      .from("social_content_channels")
+      .select("content_id")
+      .in("account_id", disconnectedAccountIds);
+    const contentIds = Array.from(
+      new Set((channels || []).map((channel: any) => channel.content_id).filter(Boolean)),
+    );
+    if (contentIds.length) {
+      const { count } = await db
+        .from("social_content_items")
+        .delete({ count: "exact" })
+        .in("id", contentIds)
+        .in("status", [
+          "draft",
+          "manager_review",
+          "admin_review",
+          "approved",
+          "scheduled",
+          "publishing",
+          "rejected",
+          "failed",
+        ]);
+      deletedContentCount = count || 0;
+    }
+    await db
+      .from("social_accounts")
+      .delete()
+      .in("id", disconnectedAccountIds);
+  }
+
+  const { data: inactiveConnections } = await db
+    .from("social_meta_connections")
+    .select("id")
+    .neq("status", "active");
+  const inactiveConnectionIds = (inactiveConnections || []).map((connection: any) => connection.id);
+  let deletedAdAccountCount = 0;
+  if (inactiveConnectionIds.length) {
+    const { count } = await db
+      .from("social_ad_accounts")
+      .delete({ count: "exact" })
+      .in("connection_id", inactiveConnectionIds);
+    deletedAdAccountCount = count || 0;
+  }
+
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "meta.disconnected_workspace_cleaned",
+    resource_type: "social_account",
+    after_data: {
+      deletedAccountCount: disconnectedAccountIds.length,
+      deletedContentCount,
+      deletedAdAccountCount,
+    },
+  });
+
+  return {
+    cleaned: true,
+    deletedAccountCount: disconnectedAccountIds.length,
+    deletedContentCount,
+    deletedAdAccountCount,
+  };
 }
 
 async function verifyWebhook(req: Request, url: URL) {
@@ -4778,6 +4932,9 @@ Deno.serve(async (req) => {
         break;
       case "disconnect":
         data = await handleDisconnect(req, payload);
+        break;
+      case "cleanup_disconnected_workspace":
+        data = await handleCleanupDisconnectedWorkspace(req);
         break;
       default:
         return json(req, { error: "Unknown action" }, 400);
