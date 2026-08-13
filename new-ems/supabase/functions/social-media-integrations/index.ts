@@ -3409,6 +3409,7 @@ async function generateBrandedImage(
 Create original premium corporate artwork for a diversified Indian enterprise.
 Brand palette: ${JSON.stringify(brand.visual_identity)}.
 Visual style: ${cleanText(payload.style, 300) || "premium black and gold corporate editorial"}.
+ABSOLUTELY NO TEXT: no letters, numbers, captions, labels, posters, banners, signs, UI panels, lower-thirds, watermark text, brand names, slogans, or readable/garbled typography anywhere in the image.
 Keep the top-right area visually calm but continue the underlying photograph or illustration naturally through it.
 Do not create a blank area, white square, rectangle, card, badge, plaque, border, glow, gradient tile, or backing panel in any corner.
 Do not draw or imitate any logo, wordmark, watermark, monogram, initials, company name, readable text, signage, signature, trademark, or logo-like symbol anywhere in the artwork.
@@ -3430,9 +3431,9 @@ The official transparent logo will be composited later by the secure backend dir
         : `https://${imageLocation}-aiplatform.googleapis.com`;
       artworkQa = null;
       try {
-        for (let attempt = 1; attempt <= 2; attempt += 1) {
+        for (let attempt = 1; attempt <= 4; attempt += 1) {
           const retryInstruction = artworkQa && !artworkQa.approved
-            ? `\nPrevious attempt was rejected by brand QA: ${artworkQa.reason}. Correct that problem completely.`
+            ? `\nPrevious attempt was rejected by brand QA: ${artworkQa.reason}. Correct that problem completely. If text was present, create a clean photographic/editorial background with objects only and no written material of any kind.`
             : "";
           base64 = await generateVertexBaseArtwork({
             endpoint: imageEndpoint,
@@ -3469,7 +3470,6 @@ The official transparent logo will be composited later by the secure backend dir
         for (const candidateModel of [
           Deno.env.get("GEMINI_IMAGE_MODEL") || "",
           "gemini-2.5-flash-image",
-          "gemini-2.0-flash-preview-image-generation",
         ].map((item) => item.trim()).filter(Boolean)) {
           model = candidateModel;
           try {
@@ -3501,7 +3501,6 @@ The official transparent logo will be composited later by the secure backend dir
       for (const candidateModel of [
         Deno.env.get("GEMINI_IMAGE_MODEL") || "",
         "gemini-2.5-flash-image",
-        "gemini-2.0-flash-preview-image-generation",
       ].map((item) => item.trim()).filter(Boolean)) {
         model = candidateModel;
         try {
