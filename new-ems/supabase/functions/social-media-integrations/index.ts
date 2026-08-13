@@ -2848,10 +2848,21 @@ async function handleCreateCampaign(req: Request, payload: any) {
     name,
     objective,
     status: payload.status === "ACTIVE" ? "ACTIVE" : "PAUSED",
+    buying_type: ["AUCTION", "RESERVED"].includes(String(payload.buyingType))
+      ? String(payload.buyingType)
+      : "AUCTION",
     special_ad_categories: Array.isArray(payload.specialAdCategories)
       ? payload.specialAdCategories
       : [],
   };
+  const allowedBidStrategies = new Set([
+    "LOWEST_COST_WITHOUT_CAP",
+    "LOWEST_COST_WITH_BID_CAP",
+    "COST_CAP",
+  ]);
+  if (allowedBidStrategies.has(String(payload.bidStrategy || ""))) {
+    params.bid_strategy = String(payload.bidStrategy);
+  }
   if (payload.dailyBudget) {
     params.daily_budget = Math.round(Number(payload.dailyBudget) * 100);
   }
@@ -2874,12 +2885,44 @@ async function handleCreateCampaign(req: Request, payload: any) {
     },
   });
   const [row] = await syncCampaignRows(db, resolved.account.id, [campaign]);
+  const advancedPlan = payload.advancedPlan && typeof payload.advancedPlan === "object"
+    ? payload.advancedPlan
+    : null;
+  if (advancedPlan) {
+    const { error: planError } = await db
+      .from("social_ad_campaigns")
+      .update({
+        metadata: {
+          ...(row.metadata || {}),
+          advancedPlan,
+          setupState: "campaign_created",
+          adSetCreated: false,
+          adCreated: false,
+        },
+      })
+      .eq("external_campaign_id", result.id);
+    if (planError) throw new Error(planError.message);
+    row.metadata = {
+      ...(row.metadata || {}),
+      advancedPlan,
+      setupState: "campaign_created",
+      adSetCreated: false,
+      adCreated: false,
+    };
+  }
   await db.from("social_audit_logs").insert({
     actor_id: appUser.id,
     action: "meta.campaign.created",
     resource_type: "social_ad_campaign",
     resource_id: result.id,
-    after_data: { name, objective, status: params.status },
+    after_data: {
+      name,
+      objective,
+      status: params.status,
+      buyingType: params.buying_type,
+      bidStrategy: params.bid_strategy || null,
+      hasAdvancedPlan: Boolean(advancedPlan),
+    },
   });
   return row;
 }
