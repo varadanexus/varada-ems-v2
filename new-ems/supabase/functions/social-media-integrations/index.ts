@@ -1579,15 +1579,10 @@ async function handleInstagramInbox(req: Request, payload: any) {
   const query = {
     platform: "instagram",
     fields:
-      "id,updated_time,unread_count,participants{id,name,username},messages.limit(30){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
+      "id,updated_time,unread_count,participants{id,name,username},messages.limit(1){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
     limit: String(Math.max(1, Math.min(Number(payload.limit || 50), 100))),
   };
   const candidates = [
-    {
-      source: "facebook_page",
-      ownerObjectId: resolved.pageId,
-      path: `${resolved.pageId}/conversations`,
-    },
     {
       source: "instagram_account",
       ownerObjectId: resolved.account.external_account_id,
@@ -1598,6 +1593,11 @@ async function handleInstagramInbox(req: Request, payload: any) {
       ownerObjectId: resolved.account.external_account_id,
       path:
         `${INSTAGRAM_GRAPH_BASE}/${resolved.account.external_account_id}/conversations`,
+    },
+    {
+      source: "facebook_page",
+      ownerObjectId: resolved.pageId,
+      path: `${resolved.pageId}/conversations`,
     },
   ];
   let result: any = null;
