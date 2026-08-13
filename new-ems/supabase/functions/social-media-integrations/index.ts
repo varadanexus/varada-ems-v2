@@ -566,6 +566,39 @@ async function graph(
   return payload;
 }
 
+async function inspectTokenPermissions(accessToken: string, returnedScopes: string[] = []) {
+  const appAccessToken = `${env("META_APP_ID")}|${env("META_APP_SECRET")}`;
+  const [permissionsResult, debugResult] = await Promise.allSettled([
+    graph("me/permissions", accessToken),
+    graph("debug_token", appAccessToken, {
+      query: { input_token: accessToken },
+    }),
+  ]);
+  const permissionStatus = new Map<string, string>();
+  if (permissionsResult.status === "fulfilled") {
+    for (const item of permissionsResult.value.data || []) {
+      if (item?.permission) permissionStatus.set(item.permission, item.status || "declined");
+    }
+  }
+  const debugData = debugResult.status === "fulfilled" ? debugResult.value?.data : null;
+  const debugScopes = [
+    ...(Array.isArray(debugData?.scopes) ? debugData.scopes : []),
+    ...(Array.isArray(debugData?.granular_scopes)
+      ? debugData.granular_scopes.map((item: any) => item?.scope).filter(Boolean)
+      : []),
+    ...returnedScopes,
+  ];
+  for (const scope of debugScopes) permissionStatus.set(String(scope), "granted");
+  return {
+    grantedScopes: [...permissionStatus.entries()]
+      .filter(([, status]) => status === "granted")
+      .map(([permission]) => permission),
+    declinedScopes: [...permissionStatus.entries()]
+      .filter(([, status]) => status !== "granted")
+      .map(([permission]) => permission),
+  };
+}
+
 async function defaultBrand(db: any) {
   const { data, error } = await db
     .from("social_brands")
@@ -658,9 +691,13 @@ async function handleCallback(req: Request, requestUrl: URL) {
     const expiresIn =
       Number(longPayload.expires_in || shortPayload.expires_in || 5184000);
 
-    const [identity, permissions] = await Promise.all([
+    const returnedScopes = String(requestUrl.searchParams.get("granted_scopes") || "")
+      .split(",")
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+    const [identity, permissionSnapshot] = await Promise.all([
       graph("me", userToken, { query: { fields: "id,name" } }),
-      graph("me/permissions", userToken),
+      inspectTokenPermissions(userToken, returnedScopes),
     ]);
     const pages = state.connectionMode === "ads_mcp"
       ? { data: [] }
@@ -671,9 +708,7 @@ async function handleCallback(req: Request, requestUrl: URL) {
           limit: "100",
         },
       });
-    const grantedScopes = (permissions.data || [])
-      .filter((item: any) => item.status === "granted")
-      .map((item: any) => item.permission);
+    const grantedScopes = permissionSnapshot.grantedScopes;
     const db = adminClient();
     const credentialExpiresAt = new Date(
       Date.now() + expiresIn * 1000,
@@ -851,24 +886,14 @@ async function handleMetaConnectionStatus(req: Request) {
   const connections = [];
   for (const row of rows || []) {
     const credentials = JSON.parse(await decryptSecret(row.credential_ciphertext));
-    const permissions = await graph("me/permissions", credentials.accessToken);
-    const permissionStatus = Object.fromEntries(
-      (permissions.data || []).map((item: any) => [
-        item.permission,
-        item.status,
-      ]),
-    );
+    const permissionSnapshot = await inspectTokenPermissions(credentials.accessToken);
     connections.push({
       id: row.id,
       external_user_id: row.external_user_id,
       display_name: row.display_name,
       credential_expires_at: row.credential_expires_at,
-      granted_scopes: Object.entries(permissionStatus)
-        .filter(([, status]) => status === "granted")
-        .map(([permission]) => permission),
-      declined_scopes: Object.entries(permissionStatus)
-        .filter(([, status]) => status !== "granted")
-        .map(([permission]) => permission),
+      granted_scopes: permissionSnapshot.grantedScopes,
+      declined_scopes: permissionSnapshot.declinedScopes,
       updated_at: row.updated_at,
     });
   }
@@ -2670,12 +2695,6 @@ async function handleAddAccount(req: Request, payload: any) {
 async function handleListAdAccounts(req: Request, payload: any) {
   const { db } = await authenticatedCaller(req, "view");
   const connection = await activeConnection(db, payload.brandId);
-  const grantedScopes = new Set(connection.row.granted_scopes || []);
-  if (!grantedScopes.has("ads_read") && !grantedScopes.has("ads_management")) {
-    throw new Error(
-      "Meta authorization is missing ads_read and ads_management. Open Social Accounts and choose Grant ads access.",
-    );
-  }
   const result = await graph("me/adaccounts", connection.accessToken, {
     query: {
       fields:
