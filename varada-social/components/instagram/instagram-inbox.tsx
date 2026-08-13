@@ -41,8 +41,9 @@ export function InstagramInbox() {
   const [draft, setDraft] = useState("");
   const messageListRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
-    setBusy("sync");
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (!silent) setBusy("sync");
     try {
       const result = await socialEdgeFetch<InboxData>("instagram_inbox", { limit: 50 });
       setData(result);
@@ -55,13 +56,19 @@ export function InstagramInbox() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Instagram Inbox could not be loaded.");
     } finally {
-      setBusy("");
+      if (!silent) setBusy("");
     }
   }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
+    const sync = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load({ silent: true });
+    }, 10_000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(sync);
+    };
   }, [load]);
 
   async function openConversation(conversation: Conversation) {
@@ -114,16 +121,18 @@ export function InstagramInbox() {
     );
   }, [data, query]);
   const messages = [...(selected?.messages || [])].reverse();
+  const selectedId = selected?.id;
+  const selectedMessageCount = selected?.messages?.length || 0;
   const approvalPending = error.includes("awaiting Meta approval");
 
   useEffect(() => {
-    if (!selected) return;
+    if (!selectedId) return;
     const frame = window.requestAnimationFrame(() => {
       const messageList = messageListRef.current;
       if (messageList) messageList.scrollTop = messageList.scrollHeight;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [selected?.id, selected?.messages?.length]);
+  }, [selectedId, selectedMessageCount]);
 
   return (
     <div className="space-y-6">
@@ -132,7 +141,7 @@ export function InstagramInbox() {
         title="Inbox"
         description="Read and reply to Instagram Business conversations without leaving EMS."
         icon={Inbox}
-        actions={<button onClick={load} disabled={busy === "sync"} className="btn-secondary">
+        actions={<button onClick={() => void load()} disabled={busy === "sync"} className="btn-secondary">
           {busy === "sync" ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />} Sync inbox
         </button>}
       />
@@ -149,7 +158,7 @@ export function InstagramInbox() {
                 Page access and Instagram Connected Tools are ready. Live conversations will appear here after Meta grants Advanced Access for <code>instagram_manage_messages</code>.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button onClick={load} disabled={busy === "sync"} className="btn-secondary">
+                <button onClick={() => void load()} disabled={busy === "sync"} className="btn-secondary">
                   {busy === "sync" ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                   Check again
                 </button>
