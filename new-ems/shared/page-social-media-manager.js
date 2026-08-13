@@ -23,6 +23,20 @@ function safeModuleUrl(view) {
   }
 }
 
+function syncSidebarActiveState(destination) {
+  const current = new URL(destination, window.location.origin);
+  document.querySelectorAll("#appSidebar a.nav-link[href]").forEach((link) => {
+    const item = new URL(link.href, window.location.origin);
+    const active = item.pathname === current.pathname && item.search === current.search;
+    link.classList.toggle("active", active);
+    if (active) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  document.querySelectorAll("#appSidebar details.nav-section").forEach((section) => {
+    if (section.querySelector("a.nav-link.active")) section.open = true;
+  });
+}
+
 function renderLauncher(moduleUrl, session, accessToken) {
   renderModuleContent(`
     <style>
@@ -98,6 +112,7 @@ function renderLauncher(moduleUrl, session, accessToken) {
       document.body.classList.remove("page-transition-active");
       try { sessionStorage.removeItem("ems_nav_pending"); } catch {}
       window.history.replaceState(null, "", destination.href);
+      syncSidebarActiveState(destination);
       frame?.contentWindow?.postMessage({ type: "VARADA_EMS_NAVIGATE", route }, targetOrigin);
     } catch {
       // Preserve normal navigation when a sidebar destination is malformed.
