@@ -4796,6 +4796,54 @@ async function handleCleanupDisconnectedWorkspace(req: Request) {
   };
 }
 
+async function handleResetReviewWorkspace(req: Request) {
+  const { db, appUser } = await authenticatedCaller(req, "admin");
+  const removableStatuses = [
+    "draft",
+    "manager_review",
+    "admin_review",
+    "approved",
+    "scheduled",
+    "publishing",
+    "rejected",
+    "failed",
+  ];
+  const { data: removableContent } = await db
+    .from("social_content_items")
+    .select("id")
+    .in("status", removableStatuses);
+  const contentIds = (removableContent || []).map((item: any) => item.id);
+
+  let deletedContentCount = 0;
+  let cancelledJobCount = 0;
+  if (contentIds.length) {
+    const { count: jobCount } = await db
+      .from("social_publish_jobs")
+      .update({ status: "cancelled", last_error: "Cleared before Meta App Review recording" }, { count: "exact" })
+      .in("content_id", contentIds)
+      .in("status", ["queued", "retrying", "scheduled", "processing"]);
+    cancelledJobCount = jobCount || 0;
+    const { count } = await db
+      .from("social_content_items")
+      .delete({ count: "exact" })
+      .in("id", contentIds);
+    deletedContentCount = count || 0;
+  }
+
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "review.workspace_reset",
+    resource_type: "social_content",
+    after_data: {
+      deletedContentCount,
+      cancelledJobCount,
+      preserved: ["published_content", "meta_connections", "social_accounts", "audit_logs"],
+    },
+  });
+
+  return { reset: true, deletedContentCount, cancelledJobCount };
+}
+
 async function verifyWebhook(req: Request, url: URL) {
   const mode = url.searchParams.get("hub.mode");
   const token = url.searchParams.get("hub.verify_token");
@@ -5030,6 +5078,9 @@ Deno.serve(async (req) => {
         break;
       case "cleanup_disconnected_workspace":
         data = await handleCleanupDisconnectedWorkspace(req);
+        break;
+      case "reset_review_workspace":
+        data = await handleResetReviewWorkspace(req);
         break;
       default:
         return json(req, { error: "Unknown action" }, 400);
