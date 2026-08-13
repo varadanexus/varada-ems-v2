@@ -1561,6 +1561,7 @@ function normalizeConversation(conversation: any, ownInstagramId: string) {
   return {
     id: conversation.id,
     updated_time: conversation.updated_time || latest.created_time || null,
+    unread_count: Math.max(0, Number(conversation.unread_count || 0)),
     contact: {
       id: contact.id || null,
       name: contact.name || contact.username || "Instagram user",
@@ -1578,7 +1579,7 @@ async function handleInstagramInbox(req: Request, payload: any) {
   const query = {
     platform: "instagram",
     fields:
-      "id,updated_time,participants{id,name,username},messages.limit(30){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
+      "id,updated_time,unread_count,participants{id,name,username},messages.limit(30){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
     limit: String(Math.max(1, Math.min(Number(payload.limit || 50), 100))),
   };
   const candidates = [
@@ -1666,7 +1667,7 @@ async function handleInstagramConversation(req: Request, payload: any) {
   const conversation = await graph(conversationId, resolved.accessToken, {
     query: {
       fields:
-        "id,updated_time,participants{id,name,username},messages.limit(100){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
+        "id,updated_time,unread_count,participants{id,name,username},messages.limit(100){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
     },
   });
   return normalizeConversation(conversation, resolved.account.external_account_id);
@@ -1712,6 +1713,46 @@ async function handleInstagramSendMessage(req: Request, payload: any) {
     },
   });
   return { messageId: result.message_id || null, recipientId };
+}
+
+async function handleInstagramMarkRead(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "post");
+  const resolved = await instagramInboxAccount(db, String(payload.accountId || "") || undefined);
+  const recipientId = cleanText(payload.recipientId, 160);
+  if (!recipientId) throw new Error("Instagram conversation recipient is required");
+  const request = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      sender_action: "mark_seen",
+    }),
+  };
+  let result: any;
+  try {
+    result = await graph(`${resolved.pageId}/messages`, resolved.accessToken, request);
+  } catch (pageError) {
+    try {
+      result = await graph(
+        `${resolved.account.external_account_id}/messages`,
+        resolved.accessToken,
+        request,
+      );
+    } catch {
+      throw pageError;
+    }
+  }
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "instagram.conversation.read",
+    resource_type: "instagram_conversation",
+    resource_id: cleanText(payload.conversationId, 500) || recipientId,
+    after_data: {
+      accountId: resolved.account.id,
+      recipientId,
+    },
+  });
+  return { recipientId: result.recipient_id || recipientId, read: true };
 }
 
 async function handleDashboard(req: Request) {
@@ -5003,6 +5044,9 @@ Deno.serve(async (req) => {
         break;
       case "instagram_send_message":
         data = await handleInstagramSendMessage(req, payload);
+        break;
+      case "instagram_mark_read":
+        data = await handleInstagramMarkRead(req, payload);
         break;
       case "dashboard":
         data = await handleDashboard(req);
