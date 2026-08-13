@@ -4797,21 +4797,10 @@ async function handleCleanupDisconnectedWorkspace(req: Request) {
 }
 
 async function handleResetReviewWorkspace(req: Request) {
-  const { db, appUser } = await authenticatedCaller(req, "admin");
-  const removableStatuses = [
-    "draft",
-    "manager_review",
-    "admin_review",
-    "approved",
-    "scheduled",
-    "publishing",
-    "rejected",
-    "failed",
-  ];
+  const { db, appUser } = await authenticatedCaller(req, "edit");
   const { data: removableContent } = await db
     .from("social_content_items")
-    .select("id")
-    .in("status", removableStatuses);
+    .select("id");
   const contentIds = (removableContent || []).map((item: any) => item.id);
 
   let deletedContentCount = 0;
@@ -4821,7 +4810,7 @@ async function handleResetReviewWorkspace(req: Request) {
       .from("social_publish_jobs")
       .update({ status: "cancelled", last_error: "Cleared before Meta App Review recording" }, { count: "exact" })
       .in("content_id", contentIds)
-      .in("status", ["queued", "retrying", "scheduled", "processing"]);
+      .in("status", ["queued", "retrying", "scheduled", "processing", "failed"]);
     cancelledJobCount = jobCount || 0;
     const { count } = await db
       .from("social_content_items")
@@ -4837,7 +4826,7 @@ async function handleResetReviewWorkspace(req: Request) {
     after_data: {
       deletedContentCount,
       cancelledJobCount,
-      preserved: ["published_content", "meta_connections", "social_accounts", "audit_logs"],
+      preserved: ["meta_connections", "social_accounts", "audit_logs", "live_instagram_media"],
     },
   });
 
