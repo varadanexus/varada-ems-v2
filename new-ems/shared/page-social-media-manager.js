@@ -95,6 +95,8 @@ function renderLauncher(moduleUrl, session, accessToken) {
       const view = destination.searchParams.get("view") || "overview";
       const route = view === "overview" ? "/dashboard" : `/${view}`;
       event.preventDefault();
+      document.body.classList.remove("page-transition-active");
+      try { sessionStorage.removeItem("ems_nav_pending"); } catch {}
       window.history.replaceState(null, "", destination.href);
       frame?.contentWindow?.postMessage({ type: "VARADA_EMS_NAVIGATE", route }, targetOrigin);
     } catch {
