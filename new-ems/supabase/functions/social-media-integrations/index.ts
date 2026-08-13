@@ -3289,6 +3289,11 @@ function vertexImageModels() {
   ].map((item) => item.trim()).filter(Boolean);
   return [...new Set([
     ...configured,
+    // Current Model Garden image model for this Google Cloud project.
+    // The older Imagen 3 publisher IDs are not available in every project,
+    // while Agent Studio exposes Gemini 2.5 Flash Image through Imagen 4.
+    "imagen-4.0-generate-001",
+    "imagen-4.0-fast-generate-001",
     "gemini-2.5-flash-image",
     "imagen-3.0-generate-002",
     "imagen-3.0-fast-generate-001",
@@ -3302,9 +3307,10 @@ function isImagenModel(model: string) {
 function imageBase64FromGenerateContent(response: any) {
   const parts = response?.candidates?.flatMap((candidate: any) => candidate?.content?.parts || []) || [];
   const imagePart = parts.find((part: any) =>
-    part?.inlineData?.data && String(part.inlineData?.mimeType || "").startsWith("image/")
+    (part?.inlineData?.data || part?.inline_data?.data) &&
+    String(part.inlineData?.mimeType || part.inline_data?.mime_type || "").startsWith("image/")
   );
-  return imagePart?.inlineData?.data || "";
+  return imagePart?.inlineData?.data || imagePart?.inline_data?.data || "";
 }
 
 async function generateVertexBaseArtwork(options: {
@@ -3362,15 +3368,15 @@ async function generateGeminiApiBaseArtwork(options: {
   aspectRatio: string;
 }) {
   const response = await providerJson(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:generateContent?key=${encodeURIComponent(options.key)}`,
+    `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(options.model)}:generateContent`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": options.key },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: options.prompt }] }],
+        contents: [{ parts: [{ text: options.prompt }] }],
         generationConfig: {
-          responseModalities: ["TEXT", "IMAGE"],
-          imageConfig: { aspectRatio: options.aspectRatio },
+          responseModalities: ["IMAGE"],
+          responseFormat: { image: { aspectRatio: options.aspectRatio } },
         },
       }),
     },
