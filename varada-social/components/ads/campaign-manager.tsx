@@ -1655,7 +1655,11 @@ function humanize(value?: string | null) {
 function formatDate(value?: string | null) {
   if (!value) return "Not scheduled";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("en-IN");
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.getTime() <= 0
+      ? "Not scheduled"
+      : date.toLocaleString("en-IN");
 }
 
 function Field({
