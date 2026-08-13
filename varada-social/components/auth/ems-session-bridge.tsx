@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 function isAllowedParent(origin: string): boolean {
@@ -24,6 +25,7 @@ function isAllowedParent(origin: string): boolean {
 }
 
 export function EmsSessionBridge() {
+  const router = useRouter();
   useEffect(() => {
     if (window.parent === window) return;
     let readyTimer: number | null = null;
@@ -41,11 +43,21 @@ export function EmsSessionBridge() {
       if (event.source !== window.parent || !isAllowedParent(event.origin)) return;
       const payload = event.data as {
         type?: string;
+        route?: string;
         accessToken?: string;
         refreshToken?: string;
         supabaseUrl?: string;
         supabaseAnonKey?: string;
       };
+      if (payload.type === "VARADA_EMS_NAVIGATE") {
+        const allowedRoutes = new Set([
+          "/dashboard", "/create", "/content", "/calendar", "/approvals",
+          "/trends", "/analytics", "/instagram", "/inbox", "/accounts",
+          "/campaigns", "/settings", "/audit",
+        ]);
+        if (payload.route && allowedRoutes.has(payload.route)) router.push(payload.route);
+        return;
+      }
       if (
         payload.type !== "VARADA_EMS_SESSION" ||
         !payload.accessToken
@@ -90,7 +102,7 @@ export function EmsSessionBridge() {
       if (readyTimer !== null) window.clearInterval(readyTimer);
       window.clearTimeout(stopTimer);
     };
-  }, []);
+  }, [router]);
 
   return null;
 }

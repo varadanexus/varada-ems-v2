@@ -42,13 +42,21 @@ export function InstagramInbox() {
   const [draft, setDraft] = useState("");
   const messageListRef = useRef<HTMLDivElement>(null);
   const markingReadRef = useRef(new Set<string>());
+  const syncInFlightRef = useRef(false);
 
   const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
     const silent = options?.silent === true;
     if (!silent) setBusy("sync");
     try {
       const result = await socialEdgeFetch<InboxData>("instagram_inbox", { limit: 50 });
       setData(result);
+      try {
+        sessionStorage.setItem("nexus_instagram_inbox_cache", JSON.stringify(result));
+      } catch {
+        // Storage can be unavailable in hardened browser contexts.
+      }
       setSelected((current) =>
         current
           ? result.conversations.find((item) => item.id === current.id) || null
@@ -59,10 +67,19 @@ export function InstagramInbox() {
       setError(reason instanceof Error ? reason.message : "Instagram Inbox could not be loaded.");
     } finally {
       if (!silent) setBusy("");
+      syncInFlightRef.current = false;
     }
   }, []);
 
   useEffect(() => {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem("nexus_instagram_inbox_cache") || "null") as InboxData | null;
+      if (cached?.account?.id && Array.isArray(cached.conversations)) {
+        window.setTimeout(() => setData(cached), 0);
+      }
+    } catch {
+      // A malformed or unavailable cache falls through to the live sync.
+    }
     const timer = window.setTimeout(() => void load(), 0);
     const sync = window.setInterval(() => {
       if (document.visibilityState === "visible") void load({ silent: true });

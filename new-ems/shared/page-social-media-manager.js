@@ -85,6 +85,22 @@ function renderLauncher(moduleUrl, session, accessToken) {
     postSession();
     window.setTimeout(postSession, 250);
   });
+  document.addEventListener("click", (event) => {
+    const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    if (!link) return;
+    try {
+      const destination = new URL(link.href, window.location.origin);
+      if (destination.origin !== window.location.origin) return;
+      if (!destination.pathname.includes("/modules/social-media-manager/")) return;
+      const view = destination.searchParams.get("view") || "overview";
+      const route = view === "overview" ? "/dashboard" : `/${view}`;
+      event.preventDefault();
+      window.history.replaceState(null, "", destination.href);
+      frame?.contentWindow?.postMessage({ type: "VARADA_EMS_NAVIGATE", route }, targetOrigin);
+    } catch {
+      // Preserve normal navigation when a sidebar destination is malformed.
+    }
+  });
   window.addEventListener("message", (event) => {
     if (event.source !== frame?.contentWindow || event.origin !== targetOrigin) return;
     if (event.data?.type === "VARADA_SOCIAL_READY") {

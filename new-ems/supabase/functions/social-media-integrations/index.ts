@@ -544,6 +544,7 @@ async function graph(
     method: init.method || "GET",
     headers: init.headers,
     body: init.body,
+    signal: init.signal,
   });
   const payload = await response.json();
   if (!response.ok || payload?.error) {
@@ -1600,31 +1601,46 @@ async function handleInstagramInbox(req: Request, payload: any) {
       path: `${resolved.pageId}/conversations`,
     },
   ];
-  let result: any = null;
-  let ownerObjectId = resolved.pageId;
-  let messagingSource = "facebook_page";
-  const errors: string[] = [];
-  for (const candidate of candidates) {
+  const controllers = candidates.map(() => new AbortController());
+  const attempts = candidates.map(async (candidate, index) => {
     try {
       const candidateResult = await graph(candidate.path, resolved.accessToken, {
         query,
+        signal: controllers[index].signal,
       });
-      if (!result) {
-        result = candidateResult;
-        ownerObjectId = candidate.ownerObjectId;
-        messagingSource = candidate.source;
-      }
-      if (candidateResult.data?.length) {
-        result = candidateResult;
-        ownerObjectId = candidate.ownerObjectId;
-        messagingSource = candidate.source;
-        break;
-      }
+      return { candidate, candidateResult, error: "", index };
     } catch (reason) {
-      const message = String(reason?.message || reason);
-      errors.push(`${candidate.source}: ${message}`);
+      return {
+        candidate,
+        candidateResult: null,
+        error: String(reason?.message || reason),
+        index,
+      };
     }
+  });
+  let winner: Awaited<(typeof attempts)[number]> | null = null;
+  try {
+    winner = await Promise.any(
+      attempts.map((attempt) => attempt.then((value) => {
+        if (value.candidateResult?.data?.length) return value;
+        throw new Error(value.error || "No conversations returned");
+      })),
+    );
+    controllers.forEach((controller, index) => {
+      if (index !== winner?.index) controller.abort();
+    });
+  } catch {
+    // When every endpoint is empty or unavailable, retain the first valid empty result.
   }
+  const settled = winner ? [winner] : await Promise.all(attempts);
+  const fallback = settled.find((value) => value.candidateResult) || null;
+  const selected = winner || fallback;
+  const result: any = selected?.candidateResult || null;
+  const ownerObjectId = selected?.candidate.ownerObjectId || resolved.pageId;
+  const messagingSource = selected?.candidate.source || "facebook_page";
+  const errors = settled
+    .filter((value) => value.error && value.error !== "The operation was aborted")
+    .map((value) => `${value.candidate.source}: ${value.error}`);
   if (!result) {
     const capabilityPending = errors.some(
       (message) =>
