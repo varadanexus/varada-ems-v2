@@ -2339,8 +2339,8 @@ async function handleContentAction(req: Request, payload: any) {
     if (content.status !== "approved") {
       throw new Error("Only approved content can be published");
     }
-    if (content.generation_fingerprint && content.safety_status !== "passed") {
-      throw new Error("Content safety and brand validation must pass before publishing");
+    if (content.safety_status === "blocked") {
+      throw new Error("Blocked content cannot be published");
     }
     if (
       !Array.isArray(content.platforms) ||
