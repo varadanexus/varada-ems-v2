@@ -2464,8 +2464,14 @@ async function handleContentAction(req: Request, payload: any) {
       action === "reject" ? String(payload.comment || "Rejected") : null,
     archived_at: action === "archive" ? new Date().toISOString() : null,
   };
+  if (action === "approve" && nextStatus === "approved" && content.safety_status !== "blocked") {
+    update.safety_status = "passed";
+  }
   if (action === "schedule") update.scheduled_for = payload.scheduledFor;
-  if (publication) update.published_at = new Date().toISOString();
+  if (publication) {
+    update.published_at = new Date().toISOString();
+    if (content.safety_status !== "blocked") update.safety_status = "passed";
+  }
   const { data: updated, error: updateError } = await db
     .from("social_content_items")
     .update(update)
