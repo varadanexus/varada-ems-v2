@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Inbox, LoaderCircle, MessageCircle, RefreshCw, Search, Send,
   ShieldCheck,
@@ -39,6 +39,7 @@ export function InstagramInbox() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
+  const messageListRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setBusy("sync");
@@ -115,6 +116,15 @@ export function InstagramInbox() {
   const messages = [...(selected?.messages || [])].reverse();
   const approvalPending = error.includes("awaiting Meta approval");
 
+  useEffect(() => {
+    if (!selected) return;
+    const frame = window.requestAnimationFrame(() => {
+      const messageList = messageListRef.current;
+      if (messageList) messageList.scrollTop = messageList.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selected?.id, selected?.messages?.length]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -187,7 +197,7 @@ export function InstagramInbox() {
                 <div><p className="font-semibold">{selected.contact.name}</p><p className="text-xs text-muted">{selected.contact.username ? `@${selected.contact.username}` : "Instagram user"}</p></div>
                 {busy === "thread" && <LoaderCircle size={16} className="ml-auto animate-spin text-accent" />}
               </header>
-              <div className="min-h-0 flex-1 overflow-y-auto bg-background p-4 sm:p-6">
+              <div ref={messageListRef} className="min-h-0 flex-1 overflow-y-auto bg-background p-4 sm:p-6">
                 <div className="mx-auto flex max-w-3xl flex-col gap-3">
                   {messages.map((message) => {
                     const mine = String(message.from?.id || "") === String(data.account.external_account_id);

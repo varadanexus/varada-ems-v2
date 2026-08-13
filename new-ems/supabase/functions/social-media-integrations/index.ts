@@ -4,6 +4,7 @@ import { Image } from "https://deno.land/x/imagescript@1.3.0/mod.ts";
 
 const GRAPH_VERSION = Deno.env.get("META_GRAPH_VERSION") || "v25.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const INSTAGRAM_GRAPH_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
 const FACEBOOK_BASE = `https://www.facebook.com/${GRAPH_VERSION}`;
 const CALLBACK_URL =
   Deno.env.get("META_CALLBACK_URL") ||
@@ -1580,40 +1581,64 @@ async function handleInstagramInbox(req: Request, payload: any) {
       "id,updated_time,participants{id,name,username},messages.limit(30){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
     limit: String(Math.max(1, Math.min(Number(payload.limit || 50), 100))),
   };
-  let result: any;
+  const candidates = [
+    {
+      source: "facebook_page",
+      ownerObjectId: resolved.pageId,
+      path: `${resolved.pageId}/conversations`,
+    },
+    {
+      source: "instagram_account",
+      ownerObjectId: resolved.account.external_account_id,
+      path: `${resolved.account.external_account_id}/conversations`,
+    },
+    {
+      source: "instagram_graph",
+      ownerObjectId: resolved.account.external_account_id,
+      path:
+        `${INSTAGRAM_GRAPH_BASE}/${resolved.account.external_account_id}/conversations`,
+    },
+  ];
+  let result: any = null;
   let ownerObjectId = resolved.pageId;
-  try {
-    result = await graph(`${resolved.pageId}/conversations`, resolved.accessToken, {
-      query,
-    });
-  } catch (pageError) {
+  let messagingSource = "facebook_page";
+  const errors: string[] = [];
+  for (const candidate of candidates) {
     try {
-      ownerObjectId = resolved.account.external_account_id;
-      result = await graph(
-        `${resolved.account.external_account_id}/conversations`,
-        resolved.accessToken,
-        { query },
-      );
-    } catch (instagramError) {
-      const pageMessage = String(pageError?.message || pageError);
-      const instagramMessage = String(
-        instagramError?.message || instagramError,
-      );
-      const capabilityPending = [pageMessage, instagramMessage].some(
-        (message) =>
-          message.includes("(#3)") ||
-          message.toLowerCase().includes("does not have the capability") ||
-          message.toLowerCase().includes("instagram_manage_messages"),
-      );
-      if (capabilityPending) {
-        throw new Error(
-          "Instagram Inbox is awaiting Meta approval for instagram_manage_messages. Connected Tools and Page access are configured; reconnect Meta after Advanced Access is approved.",
-        );
+      const candidateResult = await graph(candidate.path, resolved.accessToken, {
+        query,
+      });
+      if (!result) {
+        result = candidateResult;
+        ownerObjectId = candidate.ownerObjectId;
+        messagingSource = candidate.source;
       }
+      if (candidateResult.data?.length) {
+        result = candidateResult;
+        ownerObjectId = candidate.ownerObjectId;
+        messagingSource = candidate.source;
+        break;
+      }
+    } catch (reason) {
+      const message = String(reason?.message || reason);
+      errors.push(`${candidate.source}: ${message}`);
+    }
+  }
+  if (!result) {
+    const capabilityPending = errors.some(
+      (message) =>
+        message.includes("(#3)") ||
+        message.toLowerCase().includes("does not have the capability") ||
+        message.toLowerCase().includes("instagram_manage_messages"),
+    );
+    if (capabilityPending) {
       throw new Error(
-        `Instagram Inbox could not be synchronized. Page API: ${pageMessage}. Instagram API: ${instagramMessage}.`,
+        "Instagram Inbox is awaiting Meta approval for instagram_manage_messages. Reconnect Meta after Advanced Access is approved, or use an app-role account for review testing.",
       );
     }
+    throw new Error(
+      `Instagram Inbox could not be synchronized. ${errors.join(" | ")}`,
+    );
   }
   return {
     account: {
@@ -1623,6 +1648,7 @@ async function handleInstagramInbox(req: Request, payload: any) {
       username: resolved.account.username,
       profile_picture_url: resolved.account.metadata?.profilePictureUrl || null,
       messaging_owner_id: ownerObjectId,
+      messaging_source: messagingSource,
     },
     conversations: (result.data || []).map((item: any) =>
       normalizeConversation(item, resolved.account.external_account_id),
