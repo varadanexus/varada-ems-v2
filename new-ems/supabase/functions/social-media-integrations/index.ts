@@ -2789,6 +2789,16 @@ function moneyFromMinorUnits(value: unknown) {
 
 async function syncCampaignRows(db: any, adAccountId: string, campaigns: any[]) {
   const now = new Date().toISOString();
+  const externalIds = campaigns.map((campaign) => campaign.id).filter(Boolean);
+  const { data: existingRows } = externalIds.length
+    ? await db
+      .from("social_ad_campaigns")
+      .select("external_campaign_id,metadata")
+      .in("external_campaign_id", externalIds)
+    : { data: [] };
+  const existingMetadata = new Map(
+    (existingRows || []).map((item: any) => [item.external_campaign_id, item.metadata || {}]),
+  );
   const rows = campaigns.map((campaign) => ({
     ad_account_id: adAccountId,
     external_campaign_id: campaign.id,
@@ -2801,8 +2811,15 @@ async function syncCampaignRows(db: any, adAccountId: string, campaigns: any[]) 
     start_time: campaign.start_time || null,
     stop_time: campaign.stop_time || null,
     metadata: {
+      ...(existingMetadata.get(campaign.id) || {}),
       buyingType: campaign.buying_type || null,
+      bidStrategy: campaign.bid_strategy || null,
       specialAdCategories: campaign.special_ad_categories || [],
+      configuredStatus: campaign.configured_status || campaign.status || null,
+      budgetRemaining: moneyFromMinorUnits(campaign.budget_remaining),
+      spendCap: moneyFromMinorUnits(campaign.spend_cap),
+      createdTime: campaign.created_time || null,
+      updatedTime: campaign.updated_time || null,
     },
     last_synced_at: now,
   }));
@@ -2827,7 +2844,7 @@ async function handleListCampaigns(req: Request, payload: any) {
     {
       query: {
         fields:
-          "id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time,buying_type,special_ad_categories,created_time,updated_time",
+          "id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,start_time,stop_time,buying_type,bid_strategy,special_ad_categories,created_time,updated_time",
         limit: String(Math.min(Number(payload.limit || 100), 200)),
       },
     },
@@ -2881,7 +2898,7 @@ async function handleCreateCampaign(req: Request, payload: any) {
   const campaign = await graph(result.id, resolved.accessToken, {
     query: {
       fields:
-        "id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time,buying_type,special_ad_categories",
+        "id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,start_time,stop_time,buying_type,bid_strategy,special_ad_categories,created_time,updated_time",
     },
   });
   const [row] = await syncCampaignRows(db, resolved.account.id, [campaign]);
@@ -2944,15 +2961,33 @@ async function handleUpdateCampaign(req: Request, payload: any) {
     ),
   );
   const allowed: Record<string, unknown> = {};
-  if (payload.name) allowed.name = String(payload.name).trim();
+  if (payload.name !== undefined) {
+    const name = String(payload.name).trim();
+    if (!name) throw new Error("Campaign name is required");
+    allowed.name = name;
+  }
   if (["ACTIVE", "PAUSED", "ARCHIVED"].includes(payload.status)) {
     allowed.status = payload.status;
   }
   if (payload.dailyBudget !== undefined) {
-    allowed.daily_budget = Math.round(Number(payload.dailyBudget) * 100);
+    const amount = Number(payload.dailyBudget);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Daily budget must be greater than zero");
+    allowed.daily_budget = Math.round(amount * 100);
   }
   if (payload.lifetimeBudget !== undefined) {
-    allowed.lifetime_budget = Math.round(Number(payload.lifetimeBudget) * 100);
+    const amount = Number(payload.lifetimeBudget);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Lifetime budget must be greater than zero");
+    allowed.lifetime_budget = Math.round(amount * 100);
+  }
+  const allowedBidStrategies = new Set([
+    "LOWEST_COST_WITHOUT_CAP",
+    "LOWEST_COST_WITH_BID_CAP",
+    "COST_CAP",
+  ]);
+  if (payload.bidStrategy !== undefined) {
+    const bidStrategy = String(payload.bidStrategy || "");
+    if (!allowedBidStrategies.has(bidStrategy)) throw new Error("Unsupported bid strategy");
+    allowed.bid_strategy = bidStrategy;
   }
   if (!Object.keys(allowed).length) throw new Error("No supported campaign changes supplied");
   const body = new URLSearchParams();
@@ -2971,7 +3006,57 @@ async function handleUpdateCampaign(req: Request, payload: any) {
     },
     after_data: allowed,
   });
-  return { id: campaignId, updated: true };
+  const campaign = await graph(campaignId, credentials.accessToken, {
+    query: {
+      fields:
+        "id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,start_time,stop_time,buying_type,bid_strategy,special_ad_categories,created_time,updated_time",
+    },
+  });
+  const [row] = await syncCampaignRows(
+    db,
+    localCampaign.ad_account_id,
+    [campaign],
+  );
+  return row;
+}
+
+async function handleDeleteCampaign(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "edit");
+  const campaignId = String(payload.campaignId || "").trim();
+  const confirmationName = String(payload.confirmationName || "").trim();
+  if (!campaignId || !confirmationName) {
+    throw new Error("Campaign ID and confirmation name are required");
+  }
+  const { data: localCampaign, error: campaignError } = await db
+    .from("social_ad_campaigns")
+    .select("*,social_ad_accounts(*,social_meta_connections(*))")
+    .eq("external_campaign_id", campaignId)
+    .maybeSingle();
+  if (campaignError || !localCampaign) throw new Error("Synchronize the campaign before deleting it");
+  if (confirmationName !== localCampaign.name) throw new Error("Campaign confirmation did not match");
+  const credentials = JSON.parse(
+    await decryptSecret(localCampaign.social_ad_accounts.social_meta_connections.credential_ciphertext),
+  );
+  await graph(campaignId, credentials.accessToken, { method: "DELETE" });
+  const { error: deleteError } = await db
+    .from("social_ad_campaigns")
+    .delete()
+    .eq("external_campaign_id", campaignId);
+  if (deleteError) throw new Error(deleteError.message);
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "meta.campaign.deleted",
+    resource_type: "social_ad_campaign",
+    resource_id: campaignId,
+    before_data: {
+      name: localCampaign.name,
+      objective: localCampaign.objective,
+      status: localCampaign.status,
+      effectiveStatus: localCampaign.effective_status,
+    },
+    after_data: { deleted: true },
+  });
+  return { id: campaignId, deleted: true };
 }
 
 async function handleSettings(req: Request) {
@@ -5259,6 +5344,9 @@ Deno.serve(async (req) => {
         break;
       case "update_campaign":
         data = await handleUpdateCampaign(req, payload);
+        break;
+      case "delete_campaign":
+        data = await handleDeleteCampaign(req, payload);
         break;
       case "publish_instagram":
         data = await handlePublishInstagram(req, payload);
