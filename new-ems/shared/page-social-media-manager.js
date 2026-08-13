@@ -27,7 +27,10 @@ function syncSidebarActiveState(destination) {
   const current = new URL(destination, window.location.origin);
   document.querySelectorAll("#appSidebar a.nav-link[href]").forEach((link) => {
     const item = new URL(link.href, window.location.origin);
-    const active = item.pathname === current.pathname && item.search === current.search;
+    const sameSocialRoute = item.pathname === current.pathname &&
+      item.pathname.includes("/modules/social-media-manager/") &&
+      (item.searchParams.get("view") || "overview") === (current.searchParams.get("view") || "overview");
+    const active = sameSocialRoute || (item.pathname === current.pathname && item.search === current.search);
     link.classList.toggle("active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -75,6 +78,8 @@ function renderLauncher(moduleUrl, session, accessToken) {
       ></iframe>
     </section>
   `);
+
+  syncSidebarActiveState(window.location.href);
 
   const frame = document.querySelector("#nexusSocialFrame");
   const targetOrigin = new URL(moduleUrl, window.location.origin).origin;
