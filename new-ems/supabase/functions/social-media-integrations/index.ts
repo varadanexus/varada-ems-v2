@@ -3299,6 +3299,14 @@ function isImagenModel(model: string) {
   return /^imagen-|^imagegeneration@/i.test(model);
 }
 
+function imageBase64FromGenerateContent(response: any) {
+  const parts = response?.candidates?.flatMap((candidate: any) => candidate?.content?.parts || []) || [];
+  const imagePart = parts.find((part: any) =>
+    part?.inlineData?.data && String(part.inlineData?.mimeType || "").startsWith("image/")
+  );
+  return imagePart?.inlineData?.data || "";
+}
+
 async function generateVertexBaseArtwork(options: {
   endpoint: string;
   projectId: string;
@@ -3344,10 +3352,30 @@ async function generateVertexBaseArtwork(options: {
       }),
     },
   );
-  const imagePart = response.candidates?.[0]?.content?.parts?.find((part: any) =>
-    part.inlineData?.data && String(part.inlineData?.mimeType || "").startsWith("image/")
+  return imageBase64FromGenerateContent(response);
+}
+
+async function generateGeminiApiBaseArtwork(options: {
+  key: string;
+  model: string;
+  prompt: string;
+  aspectRatio: string;
+}) {
+  const response = await providerJson(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:generateContent?key=${encodeURIComponent(options.key)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: options.prompt }] }],
+        generationConfig: {
+          responseModalities: ["TEXT", "IMAGE"],
+          imageConfig: { aspectRatio: options.aspectRatio },
+        },
+      }),
+    },
   );
-  return imagePart?.inlineData?.data || "";
+  return imageBase64FromGenerateContent(response);
 }
 
 async function generateBrandedImage(
@@ -3428,12 +3456,67 @@ The official transparent logo will be composited later by the secure backend dir
       }
     }
     if (!base64 && failures.length) {
-      throw new Error(`Vertex image generation failed for project ${vertex.projectId}. Tried ${failures.join(" | ")}`);
+      const geminiKey = await storedSecret(db, "gemini", "api_key", ["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"]);
+      if (geminiKey) {
+        provider = "gemini";
+        const geminiFailures: string[] = [];
+        for (const candidateModel of [
+          Deno.env.get("GEMINI_IMAGE_MODEL") || "",
+          "gemini-2.5-flash-image",
+          "gemini-2.0-flash-preview-image-generation",
+        ].map((item) => item.trim()).filter(Boolean)) {
+          model = candidateModel;
+          try {
+            base64 = await generateGeminiApiBaseArtwork({
+              key: geminiKey,
+              model,
+              prompt: brandedPrompt,
+              aspectRatio: ratios[String(payload.aspectRatio)] || "4:5",
+            });
+            if (base64) break;
+            geminiFailures.push(`${model}: provider returned no image`);
+          } catch (error) {
+            geminiFailures.push(`${model}: ${cleanText(error?.message || error, 220)}`);
+            base64 = "";
+          }
+        }
+        if (!base64) {
+          throw new Error(`Vertex image generation failed for project ${vertex.projectId}. Tried ${failures.join(" | ")}. Gemini API fallback also failed: ${geminiFailures.join(" | ")}`);
+        }
+      } else {
+        throw new Error(`Vertex image generation failed for project ${vertex.projectId}. Tried ${failures.join(" | ")}. Configure a valid Vertex image model or GOOGLE_GENERATIVE_AI_API_KEY/GEMINI_API_KEY fallback.`);
+      }
     }
   } else {
-    provider = "openai";
+    const geminiKey = await storedSecret(db, "gemini", "api_key", ["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"]);
+    if (geminiKey) {
+      provider = "gemini";
+      const failures: string[] = [];
+      for (const candidateModel of [
+        Deno.env.get("GEMINI_IMAGE_MODEL") || "",
+        "gemini-2.5-flash-image",
+        "gemini-2.0-flash-preview-image-generation",
+      ].map((item) => item.trim()).filter(Boolean)) {
+        model = candidateModel;
+        try {
+          base64 = await generateGeminiApiBaseArtwork({
+            key: geminiKey,
+            model,
+            prompt: brandedPrompt,
+            aspectRatio: ratios[String(payload.aspectRatio)] || "4:5",
+          });
+          if (base64) break;
+          failures.push(`${model}: provider returned no image`);
+        } catch (error) {
+          failures.push(`${model}: ${cleanText(error?.message || error, 220)}`);
+          base64 = "";
+        }
+      }
+      if (!base64) throw new Error(`Gemini API image generation failed. Tried ${failures.join(" | ")}`);
+    } else {
+      provider = "openai";
     const key = await storedSecret(db, "openai", "api_key", ["OPENAI_API_KEY"]);
-    if (!key) throw new Error("Configure Vertex AI for branded image generation");
+    if (!key) throw new Error("Configure Vertex AI service account JSON or GOOGLE_GENERATIVE_AI_API_KEY/GEMINI_API_KEY for branded image generation");
     model = Deno.env.get("OPENAI_IMAGE_MODEL") || "gpt-image-2";
     const response = await providerJson("https://api.openai.com/v1/images/generations", {
       method: "POST",
@@ -3447,6 +3530,7 @@ The official transparent logo will be composited later by the secure backend dir
       }),
     });
     base64 = response.data?.[0]?.b64_json || "";
+    }
   }
   if (!base64) throw new Error("The image provider returned no image");
   const generatedBinary = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
