@@ -53,7 +53,10 @@ export function InstagramInbox() {
       const result = await socialEdgeFetch<InboxData>("instagram_inbox", { limit: 50 });
       setData(result);
       try {
-        sessionStorage.setItem("nexus_instagram_inbox_cache", JSON.stringify(result));
+        localStorage.setItem("nexus_instagram_inbox_cache", JSON.stringify({
+          savedAt: Date.now(),
+          data: result,
+        }));
       } catch {
         // Storage can be unavailable in hardened browser contexts.
       }
@@ -73,9 +76,15 @@ export function InstagramInbox() {
 
   useEffect(() => {
     try {
-      const cached = JSON.parse(sessionStorage.getItem("nexus_instagram_inbox_cache") || "null") as InboxData | null;
-      if (cached?.account?.id && Array.isArray(cached.conversations)) {
-        window.setTimeout(() => setData(cached), 0);
+      const cached = JSON.parse(localStorage.getItem("nexus_instagram_inbox_cache") || "null") as {
+        savedAt?: number;
+        data?: InboxData;
+      } | null;
+      const fresh = cached?.savedAt && Date.now() - cached.savedAt < 5 * 60_000;
+      if (fresh && cached?.data?.account?.id && Array.isArray(cached.data.conversations)) {
+        window.setTimeout(() => setData(cached.data || null), 0);
+      } else if (cached) {
+        localStorage.removeItem("nexus_instagram_inbox_cache");
       }
     } catch {
       // A malformed or unavailable cache falls through to the live sync.
