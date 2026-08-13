@@ -614,8 +614,9 @@ async function defaultBrand(db: any) {
 async function handleConnectUrl(req: Request, payload: any) {
   const { db, appUser } = await authenticatedCaller(req, "edit");
   const brandId = payload.brandId || (await defaultBrand(db));
-  const connectionMode = payload.connectionMode === "ads_mcp"
-    ? "ads_mcp"
+  const requestedMode = String(payload.connectionMode || "standard");
+  const connectionMode = ["ads_mcp", "ads_review"].includes(requestedMode)
+    ? requestedMode
     : "standard";
   const state = await createState({
     appUserId: appUser.id,
@@ -627,18 +628,29 @@ async function handleConnectUrl(req: Request, payload: any) {
   url.searchParams.set("client_id", env("META_APP_ID"));
   url.searchParams.set("redirect_uri", CALLBACK_URL);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("override_default_response_type", "true");
   // Meta does not prompt again for a permission that was previously skipped
   // or declined unless the login dialog is explicitly marked as a re-request.
   url.searchParams.set("auth_type", "rerequest");
   url.searchParams.set("return_scopes", "true");
-  const configurationId = connectionMode === "ads_mcp"
-    ? Deno.env.get("META_ADS_MCP_LOGIN_CONFIG_ID")
-    : Deno.env.get("META_LOGIN_CONFIG_ID");
-  if (configurationId) url.searchParams.set("config_id", configurationId);
-  url.searchParams.set(
-    "scope",
-    [
+  const configurationId = connectionMode === "ads_review"
+    ? null
+    : connectionMode === "ads_mcp"
+      ? Deno.env.get("META_ADS_MCP_LOGIN_CONFIG_ID")
+      : Deno.env.get("META_LOGIN_CONFIG_ID");
+  if (configurationId) {
+    url.searchParams.set("override_default_response_type", "true");
+    url.searchParams.set("config_id", configurationId);
+  }
+  const requestedScopes = connectionMode === "ads_review"
+    ? [
+      "ads_management",
+      "ads_read",
+      "business_management",
+      "pages_manage_ads",
+      "pages_read_engagement",
+      "pages_show_list",
+    ]
+    : [
       "pages_show_list",
       "pages_read_engagement",
       "pages_manage_metadata",
@@ -652,7 +664,10 @@ async function handleConnectUrl(req: Request, payload: any) {
       "leads_retrieval",
       "business_management",
       "ads_mcp_management",
-    ].join(","),
+    ];
+  url.searchParams.set(
+    "scope",
+    requestedScopes.join(","),
   );
   url.searchParams.set("state", state);
   return { url: url.href, callbackUrl: CALLBACK_URL };
@@ -699,7 +714,7 @@ async function handleCallback(req: Request, requestUrl: URL) {
       graph("me", userToken, { query: { fields: "id,name" } }),
       inspectTokenPermissions(userToken, returnedScopes),
     ]);
-    const pages = state.connectionMode === "ads_mcp"
+    const pages = ["ads_mcp", "ads_review"].includes(state.connectionMode)
       ? { data: [] }
       : await graph("me/accounts", userToken, {
         query: {
@@ -837,6 +852,25 @@ async function activeConnection(db: any, brandId?: string) {
   const credentials = JSON.parse(await decryptSecret(data.credential_ciphertext));
   if (!credentials.accessToken) throw new Error("Stored Meta token is invalid");
   return { row: data, accessToken: credentials.accessToken };
+}
+
+async function activeAdsConnection(db: any, brandId?: string) {
+  let query = db
+    .from("social_meta_connections")
+    .select("*")
+    .eq("status", "active")
+    .order("updated_at", { ascending: false })
+    .limit(20);
+  if (brandId) query = query.eq("brand_id", brandId);
+  const { data, error } = await query;
+  if (error || !data?.length) throw new Error("Connect Meta before using this feature");
+  const selected = data.find((row: any) => {
+    const scopes = new Set(Array.isArray(row.granted_scopes) ? row.granted_scopes : []);
+    return scopes.has("ads_read") || scopes.has("ads_management");
+  }) || data[0];
+  const credentials = JSON.parse(await decryptSecret(selected.credential_ciphertext));
+  if (!credentials.accessToken) throw new Error("Stored Meta token is invalid");
+  return { row: selected, accessToken: credentials.accessToken };
 }
 
 async function activeConnectionWithScope(
@@ -2694,7 +2728,7 @@ async function handleAddAccount(req: Request, payload: any) {
 
 async function handleListAdAccounts(req: Request, payload: any) {
   const { db } = await authenticatedCaller(req, "view");
-  const connection = await activeConnection(db, payload.brandId);
+  const connection = await activeAdsConnection(db, payload.brandId);
   const result = await graph("me/adaccounts", connection.accessToken, {
     query: {
       fields:

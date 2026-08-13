@@ -79,6 +79,9 @@ export function AccountManager() {
   const [busy, setBusy] = useState(false);
   const activeAccounts = accounts?.filter((account) => account.status !== "disconnected");
   const disconnectedAccountCount = accounts?.filter((account) => account.status === "disconnected").length ?? 0;
+  const adsAccessGranted = connections?.some((connection) =>
+    connection.granted_scopes.includes("ads_read") && connection.granted_scopes.includes("ads_management")
+  ) ?? false;
   const load = useCallback(async () => {
     setError("");
     setHealthError("");
@@ -107,6 +110,7 @@ export function AccountManager() {
     try {
       const result = await socialEdgeFetch<{ url: string }>("connect_url", {
         returnUrl: emsMetaReturnUrl(),
+        connectionMode: connections?.length && !adsAccessGranted ? "ads_review" : "standard",
       });
       if (window.top && window.top !== window) {
         window.top.postMessage(
@@ -212,7 +216,7 @@ export function AccountManager() {
         actions={<>
           <button onClick={connectMeta} disabled={busy} className="btn-primary">
             {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Link2 size={16} />}
-            {connections?.some((connection) => !connection.granted_scopes.includes("ads_read") || !connection.granted_scopes.includes("ads_management"))
+            {connections?.length && !adsAccessGranted
               ? "Grant ads access"
               : connections?.length
                 ? "Reconnect Meta"
