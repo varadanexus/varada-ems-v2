@@ -481,7 +481,15 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
   const isCurrentItem = (href) => {
     const itemUrl = new URL(href, window.location.origin);
     if (itemUrl.pathname !== currentUrl.pathname) return false;
-    if (workspace === WORKSPACES.WHATSAPP_PLATFORM) return itemUrl.search === currentUrl.search;
+    const querySensitivePaths = new Set([
+      ROUTES.SOCIAL_MEDIA_MANAGER,
+      ROUTES.WHATSAPP_PLATFORM_ADMIN,
+      ROUTES.SUPPORT_TICKETS,
+      ROUTES.DIGITAL_SERVICES_BILLING,
+    ]);
+    if (workspace === WORKSPACES.WHATSAPP_PLATFORM || querySensitivePaths.has(itemUrl.pathname)) {
+      return itemUrl.search === currentUrl.search;
+    }
     return itemUrl.search ? itemUrl.search === currentUrl.search : true;
   };
   const contextualSections = Array.isArray(context?.sections) ? context.sections : null;
