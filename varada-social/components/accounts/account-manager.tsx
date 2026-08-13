@@ -50,6 +50,25 @@ const META_FEATURES = [
   { label: "Ads reporting and campaigns", scopes: ["ads_read", "ads_management"] },
 ] as const;
 
+const EMS_SOCIAL_ACCOUNTS_PATH = "/new-ems/modules/social-media-manager/index.html?view=accounts";
+
+function emsMetaReturnUrl() {
+  try {
+    const parent = new URL(document.referrer);
+    if (parent.pathname.includes("/modules/social-media-manager/")) {
+      return new URL(EMS_SOCIAL_ACCOUNTS_PATH, parent.origin).href;
+    }
+  } catch {
+    // The production fallback below keeps OAuth inside the authenticated EMS.
+  }
+
+  const current = new URL(window.location.href);
+  if (current.hostname === "localhost" || current.hostname === "127.0.0.1") {
+    return current.href;
+  }
+  return new URL(EMS_SOCIAL_ACCOUNTS_PATH, current.origin).href;
+}
+
 export function AccountManager() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [connections, setConnections] = useState<MetaConnection[] | null>(null);
@@ -86,20 +105,8 @@ export function AccountManager() {
   async function connectMeta() {
     setBusy(true);
     try {
-      const returnUrl = (() => {
-        try {
-          const parent = new URL(document.referrer);
-          if (parent.pathname.includes("/modules/social-media-manager/")) {
-            parent.search = "view=accounts";
-            return parent.href;
-          }
-        } catch {
-          // Standalone mode returns to the current accounts page.
-        }
-        return window.location.href;
-      })();
       const result = await socialEdgeFetch<{ url: string }>("connect_url", {
-        returnUrl,
+        returnUrl: emsMetaReturnUrl(),
       });
       if (window.top && window.top !== window) {
         window.top.postMessage(
@@ -203,7 +210,14 @@ export function AccountManager() {
         description="Connect multiple business accounts. Tokens are encrypted at rest and never returned to the browser."
         icon={Radio}
         actions={<>
-          <button onClick={connectMeta} disabled={busy} className="btn-primary">{busy ? <LoaderCircle size={16} className="animate-spin" /> : <Link2 size={16} />} Connect Meta</button>
+          <button onClick={connectMeta} disabled={busy} className="btn-primary">
+            {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Link2 size={16} />}
+            {connections?.some((connection) => !connection.granted_scopes.includes("ads_read") || !connection.granted_scopes.includes("ads_management"))
+              ? "Grant ads access"
+              : connections?.length
+                ? "Reconnect Meta"
+                : "Connect Meta"}
+          </button>
           <button onClick={() => setManual((value) => !value)} className="btn-secondary"><Plus size={16} /> Add manually</button>
         </>}
       />

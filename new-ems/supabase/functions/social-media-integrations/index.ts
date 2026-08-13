@@ -258,6 +258,15 @@ function validReturnUrl(input: unknown) {
   try {
     const url = new URL(String(input || DEFAULT_RETURN_URL));
     if (!ALLOWED_ORIGINS.has(url.origin)) return DEFAULT_RETURN_URL;
+    const localDevelopment = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if (!localDevelopment) {
+      if (!url.pathname.includes("/new-ems/modules/social-media-manager/")) {
+        return DEFAULT_RETURN_URL;
+      }
+      url.pathname = "/new-ems/modules/social-media-manager/index.html";
+      url.search = "view=accounts";
+      url.hash = "";
+    }
     return url.href;
   } catch {
     return DEFAULT_RETURN_URL;
@@ -586,6 +595,10 @@ async function handleConnectUrl(req: Request, payload: any) {
   url.searchParams.set("redirect_uri", CALLBACK_URL);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("override_default_response_type", "true");
+  // Meta does not prompt again for a permission that was previously skipped
+  // or declined unless the login dialog is explicitly marked as a re-request.
+  url.searchParams.set("auth_type", "rerequest");
+  url.searchParams.set("return_scopes", "true");
   const configurationId = connectionMode === "ads_mcp"
     ? Deno.env.get("META_ADS_MCP_LOGIN_CONFIG_ID")
     : Deno.env.get("META_LOGIN_CONFIG_ID");
@@ -2657,6 +2670,12 @@ async function handleAddAccount(req: Request, payload: any) {
 async function handleListAdAccounts(req: Request, payload: any) {
   const { db } = await authenticatedCaller(req, "view");
   const connection = await activeConnection(db, payload.brandId);
+  const grantedScopes = new Set(connection.row.granted_scopes || []);
+  if (!grantedScopes.has("ads_read") && !grantedScopes.has("ads_management")) {
+    throw new Error(
+      "Meta authorization is missing ads_read and ads_management. Open Social Accounts and choose Grant ads access.",
+    );
+  }
   const result = await graph("me/adaccounts", connection.accessToken, {
     query: {
       fields:
