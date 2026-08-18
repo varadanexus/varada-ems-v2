@@ -175,6 +175,7 @@ export function CampaignManager() {
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft>(initialDraft);
   const createIntentRef = useRef(false);
+  const creatingRef = useRef(false);
   const account = accounts?.find(
     (item) => item.external_account_id === selected,
   );
@@ -190,13 +191,20 @@ export function CampaignManager() {
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
+  useEffect(() => {
+    creatingRef.current = creating;
+  }, [creating]);
+
   const loadAccounts = useCallback(async () => {
+    if (creatingRef.current) return;
     try {
       const rows = await socialEdgeFetch<AdAccount[]>("list_ad_accounts");
+      if (creatingRef.current) return;
       setAccounts(rows);
       setSelected((current) => current || rows[0]?.external_account_id || "");
       setError("");
     } catch (reason) {
+      if (creatingRef.current) return;
       setError(
         reason instanceof Error
           ? reason.message
@@ -206,12 +214,14 @@ export function CampaignManager() {
     }
   }, []);
   const loadCampaigns = useCallback(async (adAccountId: string) => {
+    if (creatingRef.current) return;
     if (!adAccountId) return setCampaigns([]);
     setBusy(true);
     try {
       const rows = await socialEdgeFetch<Campaign[]>("list_campaigns", {
         adAccountId,
       });
+      if (creatingRef.current) return;
       setCampaigns(rows);
       setOpenedCampaign((current) =>
         current
@@ -223,6 +233,7 @@ export function CampaignManager() {
       );
       setError("");
     } catch (reason) {
+      if (creatingRef.current) return;
       setError(
         reason instanceof Error
           ? reason.message
@@ -230,23 +241,25 @@ export function CampaignManager() {
       );
       setCampaigns([]);
     } finally {
-      setBusy(false);
+      if (!creatingRef.current) setBusy(false);
     }
   }, []);
   useEffect(() => {
+    if (creating) return;
     const timer = window.setTimeout(() => void loadAccounts(), 0);
     return () => window.clearTimeout(timer);
-  }, [loadAccounts]);
+  }, [creating, loadAccounts]);
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || creating) return;
     const timer = window.setTimeout(() => void loadCampaigns(selected), 0);
     return () => window.clearTimeout(timer);
-  }, [loadCampaigns, selected]);
+  }, [creating, loadCampaigns, selected]);
 
   function openBuilder() {
     setDraft(initialDraft);
     setStep(0);
     setError("");
+    setBusy(false);
     setCreating(true);
   }
   function validate(currentStep = step) {
