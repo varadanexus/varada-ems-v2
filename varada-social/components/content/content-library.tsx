@@ -128,7 +128,7 @@ export function ContentLibrary({ approvalOnly = false }: { approvalOnly?: boolea
                   {(item.category || item.automation_run_id) && <p className="mt-1 text-xs text-accent">{item.category || "Automated campaign"}{item.automation_run_id ? " · AI plan" : ""}</p>}
                   {item.rejection_reason && <p className="mt-1 text-xs text-red-300">{item.rejection_reason}</p>}
                 </div>
-                <div className="space-y-1.5"><StatusBadge status={item.status} />{item.safety_status && item.safety_status !== "pending" && <p className={cn("text-[10px] font-bold uppercase tracking-wider", item.safety_status === "passed" ? "text-emerald-300" : "text-amber-300")}>{item.safety_status.replace("_", " ")}</p>}</div>
+                <div className="space-y-1.5"><StatusBadge status={item.status} />{item.safety_status === "blocked" && <p className="text-[10px] font-bold uppercase tracking-wider text-red-300">{item.safety_status.replace("_", " ")}</p>}</div>
                 <p className="truncate text-xs capitalize text-muted">{item.platforms.join(", ")}</p>
                 <p className="text-xs text-muted">{item.scheduled_for ? new Date(item.scheduled_for).toLocaleString("en-IN") : "Not scheduled"}</p>
                 <div className="flex flex-wrap gap-1.5">

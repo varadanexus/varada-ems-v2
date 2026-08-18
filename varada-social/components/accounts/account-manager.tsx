@@ -1,10 +1,10 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ExternalLink, Link2, LoaderCircle, Plus, Radio, RefreshCw, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, EyeOff, Link2, LoaderCircle, PlugZap, Plus, Radio, RefreshCw, ShieldCheck } from "lucide-react";
 import { socialEdgeFetch } from "@/lib/api/client";
 import { PageHeader } from "@/components/ui/page-header";
-import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
+import { EmptyState, ErrorState } from "@/components/ui/states";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 type Account = {
@@ -50,6 +50,26 @@ const META_FEATURES = [
   { label: "Ads reporting and campaigns", scopes: ["ads_read", "ads_management"] },
 ] as const;
 
+const EMS_SOCIAL_ACCOUNTS_PATH = "/new-ems/modules/social-media-manager/index.html?view=accounts";
+const HIDDEN_META_CONNECTIONS_KEY = "varada:nexus-social:hidden-meta-connections";
+
+function emsMetaReturnUrl() {
+  try {
+    const parent = new URL(document.referrer);
+    if (parent.pathname.includes("/modules/social-media-manager/")) {
+      return new URL(EMS_SOCIAL_ACCOUNTS_PATH, parent.origin).href;
+    }
+  } catch {
+    // The production fallback below keeps OAuth inside the authenticated EMS.
+  }
+
+  const current = new URL(window.location.href);
+  if (current.hostname === "localhost" || current.hostname === "127.0.0.1") {
+    return current.href;
+  }
+  return new URL(EMS_SOCIAL_ACCOUNTS_PATH, current.origin).href;
+}
+
 export function AccountManager() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [connections, setConnections] = useState<MetaConnection[] | null>(null);
@@ -58,47 +78,79 @@ export function AccountManager() {
   const [healthError, setHealthError] = useState("");
   const [manual, setManual] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [hiddenConnectionIds, setHiddenConnectionIds] = useState<string[]>([]);
+  const [showHiddenConnections, setShowHiddenConnections] = useState(false);
+  const activeAccounts = accounts?.filter((account) => account.status !== "disconnected");
+  const disconnectedAccountCount = accounts?.filter((account) => account.status === "disconnected").length ?? 0;
+  const adsAccessGranted = connections?.some((connection) =>
+    connection.granted_scopes.includes("ads_read") && connection.granted_scopes.includes("ads_management")
+  ) ?? false;
   const load = useCallback(async () => {
-    const [accountResult, connectionResult] = await Promise.allSettled([
+    setError("");
+    setHealthError("");
+    const [accountsResult, connectionsResult] = await Promise.allSettled([
       socialEdgeFetch<Account[]>("list_accounts"),
       socialEdgeFetch<MetaConnection[]>("meta_connection_status"),
     ]);
-    if (accountResult.status === "fulfilled") {
-      setAccounts(accountResult.value);
-      setError("");
+
+    if (accountsResult.status === "fulfilled") {
+      setAccounts(accountsResult.value);
     } else {
-      setError(accountResult.reason instanceof Error ? accountResult.reason.message : "Accounts could not be loaded.");
+      setAccounts([]);
+      const reason = accountsResult.reason;
+      setError(reason instanceof Error ? reason.message : "Accounts could not be loaded.");
     }
-    if (connectionResult.status === "fulfilled") {
-      setConnections(connectionResult.value);
+
+    if (connectionsResult.status === "fulfilled") {
+      setConnections(connectionsResult.value);
+      setError("");
       setHealthError("");
     } else {
       setConnections([]);
-      setHealthError(connectionResult.reason instanceof Error ? connectionResult.reason.message : "Meta access status could not be checked.");
+      const reason = connectionsResult.reason;
+      setHealthError(reason instanceof Error ? reason.message : "Meta access status could not be checked.");
     }
   }, []);
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(HIDDEN_META_CONNECTIONS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) {
+        setHiddenConnectionIds(parsed.filter((value): value is string => typeof value === "string"));
+      }
+    } catch {
+      setHiddenConnectionIds([]);
+    }
+  }, []);
+
+  function persistHiddenConnectionIds(nextIds: string[]) {
+    setHiddenConnectionIds(nextIds);
+    try {
+      window.localStorage.setItem(HIDDEN_META_CONNECTIONS_KEY, JSON.stringify(nextIds));
+    } catch {
+      // Local-only reviewer display preference. If storage is blocked, the live session still updates.
+    }
+  }
+
+  function hideConnection(connection: MetaConnection) {
+    if (hiddenConnectionIds.includes(connection.id)) return;
+    persistHiddenConnectionIds([...hiddenConnectionIds, connection.id]);
+  }
+
+  function showConnection(connection: MetaConnection) {
+    persistHiddenConnectionIds(hiddenConnectionIds.filter((id) => id !== connection.id));
+  }
 
   async function connectMeta() {
     setBusy(true);
     try {
-      const returnUrl = (() => {
-        try {
-          const parent = new URL(document.referrer);
-          if (parent.pathname.includes("/modules/social-media-manager/")) {
-            parent.search = "view=accounts";
-            return parent.href;
-          }
-        } catch {
-          // Standalone mode returns to the current accounts page.
-        }
-        return window.location.href;
-      })();
       const result = await socialEdgeFetch<{ url: string }>("connect_url", {
-        returnUrl,
+        returnUrl: emsMetaReturnUrl(),
+        connectionMode: connections?.length && !adsAccessGranted ? "ads_review" : "standard",
       });
       if (window.top && window.top !== window) {
         window.top.postMessage(
@@ -125,6 +177,49 @@ export function AccountManager() {
       await load();
     } catch (reason) {
       setHealthError(reason instanceof Error ? reason.message : "Meta access could not be refreshed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnectMeta(connection: MetaConnection) {
+    const confirmed = window.confirm(
+      `Disconnect Meta authorization for ${connection.display_name}?\n\nThis only removes the active Meta token from Nexus Social. EMS users, drafts, schedules, posts, analytics history, and audit logs will be kept.`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setHealthError("");
+    try {
+      await socialEdgeFetch<{ disconnected: boolean }>("disconnect", {
+        connectionId: connection.id,
+      });
+      setSubscriptions([]);
+      await load();
+    } catch (reason) {
+      setHealthError(reason instanceof Error ? reason.message : "Meta connection could not be disconnected.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cleanupDisconnectedWorkspace() {
+    const confirmed = window.confirm(
+      "Remove disconnected Meta account records and clear unpublished local social campaigns from this workspace?\n\nPublished history and audit logs will be kept.",
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setError("");
+    try {
+      await socialEdgeFetch<{
+        cleaned: boolean;
+        deletedAccountCount: number;
+        deletedContentCount: number;
+        deletedAdAccountCount: number;
+      }>("cleanup_disconnected_workspace");
+      setSubscriptions([]);
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Disconnected workspace could not be cleaned.");
     } finally {
       setBusy(false);
     }
@@ -159,7 +254,14 @@ export function AccountManager() {
         description="Connect multiple business accounts. Tokens are encrypted at rest and never returned to the browser."
         icon={Radio}
         actions={<>
-          <button onClick={connectMeta} disabled={busy} className="btn-primary">{busy ? <LoaderCircle size={16} className="animate-spin" /> : <Link2 size={16} />} Connect Meta</button>
+          <button onClick={connectMeta} disabled={busy} className="btn-primary">
+            {busy ? <LoaderCircle size={16} className="animate-spin" /> : <Link2 size={16} />}
+            {connections?.length && !adsAccessGranted
+              ? "Grant ads access"
+              : connections?.length
+                ? "Reconnect Meta"
+                : "Connect Meta"}
+          </button>
           <button onClick={() => setManual((value) => !value)} className="btn-secondary"><Plus size={16} /> Add manually</button>
         </>}
       />
@@ -188,18 +290,40 @@ export function AccountManager() {
             <p className="mt-5 text-sm text-muted">No active Meta authorization was returned. Use Connect Meta to authorize the existing business assets.</p>
           ) : (
             <div className="mt-5 space-y-4">
-              {connections.map((connection) => {
+              {connections.filter((connection) => showHiddenConnections || !hiddenConnectionIds.includes(connection.id)).map((connection) => {
                 const granted = new Set(connection.granted_scopes);
+                const isHidden = hiddenConnectionIds.includes(connection.id);
                 return (
-                  <div key={connection.id} className="rounded-xl border bg-background p-4">
+                  <div key={connection.id} className={`rounded-xl border bg-background p-4 ${isHidden ? "border-dashed opacity-70" : ""}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="font-semibold">{connection.display_name}</p>
                         <p className="mt-1 text-xs text-muted">Meta authorization · updated {new Date(connection.updated_at).toLocaleString("en-IN")}</p>
                       </div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
-                        <CheckCircle2 size={13} /> Linked
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                          <CheckCircle2 size={13} /> Linked
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => isHidden ? showConnection(connection) : hideConnection(connection)}
+                          className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-muted transition hover:border-accent/50 hover:text-foreground"
+                          title={isHidden ? "Show this authorization card again" : "Hide this authorization card from this browser without disconnecting it."}
+                        >
+                          {isHidden ? <Eye size={13} /> : <EyeOff size={13} />}
+                          {isHidden ? "Unhide" : "Hide"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => disconnectMeta(connection)}
+                          disabled={busy}
+                          className="inline-flex items-center gap-1 rounded-full border border-amber-400/35 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200 transition hover:border-amber-300 hover:bg-amber-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                          title="Disconnect only the active Meta authorization so you can record a fresh Meta Login flow for App Review."
+                        >
+                          {busy ? <LoaderCircle size={13} className="animate-spin" /> : <PlugZap size={13} />}
+                          Disconnect Meta
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                       {META_FEATURES.map((feature) => {
@@ -221,6 +345,21 @@ export function AccountManager() {
                   </div>
                 );
               })}
+              {hiddenConnectionIds.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed bg-background/60 px-4 py-3 text-xs text-muted">
+                  <span>
+                    {hiddenConnectionIds.length} Meta authorization card{hiddenConnectionIds.length === 1 ? "" : "s"} hidden on this browser. Hidden cards remain connected and available to EMS.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowHiddenConnections((value) => !value)}
+                    className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 font-semibold text-foreground transition hover:border-accent/50"
+                  >
+                    {showHiddenConnections ? <EyeOff size={13} /> : <Eye size={13} />}
+                    {showHiddenConnections ? "Hide again" : "Show hidden"}
+                  </button>
+                </div>
+              )}
               {subscriptions.map((subscription) => (
                 <div key={subscription.account_id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background px-4 py-3 text-sm">
                   <div>
@@ -249,11 +388,15 @@ export function AccountManager() {
           <div className="md:col-span-2"><button className="btn-primary" disabled={busy}>Save encrypted connection</button></div>
         </form>
       )}
-      {!accounts ? <LoadingState /> : accounts.length === 0 ? (
+      {!activeAccounts ? (
+        <div className="rounded-2xl border bg-surface/55 p-5 text-sm text-muted">
+          Checking connected social accounts…
+        </div>
+      ) : activeAccounts.length === 0 ? (
         <EmptyState title="No social accounts connected" description="Connect Meta for Instagram and Facebook publishing, or add another platform for n8n-driven publishing." />
       ) : (
         <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {accounts.map((account) => (
+          {activeAccounts.map((account) => (
             <article key={account.id} className="rounded-2xl border bg-surface-raised p-5">
               <div className="flex items-start justify-between">
                 <span className="grid size-11 place-items-center rounded-xl bg-accent-soft font-bold uppercase text-accent">{account.platform.slice(0, 2)}</span>
@@ -266,6 +409,17 @@ export function AccountManager() {
             </article>
           ))}
         </section>
+      )}
+      {disconnectedAccountCount > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-xs text-muted">
+          <p className="leading-5">
+            {disconnectedAccountCount} disconnected Meta account record{disconnectedAccountCount === 1 ? "" : "s"} hidden from this active workspace.
+          </p>
+          <button type="button" onClick={cleanupDisconnectedWorkspace} disabled={busy} className="btn-secondary">
+            {busy ? <LoaderCircle size={16} className="animate-spin" /> : null}
+            Clean disconnected data
+          </button>
+        </div>
       )}
       <a href="https://developers.facebook.com/docs/instagram-platform/content-publishing/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted">Meta publishing requirements <ExternalLink size={12} /></a>
     </div>

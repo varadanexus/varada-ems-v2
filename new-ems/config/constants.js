@@ -192,6 +192,7 @@ export const ROUTES = {
   ,HOSPITAL_PROJECT_LICENSING: "/new-ems/modules/hospital-project-licensing/index.html"
   ,HOSPITAL_PROJECT_CONTRACTORS: "/new-ems/modules/hospital-project-contractors/index.html"
   ,HOSPITAL_PROJECT_DOCUMENTS: "/new-ems/modules/hospital-project-documents/index.html"
+  ,HOSPITAL_PROJECT_QUOTATIONS: "/new-ems/modules/hospital-project-quotations/index.html"
   ,HOSPITAL_PROJECT_CLIENT_PAYMENTS: "/new-ems/modules/hospital-project-client-payments/index.html"
   ,HOSPITAL_PROJECT_VENDOR_PAYMENTS: "/new-ems/modules/hospital-project-vendor-payments/index.html"
   ,HOSPITAL_PROJECT_COMMUNICATIONS: "/new-ems/modules/hospital-project-communications/index.html"

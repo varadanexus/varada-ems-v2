@@ -16,11 +16,28 @@ function safeModuleUrl(view) {
     if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsupported protocol");
     const route = view === "overview" ? "dashboard" : routes.has(view) ? view : "dashboard";
     url.pathname = url.pathname.replace(/\/(dashboard|create|content|calendar|approvals|trends|analytics|instagram|inbox|accounts|campaigns|settings|audit)\/?$/, `/${route}`);
-    url.search = "embedded=1&build=nexus-social-20260730-2";
+    url.search = "embedded=1&build=nexus-social-20260814-campaign-controls-2";
     return url.href;
   } catch {
     return fallback;
   }
+}
+
+function syncSidebarActiveState(destination) {
+  const current = new URL(destination, window.location.origin);
+  document.querySelectorAll("#appSidebar a.nav-link[href]").forEach((link) => {
+    const item = new URL(link.href, window.location.origin);
+    const sameSocialRoute = item.pathname === current.pathname &&
+      item.pathname.includes("/modules/social-media-manager/") &&
+      (item.searchParams.get("view") || "overview") === (current.searchParams.get("view") || "overview");
+    const active = sameSocialRoute || (item.pathname === current.pathname && item.search === current.search);
+    link.classList.toggle("active", active);
+    if (active) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  document.querySelectorAll("#appSidebar details.nav-section").forEach((section) => {
+    if (section.querySelector("a.nav-link.active")) section.open = true;
+  });
 }
 
 function renderLauncher(moduleUrl, session, accessToken) {
@@ -62,6 +79,8 @@ function renderLauncher(moduleUrl, session, accessToken) {
     </section>
   `);
 
+  syncSidebarActiveState(window.location.href);
+
   const frame = document.querySelector("#nexusSocialFrame");
   const targetOrigin = new URL(moduleUrl, window.location.origin).origin;
   const postSession = async () => {
@@ -84,6 +103,25 @@ function renderLauncher(moduleUrl, session, accessToken) {
   frame?.addEventListener("load", () => {
     postSession();
     window.setTimeout(postSession, 250);
+  });
+  document.addEventListener("click", (event) => {
+    const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    if (!link) return;
+    try {
+      const destination = new URL(link.href, window.location.origin);
+      if (destination.origin !== window.location.origin) return;
+      if (!destination.pathname.includes("/modules/social-media-manager/")) return;
+      const view = destination.searchParams.get("view") || "overview";
+      const route = view === "overview" ? "/dashboard" : `/${view}`;
+      event.preventDefault();
+      document.body.classList.remove("page-transition-active");
+      try { sessionStorage.removeItem("ems_nav_pending"); } catch {}
+      window.history.replaceState(null, "", destination.href);
+      syncSidebarActiveState(destination);
+      frame?.contentWindow?.postMessage({ type: "VARADA_EMS_NAVIGATE", route }, targetOrigin);
+    } catch {
+      // Preserve normal navigation when a sidebar destination is malformed.
+    }
   });
   window.addEventListener("message", (event) => {
     if (event.source !== frame?.contentWindow || event.origin !== targetOrigin) return;

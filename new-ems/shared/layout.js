@@ -9,7 +9,7 @@ import { initTheme } from "./theme.js";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 import { initNotificationShell } from "./notification-ui.js?v=notifications-1";
 import { qs, showToast } from "./utils.js";
-import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
+import { initLiveChat } from "./live-chat.js?v=sprint15-chat-22";
 import { allowDeviceInternalNavigation, enforceDeviceUnlock, enforceMandatorySecuritySetup, installDeviceRelock, isMobileSecurityDevice } from "./device-security.js";
 import { offerWebPushSetup } from "./push-notifications.js";
 import { enforceNativeAppUpdate } from "./native-app-update.js";

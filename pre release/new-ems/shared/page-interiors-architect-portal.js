@@ -1,7 +1,7 @@
 import { ROUTES, TOAST_TYPES } from "../config/constants.js";
 import { getSupabaseClient } from "../config/supabase.js";
 import { initTheme } from "./theme.js";
-import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
+import { initLiveChat } from "./live-chat.js?v=sprint15-chat-22";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 import { showToast } from "./utils.js";
 import { architectPortalLogout, getArchitectPortalSession, requireArchitectPortalSession } from "./interiors-architect-portal-auth.js";

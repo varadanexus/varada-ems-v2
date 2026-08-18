@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Inbox, LoaderCircle, MessageCircle, RefreshCw, Search, Send,
   ShieldCheck,
@@ -20,6 +20,7 @@ type Message = {
 };
 type Conversation = {
   id: string; updated_time: string | null;
+  unread_count: number;
   contact: { id: string | null; name: string; username: string | null };
   latest_message: string; messages: Message[];
 };
@@ -39,32 +40,87 @@ export function InstagramInbox() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [draft, setDraft] = useState("");
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const markingReadRef = useRef(new Set<string>());
+  const syncInFlightRef = useRef(false);
 
-  const load = useCallback(async () => {
-    setBusy("sync");
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (syncInFlightRef.current) return;
+    syncInFlightRef.current = true;
+    const silent = options?.silent === true;
+    if (!silent) setBusy("sync");
     try {
       const result = await socialEdgeFetch<InboxData>("instagram_inbox", { limit: 50 });
       setData(result);
+      try {
+        localStorage.setItem("nexus_instagram_inbox_cache", JSON.stringify({
+          savedAt: Date.now(),
+          data: result,
+        }));
+      } catch {
+        // Storage can be unavailable in hardened browser contexts.
+      }
       setSelected((current) =>
         current
           ? result.conversations.find((item) => item.id === current.id) || null
-          : result.conversations[0] || null,
+          : null,
       );
       setError("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Instagram Inbox could not be loaded.");
     } finally {
-      setBusy("");
+      if (!silent) setBusy("");
+      syncInFlightRef.current = false;
     }
   }, []);
 
   useEffect(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem("nexus_instagram_inbox_cache") || "null") as {
+        savedAt?: number;
+        data?: InboxData;
+      } | null;
+      const fresh = cached?.savedAt && Date.now() - cached.savedAt < 5 * 60_000;
+      if (fresh && cached?.data?.account?.id && Array.isArray(cached.data.conversations)) {
+        window.setTimeout(() => setData(cached.data || null), 0);
+      } else if (cached) {
+        localStorage.removeItem("nexus_instagram_inbox_cache");
+      }
+    } catch {
+      // A malformed or unavailable cache falls through to the live sync.
+    }
     const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
+    const sync = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load({ silent: true });
+    }, 10_000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(sync);
+    };
   }, [load]);
+
+  const markConversationRead = useCallback(async (conversation: Conversation) => {
+    if (!data || !conversation.contact.id || conversation.unread_count <= 0 || markingReadRef.current.has(conversation.id)) return;
+    markingReadRef.current.add(conversation.id);
+    try {
+      await socialEdgeFetch("instagram_mark_read", {
+        accountId: data.account.id,
+        conversationId: conversation.id,
+        recipientId: conversation.contact.id,
+      });
+      const markRead = (item: Conversation) => item.id === conversation.id ? { ...item, unread_count: 0 } : item;
+      setData((current) => current ? { ...current, conversations: current.conversations.map(markRead) } : current);
+      setSelected((current) => current?.id === conversation.id ? { ...current, unread_count: 0 } : current);
+    } catch {
+      // Keep the unread badge when Meta does not confirm the read action.
+    } finally {
+      markingReadRef.current.delete(conversation.id);
+    }
+  }, [data]);
 
   async function openConversation(conversation: Conversation) {
     setSelected(conversation);
+    void markConversationRead(conversation);
     setBusy("thread");
     try {
       const result = await socialEdgeFetch<Conversation>("instagram_conversation", {
@@ -113,7 +169,18 @@ export function InstagramInbox() {
     );
   }, [data, query]);
   const messages = [...(selected?.messages || [])].reverse();
+  const selectedId = selected?.id;
+  const selectedMessageCount = selected?.messages?.length || 0;
   const approvalPending = error.includes("awaiting Meta approval");
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const messageList = messageListRef.current;
+      if (messageList) messageList.scrollTop = messageList.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedId, selectedMessageCount]);
 
   return (
     <div className="space-y-6">
@@ -122,7 +189,7 @@ export function InstagramInbox() {
         title="Inbox"
         description="Read and reply to Instagram Business conversations without leaving EMS."
         icon={Inbox}
-        actions={<button onClick={load} disabled={busy === "sync"} className="btn-secondary">
+        actions={<button onClick={() => void load()} disabled={busy === "sync"} className="btn-secondary">
           {busy === "sync" ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />} Sync inbox
         </button>}
       />
@@ -139,7 +206,7 @@ export function InstagramInbox() {
                 Page access and Instagram Connected Tools are ready. Live conversations will appear here after Meta grants Advanced Access for <code>instagram_manage_messages</code>.
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button onClick={load} disabled={busy === "sync"} className="btn-secondary">
+                <button onClick={() => void load()} disabled={busy === "sync"} className="btn-secondary">
                   {busy === "sync" ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                   Check again
                 </button>
@@ -169,11 +236,16 @@ export function InstagramInbox() {
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto">
               {conversations.map((conversation) => (
-                <button key={conversation.id} onClick={() => void openConversation(conversation)} className={`flex w-full gap-3 border-b p-4 text-left transition hover:bg-accent-soft ${selected?.id === conversation.id ? "bg-accent-soft" : ""}`}>
+                <button key={conversation.id} onClick={() => void openConversation(conversation)} aria-label={`${conversation.contact.name}, ${conversation.unread_count > 0 ? `${conversation.unread_count} unread messages` : "read"}`} className={`flex w-full gap-3 border-b p-4 text-left transition hover:bg-accent-soft ${selected?.id === conversation.id || conversation.unread_count > 0 ? "bg-accent-soft" : ""}`}>
                   <span className="grid size-11 shrink-0 place-items-center rounded-full bg-surface text-sm font-bold text-accent">{conversation.contact.name.slice(0, 2).toUpperCase()}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="flex justify-between gap-2"><b className="truncate text-sm">{conversation.contact.name}</b><small className="shrink-0 text-[10px] text-muted">{conversation.updated_time ? new Date(conversation.updated_time).toLocaleDateString("en-IN") : ""}</small></span>
-                    <span className="mt-1 block truncate text-xs text-muted">{conversation.latest_message || "Instagram conversation"}</span>
+                    <span className="flex justify-between gap-2"><b className={`truncate text-sm ${conversation.unread_count > 0 ? "font-bold" : "font-medium"}`}>{conversation.contact.name}</b><small className="shrink-0 text-[10px] text-muted">{conversation.updated_time ? new Date(conversation.updated_time).toLocaleDateString("en-IN") : ""}</small></span>
+                    <span className="mt-1 flex items-center gap-2">
+                      <span className={`min-w-0 flex-1 truncate text-xs ${conversation.unread_count > 0 ? "font-semibold text-foreground" : "text-muted"}`}>{conversation.latest_message || "Instagram conversation"}</span>
+                      {conversation.unread_count > 0
+                        ? <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-[#100c05]">{conversation.unread_count} unread</span>
+                        : <span className="shrink-0 text-[10px] text-muted">Read</span>}
+                    </span>
                   </span>
                 </button>
               ))}
@@ -182,12 +254,12 @@ export function InstagramInbox() {
           <main className={`${selected ? "flex" : "hidden lg:flex"} min-h-0 flex-col`}>
             {selected && <>
               <header className="flex h-16 items-center gap-3 border-b px-4">
-                <button onClick={() => setSelected(null)} className="rounded-lg p-2 text-muted lg:hidden" aria-label="Back"><ArrowLeft size={18} /></button>
+                <button onClick={() => setSelected(null)} className="rounded-lg p-2 text-muted" aria-label="Back to conversations"><ArrowLeft size={18} /></button>
                 <span className="grid size-10 place-items-center rounded-full bg-accent-soft text-sm font-bold text-accent">{selected.contact.name.slice(0, 2).toUpperCase()}</span>
                 <div><p className="font-semibold">{selected.contact.name}</p><p className="text-xs text-muted">{selected.contact.username ? `@${selected.contact.username}` : "Instagram user"}</p></div>
                 {busy === "thread" && <LoaderCircle size={16} className="ml-auto animate-spin text-accent" />}
               </header>
-              <div className="min-h-0 flex-1 overflow-y-auto bg-background p-4 sm:p-6">
+              <div ref={messageListRef} className="min-h-0 flex-1 overflow-y-auto bg-background p-4 sm:p-6">
                 <div className="mx-auto flex max-w-3xl flex-col gap-3">
                   {messages.map((message) => {
                     const mine = String(message.from?.id || "") === String(data.account.external_account_id);

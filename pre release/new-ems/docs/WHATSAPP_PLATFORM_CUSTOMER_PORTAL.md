@@ -17,25 +17,17 @@ The EMS Command Center displays it as its own **WhatsApp Platform** card under
 **Business Modules**. It is deliberately excluded from the Communications
 group, where the existing **WhatsApp** card remains for internal company use.
 
-## Authentication architecture
+## Security and access
 
-- No Supabase Auth/GoTrue customer identities are created.
-- Customer passwords are one-way bcrypt hashes in
-  `whatsapp_platform_users`; plaintext passwords are never retained.
-- Signup and password verification RPCs are executable only by `service_role`.
-- The browser calls `whatsapp-customer-auth`, which enforces an origin allowlist,
-  body limits and rate limits before invoking the private RPCs.
-- Successful login returns a 256-bit opaque session token. Only its SHA-256
-  hash is stored in the database.
-- The opaque token is stored in `sessionStorage`, so closing the tab removes the
-  browser credential. Server sessions expire after 12 hours and can be revoked.
-- The Edge Function mints a one-hour signed database access token. This is not a
-  Supabase Auth session; it only supplies `auth.uid()` to tenant RLS policies.
-- The portal uses direct HTTPS calls and does not load or call the Supabase Auth
-  browser SDK.
-- Customer tables use tenant-scoped RLS. Meta provider secrets and access tokens
-  must remain server-side and must never be stored in browser-visible runtime
-  configuration.
+Authentication, session, credential-storage and tenant-enforcement internals are
+restricted implementation details and must not be described in public product
+pages, screenshots or reviewer-facing copy. Public documentation may state only
+that access is protected, company workspaces are isolated, and provider
+credentials are never exposed to browser clients.
+
+Operational configuration must be performed through the protected EMS controls
+and the approved deployment environment. Never place secrets, credentials,
+private architecture notes or production access instructions in this document.
 
 ## Customer signup
 
@@ -51,23 +43,21 @@ Marketing consent is optional and stored separately. Meta verification
 documents, access tokens and WhatsApp credentials are deliberately not
 collected by this form; those belong in Meta Embedded Signup.
 
-## Deployment order
+## Deployment controls
 
-1. Review and apply migration
-   `20260806113000_whatsapp_platform_customer_portal.sql`, followed by the
-   platform administration and business-onboarding migrations.
-2. Confirm the existing `EMS_JWT_SECRET` function secret is the project's
-   legacy JWT signing secret. Never expose it to the browser.
-3. Deploy `whatsapp-customer-auth` with JWT verification disabled as declared in
-   `new-ems/supabase/config.toml`.
-4. In Meta Developer, complete Tech Provider onboarding and create an Embedded
-   Signup configuration.
-5. Put only the public configuration ID in
-   `window.WHATSAPP_PLATFORM_CONFIG.embeddedSignupConfigId` inside
-   `new-ems/config/whatsapp-platform-runtime.js`.
-6. Keep the Meta App Secret and customer access tokens in Edge Function secrets.
-7. Add the production callback and allowed domain:
+1. Apply only reviewed migrations from the canonical `new-ems` migration root.
+2. Deploy the three WhatsApp Platform functions from the canonical function
+   source after validation.
+3. Configure provider values only through protected EMS and deployment controls.
+4. Keep the provider environment in testing mode throughout Meta App Review.
+5. Enable production onboarding only after Meta approval and a security-release
+   review.
+6. Keep the production callback and allowed domain on
    `https://www.varadanexus.com/whatsapp-platform`.
+
+The protected EMS Meta App Setup screen is the only permitted browser-based
+entry point for provider configuration. It is restricted to ultimate-authority
+roles and never displays a stored secret.
 
 ## Required hardening before public launch
 

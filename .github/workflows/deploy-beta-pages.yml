@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -93,10 +93,68 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload EMS beta artifact
+        id: pages_artifact
         uses: actions/upload-pages-artifact@v3
         with:
+          name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: ./.pages-dist
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/github-script@v7
+        env:
+          PAGES_ARTIFACT_ID: ${{ steps.pages_artifact.outputs.artifact_id }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const deploymentId = context.sha;
+            const artifactId = Number(process.env.PAGES_ARTIFACT_ID);
+            const terminalFailures = new Set(["failed", "failure", "errored", "error", "canceled", "cancelled"]);
+            const deadline = Date.now() + (20 * 60 * 1000);
+
+            if (!Number.isSafeInteger(artifactId) || artifactId <= 0) {
+              throw new Error(`Invalid Pages artifact id: ${process.env.PAGES_ARTIFACT_ID || "missing"}`);
+            }
+
+            const idToken = await core.getIDToken();
+            const created = await github.request("POST /repos/{owner}/{repo}/pages/deployments", {
+              owner,
+              repo,
+              artifact_id: artifactId,
+              pages_build_version: deploymentId,
+              oidc_token: idToken,
+              headers: { "X-GitHub-Api-Version": "2026-03-10" }
+            });
+
+            core.setOutput("page_url", created.data.page_url || "https://www.varadanexus.com");
+
+            try {
+              while (Date.now() < deadline) {
+                await new Promise((resolve) => setTimeout(resolve, 10000));
+                const response = await github.request("GET /repos/{owner}/{repo}/pages/deployments/{pages_deployment_id}", {
+                  owner,
+                  repo,
+                  pages_deployment_id: deploymentId,
+                  headers: { "X-GitHub-Api-Version": "2026-03-10" }
+                });
+                const status = String(response.data.status || "unknown");
+                core.info(`GitHub Pages deployment status: ${status}`);
+                if (status === "succeed") return;
+                if (terminalFailures.has(status)) throw new Error(`GitHub Pages deployment ended with status: ${status}`);
+              }
+              throw new Error("GitHub Pages deployment did not finish within 20 minutes.");
+            } catch (error) {
+              try {
+                await github.request("POST /repos/{owner}/{repo}/pages/deployments/{pages_deployment_id}/cancel", {
+                  owner,
+                  repo,
+                  pages_deployment_id: deploymentId,
+                  headers: { "X-GitHub-Api-Version": "2026-03-10" }
+                });
+              } catch (cancelError) {
+                core.warning(`Unable to cancel Pages deployment cleanly: ${cancelError.message}`);
+              }
+              throw error;
+            }

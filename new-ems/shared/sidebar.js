@@ -186,7 +186,15 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Platform Overview", href: ROUTES.WHATSAPP_PLATFORM_ADMIN },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Customers", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=customers` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Business Verification", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=verification` },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Meta Connections", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=connections` }
+      ]
+    },
+    {
+      title: "Commercial Control",
+      items: [
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Package Master", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=package-master` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Packages & Offers", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=packages` }
       ]
     },
     {
@@ -473,6 +481,15 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
   const isCurrentItem = (href) => {
     const itemUrl = new URL(href, window.location.origin);
     if (itemUrl.pathname !== currentUrl.pathname) return false;
+    const querySensitivePaths = new Set([
+      ROUTES.SOCIAL_MEDIA_MANAGER,
+      ROUTES.WHATSAPP_PLATFORM_ADMIN,
+      ROUTES.SUPPORT_TICKETS,
+      ROUTES.DIGITAL_SERVICES_BILLING,
+    ]);
+    if (workspace === WORKSPACES.WHATSAPP_PLATFORM || querySensitivePaths.has(itemUrl.pathname)) {
+      return itemUrl.search === currentUrl.search;
+    }
     return itemUrl.search ? itemUrl.search === currentUrl.search : true;
   };
   const contextualSections = Array.isArray(context?.sections) ? context.sections : null;

@@ -10,11 +10,20 @@ const MAX_BODY_BYTES = 16 * 1024;
 const ALLOWED_ORIGINS = new Set([
   "https://www.varadanexus.com",
   "https://varadanexus.com",
-  "http://localhost:5501",
-  "http://127.0.0.1:5501",
-  "http://localhost:5500",
-  "http://127.0.0.1:5500",
 ]);
+
+function isLoopbackDevelopmentOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    const loopbackHost = url.hostname === "localhost" ||
+      url.hostname === "127.0.0.1" ||
+      url.hostname === "[::1]" ||
+      url.hostname === "::1";
+    return loopbackHost && (url.protocol === "http:" || url.protocol === "https:");
+  } catch {
+    return false;
+  }
+}
 
 function env(name: string) {
   return Deno.env.get(name) || "";
@@ -23,7 +32,7 @@ function env(name: string) {
 function allowedOrigin(req: Request) {
   const origin = req.headers.get("origin") || "";
   if (!origin) return "https://www.varadanexus.com";
-  return ALLOWED_ORIGINS.has(origin) ? origin : "";
+  return ALLOWED_ORIGINS.has(origin) || isLoopbackDevelopmentOrigin(origin) ? origin : "";
 }
 
 function headers(req: Request) {
@@ -199,6 +208,22 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = String(body?.action || "");
     const admin = adminClient();
+
+    if (action === "accept_invite") {
+      const inviteToken = String(body.inviteToken || "").trim().toLowerCase();
+      if (!/^[a-f0-9]{64}$/.test(inviteToken)) throw new Error("This invitation is invalid or has expired.");
+      await enforceRateLimit(admin, req, "signup", await sha256(inviteToken));
+      if (body.termsAccepted !== true) throw new Error("You must accept the Terms of Service and Privacy Policy.");
+      const { data, error } = await admin.rpc("whatsapp_platform_accept_invite", {
+        p_invite_token_hash: await sha256(inviteToken),
+        p_display_name: cleanText(body.displayName, 100),
+        p_password: String(body.password || "").slice(0, 128),
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.session_token) throw new Error("This invitation is invalid or has expired.");
+      return json(req, { session: publicSession(row) });
+    }
 
     if (action === "signup") {
       const email = normalizeEmail(body.email);

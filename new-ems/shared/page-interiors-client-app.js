@@ -3,7 +3,7 @@ import { getStoredInteriorsPortalSession, interiorsPortalLogout, listMyInteriors
 import { getSupabaseClient } from "../config/supabase.js";
 import { initTheme } from "./theme.js";
 import { qs, showToast } from "./utils.js";
-import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
+import { initLiveChat } from "./live-chat.js?v=sprint15-chat-22";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 
 console.log("CLIENT_APP_BOOT");

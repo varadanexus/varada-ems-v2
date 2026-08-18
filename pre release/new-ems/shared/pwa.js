@@ -6,6 +6,7 @@
   const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
   let installPrompt = null;
   let installButton = null;
+  const INSTALL_DISMISSED_KEY = "ems_install_prompt_dismissed";
 
   if (isStandalone()) document.documentElement.classList.add("ems-standalone");
   if (isNative()) document.documentElement.classList.add("ems-native");
@@ -20,8 +21,14 @@
   }
 
   function removeInstallButton() {
+    installButton?.closest(".ems-pwa-install-wrap")?.remove();
     installButton?.remove();
     installButton = null;
+  }
+
+  function dismissInstallButton() {
+    try { window.sessionStorage.setItem(INSTALL_DISMISSED_KEY, "1"); } catch {}
+    removeInstallButton();
   }
 
   async function requestInstall() {
@@ -72,14 +79,26 @@
   }
 
   function renderInstallButton() {
-    if (installButton || isStandalone() || document.querySelector(".login-apps") || (!installPrompt && !isIos)) return;
+    let dismissed = false;
+    try { dismissed = window.sessionStorage.getItem(INSTALL_DISMISSED_KEY) === "1"; } catch {}
+    if (installButton || dismissed || isStandalone() || document.querySelector(".login-apps") || (!installPrompt && !isIos)) return;
+    const wrapper = document.createElement("div");
+    wrapper.className = "ems-pwa-install-wrap";
     installButton = document.createElement("button");
     installButton.type = "button";
     installButton.className = "ems-pwa-install";
     installButton.setAttribute("aria-label", "Install Varada Nexus on this device");
     installButton.innerHTML = '<span aria-hidden="true">↓</span> Install EMS';
     installButton.addEventListener("click", requestInstall);
-    document.body.appendChild(installButton);
+    const dismissButton = document.createElement("button");
+    dismissButton.type = "button";
+    dismissButton.className = "ems-pwa-install-dismiss";
+    dismissButton.setAttribute("aria-label", "Close install EMS prompt");
+    dismissButton.title = "Close";
+    dismissButton.textContent = "×";
+    dismissButton.addEventListener("click", dismissInstallButton);
+    wrapper.append(installButton, dismissButton);
+    document.body.appendChild(wrapper);
   }
 
   function offerUpdate(worker) {

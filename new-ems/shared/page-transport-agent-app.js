@@ -3,7 +3,7 @@ import { getSupabaseClient } from "../config/supabase.js";
 import { showToast, qs } from "./utils.js";
 import { initTheme } from "./theme.js";
 import { requirePortalSession, listMyAccess, portalLogout, escapeHtml, formatMoney, formatDate } from "./transport-portal-auth.js";
-import { initLiveChat } from "./live-chat.js?v=sprint15-chat-21";
+import { initLiveChat } from "./live-chat.js?v=sprint15-chat-22";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 
 const client = getSupabaseClient();
