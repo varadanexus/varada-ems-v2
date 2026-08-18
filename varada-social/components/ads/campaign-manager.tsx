@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -277,8 +277,7 @@ export function CampaignManager() {
     setStep((value) => Math.min(value + 1, steps.length - 1));
   }
 
-  async function createCampaign(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function createCampaign() {
     const message = validate(0) || validate(1) || validate(2);
     if (message) return setError(message);
     setBusy(true);
@@ -535,10 +534,7 @@ export function CampaignManager() {
             </Field>
           </section>
           {creating && (
-            <form
-              onSubmit={createCampaign}
-              className="overflow-hidden rounded-2xl border bg-surface"
-            >
+            <section className="overflow-hidden rounded-2xl border bg-surface">
               <div className="border-b px-5 py-4">
                 <div className="grid gap-2 md:grid-cols-4">
                   {steps.map((label, index) => (
@@ -1066,7 +1062,12 @@ export function CampaignManager() {
                     Continue <ArrowRight size={16} />
                   </button>
                 ) : (
-                  <button className="btn-primary" disabled={busy}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={busy}
+                    onClick={() => void createCampaign()}
+                  >
                     {busy ? (
                       <LoaderCircle size={16} className="animate-spin" />
                     ) : (
@@ -1076,7 +1077,7 @@ export function CampaignManager() {
                   </button>
                 )}
               </footer>
-            </form>
+            </section>
           )}
           {!creating &&
             (campaigns === null || (busy && campaigns.length === 0) ? (
