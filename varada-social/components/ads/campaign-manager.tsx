@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -174,6 +174,7 @@ export function CampaignManager() {
   const [openedCampaign, setOpenedCampaign] = useState<Campaign | null>(null);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft>(initialDraft);
+  const createIntentRef = useRef(false);
   const account = accounts?.find(
     (item) => item.external_account_id === selected,
   );
@@ -278,6 +279,8 @@ export function CampaignManager() {
   }
 
   async function createCampaign() {
+    if (!createIntentRef.current) return;
+    createIntentRef.current = false;
     const message = validate(0) || validate(1) || validate(2);
     if (message) return setError(message);
     setBusy(true);
@@ -486,6 +489,7 @@ export function CampaignManager() {
         actions={
           <>
             <button
+              type="button"
               className="btn-secondary"
               disabled={busy}
               onClick={() => void loadAccounts()}
@@ -494,6 +498,7 @@ export function CampaignManager() {
               Sync
             </button>
             <button
+              type="button"
               className="btn-primary"
               disabled={!selected || busy}
               onClick={creating ? () => setCreating(false) : openBuilder}
@@ -1067,7 +1072,10 @@ export function CampaignManager() {
                     type="button"
                     className="btn-primary"
                     disabled={busy}
-                    onClick={() => void createCampaign()}
+                    onClick={() => {
+                      createIntentRef.current = true;
+                      void createCampaign();
+                    }}
                   >
                     {busy ? (
                       <LoaderCircle size={16} className="animate-spin" />
@@ -1137,6 +1145,7 @@ export function CampaignManager() {
                         </p>
                         <div className="flex flex-wrap gap-2">
                           <button
+                            type="button"
                             className="btn-secondary"
                             onClick={(event) => {
                               event.stopPropagation();
@@ -1147,6 +1156,7 @@ export function CampaignManager() {
                           </button>
                           {active ? (
                             <button
+                              type="button"
                               className="btn-secondary"
                               disabled={busy}
                               onClick={(event) => {
@@ -1158,6 +1168,7 @@ export function CampaignManager() {
                             </button>
                           ) : (
                             <button
+                              type="button"
                               className="btn-secondary"
                               disabled={busy}
                               onClick={(event) => {
@@ -1169,6 +1180,7 @@ export function CampaignManager() {
                             </button>
                           )}
                           <button
+                            type="button"
                             className="btn-secondary border-red-400/30 text-red-200"
                             disabled={busy}
                             onClick={(event) => {
@@ -1294,6 +1306,7 @@ function CampaignDetails({
               </p>
             </div>
             <button
+              type="button"
               className="btn-secondary shrink-0"
               aria-label="Close campaign details"
               onClick={onClose}
@@ -1306,6 +1319,7 @@ function CampaignDetails({
               status={campaign.effective_status || campaign.status || "unknown"}
             />
             <button
+              type="button"
               className="btn-secondary"
               disabled={busy}
               onClick={() => setEditing((value) => !value)}
@@ -1315,6 +1329,7 @@ function CampaignDetails({
             </button>
             {active ? (
               <button
+                type="button"
                 className="btn-secondary"
                 disabled={busy}
                 onClick={onStop}
@@ -1323,6 +1338,7 @@ function CampaignDetails({
               </button>
             ) : (
               <button
+                type="button"
                 className="btn-secondary"
                 disabled={busy}
                 onClick={onActivate}
@@ -1331,6 +1347,7 @@ function CampaignDetails({
               </button>
             )}
             <button
+              type="button"
               className="btn-secondary border-red-400/30 text-red-200"
               disabled={busy}
               onClick={onDelete}
@@ -1392,7 +1409,12 @@ function CampaignDetails({
                 </Field>
               </div>
               <div className="mt-4 flex justify-end">
-                <button className="btn-primary" disabled={busy} onClick={save}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={busy}
+                  onClick={save}
+                >
                   {busy ? (
                     <LoaderCircle size={16} className="animate-spin" />
                   ) : (
