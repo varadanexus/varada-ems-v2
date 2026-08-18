@@ -375,7 +375,7 @@ export function AccountManager() {
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                         {declinedScopesHidden ? (
                           <span className="rounded-full border border-border bg-surface px-3 py-1 text-muted">
-                            Declined permissions hidden
+                            Hidden permissions
                           </span>
                         ) : (
                           <span className="text-amber-300">Declined: {connection.declined_scopes.join(", ")}</span>
@@ -387,7 +387,7 @@ export function AccountManager() {
                           title={declinedScopesHidden ? "Show declined permissions for this authorization." : "Hide only the declined permissions warning for recording."}
                         >
                           {declinedScopesHidden ? <Eye size={13} /> : <EyeOff size={13} />}
-                          {declinedScopesHidden ? "Show declined" : "Hide declined"}
+                          {declinedScopesHidden ? "Show" : "Hide declined"}
                         </button>
                       </div>
                     )}
@@ -405,7 +405,7 @@ export function AccountManager() {
                     className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 font-semibold text-foreground transition hover:border-accent/50"
                   >
                     {showHiddenConnections ? <EyeOff size={13} /> : <Eye size={13} />}
-                    {showHiddenConnections ? "Hide again" : "Show hidden"}
+                    {showHiddenConnections ? "Hide again" : "Show"}
                   </button>
                 </div>
               )}
