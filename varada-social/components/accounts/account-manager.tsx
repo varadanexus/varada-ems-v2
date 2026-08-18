@@ -52,6 +52,7 @@ const META_FEATURES = [
 
 const EMS_SOCIAL_ACCOUNTS_PATH = "/new-ems/modules/social-media-manager/index.html?view=accounts";
 const HIDDEN_META_CONNECTIONS_KEY = "varada:nexus-social:hidden-meta-connections";
+const HIDDEN_META_DECLINED_SCOPES_KEY = "varada:nexus-social:hidden-meta-declined-scopes";
 
 function emsMetaReturnUrl() {
   try {
@@ -79,6 +80,7 @@ export function AccountManager() {
   const [manual, setManual] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hiddenConnectionIds, setHiddenConnectionIds] = useState<string[]>([]);
+  const [hiddenDeclinedConnectionIds, setHiddenDeclinedConnectionIds] = useState<string[]>([]);
   const [showHiddenConnections, setShowHiddenConnections] = useState(false);
   const activeAccounts = accounts?.filter((account) => account.status !== "disconnected");
   const disconnectedAccountCount = accounts?.filter((account) => account.status === "disconnected").length ?? 0;
@@ -126,6 +128,17 @@ export function AccountManager() {
       setHiddenConnectionIds([]);
     }
   }, []);
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(HIDDEN_META_DECLINED_SCOPES_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) {
+        setHiddenDeclinedConnectionIds(parsed.filter((value): value is string => typeof value === "string"));
+      }
+    } catch {
+      setHiddenDeclinedConnectionIds([]);
+    }
+  }, []);
 
   function persistHiddenConnectionIds(nextIds: string[]) {
     setHiddenConnectionIds(nextIds);
@@ -143,6 +156,24 @@ export function AccountManager() {
 
   function showConnection(connection: MetaConnection) {
     persistHiddenConnectionIds(hiddenConnectionIds.filter((id) => id !== connection.id));
+  }
+
+  function persistHiddenDeclinedConnectionIds(nextIds: string[]) {
+    setHiddenDeclinedConnectionIds(nextIds);
+    try {
+      window.localStorage.setItem(HIDDEN_META_DECLINED_SCOPES_KEY, JSON.stringify(nextIds));
+    } catch {
+      // Browser privacy settings can block localStorage; the control still works for the current render.
+    }
+  }
+
+  function hideDeclinedScopes(connection: MetaConnection) {
+    if (hiddenDeclinedConnectionIds.includes(connection.id)) return;
+    persistHiddenDeclinedConnectionIds([...hiddenDeclinedConnectionIds, connection.id]);
+  }
+
+  function showDeclinedScopes(connection: MetaConnection) {
+    persistHiddenDeclinedConnectionIds(hiddenDeclinedConnectionIds.filter((id) => id !== connection.id));
   }
 
   async function connectMeta() {
@@ -293,6 +324,7 @@ export function AccountManager() {
               {connections.filter((connection) => showHiddenConnections || !hiddenConnectionIds.includes(connection.id)).map((connection) => {
                 const granted = new Set(connection.granted_scopes);
                 const isHidden = hiddenConnectionIds.includes(connection.id);
+                const declinedScopesHidden = hiddenDeclinedConnectionIds.includes(connection.id);
                 return (
                   <div key={connection.id} className={`rounded-xl border bg-background p-4 ${isHidden ? "border-dashed opacity-70" : ""}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -340,7 +372,24 @@ export function AccountManager() {
                       A granted scope confirms token access. Meta App Review and feature capability approval can still be required before Instagram inbox or other restricted operations work in production.
                     </p>
                     {connection.declined_scopes.length > 0 && (
-                      <p className="mt-2 text-xs text-amber-300">Declined: {connection.declined_scopes.join(", ")}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                        {declinedScopesHidden ? (
+                          <span className="rounded-full border border-border bg-surface px-3 py-1 text-muted">
+                            Hidden permissions
+                          </span>
+                        ) : (
+                          <span className="text-amber-300">Declined: {connection.declined_scopes.join(", ")}</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => declinedScopesHidden ? showDeclinedScopes(connection) : hideDeclinedScopes(connection)}
+                          className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1 font-semibold text-muted transition hover:border-accent/50 hover:text-foreground"
+                          title={declinedScopesHidden ? "Show declined permissions for this authorization." : "Hide only the declined permissions warning for recording."}
+                        >
+                          {declinedScopesHidden ? <Eye size={13} /> : <EyeOff size={13} />}
+                          {declinedScopesHidden ? "Show" : "Hide declined"}
+                        </button>
+                      </div>
                     )}
                   </div>
                 );
@@ -348,7 +397,7 @@ export function AccountManager() {
               {hiddenConnectionIds.length > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed bg-background/60 px-4 py-3 text-xs text-muted">
                   <span>
-                    {hiddenConnectionIds.length} Meta authorization card{hiddenConnectionIds.length === 1 ? "" : "s"} hidden on this browser. Hidden cards remain connected and available to EMS.
+                    {hiddenConnectionIds.length} card{hiddenConnectionIds.length === 1 ? "" : "s"} hidden.
                   </span>
                   <button
                     type="button"
@@ -356,7 +405,7 @@ export function AccountManager() {
                     className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 font-semibold text-foreground transition hover:border-accent/50"
                   >
                     {showHiddenConnections ? <EyeOff size={13} /> : <Eye size={13} />}
-                    {showHiddenConnections ? "Hide again" : "Show hidden"}
+                    {showHiddenConnections ? "Hide again" : "Show"}
                   </button>
                 </div>
               )}

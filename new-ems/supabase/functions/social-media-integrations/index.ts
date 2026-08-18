@@ -855,6 +855,11 @@ async function activeConnection(db: any, brandId?: string) {
 }
 
 async function activeAdsConnection(db: any, brandId?: string) {
+  const connections = await activeAdsConnections(db, brandId);
+  return connections[0];
+}
+
+async function activeAdsConnections(db: any, brandId?: string) {
   let query = db
     .from("social_meta_connections")
     .select("*")
@@ -864,13 +869,20 @@ async function activeAdsConnection(db: any, brandId?: string) {
   if (brandId) query = query.eq("brand_id", brandId);
   const { data, error } = await query;
   if (error || !data?.length) throw new Error("Connect Meta before using this feature");
-  const selected = data.find((row: any) => {
+  const selected = data.filter((row: any) => {
     const scopes = new Set(Array.isArray(row.granted_scopes) ? row.granted_scopes : []);
-    return scopes.has("ads_read") || scopes.has("ads_management");
-  }) || data[0];
-  const credentials = JSON.parse(await decryptSecret(selected.credential_ciphertext));
-  if (!credentials.accessToken) throw new Error("Stored Meta token is invalid");
-  return { row: selected, accessToken: credentials.accessToken };
+    return scopes.has("ads_read") && scopes.has("ads_management");
+  });
+  if (!selected.length) {
+    throw new Error("Reconnect Meta with both ads_read and ads_management before using Ads Campaigns");
+  }
+  const connections = [];
+  for (const row of selected) {
+    const credentials = JSON.parse(await decryptSecret(row.credential_ciphertext));
+    if (credentials.accessToken) connections.push({ row, accessToken: credentials.accessToken });
+  }
+  if (!connections.length) throw new Error("Stored Meta token is invalid");
+  return connections;
 }
 
 async function activeConnectionWithScope(
@@ -2728,15 +2740,71 @@ async function handleAddAccount(req: Request, payload: any) {
 
 async function handleListAdAccounts(req: Request, payload: any) {
   const { db } = await authenticatedCaller(req, "view");
-  const connection = await activeAdsConnection(db, payload.brandId);
-  const result = await graph("me/adaccounts", connection.accessToken, {
-    query: {
-      fields:
-        "id,account_id,name,currency,timezone_name,account_status,business{id,name},amount_spent,balance,disable_reason",
-      limit: "200",
-    },
-  });
-  const rows = (result.data || []).map((account: any) => ({
+  const connections = await activeAdsConnections(db, payload.brandId);
+  const fields =
+    "id,account_id,name,currency,timezone_name,account_status,business{id,name},amount_spent,balance,disable_reason";
+  const errors: string[] = [];
+  let rows: any[] = [];
+
+  for (const connection of connections) {
+    try {
+      const result = await graph("me/adaccounts", connection.accessToken, {
+        query: { fields, limit: "200" },
+      });
+      rows = adAccountRows(result.data || [], connection);
+      if (rows.length) break;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+
+    try {
+      const businessResult = await graph("me/businesses", connection.accessToken, {
+        query: {
+          fields:
+            `id,name,owned_ad_accounts.limit(100){${fields}},client_ad_accounts.limit(100){${fields}}`,
+          limit: "100",
+        },
+      });
+      const accounts: any[] = [];
+      for (const business of businessResult.data || []) {
+        for (const account of business.owned_ad_accounts?.data || []) {
+          accounts.push({
+            ...account,
+            business: account.business || { id: business.id, name: business.name },
+          });
+        }
+        for (const account of business.client_ad_accounts?.data || []) {
+          accounts.push({
+            ...account,
+            business: account.business || { id: business.id, name: business.name },
+          });
+        }
+      }
+      rows = adAccountRows(accounts, connection);
+      if (rows.length) break;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  const uniqueRows = [...new Map(rows.map((row) => [row.external_account_id, row])).values()];
+  if (uniqueRows.length) {
+    const { error } = await db
+      .from("social_ad_accounts")
+      .upsert(uniqueRows, { onConflict: "external_account_id" });
+    if (error) throw new Error(error.message);
+  }
+  if (!uniqueRows.length && errors.length) {
+    throw new Error(
+      "Meta accepted the ads scopes, but no usable ad account was returned. Confirm the Meta user is assigned to the ad account in Business Settings with ads_read/ads_management access, then reconnect Meta and sync again. Last Meta response: " +
+        errors[errors.length - 1],
+    );
+  }
+  return uniqueRows;
+}
+
+function adAccountRows(accounts: any[], connection: any) {
+  return accounts.map((account: any) => ({
     connection_id: connection.row.id,
     brand_id: connection.row.brand_id,
     external_account_id: account.id,
@@ -2754,13 +2822,6 @@ async function handleListAdAccounts(req: Request, payload: any) {
     },
     last_synced_at: new Date().toISOString(),
   }));
-  if (rows.length) {
-    const { error } = await db
-      .from("social_ad_accounts")
-      .upsert(rows, { onConflict: "external_account_id" });
-    if (error) throw new Error(error.message);
-  }
-  return rows;
 }
 
 async function resolveAdAccount(db: any, externalId: string) {

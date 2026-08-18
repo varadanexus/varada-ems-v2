@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -277,8 +277,7 @@ export function CampaignManager() {
     setStep((value) => Math.min(value + 1, steps.length - 1));
   }
 
-  async function createCampaign(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function createCampaign() {
     const message = validate(0) || validate(1) || validate(2);
     if (message) return setError(message);
     setBusy(true);
@@ -535,10 +534,7 @@ export function CampaignManager() {
             </Field>
           </section>
           {creating && (
-            <form
-              onSubmit={createCampaign}
-              className="overflow-hidden rounded-2xl border bg-surface"
-            >
+            <section className="overflow-hidden rounded-2xl border bg-surface">
               <div className="border-b px-5 py-4">
                 <div className="grid gap-2 md:grid-cols-4">
                   {steps.map((label, index) => (
@@ -908,7 +904,7 @@ export function CampaignManager() {
                     <>
                       <Section
                         title="Ad creative plan"
-                        description="Creative details are saved with the paused campaign plan; no ad is published by this action."
+                        description="Creative details are saved with the draft campaign plan; no ad is published by this action."
                       >
                         <div className="grid gap-4 md:grid-cols-2">
                           <Field label="Destination URL">
@@ -995,11 +991,12 @@ export function CampaignManager() {
                         </div>
                       </Section>
                       <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
-                        <strong>Safe creation:</strong> This creates the real
-                        Meta campaign container in PAUSED state. Audience,
-                        placements, creative, and tracking are stored as its
-                        reviewed setup plan; no ad set, ad, delivery, or spend
-                        starts automatically.
+                        <strong>Draft creation:</strong> This creates a draft
+                        campaign record in EMS and a matching Meta campaign
+                        container in PAUSED state. Audience, placements,
+                        creative, and tracking are stored as its reviewed setup
+                        plan; no ad set, ad, delivery, or spend starts
+                        automatically.
                       </div>
                     </>
                   )}
@@ -1044,7 +1041,7 @@ export function CampaignManager() {
                   </dl>
                   <div className="mt-6 rounded-xl border bg-surface p-4 text-xs leading-5 text-muted">
                     <strong className="text-foreground">Estimated setup</strong>
-                    <br />1 paused campaign
+                    <br />1 draft campaign
                     <br />0 active ad sets
                     <br />0 active ads
                     <br />
@@ -1066,17 +1063,22 @@ export function CampaignManager() {
                     Continue <ArrowRight size={16} />
                   </button>
                 ) : (
-                  <button className="btn-primary" disabled={busy}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={busy}
+                    onClick={() => void createCampaign()}
+                  >
                     {busy ? (
                       <LoaderCircle size={16} className="animate-spin" />
                     ) : (
                       <Check size={16} />
                     )}{" "}
-                    Create paused campaign
+                    Create draft campaign
                   </button>
                 )}
               </footer>
-            </form>
+            </section>
           )}
           {!creating &&
             (campaigns === null || (busy && campaigns.length === 0) ? (
@@ -1084,7 +1086,7 @@ export function CampaignManager() {
             ) : campaigns.length === 0 ? (
               <EmptyState
                 title="No campaigns found"
-                description="Create the first paused campaign for this Meta ad account."
+                description="Create the first draft campaign for this Meta ad account."
               />
             ) : (
               <section className="grid gap-3 lg:grid-cols-2">
