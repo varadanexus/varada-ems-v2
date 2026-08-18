@@ -164,7 +164,11 @@ const objectives = [
   ["OUTCOME_APP_PROMOTION", "App promotion", "Drive app installs and events"],
 ];
 
-export function CampaignManager() {
+export function CampaignManager({
+  initialMode = "list",
+}: {
+  initialMode?: "list" | "create" | "analytics";
+}) {
   const [accounts, setAccounts] = useState<AdAccount[] | null>(null);
   const [selected, setSelected] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
@@ -194,6 +198,15 @@ export function CampaignManager() {
   useEffect(() => {
     creatingRef.current = creating;
   }, [creating]);
+
+  useEffect(() => {
+    if (initialMode !== "create") return;
+    setDraft(initialDraft);
+    setStep(0);
+    setError("");
+    setBusy(false);
+    setCreating(true);
+  }, [initialMode]);
 
   const loadAccounts = useCallback(async () => {
     if (creatingRef.current) return;
@@ -496,8 +509,20 @@ export function CampaignManager() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Meta Marketing API"
-        title="Ads campaigns"
-        description="Plan, create, review, and control Meta advertising from the EMS."
+        title={
+          initialMode === "create"
+            ? "Create draft campaign"
+            : initialMode === "analytics"
+              ? "Ad analytics"
+              : "Ads campaigns"
+        }
+        description={
+          initialMode === "create"
+            ? "Build a paused Meta campaign draft from EMS before anything is activated."
+            : initialMode === "analytics"
+              ? "Review connected ad accounts, campaign status, budgets, and delivery controls from EMS."
+              : "Plan, create, review, and control Meta advertising from the EMS."
+        }
         icon={Megaphone}
         actions={
           <>
@@ -551,6 +576,9 @@ export function CampaignManager() {
               </select>
             </Field>
           </section>
+          {initialMode === "analytics" && campaigns && (
+            <AdAnalyticsSummary campaigns={campaigns} money={money} />
+          )}
           {creating && (
             <section className="overflow-hidden rounded-2xl border bg-surface">
               <div className="border-b px-5 py-4">
@@ -1226,6 +1254,80 @@ export function CampaignManager() {
         </>
       )}
     </div>
+  );
+}
+
+function AdAnalyticsSummary({
+  campaigns,
+  money,
+}: {
+  campaigns: Campaign[];
+  money: Intl.NumberFormat;
+}) {
+  const activeCount = campaigns.filter(
+    (campaign) =>
+      campaign.effective_status === "ACTIVE" || campaign.status === "ACTIVE",
+  ).length;
+  const pausedCount = campaigns.filter(
+    (campaign) =>
+      campaign.effective_status === "PAUSED" || campaign.status === "PAUSED",
+  ).length;
+  const dailyBudget = campaigns.reduce(
+    (total, campaign) => total + Number(campaign.daily_budget || 0),
+    0,
+  );
+  const lifetimeBudget = campaigns.reduce(
+    (total, campaign) => total + Number(campaign.lifetime_budget || 0),
+    0,
+  );
+  const recentlyUpdated = [...campaigns]
+    .sort((a, b) =>
+      String(b.metadata?.updatedTime || "").localeCompare(
+        String(a.metadata?.updatedTime || ""),
+      ),
+    )
+    .slice(0, 4);
+
+  return (
+    <section className="grid gap-4 rounded-2xl border bg-surface p-5 lg:grid-cols-4">
+      <Summary label="Campaigns" value={String(campaigns.length)} />
+      <Summary label="Active" value={String(activeCount)} />
+      <Summary label="Paused / draft" value={String(pausedCount)} />
+      <Summary
+        label="Budget tracked"
+        value={
+          dailyBudget
+            ? `${money.format(dailyBudget)} daily`
+            : lifetimeBudget
+              ? `${money.format(lifetimeBudget)} lifetime`
+              : "No budget set"
+        }
+      />
+      <div className="rounded-2xl border bg-background p-4 lg:col-span-4">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">
+          Recent campaigns
+        </p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {recentlyUpdated.length ? (
+            recentlyUpdated.map((campaign) => (
+              <div
+                key={campaign.external_campaign_id}
+                className="rounded-xl border bg-surface-raised p-3"
+              >
+                <p className="font-semibold">{campaign.name}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {campaign.effective_status || campaign.status || "Unknown"} ·{" "}
+                  {campaign.objective?.replaceAll("_", " ") ||
+                    "Objective unavailable"}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted">No ad campaigns found yet.</p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -20,6 +20,8 @@ const routes = [
   "inbox",
   "accounts",
   "campaigns",
+  "ads/create",
+  "ads/analytics",
   "settings",
   "audit",
 ];
@@ -34,7 +36,7 @@ await cp(
 
 for (const route of routes) {
   const source = path.join(appOutput, `${route}.html`);
-  await copyFile(source, path.join(socialRoot, `${route}.html`));
+  await copyFile(source, path.join(socialRoot, `${route.replaceAll("/", "-")}.html`));
   const directory = path.join(socialRoot, route);
   await mkdir(directory, { recursive: true });
   await copyFile(source, path.join(directory, "index.html"));

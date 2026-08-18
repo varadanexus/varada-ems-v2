@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   BarChart3,
   CalendarDays,
   ChevronDown,
@@ -13,6 +14,7 @@ import {
   Settings,
   Sparkles,
   Radio,
+  PlusCircle,
   ScrollText,
   Users,
   X,
@@ -21,18 +23,33 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/utils/cn";
 
-const navigation = [
-  { label: "Overview", icon: LayoutDashboard, href: "/dashboard" },
-  { label: "Create", icon: Sparkles, href: "/create" },
-  { label: "Content", icon: FileStack, href: "/content" },
-  { label: "Calendar", icon: CalendarDays, href: "/calendar" },
-  { label: "Approvals", icon: Users, href: "/approvals" },
-  { label: "Trends", icon: Lightbulb, href: "/trends" },
-  { label: "Analytics", icon: BarChart3, href: "/analytics" },
-  { label: "Instagram", icon: Camera, href: "/instagram" },
-  { label: "Inbox", icon: Inbox, href: "/inbox" },
-  { label: "Accounts", icon: Radio, href: "/accounts" },
-  { label: "Ads campaigns", icon: Megaphone, href: "/campaigns" },
+const sections = [
+  {
+    title: "Workspace",
+    items: [
+      { label: "Overview", icon: LayoutDashboard, href: "/dashboard" },
+      { label: "Create", icon: Sparkles, href: "/create" },
+      { label: "Content", icon: FileStack, href: "/content" },
+      { label: "Calendar", icon: CalendarDays, href: "/calendar" },
+      { label: "Approvals", icon: Users, href: "/approvals" },
+      { label: "Trends", icon: Lightbulb, href: "/trends" },
+      { label: "Analytics", icon: BarChart3, href: "/analytics" },
+      { label: "Instagram", icon: Camera, href: "/instagram" },
+      { label: "Inbox", icon: Inbox, href: "/inbox" },
+    ],
+  },
+  {
+    title: "Ads",
+    items: [
+      { label: "Ads campaigns", icon: Megaphone, href: "/campaigns" },
+      { label: "Create campaign", icon: PlusCircle, href: "/ads/create" },
+      { label: "Ad analytics", icon: Activity, href: "/ads/analytics" },
+    ],
+  },
+  {
+    title: "Connections",
+    items: [{ label: "Accounts", icon: Radio, href: "/accounts" }],
+  },
 ];
 
 export function Sidebar({
@@ -92,27 +109,32 @@ export function Sidebar({
           <ChevronDown size={15} className="text-white/45" />
         </button>
 
-        <nav className="mt-7 space-y-1">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/30">
-            Workspace
-          </p>
-          {navigation.map(({ label, icon: Icon, href }) => {
-            const active = href !== "#" && pathname === href;
-            return (
-            <Link
-              key={label}
-              href={href}
-              className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition",
-                active
-                  ? "bg-white text-sidebar shadow-sm"
-                  : "text-white/60 hover:bg-white/[0.06] hover:text-white",
-              )}
-            >
-              <Icon size={18} strokeWidth={active ? 2.3 : 1.8} />
-              <span className="flex-1">{label}</span>
-            </Link>
-          )})}
+        <nav className="mt-7 space-y-5">
+          {sections.map((section) => (
+            <div key={section.title} className="space-y-1">
+              <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/30">
+                {section.title}
+              </p>
+              {section.items.map(({ label, icon: Icon, href }) => {
+                const active = href !== "#" && pathname === href;
+                return (
+                  <Link
+                    key={label}
+                    href={href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition",
+                      active
+                        ? "bg-white text-sidebar shadow-sm"
+                        : "text-white/60 hover:bg-white/[0.06] hover:text-white",
+                    )}
+                  >
+                    <Icon size={18} strokeWidth={active ? 2.3 : 1.8} />
+                    <span className="flex-1">{label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <nav className="mt-auto space-y-1 border-t border-white/10 pt-4">
