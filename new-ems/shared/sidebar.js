@@ -298,7 +298,6 @@ const MENU_BY_WORKSPACE = {
       title: "Ads",
       items: [
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ads Campaigns", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=campaigns` },
-        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Create Campaign", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=ads-create` },
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ad Analytics", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=ads-analytics` }
       ]
     },

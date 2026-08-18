@@ -20,7 +20,6 @@ const routes = [
   "inbox",
   "accounts",
   "campaigns",
-  "ads/create",
   "ads/analytics",
   "settings",
   "audit",

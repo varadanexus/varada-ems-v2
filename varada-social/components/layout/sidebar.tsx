@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Activity,
   BarChart3,
   CalendarDays,
   ChevronDown,
@@ -14,7 +13,6 @@ import {
   Settings,
   Sparkles,
   Radio,
-  PlusCircle,
   ScrollText,
   Users,
   X,
@@ -42,8 +40,7 @@ const sections = [
     title: "Ads",
     items: [
       { label: "Ads campaigns", icon: Megaphone, href: "/campaigns" },
-      { label: "Create campaign", icon: PlusCircle, href: "/ads/create" },
-      { label: "Ad analytics", icon: Activity, href: "/ads/analytics" },
+      { label: "Ad analytics", icon: BarChart3, href: "/ads/analytics" },
     ],
   },
   {

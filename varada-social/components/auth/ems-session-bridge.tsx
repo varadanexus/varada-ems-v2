@@ -53,7 +53,7 @@ export function EmsSessionBridge() {
         const allowedRoutes = new Set([
           "/dashboard", "/create", "/content", "/calendar", "/approvals",
           "/trends", "/analytics", "/instagram", "/inbox", "/accounts",
-          "/campaigns", "/ads/create", "/ads/analytics", "/settings", "/audit",
+          "/campaigns", "/ads/analytics", "/settings", "/audit",
         ]);
         if (payload.route && allowedRoutes.has(payload.route)) router.push(payload.route);
         return;
