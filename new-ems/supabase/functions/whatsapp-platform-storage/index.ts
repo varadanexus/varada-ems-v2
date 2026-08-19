@@ -404,12 +404,18 @@ async function verificationState(admin: any, customer: any) {
     .eq("tenant_id", customer.tenant_id).maybeSingle();
   if (error) throw error;
   let documents: any[] = [];
+  let documentRequests: any[] = [];
   if (verification?.id) {
     const { data, error: documentError } = await admin.from("whatsapp_platform_verification_documents")
-      .select("id,document_type,original_file_name,mime_type,file_size,created_at")
+      .select("id,document_type,original_file_name,mime_type,file_size,review_status,review_notes,reviewed_at,created_at")
       .eq("tenant_id", customer.tenant_id).eq("verification_id", verification.id).eq("status", "active").order("created_at", { ascending: false });
     if (documentError) throw documentError;
     documents = data || [];
+    const { data: requests, error: requestError } = await admin.from("whatsapp_platform_verification_document_requests")
+      .select("id,requested_document_type,title,instructions,due_at,status,fulfilled_document_id,requested_at,fulfilled_at")
+      .eq("tenant_id", customer.tenant_id).eq("verification_id", verification.id).neq("status", "cancelled").order("requested_at", { ascending: false });
+    if (requestError && requestError.code !== "42P01") throw requestError;
+    documentRequests = requests || [];
   }
   const entityType = verification?.entity_type || tenant.business_type || "other";
   const { data: gate, error: gateError } = await admin.from("whatsapp_platform_verification_gate_settings")
@@ -431,7 +437,8 @@ async function verificationState(admin: any, customer: any) {
     reviewedAt: verification?.reviewed_at || null,
     reviewNotes: verification?.review_notes || "",
     requirements: VERIFICATION_REQUIREMENTS[entityType] || VERIFICATION_REQUIREMENTS.other,
-    documents: documents.map((item) => ({ id: item.id, type: item.document_type, name: item.original_file_name, mimeType: item.mime_type, size: item.file_size, uploadedAt: item.created_at })),
+    documents: documents.map((item) => ({ id: item.id, type: item.document_type, name: item.original_file_name, mimeType: item.mime_type, size: item.file_size, reviewStatus: item.review_status || "pending", reviewNotes: item.review_notes || "", reviewedAt: item.reviewed_at || null, uploadedAt: item.created_at })),
+    documentRequests: documentRequests.map((item) => ({ id: item.id, type: item.requested_document_type, title: item.title, instructions: item.instructions || "", dueAt: item.due_at, status: item.status, documentId: item.fulfilled_document_id, requestedAt: item.requested_at, fulfilledAt: item.fulfilled_at })),
     canEdit: ["not_started", "draft", "changes_requested", "rejected"].includes(verification?.status || tenant.verification_status || "not_started"),
     gateRequired: !bypassActive,
     gateTemporarilyPaused: Boolean(bypassActive),
@@ -472,7 +479,16 @@ async function uploadVerificationDocument(admin: any, customer: any, body: any) 
     current = await verificationState(admin, customer);
   }
   const documentType = String(body.documentType || "");
-  const allowedTypes = new Set([...(VERIFICATION_REQUIREMENTS[current.entityType] || []).map((item) => item.type), "gst_certificate"]);
+  const requestId = String(body.requestId || "").trim();
+  let documentRequest: any = null;
+  if (requestId) {
+    const { data, error } = await admin.from("whatsapp_platform_verification_document_requests")
+      .select("id,requested_document_type,status").eq("id", requestId).eq("tenant_id", customer.tenant_id).in("status", ["requested", "uploaded"]).single();
+    if (error || !data) throw new Error("This document request is no longer open.");
+    documentRequest = data;
+    if (documentRequest.requested_document_type !== documentType) throw new Error("Upload the document type requested by the verification team.");
+  }
+  const allowedTypes = new Set([...(VERIFICATION_REQUIREMENTS[current.entityType] || []).map((item) => item.type), "gst_certificate", ...(documentRequest ? [documentRequest.requested_document_type] : [])]);
   if (!allowedTypes.has(documentType)) throw new Error("This document type is not required for the selected entity.");
   const mimeType = String(body.mimeType || "").toLowerCase();
   const rawBase64 = String(body.base64 || "");
@@ -492,18 +508,22 @@ async function uploadVerificationDocument(admin: any, customer: any, body: any) 
   const storedName = `${documentType}-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
   const uploaded = await uploadFile(token, documentsFolderId, storedName, mimeType, bytes);
   const now = new Date().toISOString();
-  const { error: insertError } = await admin.from("whatsapp_platform_verification_documents").insert({
+  const { data: inserted, error: insertError } = await admin.from("whatsapp_platform_verification_documents").insert({
     verification_id: (await admin.from("whatsapp_platform_business_verifications").select("id").eq("tenant_id", customer.tenant_id).single()).data.id,
     tenant_id: customer.tenant_id, uploaded_by_user_id: customer.user_id, document_type: documentType,
     original_file_name: originalName, stored_file_name: uploaded.name || storedName, mime_type: mimeType,
     file_size: Number(uploaded.size || bytes.length), sha256: await sha256Hex(bytes), drive_file_id: uploaded.id,
     drive_folder_id: documentsFolderId, drive_folder_path: `${tenantFolderName} / Verification / Documents`,
-  });
+  }).select("id").single();
   if (insertError) { await trashFile(token, uploaded.id).catch(() => {}); throw insertError; }
   const previous = current.documents.filter((item: any) => item.type === documentType);
   if (previous.length) {
     await admin.from("whatsapp_platform_verification_documents").update({ status: "replaced", updated_at: now })
       .eq("tenant_id", customer.tenant_id).eq("document_type", documentType).eq("status", "active").neq("drive_file_id", uploaded.id);
+  }
+  if (documentRequest) {
+    const { error: requestUpdateError } = await admin.from("whatsapp_platform_verification_document_requests").update({ status: "uploaded", fulfilled_document_id: inserted.id, fulfilled_at: now, updated_at: now }).eq("id", documentRequest.id).eq("tenant_id", customer.tenant_id);
+    if (requestUpdateError) throw requestUpdateError;
   }
   await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenantFolderName, updated_at: now }).eq("id", customer.tenant_id);
   return { ok: true, verification: await verificationState(admin, customer) };

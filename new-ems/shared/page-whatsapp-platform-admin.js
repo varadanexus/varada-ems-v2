@@ -56,6 +56,7 @@ const VIEW_META = Object.freeze({
 });
 const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false };
 const db = getSupabaseClient();
+let verificationPreviewUrl = "";
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -116,29 +117,162 @@ function connections() {
   return `<section class="wa-admin-card"><h3>Customer Meta connections</h3><p>Safe operational view of customer-owned WhatsApp Business Accounts. Provider secrets are never displayed.</p>${rows.length ? `<div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Company</th><th>Verified name</th><th>Phone</th><th>WABA ID</th><th>Status</th><th>Connected</th></tr></thead><tbody>${rows.map((item) => `<tr><td>${escapeHtml(item.tenantName)}</td><td>${escapeHtml(item.verifiedName || "—")}</td><td>${escapeHtml(item.displayPhoneNumber || "—")}</td><td><span class="wa-admin-code">${escapeHtml(item.whatsappBusinessAccountId || "not assigned")}</span></td><td>${status(item.status)}</td><td>${escapeHtml(formatDate(item.connectedAt))}</td></tr>`).join("")}</tbody></table></div>` : '<div class="wa-admin-empty">No customer has connected a Meta Business Account.</div>'}</section>`;
 }
 
-function verification() {
+function verificationLegacy() {
   const rows = state.snapshot?.verifications || [];
   const pending = rows.filter((item) => ["submitted", "in_review", "changes_requested", "rejected"].includes(item.status));
   const gate = state.snapshot?.verificationGate || { enabled: true };
   const gateControl = `<section class="wa-admin-card wa-gate-card ${gate.enabled ? "" : "paused"}"><div class="wa-admin-secret-heading"><div><h3>Production verification gate</h3><p>Controls whether an approved provider pre-check is required before customers can start Meta onboarding.</p></div>${status(gate.enabled ? "enabled" : "temporarily_paused")}</div>${gate.enabled ? `<p class="wa-gate-warning">Keep this enabled for normal operation. A temporary pause affects every customer workspace and automatically expires.</p>${state.canApprove ? `<form class="wa-gate-form" data-gate-pause><label>Reason<textarea name="reason" rows="2" minlength="10" maxlength="500" required placeholder="Example: Meta reviewer needs temporary access to reproduce onboarding"></textarea></label><label>Days disabled<select name="duration"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="14">14 days</option><option value="30">30 days (maximum)</option></select></label><button class="wa-admin-button" type="submit">Temporarily pause gate</button></form>` : ""}` : `<div class="wa-admin-notice"><strong>Gate paused until ${escapeHtml(formatDate(gate.bypassExpiresAt))}</strong><br>${escapeHtml(gate.reason || "Temporary operational bypass")}</div>${state.canApprove ? `<button class="wa-admin-button primary" type="button" data-gate-restore>Restore gate now</button>` : ""}`}</section>`;
   const cases = rows.length ? `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Provider business pre-check</h3><p>Confirm the legal-identity document and address or phone evidence before unlocking Meta onboarding. This decision does not replace Meta Business Verification, phone OTP or display-name approval.</p></div>${status(`${pending.length}_pending`)}</div><div class="wa-verification-list">${rows.map((item) => `<article class="wa-verification-case"><header><div><strong>${escapeHtml(item.tenantName)}</strong><small>${escapeHtml(item.ownerEmail)} · ${escapeHtml(String(item.entityType || "other").replaceAll("_", " "))}</small></div>${status(item.status)}</header><dl><div><dt>Registration</dt><dd>${escapeHtml(item.registrationNumber || "—")}</dd></div><div><dt>GSTIN</dt><dd>${escapeHtml(item.gstin || "Not provided")}</dd></div><div><dt>Representative</dt><dd>${escapeHtml(item.representativeName || "—")} · ${escapeHtml(item.representativeTitle || "—")}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDate(item.submittedAt))}</dd></div></dl><div class="wa-verification-address"><strong>Registered address</strong><p>${escapeHtml(item.registeredAddress || "Not provided")}</p></div><div class="wa-verification-files">${(item.documents || []).map((document) => `<button type="button" data-verification-document="${escapeHtml(document.id)}" title="Open ${escapeHtml(document.name)}">${escapeHtml(String(document.type || "document").replaceAll("_", " "))}<small>${Math.ceil(Number(document.size || 0) / 1024)} KB</small></button>`).join("") || '<em>No active documents</em>'}</div>${item.reviewNotes ? `<div class="wa-admin-notice"><strong>Review notes</strong><br>${escapeHtml(item.reviewNotes)}</div>` : ""}${state.canApprove && item.status !== "verified" ? `<form class="wa-verification-review" data-verification-review="${escapeHtml(item.tenantId)}"><label>Reviewer notes<textarea name="notes" rows="3" maxlength="2000" placeholder="Required when requesting changes or rejecting"></textarea></label><div><button type="submit" name="decision" value="in_review">Start review</button><button type="submit" name="decision" value="changes_requested">Request changes</button><button type="submit" name="decision" value="rejected" class="danger">Reject</button><button type="submit" name="decision" value="verified" class="approve">Approve pre-check</button></div></form>` : ""}</article>`).join("")}</div></section>` : '<section class="wa-admin-card"><h3>Business verification</h3><p>Review entity details and evidence submitted by customer organisations.</p><div class="wa-admin-empty">No verification cases have been created.</div></section>';
-  return `${gateControl}${cases}`;
+  const reviewModal = `<section class="wa-document-review-modal" data-document-review-modal hidden role="dialog" aria-modal="true" aria-labelledby="waDocumentReviewTitle"><div class="wa-document-review-shell"><header class="wa-document-review-head"><div><span>Protected verification evidence</span><strong id="waDocumentReviewTitle" data-document-review-name>Document preview</strong><small data-document-review-meta>Loading document…</small></div><button type="button" data-document-review-close aria-label="Close document preview">×</button></header><div class="wa-document-review-toolbar" data-document-review-toolbar hidden><label><span>Reviewer notes</span><textarea rows="2" maxlength="2000" data-document-review-notes placeholder="Required when requesting changes or rejecting"></textarea></label><div class="wa-document-review-actions"><button type="button" data-document-decision="in_review">Start review</button><button type="button" data-document-decision="changes_requested">Request changes</button><button type="button" data-document-decision="rejected" class="danger">Reject</button><button type="button" data-document-decision="verified" class="approve">Approve pre-check</button></div></div><main class="wa-document-review-stage" data-document-review-stage><div class="wa-document-review-loading"><span></span><strong>Securely fetching document…</strong></div></main></div></section>`;
+  return `${gateControl}${cases}${reviewModal}`;
 }
 
-async function downloadVerificationDocument(documentId, button) {
+function reviewStatusLabel(value) {
+  return ({ pending: "Pending review", in_review: "In review", changes_requested: "Replacement requested", approved: "Approved", rejected: "Rejected" })[value] || "Pending review";
+}
+
+function verificationReviewControls(item) {
+  if (!state.canApprove) return "";
+  const verified = item.status === "verified";
+  return `<form class="wa-verification-review" data-verification-review="${escapeHtml(item.tenantId)}"><label>Case-level reviewer notes<textarea name="notes" rows="3" maxlength="2000" placeholder="Required when requesting changes or rejecting">${escapeHtml(item.reviewNotes || "")}</textarea></label><div>${verified ? `<button type="submit" name="decision" value="in_review">Reopen business review</button>` : `<button type="submit" name="decision" value="in_review">Start review</button><button type="submit" name="decision" value="changes_requested">Request changes</button><button type="submit" name="decision" value="rejected" class="danger">Reject business</button><button type="submit" name="decision" value="verified" class="approve">Approve business pre-check</button>`}</div></form>`;
+}
+
+function verificationRequestRows(item) {
+  const requests = (state.snapshot?.documentRequests || []).filter((request) => request.tenantId === item.tenantId && request.status !== "cancelled");
+  if (!requests.length) return "";
+  return `<section class="wa-document-requests"><h4>Additional evidence requested</h4>${requests.map((request) => `<article><div><strong>${escapeHtml(request.title)}</strong><small>${escapeHtml(reviewStatusLabel(request.status === "satisfied" ? "approved" : request.status === "uploaded" ? "in_review" : "changes_requested"))}${request.dueAt ? ` · due ${escapeHtml(formatDate(request.dueAt))}` : ""}</small>${request.instructions ? `<p>${escapeHtml(request.instructions)}</p>` : ""}</div>${state.canApprove && ["requested", "uploaded"].includes(request.status) ? `<button type="button" data-cancel-document-request="${escapeHtml(request.id)}">Cancel request</button>` : ""}</article>`).join("")}</section>`;
+}
+
+function verification() {
+  const rows = state.snapshot?.verifications || [];
+  const pending = rows.filter((item) => ["submitted", "in_review", "changes_requested", "rejected"].includes(item.status));
+  const gate = state.snapshot?.verificationGate || { enabled: true };
+  const gateControl = `<section class="wa-admin-card wa-gate-card ${gate.enabled ? "" : "paused"}"><div class="wa-admin-secret-heading"><div><h3>Production verification gate</h3><p>Controls whether an approved provider pre-check is required before customers can start Meta onboarding.</p></div>${status(gate.enabled ? "enabled" : "temporarily_paused")}</div>${gate.enabled ? `<p class="wa-gate-warning">Keep this enabled for normal operation. A temporary pause affects every customer workspace and automatically expires.</p>${state.canApprove ? `<form class="wa-gate-form" data-gate-pause><label>Reason<textarea name="reason" rows="2" minlength="10" maxlength="500" required placeholder="Explain the operational reason"></textarea></label><label>Days disabled<select name="duration"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="14">14 days</option><option value="30">30 days (maximum)</option></select></label><button class="wa-admin-button" type="submit">Temporarily pause gate</button></form>` : ""}` : `<div class="wa-admin-notice"><strong>Gate paused until ${escapeHtml(formatDate(gate.bypassExpiresAt))}</strong><br>${escapeHtml(gate.reason || "Temporary operational bypass")}</div>${state.canApprove ? `<button class="wa-admin-button primary" type="button" data-gate-restore>Restore gate now</button>` : ""}`}</section>`;
+  const cases = rows.length ? `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Provider business pre-check</h3><p>Review each protected document independently, then approve the business case. Every decision remains auditable and can be reopened.</p></div>${status(`${pending.length}_pending`)}</div><div class="wa-verification-list">${rows.map((item) => `<article class="wa-verification-case"><header><div><strong>${escapeHtml(item.tenantName)}</strong><small>${escapeHtml(item.ownerEmail)} · ${escapeHtml(String(item.entityType || "other").replaceAll("_", " "))}</small></div><div class="wa-verification-heading-actions">${status(item.status)}${state.canApprove ? `<button type="button" data-request-document="${escapeHtml(item.tenantId)}">+ Request document</button>` : ""}</div></header><dl><div><dt>Registration</dt><dd>${escapeHtml(item.registrationNumber || "—")}</dd></div><div><dt>GSTIN</dt><dd>${escapeHtml(item.gstin || "Not provided")}</dd></div><div><dt>Representative</dt><dd>${escapeHtml(item.representativeName || "—")} · ${escapeHtml(item.representativeTitle || "—")}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDate(item.submittedAt))}</dd></div></dl><div class="wa-verification-address"><strong>Registered address</strong><p>${escapeHtml(item.registeredAddress || "Not provided")}</p></div><div class="wa-verification-files">${(item.documents || []).map((document) => `<button type="button" class="document-${escapeHtml(document.reviewStatus || "pending")}" data-verification-document="${escapeHtml(document.id)}" title="Open ${escapeHtml(document.name)}"><span>${escapeHtml(String(document.type || "document").replaceAll("_", " "))}</span><small>${Math.ceil(Number(document.size || 0) / 1024)} KB · ${escapeHtml(reviewStatusLabel(document.reviewStatus))}</small></button>`).join("") || "<em>No active documents</em>"}</div>${verificationRequestRows(item)}${verificationReviewControls(item)}</article>`).join("")}</div></section>` : `<section class="wa-admin-card"><h3>Business verification</h3><div class="wa-admin-empty">No verification cases have been created.</div></section>`;
+  const reviewModal = `<section class="wa-document-review-modal" data-document-review-modal hidden role="dialog" aria-modal="true" aria-labelledby="waDocumentReviewTitle"><div class="wa-document-review-shell"><header class="wa-document-review-head"><div><span>Protected verification evidence</span><strong id="waDocumentReviewTitle" data-document-review-name>Document preview</strong><small data-document-review-meta>Loading document…</small></div><button type="button" data-document-review-close aria-label="Close document preview">×</button></header><div class="wa-document-review-toolbar" data-document-review-toolbar hidden><div class="wa-document-review-notes"><label><span>Document reviewer notes</span><textarea rows="2" maxlength="2000" data-document-review-notes aria-describedby="waDocumentReviewHelp waDocumentReviewFeedback" placeholder="Explain what must be replaced or why the document is rejected"></textarea></label><small id="waDocumentReviewHelp">A clear reason of at least 10 characters is required for replacement or rejection.</small><p id="waDocumentReviewFeedback" class="wa-document-review-feedback" data-document-review-feedback role="alert" hidden></p></div><div class="wa-document-review-actions"><button type="button" data-document-decision="in_review">Start / reopen review</button><button type="button" data-document-decision="changes_requested">Request replacement</button><button type="button" data-document-decision="rejected" class="danger">Reject document</button><button type="button" data-document-decision="approved" class="approve">Approve document</button></div></div><main class="wa-document-review-stage" data-document-review-stage><div class="wa-document-review-loading"><span></span><strong>Securely fetching document…</strong></div></main></div></section>`;
+  const requestModal = `<section class="wa-document-request-modal" data-document-request-modal hidden role="dialog" aria-modal="true" aria-labelledby="waDocumentRequestTitle"><form class="wa-document-request-shell" data-document-request-form><header><div><span>Additional evidence</span><strong id="waDocumentRequestTitle">Request a document</strong><small>The request appears immediately in the customer workspace.</small></div><button type="button" data-document-request-close aria-label="Close request form">×</button></header><div class="wa-document-request-fields"><label>Document type<select name="documentType" required><option value="letter_of_authorization">Letter of Authorization</option><option value="signatory_authorisation">Signatory authorisation</option><option value="gst_certificate">GST registration certificate</option><option value="incorporation_certificate">Certificate of incorporation</option><option value="business_address_proof">Business address proof</option><option value="bank_statement">Business bank statement</option><option value="other_requested_document">Other document</option></select></label><label>Request title<input name="title" maxlength="120" required value="Letter of Authorization" /></label><label>Instructions<textarea name="instructions" rows="5" maxlength="2000" placeholder="Explain what the document must contain, who must sign it, and the accepted date range."></textarea></label><label>Due date (optional)<input name="dueAt" type="date" /></label></div><footer><button type="button" data-document-request-close>Cancel</button><button type="submit" class="approve">Send request</button></footer></form></section>`;
+  return `${gateControl}${cases}${reviewModal}${requestModal}`;
+}
+
+function verificationDocumentContext(documentId) {
+  for (const verification of state.snapshot?.verifications || []) {
+    const document = (verification.documents || []).find((item) => item.id === documentId);
+    if (document) return { document, verification };
+  }
+  return { document: {}, verification: {} };
+}
+
+function closeVerificationDocument() {
+  const modal = document.querySelector("[data-document-review-modal]");
+  if (modal) modal.hidden = true;
+  if (verificationPreviewUrl) URL.revokeObjectURL(verificationPreviewUrl);
+  verificationPreviewUrl = "";
+  document.body.classList.remove("wa-document-review-open");
+}
+
+function closeDocumentRequest() {
+  const modal = document.querySelector("[data-document-request-modal]");
+  if (modal) { modal.hidden = true; delete modal.dataset.tenantId; }
+  document.body.classList.remove("wa-document-review-open");
+}
+
+async function reviewVerification(tenantId, decision, notes, button) {
+  if (!["in_review", "changes_requested", "rejected", "verified"].includes(decision)) return;
+  if (["changes_requested", "rejected"].includes(decision) && notes.length < 10) {
+    showToast("Add clear reviewer notes before this decision.", TOAST_TYPES.ERROR);
+    return;
+  }
+  if (button) button.disabled = true;
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_review_verification", { p_tenant_id: tenantId, p_decision: decision, p_notes: notes || null });
+    if (error) throw error;
+    showToast(decision === "verified" ? "Provider business pre-check approved." : "Verification review updated.", TOAST_TYPES.SUCCESS);
+    closeVerificationDocument();
+    await loadSnapshot();
+  } catch (error) {
+    showToast(error?.message || "Verification review could not be updated.", TOAST_TYPES.ERROR);
+    if (button) button.disabled = false;
+  }
+}
+
+async function reviewDocument(documentId, decision, notes, button) {
+  if (!["in_review", "changes_requested", "rejected", "approved"].includes(decision)) return;
+  const modal = document.querySelector("[data-document-review-modal]");
+  const notesField = modal?.querySelector("[data-document-review-notes]");
+  const feedback = modal?.querySelector("[data-document-review-feedback]");
+  const normalizedNotes = String(notes || "").trim();
+  const showReviewError = (message) => {
+    if (feedback) {
+      feedback.textContent = message;
+      feedback.hidden = false;
+    }
+    if (notesField) notesField.setAttribute("aria-invalid", "true");
+    showToast(message, TOAST_TYPES.ERROR);
+  };
+  if (!documentId) {
+    showReviewError("The selected document could not be identified. Close the preview and open it again.");
+    return;
+  }
+  if (["changes_requested", "rejected"].includes(decision) && normalizedNotes.length < 10) {
+    showReviewError("Enter a clear reason of at least 10 characters before requesting replacement or rejecting this document.");
+    notesField?.focus();
+    return;
+  }
+  if (feedback) feedback.hidden = true;
+  notesField?.removeAttribute("aria-invalid");
+  if (button) button.disabled = true;
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_review_document", { p_document_id: documentId, p_decision: decision, p_notes: normalizedNotes || null });
+    if (error) throw error;
+    showToast(decision === "approved" ? "Document approved independently." : "Document review updated.", TOAST_TYPES.SUCCESS);
+    closeVerificationDocument();
+    await loadSnapshot();
+  } catch (error) {
+    showReviewError(error?.message || "Document review could not be updated.");
+    if (button) button.disabled = false;
+  }
+}
+
+async function openVerificationDocument(documentId, button) {
   const token = await getSupabaseAccessToken();
   if (!token) throw new Error("Your EMS session has expired.");
-  const original = button.textContent;
+  const modal = document.querySelector("[data-document-review-modal]");
+  const stage = modal?.querySelector("[data-document-review-stage]");
+  const context = verificationDocumentContext(documentId);
+  const name = context.document.name || "Verification document";
+  const declaredMime = context.document.mimeType || "application/octet-stream";
+  if (!modal || !stage) throw new Error("The document reviewer could not be opened.");
+  const original = button.innerHTML;
   try {
-    button.disabled = true; button.textContent = "Opening…";
+    button.disabled = true;
+    button.textContent = "Opening…";
+    modal.hidden = false;
+    modal.dataset.documentId = context.document.id || "";
+    modal.querySelector("[data-document-review-name]").textContent = name;
+    modal.querySelector("[data-document-review-meta]").textContent = `${declaredMime} · ${Math.ceil(Number(context.document.size || 0) / 1024)} KB · ${reviewStatusLabel(context.document.reviewStatus)}`;
+    const notesField = modal.querySelector("[data-document-review-notes]");
+    const feedback = modal.querySelector("[data-document-review-feedback]");
+    notesField.value = context.document.reviewNotes || "";
+    notesField.removeAttribute("aria-invalid");
+    if (feedback) feedback.hidden = true;
+    modal.querySelector("[data-document-review-toolbar]").hidden = !state.canApprove;
+    stage.innerHTML = '<div class="wa-document-review-loading"><span></span><strong>Securely fetching document…</strong></div>';
+    document.body.classList.add("wa-document-review-open");
     const response = await fetch(`${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-admin-verification`, { method: "POST", headers: { Authorization: `Bearer ${token}`, apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || "", "Content-Type": "application/json" }, credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer", body: JSON.stringify({ documentId }) });
     if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data?.error || "Document could not be opened."); }
     const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url; link.download = ""; link.target = "_blank"; link.rel = "noopener"; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
-  } finally { button.disabled = false; button.textContent = original; }
+    verificationPreviewUrl = URL.createObjectURL(blob);
+    const mime = blob.type || declaredMime;
+    if (mime.startsWith("image/")) stage.innerHTML = `<img src="${verificationPreviewUrl}" alt="${escapeHtml(name)}" />`;
+    else if (mime === "application/pdf") stage.innerHTML = `<iframe src="${verificationPreviewUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH" title="${escapeHtml(name)}"></iframe>`;
+    else stage.innerHTML = `<div class="wa-document-review-unsupported"><strong>Preview is not available for this file type.</strong><span>${escapeHtml(mime)}</span><a href="${verificationPreviewUrl}" download="${escapeHtml(name)}">Download a protected copy</a></div>`;
+  } catch (error) {
+    closeVerificationDocument();
+    throw error;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = original;
+  }
 }
 
 function metaSetup() {
@@ -565,6 +699,10 @@ function content() {
 }
 
 function render() {
+  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal]").forEach((modal) => modal.remove());
+  if (verificationPreviewUrl) URL.revokeObjectURL(verificationPreviewUrl);
+  verificationPreviewUrl = "";
+  document.body.classList.remove("wa-document-review-open");
   const meta = VIEW_META[state.view] || VIEW_META.overview;
   const pageHead = document.querySelector(".page-head");
   if (pageHead) {
@@ -581,6 +719,10 @@ function render() {
 }
 
 function bind() {
+  const reviewModal = document.querySelector("#waAdminContent [data-document-review-modal]");
+  if (reviewModal) document.body.appendChild(reviewModal);
+  const requestModal = document.querySelector("#waAdminContent [data-document-request-modal]");
+  if (requestModal) document.body.appendChild(requestModal);
   document.querySelector("#waRefresh")?.addEventListener("click", () => loadSnapshot());
   document.querySelectorAll("[data-tenant-form]").forEach((form) => form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -603,16 +745,50 @@ function bind() {
     event.preventDefault();
     const decision = event.submitter?.value;
     const notes = String(new FormData(form).get("notes") || "").trim();
-    if (["changes_requested", "rejected"].includes(decision) && notes.length < 10) return showToast("Add clear reviewer notes before this decision.", TOAST_TYPES.ERROR);
-    event.submitter.disabled = true;
-    try {
-      const { error } = await db.rpc("whatsapp_platform_admin_review_verification", { p_tenant_id: form.dataset.verificationReview, p_decision: decision, p_notes: notes || null });
-      if (error) throw error;
-      showToast(decision === "verified" ? "Provider business pre-check approved." : "Verification review updated.", TOAST_TYPES.SUCCESS);
-      await loadSnapshot();
-    } catch (error) { showToast(error?.message || "Verification review could not be updated.", TOAST_TYPES.ERROR); event.submitter.disabled = false; }
+    await reviewVerification(form.dataset.verificationReview, decision, notes, event.submitter);
   }));
-  document.querySelectorAll("[data-verification-document]").forEach((button) => button.addEventListener("click", () => downloadVerificationDocument(button.dataset.verificationDocument, button).catch((error) => showToast(error?.message || "Document could not be opened.", TOAST_TYPES.ERROR))));
+  document.querySelectorAll("[data-verification-document]").forEach((button) => button.addEventListener("click", () => openVerificationDocument(button.dataset.verificationDocument, button).catch((error) => showToast(error?.message || "Document could not be opened.", TOAST_TYPES.ERROR))));
+  document.querySelector("[data-document-review-close]")?.addEventListener("click", closeVerificationDocument);
+  document.querySelector("[data-document-review-modal]")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) closeVerificationDocument(); });
+  document.querySelectorAll("[data-document-decision]").forEach((button) => button.addEventListener("click", async () => {
+    const modal = document.querySelector("[data-document-review-modal]");
+    const notes = String(modal?.querySelector("[data-document-review-notes]")?.value || "").trim();
+    await reviewDocument(modal?.dataset.documentId || "", button.dataset.documentDecision, notes, button);
+  }));
+  document.querySelector("[data-document-review-notes]")?.addEventListener("input", (event) => {
+    event.currentTarget.removeAttribute("aria-invalid");
+    const feedback = document.querySelector("[data-document-review-feedback]");
+    if (feedback) feedback.hidden = true;
+  });
+  document.querySelectorAll("[data-request-document]").forEach((button) => button.addEventListener("click", () => {
+    const modal = document.querySelector("[data-document-request-modal]");
+    if (!modal) return;
+    modal.dataset.tenantId = button.dataset.requestDocument;
+    modal.hidden = false;
+    document.body.classList.add("wa-document-review-open");
+    modal.querySelector('[name="title"]')?.focus();
+  }));
+  document.querySelectorAll("[data-document-request-close]").forEach((button) => button.addEventListener("click", closeDocumentRequest));
+  document.querySelector("[data-document-request-modal]")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) closeDocumentRequest(); });
+  document.querySelector("[data-document-request-form]")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget; const modal = form.closest("[data-document-request-modal]"); const submit = form.querySelector('button[type="submit"]'); const values = new FormData(form);
+    submit.disabled = true;
+    try {
+      const due = values.get("dueAt") ? new Date(`${values.get("dueAt")}T23:59:59`).toISOString() : null;
+      const { error } = await db.rpc("whatsapp_platform_admin_request_document", { p_tenant_id: modal.dataset.tenantId, p_document_type: values.get("documentType"), p_title: String(values.get("title") || "").trim(), p_instructions: String(values.get("instructions") || "").trim() || null, p_due_at: due });
+      if (error) throw error;
+      showToast("Additional document requested from the customer.", TOAST_TYPES.SUCCESS);
+      closeDocumentRequest(); form.reset(); await loadSnapshot();
+    } catch (error) { showToast(error?.message || "Document request could not be sent.", TOAST_TYPES.ERROR); submit.disabled = false; }
+  });
+  document.querySelectorAll("[data-cancel-document-request]").forEach((button) => button.addEventListener("click", async () => {
+    if (!window.confirm("Cancel this outstanding document request?")) return;
+    button.disabled = true;
+    const { error } = await db.rpc("whatsapp_platform_admin_cancel_document_request", { p_request_id: button.dataset.cancelDocumentRequest });
+    if (error) { showToast(error.message || "Request could not be cancelled.", TOAST_TYPES.ERROR); button.disabled = false; return; }
+    showToast("Document request cancelled.", TOAST_TYPES.SUCCESS); await loadSnapshot();
+  }));
   document.querySelector("[data-gate-pause]")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget; const values = new FormData(form); const button = form.querySelector("button[type=submit]");
@@ -677,7 +853,18 @@ async function loadSnapshot() {
   state.loading = true; state.error = ""; render();
   const { data, error } = await db.rpc("whatsapp_platform_admin_snapshot");
   if (error) { state.error = error.message || "Database setup is pending."; state.snapshot = null; }
-  else state.snapshot = data || {};
+  else {
+    state.snapshot = data || {};
+    const [{ data: reviews, error: reviewError }, { data: requests, error: requestError }] = await Promise.all([
+      db.rpc("whatsapp_platform_admin_document_reviews"),
+      db.rpc("whatsapp_platform_admin_document_requests"),
+    ]);
+    if (!reviewError) {
+      const reviewMap = new Map((reviews || []).map((item) => [item.id, item]));
+      (state.snapshot.verifications || []).forEach((verification) => (verification.documents || []).forEach((document) => Object.assign(document, reviewMap.get(document.id) || {})));
+    }
+    if (!requestError) state.snapshot.documentRequests = requests || [];
+  }
   state.loading = false; render();
 }
 
