@@ -3314,6 +3314,33 @@ body.wp-verification-viewer-open { overflow: hidden; }
   font-size: 17px;
   line-height: 1.7;
 }
+.wp-invite-sender {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  max-width: 570px;
+  margin-top: 26px;
+  padding: 15px 17px;
+  border: 1px solid rgba(147, 184, 164, .18);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, .025);
+}
+.wp-invite-sender > span {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(43, 221, 144, .3);
+  border-radius: 14px;
+  color: #2bdd90;
+  background: rgba(43, 221, 144, .1);
+  font-weight: 850;
+}
+.wp-invite-sender div { display: grid; min-width: 0; }
+.wp-invite-sender small { color: #82978c; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.wp-invite-sender strong { margin-top: 3px; overflow: hidden; color: #edf7f2; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.wp-invite-sender em { margin-top: 2px; overflow: hidden; color: #9bb0a5; font-size: 12px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
 .wp-invite-assurance { margin: 34px 0 22px; border-top: 1px solid rgba(147, 184, 164, .18); }
 .wp-invite-assurance > div {
   display: grid;
@@ -3409,6 +3436,7 @@ body.wp-verification-viewer-open { overflow: hidden; }
   background: rgba(2, 16, 10, .68);
 }
 .wp-invite-card .wp-field input::placeholder { color: #657c71; }
+.wp-invite-card .wp-field input[readonly] { color: #b9cec3; background: rgba(255,255,255,.035); cursor: default; }
 .wp-invite-card .wp-field input:focus {
   border-color: #2bdd90;
   outline: none;
@@ -3425,6 +3453,14 @@ body.wp-verification-viewer-open { overflow: hidden; }
   font-size: 11px;
 }
 .wp-password-guidance span { color: #2bdd90; font-size: 8px; }
+.wp-invite-account-note {
+  padding: 14px 15px;
+  border: 1px solid rgba(43, 221, 144, .22);
+  border-radius: 12px;
+  background: rgba(43, 221, 144, .065);
+}
+.wp-invite-account-note strong { color: #dff7ea; font-size: 12px; }
+.wp-invite-account-note p { margin: 5px 0 0; color: #8fa49a; font-size: 11px; line-height: 1.55; }
 .wp-invite-terms {
   align-items: flex-start;
   padding: 13px 14px;
@@ -3465,6 +3501,9 @@ body.wp-verification-viewer-open { overflow: hidden; }
   text-decoration: none;
 }
 .wp-invite-card .wp-customer-signin:hover { color: #2bdd90; }
+.wp-invite-error { max-width: 560px; text-align: center; }
+.wp-invite-error h1 { margin: 10px 0; color: #f7fbf9; font-family: var(--wp-display); font-size: clamp(28px, 4vw, 42px); }
+.wp-invite-error p { margin: 0 0 22px; color: #9fb2a8; line-height: 1.6; }
 
 @media (max-width: 980px) {
   .wp-invite-shell { grid-template-columns: 1fr; gap: 36px; max-width: 680px; }

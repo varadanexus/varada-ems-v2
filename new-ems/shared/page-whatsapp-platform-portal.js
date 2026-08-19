@@ -798,16 +798,34 @@ function authForm(mode) {
   </form>`;
 }
 
-function renderInviteAcceptance(inviteToken) {
+async function renderInviteAcceptance(inviteToken) {
+  app.innerHTML = `<div class="wp-loading">Checking your secure invitation…</div>`;
+  let invitation;
+  try {
+    const result = await authRequest("inspect_invite", { inviteToken });
+    invitation = result.invitation;
+  } catch (error) {
+    app.innerHTML = `<main class="wp-invite-page"><section class="wp-auth-card wp-invite-card wp-invite-error"><span class="wp-card-eyebrow">Invitation unavailable</span><h1>This invitation cannot be opened.</h1><p>${escapeHtml(error?.message || "The invitation is invalid or has expired.")}</p><a class="wp-submit wp-button-link" href="${ACCESS_PATH}#signin">Go to customer sign in</a></section></main>`;
+    return;
+  }
+
+  const existingAccount = invitation.existingAccount === true;
+  const roleLabels = { owner: "Owner", admin: "Administrator", agent: "Agent", viewer: "Viewer" };
+  const roleLabel = roleLabels[invitation.roleCode] || "Member";
+  const inviterInitial = (invitation.inviterName || invitation.organisationName || "I").charAt(0).toUpperCase();
   app.innerHTML = `<main class="wp-invite-page">
     <section class="wp-invite-shell" aria-labelledby="wpInviteTitle">
       <div class="wp-invite-intro">
         <span class="wp-kicker">Protected workspace invitation</span>
-        <h1 id="wpInviteTitle">Your team is ready for you.</h1>
-        <p>Activate your member profile, then continue directly into the shared WhatsApp customer workspace.</p>
+        <h1 id="wpInviteTitle">${escapeHtml(invitation.organisationName)} invited you.</h1>
+        <p>Join the shared WhatsApp customer workspace with ${escapeHtml(roleLabel.toLowerCase())} access.</p>
+        <div class="wp-invite-sender" aria-label="Invitation sender">
+          <span aria-hidden="true">${escapeHtml(inviterInitial)}</span>
+          <div><small>Invitation sent by</small><strong>${escapeHtml(invitation.inviterName)}</strong><em>${escapeHtml(invitation.organisationName)}</em></div>
+        </div>
         <div class="wp-invite-assurance" aria-label="Invitation safeguards">
-          <div><span aria-hidden="true">01</span><strong>Confirm your profile</strong><small>Use the name your teammates will recognise.</small></div>
-          <div><span aria-hidden="true">02</span><strong>Protect your access</strong><small>Create a strong password known only to you.</small></div>
+          <div><span aria-hidden="true">01</span><strong>Confirm the invitation</strong><small>Issued to ${escapeHtml(invitation.invitedEmail)}.</small></div>
+          <div><span aria-hidden="true">02</span><strong>${existingAccount ? "Use your existing account" : "Protect your access"}</strong><small>${existingAccount ? "Sign in with the password already linked to this email." : "Create a strong password known only to you."}</small></div>
           <div><span aria-hidden="true">03</span><strong>Enter the workspace</strong><small>Your assigned permissions apply automatically.</small></div>
         </div>
         <p class="wp-invite-security"><span aria-hidden="true">✓</span> Single-use invitation · Role-based workspace access</p>
@@ -815,20 +833,26 @@ function renderInviteAcceptance(inviteToken) {
       <section class="wp-auth-card wp-invite-card">
         <header class="wp-invite-card-head">
           <span class="wp-invite-lock" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2m-9 0h8a2 2 0 0 1 2 2v7H6v-7a2 2 0 0 1 2-2Z"/></svg></span>
-          <div><span class="wp-card-eyebrow">Member access</span><h2>Create your profile</h2><p>Complete the details below to accept this invitation.</p></div>
+          <div><span class="wp-card-eyebrow">${existingAccount ? "Existing customer account" : "Member access"}</span><h2>${existingAccount ? "Sign in to accept" : "Create your profile"}</h2><p>${existingAccount ? `We found an account registered to ${escapeHtml(invitation.invitedEmail)}.` : "Complete the details below to accept this invitation."}</p></div>
         </header>
         <form class="wp-form" id="wpInviteAcceptForm" novalidate>
-          <label class="wp-field"><span>Full name</span><input name="displayName" autocomplete="name" minlength="2" maxlength="100" placeholder="Enter your full name" required autofocus /></label>
-          <div class="wp-invite-password-grid">
-            <label class="wp-field"><span>Create password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Minimum 10 characters" required /><button type="button" data-password-toggle aria-label="Show password">Show</button></span></label>
-            <label class="wp-field"><span>Confirm password</span><span class="wp-password-control"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Repeat your password" required /><button type="button" data-password-toggle aria-label="Show confirm password">Show</button></span></label>
-          </div>
-          <p class="wp-password-guidance"><span aria-hidden="true">●</span> Use 10+ characters with uppercase, lowercase and a number.</p>
-          <label class="wp-check wp-invite-terms"><input name="terms" type="checkbox" required /><span>I agree to the <a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+          ${existingAccount ? `
+            <div class="wp-invite-account-note"><strong>Use your registered account</strong><p>Signing in will link this invitation to your existing customer identity and add access to ${escapeHtml(invitation.organisationName)}.</p></div>
+            <label class="wp-field"><span>Registered email</span><input name="email" type="email" autocomplete="username" value="${escapeHtml(invitation.invitedEmail)}" readonly /></label>
+            <label class="wp-field"><span>Existing password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="current-password" maxlength="128" placeholder="Enter your current password" required autofocus /><button type="button" data-password-toggle aria-label="Show password">Show</button></span></label>
+          ` : `
+            <label class="wp-field"><span>Full name</span><input name="displayName" autocomplete="name" minlength="2" maxlength="100" value="${escapeHtml(invitation.inviteeName || "")}" placeholder="Enter your full name" required autofocus /></label>
+            <div class="wp-invite-password-grid">
+              <label class="wp-field"><span>Create password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Minimum 10 characters" required /><button type="button" data-password-toggle aria-label="Show password">Show</button></span></label>
+              <label class="wp-field"><span>Confirm password</span><span class="wp-password-control"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Repeat your password" required /><button type="button" data-password-toggle aria-label="Show confirm password">Show</button></span></label>
+            </div>
+            <p class="wp-password-guidance"><span aria-hidden="true">●</span> Use 10+ characters with uppercase, lowercase and a number.</p>
+            <label class="wp-check wp-invite-terms"><input name="terms" type="checkbox" required /><span>I agree to the <a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+          `}
           <p class="wp-form-message" id="wpInviteMessage" role="alert"></p>
-          <button class="wp-submit" type="submit">Accept invitation <span aria-hidden="true">→</span></button>
+          <button class="wp-submit" type="submit">${existingAccount ? "Sign in and accept" : "Accept invitation"} <span aria-hidden="true">→</span></button>
         </form>
-        <footer class="wp-invite-card-foot"><span>This invitation can only be used once.</span><a class="wp-customer-signin" href="${ACCESS_PATH}#signin">Already a member? Sign in</a></footer>
+        <footer class="wp-invite-card-foot"><span>This invitation can only be used once.</span><span>For ${escapeHtml(invitation.invitedEmail)}</span></footer>
       </section>
     </section>
   </main>`;
@@ -844,15 +868,17 @@ function renderInviteAcceptance(inviteToken) {
     const form = event.currentTarget;
     const message = form.querySelector("#wpInviteMessage");
     if (!form.reportValidity()) return;
-    if (form.elements.password.value !== form.elements.confirmPassword.value) { message.textContent = "Passwords do not match."; return; }
+    if (!existingAccount && form.elements.password.value !== form.elements.confirmPassword.value) { message.textContent = "Passwords do not match."; return; }
     const submit = form.querySelector("button[type=submit]");
-    submit.disabled = true; submit.textContent = "Accepting invitation…"; message.textContent = "";
+    submit.disabled = true; submit.textContent = existingAccount ? "Signing in and linking…" : "Accepting invitation…"; message.textContent = "";
     try {
-      const result = await authRequest("accept_invite", { inviteToken, displayName: form.elements.displayName.value.trim(), password: form.elements.password.value, termsAccepted: form.elements.terms.checked });
+      const result = existingAccount
+        ? await authRequest("accept_existing_invite", { inviteToken, password: form.elements.password.value })
+        : await authRequest("accept_invite", { inviteToken, displayName: form.elements.displayName.value.trim(), password: form.elements.password.value, termsAccepted: form.elements.terms.checked });
       session = result.session; storeSession(session); location.replace(WORKSPACE_PATH);
     } catch (error) {
       message.textContent = error?.message || "The invitation could not be accepted.";
-      submit.disabled = false; submit.innerHTML = 'Accept invitation <span aria-hidden="true">→</span>';
+      submit.disabled = false; submit.innerHTML = `${existingAccount ? "Sign in and accept" : "Accept invitation"} <span aria-hidden="true">→</span>`;
     }
   });
 }
@@ -2827,7 +2853,7 @@ async function init() {
   }
   const inviteToken = new URLSearchParams(location.search).get("invite") || "";
   if (/^[a-f0-9]{64}$/i.test(inviteToken)) {
-    renderInviteAcceptance(inviteToken.toLowerCase());
+    await renderInviteAcceptance(inviteToken.toLowerCase());
     return;
   }
   if (session) {
