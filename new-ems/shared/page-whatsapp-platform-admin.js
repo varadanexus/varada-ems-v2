@@ -57,6 +57,11 @@ const VIEW_META = Object.freeze({
 const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false };
 const db = getSupabaseClient();
 let verificationPreviewUrl = "";
+const VERIFICATION_ENTITY_TYPES = Object.freeze([
+  ["private_limited", "Private limited company"], ["public_limited", "Public limited company"],
+  ["partnership", "Partnership"], ["sole_proprietor", "Sole proprietor"],
+  ["nonprofit", "Nonprofit"], ["government", "Government"], ["other", "Other"],
+]);
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -143,15 +148,47 @@ function verificationRequestRows(item) {
   return `<section class="wa-document-requests"><h4>Additional evidence requested</h4>${requests.map((request) => `<article><div><strong>${escapeHtml(request.title)}</strong><small>${escapeHtml(reviewStatusLabel(request.status === "satisfied" ? "approved" : request.status === "uploaded" ? "in_review" : "changes_requested"))}${request.dueAt ? ` · due ${escapeHtml(formatDate(request.dueAt))}` : ""}</small>${request.instructions ? `<p>${escapeHtml(request.instructions)}</p>` : ""}</div>${state.canApprove && ["requested", "uploaded"].includes(request.status) ? `<button type="button" data-cancel-document-request="${escapeHtml(request.id)}">Cancel request</button>` : ""}</article>`).join("")}</section>`;
 }
 
+function verificationCaseModal(item) {
+  const documents = item.documents || [];
+  const approvedDocuments = documents.filter((document) => document.reviewStatus === "approved").length;
+  const fields = state.canManage ? `<form class="wa-verification-detail-form" data-verification-details="${escapeHtml(item.tenantId)}">
+    <div class="wa-verification-field-grid">
+      <label class="wide"><span>Company / workspace name</span><input name="companyName" value="${escapeHtml(item.tenantName)}" minlength="2" maxlength="120" required /><small>This is the shared company identity shown throughout the customer portal.</small></label>
+      <label><span>Entity type</span><select name="entityType" required>${VERIFICATION_ENTITY_TYPES.map(([value, label]) => `<option value="${value}" ${item.entityType === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+      <label><span>Registration / licence number</span><input name="registrationNumber" value="${escapeHtml(item.registrationNumber || "")}" maxlength="80" /></label>
+      <label><span>GSTIN</span><input name="gstin" value="${escapeHtml(item.gstin || "")}" maxlength="20" autocapitalize="characters" /></label>
+      <label><span>Authorised representative</span><input name="representativeName" value="${escapeHtml(item.representativeName || "")}" maxlength="120" /></label>
+      <label><span>Representative title</span><input name="representativeTitle" value="${escapeHtml(item.representativeTitle || "")}" maxlength="120" /></label>
+      <label class="wide"><span>Registered business address</span><textarea name="registeredAddress" rows="4" maxlength="800">${escapeHtml(item.registeredAddress || "")}</textarea></label>
+    </div>
+    <footer class="wa-verification-savebar"><span>Saving updates the authoritative customer record and portal.</span><button type="submit" class="approve">Save customer details</button></footer>
+  </form>` : `<dl class="wa-verification-detail-readonly"><div><dt>Registration</dt><dd>${escapeHtml(item.registrationNumber || "—")}</dd></div><div><dt>GSTIN</dt><dd>${escapeHtml(item.gstin || "Not provided")}</dd></div><div><dt>Representative</dt><dd>${escapeHtml(item.representativeName || "—")} · ${escapeHtml(item.representativeTitle || "—")}</dd></div><div><dt>Registered address</dt><dd>${escapeHtml(item.registeredAddress || "Not provided")}</dd></div></dl>`;
+  return `<section class="wa-verification-case-modal" data-verification-case-modal="${escapeHtml(item.tenantId)}" hidden role="dialog" aria-modal="true" aria-labelledby="waVerificationCase-${escapeHtml(item.tenantId)}">
+    <div class="wa-verification-case-shell">
+      <header><div><span>Customer verification case</span><strong id="waVerificationCase-${escapeHtml(item.tenantId)}">${escapeHtml(item.tenantName)}</strong><small>${escapeHtml(item.ownerEmail)} · submitted ${escapeHtml(formatDate(item.submittedAt))}</small></div><div>${status(item.status)}<button type="button" data-verification-case-close aria-label="Close verification case">×</button></div></header>
+      <main>
+        <section class="wa-verification-case-section"><div class="wa-verification-section-heading"><div><span>Business identity</span><h3>Submitted details</h3></div><small>Owner email is account-controlled and remains read-only.</small></div>${fields}</section>
+        <section class="wa-verification-case-section"><div class="wa-verification-section-heading"><div><span>Protected evidence</span><h3>Documents</h3></div><small>${approvedDocuments} of ${documents.length} approved</small></div><div class="wa-verification-files">${documents.map((document) => `<button type="button" class="document-${escapeHtml(document.reviewStatus || "pending")}" data-verification-document="${escapeHtml(document.id)}" title="Open ${escapeHtml(document.name)}"><span>${escapeHtml(String(document.type || "document").replaceAll("_", " "))}</span><small>${Math.ceil(Number(document.size || 0) / 1024)} KB · ${escapeHtml(reviewStatusLabel(document.reviewStatus))}</small></button>`).join("") || "<em>No active documents</em>"}</div>${state.canApprove ? `<button class="wa-request-evidence-button" type="button" data-request-document="${escapeHtml(item.tenantId)}">+ Request additional document</button>` : ""}${verificationRequestRows(item)}</section>
+        <section class="wa-verification-case-section"><div class="wa-verification-section-heading"><div><span>Case decision</span><h3>Provider pre-check</h3></div><small>Document decisions remain independent.</small></div>${verificationReviewControls(item)}</section>
+      </main>
+    </div>
+  </section>`;
+}
+
 function verification() {
   const rows = state.snapshot?.verifications || [];
   const pending = rows.filter((item) => ["submitted", "in_review", "changes_requested", "rejected"].includes(item.status));
   const gate = state.snapshot?.verificationGate || { enabled: true };
-  const gateControl = `<section class="wa-admin-card wa-gate-card ${gate.enabled ? "" : "paused"}"><div class="wa-admin-secret-heading"><div><h3>Production verification gate</h3><p>Controls whether an approved provider pre-check is required before customers can start Meta onboarding.</p></div>${status(gate.enabled ? "enabled" : "temporarily_paused")}</div>${gate.enabled ? `<p class="wa-gate-warning">Keep this enabled for normal operation. A temporary pause affects every customer workspace and automatically expires.</p>${state.canApprove ? `<form class="wa-gate-form" data-gate-pause><label>Reason<textarea name="reason" rows="2" minlength="10" maxlength="500" required placeholder="Explain the operational reason"></textarea></label><label>Days disabled<select name="duration"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="14">14 days</option><option value="30">30 days (maximum)</option></select></label><button class="wa-admin-button" type="submit">Temporarily pause gate</button></form>` : ""}` : `<div class="wa-admin-notice"><strong>Gate paused until ${escapeHtml(formatDate(gate.bypassExpiresAt))}</strong><br>${escapeHtml(gate.reason || "Temporary operational bypass")}</div>${state.canApprove ? `<button class="wa-admin-button primary" type="button" data-gate-restore>Restore gate now</button>` : ""}`}</section>`;
-  const cases = rows.length ? `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Provider business pre-check</h3><p>Review each protected document independently, then approve the business case. Every decision remains auditable and can be reopened.</p></div>${status(`${pending.length}_pending`)}</div><div class="wa-verification-list">${rows.map((item) => `<article class="wa-verification-case"><header><div><strong>${escapeHtml(item.tenantName)}</strong><small>${escapeHtml(item.ownerEmail)} · ${escapeHtml(String(item.entityType || "other").replaceAll("_", " "))}</small></div><div class="wa-verification-heading-actions">${status(item.status)}${state.canApprove ? `<button type="button" data-request-document="${escapeHtml(item.tenantId)}">+ Request document</button>` : ""}</div></header><dl><div><dt>Registration</dt><dd>${escapeHtml(item.registrationNumber || "—")}</dd></div><div><dt>GSTIN</dt><dd>${escapeHtml(item.gstin || "Not provided")}</dd></div><div><dt>Representative</dt><dd>${escapeHtml(item.representativeName || "—")} · ${escapeHtml(item.representativeTitle || "—")}</dd></div><div><dt>Submitted</dt><dd>${escapeHtml(formatDate(item.submittedAt))}</dd></div></dl><div class="wa-verification-address"><strong>Registered address</strong><p>${escapeHtml(item.registeredAddress || "Not provided")}</p></div><div class="wa-verification-files">${(item.documents || []).map((document) => `<button type="button" class="document-${escapeHtml(document.reviewStatus || "pending")}" data-verification-document="${escapeHtml(document.id)}" title="Open ${escapeHtml(document.name)}"><span>${escapeHtml(String(document.type || "document").replaceAll("_", " "))}</span><small>${Math.ceil(Number(document.size || 0) / 1024)} KB · ${escapeHtml(reviewStatusLabel(document.reviewStatus))}</small></button>`).join("") || "<em>No active documents</em>"}</div>${verificationRequestRows(item)}${verificationReviewControls(item)}</article>`).join("")}</div></section>` : `<section class="wa-admin-card"><h3>Business verification</h3><div class="wa-admin-empty">No verification cases have been created.</div></section>`;
+  const gateControl = `<details class="wa-admin-card wa-gate-card ${gate.enabled ? "" : "paused"}"><summary><div><h3>Production verification gate</h3><p>Controls whether an approved provider pre-check is required before customers can start Meta onboarding.</p></div><div>${status(gate.enabled ? "enabled" : "temporarily_paused")}<span class="wa-gate-chevron" aria-hidden="true">⌄</span></div></summary><div class="wa-gate-body">${gate.enabled ? `<p class="wa-gate-warning">Keep this enabled for normal operation. A temporary pause affects every customer workspace and automatically expires.</p>${state.canApprove ? `<form class="wa-gate-form" data-gate-pause><label>Reason<textarea name="reason" rows="2" minlength="10" maxlength="500" required placeholder="Explain the operational reason"></textarea></label><label>Days disabled<select name="duration"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="14">14 days</option><option value="30">30 days (maximum)</option></select></label><button class="wa-admin-button" type="submit">Temporarily pause gate</button></form>` : ""}` : `<div class="wa-admin-notice"><strong>Gate paused until ${escapeHtml(formatDate(gate.bypassExpiresAt))}</strong><br>${escapeHtml(gate.reason || "Temporary operational bypass")}</div>${state.canApprove ? `<button class="wa-admin-button primary" type="button" data-gate-restore>Restore gate now</button>` : ""}`}</div></details>`;
+  const cases = rows.length ? `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Provider business pre-check</h3><p>Open a customer card to review identity details, edit the authoritative customer record, inspect protected evidence and record decisions.</p></div>${status(`${pending.length}_pending`)}</div><div class="wa-verification-card-grid">${rows.map((item) => {
+    const documents = item.documents || [];
+    const approved = documents.filter((document) => document.reviewStatus === "approved").length;
+    const attention = documents.filter((document) => ["changes_requested", "rejected"].includes(document.reviewStatus)).length;
+    return `<button class="wa-verification-summary-card" type="button" data-open-verification-case="${escapeHtml(item.tenantId)}"><span class="wa-verification-avatar">${escapeHtml((item.tenantName || "B").charAt(0).toUpperCase())}</span><span class="wa-verification-summary-copy"><span>${escapeHtml(String(item.entityType || "other").replaceAll("_", " "))}</span><strong>${escapeHtml(item.tenantName)}</strong><small>${escapeHtml(item.ownerEmail)}</small></span><span class="wa-verification-summary-meta">${status(item.status)}<small>${documents.length} document${documents.length === 1 ? "" : "s"} · ${approved} approved${attention ? ` · ${attention} needs action` : ""}</small><em>Open review →</em></span></button>`;
+  }).join("")}</div></section>` : `<section class="wa-admin-card"><h3>Business verification</h3><div class="wa-admin-empty">No verification cases have been created.</div></section>`;
   const reviewModal = `<section class="wa-document-review-modal" data-document-review-modal hidden role="dialog" aria-modal="true" aria-labelledby="waDocumentReviewTitle"><div class="wa-document-review-shell"><header class="wa-document-review-head"><div><span>Protected verification evidence</span><strong id="waDocumentReviewTitle" data-document-review-name>Document preview</strong><small data-document-review-meta>Loading document…</small></div><button type="button" data-document-review-close aria-label="Close document preview">×</button></header><div class="wa-document-review-toolbar" data-document-review-toolbar hidden><div class="wa-document-review-notes"><label><span>Document reviewer notes</span><textarea rows="2" maxlength="2000" data-document-review-notes aria-describedby="waDocumentReviewHelp waDocumentReviewFeedback" placeholder="Explain what must be replaced or why the document is rejected"></textarea></label><small id="waDocumentReviewHelp">A clear reason of at least 10 characters is required for replacement or rejection.</small><p id="waDocumentReviewFeedback" class="wa-document-review-feedback" data-document-review-feedback role="alert" hidden></p></div><div class="wa-document-review-actions"><button type="button" data-document-decision="in_review">Start / reopen review</button><button type="button" data-document-decision="changes_requested">Request replacement</button><button type="button" data-document-decision="rejected" class="danger">Reject document</button><button type="button" data-document-decision="approved" class="approve">Approve document</button></div></div><main class="wa-document-review-stage" data-document-review-stage><div class="wa-document-review-loading"><span></span><strong>Securely fetching document…</strong></div></main></div></section>`;
   const requestModal = `<section class="wa-document-request-modal" data-document-request-modal hidden role="dialog" aria-modal="true" aria-labelledby="waDocumentRequestTitle"><form class="wa-document-request-shell" data-document-request-form><header><div><span>Additional evidence</span><strong id="waDocumentRequestTitle">Request a document</strong><small>The request appears immediately in the customer workspace.</small></div><button type="button" data-document-request-close aria-label="Close request form">×</button></header><div class="wa-document-request-fields"><label>Document type<select name="documentType" required><option value="letter_of_authorization">Letter of Authorization</option><option value="signatory_authorisation">Signatory authorisation</option><option value="gst_certificate">GST registration certificate</option><option value="incorporation_certificate">Certificate of incorporation</option><option value="business_address_proof">Business address proof</option><option value="bank_statement">Business bank statement</option><option value="other_requested_document">Other document</option></select></label><label>Request title<input name="title" maxlength="120" required value="Letter of Authorization" /></label><label>Instructions<textarea name="instructions" rows="5" maxlength="2000" placeholder="Explain what the document must contain, who must sign it, and the accepted date range."></textarea></label><label>Due date (optional)<input name="dueAt" type="date" /></label></div><footer><button type="button" data-document-request-close>Cancel</button><button type="submit" class="approve">Send request</button></footer></form></section>`;
-  return `${gateControl}${cases}${reviewModal}${requestModal}`;
+  return `${gateControl}${cases}${rows.map(verificationCaseModal).join("")}${reviewModal}${requestModal}`;
 }
 
 function verificationDocumentContext(documentId) {
@@ -699,10 +736,10 @@ function content() {
 }
 
 function render() {
-  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal]").forEach((modal) => modal.remove());
+  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal]").forEach((modal) => modal.remove());
   if (verificationPreviewUrl) URL.revokeObjectURL(verificationPreviewUrl);
   verificationPreviewUrl = "";
-  document.body.classList.remove("wa-document-review-open");
+  document.body.classList.remove("wa-document-review-open", "wa-verification-case-open");
   const meta = VIEW_META[state.view] || VIEW_META.overview;
   const pageHead = document.querySelector(".page-head");
   if (pageHead) {
@@ -719,11 +756,52 @@ function render() {
 }
 
 function bind() {
+  document.querySelectorAll("#waAdminContent [data-verification-case-modal]").forEach((modal) => document.body.appendChild(modal));
   const reviewModal = document.querySelector("#waAdminContent [data-document-review-modal]");
   if (reviewModal) document.body.appendChild(reviewModal);
   const requestModal = document.querySelector("#waAdminContent [data-document-request-modal]");
   if (requestModal) document.body.appendChild(requestModal);
   document.querySelector("#waRefresh")?.addEventListener("click", () => loadSnapshot());
+  document.querySelectorAll("[data-open-verification-case]").forEach((button) => button.addEventListener("click", () => {
+    const modal = [...document.querySelectorAll("[data-verification-case-modal]")].find((item) => item.dataset.verificationCaseModal === button.dataset.openVerificationCase);
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add("wa-verification-case-open");
+    modal.querySelector("input, select, textarea, button")?.focus();
+  }));
+  document.querySelectorAll("[data-verification-case-close]").forEach((button) => button.addEventListener("click", () => {
+    button.closest("[data-verification-case-modal]").hidden = true;
+    document.body.classList.remove("wa-verification-case-open");
+  }));
+  document.querySelectorAll("[data-verification-case-modal]").forEach((modal) => modal.addEventListener("click", (event) => {
+    if (event.target !== modal) return;
+    modal.hidden = true;
+    document.body.classList.remove("wa-verification-case-open");
+  }));
+  document.querySelectorAll("[data-verification-details]").forEach((form) => form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = form.querySelector('button[type="submit"]');
+    const values = new FormData(form);
+    button.disabled = true;
+    try {
+      const { error } = await db.rpc("whatsapp_platform_admin_update_verification", {
+        p_tenant_id: form.dataset.verificationDetails,
+        p_company_name: String(values.get("companyName") || "").trim(),
+        p_entity_type: String(values.get("entityType") || "other"),
+        p_registration_number: String(values.get("registrationNumber") || "").trim() || null,
+        p_gstin: String(values.get("gstin") || "").trim() || null,
+        p_registered_address: String(values.get("registeredAddress") || "").trim() || null,
+        p_representative_name: String(values.get("representativeName") || "").trim() || null,
+        p_representative_title: String(values.get("representativeTitle") || "").trim() || null,
+      });
+      if (error) throw error;
+      showToast("Customer details updated in the admin console and customer portal.", TOAST_TYPES.SUCCESS);
+      await loadSnapshot();
+    } catch (error) {
+      showToast(error?.message || "Customer details could not be updated.", TOAST_TYPES.ERROR);
+      button.disabled = false;
+    }
+  }));
   document.querySelectorAll("[data-tenant-form]").forEach((form) => form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = form.querySelector("button");
