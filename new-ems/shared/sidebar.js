@@ -295,10 +295,16 @@ const MENU_BY_WORKSPACE = {
       ]
     },
     {
+      title: "Ads",
+      items: [
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ads Campaigns", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=campaigns` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ad Analytics", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=ads-analytics` }
+      ]
+    },
+    {
       title: "Connections",
       items: [
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Social Accounts", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=accounts` },
-        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ads Campaigns", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=campaigns` },
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Settings", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=settings` },
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Audit History", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=audit` }
       ]

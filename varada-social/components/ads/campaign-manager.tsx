@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -164,7 +164,11 @@ const objectives = [
   ["OUTCOME_APP_PROMOTION", "App promotion", "Drive app installs and events"],
 ];
 
-export function CampaignManager() {
+export function CampaignManager({
+  initialMode = "list",
+}: {
+  initialMode?: "list" | "create" | "analytics";
+}) {
   const [accounts, setAccounts] = useState<AdAccount[] | null>(null);
   const [selected, setSelected] = useState("");
   const [campaigns, setCampaigns] = useState<Campaign[] | null>(null);
@@ -174,6 +178,8 @@ export function CampaignManager() {
   const [openedCampaign, setOpenedCampaign] = useState<Campaign | null>(null);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft>(initialDraft);
+  const createIntentRef = useRef(false);
+  const creatingRef = useRef(false);
   const account = accounts?.find(
     (item) => item.external_account_id === selected,
   );
@@ -189,13 +195,29 @@ export function CampaignManager() {
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
+  useEffect(() => {
+    creatingRef.current = creating;
+  }, [creating]);
+
+  useEffect(() => {
+    if (initialMode !== "create") return;
+    setDraft(initialDraft);
+    setStep(0);
+    setError("");
+    setBusy(false);
+    setCreating(true);
+  }, [initialMode]);
+
   const loadAccounts = useCallback(async () => {
+    if (creatingRef.current) return;
     try {
       const rows = await socialEdgeFetch<AdAccount[]>("list_ad_accounts");
+      if (creatingRef.current) return;
       setAccounts(rows);
       setSelected((current) => current || rows[0]?.external_account_id || "");
       setError("");
     } catch (reason) {
+      if (creatingRef.current) return;
       setError(
         reason instanceof Error
           ? reason.message
@@ -205,12 +227,14 @@ export function CampaignManager() {
     }
   }, []);
   const loadCampaigns = useCallback(async (adAccountId: string) => {
+    if (creatingRef.current) return;
     if (!adAccountId) return setCampaigns([]);
     setBusy(true);
     try {
       const rows = await socialEdgeFetch<Campaign[]>("list_campaigns", {
         adAccountId,
       });
+      if (creatingRef.current) return;
       setCampaigns(rows);
       setOpenedCampaign((current) =>
         current
@@ -222,6 +246,7 @@ export function CampaignManager() {
       );
       setError("");
     } catch (reason) {
+      if (creatingRef.current) return;
       setError(
         reason instanceof Error
           ? reason.message
@@ -229,23 +254,25 @@ export function CampaignManager() {
       );
       setCampaigns([]);
     } finally {
-      setBusy(false);
+      if (!creatingRef.current) setBusy(false);
     }
   }, []);
   useEffect(() => {
+    if (creating) return;
     const timer = window.setTimeout(() => void loadAccounts(), 0);
     return () => window.clearTimeout(timer);
-  }, [loadAccounts]);
+  }, [creating, loadAccounts]);
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || creating) return;
     const timer = window.setTimeout(() => void loadCampaigns(selected), 0);
     return () => window.clearTimeout(timer);
-  }, [loadCampaigns, selected]);
+  }, [creating, loadCampaigns, selected]);
 
   function openBuilder() {
     setDraft(initialDraft);
     setStep(0);
     setError("");
+    setBusy(false);
     setCreating(true);
   }
   function validate(currentStep = step) {
@@ -278,6 +305,8 @@ export function CampaignManager() {
   }
 
   async function createCampaign() {
+    if (!createIntentRef.current) return;
+    createIntentRef.current = false;
     const message = validate(0) || validate(1) || validate(2);
     if (message) return setError(message);
     setBusy(true);
@@ -480,12 +509,25 @@ export function CampaignManager() {
     <div className="space-y-6">
       <PageHeader
         eyebrow="Meta Marketing API"
-        title="Ads campaigns"
-        description="Plan, create, review, and control Meta advertising from the EMS."
+        title={
+          initialMode === "create"
+            ? "Create draft campaign"
+            : initialMode === "analytics"
+              ? "Ad analytics"
+              : "Ads campaigns"
+        }
+        description={
+          initialMode === "create"
+            ? "Build a paused Meta campaign draft from EMS before anything is activated."
+            : initialMode === "analytics"
+              ? "Review connected ad accounts, campaign status, budgets, and delivery controls from EMS."
+              : "Plan, create, review, and control Meta advertising from the EMS."
+        }
         icon={Megaphone}
         actions={
           <>
             <button
+              type="button"
               className="btn-secondary"
               disabled={busy}
               onClick={() => void loadAccounts()}
@@ -494,6 +536,7 @@ export function CampaignManager() {
               Sync
             </button>
             <button
+              type="button"
               className="btn-primary"
               disabled={!selected || busy}
               onClick={creating ? () => setCreating(false) : openBuilder}
@@ -533,6 +576,9 @@ export function CampaignManager() {
               </select>
             </Field>
           </section>
+          {initialMode === "analytics" && campaigns && (
+            <AdAnalyticsSummary campaigns={campaigns} money={money} />
+          )}
           {creating && (
             <section className="overflow-hidden rounded-2xl border bg-surface">
               <div className="border-b px-5 py-4">
@@ -1067,7 +1113,10 @@ export function CampaignManager() {
                     type="button"
                     className="btn-primary"
                     disabled={busy}
-                    onClick={() => void createCampaign()}
+                    onClick={() => {
+                      createIntentRef.current = true;
+                      void createCampaign();
+                    }}
                   >
                     {busy ? (
                       <LoaderCircle size={16} className="animate-spin" />
@@ -1137,6 +1186,7 @@ export function CampaignManager() {
                         </p>
                         <div className="flex flex-wrap gap-2">
                           <button
+                            type="button"
                             className="btn-secondary"
                             onClick={(event) => {
                               event.stopPropagation();
@@ -1147,6 +1197,7 @@ export function CampaignManager() {
                           </button>
                           {active ? (
                             <button
+                              type="button"
                               className="btn-secondary"
                               disabled={busy}
                               onClick={(event) => {
@@ -1158,6 +1209,7 @@ export function CampaignManager() {
                             </button>
                           ) : (
                             <button
+                              type="button"
                               className="btn-secondary"
                               disabled={busy}
                               onClick={(event) => {
@@ -1169,6 +1221,7 @@ export function CampaignManager() {
                             </button>
                           )}
                           <button
+                            type="button"
                             className="btn-secondary border-red-400/30 text-red-200"
                             disabled={busy}
                             onClick={(event) => {
@@ -1201,6 +1254,80 @@ export function CampaignManager() {
         </>
       )}
     </div>
+  );
+}
+
+function AdAnalyticsSummary({
+  campaigns,
+  money,
+}: {
+  campaigns: Campaign[];
+  money: Intl.NumberFormat;
+}) {
+  const activeCount = campaigns.filter(
+    (campaign) =>
+      campaign.effective_status === "ACTIVE" || campaign.status === "ACTIVE",
+  ).length;
+  const pausedCount = campaigns.filter(
+    (campaign) =>
+      campaign.effective_status === "PAUSED" || campaign.status === "PAUSED",
+  ).length;
+  const dailyBudget = campaigns.reduce(
+    (total, campaign) => total + Number(campaign.daily_budget || 0),
+    0,
+  );
+  const lifetimeBudget = campaigns.reduce(
+    (total, campaign) => total + Number(campaign.lifetime_budget || 0),
+    0,
+  );
+  const recentlyUpdated = [...campaigns]
+    .sort((a, b) =>
+      String(b.metadata?.updatedTime || "").localeCompare(
+        String(a.metadata?.updatedTime || ""),
+      ),
+    )
+    .slice(0, 4);
+
+  return (
+    <section className="grid gap-4 rounded-2xl border bg-surface p-5 lg:grid-cols-4">
+      <Summary label="Campaigns" value={String(campaigns.length)} />
+      <Summary label="Active" value={String(activeCount)} />
+      <Summary label="Paused / draft" value={String(pausedCount)} />
+      <Summary
+        label="Budget tracked"
+        value={
+          dailyBudget
+            ? `${money.format(dailyBudget)} daily`
+            : lifetimeBudget
+              ? `${money.format(lifetimeBudget)} lifetime`
+              : "No budget set"
+        }
+      />
+      <div className="rounded-2xl border bg-background p-4 lg:col-span-4">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">
+          Recent campaigns
+        </p>
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {recentlyUpdated.length ? (
+            recentlyUpdated.map((campaign) => (
+              <div
+                key={campaign.external_campaign_id}
+                className="rounded-xl border bg-surface-raised p-3"
+              >
+                <p className="font-semibold">{campaign.name}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {campaign.effective_status || campaign.status || "Unknown"} ·{" "}
+                  {campaign.objective?.replaceAll("_", " ") ||
+                    "Objective unavailable"}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-muted">No ad campaigns found yet.</p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1294,6 +1421,7 @@ function CampaignDetails({
               </p>
             </div>
             <button
+              type="button"
               className="btn-secondary shrink-0"
               aria-label="Close campaign details"
               onClick={onClose}
@@ -1306,6 +1434,7 @@ function CampaignDetails({
               status={campaign.effective_status || campaign.status || "unknown"}
             />
             <button
+              type="button"
               className="btn-secondary"
               disabled={busy}
               onClick={() => setEditing((value) => !value)}
@@ -1315,6 +1444,7 @@ function CampaignDetails({
             </button>
             {active ? (
               <button
+                type="button"
                 className="btn-secondary"
                 disabled={busy}
                 onClick={onStop}
@@ -1323,6 +1453,7 @@ function CampaignDetails({
               </button>
             ) : (
               <button
+                type="button"
                 className="btn-secondary"
                 disabled={busy}
                 onClick={onActivate}
@@ -1331,6 +1462,7 @@ function CampaignDetails({
               </button>
             )}
             <button
+              type="button"
               className="btn-secondary border-red-400/30 text-red-200"
               disabled={busy}
               onClick={onDelete}
@@ -1392,7 +1524,12 @@ function CampaignDetails({
                 </Field>
               </div>
               <div className="mt-4 flex justify-end">
-                <button className="btn-primary" disabled={busy} onClick={save}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={busy}
+                  onClick={save}
+                >
                   {busy ? (
                     <LoaderCircle size={16} className="animate-spin" />
                   ) : (

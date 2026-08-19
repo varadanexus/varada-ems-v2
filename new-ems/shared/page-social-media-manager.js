@@ -8,15 +8,17 @@ function safeModuleUrl(view) {
   const fallback = "http://localhost:3000/dashboard?embedded=1";
   const routes = new Set([
     "dashboard", "create", "content", "calendar", "approvals",
-    "trends", "analytics", "instagram", "inbox", "accounts", "campaigns", "settings", "audit"
+    "trends", "analytics", "instagram", "inbox", "accounts", "campaigns",
+    "ads-analytics", "settings", "audit"
   ]);
 
   try {
     const url = new URL(configured || fallback, window.location.origin);
     if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsupported protocol");
     const route = view === "overview" ? "dashboard" : routes.has(view) ? view : "dashboard";
-    url.pathname = url.pathname.replace(/\/(dashboard|create|content|calendar|approvals|trends|analytics|instagram|inbox|accounts|campaigns|settings|audit)\/?$/, `/${route}`);
-    url.search = "embedded=1&build=nexus-social-hide-meta-cards-20260818";
+    const routePath = route.replace("ads-analytics", "ads/analytics");
+    url.pathname = url.pathname.replace(/\/(dashboard|create|content|calendar|approvals|trends|analytics|instagram|inbox|accounts|campaigns|ads\/create|ads\/analytics|settings|audit)\/?$/, `/${routePath}`);
+    url.search = "embedded=1&build=nexus-social-ads-section-v2-20260818";
     return url.href;
   } catch {
     return fallback;
@@ -112,7 +114,11 @@ function renderLauncher(moduleUrl, session, accessToken) {
       if (destination.origin !== window.location.origin) return;
       if (!destination.pathname.includes("/modules/social-media-manager/")) return;
       const view = destination.searchParams.get("view") || "overview";
-      const route = view === "overview" ? "/dashboard" : `/${view}`;
+      const route = view === "overview"
+        ? "/dashboard"
+        : view === "ads-analytics"
+          ? "/ads/analytics"
+          : `/${view}`;
       event.preventDefault();
       document.body.classList.remove("page-transition-active");
       try { sessionStorage.removeItem("ems_nav_pending"); } catch {}

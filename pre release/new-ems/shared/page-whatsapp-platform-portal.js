@@ -68,6 +68,8 @@ let metaOnboardingStatus = null;
 let facebookSdkPromise = null;
 let workspaceProfile = { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
 let workspaceVerification = null;
+let verificationDocumentObjectUrl = "";
+let verificationAttentionDismissed = false;
 let workspaceInbox = { conversations: [], thread: null, error: "" };
 let workspaceContacts = { contacts: [], error: "" };
 let workspaceTemplates = { templates: [], connectionId: "", error: "" };
@@ -108,7 +110,6 @@ const WORKSPACE_VIEW_LABELS = {
   campaigns: "Campaigns",
   templates: "Message templates",
   flows: "Flows",
-  automations: "Automations",
   analytics: "Analytics",
   accounts: "Business accounts",
   team: "Team & roles",
@@ -120,6 +121,10 @@ const WORKSPACE_VIEW_LABELS = {
 function currentWorkspaceView() {
   const relativePath = location.pathname.slice(WORKSPACE_PATH.length).replace(/^\/+|\/+$/g, "");
   const view = relativePath.split("/")[0] || "overview";
+  if (view === "automations") {
+    location.replace(`${workspacePath("flows")}${location.search}${location.hash}`);
+    return "flows";
+  }
   return Object.hasOwn(WORKSPACE_VIEW_LABELS, view) ? view : "overview";
 }
 
@@ -316,10 +321,109 @@ function currentFlowBuilderId() {
   return currentWorkspaceView() === "flows" ? (new URLSearchParams(location.search).get("builder") || "") : "";
 }
 
+function workspaceIcon(paths, className = "") {
+  return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
+}
+
+const WORKSPACE_NAV_ICONS = {
+  overview: workspaceIcon('<path d="m3 10 9-7 9 7"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-7h6v7"/>'),
+  verification: workspaceIcon('<path d="M12 3 20 6v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6l8-3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>'),
+  onboarding: workspaceIcon('<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 8h7M9 12h7M9 16h4"/><path d="m6.5 8 .5.5 1-1M6.5 12l.5.5 1-1M6.5 16l.5.5 1-1"/>'),
+  inbox: workspaceIcon('<path d="M4 5h16l2 9v5H2v-5l2-9Z"/><path d="M2 14h5l2 3h6l2-3h5"/>'),
+  contacts: workspaceIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'),
+  campaigns: workspaceIcon('<path d="m3 11 15-6v14L3 13v-2Z"/><path d="M11.6 16.4 13 21H8l-1.8-6.6M21 9v6"/>'),
+  templates: workspaceIcon('<path d="M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>'),
+  flows: workspaceIcon('<circle cx="6" cy="5" r="2"/><circle cx="18" cy="12" r="2"/><circle cx="6" cy="19" r="2"/><path d="M8 5h3a4 4 0 0 1 4 4v1M8 19h3a4 4 0 0 0 4-4v-1"/>'),
+  analytics: workspaceIcon('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
+  accounts: workspaceIcon('<path d="M3 21h18M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6M9 10h.01M15 10h.01"/>'),
+  team: workspaceIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M18 8v6M21 11h-6"/>'),
+  integrations: workspaceIcon('<path d="M12 22v-5M9 8V2M15 8V2M18 8H6v3a6 6 0 0 0 12 0V8Z"/>'),
+  billing: workspaceIcon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/>'),
+  settings: workspaceIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.15.38.36.72.6 1 .3.3.7.45 1.1.4H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z"/>'),
+};
+
 function workspaceNavItem(view, icon, badge = "") {
   const active = currentWorkspaceView() === view;
   const label = WORKSPACE_VIEW_LABELS[view];
-  return `<a class="${active ? "active" : ""}" href="${workspacePath(view)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" ${active ? 'aria-current="page"' : ""}><span class="wp-nav-icon" aria-hidden="true">${icon}</span><span class="wp-nav-text">${escapeHtml(label)}</span>${badge ? `<em>${badge}</em>` : ""}</a>`;
+  const iconMarkup = WORKSPACE_NAV_ICONS[view] || icon;
+  return `<a class="${active ? "active" : ""}" href="${workspacePath(view)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" data-nav-label="${escapeHtml(label)}" ${active ? 'aria-current="page"' : ""}><span class="wp-nav-icon" aria-hidden="true">${iconMarkup}</span><span class="wp-nav-text">${escapeHtml(label)}</span>${badge ? `<em>${badge}</em>` : ""}</a>`;
+}
+
+const WORKSPACE_SIDEBAR_KEY = "varada-whatsapp-workspace-sidebar";
+
+function readWorkspaceSidebarState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WORKSPACE_SIDEBAR_KEY) || "{}");
+    return {
+      collapsed: Boolean(saved?.collapsed),
+      sections: saved?.sections && typeof saved.sections === "object" ? saved.sections : {},
+    };
+  } catch {
+    return { collapsed: false, sections: {} };
+  }
+}
+
+function writeWorkspaceSidebarState(state) {
+  try { localStorage.setItem(WORKSPACE_SIDEBAR_KEY, JSON.stringify(state)); } catch { /* Navigation remains usable for this visit. */ }
+}
+
+function workspaceNavSection(id, label, items, sidebarState) {
+  const collapsed = sidebarState?.sections?.[id] === false;
+  return `<section class="wp-nav-section ${collapsed ? "is-collapsed" : ""}" data-workspace-nav-section="${escapeHtml(id)}"><button class="wp-nav-section-toggle" type="button" data-workspace-section-toggle="${escapeHtml(id)}" aria-expanded="${String(!collapsed)}"><span class="wp-nav-label">${escapeHtml(label)}</span><span class="wp-nav-section-chevron" aria-hidden="true">${workspaceIcon('<path d="m7 10 5 5 5-5"/>')}</span></button><div class="wp-nav-section-items">${items}</div></section>`;
+}
+
+function enhanceWorkspaceSidebar(root, sidebarState, isFlowBuilderRoute) {
+  const shell = root.querySelector(".wp-workspace-shell");
+  const sidebar = root.querySelector(".wp-workspace-sidebar");
+  const nav = root.querySelector(".wp-workspace-nav");
+  const brand = root.querySelector(".wp-workspace-brand");
+  if (!shell || !sidebar || !nav || !brand) return;
+  if (sidebarState.collapsed && !isFlowBuilderRoute) shell.classList.add("sidebar-collapsed");
+
+  const brandRow = document.createElement("div");
+  brandRow.className = "wp-sidebar-brand-row";
+  sidebar.insertBefore(brandRow, brand);
+  brandRow.appendChild(brand);
+  if (!isFlowBuilderRoute) {
+    const collapseButton = document.createElement("button");
+    collapseButton.type = "button";
+    collapseButton.id = "wpSidebarCollapseBtn";
+    collapseButton.className = "wp-sidebar-collapse";
+    collapseButton.innerHTML = `<span aria-hidden="true">${workspaceIcon('<path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M14 8l-4 4 4 4M10 12h11"/>', "wp-sidebar-collapse-icon")}</span>`;
+    brandRow.appendChild(collapseButton);
+  }
+
+  const sectionIds = ["workspace", "customers", "engage", "insights", "administration"];
+  [...nav.querySelectorAll(":scope > .wp-nav-label")].forEach((label, index) => {
+    const sectionId = sectionIds[index] || `section-${index + 1}`;
+    const section = document.createElement("section");
+    section.className = "wp-nav-section";
+    section.dataset.workspaceNavSection = sectionId;
+    if (sidebarState.sections?.[sectionId] === false) section.classList.add("is-collapsed");
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "wp-nav-section-toggle";
+    toggle.dataset.workspaceSectionToggle = sectionId;
+    toggle.setAttribute("aria-expanded", String(!section.classList.contains("is-collapsed")));
+    toggle.setAttribute("aria-label", `${section.classList.contains("is-collapsed") ? "Expand" : "Collapse"} ${label.textContent.trim()}`);
+    const items = document.createElement("div");
+    items.className = "wp-nav-section-items";
+    let cursor = label.nextElementSibling;
+    while (cursor && !cursor.classList.contains("wp-nav-label")) {
+      const next = cursor.nextElementSibling;
+      items.appendChild(cursor);
+      cursor = next;
+    }
+    nav.insertBefore(section, label);
+    toggle.appendChild(label);
+    toggle.insertAdjacentHTML("beforeend", `<span class="wp-nav-section-chevron" aria-hidden="true">${workspaceIcon('<path d="m7 10 5 5 5-5"/>')}</span>`);
+    section.append(toggle, items);
+  });
+
+  const footer = sidebar.querySelector(".wp-sidebar-footer");
+  if (footer) {
+    footer.innerHTML = `<a class="wp-sidebar-help" href="/contact.html" title="Help and support" aria-label="Help and support"><span class="wp-sidebar-footer-icon" aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.12c-.9.55-1.5 1.05-1.5 2.38M12 17h.01"/>')}</span><span class="wp-sidebar-footer-label">Help &amp; support</span></a><button class="wp-sidebar-signout" id="wpSidebarLogoutBtn" type="button" title="Sign out" aria-label="Sign out"><span class="wp-sidebar-footer-icon wp-sidebar-signout-icon" aria-hidden="true">${workspaceIcon('<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>')}</span><span class="wp-sidebar-footer-label">Sign out</span></button>`;
+  }
 }
 
 const PROFILE_LABELS = {
@@ -452,6 +556,23 @@ async function storageRequest(action, payload = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || "Workspace storage request failed.");
   return data;
+}
+
+async function verificationDocumentRequest(documentId) {
+  if (!session?.sessionToken) throw new Error("Your workspace session has expired.");
+  const response = await fetch(storageEndpoint(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: runtime.supabaseAnonKey || "" },
+    credentials: "omit",
+    cache: "no-store",
+    referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action: "preview_verification_document", sessionToken: session.sessionToken, documentId }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data?.error || "Verification document could not be opened.");
+  }
+  return { blob: await response.blob(), contentType: response.headers.get("content-type") || "" };
 }
 
 function messagingEndpoint() {
@@ -678,7 +799,39 @@ function authForm(mode) {
 }
 
 function renderInviteAcceptance(inviteToken) {
-  app.innerHTML = `<main class="wp-invite-page"><section class="wp-invite-shell"><div class="wp-invite-intro"><a class="wp-brand" href="/whatsapp-platform/"><img src="/images/logo.png" alt="Varada Nexus" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><span class="wp-kicker">Workspace invitation</span><h1>Join your team’s customer workspace.</h1><p>Create your member profile to collaborate on conversations, campaigns and customer journeys with the access assigned by your workspace administrator.</p><ul><li>One protected company workspace</li><li>Role-based access from day one</li><li>Invitation expires automatically</li></ul></div><section class="wp-auth-card wp-invite-card"><div><span class="wp-card-eyebrow">Accept invitation</span><h2>Set up your access</h2><p>This link can be used once. If it has expired, ask your workspace administrator for a new invitation.</p></div><form class="wp-form" id="wpInviteAcceptForm" novalidate><label class="wp-field"><span>Full name</span><input name="displayName" autocomplete="name" minlength="2" maxlength="100" required autofocus /></label><label class="wp-field"><span>Create password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><button type="button" data-password-toggle aria-label="Show password">Show</button></span><small>10+ characters with uppercase, lowercase and a number.</small></label><label class="wp-field"><span>Confirm password</span><span class="wp-password-control"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><button type="button" data-password-toggle aria-label="Show confirm password">Show</button></span></label><label class="wp-check"><input name="terms" type="checkbox" required /><span>I agree to the <a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label><p class="wp-form-message" id="wpInviteMessage" role="alert"></p><button class="wp-submit" type="submit">Join workspace</button></form><a class="wp-customer-signin" href="${ACCESS_PATH}#signin">Already a member? Sign in →</a></section></section></main>`;
+  app.innerHTML = `<main class="wp-invite-page">
+    <section class="wp-invite-shell" aria-labelledby="wpInviteTitle">
+      <div class="wp-invite-intro">
+        <span class="wp-kicker">Protected workspace invitation</span>
+        <h1 id="wpInviteTitle">Your team is ready for you.</h1>
+        <p>Activate your member profile, then continue directly into the shared WhatsApp customer workspace.</p>
+        <div class="wp-invite-assurance" aria-label="Invitation safeguards">
+          <div><span aria-hidden="true">01</span><strong>Confirm your profile</strong><small>Use the name your teammates will recognise.</small></div>
+          <div><span aria-hidden="true">02</span><strong>Protect your access</strong><small>Create a strong password known only to you.</small></div>
+          <div><span aria-hidden="true">03</span><strong>Enter the workspace</strong><small>Your assigned permissions apply automatically.</small></div>
+        </div>
+        <p class="wp-invite-security"><span aria-hidden="true">✓</span> Single-use invitation · Role-based workspace access</p>
+      </div>
+      <section class="wp-auth-card wp-invite-card">
+        <header class="wp-invite-card-head">
+          <span class="wp-invite-lock" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2m-9 0h8a2 2 0 0 1 2 2v7H6v-7a2 2 0 0 1 2-2Z"/></svg></span>
+          <div><span class="wp-card-eyebrow">Member access</span><h2>Create your profile</h2><p>Complete the details below to accept this invitation.</p></div>
+        </header>
+        <form class="wp-form" id="wpInviteAcceptForm" novalidate>
+          <label class="wp-field"><span>Full name</span><input name="displayName" autocomplete="name" minlength="2" maxlength="100" placeholder="Enter your full name" required autofocus /></label>
+          <div class="wp-invite-password-grid">
+            <label class="wp-field"><span>Create password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Minimum 10 characters" required /><button type="button" data-password-toggle aria-label="Show password">Show</button></span></label>
+            <label class="wp-field"><span>Confirm password</span><span class="wp-password-control"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Repeat your password" required /><button type="button" data-password-toggle aria-label="Show confirm password">Show</button></span></label>
+          </div>
+          <p class="wp-password-guidance"><span aria-hidden="true">●</span> Use 10+ characters with uppercase, lowercase and a number.</p>
+          <label class="wp-check wp-invite-terms"><input name="terms" type="checkbox" required /><span>I agree to the <a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+          <p class="wp-form-message" id="wpInviteMessage" role="alert"></p>
+          <button class="wp-submit" type="submit">Accept invitation <span aria-hidden="true">→</span></button>
+        </form>
+        <footer class="wp-invite-card-foot"><span>This invitation can only be used once.</span><a class="wp-customer-signin" href="${ACCESS_PATH}#signin">Already a member? Sign in</a></footer>
+      </section>
+    </section>
+  </main>`;
   document.body.classList.add("wp-access-page");
   app.querySelectorAll("[data-password-toggle]").forEach((button) => button.addEventListener("click", () => {
     const input = button.closest(".wp-password-control")?.querySelector("input");
@@ -693,13 +846,13 @@ function renderInviteAcceptance(inviteToken) {
     if (!form.reportValidity()) return;
     if (form.elements.password.value !== form.elements.confirmPassword.value) { message.textContent = "Passwords do not match."; return; }
     const submit = form.querySelector("button[type=submit]");
-    submit.disabled = true; submit.textContent = "Joining workspace…"; message.textContent = "";
+    submit.disabled = true; submit.textContent = "Accepting invitation…"; message.textContent = "";
     try {
       const result = await authRequest("accept_invite", { inviteToken, displayName: form.elements.displayName.value.trim(), password: form.elements.password.value, termsAccepted: form.elements.terms.checked });
       session = result.session; storeSession(session); location.replace(WORKSPACE_PATH);
     } catch (error) {
       message.textContent = error?.message || "The invitation could not be accepted.";
-      submit.disabled = false; submit.textContent = "Join workspace";
+      submit.disabled = false; submit.innerHTML = 'Accept invitation <span aria-hidden="true">→</span>';
     }
   });
 }
@@ -1132,7 +1285,64 @@ function onboardingView(setupReady, connections) {
   const gatePaused = workspaceVerification?.gateRequired === false;
   const mayOnboard = businessVerified || gatePaused;
   const completed = 1 + Number(businessVerified) + Number(metaConnected) + Number(phoneConnected);
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Workspace setup</span><h1>Onboarding</h1><p>Complete each stage before your team starts managing customer conversations.</p></div><strong class="wp-route-progress">${completed} of 5 complete</strong></div><div class="wp-readiness-banner ${mayOnboard && setupReady ? "ready" : "pending"}"><span>${mayOnboard ? (setupReady ? "✓" : "◷") : "◆"}</span><div><strong>${!mayOnboard ? "Business verification comes next" : setupReady ? "Meta connection is ready" : "Meta connection setup is in progress"}</strong><p>${!mayOnboard ? "Submit the organisation details and entity-specific evidence required to activate production onboarding." : setupReady ? "Your verified organisation can now connect its Meta business assets." : "Your verified workspace is ready while the Meta configuration is completed."}</p></div>${!mayOnboard ? `<a class="wp-primary wp-button-link" href="${workspacePath("verification")}">Verify business</a>` : !metaConnected ? `<button class="wp-primary" type="button" data-connect-meta>${setupReady ? "Connect Meta Business" : "Check connection status"}</button>` : ""}</div><article class="wp-card wp-route-card"><ol class="wp-steps wp-route-steps"><li class="complete"><span class="wp-step-no">✓</span><div><strong>Create your business workspace</strong><span>Completed for ${escapeHtml(session.email)}.</span></div></li><li class="${businessVerified ? "complete" : ""}"><span class="wp-step-no">${businessVerified ? "✓" : "2"}</span><div><strong>Verify your business</strong><span>${businessVerified ? "Your organisation has been verified." : `Status: ${escapeHtml(String(workspaceVerification?.status || "not started").replaceAll("_", " "))}.`}</span></div></li><li class="${metaConnected ? "complete" : ""}"><span class="wp-step-no">${metaConnected ? "✓" : "3"}</span><div><strong>Connect Meta Business</strong><span>${metaConnected ? "Your WhatsApp Business account is connected." : mayOnboard && setupReady ? "Ready to launch secure business onboarding." : "Available after business verification."}</span></div></li><li class="${phoneConnected ? "complete" : ""}"><span class="wp-step-no">${phoneConnected ? "✓" : "4"}</span><div><strong>Confirm your WhatsApp number</strong><span>${phoneConnected ? "A WhatsApp business number is connected." : "Select or register a number owned by your business."}</span></div></li><li><span class="wp-step-no">5</span><div><strong>Invite your team</strong><span>Prepare roles for customer conversations and operations.</span></div></li></ol></article></section>`;
+  const progress = completed * 20;
+  const stages = [
+    { title: "Create your business workspace", description: `Workspace created for ${session.email}.`, complete: true },
+    { title: "Verify your business", description: businessVerified ? "Your organisation passed the provider business pre-check." : `Verification is ${String(workspaceVerification?.status || "not started").replaceAll("_", " ")}.`, complete: businessVerified, href: workspacePath("verification") },
+    { title: "Connect Meta Business", description: metaConnected ? "Your WhatsApp Business Account is securely connected." : mayOnboard && setupReady ? "Connect the Meta business assets owned by your organisation." : "Available after business verification.", complete: metaConnected, metaAction: mayOnboard },
+    { title: "Confirm your WhatsApp number", description: phoneConnected ? "Your business number is registered and ready." : "Select or register a WhatsApp number owned by your business.", complete: phoneConnected, href: workspacePath("accounts") },
+    { title: "Invite your team", description: "Add colleagues, assign roles and prepare the shared workspace.", complete: false, href: workspacePath("team") }
+  ];
+  const nextStageIndex = stages.findIndex((stage) => !stage.complete);
+  const nextStage = stages[nextStageIndex] || stages[stages.length - 1];
+  const nextAction = nextStage.metaAction && !metaConnected
+    ? `<button class="wp-primary" type="button" data-connect-meta>${setupReady ? "Connect Meta Business" : "Check connection status"}</button>`
+    : `<a class="wp-primary wp-button-link" href="${nextStage.href || workspacePath("overview")}">${nextStageIndex === 4 ? "Invite team members" : "Continue setup"}<span aria-hidden="true">→</span></a>`;
+  const stageRows = stages.map((stage, index) => {
+    const current = index === nextStageIndex;
+    const state = stage.complete ? "complete" : current ? "current" : "pending";
+    const status = stage.complete ? "Complete" : current ? "Next action" : "Waiting";
+    const marker = stage.complete
+      ? `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6.5 12.4 3.4 3.4 7.6-8" /></svg>`
+      : `<b aria-hidden="true">${index + 1}</b>`;
+    return `<li class="${state}"><span class="wp-step-no" aria-label="${stage.complete ? "Completed" : `Stage ${index + 1}`}">${marker}</span><div class="wp-onboarding-step-copy"><div><strong>${escapeHtml(stage.title)}</strong><span>${escapeHtml(stage.description)}</span></div><em>${status}</em></div></li>`;
+  }).join("");
+
+  return `<section class="wp-route-page wp-onboarding-page">
+    <div class="wp-route-heading wp-onboarding-heading">
+      <div><span class="wp-kicker">Workspace setup</span><h1>Launch your workspace</h1><p>Follow one guided path from company verification to a team-ready WhatsApp operation.</p></div>
+      <div class="wp-onboarding-progress" role="img" aria-label="${completed} of 5 onboarding stages complete">
+        <svg viewBox="0 0 44 44" aria-hidden="true" focusable="false">
+          <circle class="wp-onboarding-progress-track" cx="22" cy="22" r="18"></circle>
+          <circle class="wp-onboarding-progress-value" cx="22" cy="22" r="18" pathLength="100" stroke-dasharray="${progress} ${100 - progress}"></circle>
+        </svg>
+        <span><strong>${completed}</strong><small>of 5 complete</small></span>
+      </div>
+    </div>
+    <section class="wp-onboarding-hero wp-card">
+      <div class="wp-onboarding-hero-copy">
+        <span class="wp-onboarding-overline">Next milestone</span>
+        <h2>${escapeHtml(nextStage.title)}</h2>
+        <p>${escapeHtml(nextStage.description)}</p>
+        <div class="wp-onboarding-hero-actions">${nextAction}<span>${progress}% complete</span></div>
+      </div>
+      <div class="wp-onboarding-meter" aria-hidden="true"><span style="width:${progress}%"></span></div>
+      <dl class="wp-onboarding-summary">
+        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 12.5 3.4 3.4 7.6-8" /></svg></span><div><dt>Completed</dt><dd><strong>${completed}</strong> of 5 milestones</dd><small>Setup tasks finished</small></div></div>
+        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg></span><div><dt>Remaining</dt><dd><strong>${5 - completed}</strong> ${5 - completed === 1 ? "milestone" : "milestones"}</dd><small>${escapeHtml(nextStage.title)}</small></div></div>
+        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M6 20V8l6-4 6 4v12M9 12h1m4 0h1M9 16h1m4 0h1"/></svg></span><div><dt>Workspace</dt><dd>${escapeHtml(session.companyName || "Business workspace")}</dd><small>${escapeHtml(planName(workspaceProfile?.planCode))} package</small></div></div>
+      </dl>
+    </section>
+    <div class="wp-readiness-banner ${mayOnboard && setupReady ? "ready" : "pending"}">
+      <span>${mayOnboard ? (setupReady ? "✓" : "◷") : "◆"}</span>
+      <div><strong>${!mayOnboard ? "Business verification comes next" : setupReady ? "Meta connection is ready" : "Meta connection setup is in progress"}</strong><p>${!mayOnboard ? "Submit the organisation details and entity-specific evidence required to activate production onboarding." : setupReady ? "Your verified organisation is eligible to connect its Meta business assets." : "Your verified workspace is ready while the Meta configuration is completed."}</p></div>
+      ${!mayOnboard ? `<a class="wp-secondary wp-button-link" href="${workspacePath("verification")}">Review verification</a>` : ""}
+    </div>
+    <article class="wp-card wp-route-card wp-onboarding-roadmap">
+      <header><div><span class="wp-card-eyebrow">Setup roadmap</span><h2>Five milestones to go live</h2></div><span>${completed}/5</span></header>
+      <ol class="wp-steps wp-route-steps">${stageRows}</ol>
+    </article>
+  </section>`;
 }
 
 function accountsView(connections, setupReady) {
@@ -1156,16 +1366,61 @@ function settingsView(profile) {
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("profile")}">View full profile</a></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button>${profile?.logoDataUrl ? `<button class="wp-remove-logo" id="wpRemoveLogoBtn" type="button">Remove logo</button>` : ""}</form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(profile?.companyName || session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(profile?.displayName || session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(profile?.email || session.email)}</dd></div><div><dt>Plan</dt><dd>${escapeHtml(planName(profile?.planCode))}</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div></article></section></section>`;
 }
 
-function verificationView(verification) {
+function verifiedVerificationView(data) {
+  const entityLabel = PROFILE_LABELS.businessType[data.entityType] || String(data.entityType || "Business").replaceAll("_", " ");
+  const reviewedOn = data.reviewedAt || data.updatedAt || data.submittedAt;
+  const approvedItems = (data.documents || []).filter((document) => document.reviewStatus === "approved");
+  const approvedDocumentRows = approvedItems.map((document) => {
+    const requirement = (data.requirements || []).find((item) => item.type === document.type);
+    const label = requirement?.label || document.name || "Verification document";
+    const size = Number(document.size || 0) ? `${Math.max(1, Math.round(Number(document.size) / 1024))} KB` : "Approved";
+    return `<button type="button" class="wp-verification-record-button" data-verification-document-open="${escapeHtml(document.id)}" data-verification-document-name="${escapeHtml(document.name || label)}"><span class="wp-verification-check">✓</span><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(document.name || label)} · ${escapeHtml(size)} · Approved</small></span><span class="wp-verification-record-open">View PDF →</span></button>`;
+  }).join("");
+  return `<section class="wp-route-page wp-verification-page wp-verification-complete"><div class="wp-route-heading"><div><span class="wp-kicker">Business verification</span><h1>Your business is verified</h1><p>Your submitted business information and supporting evidence have been approved.</p></div><span class="wp-verification-status verified">Verified</span></div><article class="wp-verification-complete-hero"><span class="wp-verification-complete-icon" aria-hidden="true">✓</span><div><span class="wp-card-eyebrow">Verification complete</span><h2>Your business is verified</h2><p>The submitted legal-business record and supporting evidence for <strong>${escapeHtml(data.companyName || session.companyName)}</strong> have been approved.</p><div class="wp-verification-complete-actions"><a class="wp-primary wp-button-link" href="${workspacePath("onboarding")}">Proceed with onboarding →</a></div></div></article><div class="wp-verification-complete-layout"><article class="wp-card wp-route-card wp-verification-summary-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Submitted record</span><h2>Business details provided</h2></div>${reviewedOn ? `<small>Approved ${escapeHtml(formatProfileDate(reviewedOn))}</small>` : ""}</div><dl class="wp-verification-summary"><div><dt>Organisation</dt><dd>${escapeHtml(data.companyName || session.companyName)}</dd></div><div><dt>Entity type</dt><dd>${escapeHtml(entityLabel)}</dd></div><div><dt>Registration / licence</dt><dd>${escapeHtml(data.registrationNumber || "Not provided")}</dd></div><div><dt>GSTIN</dt><dd>${escapeHtml(data.gstin || "Not provided")}</dd></div><div><dt>Authorised representative</dt><dd>${escapeHtml(data.representativeName || session.displayName || "Not provided")}${data.representativeTitle ? ` · ${escapeHtml(data.representativeTitle)}` : ""}</dd></div><div class="wide"><dt>Registered address</dt><dd>${escapeHtml(data.registeredAddress || "Not provided")}</dd></div></dl></article><article class="wp-card wp-route-card wp-verification-evidence-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Submitted evidence</span><h2>Approved documents</h2></div><strong>${approvedItems.length}</strong></div><p>Select a document to view its approved PDF securely.</p><div class="wp-verification-record-list">${approvedDocumentRows || `<div class="wp-empty-state"><strong>No approved documents available</strong></div>`}</div></article></div></section><div class="wp-verification-viewer" data-verification-viewer hidden tabindex="-1"><div class="wp-verification-viewer-backdrop" data-verification-viewer-close></div><section class="wp-verification-viewer-shell" role="dialog" aria-modal="true" aria-labelledby="wpVerificationViewerTitle"><header><div><span class="wp-card-eyebrow">Approved business record</span><h2 id="wpVerificationViewerTitle" data-verification-viewer-title>Document</h2></div><button type="button" data-verification-viewer-close aria-label="Close document">×</button></header><div class="wp-verification-viewer-stage" data-verification-viewer-stage><div class="wp-verification-viewer-loading">Securely fetching document…</div></div></section></div>`;
+}
+
+function verificationView(verification, connections = []) {
   const data = verification || { status: "not_started", entityType: workspaceProfile?.businessType || "other", requirements: [], documents: [], canEdit: true };
+  if (data.status === "verified") return verifiedVerificationView(data);
   const canEdit = data.canEdit !== false;
   const documentByType = new Map((data.documents || []).map((item) => [item.type, item]));
   const entityOptions = Object.entries(PROFILE_LABELS.businessType).map(([value, label]) => `<option value="${value}" ${data.entityType === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
-  const requirementRows = (data.requirements || []).map((requirement) => {
+  let requirementRows = (data.requirements || []).map((requirement) => {
     const document = documentByType.get(requirement.type);
-    return `<div class="wp-verification-document ${document ? "complete" : ""}"><span class="wp-verification-check">${document ? "✓" : "○"}</span><div><strong>${escapeHtml(requirement.label)}</strong>${document ? `<small>${escapeHtml(document.name)} · ${(Number(document.size || 0) / 1024).toFixed(0)} KB</small>` : `<small>PDF, PNG or JPG · maximum 5 MB</small>`}</div>${canEdit ? document ? `<button type="button" data-remove-verification-document="${escapeHtml(document.id)}">Remove</button>` : `<label class="wp-file-picker"><input type="file" accept="application/pdf,image/png,image/jpeg" data-verification-upload="${escapeHtml(requirement.type)}" /><span>Upload</span></label>` : ""}</div>`;
+    const reviewStatus = String(document?.reviewStatus || "pending");
+    const approved = Boolean(document && reviewStatus === "approved");
+    const needsReplacement = Boolean(document && ["changes_requested", "rejected"].includes(reviewStatus));
+    const stateClass = approved ? "complete approved" : needsReplacement ? "needs-attention" : document ? "under-review" : "";
+    const stateIcon = approved ? "✓" : needsReplacement ? "!" : document ? "…" : "○";
+    const action = canEdit
+      ? needsReplacement
+        ? `<label class="wp-file-picker replacement"><input type="file" accept="application/pdf,image/png,image/jpeg" data-verification-upload="${escapeHtml(requirement.type)}" /><span>Replace document</span></label>`
+        : document
+          ? `<button type="button" data-remove-verification-document="${escapeHtml(document.id)}">Remove</button>`
+          : `<label class="wp-file-picker"><input type="file" accept="application/pdf,image/png,image/jpeg" data-verification-upload="${escapeHtml(requirement.type)}" /><span>Upload</span></label>`
+      : "";
+    return `<div class="wp-verification-document ${stateClass}"><span class="wp-verification-check">${stateIcon}</span><div><strong>${escapeHtml(requirement.label)}</strong>${document ? `<small>${escapeHtml(document.name)} · ${(Number(document.size || 0) / 1024).toFixed(0)} KB · ${escapeHtml(reviewStatus.replaceAll("_", " "))}</small>${document.reviewNotes ? `<small class="wp-document-review-note">${escapeHtml(document.reviewNotes)}</small>` : ""}` : `<small>PDF, PNG or JPG · maximum 5 MB</small>`}</div>${action}</div>`;
   }).join("");
+  const requestedRows = (data.documentRequests || []).filter((request) => request.status !== "cancelled").map((request) => {
+    const document = request.documentId ? (data.documents || []).find((item) => item.id === request.documentId) : null;
+    const open = ["requested", "uploaded"].includes(request.status) && canEdit;
+    return `<div class="wp-verification-document requested ${request.status === "satisfied" ? "complete" : ""}"><span class="wp-verification-check">${request.status === "satisfied" ? "✓" : "!"}</span><div><strong>${escapeHtml(request.title)}</strong><small>${escapeHtml(request.instructions || "Additional evidence requested by the verification team.")}${request.dueAt ? ` · Due ${escapeHtml(formatProfileDate(request.dueAt))}` : ""}</small>${document ? `<small>${escapeHtml(document.name)} · ${escapeHtml(String(document.reviewStatus || request.status).replaceAll("_", " "))}</small>` : ""}</div>${open ? `<label class="wp-file-picker"><input type="file" accept="application/pdf,image/png,image/jpeg" data-verification-upload="${escapeHtml(request.type)}" data-verification-request="${escapeHtml(request.id)}" /><span>${document ? "Upload replacement" : "Upload requested document"}</span></label>` : ""}</div>`;
+  }).join("");
+  if (requestedRows) requirementRows += `<div class="wp-requested-evidence-heading"><strong>Additional documents requested</strong><small>Respond to each outstanding request below.</small></div>${requestedRows}`;
   const statusLabel = String(data.status || "not_started").replaceAll("_", " ");
+  if (data.status === "verified") {
+    const entityLabel = PROFILE_LABELS.businessType[data.entityType] || String(data.entityType || "Business").replaceAll("_", " ");
+    const reviewedOn = data.reviewedAt || data.updatedAt || data.submittedAt;
+    const approvedDocuments = (data.documents || []).filter((document) => document.reviewStatus === "approved").length;
+    const activeConnections = connections.filter((row) => ["connected", "pending"].includes(row.status));
+    const metaConnected = activeConnections.length > 0;
+    const phoneConnected = activeConnections.some((row) => row.phone_number_id);
+    const nextHref = phoneConnected ? workspacePath("team") : metaConnected ? workspacePath("accounts") : workspacePath("onboarding");
+    const nextLabel = phoneConnected ? "Invite your team →" : metaConnected ? "Confirm your WhatsApp number →" : "Continue to Meta authorisation →";
+    const stageTwoClass = metaConnected ? "complete" : "active";
+    const stageThreeClass = phoneConnected ? "complete" : metaConnected ? "active" : "";
+    return `<section class="wp-route-page wp-verification-page wp-verification-complete"><div class="wp-route-heading"><div><span class="wp-kicker">Provider onboarding</span><h1>Business verified</h1><p>Your provider pre-check is complete. Continue with the next unfinished workspace setup step.</p></div><span class="wp-verification-status verified">Verified</span></div><ol class="wp-provider-flow" aria-label="WhatsApp onboarding stages"><li class="complete"><span>✓</span><div><strong>Business details</strong><small>Approved by Varada Nexus</small></div></li><li class="${stageTwoClass}"><span>${metaConnected ? "✓" : "2"}</span><div><strong>Meta authorisation</strong><small>${metaConnected ? "Business Portfolio connected" : "Next: Business Portfolio access"}</small></div></li><li class="${stageThreeClass}"><span>${phoneConnected ? "✓" : "3"}</span><div><strong>Phone verification</strong><small>${phoneConnected ? "WhatsApp number connected" : "SMS or voice OTP"}</small></div></li><li><span>4</span><div><strong>Display-name review</strong><small>Completed by Meta</small></div></li></ol><article class="wp-verification-complete-hero"><span class="wp-verification-complete-icon" aria-hidden="true">✓</span><div><span class="wp-card-eyebrow">Verification complete</span><h2>Your organisation is approved</h2><p>The legal-business information and supporting evidence for <strong>${escapeHtml(session.companyName)}</strong> passed the Varada Nexus provider pre-check. Meta authorisation is a separate step controlled by Meta.</p><div class="wp-verification-complete-actions"><a class="wp-primary wp-button-link" href="${nextHref}">${nextLabel}</a><a class="wp-secondary wp-button-link" href="${workspacePath("overview")}">Return to overview</a></div></div></article><div class="wp-verification-complete-layout"><article class="wp-card wp-route-card wp-verification-summary-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Verified business</span><h2>Official record summary</h2></div>${reviewedOn ? `<small>Approved ${escapeHtml(formatProfileDate(reviewedOn))}</small>` : ""}</div><dl class="wp-verification-summary"><div><dt>Organisation</dt><dd>${escapeHtml(session.companyName)}</dd></div><div><dt>Entity type</dt><dd>${escapeHtml(entityLabel)}</dd></div><div><dt>Registration / licence</dt><dd>${escapeHtml(data.registrationNumber || "Not provided")}</dd></div><div><dt>GSTIN</dt><dd>${escapeHtml(data.gstin || "Not provided")}</dd></div><div><dt>Authorised representative</dt><dd>${escapeHtml(data.representativeName || session.displayName || "Not provided")}${data.representativeTitle ? ` · ${escapeHtml(data.representativeTitle)}` : ""}</dd></div><div class="wide"><dt>Registered address</dt><dd>${escapeHtml(data.registeredAddress || "Not provided")}</dd></div></dl></article><article class="wp-card wp-route-card wp-verification-evidence-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Protected evidence</span><h2>Approved documents</h2></div><strong>${approvedDocuments}/${(data.requirements || []).length}</strong></div><p>Your approved evidence remains available here as a read-only record.</p><div class="wp-verification-documents">${requirementRows}</div></article></div></section>`;
+  }
   const lockedMessage = data.status === "verified" ? "Your provider business pre-check is approved." : data.status === "submitted" || data.status === "in_review" ? "Your submission is locked while our verification team reviews it." : "";
   return `<section class="wp-route-page wp-verification-page"><div class="wp-route-heading"><div><span class="wp-kicker">Provider onboarding</span><h1>Verify your business</h1><p>Complete a provider pre-check before continuing to Meta Business verification and phone registration.</p></div><span class="wp-verification-status ${escapeHtml(data.status)}">${escapeHtml(statusLabel)}</span></div><ol class="wp-provider-flow" aria-label="WhatsApp onboarding stages"><li class="active"><span>1</span><div><strong>Business details</strong><small>Varada Nexus pre-check</small></div></li><li><span>2</span><div><strong>Meta authorisation</strong><small>Business Portfolio access</small></div></li><li><span>3</span><div><strong>Phone verification</strong><small>SMS or voice OTP</small></div></li><li><span>4</span><div><strong>Display-name review</strong><small>Completed by Meta</small></div></li></ol>${data.reviewNotes ? `<div class="wp-verification-notice"><strong>${data.status === "changes_requested" ? "Changes requested" : "Review update"}</strong><p>${escapeHtml(data.reviewNotes)}</p></div>` : ""}${lockedMessage ? `<div class="wp-verification-notice success"><strong>${escapeHtml(lockedMessage)}</strong><p>${data.submittedAt ? `Submitted ${escapeHtml(formatProfileDate(data.submittedAt))}.` : ""} We will show any review update here.</p></div>` : ""}<form id="wpVerificationForm" class="wp-verification-layout"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Business information</span><h2>Match your official records</h2></div></div><p>Enter details exactly as they appear on government or tax registration records. Differences in spelling, address or legal suffix can delay verification.</p><div class="wp-form wp-verification-form"><label class="wp-field"><span>Entity type</span><select name="entityType" ${canEdit ? "" : "disabled"}>${entityOptions}</select><small>The accepted legal-identity document changes with the entity type.</small></label><div class="wp-form-row"><label class="wp-field"><span>Registration / licence number</span><input name="registrationNumber" maxlength="80" value="${escapeHtml(data.registrationNumber || "")}" ${canEdit ? "" : "readonly"} required /></label><label class="wp-field"><span>GSTIN (optional)</span><input name="gstin" maxlength="15" value="${escapeHtml(data.gstin || "")}" ${canEdit ? "" : "readonly"} /></label></div><label class="wp-field"><span>Registered business address</span><textarea name="registeredAddress" maxlength="800" ${canEdit ? "" : "readonly"} required>${escapeHtml(data.registeredAddress || "")}</textarea></label><div class="wp-form-row"><label class="wp-field"><span>Authorised representative</span><input name="representativeName" maxlength="120" value="${escapeHtml(data.representativeName || session.displayName || "")}" ${canEdit ? "" : "readonly"} required /></label><label class="wp-field"><span>Representative title</span><input name="representativeTitle" maxlength="120" value="${escapeHtml(data.representativeTitle || workspaceProfile?.jobTitle || "")}" ${canEdit ? "" : "readonly"} required /></label></div></div></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Supporting evidence</span><h2>Two-document check</h2></div><strong>${(data.documents || []).length}/${(data.requirements || []).length}</strong></div><p>Provide one official document proving the legal business and one proving its address or phone number.</p><div class="wp-verification-documents">${requirementRows}</div><div class="wp-document-guidance"><div><strong>Usually accepted</strong><p>Business licence, incorporation or formation certificate, government tax/GST registration, utility bill or business bank statement.</p></div><div><strong>Usually not accepted</strong><p>Invoices, purchase orders, website screenshots, letterhead, marketing material or self-written company declarations.</p></div></div><div class="wp-verification-privacy"><strong>Separate verification stages</strong><p>Varada Nexus reviews this submission for customer eligibility. Meta separately controls Business Portfolio verification, phone OTP, display-name approval and Official Business Account status.</p></div>${canEdit ? `<label class="wp-check wp-verification-declaration"><input name="declarationAccepted" type="checkbox" /><span>I am authorised to submit these details and confirm that they are accurate, current, and belong to this organisation.</span></label><div class="wp-verification-actions"><button class="wp-secondary" type="submit" value="save">Save draft</button><button class="wp-primary" type="submit" value="submit">Submit for review</button></div>` : ""}<p class="wp-form-message" id="wpVerificationMessage" role="alert"></p></article></form></section>`;
 }
@@ -1221,7 +1476,7 @@ function inboxView() {
   const serviceWindow = thread?.serviceWindowOpen;
   const memberOptions = (thread?.members || []).map((member) => `<option value="${escapeHtml(member.id)}" ${thread.conversation.assigned_user_id === member.id ? "selected" : ""}>${escapeHtml(member.display_name)} · ${escapeHtml(member.role_code)}</option>`).join("");
   const threadPanel = thread ? `<section class="wp-inbox-thread"><header><div class="wp-inbox-avatar large">${escapeHtml(contactName.charAt(0).toUpperCase())}</div><div><strong>${escapeHtml(contactName)}</strong><small>${escapeHtml(thread.contact?.phone_e164 || "")}</small></div><div class="wp-inbox-controls"><select data-conversation-assignee aria-label="Assign conversation"><option value="">Unassigned</option>${memberOptions}</select><select data-conversation-priority aria-label="Conversation priority"><option value="low" ${thread.conversation.priority === "low" ? "selected" : ""}>Low priority</option><option value="normal" ${thread.conversation.priority === "normal" ? "selected" : ""}>Normal priority</option><option value="high" ${thread.conversation.priority === "high" ? "selected" : ""}>High priority</option><option value="urgent" ${thread.conversation.priority === "urgent" ? "selected" : ""}>Urgent</option></select><select data-conversation-status aria-label="Conversation status"><option value="open" ${thread.conversation.status === "open" ? "selected" : ""}>Open</option><option value="pending" ${thread.conversation.status === "pending" ? "selected" : ""}>Pending</option><option value="resolved" ${thread.conversation.status === "resolved" ? "selected" : ""}>Resolved</option></select></div></header><div class="wp-inbox-window-banner ${serviceWindow ? "open" : "closed"}"><span>${serviceWindow ? "Customer-service window open" : "Customer-service window closed"}</span><small>${serviceWindow ? `Free-form replies available until ${escapeHtml(inboxTime(thread.conversation.service_window_expires_at))}` : "An approved template is required to restart this conversation."}</small></div><div class="wp-inbox-messages" id="wpInboxMessages">${messages || '<div class="wp-inbox-empty"><span>◌</span><strong>No messages yet</strong><p>The conversation history will appear here.</p></div>'}</div><aside class="wp-inbox-notes"><header><div><strong>Internal notes</strong><small>Visible only to your workspace team</small></div><span>${(thread.notes || []).length}</span></header><div class="wp-inbox-note-list">${notes || "<p>No internal notes yet.</p>"}</div><form id="wpInboxNoteForm"><textarea name="note" maxlength="4000" rows="2" placeholder="Add context for your team…" required></textarea><button class="wp-secondary" type="submit">Add note</button></form></aside><form class="wp-inbox-composer" id="wpInboxComposer"><textarea name="message" rows="1" maxlength="4096" placeholder="${serviceWindow ? "Write a reply…" : "Customer-service window is closed"}" ${serviceWindow ? "" : "disabled"} required></textarea><button class="wp-primary" type="submit" ${serviceWindow ? "" : "disabled"} aria-label="Send message">Send</button></form></section>` : `<section class="wp-inbox-thread wp-inbox-no-selection"><div><span>◌</span><h2>Select a conversation</h2><p>Choose a customer conversation to view messages and reply from the shared inbox.</p></div></section>`;
-  return `<section class="wp-route-page wp-inbox-page"><div class="wp-route-heading wp-inbox-heading"><div><span class="wp-kicker">Customer conversations</span><h1>Team inbox</h1><p>Receive, organise and answer customer messages from one protected workspace.</p></div><div class="wp-inbox-live"><i></i><span>Webhook ready</span></div></div>${workspaceInbox?.error ? `<div class="wp-verification-notice"><strong>Inbox unavailable</strong><p>${escapeHtml(workspaceInbox.error)}</p></div>` : ""}<div class="wp-inbox-shell"><aside class="wp-inbox-list"><div class="wp-inbox-list-head"><strong>Conversations</strong><span>${conversations.length}</span></div><nav class="wp-inbox-filters" aria-label="Conversation filters">${filters.map((filter) => { const url = new URL(workspacePath("inbox"), location.origin); if (filter !== "all") url.searchParams.set("status", filter); return `<a class="${activeFilter === filter ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}">${escapeHtml(filter)}</a>`; }).join("")}</nav><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search conversations" data-inbox-search /></label><div class="wp-inbox-conversations" data-inbox-conversations>${conversationRows || '<div class="wp-inbox-empty"><span>◌</span><strong>No conversations yet</strong><p>Incoming WhatsApp messages will appear here after the webhook is connected.</p></div>'}</div></aside>${threadPanel}</div></section>`;
+  return `<section class="wp-route-page wp-inbox-page"><div class="wp-route-heading wp-inbox-heading"><div><span class="wp-kicker">Customer conversations</span><h1>Team inbox</h1><p>Receive, organise and answer customer messages from one protected workspace.</p></div><div class="wp-inbox-live"><i></i><span>Webhook ready</span></div></div>${workspaceInbox?.error ? `<div class="wp-verification-notice"><strong>Inbox unavailable</strong><p>${escapeHtml(workspaceInbox.error)}</p></div>` : ""}<div class="wp-inbox-shell"><aside class="wp-inbox-list"><div class="wp-inbox-list-head"><strong>Conversations</strong><span>${conversations.length}</span></div><nav class="wp-inbox-filters" aria-label="Conversation filters">${filters.map((filter) => { const url = new URL(workspacePath("inbox"), location.origin); if (filter !== "all") url.searchParams.set("status", filter); return `<a class="${activeFilter === filter ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}">${escapeHtml(filter)}</a>`; }).join("")}</nav><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search conversations" data-inbox-search /></label><div class="wp-inbox-conversations" data-inbox-conversations>${conversationRows || '<div class="wp-inbox-empty"><span>◌</span><strong>No conversations yet</strong><p>Incoming WhatsApp messages will appear here after the webhook is connected.</p></div>'}</div><footer class="wp-inbox-list-footer"><button class="wp-primary" id="wpNewChatBtn" type="button">＋ New chat</button></footer></aside>${threadPanel}</div></section>`;
 }
 
 function templateBody(template) {
@@ -1446,34 +1701,6 @@ function analyticsView() {
   </section>`;
 }
 
-function automationsView() {
-  const flows = workspaceFlows?.flows || [];
-  const active = flows.filter((flow) => flow.status === "active");
-  const paused = flows.filter((flow) => flow.status === "paused");
-  const drafts = flows.filter((flow) => !flow.status || flow.status === "draft");
-  const triggers = new Set(flows.map((flow) => flow.trigger_type || "keyword"));
-  const rows = flows.map((flow) => {
-    const nodeCount = Number(flow.nodes?.length || 0);
-    const edgeCount = Number(flow.edges?.length || 0);
-    const status = flow.status || "draft";
-    const canActivate = nodeCount >= 2;
-    return `<article class="wp-automation-row" data-automation-id="${escapeHtml(flow.id)}">
-      <div class="wp-automation-icon">↻</div>
-      <div class="wp-automation-copy"><div><strong>${escapeHtml(flow.name || "Untitled flow")}</strong><span class="wp-automation-status ${escapeHtml(status)}">${escapeHtml(status)}</span></div><p>${escapeHtml(flow.description || "Customer journey automation")}</p><footer><span>${escapeHtml(String(flow.trigger_type || "keyword").replaceAll("_", " "))} trigger</span><span>${nodeCount} block${nodeCount === 1 ? "" : "s"}</span><span>${edgeCount} connection${edgeCount === 1 ? "" : "s"}</span><span>Updated ${escapeHtml(inboxTime(flow.updated_at))}</span></footer></div>
-      <label class="wp-automation-switch" title="${canActivate ? "Activate or pause this automation" : "Add an action block before activation"}"><input type="checkbox" data-automation-toggle ${status === "active" ? "checked" : ""} ${canActivate ? "" : "disabled"} /><span></span><em>${status === "active" ? "Active" : status === "paused" ? "Paused" : "Draft"}</em></label>
-      <a class="wp-secondary wp-button-link" href="${workspacePath("flows")}?builder=${encodeURIComponent(flow.id)}">Edit flow</a>
-    </article>`;
-  }).join("");
-  return `<section class="wp-route-page wp-automations-page">
-    <div class="wp-route-heading"><div><span class="wp-kicker">Journey operations</span><h1>Automations</h1><p>Activate, pause and monitor the saved customer journeys designed in Flow Builder.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("flows")}?builder=new">＋ Build automation</a></div>
-    ${workspaceFlows?.error ? `<div class="wp-verification-notice"><strong>Automations unavailable</strong><p>${escapeHtml(workspaceFlows.error)}</p></div>` : ""}
-    <section class="wp-analytics-kpis wp-automation-kpis"><article><span>Active</span><strong>${active.length}</strong><small>Currently enabled</small></article><article><span>Paused</span><strong>${paused.length}</strong><small>Retained but not running</small></article><article><span>Drafts</span><strong>${drafts.length}</strong><small>Still being prepared</small></article><article><span>Trigger types</span><strong>${triggers.size}</strong><small>Across ${flows.length} saved flow${flows.length === 1 ? "" : "s"}</small></article></section>
-    <section class="wp-automation-layout">
-      <article class="wp-card wp-automation-library"><header><div><span class="wp-card-eyebrow">Runtime controls</span><h2>Saved automations</h2><p>Changes to activation are protected by workspace administrator permissions.</p></div><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search automations" data-automation-search /></label></header><div class="wp-automation-list" data-automation-list>${rows || '<div class="wp-inbox-empty"><span>↻</span><strong>No automations yet</strong><p>Create a flow, connect its path and save it before activation.</p><a class="wp-primary wp-button-link" href="' + workspacePath("flows") + '?builder=new">Build first automation</a></div>'}</div></article>
-      <aside class="wp-card wp-automation-readiness"><span class="wp-card-eyebrow">Activation standard</span><h2>Before switching on</h2><ol><li><b>1</b><span><strong>Define the trigger</strong><small>Use a specific keyword or supported event.</small></span></li><li><b>2</b><span><strong>Complete every path</strong><small>Connect buttons and conditions to valid outcomes.</small></span></li><li><b>3</b><span><strong>Run Live view</strong><small>Test customer choices before activation.</small></span></li><li><b>4</b><span><strong>Monitor conversations</strong><small>Use Team inbox for handoffs and exceptions.</small></span></li></ol><a href="${workspacePath("flows")}">Open Flow library →</a></aside>
-    </section>
-  </section>`;
-}
 function teamView() {
   const members = workspaceTeam?.members || [];
   const roleLabels = { owner: "Owner", admin: "Administrator", agent: "Agent", viewer: "Viewer" };
@@ -1536,7 +1763,7 @@ function overviewView(connections, setupReady, profile) {
 
 function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "profile") return profileView(profile);
-  if (view === "verification") return verificationView(workspaceVerification);
+  if (view === "verification") return verificationView(workspaceVerification, connections);
   if (view === "onboarding") return onboardingView(setupReady, connections.filter((row) => ["connected", "pending"].includes(row.status)));
   if (view === "accounts") return accountsView(connections, setupReady);
   if (view === "settings") return settingsView(profile);
@@ -1544,13 +1771,29 @@ function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "contacts") return contactsView();
   if (view === "campaigns") return campaignsView();
   if (view === "analytics") return analyticsView();
-  if (view === "automations") return automationsView();
   if (view === "team") return teamView();
   if (view === "billing") return billingView();
   if (view === "templates") return templatesViewV2(connections);
   if (view === "flows") return currentFlowBuilderId() ? renderFlowBuilderPage({ escapeHtml }) : renderFlowsView({ flows: workspaceFlows.flows, escapeHtml });
   if (Object.hasOwn(PLANNED_WORKSPACE_VIEWS, view)) return plannedView(view);
   return overviewView(connections.filter((row) => ["connected", "pending"].includes(row.status)), setupReady, profile);
+}
+
+function verificationAttentionModal() {
+  if (verificationAttentionDismissed) return "";
+  const requests = (workspaceVerification?.documentRequests || []).filter((request) => request.status === "requested");
+  const requestDocumentIds = new Set(requests.map((request) => request.documentId).filter(Boolean));
+  const rejectedDocuments = (workspaceVerification?.documents || []).filter((document) =>
+    document.status !== "inactive"
+    && ["changes_requested", "rejected"].includes(document.reviewStatus)
+    && !requestDocumentIds.has(document.id)
+  );
+  if (!requests.length && !rejectedDocuments.length) return "";
+
+  const requestRows = requests.map((request) => `<article class="wp-attention-document"><div><span>Requested evidence</span><strong>${escapeHtml(request.title || String(request.type || "document").replaceAll("_", " "))}</strong><p>${escapeHtml(request.instructions || "Upload the additional evidence requested by the verification team.")}${request.dueAt ? ` Due ${escapeHtml(formatProfileDate(request.dueAt))}.` : ""}</p></div><label class="wp-attention-upload"><input type="file" accept="application/pdf,image/png,image/jpeg" data-verification-upload="${escapeHtml(request.type)}" data-verification-request="${escapeHtml(request.id)}" /><span>Upload document</span></label></article>`).join("");
+  const rejectedRows = rejectedDocuments.map((document) => `<article class="wp-attention-document rejected"><div><span>${document.reviewStatus === "rejected" ? "Document rejected" : "Replacement required"}</span><strong>${escapeHtml(String(document.type || "document").replaceAll("_", " "))}</strong><p>${escapeHtml(document.reviewNotes || "Upload a corrected replacement for verification.")}</p></div><label class="wp-attention-upload"><input type="file" accept="application/pdf,image/png,image/jpeg" data-verification-upload="${escapeHtml(document.type)}" /><span>Re-upload replacement</span></label></article>`).join("");
+
+  return `<section class="wp-verification-attention" data-verification-attention role="dialog" aria-modal="true" aria-labelledby="wpVerificationAttentionTitle"><div class="wp-verification-attention-card"><header><div><span class="wp-kicker">Action required</span><h2 id="wpVerificationAttentionTitle">Verification documents need your attention</h2><p>Resolve every request below to continue the business verification review.</p></div><button type="button" data-verification-attention-close aria-label="Close notification">×</button></header><div class="wp-attention-documents">${requestRows}${rejectedRows}</div><footer><small>This notice will appear again on your next sign-in until replacement evidence is submitted.</small><a class="wp-secondary wp-button-link" href="${workspacePath("verification")}">Open verification centre</a></footer></div></section>`;
 }
 
 async function renderDashboard() {
@@ -1638,7 +1881,7 @@ async function renderDashboard() {
       workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
     }
   }
-  if (["flows", "automations"].includes(view)) {
+  if (view === "flows") {
     try {
       const result = await messagingRequest("list_flows");
       workspaceFlows = { flows: result?.flows || [], error: "" };
@@ -1663,29 +1906,17 @@ async function renderDashboard() {
   const contactCount = (workspaceContacts?.contacts || []).length;
   const campaignCount = readCampaignDrafts().length;
   const isFlowBuilderRoute = Boolean(currentFlowBuilderId());
+  const isInboxRoute = view === "inbox";
   const operationalPackageName = workspacePackageMaster?.package?.name || planName(workspaceProfile?.planCode);
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", workspaceTemplates.templates.length ? String(workspaceTemplates.templates.length) : "")}${workspaceNavItem("flows", "⌁", workspaceFlows.flows.length ? String(workspaceFlows.flows.length) : "")}${workspaceNavItem("automations", "↻", workspaceFlows.flows.filter((flow) => flow.status === "active").length ? String(workspaceFlows.flows.filter((flow) => flow.status === "active").length) : "")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", workspaceTeam.members.length ? String(workspaceTeam.members.length) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", operationalPackageName)}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>`;
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", workspaceTemplates.templates.length ? String(workspaceTemplates.templates.length) : "")}${workspaceNavItem("flows", "⌁", workspaceFlows.flows.length ? String(workspaceFlows.flows.length) : "")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", workspaceTeam.members.length ? String(workspaceTeam.members.length) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", operationalPackageName)}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${verificationAttentionModal()}`;
+  if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
+  const workspaceSidebarState = readWorkspaceSidebarState();
+  enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
+  app.querySelector("[data-verification-attention-close]")?.addEventListener("click", () => {
+    verificationAttentionDismissed = true;
+    app.querySelector("[data-verification-attention]")?.remove();
+  });
   if (view === "flows") bindFlowsView({ root: app, flows: workspaceFlows.flows, request: messagingRequest, onRefresh: renderDashboard, toast: showToast, escapeHtml, builderId: currentFlowBuilderId(), listUrl: workspacePath("flows") });
-  if (view === "automations") {
-    app.querySelector("[data-automation-search]")?.addEventListener("input", (event) => {
-      const query = event.target.value.trim().toLowerCase();
-      app.querySelectorAll("[data-automation-id]").forEach((row) => { row.hidden = Boolean(query && !row.textContent.toLowerCase().includes(query)); });
-    });
-    app.querySelectorAll("[data-automation-toggle]").forEach((input) => input.addEventListener("change", async () => {
-      const flowId = input.closest("[data-automation-id]")?.dataset.automationId;
-      const nextStatus = input.checked ? "active" : "paused";
-      try {
-        input.disabled = true;
-        await messagingRequest("set_flow_status", { flowId, status: nextStatus });
-        showToast(input.checked ? "Automation activated." : "Automation paused.");
-        await renderDashboard();
-      } catch (error) {
-        input.checked = !input.checked;
-        input.disabled = false;
-        showToast(error?.message || "Automation status could not be changed.", "error");
-      }
-    }));
-  }
   if (view === "team") {
     const inviteDialog = app.querySelector("#wpInviteMemberDialog");
     const manageDialog = app.querySelector("#wpManageMemberDialog");
@@ -1748,7 +1979,6 @@ async function renderDashboard() {
     const activeContacts = (workspaceContacts?.contacts || []).filter((contact) => contact.status === "active");
     const readyConnections = connected.filter((connection) => connection.status === "connected" && connection.phone_number_id);
     const chatConnections = readyConnections.filter((connection) => connection.id === workspaceTemplates.connectionId);
-    app.querySelector(".wp-inbox-heading")?.insertAdjacentHTML("beforeend", '<button class="wp-primary" id="wpNewChatBtn" type="button">＋ New chat</button>');
     const approvedTemplates = workspaceTemplates.templates.filter((template) => template.status === "APPROVED");
     app.querySelector(".wp-inbox-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-new-chat-dialog" id="wpNewChatDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Business-initiated message</span><h2>Start a new chat</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Contact</span><select name="contactId" required><option value="">Select contact</option>${activeContacts.map((contact) => `<option value="${escapeHtml(contact.id)}">${escapeHtml(inboxContactName(contact))} · ${escapeHtml(contact.phone_e164 || "")}</option>`).join("")}</select><small>${activeContacts.length ? "Choose an active WhatsApp contact." : "Add an active contact before starting a chat."}</small></label><label><span>Send from</span><select name="connectionId" required>${chatConnections.map((connection) => `<option value="${escapeHtml(connection.id)}">${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}${connection.display_phone_number ? ` · ${escapeHtml(connection.display_phone_number)}` : ""}</option>`).join("")}</select><small>${chatConnections.length ? "Templates below belong to this connected business account." : "Connect a WhatsApp Business number before starting a chat."}</small></label><label><span>Approved message template</span><select name="templateKey" required><option value="">Select approved template</option>${approvedTemplates.map((template) => `<option value="${escapeHtml(`${template.name}|${template.language}`)}">${escapeHtml(template.name)} · ${escapeHtml(template.language)}</option>`).join("")}</select><small>${approvedTemplates.length ? "Only templates approved by Meta are shown." : `No approved template is available. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label><div class="wp-policy-note"><strong>WhatsApp requirement</strong><p>A business-initiated conversation must begin with an approved template. Free-form replies become available after the customer responds and opens the 24-hour service window.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="send" ${activeContacts.length && chatConnections.length && approvedTemplates.length ? "" : "disabled"}>Send template</button></footer></form></dialog>`);
   }
@@ -2014,6 +2244,33 @@ async function renderDashboard() {
   });
   app.querySelector("#wpSidebarLogoutBtn")?.addEventListener("click", () => signOut(true));
   const shell = app.querySelector(".wp-workspace-shell");
+  const collapseButton = app.querySelector("#wpSidebarCollapseBtn");
+  const syncSidebarCollapseButton = () => {
+    const collapsed = Boolean(shell?.classList.contains("sidebar-collapsed"));
+    collapseButton?.setAttribute("aria-expanded", String(!collapsed));
+    collapseButton?.setAttribute("aria-label", collapsed ? "Expand workspace navigation" : "Collapse workspace navigation");
+    collapseButton?.setAttribute("title", collapsed ? "Expand navigation" : "Collapse navigation");
+    collapseButton?.classList.toggle("is-collapsed", collapsed);
+  };
+  syncSidebarCollapseButton();
+  collapseButton?.addEventListener("click", () => {
+    const collapsed = !shell?.classList.contains("sidebar-collapsed");
+    shell?.classList.toggle("sidebar-collapsed", collapsed);
+    workspaceSidebarState.collapsed = collapsed;
+    writeWorkspaceSidebarState(workspaceSidebarState);
+    syncSidebarCollapseButton();
+  });
+  app.querySelectorAll("[data-workspace-section-toggle]").forEach((button) => button.addEventListener("click", () => {
+    const section = button.closest("[data-workspace-nav-section]");
+    const sectionId = button.dataset.workspaceSectionToggle;
+    if (!section || !sectionId) return;
+    const collapsed = !section.classList.contains("is-collapsed");
+    section.classList.toggle("is-collapsed", collapsed);
+    button.setAttribute("aria-expanded", String(!collapsed));
+    button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${button.querySelector(".wp-nav-label")?.textContent?.trim() || "navigation section"}`);
+    workspaceSidebarState.sections[sectionId] = !collapsed;
+    writeWorkspaceSidebarState(workspaceSidebarState);
+  }));
   const toggleSidebar = (open) => {
     shell?.classList.toggle("sidebar-open", open);
     app.querySelector("#wpSidebarToggle")?.setAttribute("aria-expanded", String(open));
@@ -2086,6 +2343,10 @@ async function renderDashboard() {
     const message = app.querySelector("#wpVerificationMessage");
     const original = submit?.textContent || "Save";
     try {
+      if (action === "submit_verification") {
+        const missingRequest = (workspaceVerification?.documentRequests || []).find((request) => request.status === "requested");
+        if (missingRequest) throw new Error(`Upload the requested document “${missingRequest.title || "Additional evidence"}” before submitting for review.`);
+      }
       if (submit) { submit.disabled = true; submit.textContent = action === "submit_verification" ? "Submitting…" : "Saving…"; }
       const payload = { ...verificationPayload(), declarationAccepted: verificationForm.elements.declarationAccepted?.checked === true };
       const result = await storageRequest(action, payload);
@@ -2108,7 +2369,7 @@ async function renderDashboard() {
       if (label) label.textContent = "Uploading…";
       await storageRequest("save_verification", verificationPayload());
       const base64 = await readFileBase64(file);
-      const result = await storageRequest("upload_verification_document", { documentType: input.dataset.verificationUpload, fileName: file.name, mimeType: file.type, base64 });
+      const result = await storageRequest("upload_verification_document", { documentType: input.dataset.verificationUpload, requestId: input.dataset.verificationRequest || null, fileName: file.name, mimeType: file.type, base64 });
       workspaceVerification = result.verification;
       showToast("Verification document uploaded.");
       await renderDashboard();
@@ -2128,6 +2389,40 @@ async function renderDashboard() {
       await renderDashboard();
     } catch (error) { showToast(error?.message || "Document could not be removed.", "error"); button.disabled = false; }
   }));
+  const verificationViewer = app.querySelector("[data-verification-viewer]");
+  const closeVerificationViewer = () => {
+    if (!verificationViewer) return;
+    verificationViewer.hidden = true;
+    document.body.classList.remove("wp-verification-viewer-open");
+    if (verificationDocumentObjectUrl) {
+      URL.revokeObjectURL(verificationDocumentObjectUrl);
+      verificationDocumentObjectUrl = "";
+    }
+    const stage = verificationViewer.querySelector("[data-verification-viewer-stage]");
+    if (stage) stage.innerHTML = '<div class="wp-verification-viewer-loading">Securely fetching document…</div>';
+  };
+  app.querySelectorAll("[data-verification-document-open]").forEach((button) => button.addEventListener("click", async () => {
+    if (!verificationViewer) return;
+    const stage = verificationViewer.querySelector("[data-verification-viewer-stage]");
+    const title = verificationViewer.querySelector("[data-verification-viewer-title]");
+    if (title) title.textContent = button.dataset.verificationDocumentName || "Verification document";
+    verificationViewer.hidden = false;
+    document.body.classList.add("wp-verification-viewer-open");
+    verificationViewer.focus();
+    if (stage) stage.innerHTML = '<div class="wp-verification-viewer-loading">Securely fetching document…</div>';
+    try {
+      const result = await verificationDocumentRequest(button.dataset.verificationDocumentOpen);
+      verificationDocumentObjectUrl = URL.createObjectURL(result.blob);
+      const label = escapeHtml(button.dataset.verificationDocumentName || "Verification document");
+      if (stage) stage.innerHTML = result.contentType.startsWith("image/")
+        ? `<img src="${verificationDocumentObjectUrl}" alt="${label}" />`
+        : `<iframe src="${verificationDocumentObjectUrl}" title="${label}"></iframe>`;
+    } catch (error) {
+      if (stage) stage.innerHTML = `<div class="wp-verification-viewer-error"><strong>Document could not be opened</strong><p>${escapeHtml(error?.message || "Please try again.")}</p></div>`;
+    }
+  }));
+  verificationViewer?.querySelectorAll("[data-verification-viewer-close]").forEach((button) => button.addEventListener("click", closeVerificationViewer));
+  verificationViewer?.addEventListener("keydown", (event) => { if (event.key === "Escape") closeVerificationViewer(); });
   app.querySelector("[data-inbox-search]")?.addEventListener("input", (event) => {
     const query = String(event.currentTarget.value || "").trim().toLowerCase();
     app.querySelectorAll(".wp-inbox-conversation").forEach((row) => { row.hidden = Boolean(query && !row.textContent.toLowerCase().includes(query)); });
