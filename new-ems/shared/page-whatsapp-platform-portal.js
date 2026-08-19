@@ -322,7 +322,7 @@ function currentFlowBuilderId() {
 }
 
 function workspaceIcon(paths, className = "") {
-  return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
+  return `<svg class="${className}" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
 }
 
 const WORKSPACE_NAV_ICONS = {
@@ -814,7 +814,7 @@ function renderInviteAcceptance(inviteToken) {
       </div>
       <section class="wp-auth-card wp-invite-card">
         <header class="wp-invite-card-head">
-          <span class="wp-invite-lock" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2m-9 0h8a2 2 0 0 1 2 2v7H6v-7a2 2 0 0 1 2-2Z"/></svg></span>
+          <span class="wp-invite-lock" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2m-9 0h8a2 2 0 0 1 2 2v7H6v-7a2 2 0 0 1 2-2Z"/></svg></span>
           <div><span class="wp-card-eyebrow">Member access</span><h2>Create your profile</h2><p>Complete the details below to accept this invitation.</p></div>
         </header>
         <form class="wp-form" id="wpInviteAcceptForm" novalidate>

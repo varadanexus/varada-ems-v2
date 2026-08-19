@@ -931,6 +931,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: grid;
   place-items: center;
   position: relative;
+}
 .wp-onboarding-progress svg {
   grid-area: 1 / 1;
   width: 100%;
