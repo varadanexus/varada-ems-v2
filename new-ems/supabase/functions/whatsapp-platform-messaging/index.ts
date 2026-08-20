@@ -267,7 +267,7 @@ async function templateConnection(admin: any, customer: any, connectionId: unkno
   return { connection, credential, secret: await decryptCredential(credential.credential_ciphertext) };
 }
 
-const BUSINESS_VERTICALS = new Set(["UNDEFINED","OTHER","AUTO","BEAUTY","APPAREL","EDU","ENTERTAIN","EVENT_PLAN","FINANCE","GROCERY","GOVT","HOTEL","HEALTH","NONPROFIT","PROF_SERVICES","RETAIL","TRAVEL","RESTAURANT"]);
+const BUSINESS_VERTICALS = new Set(["UNDEFINED","OTHER","AUTO","BEAUTY","APPAREL","EDU","ENTERTAIN","EVENT_PLAN","FINANCE","GROCERY","GOVT","HOTEL","HEALTH","NONPROFIT","PROF_SERVICES","RETAIL","TRAVEL","RESTAURANT","NOT_A_BIZ"]);
 function profileText(value: unknown, maximum: number, label: string) {
   const text = String(value || "").trim();
   if (text.length > maximum) throw new Error(`${label} cannot exceed ${maximum} characters.`);
@@ -338,7 +338,27 @@ async function updateBusinessProfile(admin: any, customer: any, body: any) {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(payload),
   });
   const graph = await response.json().catch(() => ({}));
-  if (!response.ok || graph?.success !== true) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "The WhatsApp profile could not be updated.");
+  if (!response.ok || graph?.success !== true) {
+    const metaError = graph?.error || {};
+    console.error("Meta WhatsApp profile update failed", {
+      status: response.status,
+      code: metaError.code || null,
+      subcode: metaError.error_subcode || null,
+      type: metaError.type || null,
+      trace: metaError.fbtrace_id || null,
+    });
+    const message = String(metaError.error_user_msg || metaError.message || "");
+    if (Number(metaError.code) === 190 || /token.*(?:expired|invalid)|session.*expired/i.test(message)) {
+      throw new Error("The Meta access token has expired or is invalid. Reconnect this number from Business numbers and try again.");
+    }
+    if ([10, 200].includes(Number(metaError.code)) || /permission|whatsapp_business_management/i.test(message)) {
+      throw new Error("This Meta token cannot update the WhatsApp profile. Reconnect the number using a System User access token with whatsapp_business_management and whatsapp_business_messaging permissions.");
+    }
+    if (Number(metaError.code) === 1 || /unknown error/i.test(message)) {
+      throw new Error("Meta rejected this profile update. For a developer test number, reconnect it from Business numbers using a System User access token with WhatsApp management and messaging permissions, then try again.");
+    }
+    throw new Error(message ? `${message}${metaError.code ? ` (Meta error ${metaError.code})` : ""}` : "The WhatsApp profile could not be updated.");
+  }
   return getBusinessProfile(admin, customer, body);
 }
 async function listTemplates(admin: any, customer: any, body: any) {

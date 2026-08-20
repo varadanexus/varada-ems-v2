@@ -252,20 +252,41 @@ async function removeConnection(admin: any, customer: any, body: any) {
   return { ok: true, removedConnectionId: connection.id };
 }
 
-function cleanTemporaryAccessToken(value: unknown) {
+function cleanMetaAccessToken(value: unknown) {
   const token = String(value || "").trim();
-  if (token.length < 20 || token.length > 4096 || /[\s\u0000-\u001f\u007f]/.test(token)) throw new Error("Enter the temporary access token from Meta API Setup.");
+  if (token.length < 20 || token.length > 4096 || /[\s\u0000-\u001f\u007f]/.test(token)) throw new Error("Enter a valid Meta access token.");
   return token;
+}
+
+async function inspectMetaAccessToken(appId: string, appSecret: string, accessToken: string) {
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/debug_token`);
+  url.searchParams.set("input_token", accessToken);
+  url.searchParams.set("access_token", `${appId}|${appSecret}`);
+  const response = await fetch(url);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.data?.is_valid) throw new Error(payload?.error?.message || "Meta says this access token is invalid or expired.");
+  const permissions = new Set<string>([
+    ...(Array.isArray(payload.data.scopes) ? payload.data.scopes : []),
+    ...(Array.isArray(payload.data.granular_scopes) ? payload.data.granular_scopes.flatMap((scope: any) => Array.isArray(scope?.scopes) ? scope.scopes : [scope?.scope]).filter(Boolean) : []),
+  ].map((scope) => String(scope)));
+  const required = ["whatsapp_business_management", "whatsapp_business_messaging"];
+  const missing = required.filter((permission) => !permissions.has(permission));
+  if (missing.length) {
+    throw new Error(`This token is missing ${missing.join(" and ")}. Generate a System User access token with WhatsApp management and messaging permissions.`);
+  }
+  return payload.data;
 }
 
 async function connectDeveloperTestNumber(admin: any, customer: any, body: any) {
   const wabaId = cleanId(body.wabaId, "WhatsApp Business Account ID");
   const requestedPhoneNumberId = body.phoneNumberId ? cleanId(body.phoneNumberId, "phone number ID") : "";
-  const accessToken = cleanTemporaryAccessToken(body.accessToken);
+  const accessToken = cleanMetaAccessToken(body.accessToken);
+  const appId = env("WHATSAPP_PLATFORM_META_APP_ID");
   const appSecret = await providerAppSecret(admin);
-  if (!appSecret) throw new Error("Meta onboarding is not configured.");
+  if (!appId || !appSecret) throw new Error("Meta onboarding is not configured.");
 
-  const [waba, phoneNumbers] = await Promise.all([
+  const [tokenDetails, waba, phoneNumbers] = await Promise.all([
+    inspectMetaAccessToken(appId, appSecret, accessToken),
     graphRequest(`${wabaId}?fields=id,name,owner_business_info`, accessToken, appSecret),
     graphRequest(`${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,status&limit=100`, accessToken, appSecret),
   ]);
@@ -295,7 +316,8 @@ async function connectDeveloperTestNumber(admin: any, customer: any, body: any) 
       test_number: true,
       quality_rating: phone.quality_rating || null,
       phone_status: phone.status || null,
-      token_notice: "temporary_access_token",
+      token_notice: Number(tokenDetails?.expires_at || 0) > 0 ? "expiring_access_token" : "system_user_access_token",
+      token_permissions_verified: true,
     },
     connected_at: now,
     updated_at: now,
@@ -315,10 +337,12 @@ async function connectDeveloperTestNumber(admin: any, customer: any, body: any) 
     .single();
   if (connectionError) throw connectionError;
 
-  const expiresAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString();
+  const tokenExpiresAt = Number(tokenDetails?.expires_at || 0);
+  const expiresAt = tokenExpiresAt > 0 ? new Date(tokenExpiresAt * 1000).toISOString() : null;
   const credentialCiphertext = await encryptCredential(JSON.stringify({
     accessToken,
-    tokenType: "temporary_test_token",
+    tokenType: expiresAt ? "expiring_meta_access_token" : "system_user_access_token",
+    permissions: ["whatsapp_business_management", "whatsapp_business_messaging"],
     wabaId,
     phoneNumberId,
   }));
@@ -326,7 +350,7 @@ async function connectDeveloperTestNumber(admin: any, customer: any, body: any) 
     connection_id: connection.id,
     tenant_id: customer.tenant_id,
     credential_ciphertext: credentialCiphertext,
-    token_type: "temporary_test_token",
+    token_type: expiresAt ? "expiring_meta_access_token" : "system_user_access_token",
     expires_at: expiresAt,
     last_rotated_at: now,
     updated_at: now,
