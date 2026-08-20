@@ -463,6 +463,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-account-row strong,.wp-account-row small { display: block; }
 .wp-account-row small { margin-top: .2rem; color: var(--wp-muted); font-size: .7rem; }
 .wp-account-row em { color: #8be2b4; font-size: .68rem; font-style: normal; text-transform: capitalize; }
+.wp-account-actions { display: flex; align-items: center; gap: .7rem; }
+.wp-account-remove { padding: .42rem .62rem; border: 1px solid rgba(239,107,115,.35); border-radius: 8px; background: rgba(239,107,115,.08); color: #ef8b92; font: inherit; font-size: .66rem; font-weight: 800; }
+.wp-account-remove:hover,.wp-account-remove:focus-visible { border-color: #ef6b73; background: rgba(239,107,115,.14); outline: none; }
 .wp-workspace-note { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.1rem; padding: 1rem 1.2rem; border: 1px solid rgba(139,226,180,.12); border-radius: 14px; background: rgba(139,226,180,.035); scroll-margin-top: 96px; }
 .wp-workspace-note strong { font-size: .82rem; }
 .wp-workspace-note p { margin: .22rem 0 0; color: var(--wp-muted); font-size: .72rem; }

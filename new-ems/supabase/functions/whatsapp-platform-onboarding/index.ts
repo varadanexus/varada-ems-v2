@@ -176,6 +176,7 @@ async function configurationStatus(admin: any, customer: any) {
     .from("whatsapp_platform_connections")
     .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at")
     .eq("tenant_id", customer.tenant_id)
+    .neq("status", "disconnected")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return {
@@ -196,6 +197,59 @@ async function recordEvent(admin: any, customer: any, eventCode: string, metadat
     event_code: eventCode,
     safe_metadata: metadata,
   });
+}
+
+async function removeConnection(admin: any, customer: any, body: any) {
+  const connectionId = String(body.connectionId || "").trim();
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(connectionId)) throw new Error("Select a valid WhatsApp business number.");
+  const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
+    .select("id,status,display_phone_number,verified_name,onboarding_metadata")
+    .eq("id", connectionId)
+    .eq("tenant_id", customer.tenant_id)
+    .neq("status", "disconnected")
+    .single();
+  if (connectionError || !connection) throw new Error("This WhatsApp business number has already been removed.");
+
+  const now = new Date().toISOString();
+  const { error: updateError } = await admin.from("whatsapp_platform_connections").update({
+    status: "disconnected",
+    updated_at: now,
+    onboarding_metadata: { ...(connection.onboarding_metadata || {}), removed_from_workspace_at: now, removal_source: "customer_workspace" },
+  }).eq("id", connection.id).eq("tenant_id", customer.tenant_id);
+  if (updateError) throw updateError;
+
+  const { error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+    .delete()
+    .eq("connection_id", connection.id)
+    .eq("tenant_id", customer.tenant_id);
+  if (credentialError) {
+    await admin.from("whatsapp_platform_connections").update({
+      status: connection.status,
+      onboarding_metadata: connection.onboarding_metadata || {},
+      updated_at: new Date().toISOString(),
+    }).eq("id", connection.id).eq("tenant_id", customer.tenant_id);
+    throw credentialError;
+  }
+
+  const { data: remaining, error: remainingError } = await admin.from("whatsapp_platform_connections")
+    .select("status")
+    .eq("tenant_id", customer.tenant_id)
+    .in("status", ["connected", "pending"]);
+  if (remainingError) throw remainingError;
+  const onboardingStatus = (remaining || []).some((item: any) => item.status === "connected")
+    ? "meta_connected"
+    : (remaining || []).some((item: any) => item.status === "pending") ? "meta_pending" : "profile_complete";
+  const { error: tenantError } = await admin.from("whatsapp_platform_tenants")
+    .update({ onboarding_status: onboardingStatus, updated_at: now })
+    .eq("id", customer.tenant_id);
+  if (tenantError) throw tenantError;
+
+  await recordEvent(admin, customer, "connection_disconnected", {
+    displayPhoneNumber: connection.display_phone_number || null,
+    verifiedName: connection.verified_name || null,
+    source: "customer_workspace",
+  }, connection.id);
+  return { ok: true, removedConnectionId: connection.id };
 }
 
 async function enforceVerificationGate(admin: any, customer: any) {
@@ -379,6 +433,7 @@ Deno.serve(async (req) => {
       await enforceVerificationGate(admin, customer);
       return json(req, await completeOnboarding(admin, customer, body));
     }
+    if (action === "remove_connection") return json(req, await removeConnection(admin, customer, body));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";

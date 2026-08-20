@@ -164,6 +164,8 @@ function resolveSelectedConnection(connections = []) {
   workspaceSelectedConnectionId = selected?.id || "";
   if (selected) {
     try { localStorage.setItem(selectedNumberStorageKey(), selected.id); } catch { /* Selection remains active for this visit. */ }
+  } else {
+    try { localStorage.removeItem(selectedNumberStorageKey()); } catch { /* The empty selection remains active for this visit. */ }
   }
   return selected;
 }
@@ -1362,6 +1364,7 @@ async function loadConnections() {
   const query = new URLSearchParams({
     select: "id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at",
     tenant_id: `eq.${session.tenantId}`,
+    status: "neq.disconnected",
     order: "created_at.desc"
   });
   const response = await fetch(`${runtime.supabaseUrl}/rest/v1/whatsapp_platform_connections?${query}`, {
@@ -1450,7 +1453,7 @@ function accountsView(connections, setupReady) {
   const addButton = canManageNumbers
     ? `<button class="wp-primary" id="wpConnectMetaBtn" type="button">${setupReady ? `＋ ${connections.length ? "Add business number" : "Connect business number"}` : "Connection setup pending"}</button>`
     : "";
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div>${addButton}</div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2></div><strong>${connections.length}</strong></div><p>Each number is connected securely through your company’s Meta Business account.</p>${connections.length ? connections.map((row) => `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(row.display_phone_number || row.verified_name || "Number setup pending")}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}</small></div><em>${escapeHtml(row.status)}</em></div>`).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</article></section>`;
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div>${addButton}</div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2></div><strong>${connections.length}</strong></div><p>Each number is connected securely through your company’s Meta Business account.</p>${connections.length ? connections.map((row) => { const label = row.display_phone_number || row.verified_name || "Number setup pending"; return `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}</small></div><div class="wp-account-actions"><em>${escapeHtml(row.status)}</em>${canManageNumbers ? `<button class="wp-account-remove" type="button" data-remove-business-number="${escapeHtml(row.id)}" data-business-number-label="${escapeHtml(label)}">Remove</button>` : ""}</div></div>`; }).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</article></section>`;
 }
 
 const WHATSAPP_BUSINESS_VERTICALS = {
@@ -3073,6 +3076,22 @@ async function renderDashboard() {
   const messagePanel = app.querySelector("#wpInboxMessages");
   if (messagePanel) messagePanel.scrollTop = messagePanel.scrollHeight;
   app.querySelectorAll("#wpConnectMetaBtn,[data-connect-meta]").forEach((button) => button.addEventListener("click", () => startMetaOnboarding(button)));
+  app.querySelectorAll("[data-remove-business-number]").forEach((button) => button.addEventListener("click", async () => {
+    const connectionId = button.dataset.removeBusinessNumber || "";
+    const label = button.dataset.businessNumberLabel || "this number";
+    if (!window.confirm(`Remove ${label} from this workspace?\n\nSending will stop immediately. Existing conversations, messages and Drive archives will be retained.`)) return;
+    const original = button.textContent || "Remove";
+    try {
+      button.disabled = true; button.textContent = "Removing…";
+      await onboardingRequest("remove_connection", { connectionId });
+      if (workspaceSelectedConnectionId === connectionId) selectWorkspaceConnection("");
+      showToast(`${label} was removed from this workspace. Message history was retained.`);
+      await renderDashboard();
+    } catch (error) {
+      showToast(error?.message || "The business number could not be removed.", "error");
+      button.disabled = false; button.textContent = original;
+    }
+  }));
   if (setupReady) loadFacebookSdk().catch(() => {});
 }
 
