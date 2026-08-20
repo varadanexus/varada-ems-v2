@@ -268,13 +268,41 @@ async function completeOnboarding(admin: any, customer: any, body: any) {
       connected_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
   };
-  const { data: existingConnection } = await admin
-    .from("whatsapp_platform_connections")
-    .select("id")
-    .eq("tenant_id", customer.tenant_id)
-    .eq("whatsapp_business_account_id", wabaId)
-    .limit(1)
-    .maybeSingle();
+  let existingConnection: any = null;
+  if (phoneNumberId) {
+    const exact = await admin
+      .from("whatsapp_platform_connections")
+      .select("id")
+      .eq("tenant_id", customer.tenant_id)
+      .eq("whatsapp_business_account_id", wabaId)
+      .eq("phone_number_id", phoneNumberId)
+      .maybeSingle();
+    if (exact.error) throw exact.error;
+    existingConnection = exact.data;
+    if (!existingConnection) {
+      const pending = await admin
+        .from("whatsapp_platform_connections")
+        .select("id")
+        .eq("tenant_id", customer.tenant_id)
+        .eq("whatsapp_business_account_id", wabaId)
+        .is("phone_number_id", null)
+        .limit(1)
+        .maybeSingle();
+      if (pending.error) throw pending.error;
+      existingConnection = pending.data;
+    }
+  } else {
+    const pending = await admin
+      .from("whatsapp_platform_connections")
+      .select("id")
+      .eq("tenant_id", customer.tenant_id)
+      .eq("whatsapp_business_account_id", wabaId)
+      .is("phone_number_id", null)
+      .limit(1)
+      .maybeSingle();
+    if (pending.error) throw pending.error;
+    existingConnection = pending.data;
+  }
   const connectionQuery = existingConnection?.id
     ? admin.from("whatsapp_platform_connections").update(connectionPayload).eq("id", existingConnection.id)
     : admin.from("whatsapp_platform_connections").insert(connectionPayload);
@@ -334,8 +362,14 @@ Deno.serve(async (req) => {
     }
     const body = rawBody ? JSON.parse(rawBody) : {};
     customer = await customerSession(admin, body.sessionToken);
+    if (customer.role_code === "agent") {
+      return json(req, { error: "Your agent role cannot access business onboarding." }, 403);
+    }
     const action = String(body.action || "status");
     if (action === "status") return json(req, await configurationStatus(admin, customer));
+    if (!["owner", "admin"].includes(customer.role_code)) {
+      return json(req, { error: "Only workspace owners and administrators can add business numbers." }, 403);
+    }
     if (action === "begin") {
       await enforceVerificationGate(admin, customer);
       await recordEvent(admin, customer, "onboarding_started", { source: "customer_workspace" });

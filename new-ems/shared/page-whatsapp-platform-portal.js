@@ -111,12 +111,22 @@ const WORKSPACE_VIEW_LABELS = {
   templates: "Message templates",
   flows: "Flows",
   analytics: "Analytics",
-  accounts: "Business accounts",
+  accounts: "Business numbers",
   team: "Team & roles",
   integrations: "Integrations",
   billing: "Billing & usage",
   settings: "Workspace settings",
 };
+
+const AGENT_WORKSPACE_VIEWS = new Set(["inbox", "contacts", "campaigns", "templates", "flows", "analytics"]);
+
+function isAgentWorkspaceRole() {
+  return session?.roleCode === "agent";
+}
+
+function canAccessWorkspaceView(view) {
+  return !isAgentWorkspaceRole() || AGENT_WORKSPACE_VIEWS.has(view);
+}
 
 function currentWorkspaceView() {
   const relativePath = location.pathname.slice(WORKSPACE_PATH.length).replace(/^\/+|\/+$/g, "");
@@ -125,7 +135,12 @@ function currentWorkspaceView() {
     location.replace(`${workspacePath("flows")}${location.search}${location.hash}`);
     return "flows";
   }
-  return Object.hasOwn(WORKSPACE_VIEW_LABELS, view) ? view : "overview";
+  const resolvedView = Object.hasOwn(WORKSPACE_VIEW_LABELS, view) ? view : "overview";
+  if (!canAccessWorkspaceView(resolvedView)) {
+    location.replace(workspacePath("inbox"));
+    return "inbox";
+  }
+  return resolvedView;
 }
 
 function workspacePath(view) {
@@ -322,7 +337,7 @@ function currentFlowBuilderId() {
 }
 
 function workspaceIcon(paths, className = "") {
-  return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
+  return `<svg class="${className}" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths}</svg>`;
 }
 
 const WORKSPACE_NAV_ICONS = {
@@ -347,6 +362,14 @@ function workspaceNavItem(view, icon, badge = "") {
   const label = WORKSPACE_VIEW_LABELS[view];
   const iconMarkup = WORKSPACE_NAV_ICONS[view] || icon;
   return `<a class="${active ? "active" : ""}" href="${workspacePath(view)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" data-nav-label="${escapeHtml(label)}" ${active ? 'aria-current="page"' : ""}><span class="wp-nav-icon" aria-hidden="true">${iconMarkup}</span><span class="wp-nav-text">${escapeHtml(label)}</span>${badge ? `<em>${badge}</em>` : ""}</a>`;
+}
+
+function workspaceNavigationMarkup({ inboxUnread = 0, contactCount = 0, campaignCount = 0, templateCount = 0, flowCount = 0, connectedCount = 0, teamCount = 0, packageName = "" } = {}) {
+  const customers = `<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}`;
+  const engage = `<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", templateCount ? String(templateCount) : "")}${workspaceNavItem("flows", "⌁", flowCount ? String(flowCount) : "")}`;
+  const insights = `<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}`;
+  if (isAgentWorkspaceRole()) return `${customers}${engage}${insights}`;
+  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", packageName)}${workspaceNavItem("settings", "⚙")}`;
 }
 
 const WORKSPACE_SIDEBAR_KEY = "varada-whatsapp-workspace-sidebar";
@@ -393,9 +416,9 @@ function enhanceWorkspaceSidebar(root, sidebarState, isFlowBuilderRoute) {
     brandRow.appendChild(collapseButton);
   }
 
-  const sectionIds = ["workspace", "customers", "engage", "insights", "administration"];
+  const sectionIds = { Workspace: "workspace", Customers: "customers", Engage: "engage", Insights: "insights", Administration: "administration" };
   [...nav.querySelectorAll(":scope > .wp-nav-label")].forEach((label, index) => {
-    const sectionId = sectionIds[index] || `section-${index + 1}`;
+    const sectionId = sectionIds[label.textContent.trim()] || `section-${index + 1}`;
     const section = document.createElement("section");
     section.className = "wp-nav-section";
     section.dataset.workspaceNavSection = sectionId;
@@ -694,6 +717,10 @@ function embeddedSignupResult(FB, configurationId) {
 }
 
 async function startMetaOnboarding(button) {
+  if (!["owner", "admin"].includes(session?.roleCode)) {
+    showToast("Only workspace owners and administrators can add business numbers.", "error");
+    return;
+  }
   if (workspaceVerification?.gateRequired !== false && workspaceVerification?.status !== "verified") {
     showToast("Complete the provider business pre-check before connecting production business assets.", "error");
     location.href = workspacePath("verification");
@@ -798,37 +825,61 @@ function authForm(mode) {
   </form>`;
 }
 
-function renderInviteAcceptance(inviteToken) {
+async function renderInviteAcceptance(inviteToken) {
+  app.innerHTML = `<div class="wp-loading">Checking your secure invitation…</div>`;
+  let invitation;
+  try {
+    const result = await authRequest("inspect_invite", { inviteToken });
+    invitation = result.invitation;
+  } catch (error) {
+    app.innerHTML = `<main class="wp-invite-page"><section class="wp-auth-card wp-invite-card wp-invite-error"><span class="wp-card-eyebrow">Invitation unavailable</span><h1>This invitation cannot be opened.</h1><p>${escapeHtml(error?.message || "The invitation is invalid or has expired.")}</p><a class="wp-submit wp-button-link" href="${ACCESS_PATH}#signin">Go to customer sign in</a></section></main>`;
+    return;
+  }
+
+  const existingAccount = invitation.existingAccount === true;
+  const roleLabels = { owner: "Owner", admin: "Administrator", agent: "Agent", viewer: "Viewer" };
+  const roleLabel = roleLabels[invitation.roleCode] || "Member";
+  const inviterInitial = (invitation.inviterName || invitation.organisationName || "I").charAt(0).toUpperCase();
   app.innerHTML = `<main class="wp-invite-page">
     <section class="wp-invite-shell" aria-labelledby="wpInviteTitle">
       <div class="wp-invite-intro">
         <span class="wp-kicker">Protected workspace invitation</span>
-        <h1 id="wpInviteTitle">Your team is ready for you.</h1>
-        <p>Activate your member profile, then continue directly into the shared WhatsApp customer workspace.</p>
+        <h1 id="wpInviteTitle">${escapeHtml(invitation.organisationName)} invited you.</h1>
+        <p>Join the shared WhatsApp customer workspace with ${escapeHtml(roleLabel.toLowerCase())} access.</p>
+        <div class="wp-invite-sender" aria-label="Invitation sender">
+          <span aria-hidden="true">${escapeHtml(inviterInitial)}</span>
+          <div><small>Invitation sent by</small><strong>${escapeHtml(invitation.inviterName)}</strong><em>${escapeHtml(invitation.organisationName)}</em></div>
+        </div>
         <div class="wp-invite-assurance" aria-label="Invitation safeguards">
-          <div><span aria-hidden="true">01</span><strong>Confirm your profile</strong><small>Use the name your teammates will recognise.</small></div>
-          <div><span aria-hidden="true">02</span><strong>Protect your access</strong><small>Create a strong password known only to you.</small></div>
+          <div><span aria-hidden="true">01</span><strong>Confirm the invitation</strong><small>Issued to ${escapeHtml(invitation.invitedEmail)}.</small></div>
+          <div><span aria-hidden="true">02</span><strong>${existingAccount ? "Use your existing account" : "Protect your access"}</strong><small>${existingAccount ? "Sign in with the password already linked to this email." : "Create a strong password known only to you."}</small></div>
           <div><span aria-hidden="true">03</span><strong>Enter the workspace</strong><small>Your assigned permissions apply automatically.</small></div>
         </div>
         <p class="wp-invite-security"><span aria-hidden="true">✓</span> Single-use invitation · Role-based workspace access</p>
       </div>
       <section class="wp-auth-card wp-invite-card">
         <header class="wp-invite-card-head">
-          <span class="wp-invite-lock" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2m-9 0h8a2 2 0 0 1 2 2v7H6v-7a2 2 0 0 1 2-2Z"/></svg></span>
-          <div><span class="wp-card-eyebrow">Member access</span><h2>Create your profile</h2><p>Complete the details below to accept this invitation.</p></div>
+          <span class="wp-invite-lock" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2m-9 0h8a2 2 0 0 1 2 2v7H6v-7a2 2 0 0 1 2-2Z"/></svg></span>
+          <div><span class="wp-card-eyebrow">${existingAccount ? "Existing customer account" : "Member access"}</span><h2>${existingAccount ? "Sign in to accept" : "Create your profile"}</h2><p>${existingAccount ? `We found an account registered to ${escapeHtml(invitation.invitedEmail)}.` : "Complete the details below to accept this invitation."}</p></div>
         </header>
         <form class="wp-form" id="wpInviteAcceptForm" novalidate>
-          <label class="wp-field"><span>Full name</span><input name="displayName" autocomplete="name" minlength="2" maxlength="100" placeholder="Enter your full name" required autofocus /></label>
-          <div class="wp-invite-password-grid">
-            <label class="wp-field"><span>Create password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Minimum 10 characters" required /><button type="button" data-password-toggle aria-label="Show password">Show</button></span></label>
-            <label class="wp-field"><span>Confirm password</span><span class="wp-password-control"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Repeat your password" required /><button type="button" data-password-toggle aria-label="Show confirm password">Show</button></span></label>
-          </div>
-          <p class="wp-password-guidance"><span aria-hidden="true">●</span> Use 10+ characters with uppercase, lowercase and a number.</p>
-          <label class="wp-check wp-invite-terms"><input name="terms" type="checkbox" required /><span>I agree to the <a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+          ${existingAccount ? `
+            <div class="wp-invite-account-note"><strong>Use your registered account</strong><p>Signing in will link this invitation to your existing customer identity and add access to ${escapeHtml(invitation.organisationName)}.</p></div>
+            <label class="wp-field"><span>Registered email</span><input name="email" type="email" autocomplete="username" value="${escapeHtml(invitation.invitedEmail)}" readonly /></label>
+            <label class="wp-field"><span>Existing password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="current-password" maxlength="128" placeholder="Enter your current password" required autofocus /><button type="button" data-password-toggle aria-label="Show password">Show</button></span></label>
+          ` : `
+            <label class="wp-field"><span>Full name</span><input name="displayName" autocomplete="name" minlength="2" maxlength="100" value="${escapeHtml(invitation.inviteeName || "")}" placeholder="Enter your full name" required autofocus /></label>
+            <div class="wp-invite-password-grid">
+              <label class="wp-field"><span>Create password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Minimum 10 characters" required /><button type="button" data-password-toggle aria-label="Show password">Show</button></span></label>
+              <label class="wp-field"><span>Confirm password</span><span class="wp-password-control"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" placeholder="Repeat your password" required /><button type="button" data-password-toggle aria-label="Show confirm password">Show</button></span></label>
+            </div>
+            <p class="wp-password-guidance"><span aria-hidden="true">●</span> Use 10+ characters with uppercase, lowercase and a number.</p>
+            <label class="wp-check wp-invite-terms"><input name="terms" type="checkbox" required /><span>I agree to the <a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
+          `}
           <p class="wp-form-message" id="wpInviteMessage" role="alert"></p>
-          <button class="wp-submit" type="submit">Accept invitation <span aria-hidden="true">→</span></button>
+          <button class="wp-submit" type="submit">${existingAccount ? "Sign in and accept" : "Accept invitation"} <span aria-hidden="true">→</span></button>
         </form>
-        <footer class="wp-invite-card-foot"><span>This invitation can only be used once.</span><a class="wp-customer-signin" href="${ACCESS_PATH}#signin">Already a member? Sign in</a></footer>
+        <footer class="wp-invite-card-foot"><span>This invitation can only be used once.</span><span>For ${escapeHtml(invitation.invitedEmail)}</span></footer>
       </section>
     </section>
   </main>`;
@@ -844,15 +895,17 @@ function renderInviteAcceptance(inviteToken) {
     const form = event.currentTarget;
     const message = form.querySelector("#wpInviteMessage");
     if (!form.reportValidity()) return;
-    if (form.elements.password.value !== form.elements.confirmPassword.value) { message.textContent = "Passwords do not match."; return; }
+    if (!existingAccount && form.elements.password.value !== form.elements.confirmPassword.value) { message.textContent = "Passwords do not match."; return; }
     const submit = form.querySelector("button[type=submit]");
-    submit.disabled = true; submit.textContent = "Accepting invitation…"; message.textContent = "";
+    submit.disabled = true; submit.textContent = existingAccount ? "Signing in and linking…" : "Accepting invitation…"; message.textContent = "";
     try {
-      const result = await authRequest("accept_invite", { inviteToken, displayName: form.elements.displayName.value.trim(), password: form.elements.password.value, termsAccepted: form.elements.terms.checked });
+      const result = existingAccount
+        ? await authRequest("accept_existing_invite", { inviteToken, password: form.elements.password.value })
+        : await authRequest("accept_invite", { inviteToken, displayName: form.elements.displayName.value.trim(), password: form.elements.password.value, termsAccepted: form.elements.terms.checked });
       session = result.session; storeSession(session); location.replace(WORKSPACE_PATH);
     } catch (error) {
       message.textContent = error?.message || "The invitation could not be accepted.";
-      submit.disabled = false; submit.innerHTML = 'Accept invitation <span aria-hidden="true">→</span>';
+      submit.disabled = false; submit.innerHTML = `${existingAccount ? "Sign in and accept" : "Accept invitation"} <span aria-hidden="true">→</span>`;
     }
   });
 }
@@ -1346,7 +1399,11 @@ function onboardingView(setupReady, connections) {
 }
 
 function accountsView(connections, setupReady) {
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Connected assets</span><h1>Business accounts</h1><p>Connect and manage WhatsApp Business assets owned by your company.</p></div><button class="wp-primary" id="wpConnectMetaBtn" type="button">${setupReady ? "Connect Meta Business" : "Connection setup pending"}</button></div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">WhatsApp Business Accounts</span><h2>Your connected accounts</h2></div><strong>${connections.length}</strong></div><p>Only accounts connected to this company workspace appear here.</p>${connections.length ? connections.map((row) => `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(row.verified_name || row.display_phone_number || "WhatsApp Business Account")}</strong><small>${escapeHtml(row.display_phone_number || "Business number")}</small></div><em>${escapeHtml(row.status)}</em></div>`).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business account connected</strong><p>${setupReady ? "Connect your company’s Meta Business account to start configuring WhatsApp." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p><button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Connect account" : "Check connection status"}</button></div>`}</article></section>`;
+  const canManageNumbers = ["owner", "admin"].includes(session?.roleCode);
+  const addButton = canManageNumbers
+    ? `<button class="wp-primary" id="wpConnectMetaBtn" type="button">${setupReady ? `＋ ${connections.length ? "Add business number" : "Connect business number"}` : "Connection setup pending"}</button>`
+    : "";
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div>${addButton}</div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2></div><strong>${connections.length}</strong></div><p>Each number is connected securely through your company’s Meta Business account.</p>${connections.length ? connections.map((row) => `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(row.display_phone_number || row.verified_name || "Number setup pending")}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}</small></div><em>${escapeHtml(row.status)}</em></div>`).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</article></section>`;
 }
 
 function profileView(profile) {
@@ -1780,6 +1837,7 @@ function workspaceViewContent(view, connections, setupReady, profile) {
 }
 
 function verificationAttentionModal() {
+  if (isAgentWorkspaceRole()) return "";
   if (verificationAttentionDismissed) return "";
   const requests = (workspaceVerification?.documentRequests || []).filter((request) => request.status === "requested");
   const requestDocumentIds = new Set(requests.map((request) => request.documentId).filter(Boolean));
@@ -1798,12 +1856,41 @@ function verificationAttentionModal() {
 
 async function renderDashboard() {
   const view = currentWorkspaceView();
+  const agentWorkspace = isAgentWorkspaceRole();
   let connections = [];
   try { connections = await loadConnections(); } catch { connections = []; }
-  try {
-    metaOnboardingStatus = await onboardingRequest("status");
-    if (Array.isArray(metaOnboardingStatus.connections)) connections = metaOnboardingStatus.connections;
-  } catch {
+  if (!agentWorkspace) {
+    try {
+      metaOnboardingStatus = await onboardingRequest("status");
+      if (Array.isArray(metaOnboardingStatus.connections)) connections = metaOnboardingStatus.connections;
+    } catch {
+      metaOnboardingStatus = {
+        configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
+        publicAppId: runtime.metaAppId || null,
+        publicConfigurationId: runtime.embeddedSignupConfigId || null,
+        publicGraphVersion: runtime.metaGraphVersion || null,
+        environment: "testing",
+      };
+    }
+    try {
+      const storage = await storageRequest("profile");
+      workspaceProfile = storage?.profile || workspaceProfile;
+    } catch {
+      workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+    }
+    try {
+      const result = await storageRequest("verification_status");
+      workspaceVerification = result?.verification || workspaceVerification;
+    } catch {
+      workspaceVerification = workspaceVerification || { status: "not_started", entityType: workspaceProfile?.businessType || "other", requirements: [], documents: [], canEdit: true };
+    }
+    try {
+      const result = await messagingRequest("package_master");
+      workspacePackageMaster = { package: result?.package || null, addons: result?.addons || [], availableAddons: result?.availableAddons || [], error: "" };
+    } catch (error) {
+      workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: error?.message || "Package Master could not be loaded." };
+    }
+  } else {
     metaOnboardingStatus = {
       configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
       publicAppId: runtime.metaAppId || null,
@@ -1811,24 +1898,9 @@ async function renderDashboard() {
       publicGraphVersion: runtime.metaGraphVersion || null,
       environment: "testing",
     };
-  }
-  try {
-    const storage = await storageRequest("profile");
-    workspaceProfile = storage?.profile || workspaceProfile;
-  } catch {
-    workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
-  }
-  try {
-    const result = await storageRequest("verification_status");
-    workspaceVerification = result?.verification || workspaceVerification;
-  } catch {
-    workspaceVerification = workspaceVerification || { status: "not_started", entityType: workspaceProfile?.businessType || "other", requirements: [], documents: [], canEdit: true };
-  }
-  try {
-    const result = await messagingRequest("package_master");
-    workspacePackageMaster = { package: result?.package || null, addons: result?.addons || [], availableAddons: result?.availableAddons || [], error: "" };
-  } catch (error) {
-    workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: error?.message || "Package Master could not be loaded." };
+    workspaceProfile = { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+    workspaceVerification = null;
+    workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
   }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
@@ -1908,7 +1980,11 @@ async function renderDashboard() {
   const isFlowBuilderRoute = Boolean(currentFlowBuilderId());
   const isInboxRoute = view === "inbox";
   const operationalPackageName = workspacePackageMaster?.package?.name || planName(workspaceProfile?.planCode);
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", workspaceTemplates.templates.length ? String(workspaceTemplates.templates.length) : "")}${workspaceNavItem("flows", "⌁", workspaceFlows.flows.length ? String(workspaceFlows.flows.length) : "")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", workspaceTeam.members.length ? String(workspaceTeam.members.length) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", operationalPackageName)}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${verificationAttentionModal()}`;
+  const sidebarAccount = agentWorkspace
+    ? `<div class="wp-workspace-account" aria-label="${escapeHtml(session.companyName)} workspace"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>Agent workspace</small></div></div>`
+    : `<a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a>`;
+  const sidebarNavigation = workspaceNavigationMarkup({ inboxUnread, contactCount, campaignCount, templateCount: workspaceTemplates.templates.length, flowCount: workspaceFlows.flows.length, connectedCount: connected.length, teamCount: workspaceTeam.members.length, packageName: operationalPackageName });
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarAccount}<nav class="wp-workspace-nav">${sidebarNavigation}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${verificationAttentionModal()}`;
   if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
   const workspaceSidebarState = readWorkspaceSidebarState();
   enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
@@ -2253,12 +2329,20 @@ async function renderDashboard() {
     collapseButton?.classList.toggle("is-collapsed", collapsed);
   };
   syncSidebarCollapseButton();
-  collapseButton?.addEventListener("click", () => {
-    const collapsed = !shell?.classList.contains("sidebar-collapsed");
+  const setSidebarCollapsed = (collapsed) => {
     shell?.classList.toggle("sidebar-collapsed", collapsed);
     workspaceSidebarState.collapsed = collapsed;
     writeWorkspaceSidebarState(workspaceSidebarState);
     syncSidebarCollapseButton();
+  };
+  collapseButton?.addEventListener("click", () => {
+    setSidebarCollapsed(!shell?.classList.contains("sidebar-collapsed"));
+  });
+  app.querySelector(".wp-workspace-sidebar")?.addEventListener("click", (event) => {
+    if (!shell?.classList.contains("sidebar-collapsed")) return;
+    if (event.target.closest("#wpSidebarCollapseBtn, .wp-workspace-nav a, .wp-sidebar-footer a, .wp-sidebar-footer button")) return;
+    event.preventDefault();
+    setSidebarCollapsed(false);
   });
   app.querySelectorAll("[data-workspace-section-toggle]").forEach((button) => button.addEventListener("click", () => {
     const section = button.closest("[data-workspace-nav-section]");
@@ -2827,7 +2911,7 @@ async function init() {
   }
   const inviteToken = new URLSearchParams(location.search).get("invite") || "";
   if (/^[a-f0-9]{64}$/i.test(inviteToken)) {
-    renderInviteAcceptance(inviteToken.toLowerCase());
+    await renderInviteAcceptance(inviteToken.toLowerCase());
     return;
   }
   if (session) {
