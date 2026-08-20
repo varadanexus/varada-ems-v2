@@ -3122,7 +3122,7 @@ async function renderDashboard() {
       button.disabled = false; button.textContent = original;
     }
   }));
-  if (setupReady) loadFacebookSdk().catch(() => {});
+  if (setupReady && ["onboarding", "accounts"].includes(view)) loadFacebookSdk().catch(() => {});
 }
 
 async function init() {
