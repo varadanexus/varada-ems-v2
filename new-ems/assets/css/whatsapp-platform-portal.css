@@ -373,6 +373,50 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-number-selector select { width: 100%; min-width: 0; padding: 0 1.25rem 0 0; border: 0; background: transparent; color: var(--wp-workspace-text,var(--wp-text)); font: inherit; font-size: .72rem; font-weight: 800; outline: none; text-overflow: ellipsis; }
 .wp-number-selector select option { background: var(--wp-workspace-surface-solid,#14181d); color: var(--wp-workspace-text,#f2f4f6); }
 .wp-number-selector-empty:hover,.wp-number-selector-empty:focus-visible { border-color: var(--wp-workspace-accent); outline: none; }
+.wp-business-profile-page { max-width: 1320px; }
+.wp-business-profile-identity { display: grid; grid-template-columns: 72px minmax(0,1fr) minmax(220px,340px); gap: 1rem; align-items: center; padding: 1.15rem; }
+.wp-business-profile-identity h2 { margin: .18rem 0; font-size: 1.15rem; }
+.wp-business-profile-identity p,.wp-business-profile-identity span { margin: 0; color: var(--wp-workspace-muted); font-size: .72rem; }
+.wp-business-profile-avatar { width: 58px; height: 58px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--wp-workspace-line-strong); border-radius: 50%; background: linear-gradient(145deg,var(--wp-workspace-accent-soft),var(--wp-workspace-surface-solid)); color: var(--wp-workspace-accent-strong); font-size: 1.35rem; font-weight: 900; }
+.wp-business-profile-avatar.large { width: 104px; height: 104px; border-radius: 26px; }
+.wp-business-profile-avatar img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.wp-business-profile-lock { padding: .75rem .9rem; border: 1px solid var(--wp-workspace-line); border-radius: 12px; background: var(--wp-workspace-surface-soft); }
+.wp-business-profile-lock strong,.wp-business-profile-lock small { display: block; }
+.wp-business-profile-lock strong { font-size: .72rem; }
+.wp-business-profile-lock small { margin-top: .2rem; color: var(--wp-workspace-muted); font-size: .64rem; line-height: 1.45; }
+.wp-business-profile-layout { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(310px,.75fr); gap: 1rem; align-items: start; }
+.wp-business-profile-editor,.wp-business-profile-preview { padding: 1.2rem; }
+.wp-business-profile-editor > header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; margin-bottom: 1rem; }
+.wp-business-profile-editor h2,.wp-business-profile-preview h2 { margin: .25rem 0 0; font-size: 1.08rem; }
+.wp-unsaved-indicator { padding: .32rem .55rem; border-radius: 999px; background: var(--wp-workspace-accent-soft); color: var(--wp-workspace-accent-strong); font-size: .62rem; font-weight: 800; white-space: nowrap; }
+.wp-unsaved-indicator.dirty { background: rgba(219,183,101,.12); color: var(--wp-workspace-gold); }
+.wp-business-profile-photo-row { display: grid; grid-template-columns: 104px minmax(0,1fr); gap: 1rem; align-items: center; margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--wp-workspace-line); border-radius: 14px; background: var(--wp-workspace-surface-soft); }
+.wp-business-profile-photo-picker { display: grid; gap: .32rem; }
+.wp-business-profile-photo-picker > span { color: var(--wp-workspace-muted); font-size: .7rem; line-height: 1.45; }
+.wp-business-profile-photo-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.wp-business-profile-photo-picker em { width: max-content; margin-top: .2rem; padding: .5rem .7rem; border: 1px solid var(--wp-workspace-line-strong); border-radius: 9px; color: var(--wp-workspace-text); font-size: .68rem; font-style: normal; font-weight: 800; cursor: pointer; }
+.wp-business-profile-editor > label,.wp-business-profile-editor .wp-form-row > label { display: grid; gap: .38rem; margin-bottom: .9rem; color: var(--wp-workspace-text); font-size: .72rem; font-weight: 750; }
+.wp-business-profile-editor label > span b { color: #ef6b73; }
+.wp-business-profile-editor input,.wp-business-profile-editor textarea,.wp-business-profile-editor select { width: 100%; border: 1px solid var(--wp-workspace-line-strong); border-radius: 10px; background: var(--wp-workspace-surface-solid); color: var(--wp-workspace-text); padding: .72rem .8rem; font: inherit; outline: none; }
+.wp-business-profile-editor input:focus,.wp-business-profile-editor textarea:focus,.wp-business-profile-editor select:focus { border-color: var(--wp-workspace-accent); box-shadow: 0 0 0 3px var(--wp-workspace-accent-soft); }
+.wp-business-profile-editor textarea { resize: vertical; line-height: 1.5; }
+.wp-business-profile-editor label small { color: var(--wp-workspace-subtle); font-size: .62rem; font-weight: 600; }
+.wp-business-profile-editor > footer { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-top: .4rem; padding-top: 1rem; border-top: 1px solid var(--wp-workspace-line); }
+.wp-business-profile-editor > footer p { max-width: 62%; margin: 0; color: var(--wp-workspace-muted); font-size: .65rem; line-height: 1.5; }
+.wp-business-profile-preview { position: sticky; top: 92px; }
+.wp-phone-profile { overflow: hidden; margin-top: 1rem; border: 1px solid var(--wp-workspace-line); border-radius: 18px; background: var(--wp-workspace-surface-solid); box-shadow: var(--wp-workspace-shadow-soft); }
+.wp-phone-profile > header { display: grid; justify-items: center; padding: 1.25rem 1rem 1rem; text-align: center; background: linear-gradient(180deg,var(--wp-workspace-accent-soft),transparent); }
+.wp-phone-profile > header strong { margin-top: .6rem; font-size: .9rem; }
+.wp-phone-profile > header small { margin-top: .18rem; color: var(--wp-workspace-muted); font-size: .65rem; }
+.wp-phone-profile-about { padding: .72rem 1rem; border-block: 1px solid var(--wp-workspace-line); color: var(--wp-workspace-text); font-size: .7rem; line-height: 1.45; }
+.wp-phone-profile dl { margin: 0; padding: .35rem 1rem .9rem; }
+.wp-phone-profile dl > div { padding: .62rem 0; border-bottom: 1px solid var(--wp-workspace-line); }
+.wp-phone-profile dl > div:last-child { border-bottom: 0; }
+.wp-phone-profile dt { color: var(--wp-workspace-subtle); font-size: .58rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.wp-phone-profile dd { margin: .24rem 0 0; overflow-wrap: anywhere; color: var(--wp-workspace-text); font-size: .68rem; line-height: 1.4; }
+.wp-profile-guidance { margin-top: 1rem; padding: .9rem; border: 1px solid var(--wp-workspace-line); border-radius: 12px; background: var(--wp-workspace-surface-soft); }
+.wp-profile-guidance strong { font-size: .7rem; }
+.wp-profile-guidance ul { margin: .55rem 0 0; padding-left: 1rem; color: var(--wp-workspace-muted); font-size: .64rem; line-height: 1.6; }
 .wp-workspace-nav { display: grid; gap: .2rem; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
 .wp-nav-label { margin: 1rem .65rem .35rem; color: #6f8f7d; font-size: .61rem; font-weight: 850; letter-spacing: .16em; text-transform: uppercase; }
 .wp-workspace-nav a,.wp-workspace-nav button { width: 100%; min-height: 42px; display: grid; grid-template-columns: 25px minmax(0,1fr) auto; gap: .4rem; align-items: center; padding: .62rem .7rem; border: 0; border-radius: 10px; background: transparent; color: #a9c1b2; font-size: .78rem; font-weight: 700; text-align: left; text-decoration: none; }
@@ -476,6 +520,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .wp-workspace-shell.sidebar-open .wp-sidebar-scrim { display: block; }
   .wp-overview-actions { grid-template-columns: 1fr; }
   .wp-settings-grid { grid-template-columns: 1fr; }
+  .wp-business-profile-layout { grid-template-columns: 1fr; }
+  .wp-business-profile-preview { position: static; }
 }
 
 @media (max-width: 600px) {
@@ -496,6 +542,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .wp-readiness-banner .wp-primary { grid-column: 1 / -1; width: 100%; }
   .wp-planned-card { grid-template-columns: 1fr; }
   .wp-planned-visual { min-height: 190px; }
+  .wp-business-profile-identity { grid-template-columns: 58px minmax(0,1fr); }
+  .wp-business-profile-lock { grid-column: 1 / -1; }
+  .wp-business-profile-photo-row { grid-template-columns: 1fr; }
+  .wp-business-profile-editor > footer { align-items: stretch; flex-direction: column; }
+  .wp-business-profile-editor > footer p { max-width: none; }
 }
 
 @media (max-width: 1100px) {

@@ -77,6 +77,7 @@ let workspaceTemplates = { templates: [], connectionId: "", error: "" };
 let workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
 let workspaceFlows = { flows: [], error: "" };
 let workspaceSelectedConnectionId = "";
+let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
 const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
@@ -114,6 +115,7 @@ const WORKSPACE_VIEW_LABELS = {
   flows: "Flows",
   analytics: "Analytics",
   accounts: "Business numbers",
+  "business-profile": "WhatsApp profile",
   team: "Team & roles",
   integrations: "Integrations",
   billing: "Billing & usage",
@@ -127,6 +129,7 @@ function isAgentWorkspaceRole() {
 }
 
 function canAccessWorkspaceView(view) {
+  if (view === "business-profile") return ["owner", "admin"].includes(session?.roleCode);
   return !isAgentWorkspaceRole() || AGENT_WORKSPACE_VIEWS.has(view);
 }
 
@@ -381,6 +384,7 @@ const WORKSPACE_NAV_ICONS = {
   flows: workspaceIcon('<circle cx="6" cy="5" r="2"/><circle cx="18" cy="12" r="2"/><circle cx="6" cy="19" r="2"/><path d="M8 5h3a4 4 0 0 1 4 4v1M8 19h3a4 4 0 0 0 4-4v-1"/>'),
   analytics: workspaceIcon('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
   accounts: workspaceIcon('<path d="M3 21h18M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6M9 10h.01M15 10h.01"/>'),
+  "business-profile": workspaceIcon('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="M18 3h3v3"/>'),
   team: workspaceIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M18 8v6M21 11h-6"/>'),
   integrations: workspaceIcon('<path d="M12 22v-5M9 8V2M15 8V2M18 8H6v3a6 6 0 0 0 12 0V8Z"/>'),
   billing: workspaceIcon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/>'),
@@ -399,7 +403,8 @@ function workspaceNavigationMarkup({ inboxUnread = 0, contactCount = 0, campaign
   const engage = `<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", templateCount ? String(templateCount) : "")}${workspaceNavItem("flows", "⌁", flowCount ? String(flowCount) : "")}`;
   const insights = `<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}`;
   if (isAgentWorkspaceRole()) return `${customers}${engage}${insights}`;
-  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", packageName)}${workspaceNavItem("settings", "⚙")}`;
+  const profileItem = ["owner", "admin"].includes(session?.roleCode) ? workspaceNavItem("business-profile", "◎") : "";
+  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${profileItem}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", packageName)}${workspaceNavItem("settings", "⚙")}`;
 }
 
 const WORKSPACE_SIDEBAR_KEY = "varada-whatsapp-workspace-sidebar";
@@ -1448,6 +1453,42 @@ function accountsView(connections, setupReady) {
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div>${addButton}</div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2></div><strong>${connections.length}</strong></div><p>Each number is connected securely through your company’s Meta Business account.</p>${connections.length ? connections.map((row) => `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(row.display_phone_number || row.verified_name || "Number setup pending")}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}</small></div><em>${escapeHtml(row.status)}</em></div>`).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</article></section>`;
 }
 
+const WHATSAPP_BUSINESS_VERTICALS = {
+  UNDEFINED: "Not specified", OTHER: "Other", AUTO: "Automotive", BEAUTY: "Beauty, spa and salon",
+  APPAREL: "Clothing and apparel", EDU: "Education", ENTERTAIN: "Entertainment", EVENT_PLAN: "Event planning",
+  FINANCE: "Finance and banking", GROCERY: "Food and grocery", GOVT: "Public service", HOTEL: "Hotel and lodging",
+  HEALTH: "Medical and health", NONPROFIT: "Non-profit", PROF_SERVICES: "Professional services",
+  RETAIL: "Shopping and retail", TRAVEL: "Travel and transportation", RESTAURANT: "Restaurant",
+};
+
+function businessProfileView(connections) {
+  const connection = connections.find((item) => item.id === workspaceSelectedConnectionId) || null;
+  if (!connection) return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Customer-facing identity</span><h1>WhatsApp profile</h1><p>Choose or connect a business number before editing its public WhatsApp profile.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("accounts")}">Manage business numbers</a></div></section>`;
+  const profile = workspaceBusinessProfile.profile || {};
+  const websites = Array.isArray(profile.websites) ? profile.websites : [];
+  const picture = profile.profile_picture_url
+    ? `<img src="${escapeHtml(profile.profile_picture_url)}" alt="Current WhatsApp profile" />`
+    : `<span>${escapeHtml((connection.verified_name || session.companyName || "W").charAt(0).toUpperCase())}</span>`;
+  const verticalOptions = Object.entries(WHATSAPP_BUSINESS_VERTICALS).map(([value, label]) => `<option value="${value}" ${String(profile.vertical || "UNDEFINED") === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
+  return `<section class="wp-route-page wp-business-profile-page">
+    <div class="wp-route-heading"><div><span class="wp-kicker">Selected business number</span><h1>WhatsApp profile</h1><p>Control the public business identity customers see when they open this number in WhatsApp.</p></div><button class="wp-secondary" id="wpRefreshBusinessProfileBtn" type="button">↻ Refresh from Meta</button></div>
+    ${workspaceBusinessProfile.error ? `<div class="wp-verification-notice"><strong>Profile unavailable</strong><p>${escapeHtml(workspaceBusinessProfile.error)}</p></div>` : ""}
+    <section class="wp-business-profile-identity wp-card"><div class="wp-business-profile-avatar" data-business-profile-preview>${picture}</div><div><span>Active WhatsApp number</span><h2>${escapeHtml(connection.verified_name || "WhatsApp Business")}</h2><p>${escapeHtml(connection.display_phone_number || "Business number")}</p></div><div class="wp-business-profile-lock"><strong>Meta-controlled identity</strong><small>The phone number and approved display name cannot be changed here.</small></div></section>
+    <form id="wpBusinessProfileForm" class="wp-business-profile-layout">
+      <section class="wp-card wp-business-profile-editor"><header><div><span class="wp-card-eyebrow">Public details</span><h2>Edit profile information</h2></div><span class="wp-unsaved-indicator" data-profile-save-state>Synced with Meta</span></header>
+        <div class="wp-business-profile-photo-row"><div class="wp-business-profile-avatar large" data-business-profile-preview>${picture}</div><label class="wp-business-profile-photo-picker"><strong>Profile photo</strong><span>Square JPG or PNG, at least 192 × 192 pixels and up to 2 MB.</span><input id="wpBusinessProfilePhoto" name="photo" type="file" accept="image/jpeg,image/png" /><em>Choose new photo</em></label></div>
+        <div class="wp-form-row"><label><span>Profile about <b>*</b></span><input name="about" maxlength="139" value="${escapeHtml(profile.about || "")}" placeholder="A short status customers can see" required /><small><span data-count-for="about">${String(profile.about || "").length}</span>/139 characters</small></label><label><span>Business category</span><select name="vertical">${verticalOptions}</select><small>Choose the category that most accurately describes this number.</small></label></div>
+        <label><span>Business description</span><textarea name="description" maxlength="256" rows="5" placeholder="Explain what your business offers and how you help customers.">${escapeHtml(profile.description || "")}</textarea><small><span data-count-for="description">${String(profile.description || "").length}</span>/256 characters</small></label>
+        <label><span>Business address</span><input name="address" maxlength="256" value="${escapeHtml(profile.address || "")}" placeholder="Street, city, state and postal code" /><small><span data-count-for="address">${String(profile.address || "").length}</span>/256 characters</small></label>
+        <div class="wp-form-row"><label><span>Business email</span><input name="email" type="email" maxlength="128" value="${escapeHtml(profile.email || "")}" placeholder="support@company.com" /></label><label><span>Primary website</span><input name="website1" type="url" maxlength="256" value="${escapeHtml(websites[0] || "")}" placeholder="https://www.example.com" /></label></div>
+        <label><span>Additional website</span><input name="website2" type="url" maxlength="256" value="${escapeHtml(websites[1] || "")}" placeholder="https://shop.example.com" /><small>WhatsApp supports up to two public website links.</small></label>
+        <footer><p>Updates are published to the selected number through Meta. Customers may need a short time to see refreshed profile information.</p><button class="wp-primary" type="submit">Save WhatsApp profile</button></footer>
+      </section>
+      <aside class="wp-card wp-business-profile-preview"><span class="wp-card-eyebrow">Live customer preview</span><h2>WhatsApp profile preview</h2><div class="wp-phone-profile"><header><div class="wp-business-profile-avatar" data-business-profile-preview>${picture}</div><strong data-profile-preview-name>${escapeHtml(connection.verified_name || "WhatsApp Business")}</strong><small>${escapeHtml(connection.display_phone_number || "Business number")}</small></header><div class="wp-phone-profile-about" data-profile-preview-about>${escapeHtml(profile.about || "Your profile about will appear here.")}</div><dl><div><dt>Description</dt><dd data-profile-preview-description>${escapeHtml(profile.description || "Add a business description.")}</dd></div><div><dt>Category</dt><dd data-profile-preview-category>${escapeHtml(WHATSAPP_BUSINESS_VERTICALS[profile.vertical] || "Not specified")}</dd></div><div><dt>Address</dt><dd data-profile-preview-address>${escapeHtml(profile.address || "Not provided")}</dd></div><div><dt>Email</dt><dd data-profile-preview-email>${escapeHtml(profile.email || "Not provided")}</dd></div><div><dt>Website</dt><dd data-profile-preview-website>${escapeHtml(websites[0] || "Not provided")}</dd></div></dl></div><div class="wp-profile-guidance"><strong>Profile quality checklist</strong><ul><li>Use a recognizable square brand image.</li><li>Keep “about” direct and customer-friendly.</li><li>Use a monitored support email and secure HTTPS websites.</li><li>Keep the business description factual and policy-compliant.</li></ul></div></aside>
+    </form>
+  </section>`;
+}
+
 function profileView(profile) {
   const logo = profile?.logoDataUrl
     ? `<img src="${escapeHtml(profile.logoDataUrl)}" alt="${escapeHtml(profile.companyName || session.companyName)} logo" />`
@@ -1865,6 +1906,7 @@ function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "verification") return verificationView(workspaceVerification, connections);
   if (view === "onboarding") return onboardingView(setupReady, connections.filter((row) => ["connected", "pending"].includes(row.status)));
   if (view === "accounts") return accountsView(connections, setupReady);
+  if (view === "business-profile") return businessProfileView(connections);
   if (view === "settings") return settingsView(profile);
   if (view === "inbox") return inboxView();
   if (view === "contacts") return contactsView();
@@ -1947,6 +1989,18 @@ async function renderDashboard() {
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const selectedConnection = resolveSelectedConnection(connections);
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
+  if (view === "business-profile") {
+    if (workspaceSelectedConnectionId) {
+      try {
+        const result = await messagingRequest("get_business_profile", { connectionId: workspaceSelectedConnectionId });
+        workspaceBusinessProfile = { profile: result?.profile || {}, connection: result?.connection || selectedConnection, error: "" };
+      } catch (error) {
+        workspaceBusinessProfile = { profile: null, connection: selectedConnection, error: error?.message || "The WhatsApp profile could not be loaded." };
+      }
+    } else {
+      workspaceBusinessProfile = { profile: null, connection: null, error: "Connect a WhatsApp business number first." };
+    }
+  }
   if (["inbox", "analytics"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
@@ -2048,6 +2102,75 @@ async function renderDashboard() {
   if (view === "flows") {
     const numberScopedFlowRequest = (action, payload = {}) => messagingRequest(action, { ...payload, connectionId: workspaceSelectedConnectionId });
     bindFlowsView({ root: app, flows: workspaceFlows.flows, request: numberScopedFlowRequest, onRefresh: renderDashboard, toast: showToast, escapeHtml, builderId: currentFlowBuilderId(), listUrl: workspacePath("flows") });
+  }
+  if (view === "business-profile") {
+    const form = app.querySelector("#wpBusinessProfileForm");
+    const saveState = app.querySelector("[data-profile-save-state]");
+    const previewField = (selector, value, fallback) => app.querySelector(selector)?.replaceChildren(document.createTextNode(value || fallback));
+    const syncPreview = () => {
+      if (!form) return;
+      previewField("[data-profile-preview-about]", form.elements.about.value.trim(), "Your profile about will appear here.");
+      previewField("[data-profile-preview-description]", form.elements.description.value.trim(), "Add a business description.");
+      previewField("[data-profile-preview-address]", form.elements.address.value.trim(), "Not provided");
+      previewField("[data-profile-preview-email]", form.elements.email.value.trim(), "Not provided");
+      previewField("[data-profile-preview-website]", form.elements.website1.value.trim(), "Not provided");
+      previewField("[data-profile-preview-category]", WHATSAPP_BUSINESS_VERTICALS[form.elements.vertical.value], "Not specified");
+      ["about", "description", "address"].forEach((name) => app.querySelector(`[data-count-for="${name}"]`)?.replaceChildren(document.createTextNode(String(form.elements[name].value.length))));
+      if (saveState) { saveState.textContent = "Unsaved changes"; saveState.classList.add("dirty"); }
+    };
+    form?.querySelectorAll("input:not([type='file']),textarea,select").forEach((field) => field.addEventListener("input", syncPreview));
+    form?.querySelectorAll("select").forEach((field) => field.addEventListener("change", syncPreview));
+    const photoInput = app.querySelector("#wpBusinessProfilePhoto");
+    photoInput?.addEventListener("change", () => {
+      const file = photoInput.files?.[0];
+      if (!file) return;
+      if (!["image/jpeg", "image/png"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+        photoInput.value = "";
+        return showToast("Choose a JPG or PNG profile photo up to 2 MB.", "error");
+      }
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        if (image.naturalWidth < 192 || image.naturalHeight < 192 || image.naturalWidth !== image.naturalHeight) {
+          photoInput.value = ""; URL.revokeObjectURL(url);
+          return showToast("Use a square profile photo that is at least 192 × 192 pixels.", "error");
+        }
+        app.querySelectorAll("[data-business-profile-preview]").forEach((preview) => { preview.innerHTML = `<img src="${url}" alt="New WhatsApp profile preview" />`; });
+        if (saveState) { saveState.textContent = "New photo selected"; saveState.classList.add("dirty"); }
+      };
+      image.onerror = () => { photoInput.value = ""; URL.revokeObjectURL(url); showToast("The selected image could not be read.", "error"); };
+      image.src = url;
+    });
+    app.querySelector("#wpRefreshBusinessProfileBtn")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      try { button.disabled = true; button.textContent = "Refreshing…"; await renderDashboard(); showToast("Profile refreshed from Meta."); }
+      catch (error) { showToast(error?.message || "The profile could not be refreshed.", "error"); }
+    });
+    form?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      const submit = form.querySelector('button[type="submit"]');
+      try {
+        submit.disabled = true; submit.textContent = "Publishing to Meta…";
+        const file = photoInput?.files?.[0] || null;
+        let photo = null;
+        if (file) photo = { fileName: file.name, mimeType: file.type, base64: await readFileBase64(file) };
+        const result = await messagingRequest("update_business_profile", {
+          connectionId: workspaceSelectedConnectionId,
+          about: form.elements.about.value.trim(), description: form.elements.description.value.trim(),
+          address: form.elements.address.value.trim(), email: form.elements.email.value.trim(),
+          vertical: form.elements.vertical.value,
+          websites: [form.elements.website1.value.trim(), form.elements.website2.value.trim()].filter(Boolean),
+          photo,
+        });
+        workspaceBusinessProfile = { profile: result?.profile || {}, connection: result?.connection || workspaceBusinessProfile.connection, error: "" };
+        showToast("WhatsApp profile published successfully.");
+        await renderDashboard();
+      } catch (error) {
+        showToast(error?.message || "The WhatsApp profile could not be updated.", "error");
+        submit.disabled = false; submit.textContent = "Save WhatsApp profile";
+      }
+    });
   }
   if (view === "team") {
     const inviteDialog = app.querySelector("#wpInviteMemberDialog");

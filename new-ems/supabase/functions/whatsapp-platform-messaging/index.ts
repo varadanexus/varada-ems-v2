@@ -3,7 +3,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const MAX_BODY_BYTES = 192 * 1024;
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
 const AGENT_ACTIONS = new Set([
   "list", "thread", "send_text", "update_conversation", "add_note",
@@ -83,6 +83,14 @@ function decodeBase64Url(value: string) {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
   const binary = atob(base64);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+function decodeBase64Payload(value: unknown) {
+  const base64 = String(value || "").replace(/\s+/g, "");
+  if (!base64 || base64.length > 3 * 1024 * 1024 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw new Error("The profile photo is invalid or too large.");
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
 }
 async function encryptionKey() {
   const material = env("WHATSAPP_PLATFORM_TOKEN_ENCRYPTION_KEY");
@@ -250,13 +258,82 @@ async function listContacts(admin: any, customer: any, body: any) {
 async function templateConnection(admin: any, customer: any, connectionId: unknown) {
   const id = cleanUuid(connectionId, "connection");
   const [{ data: connection, error: connectionError }, { data: credential, error: credentialError }] = await Promise.all([
-    admin.from("whatsapp_platform_connections").select("id,whatsapp_business_account_id,display_phone_number,verified_name,status").eq("id", id).eq("tenant_id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_connections").select("id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,status").eq("id", id).eq("tenant_id", customer.tenant_id).single(),
     admin.from("whatsapp_platform_provider_credentials").select("credential_ciphertext,expires_at").eq("connection_id", id).eq("tenant_id", customer.tenant_id).single(),
   ]);
   if (connectionError || !connection?.whatsapp_business_account_id || connection.status !== "connected") throw new Error("Select a connected WhatsApp Business account.");
   if (credentialError || !credential) throw new Error("The WhatsApp connection credential is unavailable.");
   if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
   return { connection, credential, secret: await decryptCredential(credential.credential_ciphertext) };
+}
+
+const BUSINESS_VERTICALS = new Set(["UNDEFINED","OTHER","AUTO","BEAUTY","APPAREL","EDU","ENTERTAIN","EVENT_PLAN","FINANCE","GROCERY","GOVT","HOTEL","HEALTH","NONPROFIT","PROF_SERVICES","RETAIL","TRAVEL","RESTAURANT"]);
+function profileText(value: unknown, maximum: number, label: string) {
+  const text = String(value || "").trim();
+  if (text.length > maximum) throw new Error(`${label} cannot exceed ${maximum} characters.`);
+  return text;
+}
+async function getBusinessProfile(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage the WhatsApp profile.");
+  const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
+  if (!connection.phone_number_id) throw new Error("Select a connected WhatsApp business number.");
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/whatsapp_business_profile`);
+  url.searchParams.set("fields", "about,address,description,email,profile_picture_url,websites,vertical");
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${secret.accessToken}` } });
+  const graph = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "The WhatsApp profile could not be loaded.");
+  return { connection, profile: Array.isArray(graph?.data) ? graph.data[0] || {} : graph?.data || graph || {} };
+}
+async function uploadBusinessProfilePhoto(connection: any, secret: any, photo: any) {
+  const mimeType = String(photo?.mimeType || "").toLowerCase();
+  if (!["image/jpeg","image/png"].includes(mimeType)) throw new Error("The profile photo must be a JPG or PNG image.");
+  const bytes = decodeBase64Payload(photo?.base64);
+  if (bytes.byteLength > 2 * 1024 * 1024) throw new Error("The profile photo cannot exceed 2 MB.");
+  const appId = env("WHATSAPP_PLATFORM_META_APP_ID");
+  if (!appId) throw new Error("Meta profile photo uploads are not configured.");
+  const sessionUrl = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(appId)}/uploads`);
+  sessionUrl.searchParams.set("file_length", String(bytes.byteLength));
+  sessionUrl.searchParams.set("file_type", mimeType);
+  sessionUrl.searchParams.set("file_name", profileText(photo?.fileName, 180, "Photo file name") || "whatsapp-profile.jpg");
+  const sessionResponse = await fetch(sessionUrl, { method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}` } });
+  const session = await sessionResponse.json().catch(() => ({}));
+  if (!sessionResponse.ok || !session?.id) throw new Error(session?.error?.error_user_msg || session?.error?.message || "Meta could not start the profile photo upload.");
+  const uploadResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(session.id)}`, {
+    method: "POST",
+    headers: { Authorization: `OAuth ${secret.accessToken}`, file_offset: "0", "Content-Type": mimeType },
+    body: bytes,
+  });
+  const uploaded = await uploadResponse.json().catch(() => ({}));
+  if (!uploadResponse.ok || !uploaded?.h) throw new Error(uploaded?.error?.error_user_msg || uploaded?.error?.message || "Meta could not upload the profile photo.");
+  return String(uploaded.h);
+}
+async function updateBusinessProfile(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage the WhatsApp profile.");
+  const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
+  if (!connection.phone_number_id) throw new Error("Select a connected WhatsApp business number.");
+  const about = profileText(body.about, 139, "Profile about");
+  if (!about) throw new Error("Add a short profile about message.");
+  const description = profileText(body.description, 256, "Business description");
+  const address = profileText(body.address, 256, "Business address");
+  const email = profileText(body.email, 128, "Business email").toLowerCase();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid business email address.");
+  const vertical = String(body.vertical || "UNDEFINED").toUpperCase();
+  if (!BUSINESS_VERTICALS.has(vertical)) throw new Error("Select a valid business category.");
+  const websites = (Array.isArray(body.websites) ? body.websites : []).map((value: unknown) => profileText(value, 256, "Website")).filter(Boolean);
+  if (websites.length > 2) throw new Error("WhatsApp supports up to two business websites.");
+  for (const website of websites) {
+    let parsed: URL;
+    try { parsed = new URL(website); } catch { throw new Error("Enter complete website addresses beginning with https:// or http://."); }
+    if (!["https:","http:"].includes(parsed.protocol)) throw new Error("Business websites must use HTTPS or HTTP.");
+  }
+  const payload: Record<string, unknown> = { messaging_product: "whatsapp", about, address, description, email, vertical, websites };
+  if (body.photo) payload.profile_picture_handle = await uploadBusinessProfilePhoto(connection, secret, body.photo);
+  const response = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/whatsapp_business_profile`, {
+    method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+  const graph = await response.json().catch(() => ({}));
+  if (!response.ok || graph?.success !== true) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "The WhatsApp profile could not be updated.");
+  return getBusinessProfile(admin, customer, body);
 }
 async function listTemplates(admin: any, customer: any, body: any) {
   const connectionId = cleanUuid(body.connectionId, "connection");
@@ -708,6 +785,8 @@ Deno.serve(async (req) => {
     if (action === "invite_team_member") return json(req, await inviteTeamMember(admin, customer, body));
     if (action === "update_team_member") return json(req, await updateTeamMember(admin, customer, body));
     if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));
+    if (action === "get_business_profile") return json(req, await getBusinessProfile(admin, customer, body));
+    if (action === "update_business_profile") return json(req, await updateBusinessProfile(admin, customer, body));
     if (action === "list_templates") return json(req, await listTemplates(admin, customer, body));
     if (action === "list_template_library") return json(req, await listTemplateLibrary(admin, customer, body));
     if (action === "create_template") return json(req, await createTemplate(admin, customer, body));
