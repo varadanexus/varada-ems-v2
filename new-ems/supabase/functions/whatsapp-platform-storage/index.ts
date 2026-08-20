@@ -355,6 +355,85 @@ async function uploadLogo(admin: any, customer: any, body: any) {
   return { ok: true, profile: { companyName: tenant.name, logoDataUrl: `data:${mimeType};base64,${rawBase64}`, logoFileName: originalName, logoUpdatedAt: now } };
 }
 
+async function uploadBusinessProfilePicture(admin: any, customer: any, body: any) {
+  if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can change the WhatsApp profile picture.");
+  const connectionId = String(body.connectionId || "").trim();
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(connectionId)) throw new Error("Select a valid WhatsApp business number.");
+  const mimeType = String(body.mimeType || "").toLowerCase();
+  if (!["image/png", "image/jpeg"].includes(mimeType)) throw new Error("The WhatsApp profile picture must be a PNG or JPG image.");
+  const rawBase64 = String(body.base64 || "");
+  if (!rawBase64 || rawBase64.length > Math.ceil(MAX_LOGO_BYTES * 4 / 3) + 16) throw new Error("The WhatsApp profile picture must be 2 MB or smaller.");
+  const bytes = base64ToBytes(rawBase64);
+  if (!bytes.length || bytes.length > MAX_LOGO_BYTES) throw new Error("The WhatsApp profile picture must be 2 MB or smaller.");
+  validateLogo(bytes, mimeType);
+
+  const [{ data: tenant, error: tenantError }, { data: connection, error: connectionError }] = await Promise.all([
+    admin.from("whatsapp_platform_tenants").select("name,drive_root_folder_id").eq("id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_connections").select("id,display_phone_number,verified_name,status").eq("id", connectionId).eq("tenant_id", customer.tenant_id).single(),
+  ]);
+  if (tenantError) throw tenantError;
+  if (connectionError || !connection || connection.status !== "connected") throw new Error("Select a connected WhatsApp business number.");
+
+  const token = await driveAccessToken();
+  const tenantFolderName = `${safeSegment(tenant.name, "Business")} - ${String(customer.tenant_id).slice(0, 8)}`;
+  const tenantFolderId = tenant.drive_root_folder_id || await findOrCreateFolder(token, ROOT_FOLDER_ID, tenantFolderName);
+  const brandFolderId = await findOrCreateFolder(token, tenantFolderId, "Brand");
+  const profilesFolderId = await findOrCreateFolder(token, brandFolderId, "WhatsApp Profiles");
+  const numberFolderName = safeSegment(`${connection.verified_name || "WhatsApp"} - ${connection.display_phone_number || connection.id.slice(0, 8)}`, `Number-${connection.id.slice(0, 8)}`);
+  const numberFolderId = await findOrCreateFolder(token, profilesFolderId, numberFolderName);
+  const extension = mimeType === "image/png" ? "png" : "jpg";
+  const storedName = `whatsapp-profile-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
+  const originalName = safeSegment(body.fileName, storedName);
+  const uploaded = await uploadFile(token, numberFolderId, storedName, mimeType, bytes);
+  const folderPath = `${tenantFolderName} / Brand / WhatsApp Profiles / ${numberFolderName}`;
+  const now = new Date().toISOString();
+
+  const { data: previous, error: previousError } = await admin.from("whatsapp_platform_documents")
+    .select("id,drive_file_id")
+    .eq("tenant_id", customer.tenant_id)
+    .eq("category", "other")
+    .eq("entity_type", "whatsapp_business_profile_picture")
+    .eq("entity_id", connection.id)
+    .eq("status", "active");
+  if (previousError) {
+    await trashFile(token, uploaded.id).catch(() => {});
+    throw previousError;
+  }
+
+  const { data: document, error: documentError } = await admin.from("whatsapp_platform_documents").insert({
+    tenant_id: customer.tenant_id,
+    uploaded_by_user_id: customer.user_id,
+    category: "other",
+    entity_type: "whatsapp_business_profile_picture",
+    entity_id: connection.id,
+    original_file_name: originalName,
+    stored_file_name: uploaded.name || storedName,
+    mime_type: mimeType,
+    file_size: Number(uploaded.size || bytes.length),
+    drive_file_id: uploaded.id,
+    drive_folder_id: numberFolderId,
+    drive_folder_path: folderPath,
+  }).select("id").single();
+  if (documentError) {
+    await trashFile(token, uploaded.id).catch(() => {});
+    throw documentError;
+  }
+
+  if (previous?.length) {
+    const { error: replaceError } = await admin.from("whatsapp_platform_documents").update({ status: "replaced", updated_at: now })
+      .eq("tenant_id", customer.tenant_id)
+      .eq("category", "other")
+      .eq("entity_type", "whatsapp_business_profile_picture")
+      .eq("entity_id", connection.id)
+      .eq("status", "active")
+      .neq("id", document.id);
+    if (replaceError) console.error("WhatsApp profile picture history update failed", replaceError);
+    else await Promise.all(previous.map((item: any) => trashFile(token, item.drive_file_id).catch((error) => console.error("Old WhatsApp profile picture cleanup failed", error))));
+  }
+  await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenantFolderName, updated_at: now }).eq("id", customer.tenant_id);
+  return { ok: true, archive: { documentId: document.id, driveFileId: uploaded.id, driveFolderId: numberFolderId, driveFolderPath: folderPath, storedFileName: uploaded.name || storedName } };
+}
+
 async function removeLogo(admin: any, customer: any) {
   if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can remove the logo.");
   const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
@@ -580,6 +659,7 @@ Deno.serve(async (req) => {
     const action = String(body.action || "profile");
     if (action === "profile") return json(req, { profile: await tenantProfile(admin, customer) });
     if (action === "upload_logo") return json(req, await uploadLogo(admin, customer, body));
+    if (action === "upload_business_profile_picture") return json(req, await uploadBusinessProfilePicture(admin, customer, body));
     if (action === "remove_logo") return json(req, await removeLogo(admin, customer));
     if (action === "verification_status") return json(req, { verification: await verificationState(admin, customer) });
     if (action === "save_verification") return json(req, await saveVerification(admin, customer, body));

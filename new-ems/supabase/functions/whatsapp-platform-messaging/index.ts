@@ -308,7 +308,7 @@ async function uploadBusinessProfilePhoto(secret: any, photo: any) {
   const session = await sessionResponse.json().catch(() => ({}));
   if (!sessionResponse.ok || !session?.id) throw new Error(session?.error?.error_user_msg || session?.error?.message || "Meta could not start the profile photo upload.");
   const uploadSessionId = String(session.id);
-  if (!/^upload:[A-Za-z0-9._~-]+(?:\?.+)?$/.test(uploadSessionId)) throw new Error("Meta returned an invalid profile photo upload session.");
+  if (!uploadSessionId.startsWith("upload:") || uploadSessionId.length > 4096 || /[\s\u0000-\u001f\u007f]/.test(uploadSessionId)) throw new Error("Meta returned an invalid profile photo upload session.");
   const uploadResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${uploadSessionId}`, {
     method: "POST",
     headers: { Authorization: `OAuth ${secret.accessToken}`, file_offset: "0", "Content-Type": mimeType },
