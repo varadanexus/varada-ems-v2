@@ -2321,12 +2321,20 @@ async function renderDashboard() {
     collapseButton?.classList.toggle("is-collapsed", collapsed);
   };
   syncSidebarCollapseButton();
-  collapseButton?.addEventListener("click", () => {
-    const collapsed = !shell?.classList.contains("sidebar-collapsed");
+  const setSidebarCollapsed = (collapsed) => {
     shell?.classList.toggle("sidebar-collapsed", collapsed);
     workspaceSidebarState.collapsed = collapsed;
     writeWorkspaceSidebarState(workspaceSidebarState);
     syncSidebarCollapseButton();
+  };
+  collapseButton?.addEventListener("click", () => {
+    setSidebarCollapsed(!shell?.classList.contains("sidebar-collapsed"));
+  });
+  app.querySelector(".wp-workspace-sidebar")?.addEventListener("click", (event) => {
+    if (!shell?.classList.contains("sidebar-collapsed")) return;
+    if (event.target.closest("#wpSidebarCollapseBtn, .wp-workspace-nav a, .wp-sidebar-footer a, .wp-sidebar-footer button")) return;
+    event.preventDefault();
+    setSidebarCollapsed(false);
   });
   app.querySelectorAll("[data-workspace-section-toggle]").forEach((button) => button.addEventListener("click", () => {
     const section = button.closest("[data-workspace-nav-section]");

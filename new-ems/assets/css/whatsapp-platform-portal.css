@@ -3162,7 +3162,7 @@ body.wp-verification-viewer-open { overflow: hidden; }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-nav-text,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-nav em,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-sidebar-footer-label { display: none; }
-  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-sidebar-collapse { margin: 0 auto; }
+  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-sidebar-collapse { display: none; }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-account {
     grid-template-columns: 1fr;
     justify-items: center;
