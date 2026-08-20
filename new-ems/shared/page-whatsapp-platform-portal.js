@@ -1626,7 +1626,10 @@ function inboxView() {
     if (activeFilter !== "all") url.searchParams.set("status", activeFilter);
     return `<a class="wp-inbox-conversation ${item.id === activeId ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}"><span class="wp-inbox-avatar">${escapeHtml(initial)}</span><span class="wp-inbox-conversation-copy"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(item.last_message_preview || "No message preview")}</small></span><span class="wp-inbox-conversation-meta"><time>${escapeHtml(inboxTime(item.last_message_at))}</time>${Number(item.unread_count || 0) ? `<b>${Number(item.unread_count)}</b>` : `<em>${escapeHtml(item.status)}</em>`}</span></a>`;
   }).join("");
-  const messages = (thread?.messages || []).map((message) => `<article class="wp-inbox-message ${message.direction}"><div><p>${escapeHtml(message.body || `[${message.message_type} message]`)}</p><footer><time>${escapeHtml(inboxTime(message.provider_timestamp || message.created_at))}</time>${message.direction === "outbound" ? `<span class="${escapeHtml(message.status)}">${escapeHtml(message.status)}</span>` : ""}</footer></div></article>`).join("");
+  const messages = (thread?.messages || []).map((message) => {
+    const templateName = message.message_type === "template" ? String(message.safe_metadata?.template_name || "").trim() : "";
+    return `<article class="wp-inbox-message ${message.direction}"><div>${templateName ? `<span class="wp-inbox-template-label">Template · ${escapeHtml(templateName)}</span>` : ""}<p>${escapeHtml(message.body || `[${message.message_type} message]`)}</p><footer><time>${escapeHtml(inboxTime(message.provider_timestamp || message.created_at))}</time>${message.direction === "outbound" ? `<span class="${escapeHtml(message.status)}">${escapeHtml(message.status)}</span>` : ""}</footer></div></article>`;
+  }).join("");
   const notes = (thread?.notes || []).map((note) => `<article class="wp-inbox-note"><div><strong>${escapeHtml(note.author?.display_name || "Workspace member")}</strong><time>${escapeHtml(inboxTime(note.created_at))}</time></div><p>${escapeHtml(note.body)}</p></article>`).join("");
   const contactName = inboxContactName(thread?.contact);
   const serviceWindow = thread?.serviceWindowOpen;
@@ -1637,6 +1640,21 @@ function inboxView() {
 
 function templateBody(template) {
   return String((template?.components || []).find((component) => String(component?.type || "").toUpperCase() === "BODY")?.text || "No body preview available.");
+}
+
+function templateFullMessage(template) {
+  const sections = [];
+  (template?.components || []).forEach((component) => {
+    const type = String(component?.type || "").toUpperCase();
+    const text = String(component?.text || "").trim();
+    if (["HEADER", "BODY", "FOOTER"].includes(type) && text) sections.push(text);
+    else if (type === "HEADER" && component?.format && String(component.format).toUpperCase() !== "TEXT") sections.push(`[${String(component.format).toLowerCase()} attachment]`);
+    else if (type === "BUTTONS") {
+      const labels = (component?.buttons || []).map((button) => String(button?.text || "").trim()).filter(Boolean);
+      if (labels.length) sections.push(labels.map((label) => `• ${label}`).join("\n"));
+    }
+  });
+  return sections.join("\n\n").trim() || "No message preview available.";
 }
 
 function templatesView(connections) {
@@ -2264,7 +2282,7 @@ async function renderDashboard() {
     const readyConnections = connected.filter((connection) => connection.status === "connected" && connection.phone_number_id);
     const chatConnections = readyConnections.filter((connection) => connection.id === workspaceTemplates.connectionId);
     const approvedTemplates = workspaceTemplates.templates.filter((template) => template.status === "APPROVED");
-    app.querySelector(".wp-inbox-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-new-chat-dialog" id="wpNewChatDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Business-initiated message</span><h2>Start a new chat</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Contact</span><select name="contactId" required><option value="">Select contact</option>${activeContacts.map((contact) => `<option value="${escapeHtml(contact.id)}">${escapeHtml(inboxContactName(contact))} · ${escapeHtml(contact.phone_e164 || "")}</option>`).join("")}</select><small>${activeContacts.length ? "Choose an active WhatsApp contact." : "Add an active contact before starting a chat."}</small></label><label><span>Send from</span><select name="connectionId" required>${chatConnections.map((connection) => `<option value="${escapeHtml(connection.id)}">${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}${connection.display_phone_number ? ` · ${escapeHtml(connection.display_phone_number)}` : ""}</option>`).join("")}</select><small>${chatConnections.length ? "Templates below belong to this connected business account." : "Connect a WhatsApp Business number before starting a chat."}</small></label><label><span>Approved message template</span><select name="templateKey" required><option value="">Select approved template</option>${approvedTemplates.map((template) => `<option value="${escapeHtml(`${template.name}|${template.language}`)}">${escapeHtml(template.name)} · ${escapeHtml(template.language)}</option>`).join("")}</select><small>${approvedTemplates.length ? "Only templates approved by Meta are shown." : `No approved template is available. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label><div class="wp-policy-note"><strong>WhatsApp requirement</strong><p>A business-initiated conversation must begin with an approved template. Free-form replies become available after the customer responds and opens the 24-hour service window.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="send" ${activeContacts.length && chatConnections.length && approvedTemplates.length ? "" : "disabled"}>Send template</button></footer></form></dialog>`);
+    app.querySelector(".wp-inbox-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-new-chat-dialog" id="wpNewChatDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Business-initiated message</span><h2>Start a new chat</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Contact</span><select name="contactId" required><option value="">Select contact</option>${activeContacts.map((contact) => `<option value="${escapeHtml(contact.id)}">${escapeHtml(inboxContactName(contact))} · ${escapeHtml(contact.phone_e164 || "")}</option>`).join("")}</select><small>${activeContacts.length ? "Choose an active WhatsApp contact." : "Add an active contact before starting a chat."}</small></label><label><span>Send from</span><select name="connectionId" required>${chatConnections.map((connection) => `<option value="${escapeHtml(connection.id)}">${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}${connection.display_phone_number ? ` · ${escapeHtml(connection.display_phone_number)}` : ""}</option>`).join("")}</select><small>${chatConnections.length ? "Templates below belong to this connected business account." : "Connect a WhatsApp Business number before starting a chat."}</small></label><label><span>Approved message template</span><select name="templateKey" required><option value="">Select approved template</option>${approvedTemplates.map((template) => `<option value="${escapeHtml(`${template.name}|${template.language}`)}">${escapeHtml(template.name)} · ${escapeHtml(template.language)}</option>`).join("")}</select><small>${approvedTemplates.length ? "Only templates approved by Meta are shown." : `No approved template is available. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label><div class="wp-new-chat-template-preview" data-new-chat-template-preview hidden><strong>Full message preview</strong><p></p></div><div class="wp-policy-note"><strong>WhatsApp requirement</strong><p>A business-initiated conversation must begin with an approved template. Free-form replies become available after the customer responds and opens the 24-hour service window.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="send" ${activeContacts.length && chatConnections.length && approvedTemplates.length ? "" : "disabled"}>Send template</button></footer></form></dialog>`);
   }
   if (view === "campaigns") {
     const dialog = app.querySelector("#wpCampaignDraftDialog");
@@ -2981,6 +2999,16 @@ async function renderDashboard() {
   });
   const newChatDialog = app.querySelector("#wpNewChatDialog");
   app.querySelector("#wpNewChatBtn")?.addEventListener("click", () => newChatDialog?.showModal());
+  const newChatTemplateSelect = newChatDialog?.querySelector("select[name='templateKey']");
+  const newChatTemplatePreview = newChatDialog?.querySelector("[data-new-chat-template-preview]");
+  const updateNewChatTemplatePreview = () => {
+    const selected = workspaceTemplates.templates.find((template) => `${template.name}|${template.language}` === newChatTemplateSelect?.value);
+    if (!newChatTemplatePreview) return;
+    newChatTemplatePreview.hidden = !selected;
+    const copy = newChatTemplatePreview.querySelector("p");
+    if (copy) copy.textContent = selected ? templateFullMessage(selected) : "";
+  };
+  newChatTemplateSelect?.addEventListener("change", updateNewChatTemplatePreview);
   newChatDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
     const submitter = event.submitter;
     if (submitter?.value !== "send") return;

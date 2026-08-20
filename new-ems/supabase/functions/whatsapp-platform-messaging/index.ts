@@ -405,19 +405,41 @@ async function updateBusinessProfile(admin: any, customer: any, body: any) {
   }
   return getBusinessProfile(admin, customer, body);
 }
+function normalizeMetaTemplate(template: any) {
+  return {
+    id: String(template?.id || ""), name: String(template?.name || ""), status: String(template?.status || "UNKNOWN").toUpperCase(),
+    category: String(template?.category || "UNKNOWN").toUpperCase(), language: String(template?.language || ""),
+    components: Array.isArray(template?.components) ? template.components : [],
+  };
+}
+async function fetchMetaTemplates(whatsappBusinessAccountId: string, accessToken: string) {
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(whatsappBusinessAccountId)}/message_templates`);
+  url.searchParams.set("limit", "100");
+  const graphResponse = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const graph = await graphResponse.json().catch(() => ({}));
+  if (!graphResponse.ok) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Message templates could not be loaded.");
+  return (Array.isArray(graph?.data) ? graph.data : []).map(normalizeMetaTemplate);
+}
+function formatTemplateMessage(components: any[]) {
+  const sections: string[] = [];
+  for (const component of Array.isArray(components) ? components : []) {
+    const type = String(component?.type || "").toUpperCase();
+    const text = String(component?.text || "").trim();
+    if (["HEADER", "BODY", "FOOTER"].includes(type) && text) sections.push(text);
+    else if (type === "HEADER" && component?.format && String(component.format).toUpperCase() !== "TEXT") {
+      sections.push(`[${String(component.format).toLowerCase()} attachment]`);
+    } else if (type === "BUTTONS") {
+      const buttons = (Array.isArray(component?.buttons) ? component.buttons : [])
+        .map((button: any) => String(button?.text || "").trim()).filter(Boolean);
+      if (buttons.length) sections.push(buttons.map((label: string) => `• ${label}`).join("\n"));
+    }
+  }
+  return sections.join("\n\n").trim();
+}
 async function listTemplates(admin: any, customer: any, body: any) {
   const connectionId = cleanUuid(body.connectionId, "connection");
   const { connection, secret } = await templateConnection(admin, customer, connectionId);
-  const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`);
-  url.searchParams.set("limit", "100");
-  const graphResponse = await fetch(url, { headers: { Authorization: `Bearer ${secret.accessToken}` } });
-  const graph = await graphResponse.json().catch(() => ({}));
-  if (!graphResponse.ok) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Message templates could not be loaded.");
-  const templates = (Array.isArray(graph?.data) ? graph.data : []).map((template: any) => ({
-    id: String(template.id || ""), name: String(template.name || ""), status: String(template.status || "UNKNOWN").toUpperCase(),
-    category: String(template.category || "UNKNOWN").toUpperCase(), language: String(template.language || ""),
-    components: Array.isArray(template.components) ? template.components : [],
-  }));
+  const templates = await fetchMetaTemplates(connection.whatsapp_business_account_id, secret.accessToken);
   return { connection: { id: connection.id, displayPhoneNumber: connection.display_phone_number, verifiedName: connection.verified_name }, templates };
 }
 // Meta's own pre-approved utility and authentication template catalogue.
@@ -560,13 +582,35 @@ async function thread(admin: any, customer: any, body: any) {
   if (error || !conversation) throw new Error("Conversation not found.");
   const [{ data: contact, error: contactError }, { data: messages, error: messagesError }, { data: notes, error: notesError }, { data: members, error: membersError }] = await Promise.all([
     admin.from("whatsapp_platform_contacts").select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at").eq("id", conversation.contact_id).eq("tenant_id", customer.tenant_id).single(),
-    admin.from("whatsapp_platform_messages").select("id,meta_message_id,direction,message_type,body,media_id,media_mime_type,media_file_name,reply_to_meta_message_id,status,error_code,error_title,provider_timestamp,created_at").eq("conversation_id", conversationId).eq("tenant_id", customer.tenant_id).order("provider_timestamp", { ascending: true, nullsFirst: false }).order("created_at", { ascending: true }).limit(250),
+    admin.from("whatsapp_platform_messages").select("id,meta_message_id,direction,message_type,body,media_id,media_mime_type,media_file_name,reply_to_meta_message_id,status,error_code,error_title,safe_metadata,provider_timestamp,created_at").eq("conversation_id", conversationId).eq("tenant_id", customer.tenant_id).order("provider_timestamp", { ascending: true, nullsFirst: false }).order("created_at", { ascending: true }).limit(250),
     admin.from("whatsapp_platform_conversation_notes").select("id,author_user_id,body,created_at,updated_at").eq("conversation_id", conversationId).eq("tenant_id", customer.tenant_id).order("created_at", { ascending: true }).limit(100),
     admin.from("whatsapp_platform_users").select("id,display_name,email,role_code,status").eq("tenant_id", customer.tenant_id).in("status", ["active","invited"]).order("display_name", { ascending: true }).limit(250),
   ]);
   if (contactError) throw contactError; if (messagesError) throw messagesError; if (notesError) throw notesError; if (membersError) throw membersError;
+  const hydratedMessages = (messages || []).map((message: any) => ({ ...message }));
+  const unresolvedTemplates = hydratedMessages.filter((message: any) => message.message_type === "template" && /^Template:\s*/i.test(String(message.body || "")));
+  if (unresolvedTemplates.length) {
+    try {
+      const { connection: templateSource, secret } = await templateConnection(admin, customer, conversation.connection_id);
+      const templates = await fetchMetaTemplates(templateSource.whatsapp_business_account_id, secret.accessToken);
+      unresolvedTemplates.forEach((message: any) => {
+        const metadata = message.safe_metadata && typeof message.safe_metadata === "object" ? message.safe_metadata : {};
+        const fallbackName = String(message.body || "").replace(/^Template:\s*/i, "").trim();
+        const templateName = String(metadata.template_name || fallbackName);
+        const languageCode = String(metadata.language_code || "");
+        const template = templates.find((item: any) => item.name === templateName && (!languageCode || item.language === languageCode));
+        const fullMessage = formatTemplateMessage(template?.components || []);
+        if (fullMessage) {
+          message.body = fullMessage;
+          message.safe_metadata = { ...metadata, template_name: templateName, language_code: languageCode || template?.language || "" };
+        }
+      });
+    } catch (error) {
+      console.warn("Historical template preview could not be hydrated", error instanceof Error ? error.message : "Unknown error");
+    }
+  }
   const memberMap = new Map((members || []).map((row: any) => [row.id, row]));
-  return { conversation, contact, messages: messages || [], notes: (notes || []).map((row: any) => ({ ...row, author: memberMap.get(row.author_user_id) || null })), members: members || [], serviceWindowOpen: Boolean(conversation.service_window_expires_at && new Date(conversation.service_window_expires_at).getTime() > Date.now()) };
+  return { conversation, contact, messages: hydratedMessages, notes: (notes || []).map((row: any) => ({ ...row, author: memberMap.get(row.author_user_id) || null })), members: members || [], serviceWindowOpen: Boolean(conversation.service_window_expires_at && new Date(conversation.service_window_expires_at).getTime() > Date.now()) };
 }
 async function sendText(admin: any, customer: any, body: any) {
   if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot send messages.");
@@ -641,7 +685,7 @@ async function startChat(admin: any, customer: any, body: any) {
   if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(languageCode)) throw new Error("Enter a valid template language code, such as en_US.");
   const [{ data: contact, error: contactError }, { data: connection, error: connectionError }, { data: credential, error: credentialError }] = await Promise.all([
     admin.from("whatsapp_platform_contacts").select("id,wa_id,status").eq("id", contactId).eq("tenant_id", customer.tenant_id).single(),
-    admin.from("whatsapp_platform_connections").select("id,phone_number_id,status").eq("id", connectionId).eq("tenant_id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_connections").select("id,whatsapp_business_account_id,phone_number_id,status").eq("id", connectionId).eq("tenant_id", customer.tenant_id).single(),
     admin.from("whatsapp_platform_provider_credentials").select("credential_ciphertext,expires_at").eq("connection_id", connectionId).eq("tenant_id", customer.tenant_id).single(),
   ]);
   if (contactError || !contact) throw new Error("Contact not found.");
@@ -661,6 +705,14 @@ async function startChat(admin: any, customer: any, body: any) {
     conversationCreated = true;
   }
   const secret = await decryptCredential(credential.credential_ciphertext);
+  let templateDefinition: any = null;
+  try {
+    const templates = await fetchMetaTemplates(connection.whatsapp_business_account_id, secret.accessToken);
+    templateDefinition = templates.find((item: any) => item.name === templateName && item.language === languageCode)
+      || templates.find((item: any) => item.name === templateName);
+  } catch (error) {
+    console.warn("Template preview could not be loaded before sending", error instanceof Error ? error.message : "Unknown error");
+  }
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: { name: templateName, language: { code: languageCode } } }),
@@ -671,16 +723,16 @@ async function startChat(admin: any, customer: any, body: any) {
     throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Template message could not be sent.");
   }
   const now = new Date().toISOString();
-  const preview = `Template: ${templateName}`;
+  const preview = formatTemplateMessage(templateDefinition?.components || []) || `Template: ${templateName}`;
   const { data: message, error: messageError } = await admin.from("whatsapp_platform_messages").insert({
     tenant_id: customer.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
     meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: "template", body: preview,
     status: "accepted", provider_timestamp: now, created_by_user_id: customer.user_id,
     safe_metadata: { template_name: templateName, language_code: languageCode },
-  }).select("id,meta_message_id,direction,message_type,body,status,provider_timestamp,created_at").single();
+  }).select("id,meta_message_id,direction,message_type,body,status,safe_metadata,provider_timestamp,created_at").single();
   if (messageError) throw messageError;
   await Promise.all([
-    admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: preview, last_outbound_at: now, updated_at: now }).eq("id", conversation.id).eq("tenant_id", customer.tenant_id),
+    admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: preview.replace(/\s+/g, " ").slice(0, 300), last_outbound_at: now, updated_at: now }).eq("id", conversation.id).eq("tenant_id", customer.tenant_id),
     admin.from("whatsapp_platform_contacts").update({ last_outbound_at: now, updated_at: now }).eq("id", contact.id).eq("tenant_id", customer.tenant_id),
   ]);
   return { conversationId: conversation.id, message };

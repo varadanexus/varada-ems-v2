@@ -1303,6 +1303,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-inbox-message.outbound { justify-content: flex-end; }
 .wp-inbox-message > div { max-width: min(76%,640px); padding: .65rem .75rem .45rem; border: 1px solid var(--wp-workspace-line); border-radius: 14px 14px 14px 4px; background: var(--wp-workspace-surface-solid); box-shadow: var(--wp-workspace-shadow-soft); }
 .wp-inbox-message.outbound > div { border-color: color-mix(in srgb,var(--wp-workspace-accent) 18%,var(--wp-workspace-line)); border-radius: 14px 14px 4px 14px; background: color-mix(in srgb,var(--wp-workspace-accent-soft) 72%,var(--wp-workspace-surface-solid)); }
+.wp-inbox-template-label { display: block; margin-bottom: .4rem; color: var(--wp-workspace-accent-strong); font-size: .55rem; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
 .wp-inbox-message p { margin: 0; color: var(--wp-workspace-text); font-size: .74rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .wp-inbox-message footer { display: flex; justify-content: flex-end; gap: .45rem; margin-top: .25rem; color: var(--wp-workspace-subtle); font-size: .54rem; text-transform: capitalize; }
 .wp-inbox-message footer span.read,.wp-inbox-message footer span.delivered { color: var(--wp-workspace-accent-strong); }
@@ -1505,6 +1506,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-contact-dialog footer { justify-content: flex-end; padding-top: .3rem; }
 .wp-new-chat-dialog { width: min(620px,calc(100% - 2rem)); }
 .wp-new-chat-dialog .wp-form-row { display: grid; grid-template-columns: 1.5fr .7fr; gap: .75rem; }
+.wp-new-chat-template-preview { padding: .8rem .9rem; border: 1px solid color-mix(in srgb,var(--wp-workspace-accent) 24%,var(--wp-workspace-line)); border-radius: 12px; background: var(--wp-workspace-accent-soft); }
+.wp-new-chat-template-preview strong { display: block; margin-bottom: .4rem; color: var(--wp-workspace-accent-strong); font-size: .62rem; letter-spacing: .05em; text-transform: uppercase; }
+.wp-new-chat-template-preview p { margin: 0; color: var(--wp-workspace-text); font-size: .72rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 .wp-policy-note { border: 1px solid var(--wp-workspace-line); border-radius: 12px; padding: .75rem .85rem; background: color-mix(in srgb,var(--wp-workspace-accent) 6%,var(--wp-workspace-surface-soft)); }
 .wp-policy-note strong { display: block; margin-bottom: .25rem; color: var(--wp-workspace-text); font-size: .68rem; }
 .wp-policy-note p { margin: 0; color: var(--wp-workspace-muted); font-size: .62rem; line-height: 1.55; }
