@@ -4,6 +4,7 @@ const SESSION_KEY = "vn_whatsapp_platform_session";
 const THEME_KEY = "vn_whatsapp_platform_theme";
 const CAMPAIGN_DRAFTS_KEY = "vn_whatsapp_campaign_drafts";
 const CAMPAIGN_SEGMENTS_KEY = "vn_whatsapp_campaign_segments";
+const SELECTED_NUMBER_KEY = "vn_whatsapp_selected_business_number";
 const OVERVIEW_PATH = "/whatsapp-platform";
 const ACCESS_PATH = "/whatsapp-platform/access/";
 const WORKSPACE_PATH = "/whatsapp-platform/workspace/";
@@ -75,6 +76,7 @@ let workspaceContacts = { contacts: [], error: "" };
 let workspaceTemplates = { templates: [], connectionId: "", error: "" };
 let workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
 let workspaceFlows = { flows: [], error: "" };
+let workspaceSelectedConnectionId = "";
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
 const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
@@ -147,14 +149,39 @@ function workspacePath(view) {
   return view === "overview" ? WORKSPACE_PATH : `${WORKSPACE_PATH}${view}/`;
 }
 
+function selectedNumberStorageKey() {
+  return `${SELECTED_NUMBER_KEY}:${session?.tenantId || session?.email || "local"}`;
+}
+
+function resolveSelectedConnection(connections = []) {
+  const ready = connections.filter((connection) => connection.status === "connected" && connection.phone_number_id);
+  let saved = "";
+  try { saved = localStorage.getItem(selectedNumberStorageKey()) || ""; } catch { saved = ""; }
+  const selected = ready.find((connection) => connection.id === saved) || ready[0] || null;
+  workspaceSelectedConnectionId = selected?.id || "";
+  if (selected) {
+    try { localStorage.setItem(selectedNumberStorageKey(), selected.id); } catch { /* Selection remains active for this visit. */ }
+  }
+  return selected;
+}
+
+function selectWorkspaceConnection(connectionId) {
+  workspaceSelectedConnectionId = String(connectionId || "");
+  try { localStorage.setItem(selectedNumberStorageKey(), workspaceSelectedConnectionId); } catch { /* Selection remains active for this visit. */ }
+}
+
 function campaignDraftsKey() {
-  return `${CAMPAIGN_DRAFTS_KEY}:${session?.tenantId || session?.email || "local"}`;
+  return `${CAMPAIGN_DRAFTS_KEY}:${session?.tenantId || session?.email || "local"}:${workspaceSelectedConnectionId || "unassigned"}`;
 }
 
 function readCampaignDrafts() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(campaignDraftsKey()) || "[]");
-    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    const scoped = localStorage.getItem(campaignDraftsKey());
+    const legacy = localStorage.getItem(`${CAMPAIGN_DRAFTS_KEY}:${session?.tenantId || session?.email || "local"}`);
+    const parsed = JSON.parse(scoped ?? legacy ?? "[]");
+    const drafts = Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    if (scoped === null && drafts.length) writeCampaignDrafts(drafts);
+    return drafts;
   } catch {
     return [];
   }
@@ -165,7 +192,7 @@ function writeCampaignDrafts(drafts) {
 }
 
 function campaignSegmentsKey() {
-  return `${CAMPAIGN_SEGMENTS_KEY}:${session?.tenantId || session?.email || "local"}`;
+  return `${CAMPAIGN_SEGMENTS_KEY}:${session?.tenantId || session?.email || "local"}:${workspaceSelectedConnectionId || "unassigned"}`;
 }
 
 function defaultCampaignSegments(contacts = []) {
@@ -185,8 +212,11 @@ function defaultCampaignSegments(contacts = []) {
 
 function readCampaignSegments(contacts = []) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(campaignSegmentsKey()) || "[]");
+    const scoped = localStorage.getItem(campaignSegmentsKey());
+    const legacy = localStorage.getItem(`${CAMPAIGN_SEGMENTS_KEY}:${session?.tenantId || session?.email || "local"}`);
+    const parsed = JSON.parse(scoped ?? legacy ?? "[]");
     const custom = Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    if (scoped === null && custom.length) writeCampaignSegments(custom);
     return [...defaultCampaignSegments(contacts), ...custom];
   } catch {
     return defaultCampaignSegments(contacts);
@@ -447,6 +477,18 @@ function enhanceWorkspaceSidebar(root, sidebarState, isFlowBuilderRoute) {
   if (footer) {
     footer.innerHTML = `<a class="wp-sidebar-help" href="/contact.html" title="Help and support" aria-label="Help and support"><span class="wp-sidebar-footer-icon" aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.12c-.9.55-1.5 1.05-1.5 2.38M12 17h.01"/>')}</span><span class="wp-sidebar-footer-label">Help &amp; support</span></a><button class="wp-sidebar-signout" id="wpSidebarLogoutBtn" type="button" title="Sign out" aria-label="Sign out"><span class="wp-sidebar-footer-icon wp-sidebar-signout-icon" aria-hidden="true">${workspaceIcon('<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>')}</span><span class="wp-sidebar-footer-label">Sign out</span></button>`;
   }
+}
+
+function businessNumberSelector(connections, selectedConnection) {
+  const ready = connections.filter((connection) => connection.status === "connected" && connection.phone_number_id);
+  if (!ready.length) {
+    return `<a class="wp-number-selector wp-number-selector-empty" href="${workspacePath("accounts")}"><span class="wp-number-selector-icon" aria-hidden="true">#</span><span><strong>No business number</strong><small>Connect a number</small></span></a>`;
+  }
+  const options = ready.map((connection) => {
+    const label = connection.display_phone_number || connection.verified_name || "WhatsApp Business number";
+    return `<option value="${escapeHtml(connection.id)}" ${connection.id === selectedConnection?.id ? "selected" : ""}>${escapeHtml(label)}</option>`;
+  }).join("");
+  return `<label class="wp-number-selector" title="Active WhatsApp business number"><span class="wp-number-selector-icon" aria-hidden="true">#</span><span><strong>Business number</strong><select id="wpBusinessNumberSelector" aria-label="Select active WhatsApp business number">${options}</select><small>${escapeHtml(selectedConnection?.verified_name || "WhatsApp Business")}</small></span></label>`;
 }
 
 const PROFILE_LABELS = {
@@ -1541,7 +1583,7 @@ function templateBody(template) {
 }
 
 function templatesView(connections) {
-  const readyConnections = connections.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId));
+  const readyConnections = connections.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId) && (!workspaceSelectedConnectionId || connection.id === workspaceSelectedConnectionId));
   const selectedId = workspaceTemplates.connectionId || readyConnections[0]?.id || "";
   const templates = workspaceTemplates.templates || [];
   const approved = templates.filter((template) => template.status === "APPROVED").length;
@@ -1594,7 +1636,7 @@ function libraryCloneDialog(readyConnections, selectedId) {
   return `<dialog class="wp-contact-dialog wp-library-clone-dialog" id="wpLibraryCloneDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Meta Template Library</span><h2>Add pre-approved template</h2><p>The fixed wording and category come from Meta.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input type="hidden" name="libraryTemplateName" /><input type="hidden" name="category" /><label><span>WhatsApp Business account</span><select name="connectionId" required>${options}</select></label><div class="wp-form-row"><label><span>Template name</span><input name="name" maxlength="512" pattern="[a-z0-9_]+" required /></label><label><span>Language</span><input name="language" maxlength="6" readonly required /></label></div><article class="wp-library-selected-preview"><strong data-library-preview-title></strong><p data-library-preview-body></p></article><div data-library-button-inputs></div><div class="wp-policy-note"><strong>Pre-approved structure</strong><p>Meta supplies the wording and category. Your account copy may appear briefly as pending while Meta provisions it.</p></div><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="clone">Add to my templates</button></footer></form></dialog>`;
 }
 function templatesViewV2(connections) {
-  const readyConnections = connections.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId));
+  const readyConnections = connections.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId) && (!workspaceSelectedConnectionId || connection.id === workspaceSelectedConnectionId));
   const selectedId = workspaceTemplates.connectionId || readyConnections[0]?.id || "";
   const templates = workspaceTemplates.templates || [];
   const libraryTemplates = workspaceTemplateLibrary.templates || [];
@@ -1903,15 +1945,17 @@ async function renderDashboard() {
     workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
   }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
+  const selectedConnection = resolveSelectedConnection(connections);
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
   if (["inbox", "analytics"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
-      const listed = await messagingRequest("list", { status });
+      const listed = await messagingRequest("list", { status, connectionId: workspaceSelectedConnectionId });
       const conversationId = new URLSearchParams(location.search).get("conversation");
       workspaceInbox = { conversations: listed?.conversations || [], thread: null, error: "" };
-      if (view === "inbox" && conversationId) workspaceInbox.thread = await messagingRequest("thread", { conversationId });
-      const listedContacts = await messagingRequest("list_contacts", { status: "all" });
+      const selectedConversationExists = workspaceInbox.conversations.some((conversation) => conversation.id === conversationId);
+      if (view === "inbox" && conversationId && selectedConversationExists) workspaceInbox.thread = await messagingRequest("thread", { conversationId, connectionId: workspaceSelectedConnectionId });
+      const listedContacts = await messagingRequest("list_contacts", { status: "all", connectionId: workspaceSelectedConnectionId });
       workspaceContacts = { contacts: listedContacts?.contacts || [], error: "" };
     } catch (error) {
       workspaceInbox = { conversations: [], thread: null, error: error?.message || "The Team Inbox could not be loaded." };
@@ -1920,7 +1964,7 @@ async function renderDashboard() {
   if (["contacts","campaigns"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
-      const listed = await messagingRequest("list_contacts", { status });
+      const listed = await messagingRequest("list_contacts", { status, connectionId: workspaceSelectedConnectionId });
       workspaceContacts = { contacts: listed?.contacts || [], error: "" };
     } catch (error) {
       workspaceContacts = { contacts: [], error: error?.message || "The contact directory could not be loaded." };
@@ -1928,8 +1972,7 @@ async function renderDashboard() {
   }
   if (["templates","inbox","campaigns","analytics"].includes(view)) {
     const templateConnections = connected.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId));
-    const requestedConnection = new URLSearchParams(location.search).get("connection");
-    const connectionId = templateConnections.some((connection) => connection.id === requestedConnection) ? requestedConnection : templateConnections[0]?.id;
+    const connectionId = templateConnections.some((connection) => connection.id === workspaceSelectedConnectionId) ? workspaceSelectedConnectionId : "";
     if (connectionId) {
       try {
         const result = await messagingRequest("list_templates", { connectionId });
@@ -1955,7 +1998,7 @@ async function renderDashboard() {
   }
   if (view === "flows") {
     try {
-      const result = await messagingRequest("list_flows");
+      const result = workspaceSelectedConnectionId ? await messagingRequest("list_flows", { connectionId: workspaceSelectedConnectionId }) : { flows: [] };
       workspaceFlows = { flows: result?.flows || [], error: "" };
     } catch (error) {
       workspaceFlows = { flows: [], error: error?.message || "Flows could not be loaded." };
@@ -1983,16 +2026,29 @@ async function renderDashboard() {
   const sidebarAccount = agentWorkspace
     ? `<div class="wp-workspace-account" aria-label="${escapeHtml(session.companyName)} workspace"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>Agent workspace</small></div></div>`
     : `<a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a>`;
+  const sidebarNumberSelector = businessNumberSelector(connections, selectedConnection);
   const sidebarNavigation = workspaceNavigationMarkup({ inboxUnread, contactCount, campaignCount, templateCount: workspaceTemplates.templates.length, flowCount: workspaceFlows.flows.length, connectedCount: connected.length, teamCount: workspaceTeam.members.length, packageName: operationalPackageName });
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarAccount}<nav class="wp-workspace-nav">${sidebarNavigation}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${verificationAttentionModal()}`;
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarAccount}${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${verificationAttentionModal()}`;
   if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
   const workspaceSidebarState = readWorkspaceSidebarState();
   enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
+  app.querySelector("#wpBusinessNumberSelector")?.addEventListener("change", async (event) => {
+    selectWorkspaceConnection(event.currentTarget.value);
+    const url = new URL(location.href);
+    url.searchParams.delete("conversation");
+    url.searchParams.delete("connection");
+    history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    await renderDashboard();
+    showToast("Business number changed.");
+  });
   app.querySelector("[data-verification-attention-close]")?.addEventListener("click", () => {
     verificationAttentionDismissed = true;
     app.querySelector("[data-verification-attention]")?.remove();
   });
-  if (view === "flows") bindFlowsView({ root: app, flows: workspaceFlows.flows, request: messagingRequest, onRefresh: renderDashboard, toast: showToast, escapeHtml, builderId: currentFlowBuilderId(), listUrl: workspacePath("flows") });
+  if (view === "flows") {
+    const numberScopedFlowRequest = (action, payload = {}) => messagingRequest(action, { ...payload, connectionId: workspaceSelectedConnectionId });
+    bindFlowsView({ root: app, flows: workspaceFlows.flows, request: numberScopedFlowRequest, onRefresh: renderDashboard, toast: showToast, escapeHtml, builderId: currentFlowBuilderId(), listUrl: workspacePath("flows") });
+  }
   if (view === "team") {
     const inviteDialog = app.querySelector("#wpInviteMemberDialog");
     const manageDialog = app.querySelector("#wpManageMemberDialog");

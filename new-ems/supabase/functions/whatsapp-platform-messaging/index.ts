@@ -103,12 +103,22 @@ function graphVersion() {
   if (!/^v\d{1,3}\.0$/.test(value)) throw new Error("Messaging is not configured.");
   return value;
 }
+async function ownedBusinessNumber(admin: any, customer: any, value: unknown) {
+  const connectionId = cleanUuid(value, "business number");
+  const { data, error } = await admin.from("whatsapp_platform_connections")
+    .select("id,phone_number_id,display_phone_number,verified_name,status")
+    .eq("id", connectionId).eq("tenant_id", customer.tenant_id).single();
+  if (error || !data || data.status !== "connected" || !data.phone_number_id) throw new Error("Select a connected WhatsApp business number.");
+  return data;
+}
 async function listConversations(admin: any, customer: any, body: any) {
   const status = ["open","pending","resolved"].includes(String(body.status || "")) ? String(body.status) : null;
+  const connection = body.connectionId ? await ownedBusinessNumber(admin, customer, body.connectionId) : null;
   let query = admin.from("whatsapp_platform_conversations")
     .select("id,connection_id,contact_id,status,priority,assigned_user_id,unread_count,last_message_at,last_message_preview,last_inbound_at,last_outbound_at,service_window_expires_at,created_at")
     .eq("tenant_id", customer.tenant_id).order("last_message_at", { ascending: false, nullsFirst: false }).limit(100);
   if (status) query = query.eq("status", status);
+  if (connection) query = query.eq("connection_id", connection.id);
   const { data: conversations, error } = await query;
   if (error) throw error;
   const contactIds = [...new Set((conversations || []).map((row: any) => row.contact_id))];
@@ -220,6 +230,7 @@ async function updateTeamMember(admin: any, customer: any, body: any) {
 }
 async function listContacts(admin: any, customer: any, body: any) {
   const status = ["active","blocked","opted_out"].includes(String(body.status || "")) ? String(body.status) : null;
+  const connection = body.connectionId ? await ownedBusinessNumber(admin, customer, body.connectionId) : null;
   let query = admin.from("whatsapp_platform_contacts")
     .select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at,created_at,updated_at")
     .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).limit(500);
@@ -227,9 +238,11 @@ async function listContacts(admin: any, customer: any, body: any) {
   const { data: contacts, error } = await query;
   if (error) throw error;
   const contactIds = (contacts || []).map((row: any) => row.id);
-  const { data: conversations, error: conversationError } = contactIds.length
-    ? await admin.from("whatsapp_platform_conversations").select("id,contact_id,status,last_message_at,unread_count").eq("tenant_id", customer.tenant_id).in("contact_id", contactIds)
-    : { data: [], error: null };
+  let conversationQuery = contactIds.length
+    ? admin.from("whatsapp_platform_conversations").select("id,connection_id,contact_id,status,last_message_at,unread_count").eq("tenant_id", customer.tenant_id).in("contact_id", contactIds)
+    : null;
+  if (conversationQuery && connection) conversationQuery = conversationQuery.eq("connection_id", connection.id);
+  const { data: conversations, error: conversationError } = conversationQuery ? await conversationQuery : { data: [], error: null };
   if (conversationError) throw conversationError;
   const conversationMap = new Map((conversations || []).map((row: any) => [row.contact_id, row]));
   return { contacts: (contacts || []).map((row: any) => ({ ...row, conversation: conversationMap.get(row.id) || null })) };
@@ -391,9 +404,12 @@ async function createTemplate(admin: any, customer: any, body: any) {
 }
 async function thread(admin: any, customer: any, body: any) {
   const conversationId = cleanUuid(body.conversationId, "conversation");
-  const { data: conversation, error } = await admin.from("whatsapp_platform_conversations")
+  const connection = body.connectionId ? await ownedBusinessNumber(admin, customer, body.connectionId) : null;
+  let conversationQuery = admin.from("whatsapp_platform_conversations")
     .select("id,connection_id,contact_id,status,priority,assigned_user_id,unread_count,last_message_at,last_inbound_at,last_outbound_at,service_window_expires_at")
-    .eq("id", conversationId).eq("tenant_id", customer.tenant_id).single();
+    .eq("id", conversationId).eq("tenant_id", customer.tenant_id);
+  if (connection) conversationQuery = conversationQuery.eq("connection_id", connection.id);
+  const { data: conversation, error } = await conversationQuery.single();
   if (error || !conversation) throw new Error("Conversation not found.");
   const [{ data: contact, error: contactError }, { data: messages, error: messagesError }, { data: notes, error: notesError }, { data: members, error: membersError }] = await Promise.all([
     admin.from("whatsapp_platform_contacts").select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at").eq("id", conversation.contact_id).eq("tenant_id", customer.tenant_id).single(),
@@ -582,10 +598,11 @@ async function updateContact(admin: any, customer: any, body: any) {
   return { contact: data };
 }
 
-async function listFlows(admin: any, customer: any) {
+async function listFlows(admin: any, customer: any, body: any) {
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
   const { data, error } = await admin.from("whatsapp_platform_flows")
-    .select("id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at")
-    .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).limit(200);
+    .select("id,connection_id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at")
+    .eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).order("updated_at", { ascending: false }).limit(200);
   if (error) throw error;
   return { flows: data || [] };
 }
@@ -628,37 +645,40 @@ function validatedFlow(body: any) {
 
 async function saveFlow(admin: any, customer: any, body: any) {
   if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can create or edit flows.");
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
   const values = validatedFlow(body); const now = new Date().toISOString();
   if (body.flowId) {
     const flowId = cleanUuid(body.flowId, "flow");
     const { data, error } = await admin.from("whatsapp_platform_flows").update({ ...values, updated_by_user_id: customer.user_id, updated_at: now })
-      .eq("id", flowId).eq("tenant_id", customer.tenant_id)
-      .select("id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at").single();
+      .eq("id", flowId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id)
+      .select("id,connection_id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at").single();
     if (error || !data) throw new Error(error?.code === "23505" ? "A flow with this name already exists." : "Flow could not be updated.");
     return { flow: data };
   }
-  const { data, error } = await admin.from("whatsapp_platform_flows").insert({ ...values, tenant_id: customer.tenant_id, created_by_user_id: customer.user_id, updated_by_user_id: customer.user_id })
-    .select("id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at").single();
+  const { data, error } = await admin.from("whatsapp_platform_flows").insert({ ...values, tenant_id: customer.tenant_id, connection_id: connection.id, created_by_user_id: customer.user_id, updated_by_user_id: customer.user_id })
+    .select("id,connection_id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at").single();
   if (error || !data) throw new Error(error?.code === "23505" ? "A flow with this name already exists." : "Flow could not be created.");
   return { flow: data };
 }
 
 async function setFlowStatus(admin: any, customer: any, body: any) {
   if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can activate or pause flows.");
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
   const flowId = cleanUuid(body.flowId, "flow"); const status = String(body.status || "").toLowerCase();
   if (!["active","paused"].includes(status)) throw new Error("Select a valid flow status.");
-  const { data: current, error: currentError } = await admin.from("whatsapp_platform_flows").select("id,nodes").eq("id", flowId).eq("tenant_id", customer.tenant_id).single();
+  const { data: current, error: currentError } = await admin.from("whatsapp_platform_flows").select("id,nodes").eq("id", flowId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).single();
   if (currentError || !current) throw new Error("Flow not found.");
   if (status === "active" && (!Array.isArray(current.nodes) || current.nodes.length < 2)) throw new Error("Add at least one action before activating this flow.");
-  const { data, error } = await admin.from("whatsapp_platform_flows").update({ status, updated_by_user_id: customer.user_id, updated_at: new Date().toISOString() }).eq("id", flowId).eq("tenant_id", customer.tenant_id).select("id,status,updated_at").single();
+  const { data, error } = await admin.from("whatsapp_platform_flows").update({ status, updated_by_user_id: customer.user_id, updated_at: new Date().toISOString() }).eq("id", flowId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).select("id,status,updated_at").single();
   if (error || !data) throw new Error("Flow status could not be updated.");
   return { flow: data };
 }
 
 async function deleteFlow(admin: any, customer: any, body: any) {
   if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can delete flows.");
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
   const flowId = cleanUuid(body.flowId, "flow");
-  const { data, error } = await admin.from("whatsapp_platform_flows").delete().eq("id", flowId).eq("tenant_id", customer.tenant_id).select("id").single();
+  const { data, error } = await admin.from("whatsapp_platform_flows").delete().eq("id", flowId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).select("id").single();
   if (error || !data) throw new Error("Flow not found.");
   return { deleted: true, flowId };
 }
@@ -691,7 +711,7 @@ Deno.serve(async (req) => {
     if (action === "list_templates") return json(req, await listTemplates(admin, customer, body));
     if (action === "list_template_library") return json(req, await listTemplateLibrary(admin, customer, body));
     if (action === "create_template") return json(req, await createTemplate(admin, customer, body));
-    if (action === "list_flows") return json(req, await listFlows(admin, customer));
+    if (action === "list_flows") return json(req, await listFlows(admin, customer, body));
     if (action === "save_flow") return json(req, await saveFlow(admin, customer, body));
     if (action === "set_flow_status") return json(req, await setFlowStatus(admin, customer, body));
     if (action === "delete_flow") return json(req, await deleteFlow(admin, customer, body));

@@ -364,6 +364,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-workspace-account strong,.wp-workspace-account small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wp-workspace-account strong { font-size: .78rem; }
 .wp-workspace-account small { margin-top: .16rem; color: var(--wp-muted); font-size: .66rem; }
+.wp-number-selector { display: grid; grid-template-columns: 34px minmax(0,1fr); gap: .65rem; align-items: center; margin: -.35rem 0 .75rem; padding: .65rem .75rem; border: 1px solid var(--wp-workspace-line,rgba(139,226,180,.14)); border-radius: 12px; background: var(--wp-workspace-surface-soft,rgba(139,226,180,.04)); color: var(--wp-workspace-text,var(--wp-text)); text-decoration: none; }
+.wp-number-selector > span:last-child { min-width: 0; }
+.wp-number-selector strong,.wp-number-selector small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wp-number-selector strong { margin-bottom: .2rem; color: var(--wp-workspace-subtle,#6f8f7d); font-size: .58rem; letter-spacing: .09em; text-transform: uppercase; }
+.wp-number-selector small { margin-top: .2rem; color: var(--wp-workspace-muted,var(--wp-muted)); font-size: .6rem; }
+.wp-number-selector-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--wp-workspace-accent-soft,rgba(43,223,131,.12)); color: var(--wp-workspace-accent-strong,var(--wp-green)); font-size: 1rem; font-weight: 900; }
+.wp-number-selector select { width: 100%; min-width: 0; padding: 0 1.25rem 0 0; border: 0; background: transparent; color: var(--wp-workspace-text,var(--wp-text)); font: inherit; font-size: .72rem; font-weight: 800; outline: none; text-overflow: ellipsis; }
+.wp-number-selector select option { background: var(--wp-workspace-surface-solid,#14181d); color: var(--wp-workspace-text,#f2f4f6); }
+.wp-number-selector-empty:hover,.wp-number-selector-empty:focus-visible { border-color: var(--wp-workspace-accent); outline: none; }
 .wp-workspace-nav { display: grid; gap: .2rem; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
 .wp-nav-label { margin: 1rem .65rem .35rem; color: #6f8f7d; font-size: .61rem; font-weight: 850; letter-spacing: .16em; text-transform: uppercase; }
 .wp-workspace-nav a,.wp-workspace-nav button { width: 100%; min-height: 42px; display: grid; grid-template-columns: 25px minmax(0,1fr) auto; gap: .4rem; align-items: center; padding: .62rem .7rem; border: 0; border-radius: 10px; background: transparent; color: #a9c1b2; font-size: .78rem; font-weight: 700; text-align: left; text-decoration: none; }
@@ -2458,6 +2467,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-flow-builder-workspace .wp-workspace-account {
   display: none;
 }
+.wp-flow-builder-workspace .wp-number-selector { display: none; }
 .wp-flow-builder-workspace .wp-workspace-account-logo {
   margin: 0;
   width: 34px;
@@ -3157,6 +3167,7 @@ body.wp-verification-viewer-open { overflow: hidden; }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-brand { justify-content: center; padding: .15rem 0; }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-brand span,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-account div,
+  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-number-selector > span:last-child,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-account-chevron,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-nav-section-toggle,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-nav-text,
@@ -3167,6 +3178,12 @@ body.wp-verification-viewer-open { overflow: hidden; }
     grid-template-columns: 1fr;
     justify-items: center;
     padding: .55rem .35rem;
+  }
+  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-number-selector {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    margin-top: -.35rem;
+    padding: .45rem .3rem;
   }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-nav-section-items { gap: .3rem; }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-nav-section.is-collapsed .wp-nav-section-items { display: grid; }
