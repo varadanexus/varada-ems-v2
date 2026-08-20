@@ -334,6 +334,9 @@ Deno.serve(async (req) => {
     }
     const body = rawBody ? JSON.parse(rawBody) : {};
     customer = await customerSession(admin, body.sessionToken);
+    if (customer.role_code === "agent") {
+      return json(req, { error: "Your agent role cannot access business onboarding." }, 403);
+    }
     const action = String(body.action || "status");
     if (action === "status") return json(req, await configurationStatus(admin, customer));
     if (action === "begin") {

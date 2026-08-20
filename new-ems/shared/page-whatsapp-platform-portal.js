@@ -118,6 +118,16 @@ const WORKSPACE_VIEW_LABELS = {
   settings: "Workspace settings",
 };
 
+const AGENT_WORKSPACE_VIEWS = new Set(["inbox", "contacts", "campaigns", "templates", "flows", "analytics"]);
+
+function isAgentWorkspaceRole() {
+  return session?.roleCode === "agent";
+}
+
+function canAccessWorkspaceView(view) {
+  return !isAgentWorkspaceRole() || AGENT_WORKSPACE_VIEWS.has(view);
+}
+
 function currentWorkspaceView() {
   const relativePath = location.pathname.slice(WORKSPACE_PATH.length).replace(/^\/+|\/+$/g, "");
   const view = relativePath.split("/")[0] || "overview";
@@ -125,7 +135,12 @@ function currentWorkspaceView() {
     location.replace(`${workspacePath("flows")}${location.search}${location.hash}`);
     return "flows";
   }
-  return Object.hasOwn(WORKSPACE_VIEW_LABELS, view) ? view : "overview";
+  const resolvedView = Object.hasOwn(WORKSPACE_VIEW_LABELS, view) ? view : "overview";
+  if (!canAccessWorkspaceView(resolvedView)) {
+    location.replace(workspacePath("inbox"));
+    return "inbox";
+  }
+  return resolvedView;
 }
 
 function workspacePath(view) {
@@ -349,6 +364,14 @@ function workspaceNavItem(view, icon, badge = "") {
   return `<a class="${active ? "active" : ""}" href="${workspacePath(view)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" data-nav-label="${escapeHtml(label)}" ${active ? 'aria-current="page"' : ""}><span class="wp-nav-icon" aria-hidden="true">${iconMarkup}</span><span class="wp-nav-text">${escapeHtml(label)}</span>${badge ? `<em>${badge}</em>` : ""}</a>`;
 }
 
+function workspaceNavigationMarkup({ inboxUnread = 0, contactCount = 0, campaignCount = 0, templateCount = 0, flowCount = 0, connectedCount = 0, teamCount = 0, packageName = "" } = {}) {
+  const customers = `<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}`;
+  const engage = `<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", templateCount ? String(templateCount) : "")}${workspaceNavItem("flows", "⌁", flowCount ? String(flowCount) : "")}`;
+  const insights = `<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}`;
+  if (isAgentWorkspaceRole()) return `${customers}${engage}${insights}`;
+  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", packageName)}${workspaceNavItem("settings", "⚙")}`;
+}
+
 const WORKSPACE_SIDEBAR_KEY = "varada-whatsapp-workspace-sidebar";
 
 function readWorkspaceSidebarState() {
@@ -393,9 +416,9 @@ function enhanceWorkspaceSidebar(root, sidebarState, isFlowBuilderRoute) {
     brandRow.appendChild(collapseButton);
   }
 
-  const sectionIds = ["workspace", "customers", "engage", "insights", "administration"];
+  const sectionIds = { Workspace: "workspace", Customers: "customers", Engage: "engage", Insights: "insights", Administration: "administration" };
   [...nav.querySelectorAll(":scope > .wp-nav-label")].forEach((label, index) => {
-    const sectionId = sectionIds[index] || `section-${index + 1}`;
+    const sectionId = sectionIds[label.textContent.trim()] || `section-${index + 1}`;
     const section = document.createElement("section");
     section.className = "wp-nav-section";
     section.dataset.workspaceNavSection = sectionId;
@@ -1806,6 +1829,7 @@ function workspaceViewContent(view, connections, setupReady, profile) {
 }
 
 function verificationAttentionModal() {
+  if (isAgentWorkspaceRole()) return "";
   if (verificationAttentionDismissed) return "";
   const requests = (workspaceVerification?.documentRequests || []).filter((request) => request.status === "requested");
   const requestDocumentIds = new Set(requests.map((request) => request.documentId).filter(Boolean));
@@ -1824,12 +1848,41 @@ function verificationAttentionModal() {
 
 async function renderDashboard() {
   const view = currentWorkspaceView();
+  const agentWorkspace = isAgentWorkspaceRole();
   let connections = [];
   try { connections = await loadConnections(); } catch { connections = []; }
-  try {
-    metaOnboardingStatus = await onboardingRequest("status");
-    if (Array.isArray(metaOnboardingStatus.connections)) connections = metaOnboardingStatus.connections;
-  } catch {
+  if (!agentWorkspace) {
+    try {
+      metaOnboardingStatus = await onboardingRequest("status");
+      if (Array.isArray(metaOnboardingStatus.connections)) connections = metaOnboardingStatus.connections;
+    } catch {
+      metaOnboardingStatus = {
+        configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
+        publicAppId: runtime.metaAppId || null,
+        publicConfigurationId: runtime.embeddedSignupConfigId || null,
+        publicGraphVersion: runtime.metaGraphVersion || null,
+        environment: "testing",
+      };
+    }
+    try {
+      const storage = await storageRequest("profile");
+      workspaceProfile = storage?.profile || workspaceProfile;
+    } catch {
+      workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+    }
+    try {
+      const result = await storageRequest("verification_status");
+      workspaceVerification = result?.verification || workspaceVerification;
+    } catch {
+      workspaceVerification = workspaceVerification || { status: "not_started", entityType: workspaceProfile?.businessType || "other", requirements: [], documents: [], canEdit: true };
+    }
+    try {
+      const result = await messagingRequest("package_master");
+      workspacePackageMaster = { package: result?.package || null, addons: result?.addons || [], availableAddons: result?.availableAddons || [], error: "" };
+    } catch (error) {
+      workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: error?.message || "Package Master could not be loaded." };
+    }
+  } else {
     metaOnboardingStatus = {
       configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
       publicAppId: runtime.metaAppId || null,
@@ -1837,24 +1890,9 @@ async function renderDashboard() {
       publicGraphVersion: runtime.metaGraphVersion || null,
       environment: "testing",
     };
-  }
-  try {
-    const storage = await storageRequest("profile");
-    workspaceProfile = storage?.profile || workspaceProfile;
-  } catch {
-    workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
-  }
-  try {
-    const result = await storageRequest("verification_status");
-    workspaceVerification = result?.verification || workspaceVerification;
-  } catch {
-    workspaceVerification = workspaceVerification || { status: "not_started", entityType: workspaceProfile?.businessType || "other", requirements: [], documents: [], canEdit: true };
-  }
-  try {
-    const result = await messagingRequest("package_master");
-    workspacePackageMaster = { package: result?.package || null, addons: result?.addons || [], availableAddons: result?.availableAddons || [], error: "" };
-  } catch (error) {
-    workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: error?.message || "Package Master could not be loaded." };
+    workspaceProfile = { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+    workspaceVerification = null;
+    workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
   }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
@@ -1934,7 +1972,11 @@ async function renderDashboard() {
   const isFlowBuilderRoute = Boolean(currentFlowBuilderId());
   const isInboxRoute = view === "inbox";
   const operationalPackageName = workspacePackageMaster?.package?.name || planName(workspaceProfile?.planCode);
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a><a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a><nav class="wp-workspace-nav"><span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", workspaceTemplates.templates.length ? String(workspaceTemplates.templates.length) : "")}${workspaceNavItem("flows", "⌁", workspaceFlows.flows.length ? String(workspaceFlows.flows.length) : "")}<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connected.length))}${workspaceNavItem("team", "♙", workspaceTeam.members.length ? String(workspaceTeam.members.length) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", operationalPackageName)}${workspaceNavItem("settings", "⚙")}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${verificationAttentionModal()}`;
+  const sidebarAccount = agentWorkspace
+    ? `<div class="wp-workspace-account" aria-label="${escapeHtml(session.companyName)} workspace"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>Agent workspace</small></div></div>`
+    : `<a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a>`;
+  const sidebarNavigation = workspaceNavigationMarkup({ inboxUnread, contactCount, campaignCount, templateCount: workspaceTemplates.templates.length, flowCount: workspaceFlows.flows.length, connectedCount: connected.length, teamCount: workspaceTeam.members.length, packageName: operationalPackageName });
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarAccount}<nav class="wp-workspace-nav">${sidebarNavigation}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${verificationAttentionModal()}`;
   if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
   const workspaceSidebarState = readWorkspaceSidebarState();
   enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);

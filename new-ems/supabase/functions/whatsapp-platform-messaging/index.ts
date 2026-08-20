@@ -5,6 +5,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const MAX_BODY_BYTES = 192 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
+const AGENT_ACTIONS = new Set([
+  "list", "thread", "send_text", "update_conversation", "add_note",
+  "list_contacts", "create_contact", "start_chat", "update_contact",
+  "list_templates", "list_template_library", "list_flows",
+]);
 
 function env(name: string) { return Deno.env.get(name) || ""; }
 function isLoopback(origin: string) {
@@ -674,6 +679,9 @@ Deno.serve(async (req) => {
     const body = raw ? JSON.parse(raw) : {};
     const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "list");
+    if (customer.role_code === "agent" && !AGENT_ACTIONS.has(action)) {
+      return json(req, { error: "Your agent role cannot access this workspace area." }, 403);
+    }
     if (action === "list") return json(req, await listConversations(admin, customer, body));
     if (action === "list_team") return json(req, await listTeam(admin, customer));
     if (action === "package_master") return json(req, await packageMaster(admin, customer));

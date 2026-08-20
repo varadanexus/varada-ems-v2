@@ -189,6 +189,7 @@ function publicSession(row: any) {
     displayName: row.display_name,
     email: row.email,
     companyName: row.company_name,
+    roleCode: row.role_code,
     expiresAt: row.expires_at,
   };
 }
