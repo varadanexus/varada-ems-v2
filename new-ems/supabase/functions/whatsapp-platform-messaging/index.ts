@@ -315,9 +315,15 @@ function requireReadyMetaPhone(connection: any) {
   const metadata = connection.onboarding_metadata && typeof connection.onboarding_metadata === "object" ? connection.onboarding_metadata : {};
   const phoneStatus = String(metadata.phone_status || "").toUpperCase();
   const verificationStatus = String(metadata.code_verification_status || "").toUpperCase();
-  if ((phoneStatus && !READY_META_PHONE_STATUSES.has(phoneStatus)) || (verificationStatus && verificationStatus !== "VERIFIED")) {
-    const label = phoneStatus ? phoneStatus.replaceAll("_", " ").toLowerCase() : "pending";
-    throw new Error(`This WhatsApp number is still ${label} in Meta. Complete phone registration in WhatsApp Manager, including SMS or voice verification and the two-step PIN if prompted, then refresh from Meta.`);
+  const isDeveloperTest = metadata.test_number === true;
+  const phoneNotReady = Boolean(phoneStatus && !READY_META_PHONE_STATUSES.has(phoneStatus));
+  const verificationNotReady = Boolean(!isDeveloperTest && verificationStatus && verificationStatus !== "VERIFIED");
+  if (phoneNotReady || verificationNotReady) {
+    if (phoneNotReady) {
+      const label = phoneStatus.replaceAll("_", " ").toLowerCase();
+      throw new Error(`This WhatsApp number is still ${label} in Meta. Complete phone registration in WhatsApp Manager, then refresh from Meta.`);
+    }
+    throw new Error("This WhatsApp number has not completed Meta phone verification. Finish SMS or voice verification and the two-step PIN if prompted, then refresh from Meta.");
   }
 }
 async function getBusinessProfile(admin: any, customer: any, body: any) {
