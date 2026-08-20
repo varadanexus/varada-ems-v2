@@ -111,7 +111,7 @@ const WORKSPACE_VIEW_LABELS = {
   templates: "Message templates",
   flows: "Flows",
   analytics: "Analytics",
-  accounts: "Business accounts",
+  accounts: "Business numbers",
   team: "Team & roles",
   integrations: "Integrations",
   billing: "Billing & usage",
@@ -717,6 +717,10 @@ function embeddedSignupResult(FB, configurationId) {
 }
 
 async function startMetaOnboarding(button) {
+  if (!["owner", "admin"].includes(session?.roleCode)) {
+    showToast("Only workspace owners and administrators can add business numbers.", "error");
+    return;
+  }
   if (workspaceVerification?.gateRequired !== false && workspaceVerification?.status !== "verified") {
     showToast("Complete the provider business pre-check before connecting production business assets.", "error");
     location.href = workspacePath("verification");
@@ -1395,7 +1399,11 @@ function onboardingView(setupReady, connections) {
 }
 
 function accountsView(connections, setupReady) {
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Connected assets</span><h1>Business accounts</h1><p>Connect and manage WhatsApp Business assets owned by your company.</p></div><button class="wp-primary" id="wpConnectMetaBtn" type="button">${setupReady ? "Connect Meta Business" : "Connection setup pending"}</button></div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">WhatsApp Business Accounts</span><h2>Your connected accounts</h2></div><strong>${connections.length}</strong></div><p>Only accounts connected to this company workspace appear here.</p>${connections.length ? connections.map((row) => `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(row.verified_name || row.display_phone_number || "WhatsApp Business Account")}</strong><small>${escapeHtml(row.display_phone_number || "Business number")}</small></div><em>${escapeHtml(row.status)}</em></div>`).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business account connected</strong><p>${setupReady ? "Connect your company’s Meta Business account to start configuring WhatsApp." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p><button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Connect account" : "Check connection status"}</button></div>`}</article></section>`;
+  const canManageNumbers = ["owner", "admin"].includes(session?.roleCode);
+  const addButton = canManageNumbers
+    ? `<button class="wp-primary" id="wpConnectMetaBtn" type="button">${setupReady ? `＋ ${connections.length ? "Add business number" : "Connect business number"}` : "Connection setup pending"}</button>`
+    : "";
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div>${addButton}</div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2></div><strong>${connections.length}</strong></div><p>Each number is connected securely through your company’s Meta Business account.</p>${connections.length ? connections.map((row) => `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(row.display_phone_number || row.verified_name || "Number setup pending")}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}</small></div><em>${escapeHtml(row.status)}</em></div>`).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</article></section>`;
 }
 
 function profileView(profile) {
