@@ -174,7 +174,7 @@ async function configurationStatus(admin: any, customer: any) {
   const version = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
   const { data: connections, error } = await admin
     .from("whatsapp_platform_connections")
-    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at")
+    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
     .eq("tenant_id", customer.tenant_id)
     .neq("status", "disconnected")
     .order("created_at", { ascending: false });
@@ -250,6 +250,92 @@ async function removeConnection(admin: any, customer: any, body: any) {
     source: "customer_workspace",
   }, connection.id);
   return { ok: true, removedConnectionId: connection.id };
+}
+
+function cleanTemporaryAccessToken(value: unknown) {
+  const token = String(value || "").trim();
+  if (token.length < 20 || token.length > 4096 || /[\s\u0000-\u001f\u007f]/.test(token)) throw new Error("Enter the temporary access token from Meta API Setup.");
+  return token;
+}
+
+async function connectDeveloperTestNumber(admin: any, customer: any, body: any) {
+  const wabaId = cleanId(body.wabaId, "WhatsApp Business Account ID");
+  const requestedPhoneNumberId = body.phoneNumberId ? cleanId(body.phoneNumberId, "phone number ID") : "";
+  const accessToken = cleanTemporaryAccessToken(body.accessToken);
+  const appSecret = await providerAppSecret(admin);
+  if (!appSecret) throw new Error("Meta onboarding is not configured.");
+
+  const [waba, phoneNumbers] = await Promise.all([
+    graphRequest(`${wabaId}?fields=id,name,owner_business_info`, accessToken, appSecret),
+    graphRequest(`${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,status&limit=100`, accessToken, appSecret),
+  ]);
+  const available = Array.isArray(phoneNumbers?.data) ? phoneNumbers.data : [];
+  const phone = requestedPhoneNumberId
+    ? available.find((item: any) => String(item.id) === requestedPhoneNumberId)
+    : available.length === 1 ? available[0] : null;
+  if (!phone) {
+    if (!available.length) throw new Error("Meta did not return a test phone number for this WABA and token.");
+    throw new Error("This WABA has multiple phone numbers. Enter the Phone Number ID from Meta API Setup.");
+  }
+  const phoneNumberId = cleanId(phone.id, "phone number ID");
+  await graphRequest(`${wabaId}/subscribed_apps`, accessToken, appSecret, { method: "POST" });
+
+  const now = new Date().toISOString();
+  const connectionPayload = {
+    tenant_id: customer.tenant_id,
+    provider: "meta",
+    meta_business_id: waba?.owner_business_info?.id || null,
+    whatsapp_business_account_id: wabaId,
+    phone_number_id: phoneNumberId,
+    display_phone_number: phone.display_phone_number || null,
+    verified_name: phone.verified_name || waba?.name || "Meta developer test number",
+    status: "connected",
+    onboarding_metadata: {
+      source: "developer_api_setup",
+      test_number: true,
+      quality_rating: phone.quality_rating || null,
+      phone_status: phone.status || null,
+      token_notice: "temporary_access_token",
+    },
+    connected_at: now,
+    updated_at: now,
+  };
+  const { data: existing, error: existingError } = await admin.from("whatsapp_platform_connections")
+    .select("id")
+    .eq("tenant_id", customer.tenant_id)
+    .eq("whatsapp_business_account_id", wabaId)
+    .eq("phone_number_id", phoneNumberId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  const connectionQuery = existing?.id
+    ? admin.from("whatsapp_platform_connections").update(connectionPayload).eq("id", existing.id)
+    : admin.from("whatsapp_platform_connections").insert(connectionPayload);
+  const { data: connection, error: connectionError } = await connectionQuery
+    .select("id,status,phone_number_id,display_phone_number,verified_name,connected_at,onboarding_metadata")
+    .single();
+  if (connectionError) throw connectionError;
+
+  const expiresAt = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString();
+  const credentialCiphertext = await encryptCredential(JSON.stringify({
+    accessToken,
+    tokenType: "temporary_test_token",
+    wabaId,
+    phoneNumberId,
+  }));
+  const { error: credentialError } = await admin.from("whatsapp_platform_provider_credentials").upsert({
+    connection_id: connection.id,
+    tenant_id: customer.tenant_id,
+    credential_ciphertext: credentialCiphertext,
+    token_type: "temporary_test_token",
+    expires_at: expiresAt,
+    last_rotated_at: now,
+    updated_at: now,
+  }, { onConflict: "connection_id" });
+  if (credentialError) throw credentialError;
+
+  await admin.from("whatsapp_platform_tenants").update({ onboarding_status: "meta_connected", updated_at: now }).eq("id", customer.tenant_id);
+  await recordEvent(admin, customer, "onboarding_completed", { wabaId, phoneNumberId, source: "developer_api_setup", testNumber: true }, connection.id);
+  return { connection, expiresAt, temporaryCredential: true };
 }
 
 async function enforceVerificationGate(admin: any, customer: any) {
@@ -432,6 +518,10 @@ Deno.serve(async (req) => {
     if (action === "complete") {
       await enforceVerificationGate(admin, customer);
       return json(req, await completeOnboarding(admin, customer, body));
+    }
+    if (action === "connect_test_number") {
+      await enforceVerificationGate(admin, customer);
+      return json(req, await connectDeveloperTestNumber(admin, customer, body));
     }
     if (action === "remove_connection") return json(req, await removeConnection(admin, customer, body));
     return json(req, { error: "Unsupported action" }, 400);

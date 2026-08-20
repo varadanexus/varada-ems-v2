@@ -1362,7 +1362,7 @@ async function submitAuthForm(event) {
 async function loadConnections() {
   if (!accessToken || !session?.tenantId) return [];
   const query = new URLSearchParams({
-    select: "id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at",
+    select: "id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata",
     tenant_id: `eq.${session.tenantId}`,
     status: "neq.disconnected",
     order: "created_at.desc"
@@ -1453,7 +1453,9 @@ function accountsView(connections, setupReady) {
   const addButton = canManageNumbers
     ? `<button class="wp-primary" id="wpConnectMetaBtn" type="button">${setupReady ? `＋ ${connections.length ? "Add business number" : "Connect business number"}` : "Connection setup pending"}</button>`
     : "";
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div>${addButton}</div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2></div><strong>${connections.length}</strong></div><p>Each number is connected securely through your company’s Meta Business account.</p>${connections.length ? connections.map((row) => { const label = row.display_phone_number || row.verified_name || "Number setup pending"; return `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}</small></div><div class="wp-account-actions"><em>${escapeHtml(row.status)}</em>${canManageNumbers ? `<button class="wp-account-remove" type="button" data-remove-business-number="${escapeHtml(row.id)}" data-business-number-label="${escapeHtml(label)}">Remove</button>` : ""}</div></div>`; }).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</article></section>`;
+  const testButton = canManageNumbers ? `<button class="wp-secondary" id="wpConnectTestNumberBtn" type="button">Connect developer test number</button>` : "";
+  const testDialog = canManageNumbers ? `<dialog class="wp-contact-dialog wp-test-number-dialog" id="wpTestNumberDialog"><form id="wpTestNumberForm" autocomplete="off"><header><div><span class="wp-card-eyebrow">Meta developer testing</span><h2>Connect a test number</h2><p>Developer-created test WABAs do not appear in Embedded Signup. Connect the number securely using its API Setup credentials.</p></div><button type="button" data-close-test-number aria-label="Close">×</button></header><div class="wp-policy-note"><strong>Find these values in Meta</strong><p>Open your Meta app, then WhatsApp → API Setup. Copy the WhatsApp Business Account ID and temporary access token. Enter the Phone Number ID only when the WABA contains multiple numbers.</p></div><label><span>WhatsApp Business Account ID</span><input name="wabaId" inputmode="numeric" pattern="[0-9]{5,40}" maxlength="40" required placeholder="1794119041601235" /></label><label><span>Phone Number ID <small>Optional for a single-number WABA</small></span><input name="phoneNumberId" inputmode="numeric" pattern="[0-9]{5,40}" maxlength="40" placeholder="Meta Phone Number ID" /></label><label><span>Temporary access token</span><textarea name="accessToken" minlength="20" maxlength="4096" rows="5" required spellcheck="false" autocomplete="off" placeholder="Paste the temporary token from API Setup"></textarea><small>The token is encrypted immediately, never returned to the browser, and treated as expiring within 24 hours.</small></label><footer><button class="wp-secondary" type="button" data-close-test-number>Cancel</button><button class="wp-primary" type="submit">Connect test number</button></footer></form></dialog>` : "";
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div><div class="wp-number-heading-actions">${testButton}${addButton}</div></div><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2></div><strong>${connections.length}</strong></div><p>Each number is connected securely through your company’s Meta Business account.</p>${connections.length ? connections.map((row) => { const label = row.display_phone_number || row.verified_name || "Number setup pending"; const isTest = row.onboarding_metadata?.test_number === true; return `<div class="wp-account-row"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}${isTest ? ` <span class="wp-test-number-badge">Developer test</span>` : ""}</small></div><div class="wp-account-actions"><em>${escapeHtml(row.status)}</em>${canManageNumbers ? `<button class="wp-account-remove" type="button" data-remove-business-number="${escapeHtml(row.id)}" data-business-number-label="${escapeHtml(label)}">Remove</button>` : ""}</div></div>`; }).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</article>${testDialog}</section>`;
 }
 
 const WHATSAPP_BUSINESS_VERTICALS = {
@@ -3076,6 +3078,34 @@ async function renderDashboard() {
   const messagePanel = app.querySelector("#wpInboxMessages");
   if (messagePanel) messagePanel.scrollTop = messagePanel.scrollHeight;
   app.querySelectorAll("#wpConnectMetaBtn,[data-connect-meta]").forEach((button) => button.addEventListener("click", () => startMetaOnboarding(button)));
+  const testNumberDialog = app.querySelector("#wpTestNumberDialog");
+  app.querySelector("#wpConnectTestNumberBtn")?.addEventListener("click", () => testNumberDialog?.showModal());
+  testNumberDialog?.querySelectorAll("[data-close-test-number]").forEach((button) => button.addEventListener("click", () => testNumberDialog.close()));
+  testNumberDialog?.addEventListener("click", (event) => { if (event.target === testNumberDialog) testNumberDialog.close(); });
+  app.querySelector("#wpTestNumberForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const submit = event.submitter || form.querySelector('button[type="submit"]');
+    const original = submit.textContent || "Connect test number";
+    try {
+      submit.disabled = true; submit.textContent = "Validating with Meta…";
+      const result = await onboardingRequest("connect_test_number", {
+        wabaId: form.elements.wabaId.value.trim(),
+        phoneNumberId: form.elements.phoneNumberId.value.trim(),
+        accessToken: form.elements.accessToken.value.trim(),
+      });
+      form.elements.accessToken.value = "";
+      testNumberDialog?.close();
+      selectWorkspaceConnection(result?.connection?.id || "");
+      showToast("Meta developer test number connected. The temporary token will need renewal within 24 hours.");
+      await renderDashboard();
+    } catch (error) {
+      form.elements.accessToken.value = "";
+      showToast(error?.message || "The Meta developer test number could not be connected.", "error");
+      submit.disabled = false; submit.textContent = original;
+    }
+  });
   app.querySelectorAll("[data-remove-business-number]").forEach((button) => button.addEventListener("click", async () => {
     const connectionId = button.dataset.removeBusinessNumber || "";
     const label = button.dataset.businessNumberLabel || "this number";
