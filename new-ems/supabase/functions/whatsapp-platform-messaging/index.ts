@@ -273,6 +273,15 @@ function profileText(value: unknown, maximum: number, label: string) {
   if (text.length > maximum) throw new Error(`${label} cannot exceed ${maximum} characters.`);
   return text;
 }
+function normalizeBusinessWebsite(value: unknown) {
+  const entered = profileText(value, 256, "Website");
+  if (!entered) return "";
+  const website = /^[a-z][a-z0-9+.-]*:\/\//i.test(entered) ? entered : `https://${entered}`;
+  let parsed: URL;
+  try { parsed = new URL(website); } catch { throw new Error("Enter a valid business website such as www.example.com."); }
+  if (!["https:","http:"].includes(parsed.protocol) || !parsed.hostname) throw new Error("Enter a valid business website such as www.example.com.");
+  return parsed.toString();
+}
 async function getBusinessProfile(admin: any, customer: any, body: any) {
   if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage the WhatsApp profile.");
   const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
@@ -284,7 +293,7 @@ async function getBusinessProfile(admin: any, customer: any, body: any) {
   if (!response.ok) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "The WhatsApp profile could not be loaded.");
   return { connection, profile: Array.isArray(graph?.data) ? graph.data[0] || {} : graph?.data || graph || {} };
 }
-async function uploadBusinessProfilePhoto(connection: any, secret: any, photo: any) {
+async function uploadBusinessProfilePhoto(secret: any, photo: any) {
   const mimeType = String(photo?.mimeType || "").toLowerCase();
   if (!["image/jpeg","image/png"].includes(mimeType)) throw new Error("The profile photo must be a JPG or PNG image.");
   const bytes = decodeBase64Payload(photo?.base64);
@@ -298,7 +307,9 @@ async function uploadBusinessProfilePhoto(connection: any, secret: any, photo: a
   const sessionResponse = await fetch(sessionUrl, { method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}` } });
   const session = await sessionResponse.json().catch(() => ({}));
   if (!sessionResponse.ok || !session?.id) throw new Error(session?.error?.error_user_msg || session?.error?.message || "Meta could not start the profile photo upload.");
-  const uploadResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(session.id)}`, {
+  const uploadSessionId = String(session.id);
+  if (!/^upload:[A-Za-z0-9._~-]+(?:\?.+)?$/.test(uploadSessionId)) throw new Error("Meta returned an invalid profile photo upload session.");
+  const uploadResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${uploadSessionId}`, {
     method: "POST",
     headers: { Authorization: `OAuth ${secret.accessToken}`, file_offset: "0", "Content-Type": mimeType },
     body: bytes,
@@ -319,15 +330,10 @@ async function updateBusinessProfile(admin: any, customer: any, body: any) {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid business email address.");
   const vertical = String(body.vertical || "UNDEFINED").toUpperCase();
   if (!BUSINESS_VERTICALS.has(vertical)) throw new Error("Select a valid business category.");
-  const websites = (Array.isArray(body.websites) ? body.websites : []).map((value: unknown) => profileText(value, 256, "Website")).filter(Boolean);
+  const websites = (Array.isArray(body.websites) ? body.websites : []).map(normalizeBusinessWebsite).filter(Boolean);
   if (websites.length > 2) throw new Error("WhatsApp supports up to two business websites.");
-  for (const website of websites) {
-    let parsed: URL;
-    try { parsed = new URL(website); } catch { throw new Error("Enter complete website addresses beginning with https:// or http://."); }
-    if (!["https:","http:"].includes(parsed.protocol)) throw new Error("Business websites must use HTTPS or HTTP.");
-  }
   const payload: Record<string, unknown> = { messaging_product: "whatsapp", about, address, description, email, vertical, websites };
-  if (body.photo) payload.profile_picture_handle = await uploadBusinessProfilePhoto(connection, secret, body.photo);
+  if (body.photo) payload.profile_picture_handle = await uploadBusinessProfilePhoto(secret, body.photo);
   const response = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/whatsapp_business_profile`, {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(payload),
   });

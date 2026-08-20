@@ -1461,6 +1461,11 @@ const WHATSAPP_BUSINESS_VERTICALS = {
   RETAIL: "Shopping and retail", TRAVEL: "Travel and transportation", RESTAURANT: "Restaurant",
 };
 
+function normalizeBusinessWebsite(value) {
+  const website = String(value || "").trim();
+  return website && !/^[a-z][a-z0-9+.-]*:\/\//i.test(website) ? `https://${website}` : website;
+}
+
 function businessProfileView(connections) {
   const connection = connections.find((item) => item.id === workspaceSelectedConnectionId) || null;
   if (!connection) return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Customer-facing identity</span><h1>WhatsApp profile</h1><p>Choose or connect a business number before editing its public WhatsApp profile.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("accounts")}">Manage business numbers</a></div></section>`;
@@ -1480,8 +1485,8 @@ function businessProfileView(connections) {
         <div class="wp-form-row"><label><span>Profile about <b>*</b></span><input name="about" maxlength="139" value="${escapeHtml(profile.about || "")}" placeholder="A short status customers can see" required /><small><span data-count-for="about">${String(profile.about || "").length}</span>/139 characters</small></label><label><span>Business category</span><select name="vertical">${verticalOptions}</select><small>Choose the category that most accurately describes this number.</small></label></div>
         <label><span>Business description</span><textarea name="description" maxlength="256" rows="5" placeholder="Explain what your business offers and how you help customers.">${escapeHtml(profile.description || "")}</textarea><small><span data-count-for="description">${String(profile.description || "").length}</span>/256 characters</small></label>
         <label><span>Business address</span><input name="address" maxlength="256" value="${escapeHtml(profile.address || "")}" placeholder="Street, city, state and postal code" /><small><span data-count-for="address">${String(profile.address || "").length}</span>/256 characters</small></label>
-        <div class="wp-form-row"><label><span>Business email</span><input name="email" type="email" maxlength="128" value="${escapeHtml(profile.email || "")}" placeholder="support@company.com" /></label><label><span>Primary website</span><input name="website1" type="url" maxlength="256" value="${escapeHtml(websites[0] || "")}" placeholder="https://www.example.com" /></label></div>
-        <label><span>Additional website</span><input name="website2" type="url" maxlength="256" value="${escapeHtml(websites[1] || "")}" placeholder="https://shop.example.com" /><small>WhatsApp supports up to two public website links.</small></label>
+        <div class="wp-form-row"><label><span>Business email</span><input name="email" type="email" maxlength="128" value="${escapeHtml(profile.email || "")}" placeholder="support@company.com" /></label><label><span>Primary website</span><input name="website1" type="text" inputmode="url" maxlength="256" value="${escapeHtml(websites[0] || "")}" placeholder="www.example.com" /><small>You can enter a domain directly; HTTPS is added automatically.</small></label></div>
+        <label><span>Additional website</span><input name="website2" type="text" inputmode="url" maxlength="256" value="${escapeHtml(websites[1] || "")}" placeholder="shop.example.com" /><small>WhatsApp supports up to two public website links. HTTPS is added automatically.</small></label>
         <footer><p>Updates are published to the selected number through Meta. Customers may need a short time to see refreshed profile information.</p><button class="wp-primary" type="submit">Save WhatsApp profile</button></footer>
       </section>
       <aside class="wp-card wp-business-profile-preview"><span class="wp-card-eyebrow">Live customer preview</span><h2>WhatsApp profile preview</h2><div class="wp-phone-profile"><header><div class="wp-business-profile-avatar" data-business-profile-preview>${picture}</div><strong data-profile-preview-name>${escapeHtml(connection.verified_name || "WhatsApp Business")}</strong><small>${escapeHtml(connection.display_phone_number || "Business number")}</small></header><div class="wp-phone-profile-about" data-profile-preview-about>${escapeHtml(profile.about || "Your profile about will appear here.")}</div><dl><div><dt>Description</dt><dd data-profile-preview-description>${escapeHtml(profile.description || "Add a business description.")}</dd></div><div><dt>Category</dt><dd data-profile-preview-category>${escapeHtml(WHATSAPP_BUSINESS_VERTICALS[profile.vertical] || "Not specified")}</dd></div><div><dt>Address</dt><dd data-profile-preview-address>${escapeHtml(profile.address || "Not provided")}</dd></div><div><dt>Email</dt><dd data-profile-preview-email>${escapeHtml(profile.email || "Not provided")}</dd></div><div><dt>Website</dt><dd data-profile-preview-website>${escapeHtml(websites[0] || "Not provided")}</dd></div></dl></div><div class="wp-profile-guidance"><strong>Profile quality checklist</strong><ul><li>Use a recognizable square brand image.</li><li>Keep “about” direct and customer-friendly.</li><li>Use a monitored support email and secure HTTPS websites.</li><li>Keep the business description factual and policy-compliant.</li></ul></div></aside>
@@ -2113,13 +2118,17 @@ async function renderDashboard() {
       previewField("[data-profile-preview-description]", form.elements.description.value.trim(), "Add a business description.");
       previewField("[data-profile-preview-address]", form.elements.address.value.trim(), "Not provided");
       previewField("[data-profile-preview-email]", form.elements.email.value.trim(), "Not provided");
-      previewField("[data-profile-preview-website]", form.elements.website1.value.trim(), "Not provided");
+      previewField("[data-profile-preview-website]", normalizeBusinessWebsite(form.elements.website1.value), "Not provided");
       previewField("[data-profile-preview-category]", WHATSAPP_BUSINESS_VERTICALS[form.elements.vertical.value], "Not specified");
       ["about", "description", "address"].forEach((name) => app.querySelector(`[data-count-for="${name}"]`)?.replaceChildren(document.createTextNode(String(form.elements[name].value.length))));
       if (saveState) { saveState.textContent = "Unsaved changes"; saveState.classList.add("dirty"); }
     };
     form?.querySelectorAll("input:not([type='file']),textarea,select").forEach((field) => field.addEventListener("input", syncPreview));
     form?.querySelectorAll("select").forEach((field) => field.addEventListener("change", syncPreview));
+    [form?.elements.website1, form?.elements.website2].filter(Boolean).forEach((field) => field.addEventListener("blur", () => {
+      field.value = normalizeBusinessWebsite(field.value);
+      syncPreview();
+    }));
     const photoInput = app.querySelector("#wpBusinessProfilePhoto");
     photoInput?.addEventListener("change", () => {
       const file = photoInput.files?.[0];
@@ -2160,7 +2169,7 @@ async function renderDashboard() {
           about: form.elements.about.value.trim(), description: form.elements.description.value.trim(),
           address: form.elements.address.value.trim(), email: form.elements.email.value.trim(),
           vertical: form.elements.vertical.value,
-          websites: [form.elements.website1.value.trim(), form.elements.website2.value.trim()].filter(Boolean),
+          websites: [normalizeBusinessWebsite(form.elements.website1.value), normalizeBusinessWebsite(form.elements.website2.value)].filter(Boolean),
           photo,
         });
         workspaceBusinessProfile = { profile: result?.profile || {}, connection: result?.connection || workspaceBusinessProfile.connection, error: "" };
