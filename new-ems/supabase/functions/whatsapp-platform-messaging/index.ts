@@ -258,7 +258,7 @@ async function listContacts(admin: any, customer: any, body: any) {
 async function templateConnection(admin: any, customer: any, connectionId: unknown) {
   const id = cleanUuid(connectionId, "connection");
   const [{ data: connection, error: connectionError }, { data: credential, error: credentialError }] = await Promise.all([
-    admin.from("whatsapp_platform_connections").select("id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,status").eq("id", id).eq("tenant_id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_connections").select("id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,status,onboarding_metadata").eq("id", id).eq("tenant_id", customer.tenant_id).single(),
     admin.from("whatsapp_platform_provider_credentials").select("credential_ciphertext,expires_at").eq("connection_id", id).eq("tenant_id", customer.tenant_id).single(),
   ]);
   if (connectionError || !connection?.whatsapp_business_account_id || connection.status !== "connected") throw new Error("Select a connected WhatsApp Business account.");
@@ -268,6 +268,7 @@ async function templateConnection(admin: any, customer: any, connectionId: unkno
 }
 
 const BUSINESS_VERTICALS = new Set(["UNDEFINED","OTHER","AUTO","BEAUTY","APPAREL","EDU","ENTERTAIN","EVENT_PLAN","FINANCE","GROCERY","GOVT","HOTEL","HEALTH","NONPROFIT","PROF_SERVICES","RETAIL","TRAVEL","RESTAURANT","NOT_A_BIZ"]);
+const READY_META_PHONE_STATUSES = new Set(["CONNECTED","ACTIVE","READY"]);
 function profileText(value: unknown, maximum: number, label: string) {
   const text = String(value || "").trim();
   if (text.length > maximum) throw new Error(`${label} cannot exceed ${maximum} characters.`);
@@ -282,10 +283,48 @@ function normalizeBusinessWebsite(value: unknown) {
   if (!["https:","http:"].includes(parsed.protocol) || !parsed.hostname) throw new Error("Enter a valid business website such as www.example.com.");
   return parsed.toString();
 }
+async function refreshMetaPhoneStatus(admin: any, connection: any, secret: any) {
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}`);
+  url.searchParams.set("fields", "id,display_phone_number,verified_name,quality_rating,status,code_verification_status");
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${secret.accessToken}` } });
+  const graph = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.warn("Meta WhatsApp phone status refresh failed", { status: response.status, code: graph?.error?.code || null, trace: graph?.error?.fbtrace_id || null });
+    return connection;
+  }
+  const previous = connection.onboarding_metadata && typeof connection.onboarding_metadata === "object" ? connection.onboarding_metadata : {};
+  const phoneStatus = String(graph.status || previous.phone_status || "").toUpperCase();
+  const verificationStatus = String(graph.code_verification_status || "").toUpperCase();
+  const metadata = {
+    ...previous,
+    phone_status: phoneStatus || null,
+    code_verification_status: verificationStatus || null,
+    name_status: previous.name_status || null,
+    quality_rating: graph.quality_rating || previous.quality_rating || null,
+    phone_status_checked_at: new Date().toISOString(),
+  };
+  const updates: Record<string, unknown> = { onboarding_metadata: metadata, updated_at: new Date().toISOString() };
+  if (graph.display_phone_number) updates.display_phone_number = graph.display_phone_number;
+  if (graph.verified_name) updates.verified_name = graph.verified_name;
+  const { error } = await admin.from("whatsapp_platform_connections").update(updates).eq("id", connection.id);
+  if (error) console.error("WhatsApp phone status persistence failed", { code: error.code || null });
+  Object.assign(connection, updates);
+  return connection;
+}
+function requireReadyMetaPhone(connection: any) {
+  const metadata = connection.onboarding_metadata && typeof connection.onboarding_metadata === "object" ? connection.onboarding_metadata : {};
+  const phoneStatus = String(metadata.phone_status || "").toUpperCase();
+  const verificationStatus = String(metadata.code_verification_status || "").toUpperCase();
+  if ((phoneStatus && !READY_META_PHONE_STATUSES.has(phoneStatus)) || (verificationStatus && verificationStatus !== "VERIFIED")) {
+    const label = phoneStatus ? phoneStatus.replaceAll("_", " ").toLowerCase() : "pending";
+    throw new Error(`This WhatsApp number is still ${label} in Meta. Complete phone registration in WhatsApp Manager, including SMS or voice verification and the two-step PIN if prompted, then refresh from Meta.`);
+  }
+}
 async function getBusinessProfile(admin: any, customer: any, body: any) {
   if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage the WhatsApp profile.");
   const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
   if (!connection.phone_number_id) throw new Error("Select a connected WhatsApp business number.");
+  await refreshMetaPhoneStatus(admin, connection, secret);
   const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/whatsapp_business_profile`);
   url.searchParams.set("fields", "about,address,description,email,profile_picture_url,websites,vertical");
   const response = await fetch(url, { headers: { Authorization: `Bearer ${secret.accessToken}` } });
@@ -322,6 +361,8 @@ async function updateBusinessProfile(admin: any, customer: any, body: any) {
   if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage the WhatsApp profile.");
   const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
   if (!connection.phone_number_id) throw new Error("Select a connected WhatsApp business number.");
+  await refreshMetaPhoneStatus(admin, connection, secret);
+  requireReadyMetaPhone(connection);
   const about = profileText(body.about, 139, "Profile about");
   if (!about) throw new Error("Add a short profile about message.");
   const description = profileText(body.description, 256, "Business description");
@@ -355,7 +396,10 @@ async function updateBusinessProfile(admin: any, customer: any, body: any) {
       throw new Error("This Meta token cannot update the WhatsApp profile. Reconnect the number using a System User access token with whatsapp_business_management and whatsapp_business_messaging permissions.");
     }
     if (Number(metaError.code) === 1 || /unknown error/i.test(message)) {
-      throw new Error("Meta rejected this profile update. For a developer test number, reconnect it from Business numbers using a System User access token with WhatsApp management and messaging permissions, then try again.");
+      const isDeveloperTest = connection.onboarding_metadata?.test_number === true;
+      throw new Error(isDeveloperTest
+        ? "Meta rejected this developer test-number profile update. Reconnect it from Business numbers using a System User access token with WhatsApp management and messaging permissions, then try again."
+        : "Meta rejected this profile update. Confirm the phone number shows Connected in WhatsApp Manager, refresh it in the workspace, and try again.");
     }
     throw new Error(message ? `${message}${metaError.code ? ` (Meta error ${metaError.code})` : ""}` : "The WhatsApp profile could not be updated.");
   }
