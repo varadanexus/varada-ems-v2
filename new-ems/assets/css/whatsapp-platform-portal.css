@@ -1892,6 +1892,17 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-billing-addon-control { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
 .wp-billing-addon-control input { width:86px; min-height:38px; padding:7px 9px; border:1px solid var(--wp-border); border-radius:9px; background:var(--wp-input); color:var(--wp-text); }
 .wp-billing-addon-control button { min-height:38px; padding:7px 11px; white-space:nowrap; }
+.wp-billing-document-modal{width:min(1180px,calc(100vw - 28px));height:min(900px,calc(100vh - 28px));max-width:none;max-height:none;padding:0;border:1px solid #294039;border-radius:18px;background:#0b110f;color:#eef7f2;box-shadow:0 30px 90px #000b;overflow:hidden}
+.wp-billing-document-modal::backdrop{background:rgba(1,8,5,.82);backdrop-filter:blur(9px)}
+.wp-billing-document-modal>section{height:100%;display:grid;grid-template-rows:auto 1fr auto}
+.wp-billing-document-modal header{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:18px 22px;border-bottom:1px solid #23342e;background:linear-gradient(135deg,#07110d,#10251c)}
+.wp-billing-document-modal header>div:first-child span{display:block;margin-bottom:5px;color:#d8b95c;font-size:10px;font-weight:900;letter-spacing:.16em}
+.wp-billing-document-modal h2{margin:0;color:#fff;font-size:20px}.wp-billing-document-modal header p{margin:5px 0 0;color:#91a59a;font-size:12px}
+.wp-billing-document-modal header>div:last-child{display:flex;align-items:center;gap:9px}.wp-billing-document-modal header .wp-button-link,.wp-billing-document-modal header button{min-height:40px}
+.wp-billing-document-close{width:40px;border:1px solid #354941;border-radius:10px;background:#111b17;color:#e8f1ec;font-size:22px;cursor:pointer}
+.wp-billing-document-modal main{min-height:0;padding:14px;background:#17201c}.wp-billing-document-modal iframe{display:block;width:100%;height:100%;border:0;border-radius:10px;background:#eef2ef}
+.wp-billing-document-modal footer{display:flex;justify-content:space-between;gap:20px;padding:11px 22px;border-top:1px solid #23342e;color:#8fa197;font-size:11px}.wp-billing-document-modal footer b{color:#2dde8b}
+@media(max-width:720px){.wp-billing-document-modal{width:100vw;height:100vh;border:0;border-radius:0}.wp-billing-document-modal header{align-items:flex-start;flex-direction:column}.wp-billing-document-modal header>div:last-child{width:100%;flex-wrap:wrap}.wp-billing-document-modal footer{flex-direction:column;gap:4px}}
 .wp-billing-heading-actions,.wp-billing-subscription-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .wp-billing-mode,.wp-billing-status,.wp-billing-current,.wp-billing-payment-status { display:inline-flex; align-items:center; justify-content:center; width:max-content; padding:7px 10px; border:1px solid color-mix(in srgb,#e5bd57 48%,var(--wp-border)); border-radius:999px; background:color-mix(in srgb,#e5bd57 12%,var(--wp-panel)); color:#e5bd57; font-size:.7rem; font-weight:850; text-transform:capitalize; }
 .wp-billing-mode.is-live,.wp-billing-status.active,.wp-billing-payment-status.captured { border-color:color-mix(in srgb,var(--wp-accent) 48%,var(--wp-border)); background:color-mix(in srgb,var(--wp-accent) 12%,var(--wp-panel)); color:var(--wp-accent); }

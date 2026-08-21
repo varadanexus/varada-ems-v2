@@ -2,6 +2,7 @@
 // Tenant-scoped Razorpay Subscriptions integration for WhatsApp Solutions.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 
 const MAX_BODY_BYTES = 512 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
@@ -10,12 +11,284 @@ const TERMINAL_SUBSCRIPTION_STATUSES = new Set(["cancelled", "completed", "expir
 const DAY_MS = 86_400_000;
 const PACKAGE_GST_RATE = 0.18;
 const GATEWAY_RATE_WITH_TAX = 0.02 * 1.18;
+const DRIVE_ROOT_FOLDER_ID = Deno.env.get("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID") || "1Tnq1agDpaLCIT_ZGiDRjVOXa7KYDASQp";
 
 function env(name: string) { return Deno.env.get(name) || ""; }
 function adminClient() { return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } }); }
 function fromBase64Url(value: string) {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
   return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+}
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  return btoa(binary);
+}
+function base64url(input: ArrayBuffer | string) {
+  let encoded = "";
+  if (typeof input === "string") encoded = btoa(input);
+  else {
+    const bytes = new Uint8Array(input);
+    let binary = "";
+    for (let index = 0; index < bytes.length; index += 1) binary += String.fromCharCode(bytes[index]);
+    encoded = btoa(binary);
+  }
+  return encoded.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function pemToPkcs8(pem: string) {
+  const body = pem.replace(/-----BEGIN PRIVATE KEY-----/, "").replace(/-----END PRIVATE KEY-----/, "").replace(/\s+/g, "");
+  const binary = atob(body);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0)).buffer;
+}
+let cachedDriveToken: { value: string; exp: number } | null = null;
+async function driveAccessToken() {
+  const now = Math.floor(Date.now() / 1000);
+  if (cachedDriveToken && cachedDriveToken.exp - 60 > now) return cachedDriveToken.value;
+  const raw = env("GOOGLE_SERVICE_ACCOUNT_JSON");
+  if (!raw) throw new Error("Google Drive billing archive is not configured.");
+  const account = JSON.parse(raw);
+  if (!account.client_email || !account.private_key) throw new Error("Google Drive billing archive is not configured.");
+  const unsigned = `${base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${base64url(JSON.stringify({ iss: account.client_email, scope: "https://www.googleapis.com/auth/drive", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 }))}`;
+  const key = await crypto.subtle.importKey("pkcs8", pemToPkcs8(account.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
+  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${unsigned}.${base64url(signature)}` }) });
+  const payload = await response.json();
+  if (!response.ok || !payload.access_token) throw new Error("Google Drive billing archive is temporarily unavailable.");
+  cachedDriveToken = { value: payload.access_token, exp: now + Number(payload.expires_in || 3600) };
+  return cachedDriveToken.value;
+}
+const DRIVE_QS = "supportsAllDrives=true&includeItemsFromAllDrives=true";
+async function driveFetch(url: string, token: string, init: RequestInit = {}) {
+  const response = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init.headers || {}) } });
+  if (init.headers?.Accept === "application/octet-stream") {
+    if (!response.ok) throw new Error("Archived billing PDF could not be loaded.");
+    return new Uint8Array(await response.arrayBuffer());
+  }
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : null;
+  if (!response.ok) throw new Error(payload?.error?.message || "Google Drive billing archive failed.");
+  return payload;
+}
+const driveFolderCache = new Map<string, string>();
+const escapeDriveQuery = (value: string) => String(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+async function findOrCreateDriveFolder(token: string, parentId: string, name: string) {
+  const key = `${parentId}/${name}`;
+  if (driveFolderCache.has(key)) return driveFolderCache.get(key)!;
+  const query = [`name='${escapeDriveQuery(name)}'`, `'${parentId}' in parents`, "mimeType='application/vnd.google-apps.folder'", "trashed=false"].join(" and ");
+  const found = await driveFetch(`https://www.googleapis.com/drive/v3/files?${DRIVE_QS}&corpora=allDrives&q=${encodeURIComponent(query)}&fields=files(id,name)`, token);
+  if (found?.files?.[0]?.id) { driveFolderCache.set(key, found.files[0].id); return found.files[0].id; }
+  const created = await driveFetch(`https://www.googleapis.com/drive/v3/files?${DRIVE_QS}&fields=id`, token, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] }) });
+  driveFolderCache.set(key, created.id);
+  return created.id;
+}
+async function uploadDriveFile(token: string, folderId: string, name: string, bytes: Uint8Array) {
+  const boundary = `vnbilling${crypto.randomUUID().replace(/-/g, "")}`;
+  const encoder = new TextEncoder();
+  const start = encoder.encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [folderId] })}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`);
+  const end = encoder.encode(`\r\n--${boundary}--`);
+  const body = new Uint8Array(start.length + bytes.length + end.length);
+  body.set(start); body.set(bytes, start.length); body.set(end, start.length + bytes.length);
+  return driveFetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&${DRIVE_QS}&fields=id,name,size`, token, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${boundary}` }, body });
+}
+async function trashDriveFile(token: string, fileId: string) {
+  await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?${DRIVE_QS}&fields=id,trashed`, token, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }) });
+}
+function safeDriveSegment(value: unknown, fallback: string) {
+  return String(value || fallback).normalize("NFKC").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().slice(0, 100) || fallback;
+}
+function pdfSafeText(value: unknown) {
+  return String(value ?? "").normalize("NFKD").replace(/₹/g, "INR ").replace(/[–—−]/g, "-").replace(/[•·]/g, "-").replace(/[^\x20-\x7E]/g, " ").replace(/\s+/g, " ").trim();
+}
+function pdfMoney(paise: unknown, currency = "INR") {
+  return `${pdfSafeText(currency || "INR")} ${(Number(paise || 0) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function wrapPdfText(text: string, font: any, size: number, maxWidth: number) {
+  const words = pdfSafeText(text).split(" ").filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth || !line) line = candidate;
+    else { lines.push(line); line = word; }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invoice" | "credit_note") {
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(pdfSafeText(kind === "invoice" ? invoice.invoice_number : documentRecord.credit_note_number));
+  pdf.setAuthor("Varada Nexus Private Limited");
+  pdf.setCreator("Varada Nexus EMS");
+  pdf.setProducer("Varada Nexus EMS Corporate Billing");
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const green = rgb(0.025, 0.19, 0.12), emerald = rgb(0.05, 0.67, 0.39), gold = rgb(0.82, 0.66, 0.25), ink = rgb(0.08, 0.12, 0.1), muted = rgb(0.35, 0.42, 0.38), pale = rgb(0.95, 0.97, 0.96), lineColor = rgb(0.84, 0.88, 0.85), white = rgb(1, 1, 1);
+  const issuer = invoice.issuer_snapshot || {};
+  const isCredit = kind === "credit_note";
+  const number = isCredit ? documentRecord.credit_note_number : invoice.invoice_number;
+  const date = isCredit ? documentRecord.credit_note_date : invoice.invoice_date;
+  const currency = documentRecord.currency || invoice.currency || "INR";
+  const pages: any[] = [];
+  let page: any, y = 0;
+  const addPage = () => {
+    page = pdf.addPage([595.28, 841.89]); pages.push(page); y = 710;
+    page.drawRectangle({ x: 0, y: 752, width: 595.28, height: 89.89, color: green });
+    page.drawRectangle({ x: 0, y: 747, width: 595.28, height: 5, color: gold });
+    page.drawRectangle({ x: 42, y: 775, width: 42, height: 42, color: rgb(0.04, 0.26, 0.17), borderColor: gold, borderWidth: 1 });
+    page.drawText("VN", { x: 51, y: 790, font: bold, size: 16, color: gold });
+    page.drawText("VARADA NEXUS", { x: 96, y: 798, font: bold, size: 16, color: white });
+    page.drawText("PRIVATE LIMITED", { x: 96, y: 782, font: regular, size: 8, color: rgb(0.76, 0.82, 0.78) });
+    page.drawText(isCredit ? "CREDIT NOTE" : "TAX INVOICE", { x: 423, y: 798, font: bold, size: 12, color: white });
+    page.drawText(pdfSafeText(number), { x: 423, y: 781, font: regular, size: 8, color: rgb(0.84, 0.88, 0.85), maxWidth: 140 });
+  };
+  addPage();
+  if (invoice.document_environment === "test" || documentRecord.document_environment === "test") {
+    page.drawRectangle({ x: 42, y: y - 2, width: 511, height: 24, color: rgb(1, 0.96, 0.84) });
+    page.drawText("TEST DOCUMENT - NOT A STATUTORY TAX INVOICE", { x: 54, y: y + 6, font: bold, size: 8, color: rgb(0.48, 0.31, 0.02) }); y -= 40;
+  }
+  page.drawText(isCredit ? "Credit note details" : "Invoice details", { x: 42, y, font: bold, size: 18, color: green });
+  page.drawText(`Issue date  ${pdfSafeText(new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }))}`, { x: 395, y: y + 3, font: regular, size: 9, color: muted }); y -= 28;
+  const boxY = y - 105;
+  page.drawRectangle({ x: 42, y: boxY, width: 248, height: 105, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  page.drawRectangle({ x: 305, y: boxY, width: 248, height: 105, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  page.drawText("BILL TO", { x: 56, y: y - 18, font: bold, size: 8, color: emerald });
+  page.drawText(pdfSafeText(invoice.billing_name || "Customer"), { x: 56, y: y - 38, font: bold, size: 11, color: ink, maxWidth: 220 });
+  const billLines = [invoice.billing_address, invoice.billing_email, invoice.billing_gstin ? `GSTIN ${invoice.billing_gstin}` : ""].filter(Boolean);
+  let billY = y - 55;
+  for (const value of billLines) for (const text of wrapPdfText(value, regular, 8, 220).slice(0, 2)) { page.drawText(text, { x: 56, y: billY, font: regular, size: 8, color: muted }); billY -= 11; }
+  page.drawText("DOCUMENT SUMMARY", { x: 319, y: y - 18, font: bold, size: 8, color: emerald });
+  page.drawText(pdfSafeText(invoice.package_code || "WhatsApp Solutions"), { x: 319, y: y - 38, font: bold, size: 11, color: ink });
+  page.drawText(`${pdfSafeText(invoice.billing_interval || "Recurring")} billing`, { x: 319, y: y - 55, font: regular, size: 8, color: muted });
+  if (isCredit && documentRecord.reason) page.drawText(pdfSafeText(`Reason: ${documentRecord.reason}`), { x: 319, y: y - 72, font: regular, size: 8, color: muted, maxWidth: 220 });
+  y = boxY - 30;
+  const rows: any[] = [];
+  if (isCredit) rows.push({ description: `Credit against ${invoice.invoice_number || documentRecord.provider_invoice_id || "original invoice"}`, quantity: 1, basePaise: documentRecord.taxable_base_paise });
+  else {
+    for (const item of Array.isArray(invoice.line_items) ? invoice.line_items : []) {
+      rows.push({ description: item.description || item.type || "Subscription service", quantity: Number(item.quantity || 1), basePaise: Number(item.basePaise || 0) });
+      for (const addon of Array.isArray(item.addons) ? item.addons : []) rows.push({ description: `Add-on: ${addon.name || addon.code}`, quantity: Number(addon.quantity || 1), basePaise: Number(addon.baseSubtotalPaise || 0) });
+    }
+    if (!rows.length) rows.push({ description: `${invoice.package_code || "WhatsApp Solutions"} subscription`, quantity: 1, basePaise: invoice.taxable_base_paise });
+  }
+  const drawTableHeader = () => {
+    page.drawRectangle({ x: 42, y: y - 21, width: 511, height: 25, color: green });
+    page.drawText("DESCRIPTION", { x: 54, y: y - 13, font: bold, size: 8, color: white });
+    page.drawText("QTY", { x: 410, y: y - 13, font: bold, size: 8, color: white });
+    page.drawText("TAXABLE AMOUNT", { x: 455, y: y - 13, font: bold, size: 8, color: white }); y -= 29;
+  };
+  drawTableHeader();
+  for (const row of rows) {
+    const descriptions = wrapPdfText(row.description, regular, 9, 330);
+    const rowHeight = Math.max(30, descriptions.length * 12 + 14);
+    if (y - rowHeight < 205) { addPage(); drawTableHeader(); }
+    page.drawRectangle({ x: 42, y: y - rowHeight + 4, width: 511, height: rowHeight, color: white, borderColor: lineColor, borderWidth: 0.5 });
+    let textY = y - 14;
+    for (const text of descriptions) { page.drawText(text, { x: 54, y: textY, font: regular, size: 9, color: ink }); textY -= 12; }
+    page.drawText(String(row.quantity || 1), { x: 414, y: y - 14, font: regular, size: 9, color: ink });
+    const money = pdfMoney(row.basePaise, currency); page.drawText(money, { x: 541 - bold.widthOfTextAtSize(money, 9), y: y - 14, font: bold, size: 9, color: ink }); y -= rowHeight;
+  }
+  if (y < 280) addPage();
+  y -= 16;
+  const totals = [
+    ["Taxable value", documentRecord.taxable_base_paise ?? invoice.taxable_base_paise],
+    ["GST", documentRecord.gst_paise ?? invoice.gst_paise],
+    ["Additional gateway adjustment", documentRecord.gateway_adjustment_paise ?? invoice.gateway_adjustment_paise],
+  ];
+  page.drawRectangle({ x: 305, y: y - 104, width: 248, height: 112, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  let totalsY = y - 15;
+  for (const [label, value] of totals) { page.drawText(String(label), { x: 319, y: totalsY, font: regular, size: 9, color: muted }); const money = pdfMoney(value, currency); page.drawText(money, { x: 539 - bold.widthOfTextAtSize(money, 9), y: totalsY, font: bold, size: 9, color: ink }); totalsY -= 22; }
+  page.drawLine({ start: { x: 319, y: totalsY + 8 }, end: { x: 539, y: totalsY + 8 }, thickness: 1, color: green });
+  page.drawText(isCredit ? "Credit total" : "Invoice total", { x: 319, y: totalsY - 8, font: bold, size: 10, color: green });
+  const grand = pdfMoney(documentRecord.total_paise ?? invoice.total_paise, currency); page.drawText(grand, { x: 539 - bold.widthOfTextAtSize(grand, 12), y: totalsY - 9, font: bold, size: 12, color: green });
+  const refY = y - 138;
+  page.drawRectangle({ x: 42, y: refY - 72, width: 511, height: 78, color: rgb(0.96, 0.98, 0.97), borderColor: emerald, borderWidth: 0.8 });
+  page.drawText("PAYMENT GATEWAY REFERENCES", { x: 56, y: refY - 12, font: bold, size: 8, color: emerald });
+  page.drawText(pdfSafeText(`Razorpay invoice: ${documentRecord.provider_invoice_id || invoice.provider_invoice_id || "Not provided"}`), { x: 56, y: refY - 31, font: regular, size: 8, color: muted });
+  page.drawText(pdfSafeText(`Transaction ID: ${documentRecord.provider_payment_id || invoice.provider_payment_id || "Not provided"}`), { x: 56, y: refY - 47, font: regular, size: 8, color: muted });
+  if (isCredit) page.drawText(pdfSafeText(`Refund ID: ${documentRecord.provider_refund_id || "Not provided"}`), { x: 56, y: refY - 63, font: regular, size: 8, color: muted });
+  pages.forEach((item, index) => {
+    item.drawLine({ start: { x: 42, y: 45 }, end: { x: 553, y: 45 }, thickness: 0.6, color: lineColor });
+    item.drawText(pdfSafeText(issuer.legalName || issuer.tradeName || "Varada Nexus Private Limited"), { x: 42, y: 28, font: bold, size: 7, color: muted });
+    item.drawText(`Generated by Varada Nexus EMS  |  Page ${index + 1} of ${pages.length}`, { x: 365, y: 28, font: regular, size: 7, color: muted });
+  });
+  return new Uint8Array(await pdf.save({ useObjectStreams: true }));
+}
+async function loadBillingDocument(admin: any, tenantId: string, kind: "invoice" | "credit_note", documentId: string) {
+  if (kind === "invoice") {
+    const { data: invoice, error } = await admin.from("whatsapp_platform_billing_invoices").select("*").eq("id", documentId).eq("tenant_id", tenantId).single();
+    if (error || !invoice) throw new Error("Invoice not found.");
+    return { documentRecord: invoice, invoice };
+  }
+  const { data: documentRecord, error } = await admin.from("whatsapp_platform_billing_credit_notes").select("*").eq("id", documentId).eq("tenant_id", tenantId).single();
+  if (error || !documentRecord) throw new Error("Credit note not found.");
+  const { data: invoice, error: invoiceError } = await admin.from("whatsapp_platform_billing_invoices").select("*").eq("id", documentRecord.invoice_id).eq("tenant_id", tenantId).single();
+  if (invoiceError || !invoice) throw new Error("Original invoice not found.");
+  return { documentRecord, invoice };
+}
+async function archiveBillingDocument(admin: any, tenantId: string, kind: "invoice" | "credit_note", documentId: string, uploadedByUserId: string | null = null) {
+  const table = kind === "invoice" ? "whatsapp_platform_billing_invoices" : "whatsapp_platform_billing_credit_notes";
+  const { documentRecord, invoice } = await loadBillingDocument(admin, tenantId, kind, documentId);
+  if (documentRecord.pdf_drive_file_id) {
+    const bytes = await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentRecord.pdf_drive_file_id)}?alt=media&${DRIVE_QS}`, await driveAccessToken(), { headers: { Accept: "application/octet-stream" } });
+    return { bytes, documentRecord, invoice, archived: true };
+  }
+  const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("id,name,drive_root_folder_id").eq("id", tenantId).single();
+  if (tenantError || !tenant) throw new Error("Workspace Drive folder could not be resolved.");
+  const number = kind === "invoice" ? documentRecord.invoice_number : documentRecord.credit_note_number;
+  const financialYear = String(number || "").split("/").find((part: string) => /^\d{2}-\d{2}$/.test(part)) || "Unsorted";
+  const token = await driveAccessToken();
+  const tenantFolderName = safeDriveSegment(tenant.name, `Workspace-${tenantId.slice(0, 8)}`);
+  const tenantFolderId = tenant.drive_root_folder_id || await findOrCreateDriveFolder(token, DRIVE_ROOT_FOLDER_ID, tenantFolderName);
+  const financeFolderId = await findOrCreateDriveFolder(token, tenantFolderId, "Finance");
+  const typeFolderName = kind === "invoice" ? "Invoices" : "Credit Notes";
+  const typeFolderId = await findOrCreateDriveFolder(token, financeFolderId, typeFolderName);
+  const yearFolderId = await findOrCreateDriveFolder(token, typeFolderId, financialYear);
+  const folderPath = `${tenantFolderName} / Finance / ${typeFolderName} / ${financialYear}`;
+  const fileName = `${safeDriveSegment(number, kind === "invoice" ? "Invoice" : "Credit-Note")}.pdf`;
+  const bytes = await generateBillingPdf(documentRecord, invoice, kind);
+  let uploaded: any = null;
+  try {
+    uploaded = await uploadDriveFile(token, yearFolderId, fileName, bytes);
+    const { error: registryError } = await admin.from("whatsapp_platform_documents").insert({
+      tenant_id: tenantId, uploaded_by_user_id: uploadedByUserId, category: "invoice",
+      entity_type: kind === "invoice" ? "billing_invoice" : "billing_credit_note", entity_id: documentId,
+      original_file_name: fileName, stored_file_name: uploaded.name || fileName, mime_type: "application/pdf",
+      file_size: Number(uploaded.size || bytes.length), drive_file_id: uploaded.id, drive_folder_id: yearFolderId, drive_folder_path: folderPath, status: "active",
+    });
+    if (registryError) throw registryError;
+    const archivedAt = new Date().toISOString();
+    const { error: updateError } = await admin.from(table).update({ pdf_drive_file_id: uploaded.id, pdf_drive_folder_id: yearFolderId, pdf_drive_folder_path: folderPath, pdf_file_name: uploaded.name || fileName, pdf_archived_at: archivedAt, pdf_archive_error: null, updated_at: archivedAt }).eq("id", documentId).eq("tenant_id", tenantId).is("pdf_drive_file_id", null);
+    if (updateError) throw updateError;
+    if (!tenant.drive_root_folder_id) await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenantFolderName, updated_at: archivedAt }).eq("id", tenantId);
+    return { bytes, documentRecord: { ...documentRecord, pdf_drive_file_id: uploaded.id, pdf_drive_folder_path: folderPath, pdf_file_name: uploaded.name || fileName, pdf_archived_at: archivedAt }, invoice, archived: true };
+  } catch (error) {
+    if (uploaded?.id) await trashDriveFile(token, uploaded.id).catch(() => {});
+    const message = error instanceof Error ? error.message : "Billing PDF archive failed";
+    await admin.from(table).update({ pdf_archive_error: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", documentId).eq("tenant_id", tenantId);
+    throw error;
+  }
+}
+async function archiveInvoiceForPayment(admin: any, tenantId: string, providerPaymentId: string) {
+  const { data: invoice, error } = await admin.from("whatsapp_platform_billing_invoices").select("id,pdf_drive_file_id").eq("tenant_id", tenantId).eq("provider_payment_id", providerPaymentId).maybeSingle();
+  if (error) throw error;
+  if (invoice && !invoice.pdf_drive_file_id) await archiveBillingDocument(admin, tenantId, "invoice", invoice.id);
+}
+async function archiveOutstandingBillingDocuments(admin: any, tenantId: string) {
+  const [{ data: invoices }, { data: notes }] = await Promise.all([
+    admin.from("whatsapp_platform_billing_invoices").select("id").eq("tenant_id", tenantId).is("pdf_drive_file_id", null).order("issued_at", { ascending: true }).limit(10),
+    admin.from("whatsapp_platform_billing_credit_notes").select("id").eq("tenant_id", tenantId).is("pdf_drive_file_id", null).order("issued_at", { ascending: true }).limit(10),
+  ]);
+  for (const invoice of invoices || []) await archiveBillingDocument(admin, tenantId, "invoice", invoice.id).catch((error) => console.error("Invoice PDF archive pending", { invoiceId: invoice.id, message: error?.message }));
+  for (const note of notes || []) await archiveBillingDocument(admin, tenantId, "credit_note", note.id).catch((error) => console.error("Credit-note PDF archive pending", { creditNoteId: note.id, message: error?.message }));
+}
+async function billingDocumentPdf(admin: any, customer: any, body: any) {
+  const kind = String(body.documentType || "invoice") as "invoice" | "credit_note";
+  if (!['invoice', 'credit_note'].includes(kind)) throw new Error("Invalid billing document type.");
+  const documentId = cleanUuid(body.documentId, "billing document");
+  const archived = await archiveBillingDocument(admin, customer.tenant_id, kind, documentId, customer.user_id);
+  const record = archived.documentRecord;
+  const number = kind === "invoice" ? record.invoice_number : record.credit_note_number;
+  return { documentType: kind, documentId, documentNumber: number, fileName: record.pdf_file_name || `${safeDriveSegment(number, "Billing-Document")}.pdf`, mimeType: "application/pdf", base64: bytesToBase64(archived.bytes), archivedAt: record.pdf_archived_at || new Date().toISOString(), driveFolderPath: record.pdf_drive_folder_path || "Finance" };
 }
 async function encryptionKey() {
   const material = env("WHATSAPP_PLATFORM_TOKEN_ENCRYPTION_KEY");
@@ -227,6 +500,9 @@ async function upsertPayment(admin: any, subscription: any, entity: any) {
   };
   const { error } = await admin.from("whatsapp_platform_billing_payments").upsert(values, { onConflict: "provider_payment_id" });
   if (error) throw error;
+  if (values.captured && values.provider_invoice_id) {
+    await archiveInvoiceForPayment(admin, subscription.tenant_id, paymentId).catch((archiveError) => console.error("Automatic invoice PDF archive pending", { paymentId, message: archiveError?.message }));
+  }
 }
 async function bindPaymentIntentEvidence(admin: any, subscription: any, entity: any) {
   if (!subscription?.id || !entity?.id || !entity.captured) return;
@@ -259,6 +535,10 @@ async function recordRefund(admin: any, entity: any) {
     p_safe_metadata: { receipt: entity.receipt || null, speed_requested: entity.speed_requested || null, speed_processed: entity.speed_processed || null, created_at: unixDate(entity.created_at) },
   });
   if (error) throw error;
+  if (String(entity.status || "").toLowerCase() === "processed") {
+    const { data: note } = await admin.from("whatsapp_platform_billing_credit_notes").select("id,tenant_id,pdf_drive_file_id").eq("provider_refund_id", refundId).maybeSingle();
+    if (note && !note.pdf_drive_file_id) await archiveBillingDocument(admin, note.tenant_id, "credit_note", note.id).catch((archiveError) => console.error("Automatic credit-note PDF archive pending", { refundId, message: archiveError?.message }));
+  }
   return data;
 }
 async function applyPackageForSubscription(admin: any, subscription: any, status: string) {
@@ -308,10 +588,11 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     admin.from("whatsapp_platform_billing_payments").select("id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(20),
     admin.from("whatsapp_platform_billing_renewal_price_changes").select("id,subscription_id,replacement_subscription_id,from_price_version_id,target_price_version_id,effective_at,status,notice_version,notice_shown_at,decided_at,created_at").eq("tenant_id", customer.tenant_id).in("status", ["pending_consent", "accepted", "processing", "failed"]).order("created_at", { ascending: false }),
     admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id }),
-    admin.from("whatsapp_platform_billing_invoices").select("id,invoice_number,document_environment,invoice_date,status,currency,base_subtotal_paise,discount_paise,taxable_base_paise,gst_rate_bps,gst_paise,gateway_adjustment_paise,total_paise,provider_invoice_id,provider_payment_id,package_code,billing_interval,billing_name,billing_email,billing_gstin,billing_address,issuer_snapshot,line_items,issued_at").eq("tenant_id", customer.tenant_id).order("invoice_date", { ascending: false }).limit(50),
-    admin.from("whatsapp_platform_billing_credit_notes").select("id,invoice_id,credit_note_number,document_environment,credit_note_date,status,currency,taxable_base_paise,gst_paise,gateway_adjustment_paise,total_paise,reason,provider_refund_id,provider_payment_id,provider_invoice_id,issued_at").eq("tenant_id", customer.tenant_id).order("credit_note_date", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_billing_invoices").select("id,invoice_number,document_environment,invoice_date,status,currency,base_subtotal_paise,discount_paise,taxable_base_paise,gst_rate_bps,gst_paise,gateway_adjustment_paise,total_paise,provider_invoice_id,provider_payment_id,package_code,billing_interval,billing_name,billing_email,billing_gstin,billing_address,issuer_snapshot,line_items,pdf_archived_at,pdf_drive_folder_path,pdf_archive_error,issued_at").eq("tenant_id", customer.tenant_id).order("invoice_date", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_billing_credit_notes").select("id,invoice_id,credit_note_number,document_environment,credit_note_date,status,currency,taxable_base_paise,gst_paise,gateway_adjustment_paise,total_paise,reason,provider_refund_id,provider_payment_id,provider_invoice_id,pdf_archived_at,pdf_drive_folder_path,pdf_archive_error,issued_at").eq("tenant_id", customer.tenant_id).order("credit_note_date", { ascending: false }).limit(50),
   ]);
   if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError; if (renewalError) throw renewalError; if (entitlementError) throw entitlementError; if (invoicesError) throw invoicesError; if (creditNotesError) throw creditNotesError;
+  EdgeRuntime.waitUntil(archiveOutstandingBillingDocuments(admin, customer.tenant_id));
   const rows = subscriptions || [];
   const subscription = rows.find((row: any) => row.safe_metadata?.upgrade_activated_at && !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || rows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
@@ -1259,6 +1540,7 @@ Deno.serve(async (req) => {
     }
     const credentials = await loadRazorpaySecrets(admin);
     if (action === "summary") return json(req, await billingSummary(admin, customer, credentials));
+    if (action === "billing_document_pdf") return json(req, await billingDocumentPdf(admin, customer, body));
     if (action === "quote_subscription_checkout") return json(req, await quoteSubscriptionCheckout(admin, customer, body));
     if (action === "create_subscription") return json(req, await createSubscription(admin, customer, body, credentials));
     if (action === "verify_checkout") return json(req, await verifyCheckout(admin, customer, body, credentials));
