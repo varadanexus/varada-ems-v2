@@ -198,6 +198,21 @@ async function upsertPayment(admin: any, subscription: any, entity: any) {
   const { error } = await admin.from("whatsapp_platform_billing_payments").upsert(values, { onConflict: "provider_payment_id" });
   if (error) throw error;
 }
+async function recordRefund(admin: any, entity: any) {
+  if (!entity?.id || !entity?.payment_id) return null;
+  const refundId = providerId(entity.id, "rfnd");
+  const paymentId = providerId(entity.payment_id, "pay");
+  const notes = entity.notes && typeof entity.notes === "object" && !Array.isArray(entity.notes) ? entity.notes : {};
+  const reason = String(notes.comment || notes.reason || entity.receipt || "Razorpay refund").slice(0, 500);
+  const { data, error } = await admin.rpc("whatsapp_platform_record_billing_refund", {
+    p_provider_refund_id: refundId, p_provider_payment_id: paymentId,
+    p_amount_paise: Math.max(0, Number(entity.amount || 0)), p_currency: String(entity.currency || "INR").toUpperCase(),
+    p_status: String(entity.status || "pending").toLowerCase(), p_reason: reason,
+    p_safe_metadata: { receipt: entity.receipt || null, speed_requested: entity.speed_requested || null, speed_processed: entity.speed_processed || null, created_at: unixDate(entity.created_at) },
+  });
+  if (error) throw error;
+  return data;
+}
 async function applyPackageForSubscription(admin: any, subscription: any, status: string) {
   if (status === "active") {
     const { error } = await admin.from("whatsapp_platform_tenants").update({ plan_code: subscription.package_code, updated_at: new Date().toISOString() }).eq("id", subscription.tenant_id);
@@ -239,14 +254,16 @@ async function syncSubscriptionEntity(admin: any, subscription: any, entity: any
   return data;
 }
 async function billingSummary(admin: any, customer: any, credentials: any) {
-  const [{ data: packages, error: packagesError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentsError }, { data: renewalChanges, error: renewalError }, { data: entitlement, error: entitlementError }] = await Promise.all([
+  const [{ data: packages, error: packagesError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentsError }, { data: renewalChanges, error: renewalError }, { data: entitlement, error: entitlementError }, { data: invoices, error: invoicesError }, { data: creditNotes, error: creditNotesError }] = await Promise.all([
     admin.from("whatsapp_platform_package_master").select("id,code,name,description,status,billing_model,currency,monthly_amount,annual_amount,trial_days,team_member_limit,whatsapp_number_limit,contact_limit,monthly_message_limit,template_limit,flow_limit,campaign_limit,automation_limit,integration_limit,storage_limit_mb,entitlements,sort_order,current_price_version_id").eq("status", "active").order("sort_order"),
     admin.from("whatsapp_platform_billing_subscriptions").select("id,package_code,billing_interval,status,quantity,paid_count,remaining_count,short_url,current_start,current_end,charge_at,ended_at,cancel_at_cycle_end,checkout_verified_at,activated_at,cancelled_at,package_price_version_id,recurring_base_paise,gst_rate_bps,safe_metadata,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(10),
     admin.from("whatsapp_platform_billing_payments").select("id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(20),
     admin.from("whatsapp_platform_billing_renewal_price_changes").select("id,subscription_id,replacement_subscription_id,from_price_version_id,target_price_version_id,effective_at,status,notice_version,notice_shown_at,decided_at,created_at").eq("tenant_id", customer.tenant_id).in("status", ["pending_consent", "accepted", "processing", "failed"]).order("created_at", { ascending: false }),
     admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id }),
+    admin.from("whatsapp_platform_billing_invoices").select("id,invoice_number,document_environment,invoice_date,status,currency,base_subtotal_paise,discount_paise,taxable_base_paise,gst_rate_bps,gst_paise,gateway_adjustment_paise,total_paise,provider_invoice_id,provider_payment_id,package_code,billing_interval,billing_name,billing_email,billing_gstin,billing_address,issuer_snapshot,line_items,issued_at").eq("tenant_id", customer.tenant_id).order("invoice_date", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_billing_credit_notes").select("id,invoice_id,credit_note_number,document_environment,credit_note_date,status,currency,taxable_base_paise,gst_paise,gateway_adjustment_paise,total_paise,reason,provider_refund_id,provider_payment_id,provider_invoice_id,issued_at").eq("tenant_id", customer.tenant_id).order("credit_note_date", { ascending: false }).limit(50),
   ]);
-  if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError; if (renewalError) throw renewalError; if (entitlementError) throw entitlementError;
+  if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError; if (renewalError) throw renewalError; if (entitlementError) throw entitlementError; if (invoicesError) throw invoicesError; if (creditNotesError) throw creditNotesError;
   const rows = subscriptions || [];
   const subscription = rows.find((row: any) => row.safe_metadata?.upgrade_activated_at && !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || rows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
@@ -286,7 +303,7 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     configured: razorpayConfigured(credentials), keyId: razorpayConfigured(credentials) ? credentials.keyId : "",
     mode: credentials.keyId?.startsWith("rzp_live_") ? "live" : "test",
     webhookUrl: `${env("SUPABASE_URL")}/functions/v1/whatsapp-platform-billing?webhook=razorpay`,
-    packages: publicPackages, subscription: publicSubscription, payments: payments || [], renewalPriceChanges: publicRenewalChanges, entitlement,
+    packages: publicPackages, subscription: publicSubscription, payments: payments || [], invoices: invoices || [], creditNotes: creditNotes || [], renewalPriceChanges: publicRenewalChanges, entitlement,
     customer: { name: customer.display_name || customer.company_name || "", email: customer.email || "", companyName: customer.company_name || "" },
   };
 }
@@ -1067,6 +1084,7 @@ async function processWebhook(admin: any, eventRecordId: string, payload: any, c
     const eventType = String(payload?.event || "unknown");
     const subscriptionEntity = payload?.payload?.subscription?.entity || null;
     const paymentEntity = payload?.payload?.payment?.entity || null;
+    const refundEntity = payload?.payload?.refund?.entity || null;
     if (subscriptionEntity?.id) {
       const providerSubscriptionId = providerId(subscriptionEntity.id, "sub");
       const { data: subscription, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("provider_subscription_id", providerSubscriptionId).maybeSingle();
@@ -1080,6 +1098,7 @@ async function processWebhook(admin: any, eventRecordId: string, payload: any, c
         await finalizeAddonChange(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
       }
     }
+    if (refundEntity?.id) await recordRefund(admin, refundEntity);
     const { error } = await admin.from("whatsapp_platform_billing_webhook_events").update({ processed_at: new Date().toISOString(), processing_error: null }).eq("id", eventRecordId);
     if (error) throw error;
     console.log("Razorpay billing webhook processed", { eventType });

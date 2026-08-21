@@ -1965,6 +1965,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-billing-history td:last-child,.wp-billing-history th:last-child { text-align:right; }
 .wp-billing-history td strong,.wp-billing-history td small { display:block; }
 .wp-billing-history td small { margin-top:3px; color:var(--wp-muted); }
+.wp-billing-history .wp-secondary { min-height:34px; padding:0 11px; white-space:nowrap; }
+.wp-billing-subheading { margin-top:24px; padding-top:22px; border-top:1px solid var(--wp-border); }
 @media (max-width:1000px) { .wp-billing-plans { grid-template-columns:1fr; } .wp-billing-plan { min-height:0; } }
 @media (max-width:720px) { .wp-billing-subscription,.wp-billing-hero,.wp-billing-price-change { align-items:flex-start; flex-direction:column; } .wp-billing-subscription > div:last-child { justify-items:start; } .wp-billing-price-change dl { flex-direction:column; gap:12px; } .wp-billing-price-consent { width:100%; } .wp-billing-grid { grid-template-columns:1fr; } .wp-billing-price { width:100%; padding:16px 0 0; border-top:1px solid var(--wp-border); border-left:0; text-align:left; } }
 @media(max-width:900px){.wp-billing-grid{grid-template-columns:1fr}.wp-billing-hero{align-items:flex-start;flex-direction:column}.wp-billing-price{width:100%;padding:18px 0 0;border-top:1px solid var(--wp-border);border-left:0;text-align:left}}
