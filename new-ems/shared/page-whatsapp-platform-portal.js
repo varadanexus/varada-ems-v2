@@ -1958,11 +1958,38 @@ function confirmBillingUpgrade(preview) {
   });
 }
 
+async function decideRenewalPriceChange(changeId, accepting) {
+  let authorizationWindow = null;
+  try {
+    if (accepting) { authorizationWindow = window.open("about:blank", "_blank"); if (authorizationWindow) authorizationWindow.opener = null; }
+    const result = await billingRequest("record_renewal_price_consent", { changeId, decision: accepting ? "accept" : "reject" });
+    if (accepting && result?.replacement?.short_url) {
+      if (authorizationWindow) authorizationWindow.location.href = result.replacement.short_url;
+      else window.open(result.replacement.short_url, "_blank", "noopener,noreferrer");
+    } else authorizationWindow?.close();
+    showToast(accepting ? "Consent recorded. Complete Razorpay authorization to schedule the new renewal price." : "Cancellation scheduled for the end of the current paid period.");
+    await renderDashboard();
+  } catch (error) {
+    authorizationWindow?.close();
+    throw error;
+  }
+}
+
+function renewalConsentModal(view) {
+  if (view === "billing" || !["owner", "admin"].includes(session.roleCode)) return "";
+  const change = (workspaceBilling?.renewalPriceChanges || []).find((item) => ["pending_consent", "failed"].includes(item.status));
+  const subscription = workspaceBilling?.subscription;
+  if (!change || !subscription) return "";
+  const annual = subscription.billing_interval === "year";
+  const amount = (version) => Number(version?.[annual ? "annual_base_paise" : "monthly_base_paise"] || 0) / 100;
+  return `<dialog class="wp-contact-dialog wp-renewal-consent-dialog" id="wpRenewalConsentDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Billing consent required</span><h2>Review your next renewal price</h2><p>Your existing paid period is unchanged. Choose whether to authorize the revised price for the next billing date.</p></div><button type="submit" value="later" aria-label="Review later">×</button></header><dl class="wp-upgrade-quote"><div><dt>Package</dt><dd>${escapeHtml(change.target?.package?.name || subscription.package_code)}</dd></div><div><dt>Current base price</dt><dd>${escapeHtml(billingMoney(amount(change.from), change.from?.currency || "INR"))}</dd></div><div><dt>New base price</dt><dd>${escapeHtml(billingMoney(amount(change.target), change.target?.currency || "INR"))} + GST</dd></div><div><dt>Effective from</dt><dd>${escapeHtml(formatProfileDate(change.effective_at))}</dd></div></dl><div class="wp-policy-note"><strong>Explicit renewal authorization</strong><p>Accepting opens Razorpay to authorize a replacement subscription. Rejecting schedules the current subscription to end after this paid period.</p></div><footer><button class="wp-secondary" type="button" data-signin-renewal-decision="reject" data-price-change-id="${escapeHtml(change.id)}">End after current period</button><button class="wp-primary" type="button" data-signin-renewal-decision="accept" data-price-change-id="${escapeHtml(change.id)}">Accept &amp; authorize</button></footer></form></dialog>`;
+}
+
 function billingView() {
   const pkg = workspacePackageMaster?.package;
   const canManage = ["owner", "admin"].includes(session.roleCode);
   const subscription = workspaceBilling?.subscription;
-  const renewalChange = (workspaceBilling?.renewalPriceChanges || []).find((change) => ["pending_consent", "accepted", "processing"].includes(change.status));
+  const renewalChange = (workspaceBilling?.renewalPriceChanges || []).find((change) => ["pending_consent", "accepted", "processing", "failed"].includes(change.status));
   const billingError = workspaceBilling?.error || workspacePackageMaster?.error || "";
   const heading = `<div class="wp-route-heading"><div><span class="wp-kicker">Subscription management</span><h1>Billing &amp; usage</h1><p>Package prices show the original base amount. Razorpay checkout shows the final total including 18% package GST, the gateway fee and GST on that fee.</p></div><div class="wp-billing-heading-actions"><span class="wp-billing-mode ${workspaceBilling?.mode === "live" ? "is-live" : ""}">${escapeHtml(workspaceBilling?.mode === "live" ? "Live payments" : "Test payments")}</span><a class="wp-secondary wp-button-link" href="/contact.html?subject=WhatsApp%20billing%20support">Billing support</a></div></div>`;
   if (!pkg) return `<section class="wp-route-page">${heading}<div class="wp-verification-notice"><strong>Billing data unavailable</strong><p>${escapeHtml(billingError || "No active package is available for this workspace.")}</p></div></section>`;
@@ -1978,7 +2005,7 @@ function billingView() {
   const subscriptionCard = `<section class="wp-billing-subscription"><div><span class="wp-card-eyebrow">Razorpay subscription</span><h2>${escapeHtml(subscription ? `${subscription.package_code} · ${subscription.billing_interval}ly` : "No active paid subscription")}</h2><p>${subscription ? `Status: ${escapeHtml(statusLabel)}${subscription.current_end ? ` · Current period ends ${escapeHtml(formatProfileDate(subscription.current_end))}` : ""}` : "Select a self-service package below to start secure checkout."}</p></div><div><span class="wp-billing-status ${escapeHtml(subscription?.status || "none")}">${escapeHtml(statusLabel)}</span>${statusActions}</div></section>`;
   const renewalInterval = subscription?.billing_interval === "year" ? "annual" : "monthly";
   const renewalAmount = (version) => Number(version?.[subscription?.billing_interval === "year" ? "annual_base_paise" : "monthly_base_paise"] || 0) / 100;
-  const renewalNotice = renewalChange ? `<section class="wp-billing-price-change ${escapeHtml(renewalChange.status)}"><div><span class="wp-card-eyebrow">Renewal price notice</span><h2>${escapeHtml(renewalChange.target?.package?.name || subscription?.package_code || "Package")} ${escapeHtml(renewalInterval)} price update</h2><p>Your current billing period keeps its existing price. The revised tax-exclusive base price applies from ${escapeHtml(formatProfileDate(renewalChange.effective_at))} only after the required payment authorization.</p><dl><div><dt>Current base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.from), renewalChange.from?.currency || "INR"))}</dd></div><div><dt>New base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.target), renewalChange.target?.currency || "INR"))} + GST</dd></div></dl></div>${renewalChange.status === "pending_consent" && canManage ? `<div class="wp-billing-price-consent"><button class="wp-secondary" type="button" data-renewal-price-decision="reject" data-price-change-id="${escapeHtml(renewalChange.id)}">Do not accept</button><button class="wp-primary" type="button" data-renewal-price-decision="accept" data-price-change-id="${escapeHtml(renewalChange.id)}">Accept new renewal price</button></div>` : `<div class="wp-billing-price-consent"><strong>${renewalChange.status === "accepted" ? "Consent recorded" : "Renewal update processing"}</strong><small>No revised charge occurs until Razorpay authorization is completed.</small></div>`}</section>` : "";
+  const renewalNotice = renewalChange ? `<section class="wp-billing-price-change ${escapeHtml(renewalChange.status)}"><div><span class="wp-card-eyebrow">Renewal price notice</span><h2>${escapeHtml(renewalChange.target?.package?.name || subscription?.package_code || "Package")} ${escapeHtml(renewalInterval)} price update</h2><p>Your current billing period keeps its existing price. The revised tax-exclusive base price applies from ${escapeHtml(formatProfileDate(renewalChange.effective_at))} only after the required payment authorization.</p><dl><div><dt>Current base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.from), renewalChange.from?.currency || "INR"))}</dd></div><div><dt>New base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.target), renewalChange.target?.currency || "INR"))} + GST</dd></div></dl></div>${["pending_consent", "failed"].includes(renewalChange.status) && canManage ? `<div class="wp-billing-price-consent"><button class="wp-secondary" type="button" data-renewal-price-decision="reject" data-price-change-id="${escapeHtml(renewalChange.id)}">End at current period</button><button class="wp-primary" type="button" data-renewal-price-decision="accept" data-price-change-id="${escapeHtml(renewalChange.id)}">Accept &amp; authorize renewal</button></div>` : renewalChange.status === "accepted" && renewalChange.authorizationUrl ? `<div class="wp-billing-price-consent"><strong>Consent recorded</strong><small>Complete the replacement mandate before the renewal date.</small><a class="wp-primary wp-button-link" href="${escapeHtml(renewalChange.authorizationUrl)}" target="_blank" rel="noopener noreferrer">Continue Razorpay authorization</a></div>` : `<div class="wp-billing-price-consent"><strong>${renewalChange.status === "accepted" ? "Consent recorded" : renewalChange.status === "failed" ? "Authorization needs attention" : "Renewal update processing"}</strong><small>No revised charge occurs until Razorpay authorization is completed.</small></div>`}</section>` : "";
   const managedSubscription = Boolean(subscription && ["authenticated", "active"].includes(String(subscription.status)));
   const packageCards = (workspaceBilling?.packages || []).map((plan) => {
     const selfService = plan.billing_model === "subscription";
@@ -2079,7 +2106,7 @@ async function renderDashboard() {
     } catch (error) {
       workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: error?.message || "Package Master could not be loaded." };
     }
-    if (view === "billing") {
+    if (view === "billing" || ["owner", "admin"].includes(session.roleCode)) {
       try { workspaceBilling = { ...(await billingRequest("summary")), error: "" }; }
       catch (error) { workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, error: error?.message || "Billing could not be loaded." }; }
     } else {
@@ -2198,7 +2225,7 @@ async function renderDashboard() {
     : `<a class="wp-workspace-account ${view === "profile" ? "active" : ""}" href="${workspacePath("profile")}" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-workspace-account-logo">${sidebarLogo}</span><div><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)}</small></div><span class="wp-account-chevron" aria-hidden="true">›</span></a>`;
   const sidebarNumberSelector = businessNumberSelector(connections, selectedConnection);
   const sidebarNavigation = workspaceNavigationMarkup({ inboxUnread, contactCount, campaignCount, templateCount: workspaceTemplates.templates.length, flowCount: workspaceFlows.flows.length, connectedCount: connected.length, teamCount: workspaceTeam.members.length, packageName: operationalPackageName });
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarAccount}${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${verificationAttentionModal()}`;
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarAccount}${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${workspaceViewContent(view, connections, setupReady, workspaceProfile)}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${verificationAttentionModal()}${renewalConsentModal(view)}`;
   if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
   const workspaceSidebarState = readWorkspaceSidebarState();
   enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
@@ -2215,19 +2242,32 @@ async function renderDashboard() {
     verificationAttentionDismissed = true;
     app.querySelector("[data-verification-attention]")?.remove();
   });
+  const signInRenewalDialog = app.querySelector("#wpRenewalConsentDialog");
+  if (signInRenewalDialog) {
+    signInRenewalDialog.showModal();
+    signInRenewalDialog.querySelectorAll("[data-signin-renewal-decision]").forEach((button) => button.addEventListener("click", async () => {
+      const accepting = button.dataset.signinRenewalDecision === "accept";
+      const original = button.textContent;
+      try {
+        button.disabled = true; button.textContent = accepting ? "Preparing authorization…" : "Scheduling period end…";
+        await decideRenewalPriceChange(button.dataset.priceChangeId, accepting);
+      } catch (error) {
+        showToast(error?.message || "Renewal price decision could not be completed.", "error");
+        button.disabled = false; button.textContent = original;
+      }
+    }));
+  }
   if (view === "billing") {
     app.querySelectorAll("[data-renewal-price-decision]").forEach((button) => button.addEventListener("click", async () => {
       const accepting = button.dataset.renewalPriceDecision === "accept";
       const message = accepting
-        ? "Accept this revised base price for the next billing period? A new Razorpay authorization will still be required before the revised amount can be charged."
-        : "Reject this renewal price change? Your current billing period will remain unchanged, and the subscription will require review before renewal.";
+        ? "Accept this revised base price and open Razorpay to authorize the replacement subscription for the next billing period?"
+        : "End this subscription after the current paid period instead of accepting the revised renewal price?";
       if (!window.confirm(message)) return;
       const original = button.textContent;
       try {
         button.disabled = true; button.textContent = accepting ? "Recording consent…" : "Recording decision…";
-        await billingRequest("record_renewal_price_consent", { changeId: button.dataset.priceChangeId, decision: accepting ? "accept" : "reject" });
-        showToast(accepting ? "Renewal price consent recorded. Payment authorization is still required." : "Renewal price change rejected.");
-        await renderDashboard();
+        await decideRenewalPriceChange(button.dataset.priceChangeId, accepting);
       } catch (error) {
         showToast(error?.message || "Renewal price decision could not be recorded.", "error");
         button.disabled = false; button.textContent = original;

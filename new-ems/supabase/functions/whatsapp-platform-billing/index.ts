@@ -203,9 +203,9 @@ async function syncSubscriptionEntity(admin: any, subscription: any, entity: any
 async function billingSummary(admin: any, customer: any, credentials: any) {
   const [{ data: packages, error: packagesError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentsError }, { data: renewalChanges, error: renewalError }] = await Promise.all([
     admin.from("whatsapp_platform_package_master").select("id,code,name,description,status,billing_model,currency,monthly_amount,annual_amount,trial_days,team_member_limit,whatsapp_number_limit,contact_limit,monthly_message_limit,template_limit,flow_limit,campaign_limit,automation_limit,integration_limit,storage_limit_mb,entitlements,sort_order,current_price_version_id").eq("status", "active").order("sort_order"),
-    admin.from("whatsapp_platform_billing_subscriptions").select("id,package_code,billing_interval,status,quantity,paid_count,remaining_count,current_start,current_end,charge_at,ended_at,cancel_at_cycle_end,checkout_verified_at,activated_at,cancelled_at,package_price_version_id,recurring_base_paise,gst_rate_bps,safe_metadata,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(10),
+    admin.from("whatsapp_platform_billing_subscriptions").select("id,package_code,billing_interval,status,quantity,paid_count,remaining_count,short_url,current_start,current_end,charge_at,ended_at,cancel_at_cycle_end,checkout_verified_at,activated_at,cancelled_at,package_price_version_id,recurring_base_paise,gst_rate_bps,safe_metadata,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(10),
     admin.from("whatsapp_platform_billing_payments").select("id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(20),
-    admin.from("whatsapp_platform_billing_renewal_price_changes").select("id,subscription_id,from_price_version_id,target_price_version_id,effective_at,status,notice_version,notice_shown_at,decided_at,created_at").eq("tenant_id", customer.tenant_id).in("status", ["pending_consent", "accepted", "processing"]).order("created_at", { ascending: false }),
+    admin.from("whatsapp_platform_billing_renewal_price_changes").select("id,subscription_id,replacement_subscription_id,from_price_version_id,target_price_version_id,effective_at,status,notice_version,notice_shown_at,decided_at,created_at").eq("tenant_id", customer.tenant_id).in("status", ["pending_consent", "accepted", "processing", "failed"]).order("created_at", { ascending: false }),
   ]);
   if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError; if (renewalError) throw renewalError;
   const rows = subscriptions || [];
@@ -213,7 +213,7 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     || rows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
     || rows.find((row: any) => !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || rows[0] || null;
-  const publicSubscription = subscription ? Object.fromEntries(Object.entries(subscription).filter(([key]) => key !== "safe_metadata")) : null;
+  const publicSubscription = subscription ? Object.fromEntries(Object.entries(subscription).filter(([key]) => !["safe_metadata", "short_url"].includes(key))) : null;
   const priceVersionIds = [...new Set((renewalChanges || []).flatMap((change: any) => [change.from_price_version_id, change.target_price_version_id]).filter(Boolean))];
   let priceVersions: any[] = [];
   if (priceVersionIds.length) {
@@ -223,6 +223,13 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
   }
   const versionMap = new Map(priceVersions.map((version: any) => [version.id, version]));
   const packageMap = new Map((packages || []).map((item: any) => [item.id, { code: item.code, name: item.name }]));
+  const subscriptionMap = new Map(rows.map((item: any) => [item.id, item]));
+  const missingReplacementIds = [...new Set((renewalChanges || []).map((change: any) => change.replacement_subscription_id).filter((id: any) => id && !subscriptionMap.has(id)))];
+  if (missingReplacementIds.length) {
+    const { data, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("id,short_url,status").eq("tenant_id", customer.tenant_id).in("id", missingReplacementIds);
+    if (error) throw error;
+    for (const replacement of data || []) subscriptionMap.set(replacement.id, replacement);
+  }
   const publicPackages = (packages || []).map((item: any) => Object.fromEntries(Object.entries(item).filter(([key]) => !["id", "current_price_version_id"].includes(key))));
   const publicRenewalChanges = (renewalChanges || []).map((change: any) => {
     const from = versionMap.get(change.from_price_version_id) || null;
@@ -232,8 +239,9 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
       annual_base_paise: version.annual_base_paise, gst_rate_bps: version.gst_rate_bps,
       effective_from: version.effective_from, package: packageMap.get(version.package_id) || null,
     } : null;
-    const { from_price_version_id: _fromId, target_price_version_id: _targetId, ...publicChange } = change;
-    return { ...publicChange, from: publicVersion(from), target: publicVersion(target) };
+    const replacement = change.replacement_subscription_id ? subscriptionMap.get(change.replacement_subscription_id) : null;
+    const { from_price_version_id: _fromId, target_price_version_id: _targetId, replacement_subscription_id: _replacementId, ...publicChange } = change;
+    return { ...publicChange, authorizationUrl: replacement?.short_url || null, replacementStatus: replacement?.status || null, from: publicVersion(from), target: publicVersion(target) };
   });
   return {
     configured: razorpayConfigured(credentials), keyId: razorpayConfigured(credentials) ? credentials.keyId : "",
@@ -330,7 +338,8 @@ async function verifyCheckout(admin: any, customer: any, body: any, credentials:
   const { error: verifyError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ checkout_verified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", subscription.id);
   if (verifyError) throw verifyError;
   const upgrade = await finalizeProratedUpgrade(admin, synced, credentials, paymentId);
-  return { verified: true, status: synced.status, paymentStatus: String(payment.status || "unknown"), captured: Boolean(payment.captured), upgradeCompleted: Boolean(upgrade.completed) };
+  const renewal = await finalizeRenewalPriceChange(admin, synced, credentials, paymentId);
+  return { verified: true, status: synced.status, paymentStatus: String(payment.status || "unknown"), captured: Boolean(payment.captured), upgradeCompleted: Boolean(upgrade.completed), renewalPriceApplied: Boolean(renewal.completed) };
 }
 async function syncSubscription(admin: any, customer: any, body: any, credentials: any) {
   const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
@@ -338,22 +347,94 @@ async function syncSubscription(admin: any, customer: any, body: any, credential
   if (error || !subscription) throw new Error("Billing subscription not found.");
   const providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials);
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
+  await finalizeProratedUpgrade(admin, synced, credentials);
+  await finalizeRenewalPriceChange(admin, synced, credentials);
   return { subscription: synced };
 }
-async function recordRenewalPriceConsent(admin: any, customer: any, body: any, req: Request) {
+async function recordRenewalPriceConsent(admin: any, customer: any, body: any, req: Request, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing consent.");
   const changeId = cleanUuid(body.changeId, "renewal price change");
   const decision = String(body.decision || "").toLowerCase();
   if (!['accept', 'reject'].includes(decision)) throw new Error("Select whether to accept or reject the renewal price.");
-  const status = decision === "accept" ? "accepted" : "rejected";
   const decidedAt = new Date().toISOString();
-  const { data, error } = await admin.from("whatsapp_platform_billing_renewal_price_changes").update({
-    status, notice_shown_at: decidedAt, decided_at: decidedAt, decided_by_user_id: customer.user_id,
+  const evidence = {
+    notice_shown_at: decidedAt, decided_at: decidedAt, decided_by_user_id: customer.user_id,
     decision_ip: requestIp(req), decision_user_agent: String(req.headers.get("user-agent") || "").slice(0, 500), updated_at: decidedAt,
-  }).eq("id", changeId).eq("tenant_id", customer.tenant_id).eq("status", "pending_consent").select("id,status,effective_at,decided_at").maybeSingle();
-  if (error) throw error;
-  if (!data) throw new Error("This renewal price decision is no longer pending.");
-  return { priceChange: data, requiresAuthorization: status === "accepted" };
+  };
+  const { data: change, error: changeError } = await admin.from("whatsapp_platform_billing_renewal_price_changes").select("*").eq("id", changeId).eq("tenant_id", customer.tenant_id).single();
+  if (changeError || !change) throw new Error("Renewal price change not found.");
+  const { data: currentSubscription, error: subscriptionError } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("id", change.subscription_id).eq("tenant_id", customer.tenant_id).single();
+  if (subscriptionError || !currentSubscription) throw new Error("Current billing subscription not found.");
+
+  if (decision === "reject") {
+    if (!TERMINAL_SUBSCRIPTION_STATUSES.has(currentSubscription.status) && !currentSubscription.cancel_at_cycle_end) {
+      const cancelled = await razorpayRequest(`/subscriptions/${encodeURIComponent(currentSubscription.provider_subscription_id)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 1 }) }, credentials);
+      await syncSubscriptionEntity(admin, currentSubscription, cancelled);
+      const { error: flagError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: true, updated_at: decidedAt }).eq("id", currentSubscription.id);
+      if (flagError) throw flagError;
+    }
+    const { data, error } = await admin.from("whatsapp_platform_billing_renewal_price_changes").update({ ...evidence, status: "rejected", processing_error: null })
+      .eq("id", change.id).in("status", ["pending_consent", "accepted", "failed"]).select("id,status,effective_at,decided_at").maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("This renewal price decision is already being processed.");
+    return { priceChange: data, requiresAuthorization: false, cancellationScheduled: true };
+  }
+
+  if (change.replacement_subscription_id) {
+    const { data: replacement, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("id,provider_subscription_id,short_url,status").eq("id", change.replacement_subscription_id).eq("tenant_id", customer.tenant_id).single();
+    if (error || !replacement) throw new Error("Renewal authorization subscription not found.");
+    return { priceChange: { id: change.id, status: change.status, effective_at: change.effective_at }, requiresAuthorization: true, replacement, reused: true };
+  }
+
+  const { data: claimed, error: claimError } = await admin.from("whatsapp_platform_billing_renewal_price_changes").update({ ...evidence, status: "processing", processing_error: null })
+    .eq("id", change.id).in("status", ["pending_consent", "failed"]).select("*").maybeSingle();
+  if (claimError) throw claimError;
+  if (!claimed) throw new Error("This renewal price authorization is already being prepared. Refresh billing shortly.");
+
+  let providerSubscriptionId = "";
+  let replacement: any = null;
+  try {
+    const [{ data: targetVersion, error: versionError }, { data: pkg, error: packageError }] = await Promise.all([
+      admin.from("whatsapp_platform_package_price_versions").select("*").eq("id", claimed.target_price_version_id).single(),
+      admin.from("whatsapp_platform_package_master").select("*").eq("code", currentSubscription.package_code).eq("status", "active").single(),
+    ]);
+    if (versionError || !targetVersion) throw new Error("Target renewal price revision not found.");
+    if (packageError || !pkg || pkg.current_price_version_id !== targetVersion.id || pkg.id !== targetVersion.package_id) throw new Error("This renewal price was superseded. Refresh billing for the latest notice.");
+    const interval = currentSubscription.billing_interval as "month" | "year";
+    const recurringBasePaise = Number(interval === "year" ? targetVersion.annual_base_paise : targetVersion.monthly_base_paise);
+    if (!Number.isSafeInteger(recurringBasePaise) || recurringBasePaise < 100) throw new Error("The revised renewal price is invalid.");
+    const planId = await ensureRazorpayPlan(admin, pkg, interval, credentials);
+    const totalCount = interval === "month" ? 120 : 10;
+    const effectiveSeconds = Math.floor(new Date(claimed.effective_at).getTime() / 1000);
+    const startAt = Math.max(effectiveSeconds, Math.floor(Date.now() / 1000) + 600);
+    const created = await razorpayRequest("/subscriptions", { method: "POST", body: JSON.stringify({
+      plan_id: planId, total_count: totalCount, quantity: 1, customer_notify: true, start_at: startAt,
+      notes: { tenant_id: customer.tenant_id, package_code: pkg.code, billing_interval: interval, renewal_price_change_id: claimed.id, replaces_subscription_id: currentSubscription.id },
+    }) }, credentials);
+    providerSubscriptionId = providerId(created.id, "sub");
+    const { data, error: insertError } = await admin.from("whatsapp_platform_billing_subscriptions").insert({
+      tenant_id: customer.tenant_id, package_code: pkg.code, billing_interval: interval, provider_plan_id: planId,
+      provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
+      total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
+      short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
+      package_price_version_id: targetVersion.id, recurring_base_paise: recurringBasePaise, gst_rate_bps: Number(targetVersion.gst_rate_bps || 1800),
+      safe_metadata: { renewal_price_change_id: claimed.id, renewal_from_subscription_id: currentSubscription.id, recurring_starts_at: new Date(startAt * 1000).toISOString() },
+    }).select("*").single();
+    if (insertError || !data) throw insertError || new Error("Renewal authorization subscription could not be recorded.");
+    replacement = data;
+    const { error: completeError } = await admin.from("whatsapp_platform_billing_renewal_price_changes").update({ status: "accepted", replacement_subscription_id: replacement.id, processing_error: null, updated_at: new Date().toISOString() }).eq("id", claimed.id).eq("status", "processing");
+    if (completeError) throw completeError;
+    return {
+      priceChange: { id: claimed.id, status: "accepted", effective_at: claimed.effective_at }, requiresAuthorization: true,
+      replacement: { id: replacement.id, provider_subscription_id: replacement.provider_subscription_id, short_url: replacement.short_url, status: replacement.status }, reused: false,
+    };
+  } catch (error) {
+    if (providerSubscriptionId) await razorpayRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }) }, credentials).catch(() => null);
+    if (replacement?.id) await admin.from("whatsapp_platform_billing_subscriptions").delete().eq("id", replacement.id);
+    const message = error instanceof Error ? error.message : "Renewal authorization could not be prepared";
+    await admin.from("whatsapp_platform_billing_renewal_price_changes").update({ status: "pending_consent", processing_error: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", claimed.id).eq("status", "processing");
+    throw error;
+  }
 }
 async function upgradeContext(admin: any, customer: any, body: any, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
@@ -515,6 +596,39 @@ async function finalizeProratedUpgrade(admin: any, replacementSubscription: any,
     throw error;
   }
 }
+async function finalizeRenewalPriceChange(admin: any, replacementSubscription: any, credentials: any, paymentId: string | null = null) {
+  const changeId = replacementSubscription?.safe_metadata?.renewal_price_change_id;
+  if (!changeId || !['authenticated', 'active'].includes(String(replacementSubscription.status))) return { completed: false };
+  const { data: change, error: changeError } = await admin.from("whatsapp_platform_billing_renewal_price_changes").select("*").eq("id", changeId).single();
+  if (changeError || !change) throw changeError || new Error("Renewal price change not found.");
+  if (change.status === "applied") return { completed: true };
+  const { data: claimed, error: claimError } = await admin.from("whatsapp_platform_billing_renewal_price_changes")
+    .update({ status: "processing", processing_error: null, updated_at: new Date().toISOString() })
+    .eq("id", change.id).in("status", ["accepted", "failed"]).select("*").maybeSingle();
+  if (claimError) throw claimError;
+  if (!claimed) return { completed: false, processing: true };
+  try {
+    const { data: oldSubscription, error: oldError } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("id", claimed.subscription_id).single();
+    if (oldError || !oldSubscription) throw oldError || new Error("Previous renewal subscription not found.");
+    if (!TERMINAL_SUBSCRIPTION_STATUSES.has(oldSubscription.status) && !oldSubscription.cancel_at_cycle_end) {
+      const cancelled = await razorpayRequest(`/subscriptions/${encodeURIComponent(oldSubscription.provider_subscription_id)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 1 }) }, credentials);
+      await syncSubscriptionEntity(admin, oldSubscription, cancelled);
+      const { error: flagError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: true, updated_at: new Date().toISOString() }).eq("id", oldSubscription.id);
+      if (flagError) throw flagError;
+    }
+    const appliedAt = new Date().toISOString();
+    const metadata = { ...(replacementSubscription.safe_metadata || {}), renewal_price_activated_at: appliedAt, renewal_price_status: "applied", authorization_payment_id: paymentId || null };
+    const { error: replacementError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: metadata, checkout_verified_at: appliedAt, updated_at: appliedAt }).eq("id", replacementSubscription.id);
+    if (replacementError) throw replacementError;
+    const { error: completeError } = await admin.from("whatsapp_platform_billing_renewal_price_changes").update({ status: "applied", processing_error: null, updated_at: appliedAt }).eq("id", claimed.id).eq("status", "processing");
+    if (completeError) throw completeError;
+    return { completed: true };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Renewal price finalization failed";
+    await admin.from("whatsapp_platform_billing_renewal_price_changes").update({ status: "failed", processing_error: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", change.id);
+    throw error;
+  }
+}
 async function cancelSubscription(admin: any, customer: any, body: any, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
   const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
@@ -543,6 +657,7 @@ async function processWebhook(admin: any, eventRecordId: string, payload: any, c
         const synced = await syncSubscriptionEntity(admin, subscription, subscriptionEntity);
         if (paymentEntity?.id) await upsertPayment(admin, synced, paymentEntity);
         await finalizeProratedUpgrade(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
+        await finalizeRenewalPriceChange(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
       }
     }
     const { error } = await admin.from("whatsapp_platform_billing_webhook_events").update({ processed_at: new Date().toISOString(), processing_error: null }).eq("id", eventRecordId);
@@ -598,7 +713,7 @@ Deno.serve(async (req) => {
     if (action === "create_subscription") return json(req, await createSubscription(admin, customer, body, credentials));
     if (action === "verify_checkout") return json(req, await verifyCheckout(admin, customer, body, credentials));
     if (action === "sync_subscription") return json(req, await syncSubscription(admin, customer, body, credentials));
-    if (action === "record_renewal_price_consent") return json(req, await recordRenewalPriceConsent(admin, customer, body, req));
+    if (action === "record_renewal_price_consent") return json(req, await recordRenewalPriceConsent(admin, customer, body, req, credentials));
     if (action === "preview_upgrade") return json(req, await previewUpgrade(admin, customer, body, credentials));
     if (action === "upgrade_subscription") return json(req, await upgradeSubscription(admin, customer, body, credentials));
     if (action === "cancel_subscription") return json(req, await cancelSubscription(admin, customer, body, credentials));
