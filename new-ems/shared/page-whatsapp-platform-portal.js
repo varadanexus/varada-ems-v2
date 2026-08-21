@@ -1955,6 +1955,21 @@ function confirmBillingUpgrade(preview) {
     dialog.showModal();
   });
 }
+function confirmBillingCancellation(subscription) {
+  let dialog = document.querySelector("#wpBillingCancellationDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpBillingCancellationDialog";
+    dialog.className = "wp-contact-dialog wp-billing-cancellation-dialog";
+    document.body.append(dialog);
+  }
+  const periodEnd = subscription?.current_end ? formatProfileDate(subscription.current_end) : "the end of the current billed cycle";
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Subscription cancellation</span><h2>Cancel at the end of this billing cycle?</h2><p>This does not stop your workspace immediately. Please review what will happen before confirming.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Current plan</span><strong>${escapeHtml(planName(subscription?.package_code || workspacePackageMaster?.package?.code))}</strong></div><div><span>Access remains active until</span><strong>${escapeHtml(periodEnd)}</strong></div></section><ul class="wp-cancellation-effects"><li>Your current package and paid features remain available through ${escapeHtml(periodEnd)}.</li><li>The subscription will not renew and no new package charge will be raised for the next cycle.</li><li>Invoices and payment records remain available in Billing &amp; usage.</li></ul><div class="wp-policy-note"><strong>Period-end cancellation</strong><p>Only the future renewal is cancelled. This action does not create an immediate refund or remove access already paid for.</p></div><footer><button class="wp-secondary" type="submit" value="keep">Keep subscription</button><button class="wp-confirm-cancel" type="submit" value="confirm">Confirm cancellation</button></footer></form>`;
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
+    dialog.showModal();
+  });
+}
 function confirmAddonChange(preview) {
   let dialog = document.querySelector("#wpBillingAddonDialog");
   if (!dialog) {
@@ -2079,7 +2094,8 @@ function billingView(view = "billing") {
   const available = (workspacePackageMaster.availableAddons || []).filter((addon) => !assignedCodes.has(addon.code)).map((addon) => `<article class="wp-billing-addon available"><div><span class="wp-card-eyebrow">Available add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${addon.billing_model === "contact_sales" ? "Custom quote" : billingMoney(addon.unit_amount, addon.currency)}</strong><small>${addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval)} · base price + GST` : "Contact billing for terms"}</small>${addonControl(addon, 0)}</div></article>`).join("");
   const model = pkg.billing_model === "contact_sales" ? "Custom agreement" : pkg.billing_model === "free" ? "Free" : "Subscription";
   const statusLabel = String(subscription?.status || "No paid subscription").replaceAll("_", " ");
-  const statusActions = subscription ? `<div class="wp-billing-subscription-actions"><button class="wp-secondary" type="button" data-billing-sync="${escapeHtml(subscription.id)}">Refresh status</button>${canManage && !["cancelled", "completed", "expired"].includes(subscription.status) ? `<button class="wp-danger-button" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel at period end</button>` : ""}</div>` : "";
+  const subscriptionOpen = subscription && !["cancelled", "completed", "expired"].includes(subscription.status);
+  const statusActions = subscription ? `<div class="wp-billing-subscription-actions">${canManage && subscriptionOpen && !subscription.cancel_at_cycle_end ? `<a class="wp-primary wp-button-link wp-billing-upgrade-action" href="${workspacePath("billing-plans")}#available-plans">Upgrade plan</a><button class="wp-billing-cancel-subtle" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel</button>` : subscription.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">Cancellation scheduled for ${escapeHtml(formatProfileDate(subscription.current_end))}</span>` : ""}</div>` : "";
   const subscriptionCard = `<section class="wp-billing-subscription"><div><span class="wp-card-eyebrow">Razorpay subscription</span><h2>${escapeHtml(subscription ? `${subscription.package_code} · ${subscription.billing_interval}ly` : "No active paid subscription")}</h2><p>${subscription ? `Status: ${escapeHtml(statusLabel)}${subscription.current_end ? ` · Current period ends ${escapeHtml(formatProfileDate(subscription.current_end))}` : ""}` : "Select a self-service package below to start secure checkout."}</p></div><div><span class="wp-billing-status ${escapeHtml(subscription?.status || "none")}">${escapeHtml(statusLabel)}</span>${statusActions}</div></section>`;
   const renewalInterval = subscription?.billing_interval === "year" ? "annual" : "monthly";
   const renewalAmount = (version) => Number(version?.[subscription?.billing_interval === "year" ? "annual_base_paise" : "monthly_base_paise"] || 0) / 100;
@@ -2112,7 +2128,7 @@ function billingView(view = "billing") {
   const refundsSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Refund documents</span><h2>Refunds &amp; credit notes</h2><p>Every verified Razorpay refund is matched to its centralized EMS credit note and original payment reference.</p></div></div>${creditNotes ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Credit note</th><th>Reason</th><th>Refund ID</th><th>Total</th><th></th></tr></thead><tbody>${creditNotes}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No refunds or credit notes</strong><p>Verified refunds and their financial documents will appear here.</p></div>'}</section>`;
   const page = (content) => `<section class="wp-route-page wp-billing-page">${heading}${notices}${billingNav}${content}</section>`;
   if (view === "billing") return page(`<section class="wp-billing-overview-metrics"><article><span>Subscription</span><strong>${escapeHtml(statusLabel)}</strong><small>${subscription?.current_end ? `Renews ${escapeHtml(formatProfileDate(subscription.current_end))}` : "No renewal scheduled"}</small></article><article><span>Invoices</span><strong>${Number((workspaceBilling.invoices || []).length)}</strong><small>Issued documents</small></article><article><span>Payments</span><strong>${Number((workspaceBilling.payments || []).length)}</strong><small>Ledger entries</small></article><article><span>Refunds</span><strong>${Number((workspaceBilling.creditNotes || []).length)}</strong><small>Credit notes</small></article></section>${renewalNotice}${subscriptionCard}`);
-  if (view === "billing-plans") return page(`${renewalNotice}${subscriptionCard}<section><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section>${packageDetails}`);
+  if (view === "billing-plans") return page(`${renewalNotice}${subscriptionCard}<section id="available-plans"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section>${packageDetails}`);
   if (view === "billing-addons") return page(`${subscriptionCard}${addonsSection}`);
   if (view === "billing-invoices") return page(invoicesSection);
   if (view === "billing-ledger") return page(ledgerSection);
@@ -2484,9 +2500,10 @@ async function renderDashboard() {
       catch (error) { showToast(error?.message || "Subscription status could not be refreshed.", "error"); button.disabled = false; button.textContent = original; }
     }));
     app.querySelectorAll("[data-billing-cancel]").forEach((button) => button.addEventListener("click", async () => {
-      if (!window.confirm("Cancel this subscription at the end of its current billing period? Access remains available until then.")) return;
+      const confirmed = await confirmBillingCancellation(workspaceBilling?.subscription);
+      if (!confirmed) return;
       const original = button.textContent;
-      try { button.disabled = true; button.textContent = "Scheduling cancellation…"; await billingRequest("cancel_subscription", { subscriptionId: button.dataset.billingCancel, cancelAtCycleEnd: true }); showToast("Cancellation scheduled for the end of the billing period."); await renderDashboard(); }
+      try { button.disabled = true; button.textContent = "Scheduling…"; await billingRequest("cancel_subscription", { subscriptionId: button.dataset.billingCancel, cancelAtCycleEnd: true }); showToast(`Cancellation scheduled. Access remains active until ${formatProfileDate(workspaceBilling?.subscription?.current_end)}.`); await renderDashboard(); }
       catch (error) { showToast(error?.message || "Subscription could not be cancelled.", "error"); button.disabled = false; button.textContent = original; }
     }));
   }
