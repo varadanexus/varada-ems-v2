@@ -178,8 +178,10 @@ async function configurationStatus(admin: any, customer: any) {
   const configurationId = env("WHATSAPP_PLATFORM_META_CONFIG_ID");
   const version = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
   const entitlement = await billingEntitlement(admin, customer);
+  let numberCapacity: any = null;
   let connections: any[] = [];
   if (entitlement.allowed) {
+    numberCapacity = await reconcileNumberCapacity(admin, customer);
     const { data, error } = await admin
       .from("whatsapp_platform_connections")
       .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
@@ -197,7 +199,30 @@ async function configurationStatus(admin: any, customer: any) {
     environment: env("WHATSAPP_PLATFORM_META_PRODUCTION_READY") === "true" ? "production" : "testing",
     connections,
     entitlement,
+    numberCapacity,
   };
+}
+
+async function reconcileNumberCapacity(admin: any, customer: any) {
+  const { data, error } = await admin.rpc("whatsapp_platform_reconcile_number_capacity", {
+    p_tenant_id: customer.tenant_id,
+  });
+  if (error) throw error;
+  return data || null;
+}
+
+async function requireAvailableNumberCapacity(admin: any, customer: any) {
+  const capacity = await reconcileNumberCapacity(admin, customer);
+  if (capacity?.allowedLimit !== null && Number(capacity?.available || 0) <= 0) {
+    const included = Number(capacity?.baseLimit || 0);
+    const paidExtra = Number(capacity?.additionalLimit || 0);
+    const allowed = Number(capacity?.allowedLimit || 0);
+    const detail = paidExtra > 0
+      ? `${included} package and ${paidExtra} paid add-on slot${paidExtra === 1 ? "" : "s"}`
+      : `${included} package slot${included === 1 ? "" : "s"}`;
+    throw new Error(`All ${allowed} WhatsApp number slots are in use (${detail}). Purchase the Extra WhatsApp number add-on before connecting another production number.`);
+  }
+  return capacity;
 }
 
 async function recordEvent(admin: any, customer: any, eventCode: string, metadata: Record<string, unknown> = {}, connectionId: string | null = null) {
@@ -260,7 +285,8 @@ async function removeConnection(admin: any, customer: any, body: any) {
     verifiedName: connection.verified_name || null,
     source: "customer_workspace",
   }, connection.id);
-  return { ok: true, removedConnectionId: connection.id };
+  const numberCapacity = await reconcileNumberCapacity(admin, customer);
+  return { ok: true, removedConnectionId: connection.id, numberCapacity };
 }
 
 function cleanMetaAccessToken(value: unknown) {
@@ -478,6 +504,7 @@ async function completeOnboarding(admin: any, customer: any, body: any) {
     if (pending.error) throw pending.error;
     existingConnection = pending.data;
   }
+  if (!existingConnection?.id) await requireAvailableNumberCapacity(admin, customer);
   const connectionQuery = existingConnection?.id
     ? admin.from("whatsapp_platform_connections").update(connectionPayload).eq("id", existingConnection.id)
     : admin.from("whatsapp_platform_connections").insert(connectionPayload);
@@ -511,7 +538,8 @@ async function completeOnboarding(admin: any, customer: any, body: any) {
     .update({ onboarding_status: phoneNumberId ? "meta_connected" : "meta_pending", updated_at: new Date().toISOString() })
     .eq("id", customer.tenant_id);
   await recordEvent(admin, customer, "onboarding_completed", { wabaId, phoneNumberId: phoneNumberId || null }, connection.id);
-  return { connection };
+  const numberCapacity = await reconcileNumberCapacity(admin, customer);
+  return { connection, numberCapacity };
 }
 
 Deno.serve(async (req) => {
@@ -551,6 +579,7 @@ Deno.serve(async (req) => {
     }
     if (action === "begin") {
       await enforceVerificationGate(admin, customer);
+      await requireAvailableNumberCapacity(admin, customer);
       await recordEvent(admin, customer, "onboarding_started", { source: "customer_workspace" });
       return json(req, { ok: true });
     }
