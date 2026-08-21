@@ -108,13 +108,31 @@ function checkoutGrossPaise(basePaise: number) {
   const checkoutAmountPaise = Math.ceil(subtotalPaise / (1 - GATEWAY_RATE_WITH_TAX));
   return { packageGstPaise, gatewayAdjustmentPaise: checkoutAmountPaise - subtotalPaise, checkoutAmountPaise };
 }
+function checkoutGrossFromTax(basePaise: number, gstPaise: number) {
+  const subtotalPaise = basePaise + gstPaise;
+  const checkoutAmountPaise = Math.ceil(subtotalPaise / (1 - GATEWAY_RATE_WITH_TAX));
+  return { packageGstPaise: gstPaise, gatewayAdjustmentPaise: checkoutAmountPaise - subtotalPaise, checkoutAmountPaise };
+}
+function requestedAddons(value: unknown) {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > 25) throw new Error("Select up to 25 add-ons.");
+  const seen = new Set<string>();
+  return value.map((item: any) => {
+    const code = cleanCode(item?.code, "add-on");
+    const quantity = Number(item?.quantity);
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 10000) throw new Error(`Select a valid quantity for ${code}.`);
+    if (seen.has(code)) throw new Error(`Add-on ${code} was selected more than once.`);
+    seen.add(code);
+    return { code, quantity };
+  });
+}
 function publicCheckoutQuote(quote: any) {
   return {
     id: quote.id, status: quote.status, packageCode: quote.package_code, billingInterval: quote.billing_interval,
     currency: quote.currency, baseSubtotalPaise: Number(quote.base_subtotal_paise), discountPaise: Number(quote.discount_paise),
     taxableBasePaise: Number(quote.taxable_base_paise), packageGstPaise: Number(quote.package_gst_paise),
     gatewayAdjustmentPaise: Number(quote.gateway_adjustment_paise), checkoutAmountPaise: Number(quote.checkout_amount_paise),
-    couponCode: quote.coupon_code || null, expiresAt: quote.expires_at,
+    couponCode: quote.coupon_code || null, addons: Array.isArray(quote.addon_selections) ? quote.addon_selections : [], expiresAt: quote.expires_at,
   };
 }
 async function customerSession(admin: any, tokenValue: unknown) {
@@ -184,13 +202,18 @@ async function applyPackageForSubscription(admin: any, subscription: any, status
   if (status === "active") {
     const { error } = await admin.from("whatsapp_platform_tenants").update({ plan_code: subscription.package_code, updated_at: new Date().toISOString() }).eq("id", subscription.tenant_id);
     if (error) throw error;
-  } else if (TERMINAL_SUBSCRIPTION_STATUSES.has(status) && subscription.package_code !== "launch") {
-    const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("plan_code").eq("id", subscription.tenant_id).single();
-    if (tenantError) throw tenantError;
-    if (tenant?.plan_code === subscription.package_code) {
-      const { error } = await admin.from("whatsapp_platform_tenants").update({ plan_code: "launch", updated_at: new Date().toISOString() }).eq("id", subscription.tenant_id);
-      if (error) throw error;
+  } else if (TERMINAL_SUBSCRIPTION_STATUSES.has(status)) {
+    if (subscription.package_code !== "launch") {
+      const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("plan_code").eq("id", subscription.tenant_id).single();
+      if (tenantError) throw tenantError;
+      if (tenant?.plan_code === subscription.package_code) {
+        const { error } = await admin.from("whatsapp_platform_tenants").update({ plan_code: "launch", updated_at: new Date().toISOString() }).eq("id", subscription.tenant_id);
+        if (error) throw error;
+      }
     }
+    const { error: addonError } = await admin.from("whatsapp_platform_tenant_addons").update({ status: "paused", billing_ends_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("source_subscription_id", subscription.id).in("status", ["pending", "active"]);
+    if (addonError) throw addonError;
   }
 }
 async function syncSubscriptionEntity(admin: any, subscription: any, entity: any) {
@@ -272,9 +295,33 @@ async function quoteSubscriptionCheckout(admin: any, customer: any, body: any) {
   const interval = String(body.billingInterval || "month") as "month" | "year";
   if (!['month', 'year'].includes(interval)) throw new Error("Select monthly or annual billing.");
   const couponCode = cleanCouponCode(body.couponCode);
+  const requested = requestedAddons(body.addons);
   const { data: pkg, error: packageError } = await admin.from("whatsapp_platform_package_master").select("*").eq("code", packageCode).eq("status", "active").single();
   if (packageError || !pkg || pkg.billing_model !== "subscription") throw new Error("Selected package is unavailable for self-service checkout.");
   const priceSnapshot = packagePriceSnapshot(pkg, interval);
+  let addonSelections: any[] = [];
+  if (requested.length) {
+    const codes = requested.map((item) => item.code);
+    const [{ data: addons, error: addonsError }, { data: assigned, error: assignedError }] = await Promise.all([
+      admin.from("whatsapp_platform_addon_master").select("*").in("code", codes),
+      admin.from("whatsapp_platform_tenant_addons").select("addon_code,status").eq("tenant_id", customer.tenant_id).in("addon_code", codes).in("status", ["pending", "active", "paused"]),
+    ]);
+    if (addonsError) throw addonsError;
+    if (assignedError) throw assignedError;
+    if ((addons || []).length !== requested.length) throw new Error("One or more selected add-ons are unavailable.");
+    if ((assigned || []).length) throw new Error("One or more selected add-ons are already assigned to this workspace.");
+    const addonMap = new Map((addons || []).map((addon: any) => [addon.code, addon]));
+    addonSelections = requested.map(({ code, quantity }) => {
+      const addon: any = addonMap.get(code);
+      if (addon.status !== "active" || !addon.is_self_service || addon.billing_model !== "recurring") throw new Error(`${addon.name || code} is not available for self-service recurring checkout.`);
+      if (addon.billing_interval !== interval) throw new Error(`${addon.name || code} is only available with ${addon.billing_interval} billing.`);
+      if (Array.isArray(addon.eligible_plan_codes) && addon.eligible_plan_codes.length && !addon.eligible_plan_codes.includes(packageCode)) throw new Error(`${addon.name || code} is not eligible for ${pkg.name}.`);
+      if (quantity < Number(addon.minimum_quantity || 1) || (addon.maximum_quantity != null && quantity > Number(addon.maximum_quantity)) || ((quantity - Number(addon.minimum_quantity || 1)) % Number(addon.quantity_step || 1)) !== 0) throw new Error(`Select an allowed quantity for ${addon.name || code}.`);
+      const unitBasePaise = Math.round(Number(addon.unit_amount) * 100);
+      if (!Number.isSafeInteger(unitBasePaise) || unitBasePaise < 1) throw new Error(`${addon.name || code} does not have a valid self-service price.`);
+      return { code, name: addon.name, unitName: addon.unit_name, quantity, billingInterval: addon.billing_interval, addonPriceVersionId: cleanUuid(addon.current_price_version_id, "add-on price version"), unitBasePaise, baseSubtotalPaise: unitBasePaise * quantity, gstRateBps: 1800, gstPaise: Math.round(unitBasePaise * quantity * PACKAGE_GST_RATE) };
+    });
+  }
   let redemption: any = null;
   if (couponCode) {
     const { data, error } = await admin.rpc("whatsapp_platform_reserve_billing_coupon", {
@@ -288,17 +335,20 @@ async function quoteSubscriptionCheckout(admin: any, customer: any, body: any) {
     if (!redemption?.id) throw new Error("Coupon reservation could not be recorded.");
   }
   const discountPaise = Number(redemption?.discount_paise || 0);
-  const taxableBasePaise = priceSnapshot.recurring_base_paise - discountPaise;
-  const gross = checkoutGrossPaise(taxableBasePaise);
+  const addonBasePaise = addonSelections.reduce((total, item) => total + item.baseSubtotalPaise, 0);
+  const packageTaxablePaise = priceSnapshot.recurring_base_paise - discountPaise;
+  const taxableBasePaise = packageTaxablePaise + addonBasePaise;
+  const gstPaise = Math.round(packageTaxablePaise * PACKAGE_GST_RATE) + addonSelections.reduce((total, item) => total + item.gstPaise, 0);
+  const gross = checkoutGrossFromTax(taxableBasePaise, gstPaise);
   const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
   const { data: quote, error: quoteError } = await admin.from("whatsapp_platform_billing_checkout_quotes").insert({
     tenant_id: customer.tenant_id, created_by_user_id: customer.user_id, checkout_type: "subscription", status: "quoted",
     package_code: packageCode, package_price_version_id: priceSnapshot.package_price_version_id, billing_interval: interval,
     coupon_id: redemption?.coupon_id || null, coupon_redemption_id: redemption?.id || null, coupon_code: redemption?.coupon_code || null,
-    currency: pkg.currency, base_subtotal_paise: priceSnapshot.recurring_base_paise, discount_paise: discountPaise,
+    currency: pkg.currency, base_subtotal_paise: priceSnapshot.recurring_base_paise + addonBasePaise, discount_paise: discountPaise, addon_selections: addonSelections,
     package_gst_paise: gross.packageGstPaise, gateway_adjustment_paise: gross.gatewayAdjustmentPaise,
     checkout_amount_paise: gross.checkoutAmountPaise, gst_rate_bps: priceSnapshot.gst_rate_bps, gateway_rate_bps: 236,
-    quote_snapshot: { package_name: pkg.name, package_description: pkg.description || "", package_price_version_id: priceSnapshot.package_price_version_id },
+    quote_snapshot: { package_name: pkg.name, package_description: pkg.description || "", package_price_version_id: priceSnapshot.package_price_version_id, package_base_paise: priceSnapshot.recurring_base_paise, addon_base_paise: addonBasePaise },
     expires_at: expiresAt,
   }).select("*").single();
   if (quoteError || !quote) {
@@ -328,20 +378,32 @@ async function ensureRazorpayPlan(admin: any, pkg: any, interval: "month" | "yea
   return planId;
 }
 async function ensureRazorpayPlanForQuote(admin: any, pkg: any, quote: any, credentials: any) {
-  if (Number(quote.discount_paise || 0) === 0) return ensureRazorpayPlan(admin, pkg, quote.billing_interval, credentials);
+  if (Number(quote.discount_paise || 0) === 0 && !(quote.addon_selections || []).length) return ensureRazorpayPlan(admin, pkg, quote.billing_interval, credentials);
   if (quote.provider_plan_id) return providerId(quote.provider_plan_id, "plan");
   const created = await razorpayRequest("/plans", {
     method: "POST",
     body: JSON.stringify({
       period: quote.billing_interval === "month" ? "monthly" : "yearly", interval: 1,
-      item: { name: `${pkg.name} · ${quote.coupon_code}`.slice(0, 80), amount: Number(quote.checkout_amount_paise), currency: quote.currency, description: `Coupon ${quote.coupon_code} applied to ${pkg.name}`.slice(0, 255) },
-      notes: { product: "Varada Nexus WhatsApp Solutions", checkout_quote_id: quote.id, package_code: pkg.code, coupon_code: quote.coupon_code, base_subtotal_paise: quote.base_subtotal_paise, discount_paise: quote.discount_paise, final_recurring_amount_paise: quote.checkout_amount_paise },
+      item: { name: `${pkg.name} · ${quote.coupon_code || "configured checkout"}`.slice(0, 80), amount: Number(quote.checkout_amount_paise), currency: quote.currency, description: `${pkg.name} subscription with server-priced options`.slice(0, 255) },
+      notes: { product: "Varada Nexus WhatsApp Solutions", checkout_quote_id: quote.id, package_code: pkg.code, coupon_code: quote.coupon_code || "", addon_codes: (quote.addon_selections || []).map((item: any) => item.code).join(",").slice(0, 255), base_subtotal_paise: quote.base_subtotal_paise, discount_paise: quote.discount_paise, final_recurring_amount_paise: quote.checkout_amount_paise },
     }),
   }, credentials);
   const planId = providerId(created.id, "plan");
   const { error } = await admin.from("whatsapp_platform_billing_checkout_quotes").update({ provider_plan_id: planId, updated_at: new Date().toISOString() }).eq("id", quote.id).is("provider_plan_id", null);
   if (error) throw error;
   return planId;
+}
+async function stageCheckoutAddons(admin: any, customer: any, quote: any, subscriptionId: string, billingStartsAt: string | null) {
+  const selections = Array.isArray(quote.addon_selections) ? quote.addon_selections : [];
+  for (const selection of selections) {
+    const { error } = await admin.from("whatsapp_platform_tenant_addons").upsert({
+      tenant_id: customer.tenant_id, addon_code: selection.code, quantity: Number(selection.quantity), status: "pending",
+      billing_starts_at: billingStartsAt, billing_ends_at: null, addon_price_version_id: selection.addonPriceVersionId,
+      unit_base_paise: Number(selection.unitBasePaise), gst_rate_bps: Number(selection.gstRateBps || 1800),
+      source_checkout_quote_id: quote.id, source_subscription_id: subscriptionId, updated_at: new Date().toISOString(),
+    }, { onConflict: "tenant_id,addon_code" });
+    if (error) throw error;
+  }
 }
 async function createSubscription(admin: any, customer: any, body: any, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
@@ -390,7 +452,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
     provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
     total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
     short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id, ...priceSnapshot,
-    safe_metadata: { checkout_quote_id: quote.id, coupon_code: quote.coupon_code || null, base_subtotal_paise: Number(quote.base_subtotal_paise), discount_paise: Number(quote.discount_paise), checkout_amount_paise: Number(quote.checkout_amount_paise), trial_days: trialDays, trial_ends_at: trialEndsAt ? new Date(trialEndsAt * 1000).toISOString() : null, mode: credentials.keyId.startsWith("rzp_live_") ? "live" : "test" },
+    safe_metadata: { checkout_quote_id: quote.id, coupon_code: quote.coupon_code || null, addon_selections: quote.addon_selections || [], base_subtotal_paise: Number(quote.base_subtotal_paise), discount_paise: Number(quote.discount_paise), checkout_amount_paise: Number(quote.checkout_amount_paise), trial_days: trialDays, trial_ends_at: trialEndsAt ? new Date(trialEndsAt * 1000).toISOString() : null, mode: credentials.keyId.startsWith("rzp_live_") ? "live" : "test" },
   }).select("id").single();
   if (error || !subscription) {
     await razorpayRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }) }, credentials).catch(() => null);
@@ -414,6 +476,16 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
       throw reservationError;
     }
   }
+  try {
+    await stageCheckoutAddons(admin, customer, quote, subscription.id, trialEndsAt ? new Date(trialEndsAt * 1000).toISOString() : null);
+  } catch (addonError) {
+    await razorpayRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }) }, credentials).catch(() => null);
+    await admin.from("whatsapp_platform_tenant_addons").delete().eq("source_subscription_id", subscription.id).eq("status", "pending");
+    await admin.from("whatsapp_platform_billing_subscriptions").delete().eq("id", subscription.id);
+    await admin.from("whatsapp_platform_billing_checkout_quotes").update({ status: "failed", subscription_id: null, updated_at: new Date().toISOString() }).eq("id", quote.id);
+    if (quote.coupon_redemption_id) await admin.from("whatsapp_platform_billing_coupon_redemptions").update({ status: "released", released_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", quote.coupon_redemption_id).eq("status", "reserved");
+    throw addonError;
+  }
   return {
     keyId: credentials.keyId, subscriptionId: subscription.id, razorpaySubscriptionId: providerSubscriptionId,
     shortUrl: created.short_url,
@@ -435,6 +507,9 @@ async function finalizeCheckoutQuote(admin: any, subscription: any) {
       .eq("id", quote.coupon_redemption_id).in("status", ["reserved", "applied"]);
     if (redemptionError) throw redemptionError;
   }
+  const { error: addonError } = await admin.from("whatsapp_platform_tenant_addons").update({ status: "active", billing_starts_at: subscription.current_start || subscription.activated_at || consumedAt, billing_ends_at: null, updated_at: consumedAt })
+    .eq("source_subscription_id", subscription.id).eq("source_checkout_quote_id", quoteId).eq("status", "pending");
+  if (addonError) throw addonError;
   return { completed: true };
 }
 async function verifyCheckout(admin: any, customer: any, body: any, credentials: any) {
