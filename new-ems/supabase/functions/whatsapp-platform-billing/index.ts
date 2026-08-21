@@ -182,14 +182,18 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
 async function ensureRazorpayPlan(admin: any, pkg: any, interval: "month" | "year", credentials: any) {
   const column = interval === "month" ? "razorpay_monthly_plan_id" : "razorpay_annual_plan_id";
   if (pkg[column]) return providerId(pkg[column], "plan");
-  const amount = Math.round(Number(interval === "month" ? pkg.monthly_amount : pkg.annual_amount) * 100);
+  const baseAmount = Number(interval === "month" ? pkg.monthly_amount : pkg.annual_amount);
+  const packageGstRate = 0.18;
+  const gatewayRateWithTax = 0.02 * 1.18;
+  const packageAmountWithGst = baseAmount * (1 + packageGstRate);
+  const amount = Math.ceil((packageAmountWithGst / (1 - gatewayRateWithTax)) * 100);
   if (!Number.isSafeInteger(amount) || amount < 100) throw new Error("This package does not have a valid self-service price.");
   const created = await razorpayRequest("/plans", {
     method: "POST",
     body: JSON.stringify({
       period: interval === "month" ? "monthly" : "yearly", interval: 1,
       item: { name: `${pkg.name} · ${interval === "month" ? "Monthly" : "Annual"}`, amount, currency: pkg.currency, description: String(pkg.description || "").slice(0, 255) },
-      notes: { product: "Varada Nexus WhatsApp Solutions", package_code: pkg.code, billing_interval: interval },
+      notes: { product: "Varada Nexus WhatsApp Solutions", package_code: pkg.code, billing_interval: interval, base_amount: baseAmount, package_gst_rate: packageGstRate, gateway_costs_included: true },
     }),
   }, credentials);
   const planId = providerId(created.id, "plan");
