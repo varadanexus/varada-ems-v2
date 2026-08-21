@@ -126,6 +126,36 @@ function requestedAddons(value: unknown) {
     return { code, quantity };
   });
 }
+async function activeAddonSelections(admin: any, tenantId: string, sourceSubscriptionId: string, packageCode: string, interval: "month" | "year") {
+  const { data: assignments, error } = await admin.from("whatsapp_platform_tenant_addons").select("*")
+    .eq("tenant_id", tenantId).eq("source_subscription_id", sourceSubscriptionId).eq("status", "active");
+  if (error) throw error;
+  if (!(assignments || []).length) return [];
+  const codes = assignments.map((item: any) => item.addon_code);
+  const { data: addons, error: addonError } = await admin.from("whatsapp_platform_addon_master").select("*").in("code", codes);
+  if (addonError) throw addonError;
+  const addonMap = new Map((addons || []).map((addon: any) => [addon.code, addon]));
+  return assignments.map((assignment: any) => {
+    const addon: any = addonMap.get(assignment.addon_code);
+    if (!addon || addon.status !== "active") throw new Error(`Active add-on ${assignment.addon_code} is no longer available. Contact billing support before changing the subscription.`);
+    if (addon.billing_model !== "recurring" || addon.billing_interval !== interval) throw new Error(`${addon.name || addon.code} is not compatible with ${interval} billing.`);
+    if (Array.isArray(addon.eligible_plan_codes) && addon.eligible_plan_codes.length && !addon.eligible_plan_codes.includes(packageCode)) throw new Error(`${addon.name || addon.code} is not eligible for the selected package.`);
+    const quantity = Number(assignment.quantity);
+    const unitBasePaise = Number(assignment.unit_base_paise);
+    if (!Number.isSafeInteger(quantity) || quantity < 1 || !Number.isSafeInteger(unitBasePaise) || unitBasePaise < 1) throw new Error(`${addon.name || addon.code} has an invalid billing snapshot.`);
+    return {
+      code: addon.code, name: addon.name, unitName: addon.unit_name, quantity, billingInterval: interval,
+      addonPriceVersionId: cleanUuid(assignment.addon_price_version_id, "add-on price version"), unitBasePaise,
+      baseSubtotalPaise: unitBasePaise * quantity, gstRateBps: Number(assignment.gst_rate_bps || 1800),
+    };
+  });
+}
+async function reassignActiveAddons(admin: any, tenantId: string, fromSubscriptionId: string, replacementSubscriptionId: string, appliedAt: string) {
+  const { error } = await admin.from("whatsapp_platform_tenant_addons")
+    .update({ source_subscription_id: replacementSubscriptionId, updated_at: appliedAt })
+    .eq("tenant_id", tenantId).eq("source_subscription_id", fromSubscriptionId).eq("status", "active");
+  if (error) throw error;
+}
 function publicCheckoutQuote(quote: any) {
   return {
     id: quote.id, status: quote.status, packageCode: quote.package_code, billingInterval: quote.billing_interval,
@@ -197,6 +227,24 @@ async function upsertPayment(admin: any, subscription: any, entity: any) {
   };
   const { error } = await admin.from("whatsapp_platform_billing_payments").upsert(values, { onConflict: "provider_payment_id" });
   if (error) throw error;
+}
+async function bindPaymentIntentEvidence(admin: any, subscription: any, entity: any) {
+  if (!subscription?.id || !entity?.id || !entity.captured) return;
+  const paymentId = providerId(entity.id, "pay");
+  const amountPaise = Math.max(0, Number(entity.amount || 0));
+  const candidates = [
+    { table: "whatsapp_platform_billing_upgrade_intents", id: subscription.safe_metadata?.upgrade_intent_id },
+    { table: "whatsapp_platform_billing_addon_change_intents", id: subscription.safe_metadata?.addon_change_intent_id },
+  ];
+  for (const candidate of candidates) {
+    if (!candidate.id) continue;
+    const { data: intent, error } = await admin.from(candidate.table).select("id,checkout_amount_paise,provider_payment_id,replacement_subscription_id").eq("id", candidate.id).eq("replacement_subscription_id", subscription.id).single();
+    if (error || !intent) throw error || new Error("Billing change intent not found for captured payment.");
+    if (amountPaise < Number(intent.checkout_amount_paise)) throw new Error("Captured payment is below the authorized billing change total.");
+    if (intent.provider_payment_id && intent.provider_payment_id !== paymentId) throw new Error("A different captured payment is already bound to this billing change.");
+    const { error: updateError } = await admin.from(candidate.table).update({ provider_payment_id: paymentId, updated_at: new Date().toISOString() }).eq("id", intent.id);
+    if (updateError) throw updateError;
+  }
 }
 async function recordRefund(admin: any, entity: any) {
   if (!entity?.id || !entity?.payment_id) return null;
@@ -341,6 +389,7 @@ async function quoteSubscriptionCheckout(admin: any, customer: any, body: any) {
     });
   }
   let redemption: any = null;
+  let coupon: any = null;
   if (couponCode) {
     const { data, error } = await admin.rpc("whatsapp_platform_reserve_billing_coupon", {
       p_tenant_id: customer.tenant_id, p_coupon_code: couponCode, p_package_code: packageCode,
@@ -351,6 +400,10 @@ async function quoteSubscriptionCheckout(admin: any, customer: any, body: any) {
     if (error) throw new Error(error.message || "Coupon could not be applied.");
     redemption = Array.isArray(data) ? data[0] : data;
     if (!redemption?.id) throw new Error("Coupon reservation could not be recorded.");
+    const { data: couponRecord, error: couponError } = await admin.from("whatsapp_platform_billing_coupons").select("id,first_payment_only,provider_offer_id").eq("id", redemption.coupon_id).single();
+    if (couponError || !couponRecord) throw couponError || new Error("Coupon configuration could not be loaded.");
+    if (couponRecord.first_payment_only && !couponRecord.provider_offer_id) throw new Error("This first-payment coupon is missing its Razorpay single-use Subscription Offer. Contact billing support.");
+    coupon = couponRecord;
   }
   const discountPaise = Number(redemption?.discount_paise || 0);
   const addonBasePaise = addonSelections.reduce((total, item) => total + item.baseSubtotalPaise, 0);
@@ -366,7 +419,7 @@ async function quoteSubscriptionCheckout(admin: any, customer: any, body: any) {
     currency: pkg.currency, base_subtotal_paise: priceSnapshot.recurring_base_paise + addonBasePaise, discount_paise: discountPaise, addon_selections: addonSelections,
     package_gst_paise: gross.packageGstPaise, gateway_adjustment_paise: gross.gatewayAdjustmentPaise,
     checkout_amount_paise: gross.checkoutAmountPaise, gst_rate_bps: priceSnapshot.gst_rate_bps, gateway_rate_bps: 236,
-    quote_snapshot: { package_name: pkg.name, package_description: pkg.description || "", package_price_version_id: priceSnapshot.package_price_version_id, package_base_paise: priceSnapshot.recurring_base_paise, addon_base_paise: addonBasePaise },
+    quote_snapshot: { package_name: pkg.name, package_description: pkg.description || "", package_price_version_id: priceSnapshot.package_price_version_id, package_base_paise: priceSnapshot.recurring_base_paise, addon_base_paise: addonBasePaise, coupon_first_payment_only: Boolean(coupon?.first_payment_only), provider_offer_id: coupon?.provider_offer_id || null },
     expires_at: expiresAt,
   }).select("*").single();
   if (quoteError || !quote) {
@@ -395,15 +448,33 @@ async function ensureRazorpayPlan(admin: any, pkg: any, interval: "month" | "yea
   if (error) throw error;
   return planId;
 }
+async function ensureRazorpayPlanForRecurringBase(admin: any, pkg: any, interval: "month" | "year", recurringBasePaise: number, addonSelections: any[], credentials: any, context: string) {
+  const packageBase = packageBasePaise(pkg, interval);
+  if (recurringBasePaise === packageBase && !(addonSelections || []).length) return ensureRazorpayPlan(admin, pkg, interval, credentials);
+  if (!Number.isSafeInteger(recurringBasePaise) || recurringBasePaise < 100) throw new Error("The recurring billing total is invalid.");
+  const gross = checkoutGrossPaise(recurringBasePaise);
+  const created = await razorpayRequest("/plans", {
+    method: "POST",
+    body: JSON.stringify({
+      period: interval === "month" ? "monthly" : "yearly", interval: 1,
+      item: { name: `${pkg.name} with managed add-ons`.slice(0, 80), amount: gross.checkoutAmountPaise, currency: pkg.currency, description: "Varada Nexus package and recurring add-on capacity" },
+      notes: { product: "Varada Nexus WhatsApp Solutions", package_code: pkg.code, billing_interval: interval, change_type: context, recurring_base_paise: recurringBasePaise, addon_codes: (addonSelections || []).map((item: any) => item.code).join(",").slice(0, 255) },
+    }),
+  }, credentials);
+  return providerId(created.id, "plan");
+}
 async function ensureRazorpayPlanForQuote(admin: any, pkg: any, quote: any, credentials: any) {
-  if (Number(quote.discount_paise || 0) === 0 && !(quote.addon_selections || []).length) return ensureRazorpayPlan(admin, pkg, quote.billing_interval, credentials);
+  const firstPaymentOnly = Boolean(quote.quote_snapshot?.coupon_first_payment_only);
+  if ((Number(quote.discount_paise || 0) === 0 || firstPaymentOnly) && !(quote.addon_selections || []).length) return ensureRazorpayPlan(admin, pkg, quote.billing_interval, credentials);
   if (quote.provider_plan_id) return providerId(quote.provider_plan_id, "plan");
+  const recurringBasePaise = firstPaymentOnly ? Number(quote.base_subtotal_paise) : Number(quote.taxable_base_paise);
+  const recurringGross = checkoutGrossPaise(recurringBasePaise);
   const created = await razorpayRequest("/plans", {
     method: "POST",
     body: JSON.stringify({
       period: quote.billing_interval === "month" ? "monthly" : "yearly", interval: 1,
-      item: { name: `${pkg.name} · ${quote.coupon_code || "configured checkout"}`.slice(0, 80), amount: Number(quote.checkout_amount_paise), currency: quote.currency, description: `${pkg.name} subscription with server-priced options`.slice(0, 255) },
-      notes: { product: "Varada Nexus WhatsApp Solutions", checkout_quote_id: quote.id, package_code: pkg.code, coupon_code: quote.coupon_code || "", addon_codes: (quote.addon_selections || []).map((item: any) => item.code).join(",").slice(0, 255), base_subtotal_paise: quote.base_subtotal_paise, discount_paise: quote.discount_paise, final_recurring_amount_paise: quote.checkout_amount_paise },
+      item: { name: `${pkg.name} · ${quote.coupon_code || "configured checkout"}`.slice(0, 80), amount: recurringGross.checkoutAmountPaise, currency: quote.currency, description: `${pkg.name} subscription with server-priced options`.slice(0, 255) },
+      notes: { product: "Varada Nexus WhatsApp Solutions", checkout_quote_id: quote.id, package_code: pkg.code, coupon_code: quote.coupon_code || "", coupon_first_payment_only: firstPaymentOnly, addon_codes: (quote.addon_selections || []).map((item: any) => item.code).join(",").slice(0, 255), recurring_base_paise: recurringBasePaise, recurring_checkout_amount_paise: recurringGross.checkoutAmountPaise },
     }),
   }, credentials);
   const planId = providerId(created.id, "plan");
@@ -452,7 +523,8 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
     };
   }
   const planId = await ensureRazorpayPlanForQuote(admin, pkg, quote, credentials);
-  const priceSnapshot = { package_price_version_id: quote.package_price_version_id, recurring_base_paise: Number(quote.taxable_base_paise), gst_rate_bps: Number(quote.gst_rate_bps) };
+  const firstPaymentOnly = Boolean(quote.quote_snapshot?.coupon_first_payment_only);
+  const priceSnapshot = { package_price_version_id: quote.package_price_version_id, recurring_base_paise: Number(firstPaymentOnly ? quote.base_subtotal_paise : quote.taxable_base_paise), gst_rate_bps: Number(quote.gst_rate_bps) };
   const { count: priorCount, error: countError } = await admin.from("whatsapp_platform_billing_subscriptions").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("package_code", packageCode);
   if (countError) throw countError;
   const trialDays = Number(priorCount || 0) === 0 ? Math.max(0, Number(pkg.trial_days || 0)) : 0;
@@ -462,6 +534,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
     plan_id: planId, total_count: totalCount, quantity: 1, customer_notify: true,
     notes: { tenant_id: customer.tenant_id, package_code: packageCode, billing_interval: interval, created_by: customer.user_id, checkout_quote_id: quote.id, coupon_code: quote.coupon_code || "" },
   };
+  if (firstPaymentOnly) requestBody.offer_id = providerId(quote.quote_snapshot?.provider_offer_id, "offer");
   if (trialEndsAt) requestBody.start_at = trialEndsAt;
   const created = await razorpayRequest("/subscriptions", { method: "POST", body: JSON.stringify(requestBody) }, credentials);
   const providerSubscriptionId = providerId(created.id, "sub");
@@ -470,7 +543,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
     provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
     total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
     short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id, ...priceSnapshot,
-    safe_metadata: { checkout_quote_id: quote.id, coupon_code: quote.coupon_code || null, addon_selections: quote.addon_selections || [], base_subtotal_paise: Number(quote.base_subtotal_paise), discount_paise: Number(quote.discount_paise), checkout_amount_paise: Number(quote.checkout_amount_paise), trial_days: trialDays, trial_ends_at: trialEndsAt ? new Date(trialEndsAt * 1000).toISOString() : null, mode: credentials.keyId.startsWith("rzp_live_") ? "live" : "test" },
+    safe_metadata: { checkout_quote_id: quote.id, coupon_code: quote.coupon_code || null, coupon_first_payment_only: firstPaymentOnly, provider_offer_id: firstPaymentOnly ? quote.quote_snapshot?.provider_offer_id : null, addon_selections: quote.addon_selections || [], base_subtotal_paise: Number(quote.base_subtotal_paise), discount_paise: Number(quote.discount_paise), checkout_amount_paise: Number(quote.checkout_amount_paise), recurring_base_paise: priceSnapshot.recurring_base_paise, trial_days: trialDays, trial_ends_at: trialEndsAt ? new Date(trialEndsAt * 1000).toISOString() : null, mode: credentials.keyId.startsWith("rzp_live_") ? "live" : "test" },
   }).select("id").single();
   if (error || !subscription) {
     await razorpayRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }) }, credentials).catch(() => null);
@@ -528,6 +601,11 @@ async function finalizeCheckoutQuote(admin: any, subscription: any) {
   const { error: addonError } = await admin.from("whatsapp_platform_tenant_addons").update({ status: "active", billing_starts_at: subscription.current_start || subscription.activated_at || consumedAt, billing_ends_at: null, updated_at: consumedAt })
     .eq("source_subscription_id", subscription.id).eq("source_checkout_quote_id", quoteId).eq("status", "pending");
   if (addonError) throw addonError;
+  const trialDays = Number(subscription.safe_metadata?.trial_days || 0);
+  if (subscription.status === "authenticated" && Number.isSafeInteger(trialDays) && trialDays > 0 && new Date(subscription.charge_at || 0).getTime() > Date.now()) {
+    const { error: tenantError } = await admin.from("whatsapp_platform_tenants").update({ plan_code: subscription.package_code, updated_at: consumedAt }).eq("id", subscription.tenant_id);
+    if (tenantError) throw tenantError;
+  }
   return { completed: true };
 }
 async function verifyCheckout(admin: any, customer: any, body: any, credentials: any) {
@@ -545,6 +623,7 @@ async function verifyCheckout(admin: any, customer: any, body: any, credentials:
     razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials),
     razorpayRequest(`/payments/${encodeURIComponent(paymentId)}`, {}, credentials),
   ]);
+  await bindPaymentIntentEvidence(admin, subscription, payment);
   await upsertPayment(admin, subscription, payment);
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
   const { error: verifyError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ checkout_verified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", subscription.id);
@@ -617,9 +696,11 @@ async function recordRenewalPriceConsent(admin: any, customer: any, body: any, r
     if (versionError || !targetVersion) throw new Error("Target renewal price revision not found.");
     if (packageError || !pkg || pkg.current_price_version_id !== targetVersion.id || pkg.id !== targetVersion.package_id) throw new Error("This renewal price was superseded. Refresh billing for the latest notice.");
     const interval = currentSubscription.billing_interval as "month" | "year";
-    const recurringBasePaise = Number(interval === "year" ? targetVersion.annual_base_paise : targetVersion.monthly_base_paise);
-    if (!Number.isSafeInteger(recurringBasePaise) || recurringBasePaise < 100) throw new Error("The revised renewal price is invalid.");
-    const planId = await ensureRazorpayPlan(admin, pkg, interval, credentials);
+    const packageRecurringBasePaise = Number(interval === "year" ? targetVersion.annual_base_paise : targetVersion.monthly_base_paise);
+    if (!Number.isSafeInteger(packageRecurringBasePaise) || packageRecurringBasePaise < 100) throw new Error("The revised renewal price is invalid.");
+    const addonSelections = await activeAddonSelections(admin, customer.tenant_id, currentSubscription.id, pkg.code, interval);
+    const recurringBasePaise = packageRecurringBasePaise + addonSelections.reduce((total: number, item: any) => total + Number(item.baseSubtotalPaise), 0);
+    const planId = await ensureRazorpayPlanForRecurringBase(admin, pkg, interval, recurringBasePaise, addonSelections, credentials, "renewal_price_change");
     const totalCount = interval === "month" ? 120 : 10;
     const effectiveSeconds = Math.floor(new Date(claimed.effective_at).getTime() / 1000);
     const startAt = Math.max(effectiveSeconds, Math.floor(Date.now() / 1000) + 600);
@@ -634,7 +715,7 @@ async function recordRenewalPriceConsent(admin: any, customer: any, body: any, r
       total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
       short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
       package_price_version_id: targetVersion.id, recurring_base_paise: recurringBasePaise, gst_rate_bps: Number(targetVersion.gst_rate_bps || 1800),
-      safe_metadata: { renewal_price_change_id: claimed.id, renewal_from_subscription_id: currentSubscription.id, recurring_starts_at: new Date(startAt * 1000).toISOString() },
+      safe_metadata: { renewal_price_change_id: claimed.id, renewal_from_subscription_id: currentSubscription.id, target_addon_selections: addonSelections, package_recurring_base_paise: packageRecurringBasePaise, recurring_starts_at: new Date(startAt * 1000).toISOString() },
     }).select("*").single();
     if (insertError || !data) throw insertError || new Error("Renewal authorization subscription could not be recorded.");
     replacement = data;
@@ -672,6 +753,7 @@ async function upgradeContext(admin: any, customer: any, body: any, credentials:
 
   const providerEntity = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials);
   const syncedSubscription = await syncSubscriptionEntity(admin, subscription, providerEntity);
+  const addonSelections = await activeAddonSelections(admin, customer.tenant_id, syncedSubscription.id, targetPackage.code, interval);
   const cycleEndMs = new Date(syncedSubscription.current_end || 0).getTime();
   if (!Number.isFinite(cycleEndMs) || cycleEndMs <= Date.now() + 60_000) throw new Error("The current billing period has ended. Refresh billing before upgrading.");
   const rawRemainingDays = (cycleEndMs - Date.now()) / DAY_MS;
@@ -682,7 +764,8 @@ async function upgradeContext(admin: any, customer: any, body: any, credentials:
   const currentBasePaise = Number.isSafeInteger(snapshottedCurrentBasePaise) && snapshottedCurrentBasePaise >= 100
     ? snapshottedCurrentBasePaise
     : packageBasePaise(currentPackage, syncedSubscription.billing_interval);
-  const targetBasePaise = packageBasePaise(targetPackage, interval);
+  const targetPackageBasePaise = packageBasePaise(targetPackage, interval);
+  const targetBasePaise = targetPackageBasePaise + addonSelections.reduce((total: number, item: any) => total + Number(item.baseSubtotalPaise), 0);
   const unusedCreditBasePaise = Math.round((currentBasePaise / currentBasisDays) * billableRemainingDays);
   const targetProratedBasePaise = Math.round((targetBasePaise / targetBasisDays) * billableRemainingDays);
   const netUpgradeBasePaise = Math.max(0, targetProratedBasePaise - unusedCreditBasePaise);
@@ -698,9 +781,11 @@ async function upgradeContext(admin: any, customer: any, body: any, credentials:
     gatewayAdjustmentPaise: gross.gatewayAdjustmentPaise,
     checkoutAmountPaise: gross.checkoutAmountPaise,
     recurringBasePaise: targetBasePaise,
+    packageRecurringBasePaise: targetPackageBasePaise,
+    addonSelections,
     recurringStartsAt: new Date(cycleEndMs).toISOString(),
   };
-  return { subscription: syncedSubscription, currentPackage, targetPackage, interval, quote, cycleEndMs };
+  return { subscription: syncedSubscription, currentPackage, targetPackage, interval, quote, cycleEndMs, addonSelections };
 }
 async function previewUpgrade(admin: any, customer: any, body: any, credentials: any) {
   const context = await upgradeContext(admin, customer, body, credentials);
@@ -731,8 +816,9 @@ async function upgradeSubscription(admin: any, customer: any, body: any, credent
     };
   }
 
-  const planId = await ensureRazorpayPlan(admin, context.targetPackage, context.interval, credentials);
-  const priceSnapshot = packagePriceSnapshot(context.targetPackage, context.interval);
+  const planId = await ensureRazorpayPlanForRecurringBase(admin, context.targetPackage, context.interval, context.quote.recurringBasePaise, context.addonSelections, credentials, "package_upgrade");
+  const packageSnapshot = packagePriceSnapshot(context.targetPackage, context.interval);
+  const priceSnapshot = { ...packageSnapshot, recurring_base_paise: context.quote.recurringBasePaise };
   const totalCount = context.interval === "month" ? 120 : 10;
   const intentId = crypto.randomUUID();
   const requestBody = {
@@ -750,7 +836,7 @@ async function upgradeSubscription(admin: any, customer: any, body: any, credent
       provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
       total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
       short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id, ...priceSnapshot,
-      safe_metadata: { upgrade_intent_id: intentId, upgrade_from_subscription_id: context.subscription.id, recurring_starts_at: context.quote.recurringStartsAt, proration: context.quote },
+      safe_metadata: { upgrade_intent_id: intentId, upgrade_from_subscription_id: context.subscription.id, target_addon_selections: context.addonSelections, package_recurring_base_paise: context.quote.packageRecurringBasePaise, recurring_starts_at: context.quote.recurringStartsAt, proration: context.quote },
     }).select("*").single();
     if (error || !data) throw error || new Error("Replacement subscription could not be recorded.");
     replacement = data;
@@ -781,8 +867,18 @@ async function finalizeProratedUpgrade(admin: any, replacementSubscription: any,
   const { data: intent, error: intentError } = await admin.from("whatsapp_platform_billing_upgrade_intents").select("*").eq("id", intentId).single();
   if (intentError || !intent) throw intentError || new Error("Upgrade intent not found.");
   if (intent.status === "completed") return { completed: true };
+  let paymentQuery = admin.from("whatsapp_platform_billing_payments")
+    .select("provider_payment_id,amount_paise,status,captured")
+    .eq("subscription_id", replacementSubscription.id).eq("captured", true)
+    .gte("amount_paise", Number(intent.checkout_amount_paise)).order("created_at", { ascending: false }).limit(1);
+  if (paymentId) paymentQuery = paymentQuery.eq("provider_payment_id", paymentId);
+  const { data: paymentRows, error: paymentError } = await paymentQuery;
+  if (paymentError) throw paymentError;
+  const paymentEvidence = (paymentRows || [])[0];
+  if (!paymentEvidence) return { completed: false, awaitingPayment: true };
+  const effectivePaymentId = providerId(paymentEvidence.provider_payment_id, "pay");
   const { data: claimed, error: claimError } = await admin.from("whatsapp_platform_billing_upgrade_intents")
-    .update({ status: "processing", processing_error: null, provider_payment_id: paymentId || intent.provider_payment_id, updated_at: new Date().toISOString() })
+    .update({ status: "processing", processing_error: null, provider_payment_id: effectivePaymentId, updated_at: new Date().toISOString() })
     .eq("id", intent.id).in("status", ["checkout_pending", "failed"]).select("*").maybeSingle();
   if (claimError) throw claimError;
   if (!claimed) return { completed: false, processing: true };
@@ -798,12 +894,13 @@ async function finalizeProratedUpgrade(admin: any, replacementSubscription: any,
       if (cancelFlagError) throw cancelFlagError;
     }
     const activatedAt = new Date().toISOString();
+    await reassignActiveAddons(admin, intent.tenant_id, oldSubscription.id, replacementSubscription.id, activatedAt);
     const replacementMetadata = { ...(replacementSubscription.safe_metadata || {}), upgrade_activated_at: activatedAt, upgrade_status: "completed" };
     const { error: replacementError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: replacementMetadata, checkout_verified_at: activatedAt, updated_at: activatedAt }).eq("id", replacementSubscription.id);
     if (replacementError) throw replacementError;
     const { error: tenantError } = await admin.from("whatsapp_platform_tenants").update({ plan_code: intent.target_package_code, updated_at: activatedAt }).eq("id", intent.tenant_id);
     if (tenantError) throw tenantError;
-    const { error: completeError } = await admin.from("whatsapp_platform_billing_upgrade_intents").update({ status: "completed", provider_payment_id: paymentId || intent.provider_payment_id, processing_error: null, completed_at: activatedAt, updated_at: activatedAt }).eq("id", intent.id);
+    const { error: completeError } = await admin.from("whatsapp_platform_billing_upgrade_intents").update({ status: "completed", provider_payment_id: effectivePaymentId, processing_error: null, completed_at: activatedAt, updated_at: activatedAt }).eq("id", intent.id);
     if (completeError) throw completeError;
     return { completed: true };
   } catch (error) {
@@ -833,6 +930,7 @@ async function finalizeRenewalPriceChange(admin: any, replacementSubscription: a
       if (flagError) throw flagError;
     }
     const appliedAt = new Date().toISOString();
+    await reassignActiveAddons(admin, claimed.tenant_id, oldSubscription.id, replacementSubscription.id, appliedAt);
     const metadata = { ...(replacementSubscription.safe_metadata || {}), renewal_price_activated_at: appliedAt, renewal_price_status: "applied", authorization_payment_id: paymentId || null };
     const { error: replacementError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: metadata, checkout_verified_at: appliedAt, updated_at: appliedAt }).eq("id", replacementSubscription.id);
     if (replacementError) throw replacementError;
@@ -1091,7 +1189,10 @@ async function processWebhook(admin: any, eventRecordId: string, payload: any, c
       if (error) throw error;
       if (subscription) {
         const synced = await syncSubscriptionEntity(admin, subscription, subscriptionEntity);
-        if (paymentEntity?.id) await upsertPayment(admin, synced, paymentEntity);
+        if (paymentEntity?.id) {
+          await bindPaymentIntentEvidence(admin, synced, paymentEntity);
+          await upsertPayment(admin, synced, paymentEntity);
+        }
         await finalizeCheckoutQuote(admin, synced);
         await finalizeProratedUpgrade(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
         await finalizeRenewalPriceChange(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);

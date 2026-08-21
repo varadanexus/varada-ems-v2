@@ -694,6 +694,7 @@ function masterCouponForm(coupon, packages, addons) {
       <label>Valid until<input name="validUntil" type="datetime-local" value="${masterDateTime(c.valid_until)}"/><small>Blank means no scheduled expiry.</small></label>
       <label>Total redemption limit<input name="maximumRedemptions" type="number" min="1" value="${masterLimit(c,"maximum_redemptions")}" placeholder="Unlimited"/></label>
       <label>Limit per customer<input name="maximumRedemptionsPerTenant" type="number" min="1" value="${masterValue(c,"maximum_redemptions_per_tenant") || 1}" required/></label>
+      <label>Razorpay Subscription Offer ID<input name="providerOfferId" maxlength="70" pattern="offer_[A-Za-z0-9]{6,64}" value="${masterValue(c,"provider_offer_id")}" placeholder="offer_xxxxxxxxxxxxxx"/><small>Required for first-payment-only coupons. Create a matching Single Use offer in Razorpay, then paste its ID here.</small></label>
       <label class="wa-pkg-full">Description<textarea name="description" rows="2">${masterValue(c,"description")}</textarea></label>
     </div>
     <div class="wa-master-section"><h4>Eligible billing intervals</h4><div class="wa-master-toggles"><label class="wa-master-toggle"><input type="checkbox" name="interval_month" ${intervals.includes("month") ? "checked" : ""}/><span>Monthly</span></label><label class="wa-master-toggle"><input type="checkbox" name="interval_year" ${intervals.includes("year") ? "checked" : ""}/><span>Annual</span></label><label class="wa-master-toggle"><input type="checkbox" name="firstPaymentOnly" ${c.first_payment_only ? "checked" : ""}/><span>First successful payment only</span></label></div></div>
@@ -866,6 +867,7 @@ async function saveMasterCoupon(event, form) {
     validUntil: values.get("validUntil") ? new Date(String(values.get("validUntil"))).toISOString() : "",
     maximumRedemptions: values.get("maximumRedemptions"), maximumRedemptionsPerTenant: Number(values.get("maximumRedemptionsPerTenant") || 1),
     firstPaymentOnly: values.get("firstPaymentOnly") === "on",
+    providerOfferId: String(values.get("providerOfferId") || "").trim(),
     billingIntervals: ["month", "year"].filter((interval) => values.get(`interval_${interval}`) === "on"),
     packageCodes: packages.filter((item) => values.get(`package_${item.code}`) === "on").map((item) => item.code),
     addonCodes: addons.filter((item) => values.get(`addon_${item.code}`) === "on").map((item) => item.code),
@@ -873,6 +875,7 @@ async function saveMasterCoupon(event, form) {
   if (!payload.billingIntervals.length) { showToast("Select at least one billing interval.", TOAST_TYPES.ERROR); button.disabled = false; return; }
   if (payload.discountType === "percentage" && !(Number(payload.percentage) > 0)) { showToast("Enter the percentage discount.", TOAST_TYPES.ERROR); button.disabled = false; return; }
   if (payload.discountType === "fixed" && !(Number(payload.fixedAmount) > 0)) { showToast("Enter the fixed discount amount.", TOAST_TYPES.ERROR); button.disabled = false; return; }
+  if (payload.firstPaymentOnly && !/^offer_[A-Za-z0-9]{6,64}$/.test(payload.providerOfferId)) { showToast("First-payment-only coupons require the matching Razorpay single-use Subscription Offer ID.", TOAST_TYPES.ERROR); button.disabled = false; return; }
   try {
     const { error } = await db.rpc("whatsapp_platform_admin_save_billing_coupon", { p_id: form.dataset.masterCouponForm || null, p_payload: payload });
     if (error) throw error;
