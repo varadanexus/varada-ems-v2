@@ -211,6 +211,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
     if (existing.package_code !== packageCode || existing.billing_interval !== interval) throw new Error("Cancel the current subscription before selecting a different package or billing interval.");
     return {
       keyId: credentials.keyId, subscriptionId: existing.id, razorpaySubscriptionId: existing.provider_subscription_id,
+      shortUrl: existing.short_url,
       package: { code: pkg.code, name: pkg.name, description: pkg.description }, customer: { name: customer.display_name, email: customer.email, companyName: customer.company_name }, reused: true,
     };
   }
@@ -236,6 +237,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
   if (error || !subscription) throw error || new Error("Subscription could not be recorded.");
   return {
     keyId: credentials.keyId, subscriptionId: subscription.id, razorpaySubscriptionId: providerSubscriptionId,
+    shortUrl: created.short_url,
     package: { code: pkg.code, name: pkg.name, description: pkg.description }, customer: { name: customer.display_name, email: customer.email, companyName: customer.company_name }, reused: false,
   };
 }

@@ -2197,9 +2197,19 @@ async function renderDashboard() {
       const card = button.closest("[data-billing-plan]");
       const billingInterval = card?.querySelector("[data-billing-interval]")?.value || "month";
       const original = button.textContent;
+      const checkoutWindow = window.open("about:blank", "_blank");
+      if (checkoutWindow) checkoutWindow.opener = null;
       try {
         button.disabled = true; button.textContent = "Preparing secure checkout…";
         const checkout = await billingRequest("create_subscription", { packageCode: button.dataset.billingSubscribe, billingInterval });
+        if (checkout.shortUrl) {
+          if (checkoutWindow) checkoutWindow.location.replace(checkout.shortUrl);
+          else window.location.assign(checkout.shortUrl);
+          showToast("Razorpay checkout opened. Return here after completing payment.");
+          button.disabled = false; button.textContent = original;
+          return;
+        }
+        checkoutWindow?.close();
         await loadRazorpayCheckout();
         const instance = new window.Razorpay({
           key: checkout.keyId,
@@ -2227,6 +2237,7 @@ async function renderDashboard() {
         instance.on("payment.failed", (result) => showToast(result?.error?.description || "Razorpay could not complete the payment.", "error"));
         instance.open();
       } catch (error) {
+        checkoutWindow?.close();
         showToast(error?.message || "Secure checkout could not be opened.", "error");
         button.disabled = false; button.textContent = original;
       }
