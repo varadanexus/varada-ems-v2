@@ -177,20 +177,26 @@ async function configurationStatus(admin: any, customer: any) {
   const appSecret = await providerAppSecret(admin);
   const configurationId = env("WHATSAPP_PLATFORM_META_CONFIG_ID");
   const version = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
-  const { data: connections, error } = await admin
-    .from("whatsapp_platform_connections")
-    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
-    .eq("tenant_id", customer.tenant_id)
-    .neq("status", "disconnected")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const entitlement = await billingEntitlement(admin, customer);
+  let connections: any[] = [];
+  if (entitlement.allowed) {
+    const { data, error } = await admin
+      .from("whatsapp_platform_connections")
+      .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
+      .eq("tenant_id", customer.tenant_id)
+      .neq("status", "disconnected")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    connections = data || [];
+  }
   return {
     configured: Boolean(appId && appSecret && configurationId && /^v\d{1,3}\.0$/.test(version)),
     publicAppId: appId || null,
     publicConfigurationId: configurationId || null,
     publicGraphVersion: /^v\d{1,3}\.0$/.test(version) ? version : null,
     environment: env("WHATSAPP_PLATFORM_META_PRODUCTION_READY") === "true" ? "production" : "testing",
-    connections: connections || [],
+    connections,
+    entitlement,
   };
 }
 

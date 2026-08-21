@@ -1398,28 +1398,6 @@ async function submitAuthForm(event) {
   }
 }
 
-async function loadConnections() {
-  if (!accessToken || !session?.tenantId) return [];
-  const query = new URLSearchParams({
-    select: "id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata",
-    tenant_id: `eq.${session.tenantId}`,
-    status: "neq.disconnected",
-    order: "created_at.desc"
-  });
-  const response = await fetch(`${runtime.supabaseUrl}/rest/v1/whatsapp_platform_connections?${query}`, {
-    headers: {
-      apikey: runtime.supabaseAnonKey || "",
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json"
-    },
-    credentials: "omit",
-    cache: "no-store",
-    referrerPolicy: "no-referrer"
-  });
-  if (!response.ok) throw new Error("Could not load WhatsApp connections.");
-  return response.json();
-}
-
 function onboardingView(setupReady, connections) {
   const metaConnected = connections.length > 0;
   const phoneConnected = connections.some((row) => row.phone_number_id);
@@ -2103,7 +2081,6 @@ async function renderDashboard() {
   const view = currentWorkspaceView();
   const agentWorkspace = isAgentWorkspaceRole();
   let connections = [];
-  try { connections = await loadConnections(); } catch { connections = []; }
   if (!agentWorkspace) {
     try {
       metaOnboardingStatus = await onboardingRequest("status");
