@@ -2346,13 +2346,10 @@ async function renderDashboard() {
       const card = button.closest("[data-billing-plan]");
       const billingInterval = card?.querySelector("[data-billing-interval]")?.value || "month";
       const original = button.textContent;
-      let checkoutWindow = null;
       try {
         const activeSubscription = workspaceBilling?.subscription;
         const upgrading = Boolean(activeSubscription && ["authenticated", "active"].includes(String(activeSubscription.status)) && activeSubscription.package_code !== button.dataset.billingSubscribe);
         if (upgrading) {
-          checkoutWindow = window.open("about:blank", "_blank");
-          if (checkoutWindow) checkoutWindow.opener = null;
           button.disabled = true; button.textContent = "Calculating upgrade…";
           const request = {
             subscriptionId: activeSubscription.id,
@@ -2365,13 +2362,12 @@ async function renderDashboard() {
           const money = (paise) => billingMoney(Number(paise || 0) / 100, quote.currency);
           const approved = await confirmBillingUpgrade(preview);
           if (!approved) {
-            checkoutWindow?.close(); button.disabled = false; button.textContent = original; return;
+            button.disabled = false; button.textContent = original; return;
           }
           button.textContent = "Preparing upgrade checkout…";
           const upgrade = await billingRequest("upgrade_subscription", request);
           if (!upgrade.shortUrl) throw new Error("Razorpay did not return an upgrade authorization link.");
-          if (checkoutWindow) checkoutWindow.location.replace(upgrade.shortUrl);
-          else window.location.assign(upgrade.shortUrl);
+          window.location.assign(upgrade.shortUrl);
           showToast(`Upgrade checkout opened. Pay ${money(upgrade.quote?.checkoutAmountPaise)} to activate ${upgrade.package?.name || "the new package"}; the old subscription will then close automatically.`);
           button.disabled = false; button.textContent = original;
           return;
@@ -2382,7 +2378,6 @@ async function renderDashboard() {
         location.assign(checkoutUrl.pathname + checkoutUrl.search);
         return;
       } catch (error) {
-        checkoutWindow?.close();
         showToast(error?.message || "Secure checkout could not be opened.", "error");
         button.disabled = false; button.textContent = original;
       }
@@ -2391,25 +2386,21 @@ async function renderDashboard() {
       const quantityInput = app.querySelector(`[data-billing-addon-quantity="${CSS.escape(button.dataset.billingAddonChange)}"]`);
       if (!quantityInput?.reportValidity()) return;
       const original = button.textContent;
-      let checkoutWindow = null;
       try {
-        checkoutWindow = window.open("about:blank", "_blank");
-        if (checkoutWindow) checkoutWindow.opener = null;
         const request = { subscriptionId: workspaceBilling?.subscription?.id, addonCode: button.dataset.billingAddonChange, quantity: Number(quantityInput.value) };
         button.disabled = true; button.textContent = "Calculating proration…";
         const preview = await billingRequest("preview_addon_change", request);
         const approved = await confirmAddonChange(preview);
         if (!approved) {
-          checkoutWindow?.close(); button.disabled = false; button.textContent = original; return;
+          button.disabled = false; button.textContent = original; return;
         }
         button.textContent = "Preparing add-on checkout…";
         const change = await billingRequest("change_addons", request);
         if (!change.shortUrl) throw new Error("Razorpay did not return an add-on authorization link.");
-        if (checkoutWindow) checkoutWindow.location.replace(change.shortUrl); else window.location.assign(change.shortUrl);
+        window.location.assign(change.shortUrl);
         showToast(`Add-on authorization opened. Pay ${billingMoney(Number(change.quote?.checkoutAmountPaise || 0) / 100, change.quote?.currency || "INR")} to activate the increased capacity.`);
         button.disabled = false; button.textContent = original;
       } catch (error) {
-        checkoutWindow?.close();
         showToast(error?.message || "Add-on checkout could not be opened.", "error");
         button.disabled = false; button.textContent = original;
       }
