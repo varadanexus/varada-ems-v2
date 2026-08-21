@@ -3408,9 +3408,15 @@ body.wp-verification-viewer-open { overflow: hidden; }
     padding-inline: .55rem;
     transition: width .22s ease, padding .22s ease;
   }
-  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-sidebar-brand-row { grid-template-columns: 1fr; gap: .25rem; }
-  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-brand { justify-content: center; padding: .15rem 0; }
-  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-brand span,
+  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-sidebar-brand-row {
+    position: relative;
+    z-index: 2;
+    width: 250px;
+    grid-template-columns: 1fr;
+    gap: .25rem;
+  }
+  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-brand { justify-content: flex-start; padding: .15rem .45rem; }
+  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-topbar { padding-left: 224px; }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-account div,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-number-selector > span:last-child,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-account-chevron,
