@@ -476,6 +476,13 @@ async function loadPackageMaster() {
 function masterValue(record, key) { return escapeHtml(record?.[key] ?? ""); }
 function masterLimit(record, key) { return record?.[key] == null ? "" : escapeHtml(record[key]); }
 function masterOption(value, current, label = value) { return `<option value="${escapeHtml(value)}" ${String(current) === value ? "selected" : ""}>${escapeHtml(label)}</option>`; }
+function masterDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return escapeHtml(local.toISOString().slice(0, 16));
+}
 
 function masterPackageForm(pkg) {
   const p = pkg || {};
@@ -543,6 +550,41 @@ function masterAddonForm(addon, packages) {
   </form>`;
 }
 
+function masterCouponForm(coupon, packages, addons) {
+  const c = coupon || {};
+  const isNew = !c.id;
+  const packageCodes = Array.isArray(c.applies_to_package_codes) ? c.applies_to_package_codes : [];
+  const addonCodes = Array.isArray(c.applies_to_addon_codes) ? c.applies_to_addon_codes : [];
+  const intervals = Array.isArray(c.billing_intervals) ? c.billing_intervals : ["month", "year"];
+  const percentage = c.percentage_bps == null ? "" : Number(c.percentage_bps) / 100;
+  const fixedAmount = c.fixed_amount_paise == null ? "" : Number(c.fixed_amount_paise) / 100;
+  const maximumDiscount = c.max_discount_paise == null ? "" : Number(c.max_discount_paise) / 100;
+  const minimumSubtotal = c.minimum_subtotal_paise == null ? 0 : Number(c.minimum_subtotal_paise) / 100;
+  return `<form class="wa-master-record compact" data-master-coupon-form="${escapeHtml(c.id || "")}">
+    <header><div><span class="wa-admin-kicker">${isNew ? "New coupon" : `Coupon · ${escapeHtml(c.code)}`}</span><h3>${escapeHtml(c.name || "Create coupon code")}</h3><p>Discounts are validated and calculated server-side against the tax-exclusive Package Master price.</p></div><span class="wa-master-state ${escapeHtml(c.status || "draft")}">${escapeHtml(c.status || "draft")}</span></header>
+    <div class="wa-pkg-grid">
+      <label>Coupon code<input name="code" required minlength="3" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,39}" value="${masterValue(c,"code")}" placeholder="WELCOME20"/><small>Customer enters this code at checkout.</small></label>
+      <label>Internal name<input name="name" required maxlength="120" value="${masterValue(c,"name")}" placeholder="Launch offer"/></label>
+      <label>Status<select name="status">${masterOption("draft",c.status,"Draft")}${masterOption("active",c.status,"Active")}${masterOption("disabled",c.status,"Disabled")}</select></label>
+      <label>Discount type<select name="discountType">${masterOption("percentage",c.discount_type || "percentage","Percentage")}${masterOption("fixed",c.discount_type,"Fixed amount")}</select></label>
+      <label>Percentage discount<input name="percentage" type="number" min="0.01" max="100" step="0.01" value="${escapeHtml(percentage)}" placeholder="20"/><small>Used only for percentage coupons.</small></label>
+      <label>Fixed discount — excluding GST<input name="fixedAmount" type="number" min="0.01" step="0.01" value="${escapeHtml(fixedAmount)}" placeholder="500"/><small>Used only for fixed coupons.</small></label>
+      <label>Maximum discount<input name="maximumDiscount" type="number" min="0.01" step="0.01" value="${escapeHtml(maximumDiscount)}" placeholder="No cap"/></label>
+      <label>Minimum base subtotal<input name="minimumSubtotal" type="number" min="0" step="0.01" value="${escapeHtml(minimumSubtotal)}"/></label>
+      <label>Currency<input name="currency" maxlength="3" pattern="[A-Z]{3}" value="${masterValue(c,"currency") || "INR"}"/></label>
+      <label>Valid from<input name="validFrom" type="datetime-local" value="${masterDateTime(c.valid_from || new Date())}" required/></label>
+      <label>Valid until<input name="validUntil" type="datetime-local" value="${masterDateTime(c.valid_until)}"/><small>Blank means no scheduled expiry.</small></label>
+      <label>Total redemption limit<input name="maximumRedemptions" type="number" min="1" value="${masterLimit(c,"maximum_redemptions")}" placeholder="Unlimited"/></label>
+      <label>Limit per customer<input name="maximumRedemptionsPerTenant" type="number" min="1" value="${masterValue(c,"maximum_redemptions_per_tenant") || 1}" required/></label>
+      <label class="wa-pkg-full">Description<textarea name="description" rows="2">${masterValue(c,"description")}</textarea></label>
+    </div>
+    <div class="wa-master-section"><h4>Eligible billing intervals</h4><div class="wa-master-toggles"><label class="wa-master-toggle"><input type="checkbox" name="interval_month" ${intervals.includes("month") ? "checked" : ""}/><span>Monthly</span></label><label class="wa-master-toggle"><input type="checkbox" name="interval_year" ${intervals.includes("year") ? "checked" : ""}/><span>Annual</span></label><label class="wa-master-toggle"><input type="checkbox" name="firstPaymentOnly" ${c.first_payment_only ? "checked" : ""}/><span>First successful payment only</span></label></div></div>
+    <div class="wa-master-section"><h4>Eligible packages</h4><p class="wa-master-help">Leave all unchecked to allow every active package.</p><div class="wa-master-toggles">${packages.map((p) => `<label class="wa-master-toggle"><input type="checkbox" name="package_${escapeHtml(p.code)}" ${packageCodes.includes(p.code) ? "checked" : ""}/><span>${escapeHtml(p.name)}</span></label>`).join("") || "<span>Create a package first.</span>"}</div></div>
+    <div class="wa-master-section"><h4>Eligible add-ons</h4><p class="wa-master-help">Leave all unchecked to allow package-only checkout and every eligible add-on.</p><div class="wa-master-toggles">${addons.map((a) => `<label class="wa-master-toggle"><input type="checkbox" name="addon_${escapeHtml(a.code)}" ${addonCodes.includes(a.code) ? "checked" : ""}/><span>${escapeHtml(a.name)}</span></label>`).join("") || "<span>No add-ons configured.</span>"}</div></div>
+    <footer><span>Coupon values reduce the base subtotal before GST. Redemption is recorded only by verified checkout.</span><button class="wa-admin-button primary" type="submit">${isNew ? "Create coupon" : "Save coupon"}</button></footer>
+  </form>`;
+}
+
 function masterAssignments(tenants, addons, assignments) {
   const addonMap = new Map(addons.map((addon) => [addon.code, addon]));
   const assignmentRows = assignments.map((item) => {
@@ -559,13 +601,15 @@ function packageMaster() {
   if (state.packageMasterError) return `<div class="wa-admin-notice"><strong>Package Master is not active yet.</strong><br>${escapeHtml(state.packageMasterError)}</div>`;
   const packages = state.packageMaster?.packages || [];
   const addons = state.packageMaster?.addons || [];
+  const coupons = state.packageMaster?.coupons || [];
   const tenants = state.packageMaster?.tenants || [];
   const assignments = state.packageMaster?.assignments || [];
   const active = packages.filter((item) => item.status === "active").length;
-  return `<section class="wa-master-intro"><div><span class="wa-admin-kicker">Central source of truth</span><h3>Package Master</h3><p>Customer portal access and billing are resolved from these operational records. Public Packages &amp; Offers are maintained separately.</p></div><div class="wa-master-summary"><span><strong>${packages.length}</strong> packages</span><span><strong>${active}</strong> active</span><span><strong>${addons.length}</strong> add-ons</span></div></section>
+  return `<section class="wa-master-intro"><div><span class="wa-admin-kicker">Central source of truth</span><h3>Package Master</h3><p>Customer portal access and billing are resolved from these operational records. Public Packages &amp; Offers are maintained separately.</p></div><div class="wa-master-summary"><span><strong>${packages.length}</strong> packages</span><span><strong>${active}</strong> active</span><span><strong>${addons.length}</strong> add-ons</span><span><strong>${coupons.length}</strong> coupons</span></div></section>
     ${!state.canManage ? '<div class="wa-admin-notice">You have view-only access to Package Master.</div>' : ""}
     <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Customer packages</h3><p>Entitlements, hard limits, trials and subscription amounts.</p></div></div>${packages.map(masterPackageForm).join("")}${state.canManage ? masterPackageForm(null) : ""}</section>
-    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Add-on master</h3><p>Billable capacity and feature extensions eligible for each package.</p></div></div>${addons.map((addon) => masterAddonForm(addon,packages)).join("")}${state.canManage ? masterAddonForm(null,packages) : ""}</section>${masterAssignments(tenants,addons,assignments)}`;
+    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Add-on master</h3><p>Billable capacity and feature extensions eligible for each package.</p></div></div>${addons.map((addon) => masterAddonForm(addon,packages)).join("")}${state.canManage ? masterAddonForm(null,packages) : ""}</section>
+    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Coupon codes</h3><p>Create controlled discounts for the dedicated customer checkout. Redemption limits and financial snapshots are enforced server-side.</p></div></div>${coupons.map((coupon) => masterCouponForm(coupon,packages,addons)).join("")}${state.canManage ? masterCouponForm(null,packages,addons) : ""}</section>${masterAssignments(tenants,addons,assignments)}`;
 }
 
 function nullableNumber(formData, name) {
@@ -621,6 +665,37 @@ async function saveMasterAddon(event, form) {
     showToast("Add-on Master updated. The tax-exclusive price revision is now authoritative.", TOAST_TYPES.SUCCESS);
     state.packageMaster = null; await loadPackageMaster();
   } catch (error) { showToast(error?.message || "Could not save master add-on.", TOAST_TYPES.ERROR); button.disabled = false; }
+}
+
+async function saveMasterCoupon(event, form) {
+  event.preventDefault();
+  if (!form.reportValidity()) return;
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  const values = new FormData(form);
+  const packages = state.packageMaster?.packages || [];
+  const addons = state.packageMaster?.addons || [];
+  const payload = {
+    code: String(values.get("code") || "").trim().toUpperCase(), name: values.get("name"), description: values.get("description"), status: values.get("status"),
+    discountType: values.get("discountType"), percentage: values.get("percentage"), fixedAmount: values.get("fixedAmount"), maximumDiscount: values.get("maximumDiscount"),
+    minimumSubtotal: Number(values.get("minimumSubtotal") || 0), currency: String(values.get("currency") || "INR").toUpperCase(),
+    validFrom: values.get("validFrom") ? new Date(String(values.get("validFrom"))).toISOString() : new Date().toISOString(),
+    validUntil: values.get("validUntil") ? new Date(String(values.get("validUntil"))).toISOString() : "",
+    maximumRedemptions: values.get("maximumRedemptions"), maximumRedemptionsPerTenant: Number(values.get("maximumRedemptionsPerTenant") || 1),
+    firstPaymentOnly: values.get("firstPaymentOnly") === "on",
+    billingIntervals: ["month", "year"].filter((interval) => values.get(`interval_${interval}`) === "on"),
+    packageCodes: packages.filter((item) => values.get(`package_${item.code}`) === "on").map((item) => item.code),
+    addonCodes: addons.filter((item) => values.get(`addon_${item.code}`) === "on").map((item) => item.code),
+  };
+  if (!payload.billingIntervals.length) { showToast("Select at least one billing interval.", TOAST_TYPES.ERROR); button.disabled = false; return; }
+  if (payload.discountType === "percentage" && !(Number(payload.percentage) > 0)) { showToast("Enter the percentage discount.", TOAST_TYPES.ERROR); button.disabled = false; return; }
+  if (payload.discountType === "fixed" && !(Number(payload.fixedAmount) > 0)) { showToast("Enter the fixed discount amount.", TOAST_TYPES.ERROR); button.disabled = false; return; }
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_save_billing_coupon", { p_id: form.dataset.masterCouponForm || null, p_payload: payload });
+    if (error) throw error;
+    showToast("Coupon saved. Checkout will validate its dates, eligibility and redemption limits server-side.", TOAST_TYPES.SUCCESS);
+    state.packageMaster = null; await loadPackageMaster();
+  } catch (error) { showToast(error?.message || "Could not save coupon.", TOAST_TYPES.ERROR); button.disabled = false; }
 }
 
 async function saveMasterAssignment(event, form) {
@@ -979,6 +1054,7 @@ function bind() {
   document.querySelector("[data-rates-form]")?.addEventListener("submit", (event) => saveRates(event));
   document.querySelectorAll("[data-master-package-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterPackage(event, form)));
   document.querySelectorAll("[data-master-addon-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAddon(event, form)));
+  document.querySelectorAll("[data-master-coupon-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterCoupon(event, form)));
   document.querySelectorAll("[data-master-assignment]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAssignment(event, form)));
   document.querySelector("[data-meta-secret-form]")?.addEventListener("submit", saveProviderSecret);
   document.querySelector("[data-razorpay-secret-form]")?.addEventListener("submit", saveRazorpaySecrets);
