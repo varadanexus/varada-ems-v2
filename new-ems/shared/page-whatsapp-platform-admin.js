@@ -596,6 +596,71 @@ function masterAssignments(tenants, addons, assignments) {
   return `<section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Customer add-on assignments</h3><p>This ledger is the billing and entitlement source used by customer workspaces.</p></div></div><div class="wa-master-assignment-list">${assignmentRows || '<div class="wa-admin-empty">No customer add-ons assigned.</div>'}</div>${state.canManage ? `<form class="wa-master-assignment create" data-master-assignment><div><strong>Assign an add-on</strong><small>Eligibility is checked against the customer package.</small></div><label>Customer<select name="tenantId" required><option value="">Select customer</option>${tenantOptions}</select></label><label>Add-on<select name="addonCode" required><option value="">Select add-on</option>${addonOptions}</select></label><label>Quantity<input name="quantity" type="number" min="1" max="10000" value="1" required/></label><label>Status<select name="status"><option value="active">Active</option><option value="pending">Pending</option></select></label><button class="wa-admin-button primary" type="submit">Assign add-on</button></form>` : ""}</section>`;
 }
 
+function masterCurrency(amount, currency = "INR") {
+  const value = Number(amount || 0);
+  try { return new Intl.NumberFormat("en-IN", { style: "currency", currency: String(currency || "INR").toUpperCase(), maximumFractionDigits: 2 }).format(value); }
+  catch { return `${escapeHtml(currency || "INR")} ${value.toFixed(2)}`; }
+}
+
+function masterModal(kind, id, title, subtitle, form) {
+  const key = `${kind}:${id || "new"}`;
+  return `<section class="wa-master-modal" data-master-modal="${escapeHtml(key)}" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}" hidden>
+    <div class="wa-master-modal-shell">
+      <header class="wa-master-modal-head"><div><span>${escapeHtml(subtitle)}</span><strong>${escapeHtml(title)}</strong></div><button type="button" data-master-modal-close aria-label="Close editor">&times;</button></header>
+      <main>${form}</main>
+    </div>
+  </section>`;
+}
+
+function masterPackageCard(pkg) {
+  const p = pkg || {};
+  const activeFeatures = Object.values(p.entitlements || {}).filter(Boolean).length;
+  const limits = [p.team_member_limit, p.whatsapp_number_limit, p.contact_limit, p.monthly_message_limit].filter((value) => value != null).length;
+  return `<button class="wa-master-card package" type="button" data-master-open="package:${escapeHtml(p.id)}">
+    <span class="wa-master-card-top"><span class="wa-master-card-icon">${escapeHtml(String(p.name || p.code || "P").slice(0, 2).toUpperCase())}</span><span class="wa-master-state ${escapeHtml(p.status || "draft")}">${escapeHtml(p.status || "draft")}</span></span>
+    <span class="wa-master-card-copy"><small>Package · ${escapeHtml(p.code)}</small><strong>${escapeHtml(p.name)}</strong><em>${escapeHtml(p.description || "No internal description")}</em></span>
+    <span class="wa-master-card-price"><strong>${masterCurrency(p.monthly_amount, p.currency)}</strong><small>/ month + GST</small></span>
+    <span class="wa-master-card-meta"><span>${Number(p.trial_days || 0)}-day trial</span><span>${limits} metered limits</span><span>${activeFeatures} features</span></span>
+    <span class="wa-master-card-action">Open package editor <b aria-hidden="true">&rarr;</b></span>
+  </button>`;
+}
+
+function masterAddonCard(addon) {
+  const a = addon || {};
+  const eligible = Array.isArray(a.eligible_plan_codes) ? a.eligible_plan_codes.length : 0;
+  return `<button class="wa-master-card addon" type="button" data-master-open="addon:${escapeHtml(a.id)}">
+    <span class="wa-master-card-top"><span class="wa-master-card-icon">${escapeHtml(String(a.name || a.code || "A").slice(0, 2).toUpperCase())}</span><span class="wa-master-state ${escapeHtml(a.status || "draft")}">${escapeHtml(a.status || "draft")}</span></span>
+    <span class="wa-master-card-copy"><small>Add-on · ${escapeHtml(a.code)}</small><strong>${escapeHtml(a.name)}</strong><em>${escapeHtml(a.description || "No description")}</em></span>
+    <span class="wa-master-card-price"><strong>${masterCurrency(a.unit_amount, a.currency)}</strong><small>/ ${escapeHtml(a.unit_name || "unit")} · ${escapeHtml(a.billing_interval || "custom")}</small></span>
+    <span class="wa-master-card-meta"><span>${eligible || "All"} eligible package${eligible === 1 ? "" : "s"}</span><span>${a.is_self_service ? "Self-service" : "Admin assigned"}</span></span>
+    <span class="wa-master-card-action">Open add-on editor <b aria-hidden="true">&rarr;</b></span>
+  </button>`;
+}
+
+function masterCouponCard(coupon) {
+  const c = coupon || {};
+  const discount = c.discount_type === "fixed" ? masterCurrency(Number(c.fixed_amount_paise || 0) / 100, c.currency) : `${Number(c.percentage_bps || 0) / 100}%`;
+  return `<button class="wa-master-card coupon" type="button" data-master-open="coupon:${escapeHtml(c.id)}">
+    <span class="wa-master-card-top"><span class="wa-master-card-icon">%</span><span class="wa-master-state ${escapeHtml(c.status || "draft")}">${escapeHtml(c.status || "draft")}</span></span>
+    <span class="wa-master-card-copy"><small>Coupon · ${escapeHtml(c.code)}</small><strong>${escapeHtml(c.name)}</strong><em>${escapeHtml(c.description || "Controlled checkout discount")}</em></span>
+    <span class="wa-master-card-price"><strong>${escapeHtml(discount)}</strong><small>${c.first_payment_only ? "first payment only" : "eligible payments"}</small></span>
+    <span class="wa-master-card-meta"><span>${Number(c.redemption_count || 0)} redeemed</span><span>${c.valid_until ? `Ends ${escapeHtml(formatDate(c.valid_until))}` : "No expiry"}</span></span>
+    <span class="wa-master-card-action">Open coupon editor <b aria-hidden="true">&rarr;</b></span>
+  </button>`;
+}
+
+function masterCreateCard(kind, title, copy) {
+  return `<button class="wa-master-card create" type="button" data-master-open="${escapeHtml(kind)}:new"><span class="wa-master-create-icon">+</span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(copy)}</small><span class="wa-master-card-action">Open new record <b aria-hidden="true">&rarr;</b></span></button>`;
+}
+
+function masterDirectory(title, description, kind, records, cardRenderer, formRenderer, createTitle, createCopy) {
+  const cards = records.map(cardRenderer).join("");
+  const modals = records.map((record) => masterModal(kind, record.id, record.name || record.code, `Edit ${kind}`, formRenderer(record))).join("");
+  const create = state.canManage ? masterCreateCard(kind, createTitle, createCopy) : "";
+  const createModal = state.canManage ? masterModal(kind, "new", createTitle, `New ${kind}`, formRenderer(null)) : "";
+  return `<section class="wa-master-stack"><div class="wa-master-heading"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(description)}</p></div><span>${records.length} record${records.length === 1 ? "" : "s"}</span></div><div class="wa-master-card-grid">${cards}${create || (!records.length ? '<div class="wa-admin-empty">No records configured.</div>' : "")}</div>${modals}${createModal}</section>`;
+}
+
 function packageMaster() {
   if (!state.packageMaster && !state.packageMasterError) { if (!state.packageMasterLoading) loadPackageMaster(); return '<div class="wa-admin-empty">Loading Package Master…</div>'; }
   if (state.packageMasterError) return `<div class="wa-admin-notice"><strong>Package Master is not active yet.</strong><br>${escapeHtml(state.packageMasterError)}</div>`;
@@ -607,9 +672,9 @@ function packageMaster() {
   const active = packages.filter((item) => item.status === "active").length;
   return `<section class="wa-master-intro"><div><span class="wa-admin-kicker">Central source of truth</span><h3>Package Master</h3><p>Customer portal access and billing are resolved from these operational records. Public Packages &amp; Offers are maintained separately.</p></div><div class="wa-master-summary"><span><strong>${packages.length}</strong> packages</span><span><strong>${active}</strong> active</span><span><strong>${addons.length}</strong> add-ons</span><span><strong>${coupons.length}</strong> coupons</span></div></section>
     ${!state.canManage ? '<div class="wa-admin-notice">You have view-only access to Package Master.</div>' : ""}
-    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Customer packages</h3><p>Entitlements, hard limits, trials and subscription amounts.</p></div></div>${packages.map(masterPackageForm).join("")}${state.canManage ? masterPackageForm(null) : ""}</section>
-    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Add-on master</h3><p>Billable capacity and feature extensions eligible for each package.</p></div></div>${addons.map((addon) => masterAddonForm(addon,packages)).join("")}${state.canManage ? masterAddonForm(null,packages) : ""}</section>
-    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Coupon codes</h3><p>Create controlled discounts for the dedicated customer checkout. Redemption limits and financial snapshots are enforced server-side.</p></div></div>${coupons.map((coupon) => masterCouponForm(coupon,packages,addons)).join("")}${state.canManage ? masterCouponForm(null,packages,addons) : ""}</section>${masterAssignments(tenants,addons,assignments)}`;
+    ${masterDirectory("Customer packages","Entitlements, hard limits, trials and authoritative subscription prices.","package",packages,masterPackageCard,masterPackageForm,"Add package","Create a new operational package and its financial source of truth.")}
+    ${masterDirectory("Add-on master","Billable capacity and feature extensions eligible for each package.","addon",addons,masterAddonCard,(addon) => masterAddonForm(addon,packages),"Add add-on","Create recurring, one-time or usage-based capacity.")}
+    ${masterDirectory("Coupon codes","Controlled discounts with server-enforced eligibility and redemption limits.","coupon",coupons,masterCouponCard,(coupon) => masterCouponForm(coupon,packages,addons),"Add coupon","Create a customer checkout discount code.")}${masterAssignments(tenants,addons,assignments)}`;
 }
 
 function nullableNumber(formData, name) {
@@ -896,10 +961,10 @@ function content() {
 }
 
 function render() {
-  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal]").forEach((modal) => modal.remove());
+  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal],body > [data-master-modal]").forEach((modal) => modal.remove());
   if (verificationPreviewUrl) URL.revokeObjectURL(verificationPreviewUrl);
   verificationPreviewUrl = "";
-  document.body.classList.remove("wa-document-review-open", "wa-verification-case-open");
+  document.body.classList.remove("wa-document-review-open", "wa-verification-case-open", "wa-master-modal-open");
   const meta = VIEW_META[state.view] || VIEW_META.overview;
   const pageHead = document.querySelector(".page-head");
   if (pageHead) {
@@ -917,11 +982,29 @@ function render() {
 
 function bind() {
   document.querySelectorAll("#waAdminContent [data-verification-case-modal]").forEach((modal) => document.body.appendChild(modal));
+  document.querySelectorAll("#waAdminContent [data-master-modal]").forEach((modal) => document.body.appendChild(modal));
   const reviewModal = document.querySelector("#waAdminContent [data-document-review-modal]");
   if (reviewModal) document.body.appendChild(reviewModal);
   const requestModal = document.querySelector("#waAdminContent [data-document-request-modal]");
   if (requestModal) document.body.appendChild(requestModal);
   document.querySelector("#waRefresh")?.addEventListener("click", () => loadSnapshot());
+  const closeMasterModal = (modal) => {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.classList.remove("wa-master-modal-open");
+  };
+  document.querySelectorAll("[data-master-open]").forEach((button) => button.addEventListener("click", () => {
+    const modal = [...document.querySelectorAll("[data-master-modal]")].find((item) => item.dataset.masterModal === button.dataset.masterOpen);
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add("wa-master-modal-open");
+    modal.querySelector("input:not([type=hidden]), select, textarea, button")?.focus();
+  }));
+  document.querySelectorAll("[data-master-modal-close]").forEach((button) => button.addEventListener("click", () => closeMasterModal(button.closest("[data-master-modal]"))));
+  document.querySelectorAll("[data-master-modal]").forEach((modal) => {
+    modal.addEventListener("click", (event) => { if (event.target === modal) closeMasterModal(modal); });
+    modal.addEventListener("keydown", (event) => { if (event.key === "Escape") closeMasterModal(modal); });
+  });
   document.querySelectorAll("[data-open-verification-case]").forEach((button) => button.addEventListener("click", () => {
     const modal = [...document.querySelectorAll("[data-verification-case-modal]")].find((item) => item.dataset.verificationCaseModal === button.dataset.openVerificationCase);
     if (!modal) return;
