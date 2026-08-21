@@ -12,6 +12,8 @@ const DAY_MS = 86_400_000;
 const PACKAGE_GST_RATE = 0.18;
 const GATEWAY_RATE_WITH_TAX = 0.02 * 1.18;
 const DRIVE_ROOT_FOLDER_ID = Deno.env.get("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID") || "1Tnq1agDpaLCIT_ZGiDRjVOXa7KYDASQp";
+const BILLING_PDF_TEMPLATE_VERSION = 2;
+const BRAND_LOGO_URL = "https://www.varadanexus.com/images/logo.png";
 
 function env(name: string) { return Deno.env.get(name) || ""; }
 function adminClient() { return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } }); }
@@ -102,6 +104,29 @@ function pdfSafeText(value: unknown) {
 function pdfMoney(paise: unknown, currency = "INR") {
   return `${pdfSafeText(currency || "INR")} ${(Number(paise || 0) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+function integerWords(value: number): string {
+  const ones = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const belowThousand = (number: number) => {
+    const parts: string[] = [];
+    if (number >= 100) { parts.push(`${ones[Math.floor(number / 100)]} Hundred`); number %= 100; }
+    if (number >= 20) { parts.push(tens[Math.floor(number / 10)]); number %= 10; }
+    if (number > 0) parts.push(ones[number]);
+    return parts.join(" ");
+  };
+  if (value === 0) return ones[0];
+  const parts: string[] = [];
+  for (const [unit, divisor] of [["Crore", 10_000_000], ["Lakh", 100_000], ["Thousand", 1_000]] as const) {
+    if (value >= divisor) { const count = Math.floor(value / divisor); parts.push(`${belowThousand(count)} ${unit}`); value %= divisor; }
+  }
+  if (value) parts.push(belowThousand(value));
+  return parts.join(" ");
+}
+function amountInWords(paise: unknown) {
+  const amount = Math.max(0, Math.round(Number(paise || 0)));
+  const rupees = Math.floor(amount / 100), remainingPaise = amount % 100;
+  return `${integerWords(rupees)} Rupees${remainingPaise ? ` and ${integerWords(remainingPaise)} Paise` : ""} Only`;
+}
 function wrapPdfText(text: string, font: any, size: number, maxWidth: number) {
   const words = pdfSafeText(text).split(" ").filter(Boolean);
   const lines: string[] = [];
@@ -114,6 +139,23 @@ function wrapPdfText(text: string, font: any, size: number, maxWidth: number) {
   if (line) lines.push(line);
   return lines.length ? lines : [""];
 }
+let cachedBrandLogoBytes: Uint8Array | null = null;
+async function brandLogoBytes() {
+  if (cachedBrandLogoBytes) return cachedBrandLogoBytes;
+  const response = await fetch(BRAND_LOGO_URL, { headers: { Accept: "image/png" } });
+  if (!response.ok) throw new Error("The Varada Nexus invoice logo could not be loaded.");
+  cachedBrandLogoBytes = new Uint8Array(await response.arrayBuffer());
+  return cachedBrandLogoBytes;
+}
+async function updateDriveFileContent(token: string, fileId: string, bytes: Uint8Array) {
+  const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media&supportsAllDrives=true`, {
+    method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/pdf" }, body: bytes,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message || "Archived billing PDF could not be upgraded.");
+  }
+}
 async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invoice" | "credit_note") {
   const pdf = await PDFDocument.create();
   pdf.setTitle(pdfSafeText(kind === "invoice" ? invoice.invoice_number : documentRecord.credit_note_number));
@@ -122,22 +164,27 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   pdf.setProducer("Varada Nexus EMS Corporate Billing");
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const brandLogo = await pdf.embedPng(await brandLogoBytes()).catch(() => null);
   const green = rgb(0.025, 0.19, 0.12), emerald = rgb(0.05, 0.67, 0.39), gold = rgb(0.82, 0.66, 0.25), ink = rgb(0.08, 0.12, 0.1), muted = rgb(0.35, 0.42, 0.38), pale = rgb(0.95, 0.97, 0.96), lineColor = rgb(0.84, 0.88, 0.85), white = rgb(1, 1, 1);
   const issuer = invoice.issuer_snapshot || {};
   const isCredit = kind === "credit_note";
   const number = isCredit ? documentRecord.credit_note_number : invoice.invoice_number;
   const date = isCredit ? documentRecord.credit_note_date : invoice.invoice_date;
   const currency = documentRecord.currency || invoice.currency || "INR";
+  const gstRate = Number(documentRecord.gst_rate_bps ?? invoice.gst_rate_bps ?? 1800) / 100;
+  const sacCode = pdfSafeText(documentRecord.safe_metadata?.sacCode || invoice.safe_metadata?.sacCode || "998319");
+  const issuerName = pdfSafeText(issuer.legalName || issuer.tradeName || "Varada Nexus Private Limited");
+  const issuerAddress = [issuer.registeredAddress, [issuer.city, issuer.gstStateName, issuer.pincode].filter(Boolean).join(", ")].filter(Boolean).join(", ");
+  const customerAddress = pdfSafeText(invoice.billing_address || "Address not provided");
   const pages: any[] = [];
   let page: any, y = 0;
   const addPage = () => {
     page = pdf.addPage([595.28, 841.89]); pages.push(page); y = 710;
     page.drawRectangle({ x: 0, y: 752, width: 595.28, height: 89.89, color: green });
     page.drawRectangle({ x: 0, y: 747, width: 595.28, height: 5, color: gold });
-    page.drawRectangle({ x: 42, y: 775, width: 42, height: 42, color: rgb(0.04, 0.26, 0.17), borderColor: gold, borderWidth: 1 });
-    page.drawText("VN", { x: 51, y: 790, font: bold, size: 16, color: gold });
-    page.drawText("VARADA NEXUS", { x: 96, y: 798, font: bold, size: 16, color: white });
-    page.drawText("PRIVATE LIMITED", { x: 96, y: 782, font: regular, size: 8, color: rgb(0.76, 0.82, 0.78) });
+    if (brandLogo) page.drawImage(brandLogo, { x: 42, y: 773, width: 49, height: 45 });
+    page.drawText("VARADA NEXUS", { x: 103, y: 798, font: bold, size: 16, color: white });
+    page.drawText("PRIVATE LIMITED", { x: 103, y: 782, font: regular, size: 8, color: rgb(0.76, 0.82, 0.78) });
     page.drawText(isCredit ? "CREDIT NOTE" : "TAX INVOICE", { x: 423, y: 798, font: bold, size: 12, color: white });
     page.drawText(pdfSafeText(number), { x: 423, y: 781, font: regular, size: 8, color: rgb(0.84, 0.88, 0.85), maxWidth: 140 });
   };
@@ -148,68 +195,102 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   }
   page.drawText(isCredit ? "Credit note details" : "Invoice details", { x: 42, y, font: bold, size: 18, color: green });
   page.drawText(`Issue date  ${pdfSafeText(new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }))}`, { x: 395, y: y + 3, font: regular, size: 9, color: muted }); y -= 28;
-  const boxY = y - 105;
-  page.drawRectangle({ x: 42, y: boxY, width: 248, height: 105, color: pale, borderColor: lineColor, borderWidth: 0.7 });
-  page.drawRectangle({ x: 305, y: boxY, width: 248, height: 105, color: pale, borderColor: lineColor, borderWidth: 0.7 });
-  page.drawText("BILL TO", { x: 56, y: y - 18, font: bold, size: 8, color: emerald });
-  page.drawText(pdfSafeText(invoice.billing_name || "Customer"), { x: 56, y: y - 38, font: bold, size: 11, color: ink, maxWidth: 220 });
-  const billLines = [invoice.billing_address, invoice.billing_email, invoice.billing_gstin ? `GSTIN ${invoice.billing_gstin}` : ""].filter(Boolean);
-  let billY = y - 55;
-  for (const value of billLines) for (const text of wrapPdfText(value, regular, 8, 220).slice(0, 2)) { page.drawText(text, { x: 56, y: billY, font: regular, size: 8, color: muted }); billY -= 11; }
-  page.drawText("DOCUMENT SUMMARY", { x: 319, y: y - 18, font: bold, size: 8, color: emerald });
-  page.drawText(pdfSafeText(invoice.package_code || "WhatsApp Solutions"), { x: 319, y: y - 38, font: bold, size: 11, color: ink });
-  page.drawText(`${pdfSafeText(invoice.billing_interval || "Recurring")} billing`, { x: 319, y: y - 55, font: regular, size: 8, color: muted });
-  if (isCredit && documentRecord.reason) page.drawText(pdfSafeText(`Reason: ${documentRecord.reason}`), { x: 319, y: y - 72, font: regular, size: 8, color: muted, maxWidth: 220 });
-  y = boxY - 30;
+  const boxY = y - 132;
+  page.drawRectangle({ x: 42, y: boxY, width: 248, height: 132, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  page.drawRectangle({ x: 305, y: boxY, width: 248, height: 132, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  page.drawText("SUPPLIER DETAILS", { x: 56, y: y - 18, font: bold, size: 8, color: emerald });
+  page.drawText(issuerName, { x: 56, y: y - 37, font: bold, size: 10, color: ink, maxWidth: 220 });
+  let supplierY = y - 53;
+  for (const text of wrapPdfText(issuerAddress || "Registered office address not configured", regular, 7.5, 220).slice(0, 3)) { page.drawText(text, { x: 56, y: supplierY, font: regular, size: 7.5, color: muted }); supplierY -= 10; }
+  for (const value of [["GSTIN", issuer.gstin], ["CIN", issuer.cin], ["PAN", issuer.pan], ["State code", issuer.stateCode]].filter((entry) => entry[1])) {
+    page.drawText(`${value[0]}: ${pdfSafeText(value[1])}`, { x: 56, y: supplierY, font: regular, size: 7.5, color: muted }); supplierY -= 10;
+  }
+  page.drawText("BILL TO / RECIPIENT", { x: 319, y: y - 18, font: bold, size: 8, color: emerald });
+  page.drawText(pdfSafeText(invoice.billing_name || "Customer"), { x: 319, y: y - 37, font: bold, size: 10, color: ink, maxWidth: 220 });
+  let billY = y - 53;
+  for (const text of wrapPdfText(customerAddress, regular, 7.5, 220).slice(0, 4)) { page.drawText(text, { x: 319, y: billY, font: regular, size: 7.5, color: muted }); billY -= 10; }
+  const billLines = [invoice.billing_email ? `Email: ${invoice.billing_email}` : "", invoice.billing_gstin ? `GSTIN: ${invoice.billing_gstin}` : "GSTIN: Unregistered / not provided"].filter(Boolean);
+  for (const value of billLines) { page.drawText(pdfSafeText(value), { x: 319, y: billY, font: regular, size: 7.5, color: muted, maxWidth: 220 }); billY -= 10; }
+  const summaryY = boxY - 78;
+  page.drawRectangle({ x: 42, y: summaryY, width: 511, height: 66, color: white, borderColor: lineColor, borderWidth: 0.7 });
+  page.drawText("DOCUMENT & TAX SUMMARY", { x: 56, y: summaryY + 49, font: bold, size: 8, color: emerald });
+  const issueDate = pdfSafeText(new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }));
+  const summaryRows = [
+    [`Invoice number: ${number}`, `Issue / supply date: ${issueDate}`],
+    [`Service: ${invoice.package_code || "WhatsApp Solutions"} (${invoice.billing_interval || "recurring"})`, `SAC: ${sacCode}`],
+    [`Place of supply: ${customerAddress}`, `Reverse charge: No`],
+  ];
+  let summaryTextY = summaryY + 34;
+  for (const row of summaryRows) {
+    page.drawText(pdfSafeText(row[0]), { x: 56, y: summaryTextY, font: regular, size: 7.3, color: muted, maxWidth: 235 });
+    page.drawText(pdfSafeText(row[1]), { x: 319, y: summaryTextY, font: regular, size: 7.3, color: muted, maxWidth: 220 }); summaryTextY -= 13;
+  }
+  if (isCredit && documentRecord.reason) page.drawText(pdfSafeText(`Reason: ${documentRecord.reason}`), { x: 56, y: summaryY + 7, font: regular, size: 7.3, color: muted, maxWidth: 470 });
+  y = summaryY - 24;
   const rows: any[] = [];
-  if (isCredit) rows.push({ description: `Credit against ${invoice.invoice_number || documentRecord.provider_invoice_id || "original invoice"}`, quantity: 1, basePaise: documentRecord.taxable_base_paise });
+  if (isCredit) rows.push({ description: `Credit against ${invoice.invoice_number || documentRecord.provider_invoice_id || "original invoice"}`, sac: sacCode, quantity: 1, basePaise: documentRecord.taxable_base_paise });
   else {
     for (const item of Array.isArray(invoice.line_items) ? invoice.line_items : []) {
-      rows.push({ description: item.description || item.type || "Subscription service", quantity: Number(item.quantity || 1), basePaise: Number(item.basePaise || 0) });
-      for (const addon of Array.isArray(item.addons) ? item.addons : []) rows.push({ description: `Add-on: ${addon.name || addon.code}`, quantity: Number(addon.quantity || 1), basePaise: Number(addon.baseSubtotalPaise || 0) });
+      rows.push({ description: item.description || item.type || "Subscription service", sac: item.sacCode || sacCode, quantity: Number(item.quantity || 1), basePaise: Number(item.basePaise || 0) });
+      for (const addon of Array.isArray(item.addons) ? item.addons : []) rows.push({ description: `Add-on: ${addon.name || addon.code}`, sac: addon.sacCode || sacCode, quantity: Number(addon.quantity || 1), basePaise: Number(addon.baseSubtotalPaise || 0) });
     }
-    if (!rows.length) rows.push({ description: `${invoice.package_code || "WhatsApp Solutions"} subscription`, quantity: 1, basePaise: invoice.taxable_base_paise });
+    if (!rows.length) rows.push({ description: `${invoice.package_code || "WhatsApp Solutions"} subscription`, sac: sacCode, quantity: 1, basePaise: invoice.taxable_base_paise });
   }
   const drawTableHeader = () => {
     page.drawRectangle({ x: 42, y: y - 21, width: 511, height: 25, color: green });
     page.drawText("DESCRIPTION", { x: 54, y: y - 13, font: bold, size: 8, color: white });
-    page.drawText("QTY", { x: 410, y: y - 13, font: bold, size: 8, color: white });
-    page.drawText("TAXABLE AMOUNT", { x: 455, y: y - 13, font: bold, size: 8, color: white }); y -= 29;
+    page.drawText("SAC", { x: 305, y: y - 13, font: bold, size: 8, color: white });
+    page.drawText("QTY", { x: 364, y: y - 13, font: bold, size: 8, color: white });
+    page.drawText("RATE", { x: 403, y: y - 13, font: bold, size: 8, color: white });
+    page.drawText("TAXABLE", { x: 492, y: y - 13, font: bold, size: 8, color: white }); y -= 29;
   };
   drawTableHeader();
   for (const row of rows) {
-    const descriptions = wrapPdfText(row.description, regular, 9, 330);
+    const descriptions = wrapPdfText(row.description, regular, 9, 235);
     const rowHeight = Math.max(30, descriptions.length * 12 + 14);
     if (y - rowHeight < 205) { addPage(); drawTableHeader(); }
     page.drawRectangle({ x: 42, y: y - rowHeight + 4, width: 511, height: rowHeight, color: white, borderColor: lineColor, borderWidth: 0.5 });
     let textY = y - 14;
     for (const text of descriptions) { page.drawText(text, { x: 54, y: textY, font: regular, size: 9, color: ink }); textY -= 12; }
-    page.drawText(String(row.quantity || 1), { x: 414, y: y - 14, font: regular, size: 9, color: ink });
+    page.drawText(pdfSafeText(row.sac || sacCode), { x: 305, y: y - 14, font: regular, size: 8.5, color: ink });
+    page.drawText(String(row.quantity || 1), { x: 369, y: y - 14, font: regular, size: 9, color: ink });
+    const rate = pdfMoney(Math.round(Number(row.basePaise || 0) / Math.max(1, Number(row.quantity || 1))), currency); page.drawText(rate, { x: 466 - regular.widthOfTextAtSize(rate, 8), y: y - 14, font: regular, size: 8, color: ink });
     const money = pdfMoney(row.basePaise, currency); page.drawText(money, { x: 541 - bold.widthOfTextAtSize(money, 9), y: y - 14, font: bold, size: 9, color: ink }); y -= rowHeight;
   }
-  if (y < 280) addPage();
+  if (y < 345) addPage();
   y -= 16;
   const totals = [
+    ["Gross service value", documentRecord.base_subtotal_paise ?? invoice.base_subtotal_paise ?? invoice.taxable_base_paise],
+    ["Less: discount", -Number(documentRecord.discount_paise ?? invoice.discount_paise ?? 0)],
     ["Taxable value", documentRecord.taxable_base_paise ?? invoice.taxable_base_paise],
-    ["GST", documentRecord.gst_paise ?? invoice.gst_paise],
+    [`GST @ ${gstRate.toFixed(2)}%`, documentRecord.gst_paise ?? invoice.gst_paise],
     ["Additional gateway adjustment", documentRecord.gateway_adjustment_paise ?? invoice.gateway_adjustment_paise],
   ];
-  page.drawRectangle({ x: 305, y: y - 104, width: 248, height: 112, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  page.drawRectangle({ x: 42, y: y - 142, width: 248, height: 150, color: rgb(0.96, 0.98, 0.97), borderColor: lineColor, borderWidth: 0.7 });
+  page.drawText("AMOUNT IN WORDS", { x: 56, y: y - 16, font: bold, size: 8, color: emerald });
+  let wordsY = y - 35;
+  for (const text of wrapPdfText(amountInWords(documentRecord.total_paise ?? invoice.total_paise), bold, 8.5, 220).slice(0, 4)) { page.drawText(text, { x: 56, y: wordsY, font: bold, size: 8.5, color: ink }); wordsY -= 12; }
+  page.drawText("TAX & PAYMENT", { x: 56, y: wordsY - 8, font: bold, size: 8, color: emerald });
+  page.drawText(`GST rate: ${gstRate.toFixed(2)}%  |  Reverse charge: No`, { x: 56, y: wordsY - 25, font: regular, size: 7.5, color: muted });
+  page.drawText(`Payment status: ${isCredit ? "Refund processed" : "Paid / captured"}`, { x: 56, y: wordsY - 39, font: regular, size: 7.5, color: muted });
+  page.drawText("Supply classification: Information technology services", { x: 56, y: wordsY - 53, font: regular, size: 7.2, color: muted, maxWidth: 220 });
+  page.drawRectangle({ x: 305, y: y - 142, width: 248, height: 150, color: pale, borderColor: lineColor, borderWidth: 0.7 });
   let totalsY = y - 15;
-  for (const [label, value] of totals) { page.drawText(String(label), { x: 319, y: totalsY, font: regular, size: 9, color: muted }); const money = pdfMoney(value, currency); page.drawText(money, { x: 539 - bold.widthOfTextAtSize(money, 9), y: totalsY, font: bold, size: 9, color: ink }); totalsY -= 22; }
+  for (const [label, value] of totals) { page.drawText(String(label), { x: 319, y: totalsY, font: regular, size: 8.2, color: muted }); const money = pdfMoney(value, currency); page.drawText(money, { x: 539 - bold.widthOfTextAtSize(money, 8.5), y: totalsY, font: bold, size: 8.5, color: ink }); totalsY -= 19; }
   page.drawLine({ start: { x: 319, y: totalsY + 8 }, end: { x: 539, y: totalsY + 8 }, thickness: 1, color: green });
   page.drawText(isCredit ? "Credit total" : "Invoice total", { x: 319, y: totalsY - 8, font: bold, size: 10, color: green });
   const grand = pdfMoney(documentRecord.total_paise ?? invoice.total_paise, currency); page.drawText(grand, { x: 539 - bold.widthOfTextAtSize(grand, 12), y: totalsY - 9, font: bold, size: 12, color: green });
-  const refY = y - 138;
+  const refY = y - 172;
   page.drawRectangle({ x: 42, y: refY - 72, width: 511, height: 78, color: rgb(0.96, 0.98, 0.97), borderColor: emerald, borderWidth: 0.8 });
   page.drawText("PAYMENT GATEWAY REFERENCES", { x: 56, y: refY - 12, font: bold, size: 8, color: emerald });
   page.drawText(pdfSafeText(`Razorpay invoice: ${documentRecord.provider_invoice_id || invoice.provider_invoice_id || "Not provided"}`), { x: 56, y: refY - 31, font: regular, size: 8, color: muted });
   page.drawText(pdfSafeText(`Transaction ID: ${documentRecord.provider_payment_id || invoice.provider_payment_id || "Not provided"}`), { x: 56, y: refY - 47, font: regular, size: 8, color: muted });
   if (isCredit) page.drawText(pdfSafeText(`Refund ID: ${documentRecord.provider_refund_id || "Not provided"}`), { x: 56, y: refY - 63, font: regular, size: 8, color: muted });
   pages.forEach((item, index) => {
-    item.drawLine({ start: { x: 42, y: 45 }, end: { x: 553, y: 45 }, thickness: 0.6, color: lineColor });
-    item.drawText(pdfSafeText(issuer.legalName || issuer.tradeName || "Varada Nexus Private Limited"), { x: 42, y: 28, font: bold, size: 7, color: muted });
-    item.drawText(`Generated by Varada Nexus EMS  |  Page ${index + 1} of ${pages.length}`, { x: 365, y: 28, font: regular, size: 7, color: muted });
+    item.drawLine({ start: { x: 42, y: 55 }, end: { x: 553, y: 55 }, thickness: 0.6, color: lineColor });
+    item.drawText("This is a computer-generated invoice and does not require a physical signature.", { x: 42, y: 40, font: bold, size: 7, color: green });
+    item.drawText(issuerName, { x: 42, y: 25, font: bold, size: 7, color: muted });
+    item.drawText(`Generated by Varada Nexus EMS  |  Page ${index + 1} of ${pages.length}`, { x: 365, y: 25, font: regular, size: 7, color: muted });
   });
   return new Uint8Array(await pdf.save({ useObjectStreams: true }));
 }
@@ -229,8 +310,18 @@ async function archiveBillingDocument(admin: any, tenantId: string, kind: "invoi
   const table = kind === "invoice" ? "whatsapp_platform_billing_invoices" : "whatsapp_platform_billing_credit_notes";
   const { documentRecord, invoice } = await loadBillingDocument(admin, tenantId, kind, documentId);
   if (documentRecord.pdf_drive_file_id) {
-    const bytes = await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentRecord.pdf_drive_file_id)}?alt=media&${DRIVE_QS}`, await driveAccessToken(), { headers: { Accept: "application/octet-stream" } });
-    return { bytes, documentRecord, invoice, archived: true };
+    const token = await driveAccessToken();
+    if (Number(documentRecord.pdf_template_version || 1) >= BILLING_PDF_TEMPLATE_VERSION) {
+      const bytes = await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentRecord.pdf_drive_file_id)}?alt=media&${DRIVE_QS}`, token, { headers: { Accept: "application/octet-stream" } });
+      return { bytes, documentRecord, invoice, archived: true };
+    }
+    const bytes = await generateBillingPdf(documentRecord, invoice, kind);
+    await updateDriveFileContent(token, documentRecord.pdf_drive_file_id, bytes);
+    const upgradedAt = new Date().toISOString();
+    const { error: updateError } = await admin.from(table).update({ pdf_template_version: BILLING_PDF_TEMPLATE_VERSION, pdf_archived_at: upgradedAt, pdf_archive_error: null, updated_at: upgradedAt }).eq("id", documentId).eq("tenant_id", tenantId);
+    if (updateError) throw updateError;
+    await admin.from("whatsapp_platform_documents").update({ file_size: bytes.length, updated_at: upgradedAt }).eq("tenant_id", tenantId).eq("entity_type", kind === "invoice" ? "billing_invoice" : "billing_credit_note").eq("entity_id", documentId).eq("status", "active");
+    return { bytes, documentRecord: { ...documentRecord, pdf_template_version: BILLING_PDF_TEMPLATE_VERSION, pdf_archived_at: upgradedAt }, invoice, archived: true };
   }
   const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("id,name,drive_root_folder_id").eq("id", tenantId).single();
   if (tenantError || !tenant) throw new Error("Workspace Drive folder could not be resolved.");
@@ -257,10 +348,10 @@ async function archiveBillingDocument(admin: any, tenantId: string, kind: "invoi
     });
     if (registryError) throw registryError;
     const archivedAt = new Date().toISOString();
-    const { error: updateError } = await admin.from(table).update({ pdf_drive_file_id: uploaded.id, pdf_drive_folder_id: yearFolderId, pdf_drive_folder_path: folderPath, pdf_file_name: uploaded.name || fileName, pdf_archived_at: archivedAt, pdf_archive_error: null, updated_at: archivedAt }).eq("id", documentId).eq("tenant_id", tenantId).is("pdf_drive_file_id", null);
+    const { error: updateError } = await admin.from(table).update({ pdf_drive_file_id: uploaded.id, pdf_drive_folder_id: yearFolderId, pdf_drive_folder_path: folderPath, pdf_file_name: uploaded.name || fileName, pdf_archived_at: archivedAt, pdf_archive_error: null, pdf_template_version: BILLING_PDF_TEMPLATE_VERSION, updated_at: archivedAt }).eq("id", documentId).eq("tenant_id", tenantId).is("pdf_drive_file_id", null);
     if (updateError) throw updateError;
     if (!tenant.drive_root_folder_id) await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenantFolderName, updated_at: archivedAt }).eq("id", tenantId);
-    return { bytes, documentRecord: { ...documentRecord, pdf_drive_file_id: uploaded.id, pdf_drive_folder_path: folderPath, pdf_file_name: uploaded.name || fileName, pdf_archived_at: archivedAt }, invoice, archived: true };
+    return { bytes, documentRecord: { ...documentRecord, pdf_drive_file_id: uploaded.id, pdf_drive_folder_path: folderPath, pdf_file_name: uploaded.name || fileName, pdf_archived_at: archivedAt, pdf_template_version: BILLING_PDF_TEMPLATE_VERSION }, invoice, archived: true };
   } catch (error) {
     if (uploaded?.id) await trashDriveFile(token, uploaded.id).catch(() => {});
     const message = error instanceof Error ? error.message : "Billing PDF archive failed";
@@ -288,7 +379,7 @@ async function billingDocumentPdf(admin: any, customer: any, body: any) {
   const archived = await archiveBillingDocument(admin, customer.tenant_id, kind, documentId, customer.user_id);
   const record = archived.documentRecord;
   const number = kind === "invoice" ? record.invoice_number : record.credit_note_number;
-  return { documentType: kind, documentId, documentNumber: number, fileName: record.pdf_file_name || `${safeDriveSegment(number, "Billing-Document")}.pdf`, mimeType: "application/pdf", base64: bytesToBase64(archived.bytes), archivedAt: record.pdf_archived_at || new Date().toISOString(), driveFolderPath: record.pdf_drive_folder_path || "Finance" };
+  return { documentType: kind, documentId, documentNumber: number, fileName: record.pdf_file_name || `${safeDriveSegment(number, "Billing-Document")}.pdf`, mimeType: "application/pdf", base64: bytesToBase64(archived.bytes) };
 }
 async function encryptionKey() {
   const material = env("WHATSAPP_PLATFORM_TOKEN_ENCRYPTION_KEY");
@@ -588,8 +679,8 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     admin.from("whatsapp_platform_billing_payments").select("id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(20),
     admin.from("whatsapp_platform_billing_renewal_price_changes").select("id,subscription_id,replacement_subscription_id,from_price_version_id,target_price_version_id,effective_at,status,notice_version,notice_shown_at,decided_at,created_at").eq("tenant_id", customer.tenant_id).in("status", ["pending_consent", "accepted", "processing", "failed"]).order("created_at", { ascending: false }),
     admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id }),
-    admin.from("whatsapp_platform_billing_invoices").select("id,invoice_number,document_environment,invoice_date,status,currency,base_subtotal_paise,discount_paise,taxable_base_paise,gst_rate_bps,gst_paise,gateway_adjustment_paise,total_paise,provider_invoice_id,provider_payment_id,package_code,billing_interval,billing_name,billing_email,billing_gstin,billing_address,issuer_snapshot,line_items,pdf_archived_at,pdf_drive_folder_path,pdf_archive_error,issued_at").eq("tenant_id", customer.tenant_id).order("invoice_date", { ascending: false }).limit(50),
-    admin.from("whatsapp_platform_billing_credit_notes").select("id,invoice_id,credit_note_number,document_environment,credit_note_date,status,currency,taxable_base_paise,gst_paise,gateway_adjustment_paise,total_paise,reason,provider_refund_id,provider_payment_id,provider_invoice_id,pdf_archived_at,pdf_drive_folder_path,pdf_archive_error,issued_at").eq("tenant_id", customer.tenant_id).order("credit_note_date", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_billing_invoices").select("id,invoice_number,document_environment,invoice_date,status,currency,base_subtotal_paise,discount_paise,taxable_base_paise,gst_rate_bps,gst_paise,gateway_adjustment_paise,total_paise,provider_invoice_id,provider_payment_id,package_code,billing_interval,billing_name,billing_email,billing_gstin,billing_address,issuer_snapshot,line_items,issued_at").eq("tenant_id", customer.tenant_id).order("invoice_date", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_billing_credit_notes").select("id,invoice_id,credit_note_number,document_environment,credit_note_date,status,currency,taxable_base_paise,gst_paise,gateway_adjustment_paise,total_paise,reason,provider_refund_id,provider_payment_id,provider_invoice_id,issued_at").eq("tenant_id", customer.tenant_id).order("credit_note_date", { ascending: false }).limit(50),
   ]);
   if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError; if (renewalError) throw renewalError; if (entitlementError) throw entitlementError; if (invoicesError) throw invoicesError; if (creditNotesError) throw creditNotesError;
   EdgeRuntime.waitUntil(archiveOutstandingBillingDocuments(admin, customer.tenant_id));
