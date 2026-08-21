@@ -156,7 +156,20 @@ async function applyPackageForSubscription(admin: any, subscription: any, status
   }
 }
 async function syncSubscriptionEntity(admin: any, subscription: any, entity: any) {
-  const updates = safeSubscriptionUpdate(entity);
+  const updates: any = safeSubscriptionUpdate(entity);
+  if (entity?.plan_id && entity.plan_id !== subscription.provider_plan_id) {
+    const providerPlanId = providerId(entity.plan_id, "plan");
+    const { data: matchedPackage, error: packageError } = await admin.from("whatsapp_platform_package_master")
+      .select("code,razorpay_monthly_plan_id,razorpay_annual_plan_id")
+      .or(`razorpay_monthly_plan_id.eq.${providerPlanId},razorpay_annual_plan_id.eq.${providerPlanId}`)
+      .maybeSingle();
+    if (packageError) throw packageError;
+    if (matchedPackage) {
+      updates.provider_plan_id = providerPlanId;
+      updates.package_code = matchedPackage.code;
+      updates.billing_interval = matchedPackage.razorpay_annual_plan_id === providerPlanId ? "year" : "month";
+    }
+  }
   if (updates.status === "active" && !subscription.activated_at) updates.activated_at = new Date().toISOString();
   if (updates.status === "cancelled") updates.cancelled_at = new Date().toISOString();
   const { data, error } = await admin.from("whatsapp_platform_billing_subscriptions").update(updates).eq("id", subscription.id).select("*").single();
@@ -223,12 +236,13 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
   const { count: priorCount, error: countError } = await admin.from("whatsapp_platform_billing_subscriptions").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("package_code", packageCode);
   if (countError) throw countError;
   const trialDays = Number(priorCount || 0) === 0 ? Math.max(0, Number(pkg.trial_days || 0)) : 0;
+  const trialEndsAt = trialDays > 0 ? Math.floor((Date.now() + trialDays * 86_400_000) / 1000) : null;
   const totalCount = interval === "month" ? 120 : 10;
   const requestBody: any = {
     plan_id: planId, total_count: totalCount, quantity: 1, customer_notify: true,
     notes: { tenant_id: customer.tenant_id, package_code: packageCode, billing_interval: interval, created_by: customer.user_id },
   };
-  if (trialDays > 0) requestBody.start_at = Math.floor((Date.now() + trialDays * 86_400_000) / 1000);
+  if (trialEndsAt) requestBody.start_at = trialEndsAt;
   const created = await razorpayRequest("/subscriptions", { method: "POST", body: JSON.stringify(requestBody) }, credentials);
   const providerSubscriptionId = providerId(created.id, "sub");
   const { data: subscription, error } = await admin.from("whatsapp_platform_billing_subscriptions").insert({
@@ -236,13 +250,14 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
     provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
     total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
     short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
-    safe_metadata: { trial_days: trialDays, mode: credentials.keyId.startsWith("rzp_live_") ? "live" : "test" },
+    safe_metadata: { trial_days: trialDays, trial_ends_at: trialEndsAt ? new Date(trialEndsAt * 1000).toISOString() : null, mode: credentials.keyId.startsWith("rzp_live_") ? "live" : "test" },
   }).select("id").single();
   if (error || !subscription) throw error || new Error("Subscription could not be recorded.");
   return {
     keyId: credentials.keyId, subscriptionId: subscription.id, razorpaySubscriptionId: providerSubscriptionId,
     shortUrl: created.short_url,
-    package: { code: pkg.code, name: pkg.name, description: pkg.description }, customer: { name: customer.display_name, email: customer.email, companyName: customer.company_name }, reused: false,
+    package: { code: pkg.code, name: pkg.name, description: pkg.description }, customer: { name: customer.display_name, email: customer.email, companyName: customer.company_name },
+    trialDays, trialEndsAt: trialEndsAt ? new Date(trialEndsAt * 1000).toISOString() : null, reused: false,
   };
 }
 async function verifyCheckout(admin: any, customer: any, body: any, credentials: any) {
@@ -273,6 +288,43 @@ async function syncSubscription(admin: any, customer: any, body: any, credential
   const providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials);
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
   return { subscription: synced };
+}
+async function upgradeSubscription(admin: any, customer: any, body: any, credentials: any) {
+  if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
+  const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
+  const packageCode = cleanCode(body.packageCode, "package");
+  const interval = String(body.billingInterval || "month") as "month" | "year";
+  if (!['month', 'year'].includes(interval)) throw new Error("Select monthly or annual billing.");
+  const [{ data: subscription, error: subscriptionError }, { data: targetPackage, error: packageError }, { data: currentPackage, error: currentPackageError }] = await Promise.all([
+    admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("id", subscriptionId).eq("tenant_id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_package_master").select("*").eq("code", packageCode).eq("status", "active").single(),
+    admin.from("whatsapp_platform_package_master").select("code,sort_order").eq("code", body.currentPackageCode || "launch").single(),
+  ]);
+  if (subscriptionError || !subscription) throw new Error("Billing subscription not found.");
+  if (packageError || !targetPackage || targetPackage.billing_model !== "subscription") throw new Error("Selected upgrade package is unavailable.");
+  if (currentPackageError || !currentPackage) throw new Error("Current package is unavailable.");
+  if (subscription.package_code !== currentPackage.code) throw new Error("Current subscription package mismatch.");
+  if (!['authenticated', 'active'].includes(String(subscription.status))) throw new Error("Only an authenticated or active subscription can be upgraded.");
+  if (Number(targetPackage.sort_order || 0) <= Number(currentPackage.sort_order || 0)) throw new Error("Select a higher package to upgrade.");
+  const planId = await ensureRazorpayPlan(admin, targetPackage, interval, credentials);
+  try {
+    const providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ plan_id: planId, quantity: 1, schedule_change_at: "cycle_end", customer_notify: true }),
+    }, credentials);
+    const safeMetadata = { ...(subscription.safe_metadata || {}), pending_upgrade: { package_code: packageCode, billing_interval: interval, provider_plan_id: planId, effective_at: subscription.current_end } };
+    const { error: updateError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: safeMetadata, updated_at: new Date().toISOString() }).eq("id", subscription.id);
+    if (updateError) throw updateError;
+    return { scheduled: true, effectiveAt: subscription.current_end, package: { code: targetPackage.code, name: targetPackage.name }, providerStatus: providerSubscription.status || subscription.status };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Razorpay could not update this subscription.";
+    return {
+      scheduled: false,
+      requiresReauthorization: true,
+      reason,
+      guidance: "Razorpay does not support an in-place plan upgrade for this payment authorization. Schedule the current plan to end after this billing cycle, then authorize the new package.",
+    };
+  }
 }
 async function cancelSubscription(admin: any, customer: any, body: any, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
@@ -356,6 +408,7 @@ Deno.serve(async (req) => {
     if (action === "create_subscription") return json(req, await createSubscription(admin, customer, body, credentials));
     if (action === "verify_checkout") return json(req, await verifyCheckout(admin, customer, body, credentials));
     if (action === "sync_subscription") return json(req, await syncSubscription(admin, customer, body, credentials));
+    if (action === "upgrade_subscription") return json(req, await upgradeSubscription(admin, customer, body, credentials));
     if (action === "cancel_subscription") return json(req, await cancelSubscription(admin, customer, body, credentials));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {

@@ -1958,11 +1958,13 @@ function billingView() {
   const statusLabel = String(subscription?.status || "No paid subscription").replaceAll("_", " ");
   const statusActions = subscription ? `<div class="wp-billing-subscription-actions"><button class="wp-secondary" type="button" data-billing-sync="${escapeHtml(subscription.id)}">Refresh status</button>${canManage && !["cancelled", "completed", "expired"].includes(subscription.status) ? `<button class="wp-danger-button" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel at period end</button>` : ""}</div>` : "";
   const subscriptionCard = `<section class="wp-billing-subscription"><div><span class="wp-card-eyebrow">Razorpay subscription</span><h2>${escapeHtml(subscription ? `${subscription.package_code} · ${subscription.billing_interval}ly` : "No active paid subscription")}</h2><p>${subscription ? `Status: ${escapeHtml(statusLabel)}${subscription.current_end ? ` · Current period ends ${escapeHtml(formatProfileDate(subscription.current_end))}` : ""}` : "Select a self-service package below to start secure checkout."}</p></div><div><span class="wp-billing-status ${escapeHtml(subscription?.status || "none")}">${escapeHtml(statusLabel)}</span>${statusActions}</div></section>`;
+  const managedSubscription = Boolean(subscription && ["authenticated", "active"].includes(String(subscription.status)));
   const packageCards = (workspaceBilling?.packages || []).map((plan) => {
     const selfService = plan.billing_model === "subscription";
     const active = plan.code === pkg.code;
     const locked = Boolean(subscription && !["cancelled", "completed", "expired"].includes(subscription.status) && subscription.package_code !== plan.code);
-    return `<article class="wp-billing-plan ${active ? "is-current" : ""}" data-billing-plan="${escapeHtml(plan.code)}"><header><div><span class="wp-card-eyebrow">${active ? "Current package" : selfService ? "Self-service package" : "Tailored package"}</span><h3>${escapeHtml(plan.name)}</h3></div>${active ? '<span class="wp-billing-current">Current</span>' : ""}</header><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${selfService ? billingMoney(plan.monthly_amount, plan.currency) : "Custom"}</strong><span>${selfService ? "/ month + GST extra" : "quote"}</span></div>${selfService ? `<small>Additional gateway fee added at checkout</small><label><span>Billing interval</span><select data-billing-interval><option value="month">Monthly · ${escapeHtml(billingMoney(plan.monthly_amount, plan.currency))} + GST</option><option value="year">Annual · ${escapeHtml(billingMoney(plan.annual_amount, plan.currency))} + GST</option></select></label>${Number(plan.trial_days || 0) ? `<small>${Number(plan.trial_days)}-day trial on the first subscription.</small>` : ""}<button class="wp-primary" type="button" data-billing-subscribe="${escapeHtml(plan.code)}" ${!canManage || !workspaceBilling?.configured || locked ? "disabled" : ""}>${!canManage ? "Owner or admin required" : !workspaceBilling?.configured ? "Payment setup pending" : locked ? "Cancel current plan first" : subscription?.package_code === plan.code ? "Continue subscription checkout" : `Choose ${escapeHtml(plan.name)}`}</button>` : `<a class="wp-secondary wp-button-link" href="/contact.html?subject=${encodeURIComponent(`Enterprise billing: ${plan.name}`)}">Contact sales</a>`}</article>`;
+    const upgrade = Boolean(managedSubscription && locked && Number(plan.sort_order || 0) > Number(pkg.sort_order || 0));
+    return `<article class="wp-billing-plan ${active ? "is-current" : ""}" data-billing-plan="${escapeHtml(plan.code)}"><header><div><span class="wp-card-eyebrow">${active ? "Current package" : selfService ? "Self-service package" : "Tailored package"}</span><h3>${escapeHtml(plan.name)}</h3></div>${active ? '<span class="wp-billing-current">Current</span>' : ""}</header><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${selfService ? billingMoney(plan.monthly_amount, plan.currency) : "Custom"}</strong><span>${selfService ? "/ month + GST extra" : "quote"}</span></div>${selfService ? `<small>Additional gateway fee added at checkout</small><label><span>Billing interval</span><select data-billing-interval><option value="month">Monthly · ${escapeHtml(billingMoney(plan.monthly_amount, plan.currency))} + GST</option><option value="year">Annual · ${escapeHtml(billingMoney(plan.annual_amount, plan.currency))} + GST</option></select></label>${Number(plan.trial_days || 0) ? `<small>${Number(plan.trial_days)}-day free trial. The package charge starts after the trial; Razorpay may authorize the payment method today.</small>` : ""}${active && managedSubscription ? '<span class="wp-billing-current-action">Current plan active</span>' : `<button class="wp-primary" type="button" data-billing-subscribe="${escapeHtml(plan.code)}" ${!canManage || !workspaceBilling?.configured || (locked && !upgrade) ? "disabled" : ""}>${!canManage ? "Owner or admin required" : !workspaceBilling?.configured ? "Payment setup pending" : upgrade ? `Upgrade to ${escapeHtml(plan.name)}` : locked ? "Current plan active" : `Choose ${escapeHtml(plan.name)}`}</button>`}` : `<a class="wp-secondary wp-button-link" href="/contact.html?subject=${encodeURIComponent(`Enterprise billing: ${plan.name}`)}">Contact sales</a>`}</article>`;
   }).join("");
   const payments = (workspaceBilling?.payments || []).map((payment) => `<tr><td><strong>${escapeHtml(String(payment.provider_payment_id || "Payment"))}</strong><small>${escapeHtml(formatProfileDate(payment.paid_at || payment.created_at))}</small></td><td>${escapeHtml(payment.payment_method || "—")}</td><td><span class="wp-billing-payment-status ${escapeHtml(payment.status)}">${escapeHtml(payment.status)}</span></td><td>${escapeHtml(billingMoney(Number(payment.amount_paise || 0) / 100, payment.currency))}</td></tr>`).join("");
   const setupNotice = workspaceBilling?.configured ? "" : `<div class="wp-verification-notice"><strong>Razorpay setup is waiting for API keys</strong><p>Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Supabase Edge Function Secrets. Checkout buttons will become available automatically.</p></div>`;
@@ -2197,15 +2199,41 @@ async function renderDashboard() {
       const card = button.closest("[data-billing-plan]");
       const billingInterval = card?.querySelector("[data-billing-interval]")?.value || "month";
       const original = button.textContent;
-      const checkoutWindow = window.open("about:blank", "_blank");
-      if (checkoutWindow) checkoutWindow.opener = null;
+      let checkoutWindow = null;
       try {
+        const activeSubscription = workspaceBilling?.subscription;
+        const upgrading = Boolean(activeSubscription && ["authenticated", "active"].includes(String(activeSubscription.status)) && activeSubscription.package_code !== button.dataset.billingSubscribe);
+        if (upgrading) {
+          if (!window.confirm(`Upgrade to ${card?.querySelector("h3")?.textContent || "this package"} at the end of the current billing cycle? Razorpay will apply the new recurring price from the next cycle.`)) return;
+          button.disabled = true; button.textContent = "Scheduling upgrade…";
+          const upgrade = await billingRequest("upgrade_subscription", {
+            subscriptionId: activeSubscription.id,
+            currentPackageCode: workspacePackageMaster?.package?.code,
+            packageCode: button.dataset.billingSubscribe,
+            billingInterval,
+          });
+          if (upgrade.scheduled) {
+            showToast(`Upgrade to ${upgrade.package?.name || "the selected package"} scheduled for the next billing cycle.`);
+          } else if (upgrade.requiresReauthorization) {
+            const scheduleCancellation = window.confirm(`${upgrade.guidance}\n\nRazorpay response: ${upgrade.reason}\n\nSchedule the current plan to end after this billing cycle?`);
+            if (scheduleCancellation) {
+              await billingRequest("cancel_subscription", { subscriptionId: activeSubscription.id, cancelAtCycleEnd: true });
+              showToast("Current plan will end after this billing cycle. Return then to authorize the new package.");
+            }
+          }
+          button.disabled = false; button.textContent = original;
+          await renderDashboard();
+          return;
+        }
+        checkoutWindow = window.open("about:blank", "_blank");
+        if (checkoutWindow) checkoutWindow.opener = null;
         button.disabled = true; button.textContent = "Preparing secure checkout…";
         const checkout = await billingRequest("create_subscription", { packageCode: button.dataset.billingSubscribe, billingInterval });
+        const trialMessage = checkout.trialEndsAt ? ` No package charge is due today; the first charge is scheduled after the trial on ${new Date(checkout.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.` : "";
         if (checkout.shortUrl) {
           if (checkoutWindow) checkoutWindow.location.replace(checkout.shortUrl);
           else window.location.assign(checkout.shortUrl);
-          showToast("Razorpay checkout opened. Return here after completing payment.");
+          showToast(`Razorpay authorization opened.${trialMessage} Return here after completing it.`);
           button.disabled = false; button.textContent = original;
           return;
         }

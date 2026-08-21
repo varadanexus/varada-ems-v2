@@ -1910,6 +1910,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-billing-plan > small { color:var(--wp-muted); }
 .wp-billing-plan > .wp-primary,.wp-billing-plan > .wp-secondary { width:100%; margin-top:4px; text-align:center; }
 .wp-billing-plan button:disabled { cursor:not-allowed; opacity:.55; }
+.wp-billing-current-action { display:flex; align-items:center; justify-content:center; min-height:46px; padding:11px 16px; border:1px solid color-mix(in srgb,#25d887 48%,var(--wp-border)); border-radius:12px; background:color-mix(in srgb,#25d887 10%,var(--wp-panel)); color:#25d887; font-weight:850; }
 .wp-billing-history { padding:24px; }
 .wp-billing-table-wrap { overflow-x:auto; border:1px solid var(--wp-border); border-radius:13px; }
 .wp-billing-history table { width:100%; border-collapse:collapse; }
