@@ -382,10 +382,12 @@ async function quoteSubscriptionCheckout(admin: any, customer: any, body: any) {
       if (addon.status !== "active" || !addon.is_self_service || addon.billing_model !== "recurring") throw new Error(`${addon.name || code} is not available for self-service recurring checkout.`);
       if (addon.billing_interval !== interval) throw new Error(`${addon.name || code} is only available with ${addon.billing_interval} billing.`);
       if (Array.isArray(addon.eligible_plan_codes) && addon.eligible_plan_codes.length && !addon.eligible_plan_codes.includes(packageCode)) throw new Error(`${addon.name || code} is not eligible for ${pkg.name}.`);
-      if (quantity < Number(addon.minimum_quantity || 1) || (addon.maximum_quantity != null && quantity > Number(addon.maximum_quantity)) || ((quantity - Number(addon.minimum_quantity || 1)) % Number(addon.quantity_step || 1)) !== 0) throw new Error(`Select an allowed quantity for ${addon.name || code}.`);
+      const quantityEnabled = addon.quantity_enabled !== false;
+      if (!quantityEnabled && quantity !== 1) throw new Error(`${addon.name || code} is a single-purchase add-on.`);
+      if (quantityEnabled && (quantity < Number(addon.minimum_quantity || 1) || (addon.maximum_quantity != null && quantity > Number(addon.maximum_quantity)) || ((quantity - Number(addon.minimum_quantity || 1)) % Number(addon.quantity_step || 1)) !== 0)) throw new Error(`Select an allowed quantity for ${addon.name || code}.`);
       const unitBasePaise = Math.round(Number(addon.unit_amount) * 100);
       if (!Number.isSafeInteger(unitBasePaise) || unitBasePaise < 1) throw new Error(`${addon.name || code} does not have a valid self-service price.`);
-      return { code, name: addon.name, unitName: addon.unit_name, quantity, billingInterval: addon.billing_interval, addonPriceVersionId: cleanUuid(addon.current_price_version_id, "add-on price version"), unitBasePaise, baseSubtotalPaise: unitBasePaise * quantity, gstRateBps: 1800, gstPaise: Math.round(unitBasePaise * quantity * PACKAGE_GST_RATE) };
+      return { code, name: addon.name, unitName: addon.unit_name, quantity, quantityEnabled, billingInterval: addon.billing_interval, addonPriceVersionId: cleanUuid(addon.current_price_version_id, "add-on price version"), unitBasePaise, baseSubtotalPaise: unitBasePaise * quantity, gstRateBps: 1800, gstPaise: Math.round(unitBasePaise * quantity * PACKAGE_GST_RATE) };
     });
   }
   let redemption: any = null;
@@ -962,7 +964,9 @@ async function addonChangeContext(admin: any, customer: any, body: any, credenti
   if (!addon.is_self_service || addon.billing_model !== "recurring") throw new Error("This add-on requires assistance from billing support.");
   if (addon.billing_interval !== subscription.billing_interval) throw new Error(`This add-on requires ${addon.billing_interval} billing.`);
   if (Array.isArray(addon.eligible_plan_codes) && addon.eligible_plan_codes.length && !addon.eligible_plan_codes.includes(subscription.package_code)) throw new Error("This add-on is not eligible for the current package.");
-  if (targetQuantity < Number(addon.minimum_quantity || 1) || (addon.maximum_quantity != null && targetQuantity > Number(addon.maximum_quantity)) || ((targetQuantity - Number(addon.minimum_quantity || 1)) % Number(addon.quantity_step || 1)) !== 0) throw new Error(`Select an allowed quantity for ${addon.name || addonCode}.`);
+  const quantityEnabled = addon.quantity_enabled !== false;
+  if (!quantityEnabled && targetQuantity !== 1) throw new Error(`${addon.name || addonCode} is a single-purchase add-on.`);
+  if (quantityEnabled && (targetQuantity < Number(addon.minimum_quantity || 1) || (addon.maximum_quantity != null && targetQuantity > Number(addon.maximum_quantity)) || ((targetQuantity - Number(addon.minimum_quantity || 1)) % Number(addon.quantity_step || 1)) !== 0)) throw new Error(`Select an allowed quantity for ${addon.name || addonCode}.`);
 
   const providerEntity = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials);
   const syncedSubscription = await syncSubscriptionEntity(admin, subscription, providerEntity);
@@ -1034,7 +1038,7 @@ async function addonChangeContext(admin: any, customer: any, body: any, credenti
 }
 async function previewAddonChange(admin: any, customer: any, body: any, credentials: any) {
   const context = await addonChangeContext(admin, customer, body, credentials);
-  return { addon: { code: context.addon.code, name: context.addon.name, unitName: context.addon.unit_name }, quote: context.quote };
+  return { addon: { code: context.addon.code, name: context.addon.name, unitName: context.addon.unit_name, quantityEnabled: context.addon.quantity_enabled !== false }, quote: context.quote };
 }
 async function changeAddons(admin: any, customer: any, body: any, credentials: any) {
   const context = await addonChangeContext(admin, customer, body, credentials);

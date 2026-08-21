@@ -656,12 +656,13 @@ function masterAddonForm(addon, packages) {
       <label>Currency<input name="currency" maxlength="3" value="${masterValue(a,"currency") || "INR"}"/></label>
       <label>Unit base price — excluding GST/taxes<input name="unitAmount" type="number" min="0" step="0.01" value="${masterValue(a,"unit_amount") || 0}"/><small>Authoritative price per billing unit.</small></label>
       <label>Billing unit<input name="unitName" value="${masterValue(a,"unit_name") || "unit"}"/></label>
-      <label>Quantity step<input name="quantityStep" type="number" min="1" value="${masterValue(a,"quantity_step") || 1}"/></label>
-      <label>Minimum quantity<input name="minimumQuantity" type="number" min="0" value="${masterValue(a,"minimum_quantity") || 1}"/></label>
-      <label>Maximum quantity<input name="maximumQuantity" type="number" min="1" value="${masterLimit(a,"maximum_quantity")}" placeholder="Unlimited"/></label>
+      <label data-addon-quantity-field>Quantity step<input name="quantityStep" type="number" min="1" value="${masterValue(a,"quantity_step") || 1}"/></label>
+      <label data-addon-quantity-field>Minimum quantity<input name="minimumQuantity" type="number" min="1" value="${masterValue(a,"minimum_quantity") || 1}"/></label>
+      <label data-addon-quantity-field>Maximum quantity<input name="maximumQuantity" type="number" min="1" value="${masterLimit(a,"maximum_quantity")}" placeholder="Unlimited"/></label>
       <label>Sort order<input name="sortOrder" type="number" value="${masterValue(a,"sort_order") || 0}"/></label>
       <label class="wa-pkg-full">Description<textarea name="description" rows="2">${masterValue(a,"description")}</textarea></label>
     </div>
+    <div class="wa-master-section"><h4>Customer quantity control</h4><p class="wa-master-help">Enable this for add-ons customers can buy in multiple units, such as seats, WhatsApp numbers and integrations. Fixed add-ons are always purchased once.</p><div class="wa-master-toggles"><label class="wa-master-toggle"><input type="checkbox" name="quantityEnabled" data-addon-quantity-toggle ${a.quantity_enabled !== false ? "checked" : ""}/><span>Show quantity selector to customer</span></label></div></div>
     <div class="wa-master-section"><h4>Eligible packages</h4><div class="wa-master-toggles">${packages.map((p) => `<label class="wa-master-toggle"><input type="checkbox" name="eligible_${escapeHtml(p.code)}" ${eligible.includes(p.code) ? "checked" : ""}/><span>${escapeHtml(p.name)}</span></label>`).join("") || "<span>Create a package first.</span>"}</div></div>
     <div class="wa-master-section"><h4>Entitlement effect per unit</h4><div class="wa-master-limits"><label>Extra seats<input name="effect_team_member_limit" type="number" min="0" value="${escapeHtml(effects.team_member_limit ?? 0)}"/></label><label>Extra numbers<input name="effect_whatsapp_number_limit" type="number" min="0" value="${escapeHtml(effects.whatsapp_number_limit ?? 0)}"/></label><label>Extra integrations<input name="effect_integration_limit" type="number" min="0" value="${escapeHtml(effects.integration_limit ?? 0)}"/></label><label class="wa-master-toggle"><input name="effect_priority_support" type="checkbox" ${effects.priority_support ? "checked" : ""}/><span>Enable priority support</span></label></div></div>
     <footer><label class="wa-master-toggle"><input name="isSelfService" type="checkbox" ${a.is_self_service ? "checked" : ""}/><span>Customer can purchase</span></label><button class="wa-admin-button primary" type="submit">${isNew ? "Create add-on" : "Save master add-on"}</button></footer>
@@ -751,7 +752,7 @@ function masterAddonCard(addon) {
     <span class="wa-master-card-top"><span class="wa-master-card-icon">${escapeHtml(String(a.name || a.code || "A").slice(0, 2).toUpperCase())}</span><span class="wa-master-state ${escapeHtml(a.status || "draft")}">${escapeHtml(a.status || "draft")}</span></span>
     <span class="wa-master-card-copy"><small>Add-on · ${escapeHtml(a.code)}</small><strong>${escapeHtml(a.name)}</strong><em>${escapeHtml(a.description || "No description")}</em></span>
     <span class="wa-master-card-price"><strong>${masterCurrency(a.unit_amount, a.currency)}</strong><small>/ ${escapeHtml(a.unit_name || "unit")} · ${escapeHtml(a.billing_interval || "custom")}</small></span>
-    <span class="wa-master-card-meta"><span>${eligible || "All"} eligible package${eligible === 1 ? "" : "s"}</span><span>${a.is_self_service ? "Self-service" : "Admin assigned"}</span></span>
+    <span class="wa-master-card-meta"><span>${eligible || "All"} eligible package${eligible === 1 ? "" : "s"}</span><span>${a.is_self_service ? "Self-service" : "Admin assigned"}</span><span>${a.quantity_enabled === false ? "Single purchase" : "Customer quantity"}</span></span>
     <span class="wa-master-card-action">Open add-on editor <b aria-hidden="true">&rarr;</b></span>
   </button>`;
 }
@@ -837,10 +838,11 @@ async function saveMasterAddon(event, form) {
   const entitlementEffects = {};
   [["team_member_limit","effect_team_member_limit"],["whatsapp_number_limit","effect_whatsapp_number_limit"],["integration_limit","effect_integration_limit"]].forEach(([key,name]) => { const number = Number(values.get(name) || 0); if (number) entitlementEffects[key] = number; });
   if (values.get("effect_priority_support") === "on") entitlementEffects.priority_support = true;
+  const quantityEnabled = values.get("quantityEnabled") === "on";
   const payload = {
     code: values.get("code"), name: values.get("name"), description: values.get("description"), status: values.get("status"), billingModel: values.get("billingModel"),
     billingInterval: values.get("billingInterval"), currency: String(values.get("currency") || "INR").toUpperCase(), unitAmount: Number(values.get("unitAmount") || 0),
-    unitName: values.get("unitName"), minimumQuantity: Number(values.get("minimumQuantity") || 1), maximumQuantity: nullableNumber(values,"maximumQuantity"), quantityStep: Number(values.get("quantityStep") || 1),
+    unitName: values.get("unitName"), quantityEnabled, minimumQuantity: quantityEnabled ? Number(values.get("minimumQuantity") || 1) : 1, maximumQuantity: quantityEnabled ? nullableNumber(values,"maximumQuantity") : 1, quantityStep: quantityEnabled ? Number(values.get("quantityStep") || 1) : 1,
     eligiblePlanCodes, entitlementEffects, isSelfService: values.get("isSelfService") === "on", sortOrder: Number(values.get("sortOrder") || 0),
   };
   try {
@@ -849,6 +851,17 @@ async function saveMasterAddon(event, form) {
     showToast("Add-on Master updated. The tax-exclusive price revision is now authoritative.", TOAST_TYPES.SUCCESS);
     state.packageMaster = null; await loadPackageMaster();
   } catch (error) { showToast(error?.message || "Could not save master add-on.", TOAST_TYPES.ERROR); button.disabled = false; }
+}
+
+function bindMasterAddonQuantityControl(form) {
+  const toggle = form.querySelector("[data-addon-quantity-toggle]");
+  if (!toggle) return;
+  const sync = () => form.querySelectorAll("[data-addon-quantity-field]").forEach((field) => {
+    field.hidden = !toggle.checked;
+    field.querySelectorAll("input").forEach((input) => { input.disabled = !toggle.checked; });
+  });
+  toggle.addEventListener("change", sync);
+  sync();
 }
 
 async function saveMasterCoupon(event, form) {
@@ -1288,7 +1301,7 @@ function bind() {
   document.querySelectorAll("[data-addon-delete]").forEach((btn) => btn.addEventListener("click", () => deleteAddon(btn.dataset.addonDelete)));
   document.querySelector("[data-rates-form]")?.addEventListener("submit", (event) => saveRates(event));
   document.querySelectorAll("[data-master-package-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterPackage(event, form)));
-  document.querySelectorAll("[data-master-addon-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAddon(event, form)));
+  document.querySelectorAll("[data-master-addon-form]").forEach((form) => { bindMasterAddonQuantityControl(form); form.addEventListener("submit", (event) => saveMasterAddon(event, form)); });
   document.querySelectorAll("[data-master-coupon-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterCoupon(event, form)));
   document.querySelectorAll("[data-master-assignment]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAssignment(event, form)));
   document.querySelector("[data-meta-secret-form]")?.addEventListener("submit", saveProviderSecret);
