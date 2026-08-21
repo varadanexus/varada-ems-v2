@@ -198,6 +198,14 @@ const MENU_BY_WORKSPACE = {
       ]
     },
     {
+      title: "Billing",
+      items: [
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Billing Overview", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=billing` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Subscriptions & Payments", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=subscriptions` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Razorpay Settings", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=razorpay` }
+      ]
+    },
+    {
       title: "Application Control",
       items: [
         { module: MODULES.WHATSAPP_PLATFORM, label: "Meta App Setup", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=meta` },

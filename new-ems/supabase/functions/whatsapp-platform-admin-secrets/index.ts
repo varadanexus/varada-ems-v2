@@ -104,11 +104,19 @@ Deno.serve(async (req) => {
     const action = String(body.action || "status");
     if (action === "status") {
       const { data, error } = await admin.from("whatsapp_platform_provider_settings")
-        .select("setting_key,updated_at").in("setting_key", ["meta_app_secret", "webhook_verify_token"]);
+        .select("setting_key,updated_at").in("setting_key", ["meta_app_secret", "webhook_verify_token", "razorpay_key_id", "razorpay_key_secret", "razorpay_webhook_secret"]);
       if (error) throw error;
       const appSecret = (data || []).find((item: any) => item.setting_key === "meta_app_secret");
       const webhookToken = (data || []).find((item: any) => item.setting_key === "webhook_verify_token");
-      return json(req, { configured: Boolean(appSecret), updatedAt: appSecret?.updated_at || null, webhookConfigured: Boolean(webhookToken), webhookUpdatedAt: webhookToken?.updated_at || null });
+      const razorpayKeyId = (data || []).find((item: any) => item.setting_key === "razorpay_key_id");
+      const razorpayKeySecret = (data || []).find((item: any) => item.setting_key === "razorpay_key_secret");
+      const razorpayWebhookSecret = (data || []).find((item: any) => item.setting_key === "razorpay_webhook_secret");
+      return json(req, {
+        configured: Boolean(appSecret), updatedAt: appSecret?.updated_at || null,
+        webhookConfigured: Boolean(webhookToken), webhookUpdatedAt: webhookToken?.updated_at || null,
+        razorpayConfigured: Boolean(razorpayKeyId && razorpayKeySecret), razorpayUpdatedAt: razorpayKeySecret?.updated_at || null,
+        razorpayWebhookConfigured: Boolean(razorpayWebhookSecret), razorpayWebhookUpdatedAt: razorpayWebhookSecret?.updated_at || null,
+      });
     }
     if (action === "generate_webhook_token") {
       const token = Array.from(crypto.getRandomValues(new Uint8Array(32))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -120,6 +128,56 @@ Deno.serve(async (req) => {
       if (error) throw error;
       await admin.from("audit_logs").insert({ event_type: "whatsapp_platform_webhook_token_rotated", action: "webhook_token_rotated", module_code: "whatsapp-platform", actor_app_user_id: appUserId, entity_type: "whatsapp_platform_provider_settings", details: { setting_key: "webhook_verify_token", secret_recorded: true }, user_agent: req.headers.get("user-agent") || null, ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null });
       return json(req, { success: true, webhookConfigured: true, webhookUpdatedAt: now, token });
+    }
+    if (action === "billing_snapshot") {
+      const [{ data: tenants, error: tenantError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentError }] = await Promise.all([
+        admin.from("whatsapp_platform_tenants").select("id,name,plan_code,status"),
+        admin.from("whatsapp_platform_billing_subscriptions").select("id,tenant_id,package_code,billing_interval,status,paid_count,remaining_count,current_start,current_end,charge_at,cancel_at_cycle_end,activated_at,cancelled_at,created_at").order("created_at", { ascending: false }).limit(250),
+        admin.from("whatsapp_platform_billing_payments").select("id,tenant_id,subscription_id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").order("created_at", { ascending: false }).limit(500),
+      ]);
+      if (tenantError) throw tenantError; if (subscriptionError) throw subscriptionError; if (paymentError) throw paymentError;
+      const tenantMap = new Map((tenants || []).map((tenant: any) => [tenant.id, tenant]));
+      const safeSubscriptions = (subscriptions || []).map((item: any) => ({ ...item, tenant_name: tenantMap.get(item.tenant_id)?.name || "Unknown workspace" }));
+      const safePayments = (payments || []).map((item: any) => ({ ...item, tenant_name: tenantMap.get(item.tenant_id)?.name || "Unknown workspace" }));
+      const capturedRevenuePaise = safePayments.filter((item: any) => item.captured && item.status === "captured").reduce((total: number, item: any) => total + Number(item.amount_paise || 0), 0);
+      return json(req, {
+        totals: {
+          subscriptions: safeSubscriptions.length,
+          activeSubscriptions: safeSubscriptions.filter((item: any) => item.status === "active").length,
+          pendingSubscriptions: safeSubscriptions.filter((item: any) => ["created", "authenticated", "pending", "halted"].includes(item.status)).length,
+          capturedPayments: safePayments.filter((item: any) => item.captured && item.status === "captured").length,
+          capturedRevenuePaise,
+        },
+        subscriptions: safeSubscriptions,
+        payments: safePayments,
+      });
+    }
+    if (action === "set_razorpay") {
+      const keyId = String(body.keyId || "").trim();
+      const keySecret = String(body.keySecret || "").trim();
+      const webhookSecret = String(body.webhookSecret || "").trim();
+      if (!/^rzp_(test|live)_[A-Za-z0-9]{8,64}$/.test(keyId)) return json(req, { error: "Enter a valid Razorpay Key ID." }, 400);
+      if (!/^\S{16,128}$/.test(keySecret)) return json(req, { error: "Enter the Razorpay Key Secret." }, 400);
+      if (!/^\S{16,128}$/.test(webhookSecret)) return json(req, { error: "Enter a webhook signing secret of at least 16 characters." }, 400);
+      const now = new Date().toISOString();
+      const rows = await Promise.all([
+        ["razorpay_key_id", keyId], ["razorpay_key_secret", keySecret], ["razorpay_webhook_secret", webhookSecret],
+      ].map(async ([settingKey, value]) => ({
+        setting_key: settingKey,
+        encrypted_value: await encryptSecret(value, settingKey),
+        updated_by: appUserId,
+        updated_at: now,
+      })));
+      const { error } = await admin.from("whatsapp_platform_provider_settings").upsert(rows, { onConflict: "setting_key" });
+      if (error) throw error;
+      const { error: auditError } = await admin.from("audit_logs").insert({
+        event_type: "whatsapp_platform_razorpay_credentials_updated", action: "provider_secret_rotated", module_code: "whatsapp-platform",
+        actor_app_user_id: appUserId, entity_type: "whatsapp_platform_provider_settings",
+        details: { provider: "razorpay", mode: keyId.startsWith("rzp_live_") ? "live" : "test", secret_recorded: true },
+        user_agent: req.headers.get("user-agent") || null, ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null,
+      });
+      if (auditError) console.error("Razorpay credential audit log failed", auditError.message);
+      return json(req, { success: true, razorpayConfigured: true, razorpayUpdatedAt: now, razorpayWebhookConfigured: true, razorpayWebhookUpdatedAt: now });
     }
     if (action !== "set") return json(req, { error: "Unsupported action" }, 400);
     const secret = String(body.secret || "").trim();

@@ -397,6 +397,11 @@ verify_jwt = false
 [functions.whatsapp-platform-storage]
 verify_jwt = false
 
+# Browser requests use the protected WhatsApp workspace session. Razorpay
+# webhooks use their own raw-body HMAC signature validation in the function.
+[functions.whatsapp-platform-billing]
+verify_jwt = false
+
 [functions.whatsapp-platform-admin-secrets]
 verify_jwt = false
 

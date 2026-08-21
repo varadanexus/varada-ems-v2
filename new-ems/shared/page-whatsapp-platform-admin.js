@@ -3,7 +3,7 @@ import { getSupabaseAccessToken, getSupabaseClient } from "../config/supabase.js
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
 import { showToast } from "./utils.js";
 
-const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", "meta", "security"]);
+const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", "billing", "subscriptions", "razorpay", "meta", "security"]);
 const VIEW_META = Object.freeze({
   overview: {
     title: "Platform overview",
@@ -41,6 +41,24 @@ const VIEW_META = Object.freeze({
     section: "Public website",
     marker: "P&",
   },
+  billing: {
+    title: "Billing overview",
+    description: "Monitor WhatsApp subscription health, collected payments and commercial readiness.",
+    section: "Billing",
+    marker: "BO",
+  },
+  subscriptions: {
+    title: "Subscriptions & payments",
+    description: "Review customer subscription lifecycles and the verified Razorpay payment ledger.",
+    section: "Billing",
+    marker: "SP",
+  },
+  razorpay: {
+    title: "Razorpay settings",
+    description: "Configure protected Razorpay credentials and the subscription webhook used by WhatsApp Solutions.",
+    section: "Billing",
+    marker: "RP",
+  },
   meta: {
     title: "Meta App Setup",
     description: "Operate the provider application, Embedded Signup, webhook and protected server configuration.",
@@ -54,7 +72,7 @@ const VIEW_META = Object.freeze({
     marker: "SE",
   },
 });
-const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false };
+const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false, billingSnapshot: null, billingLoading: false, billingError: "" };
 const db = getSupabaseClient();
 let verificationPreviewUrl = "";
 const VERIFICATION_ENTITY_TYPES = Object.freeze([
@@ -322,6 +340,47 @@ function metaSetup() {
   return `<section class="wa-admin-grid"><article class="wa-admin-card"><h3>Meta application</h3><p>Production configuration for the sellable WhatsApp Business Platform product.</p><div class="wa-admin-list"><div class="wa-admin-row"><strong>Meta App ID</strong><span class="wa-admin-code">${escapeHtml(config.metaAppId || "Not configured")}</span></div><div class="wa-admin-row"><strong>Business verification</strong>${status("complete")}</div><div class="wa-admin-row"><strong>Tech Provider App Review</strong>${status("in_review")}</div><div class="wa-admin-row"><strong>Embedded Signup Configuration</strong>${status(embeddedReady ? "ready" : "not_configured")}</div><div class="wa-admin-row"><strong>Server credential</strong>${status(providerState)}</div><div class="wa-admin-row"><strong>Public portal</strong><a class="wa-admin-button" href="${escapeHtml(ROUTES.WHATSAPP_PLATFORM_PORTAL)}" target="_blank" rel="noopener">Open portal</a></div></div></article><article class="wa-admin-card"><h3>Launch checklist</h3><p>Complete these controls before accepting production customers.</p><div class="wa-admin-checklist"><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Dedicated Meta app created</strong><small>Varada Nexus Connect</small></div></div><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Business verification</strong><small>Verified in Meta Business Manager</small></div></div><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Embedded Signup configuration</strong><small>Configuration ID ${escapeHtml(config.embeddedSignupConfigId || "pending")}</small></div></div><div class="wa-admin-check pending"><span class="wa-admin-check-icon">4</span><div><strong>Complete Tech Provider review</strong><small>Submission is in review; Meta may request additional evidence</small></div></div></div></article>${secretControl}${webhookControl}</section>`;
 }
 
+function razorpaySetup() {
+  const provider = state.providerSecretStatus;
+  const configured = provider?.razorpayConfigured === true;
+  const webhookConfigured = provider?.razorpayWebhookConfigured === true;
+  const endpoint = "https://ftejxcycoiagbslnzaab.supabase.co/functions/v1/whatsapp-platform-billing?webhook=razorpay";
+  if (!state.hasFullAuthority) return `<section class="wa-admin-card"><h3>Razorpay billing credentials</h3><div class="wa-admin-empty">Only the Chairman &amp; Managing Director or Super Admin can configure payment credentials.</div></section>`;
+  return `<section class="wa-admin-grid"><article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Subscription payment gateway</h3><p>The checkout uses Razorpay Subscriptions. Credentials are encrypted server-side and are never returned to the browser.</p></div>${status(configured && webhookConfigured ? "configured" : "not_configured")}</div><div class="wa-admin-list"><div class="wa-admin-row"><strong>API credentials</strong><span>${configured ? `Configured ${escapeHtml(formatDate(provider.razorpayUpdatedAt))}` : "Not configured"}</span></div><div class="wa-admin-row"><strong>Webhook signing secret</strong><span>${webhookConfigured ? `Configured ${escapeHtml(formatDate(provider.razorpayWebhookUpdatedAt))}` : "Not configured"}</span></div><div class="wa-admin-row"><strong>Webhook URL</strong><span class="wa-admin-code">${endpoint}</span></div></div></article><article class="wa-admin-card wa-admin-secret-card"><div class="wa-admin-secret-heading"><div><h3>${configured ? "Rotate Razorpay credentials" : "Enter Razorpay credentials"}</h3><p>Use Test Mode keys while testing. Replace them with Live Mode keys only when production billing is ready.</p></div>${status(configured ? "protected" : "action_required")}</div><form data-razorpay-secret-form autocomplete="off"><label class="wa-admin-secret-field"><span>Key ID</span><span class="wa-admin-secret-input"><input name="razorpay_key_id" type="text" autocomplete="off" minlength="17" maxlength="80" placeholder="rzp_test_…" required /></span><small>Razorpay Dashboard → Account &amp; Settings → API Keys.</small></label><label class="wa-admin-secret-field"><span>Key Secret</span><span class="wa-admin-secret-input"><input name="razorpay_key_secret" type="password" autocomplete="new-password" minlength="16" maxlength="128" required /><button type="button" data-secret-toggle="razorpay_key_secret" aria-label="Show Key Secret" aria-pressed="false">Show</button></span><small>This value is write-only. Saving a new value replaces the previous credential.</small></label><label class="wa-admin-secret-field"><span>Webhook signing secret</span><span class="wa-admin-secret-input"><input name="razorpay_webhook_secret" type="password" autocomplete="new-password" minlength="16" maxlength="128" required /><button type="button" data-secret-toggle="razorpay_webhook_secret" aria-label="Show webhook secret" aria-pressed="false">Show</button></span><small>Choose a private value and paste the exact same value when creating the webhook in Razorpay.</small></label><div class="wa-admin-secret-footer"><span>Nothing entered here is stored in the page or browser.</span><button class="wa-admin-button primary" type="submit">Encrypt &amp; save credentials</button></div></form></article><article class="wa-admin-card"><h3>Razorpay webhook setup</h3><p>After saving credentials, add the webhook in Razorpay and subscribe to the lifecycle events below.</p><ol class="wa-admin-steps"><li>Open Razorpay Dashboard → Account &amp; Settings → Webhooks.</li><li>Use the webhook URL shown above and the same signing secret entered on this page.</li><li>Select subscription authenticated, activated, charged, pending, halted, paused, resumed, cancelled, completed and expired events.</li></ol><div class="wa-admin-notice"><strong>Secret safety:</strong> never paste payment secrets into source files, chat, email, or screenshots.</div></article></section>`;
+}
+
+function adminBillingMoney(paise, currency = "INR") {
+  try { return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(paise || 0) / 100); }
+  catch { return `${currency} ${(Number(paise || 0) / 100).toLocaleString("en-IN")}`; }
+}
+
+async function loadBillingSnapshot() {
+  if (!state.hasFullAuthority || state.billingLoading) return;
+  state.billingLoading = true; state.billingError = ""; render();
+  try { state.billingSnapshot = await providerSecretRequest("billing_snapshot"); }
+  catch (error) { state.billingSnapshot = null; state.billingError = error?.message || "Billing data could not be loaded."; }
+  state.billingLoading = false; render();
+}
+
+function billingOverview() {
+  if (state.billingLoading) return '<div class="wa-admin-empty">Loading protected billing data…</div>';
+  if (state.billingError) return `<div class="wa-admin-notice"><strong>Billing data unavailable.</strong><br>${escapeHtml(state.billingError)}</div>`;
+  const totals = state.billingSnapshot?.totals || {};
+  const subscriptions = (state.billingSnapshot?.subscriptions || []).slice(0, 6);
+  const payments = (state.billingSnapshot?.payments || []).slice(0, 6);
+  return `<section class="wa-admin-stats"><article class="wa-admin-stat"><span>Active subscriptions</span><strong>${Number(totals.activeSubscriptions || 0)}</strong><small>${Number(totals.subscriptions || 0)} total records</small></article><article class="wa-admin-stat"><span>Needs attention</span><strong>${Number(totals.pendingSubscriptions || 0)}</strong><small>Created, pending or halted</small></article><article class="wa-admin-stat"><span>Captured payments</span><strong>${Number(totals.capturedPayments || 0)}</strong><small>Signature-verified ledger</small></article><article class="wa-admin-stat"><span>Captured revenue</span><strong>${escapeHtml(adminBillingMoney(totals.capturedRevenuePaise))}</strong><small>Across recorded Razorpay payments</small></article></section><section class="wa-admin-grid"><article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Recent subscriptions</h3><p>Latest customer subscription activity.</p></div><a class="wa-admin-button" href="?view=subscriptions">View all</a></div><div class="wa-admin-list">${subscriptions.length ? subscriptions.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.package_code)} · ${escapeHtml(item.billing_interval)}</small></div>${status(item.status)}</div>`).join("") : '<div class="wa-admin-empty">No subscriptions yet.</div>'}</div></article><article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Recent payments</h3><p>Newest entries in the protected payment ledger.</p></div><a class="wa-admin-button" href="?view=subscriptions#payments">View ledger</a></div><div class="wa-admin-list">${payments.length ? payments.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.provider_payment_id)} · ${escapeHtml(formatDate(item.paid_at || item.created_at))}</small></div><span>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</span></div>`).join("") : '<div class="wa-admin-empty">No payments yet.</div>'}</div></article></section><section class="wa-admin-card"><h3>Billing controls</h3><p>Commercial definitions remain in Package Master; gateway credentials and webhook configuration remain in Razorpay Settings.</p><div class="wa-admin-actions"><a class="wa-admin-button" href="?view=package-master">Open Package Master</a><a class="wa-admin-button primary" href="?view=razorpay">Open Razorpay Settings</a></div></section>`;
+}
+
+function billingSubscriptions() {
+  if (state.billingLoading) return '<div class="wa-admin-empty">Loading subscriptions and payments…</div>';
+  if (state.billingError) return `<div class="wa-admin-notice"><strong>Billing data unavailable.</strong><br>${escapeHtml(state.billingError)}</div>`;
+  const subscriptions = state.billingSnapshot?.subscriptions || [];
+  const payments = state.billingSnapshot?.payments || [];
+  const subscriptionRows = subscriptions.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.id)}</small></td><td>${escapeHtml(item.package_code)}<br><small>${escapeHtml(item.billing_interval)}</small></td><td>${status(item.status)}</td><td>${Number(item.paid_count || 0)}<br><small>${item.remaining_count == null ? "—" : `${Number(item.remaining_count)} remaining`}</small></td><td>${escapeHtml(formatDate(item.current_end || item.charge_at || item.created_at))}</td></tr>`).join("");
+  const paymentRows = payments.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(item.provider_invoice_id || "—")}</td><td>${escapeHtml(item.payment_method || "—")}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</td><td>${escapeHtml(formatDate(item.paid_at || item.created_at))}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Customer subscriptions</h3><p>Razorpay lifecycle state synchronized by verified checkout callbacks and webhooks.</p></div>${status(`${subscriptions.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace</th><th>Package</th><th>Status</th><th>Payments</th><th>Next billing date</th></tr></thead><tbody>${subscriptionRows || '<tr><td colspan="5">No subscriptions yet.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card" id="payments"><div class="wa-admin-secret-heading"><div><h3>Payment ledger</h3><p>Only safe payment metadata is retained; card and bank credentials are never stored.</p></div>${status(`${payments.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace / payment</th><th>Invoice</th><th>Method</th><th>Status</th><th>Amount</th><th>Paid</th></tr></thead><tbody>${paymentRows || '<tr><td colspan="6">No payments yet.</td></tr>'}</tbody></table></div></section>`;
+}
+
 function providerSecretEndpoint() {
   return `${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-admin-secrets`;
 }
@@ -374,6 +433,29 @@ async function saveProviderSecret(event) {
     input.value = "";
     showToast(error?.message || "Could not save the Meta App Secret.", TOAST_TYPES.ERROR);
     button.disabled = false; button.textContent = "Encrypt & save";
+  }
+}
+
+async function saveRazorpaySecrets(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const keyId = String(form.elements.razorpay_key_id.value || "").trim();
+  const keySecret = String(form.elements.razorpay_key_secret.value || "").trim();
+  const webhookSecret = String(form.elements.razorpay_webhook_secret.value || "").trim();
+  if (!/^rzp_(test|live)_[A-Za-z0-9]{8,64}$/.test(keyId)) { showToast("Enter a valid Razorpay Key ID.", TOAST_TYPES.ERROR); return; }
+  if (keySecret.length < 16 || webhookSecret.length < 16) { showToast("Both secrets must contain at least 16 characters.", TOAST_TYPES.ERROR); return; }
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true; button.textContent = "Encrypting…";
+  try {
+    state.providerSecretStatus = { ...(state.providerSecretStatus || {}), ...(await providerSecretRequest("set_razorpay", { keyId, keySecret, webhookSecret })) };
+    form.reset();
+    showToast("Razorpay credentials encrypted and saved.", TOAST_TYPES.SUCCESS);
+    render();
+  } catch (error) {
+    form.elements.razorpay_key_secret.value = "";
+    form.elements.razorpay_webhook_secret.value = "";
+    showToast(error?.message || "Could not save Razorpay credentials.", TOAST_TYPES.ERROR);
+    button.disabled = false; button.textContent = "Encrypt & save credentials";
   }
 }
 
@@ -725,6 +807,9 @@ async function saveRates(event) {
 function content() {
   if (state.view === "package-master") return packageMaster();
   if (state.view === "packages") return packages();
+  if (state.view === "billing") return billingOverview();
+  if (state.view === "subscriptions") return billingSubscriptions();
+  if (state.view === "razorpay") return razorpaySetup();
   if (state.loading) return '<div class="wa-admin-empty">Loading platform operations…</div>';
   if (state.error) return `<div class="wa-admin-notice"><strong>Management data is not active yet.</strong><br>${escapeHtml(state.error)}<br><br>The internal console is ready; apply the pending WhatsApp Platform database migrations to activate live customer data.</div>${state.view === "meta" ? metaSetup() : state.view === "security" ? security() : overview()}`;
   if (state.view === "customers") return customers();
@@ -896,6 +981,15 @@ function bind() {
   document.querySelectorAll("[data-master-addon-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAddon(event, form)));
   document.querySelectorAll("[data-master-assignment]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAssignment(event, form)));
   document.querySelector("[data-meta-secret-form]")?.addEventListener("submit", saveProviderSecret);
+  document.querySelector("[data-razorpay-secret-form]")?.addEventListener("submit", saveRazorpaySecrets);
+  document.querySelectorAll("[data-secret-toggle]").forEach((button) => button.addEventListener("click", () => {
+    const input = document.querySelector(`[name="${button.dataset.secretToggle}"]`);
+    if (!input) return;
+    const showing = input.type === "text";
+    input.type = showing ? "password" : "text";
+    button.textContent = showing ? "Show" : "Hide";
+    button.setAttribute("aria-pressed", String(!showing));
+  }));
   document.querySelector("[data-meta-secret-toggle]")?.addEventListener("click", (event) => {
     const input = document.querySelector('[name="meta_app_secret"]');
     if (!input) return;
@@ -965,7 +1059,8 @@ async function init() {
   state.canManage = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && ["edit", "approve"].includes(permission.action_code));
   state.canApprove = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && permission.action_code === "approve");
   await loadSnapshot();
-  if (state.view === "meta" && state.hasFullAuthority) await loadProviderSecretStatus();
+  if (["meta", "razorpay"].includes(state.view) && state.hasFullAuthority) await loadProviderSecretStatus();
+  if (["billing", "subscriptions"].includes(state.view) && state.hasFullAuthority) await loadBillingSnapshot();
 }
 
 init().catch((error) => { state.loading = false; state.error = error?.message || "The management console could not start."; render(); });

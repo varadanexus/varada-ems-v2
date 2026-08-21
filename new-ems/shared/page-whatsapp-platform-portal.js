@@ -80,6 +80,8 @@ let workspaceSelectedConnectionId = "";
 let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
+let workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], customer: null, error: "" };
+let razorpayCheckoutPromise = null;
 const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
 
 function countryDialEntries() {
@@ -666,6 +668,39 @@ async function messagingRequest(action, payload = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || "Team Inbox request failed.");
   return data;
+}
+
+function billingEndpoint() {
+  return `${runtime.supabaseUrl}/functions/v1/whatsapp-platform-billing`;
+}
+
+async function billingRequest(action, payload = {}) {
+  if (!session?.sessionToken) throw new Error("Your workspace session has expired.");
+  const response = await fetch(billingEndpoint(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: runtime.supabaseAnonKey || "" },
+    credentials: "omit",
+    cache: "no-store",
+    referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, sessionToken: session.sessionToken, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Billing request failed.");
+  return data;
+}
+
+function loadRazorpayCheckout() {
+  if (window.Razorpay) return Promise.resolve(window.Razorpay);
+  if (razorpayCheckoutPromise) return razorpayCheckoutPromise;
+  razorpayCheckoutPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => window.Razorpay ? resolve(window.Razorpay) : reject(new Error("Razorpay Checkout did not initialize."));
+    script.onerror = () => reject(new Error("Razorpay Checkout could not be loaded."));
+    document.head.append(script);
+  }).catch((error) => { razorpayCheckoutPromise = null; throw error; });
+  return razorpayCheckoutPromise;
 }
 
 function readFileBase64(file) {
@@ -1908,9 +1943,11 @@ function billingMoney(value, currency = "INR") {
 
 function billingView() {
   const pkg = workspacePackageMaster?.package;
-  const heading = `<div class="wp-route-heading"><div><span class="wp-kicker">Subscription management</span><h1>Billing &amp; usage</h1><p>Package access, allowances and billing come from the Varada Nexus Package Master.</p></div><a class="wp-secondary wp-button-link" href="/contact.html?subject=WhatsApp%20billing%20support">Billing support</a></div>`;
-  if (workspacePackageMaster?.error) return `<section class="wp-route-page">${heading}<div class="wp-verification-notice"><strong>Billing data unavailable</strong><p>${escapeHtml(workspacePackageMaster.error)}</p></div></section>`;
-  if (!pkg) return `<section class="wp-route-page">${heading}<div class="wp-verification-notice"><strong>Package assignment required</strong><p>No active operational package is assigned to this workspace.</p></div></section>`;
+  const canManage = ["owner", "admin"].includes(session.roleCode);
+  const subscription = workspaceBilling?.subscription;
+  const billingError = workspaceBilling?.error || workspacePackageMaster?.error || "";
+  const heading = `<div class="wp-route-heading"><div><span class="wp-kicker">Subscription management</span><h1>Billing &amp; usage</h1><p>Choose a package, pay securely with Razorpay and manage the subscription for this workspace.</p></div><div class="wp-billing-heading-actions"><span class="wp-billing-mode ${workspaceBilling?.mode === "live" ? "is-live" : ""}">${escapeHtml(workspaceBilling?.mode === "live" ? "Live payments" : "Test payments")}</span><a class="wp-secondary wp-button-link" href="/contact.html?subject=WhatsApp%20billing%20support">Billing support</a></div></div>`;
+  if (!pkg) return `<section class="wp-route-page">${heading}<div class="wp-verification-notice"><strong>Billing data unavailable</strong><p>${escapeHtml(billingError || "No active package is available for this workspace.")}</p></div></section>`;
   const limits = [["Team seats",pkg.team_member_limit],["WhatsApp numbers",pkg.whatsapp_number_limit],["Contacts",pkg.contact_limit],["Messages / month",pkg.monthly_message_limit],["Templates",pkg.template_limit],["Flows",pkg.flow_limit],["Campaigns",pkg.campaign_limit],["Automations",pkg.automation_limit],["Integrations",pkg.integration_limit],["Storage",pkg.storage_limit_mb == null ? null : `${Number(pkg.storage_limit_mb).toLocaleString("en-IN")} MB`]];
   const labels = { team_inbox:"Team inbox",contacts:"Contacts",templates:"Message templates",campaigns:"Campaigns",flows:"Flows",automations:"Automations",api_access:"API access",priority_support:"Priority support",analytics:"Analytics" };
   const features = Object.entries(pkg.entitlements || {}).map(([key,value]) => `<li class="${value === false ? "off" : "on"}"><span>${value === false ? "×" : "✓"}</span><strong>${escapeHtml(labels[key] || key.replaceAll("_", " "))}</strong><small>${typeof value === "string" ? escapeHtml(value) : value === false ? "Not included" : "Included"}</small></li>`).join("");
@@ -1918,7 +1955,18 @@ function billingView() {
   const assigned = (workspacePackageMaster.addons || []).map((addon) => `<article class="wp-billing-addon"><div><span class="wp-card-eyebrow">Active add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${Number(addon.quantity || 1)} × ${billingMoney(addon.unit_amount, addon.currency)}</strong><small>${escapeHtml(addon.billing_interval || "month")}</small></div></article>`).join("");
   const available = (workspacePackageMaster.availableAddons || []).filter((addon) => !assignedCodes.has(addon.code)).map((addon) => `<article class="wp-billing-addon available"><div><span class="wp-card-eyebrow">Available add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${addon.billing_model === "contact_sales" ? "Custom quote" : billingMoney(addon.unit_amount, addon.currency)}</strong><a href="/contact.html?subject=${encodeURIComponent(`WhatsApp add-on: ${addon.name}`)}">Request add-on →</a></div></article>`).join("");
   const model = pkg.billing_model === "contact_sales" ? "Custom agreement" : pkg.billing_model === "free" ? "Free" : "Subscription";
-  return `<section class="wp-route-page wp-billing-page">${heading}<section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section><section class="wp-card wp-billing-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Capacity extensions</span><h2>Add-ons</h2><p>Assigned add-ons extend the operational package independently of the public catalog.</p></div></div><div class="wp-billing-addon-list">${assigned || '<div class="wp-inbox-empty"><strong>No active add-ons</strong><p>Your package currently has no assigned extensions.</p></div>'}${available}</div></section></section>`;
+  const statusLabel = String(subscription?.status || "No paid subscription").replaceAll("_", " ");
+  const statusActions = subscription ? `<div class="wp-billing-subscription-actions"><button class="wp-secondary" type="button" data-billing-sync="${escapeHtml(subscription.id)}">Refresh status</button>${canManage && !["cancelled", "completed", "expired"].includes(subscription.status) ? `<button class="wp-danger-button" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel at period end</button>` : ""}</div>` : "";
+  const subscriptionCard = `<section class="wp-billing-subscription"><div><span class="wp-card-eyebrow">Razorpay subscription</span><h2>${escapeHtml(subscription ? `${subscription.package_code} · ${subscription.billing_interval}ly` : "No active paid subscription")}</h2><p>${subscription ? `Status: ${escapeHtml(statusLabel)}${subscription.current_end ? ` · Current period ends ${escapeHtml(formatProfileDate(subscription.current_end))}` : ""}` : "Select a self-service package below to start secure checkout."}</p></div><div><span class="wp-billing-status ${escapeHtml(subscription?.status || "none")}">${escapeHtml(statusLabel)}</span>${statusActions}</div></section>`;
+  const packageCards = (workspaceBilling?.packages || []).map((plan) => {
+    const selfService = plan.billing_model === "subscription";
+    const active = plan.code === pkg.code;
+    const locked = Boolean(subscription && !["cancelled", "completed", "expired"].includes(subscription.status) && subscription.package_code !== plan.code);
+    return `<article class="wp-billing-plan ${active ? "is-current" : ""}" data-billing-plan="${escapeHtml(plan.code)}"><header><div><span class="wp-card-eyebrow">${active ? "Current package" : selfService ? "Self-service package" : "Tailored package"}</span><h3>${escapeHtml(plan.name)}</h3></div>${active ? '<span class="wp-billing-current">Current</span>' : ""}</header><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${selfService ? billingMoney(plan.monthly_amount, plan.currency) : "Custom"}</strong><span>${selfService ? "/ month" : "quote"}</span></div>${selfService ? `<label><span>Billing interval</span><select data-billing-interval><option value="month">Monthly · ${escapeHtml(billingMoney(plan.monthly_amount, plan.currency))}</option><option value="year">Annual · ${escapeHtml(billingMoney(plan.annual_amount, plan.currency))}</option></select></label>${Number(plan.trial_days || 0) ? `<small>${Number(plan.trial_days)}-day trial on the first subscription.</small>` : ""}<button class="wp-primary" type="button" data-billing-subscribe="${escapeHtml(plan.code)}" ${!canManage || !workspaceBilling?.configured || locked ? "disabled" : ""}>${!canManage ? "Owner or admin required" : !workspaceBilling?.configured ? "Payment setup pending" : locked ? "Cancel current plan first" : subscription?.package_code === plan.code ? "Continue subscription checkout" : `Choose ${escapeHtml(plan.name)}`}</button>` : `<a class="wp-secondary wp-button-link" href="/contact.html?subject=${encodeURIComponent(`Enterprise billing: ${plan.name}`)}">Contact sales</a>`}</article>`;
+  }).join("");
+  const payments = (workspaceBilling?.payments || []).map((payment) => `<tr><td><strong>${escapeHtml(String(payment.provider_payment_id || "Payment"))}</strong><small>${escapeHtml(formatProfileDate(payment.paid_at || payment.created_at))}</small></td><td>${escapeHtml(payment.payment_method || "—")}</td><td><span class="wp-billing-payment-status ${escapeHtml(payment.status)}">${escapeHtml(payment.status)}</span></td><td>${escapeHtml(billingMoney(Number(payment.amount_paise || 0) / 100, payment.currency))}</td></tr>`).join("");
+  const setupNotice = workspaceBilling?.configured ? "" : `<div class="wp-verification-notice"><strong>Razorpay setup is waiting for API keys</strong><p>Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Supabase Edge Function Secrets. Checkout buttons will become available automatically.</p></div>`;
+  return `<section class="wp-route-page wp-billing-page">${heading}${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}${subscriptionCard}<section><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section><section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section><section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Payment ledger</span><h2>Recent payments</h2><p>Verified Razorpay payments for this workspace.</p></div></div>${payments ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Payment</th><th>Method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${payments}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No payments yet</strong><p>Completed payments will appear here.</p></div>'}</section><section class="wp-card wp-billing-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Capacity extensions</span><h2>Add-ons</h2><p>Assigned add-ons extend the operational package independently of the public catalog.</p></div></div><div class="wp-billing-addon-list">${assigned || '<div class="wp-inbox-empty"><strong>No active add-ons</strong><p>Your package currently has no assigned extensions.</p></div>'}${available}</div></section></section>`;
 }
 
 function plannedView(view) {
@@ -2008,6 +2056,12 @@ async function renderDashboard() {
     } catch (error) {
       workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: error?.message || "Package Master could not be loaded." };
     }
+    if (view === "billing") {
+      try { workspaceBilling = { ...(await billingRequest("summary")), error: "" }; }
+      catch (error) { workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], customer: null, error: error?.message || "Billing could not be loaded." }; }
+    } else {
+      workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], customer: null, error: "" };
+    }
   } else {
     metaOnboardingStatus = {
       configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
@@ -2019,6 +2073,7 @@ async function renderDashboard() {
     workspaceProfile = { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
     workspaceVerification = null;
     workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
+    workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], customer: null, error: "" };
   }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const selectedConnection = resolveSelectedConnection(connections);
@@ -2137,6 +2192,57 @@ async function renderDashboard() {
     verificationAttentionDismissed = true;
     app.querySelector("[data-verification-attention]")?.remove();
   });
+  if (view === "billing") {
+    app.querySelectorAll("[data-billing-subscribe]").forEach((button) => button.addEventListener("click", async () => {
+      const card = button.closest("[data-billing-plan]");
+      const billingInterval = card?.querySelector("[data-billing-interval]")?.value || "month";
+      const original = button.textContent;
+      try {
+        button.disabled = true; button.textContent = "Preparing secure checkout…";
+        const checkout = await billingRequest("create_subscription", { packageCode: button.dataset.billingSubscribe, billingInterval });
+        await loadRazorpayCheckout();
+        const instance = new window.Razorpay({
+          key: checkout.keyId,
+          subscription_id: checkout.razorpaySubscriptionId,
+          name: "Varada Nexus",
+          description: `${checkout.package?.name || "WhatsApp Solutions"} subscription`,
+          prefill: { name: checkout.customer?.name || "", email: checkout.customer?.email || "" },
+          notes: { workspace: checkout.customer?.companyName || session.companyName || "" },
+          theme: { color: "#25d887" },
+          handler: async (result) => {
+            try {
+              showToast("Payment received. Verifying securely…");
+              await billingRequest("verify_checkout", {
+                subscriptionId: checkout.subscriptionId,
+                razorpayPaymentId: result.razorpay_payment_id,
+                razorpaySubscriptionId: result.razorpay_subscription_id,
+                razorpaySignature: result.razorpay_signature,
+              });
+              showToast("Subscription verified and billing activated.");
+              await renderDashboard();
+            } catch (error) { showToast(error?.message || "Payment verification failed.", "error"); }
+          },
+          modal: { ondismiss: () => { button.disabled = false; button.textContent = original; } },
+        });
+        instance.on("payment.failed", (result) => showToast(result?.error?.description || "Razorpay could not complete the payment.", "error"));
+        instance.open();
+      } catch (error) {
+        showToast(error?.message || "Secure checkout could not be opened.", "error");
+        button.disabled = false; button.textContent = original;
+      }
+    }));
+    app.querySelectorAll("[data-billing-sync]").forEach((button) => button.addEventListener("click", async () => {
+      const original = button.textContent;
+      try { button.disabled = true; button.textContent = "Refreshing…"; await billingRequest("sync_subscription", { subscriptionId: button.dataset.billingSync }); showToast("Subscription status refreshed from Razorpay."); await renderDashboard(); }
+      catch (error) { showToast(error?.message || "Subscription status could not be refreshed.", "error"); button.disabled = false; button.textContent = original; }
+    }));
+    app.querySelectorAll("[data-billing-cancel]").forEach((button) => button.addEventListener("click", async () => {
+      if (!window.confirm("Cancel this subscription at the end of its current billing period? Access remains available until then.")) return;
+      const original = button.textContent;
+      try { button.disabled = true; button.textContent = "Scheduling cancellation…"; await billingRequest("cancel_subscription", { subscriptionId: button.dataset.billingCancel, cancelAtCycleEnd: true }); showToast("Cancellation scheduled for the end of the billing period."); await renderDashboard(); }
+      catch (error) { showToast(error?.message || "Subscription could not be cancelled.", "error"); button.disabled = false; button.textContent = original; }
+    }));
+  }
   if (view === "flows") {
     const numberScopedFlowRequest = (action, payload = {}) => messagingRequest(action, { ...payload, connectionId: workspaceSelectedConnectionId });
     bindFlowsView({ root: app, flows: workspaceFlows.flows, request: numberScopedFlowRequest, onRefresh: renderDashboard, toast: showToast, escapeHtml, builderId: currentFlowBuilderId(), listUrl: workspacePath("flows") });
