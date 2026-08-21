@@ -1946,6 +1946,14 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-checkout-addons em { margin-top:5px; color:var(--wp-accent); font-size:.67rem; font-style:normal; }
 .wp-checkout-total { position:sticky; top:20px; }
 .wp-checkout-total > .wp-primary { width:100%; margin-top:18px; }
+.wp-billing-locked { min-height:calc(100vh - 160px); place-items:center; }
+.wp-billing-lock-card { display:grid; justify-items:center; width:min(680px,100%); margin:auto; padding:54px 46px; border:1px solid color-mix(in srgb,var(--wp-accent) 32%,var(--wp-border)); border-radius:24px; background:radial-gradient(circle at 50% 0,color-mix(in srgb,var(--wp-accent) 13%,transparent),transparent 48%),var(--wp-panel); box-shadow:var(--wp-shadow); text-align:center; }
+.wp-billing-lock-icon { display:grid; place-items:center; width:70px; height:70px; margin-bottom:22px; border:1px solid color-mix(in srgb,var(--wp-accent) 42%,var(--wp-border)); border-radius:22px; background:color-mix(in srgb,var(--wp-accent) 11%,var(--wp-surface)); color:var(--wp-accent); font-size:1.7rem; font-weight:950; }
+.wp-billing-lock-card h1 { margin:10px 0 12px; color:var(--wp-text); font-size:clamp(2rem,4vw,3.35rem); line-height:1.02; }
+.wp-billing-lock-card > p { max-width:540px; margin:0; color:var(--wp-muted); font-size:.94rem; line-height:1.65; }
+.wp-billing-lock-card > small { max-width:560px; margin-top:20px; color:var(--wp-muted); line-height:1.55; }
+.wp-billing-lock-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; margin-top:28px; }
+.wp-billing-lock-card .wp-policy-note { width:100%; margin-top:28px; text-align:left; }
 .wp-billing-history { padding:24px; }
 .wp-billing-table-wrap { overflow-x:auto; border:1px solid var(--wp-border); border-radius:13px; }
 .wp-billing-history table { width:100%; border-collapse:collapse; }

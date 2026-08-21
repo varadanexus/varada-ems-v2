@@ -239,13 +239,14 @@ async function syncSubscriptionEntity(admin: any, subscription: any, entity: any
   return data;
 }
 async function billingSummary(admin: any, customer: any, credentials: any) {
-  const [{ data: packages, error: packagesError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentsError }, { data: renewalChanges, error: renewalError }] = await Promise.all([
+  const [{ data: packages, error: packagesError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentsError }, { data: renewalChanges, error: renewalError }, { data: entitlement, error: entitlementError }] = await Promise.all([
     admin.from("whatsapp_platform_package_master").select("id,code,name,description,status,billing_model,currency,monthly_amount,annual_amount,trial_days,team_member_limit,whatsapp_number_limit,contact_limit,monthly_message_limit,template_limit,flow_limit,campaign_limit,automation_limit,integration_limit,storage_limit_mb,entitlements,sort_order,current_price_version_id").eq("status", "active").order("sort_order"),
     admin.from("whatsapp_platform_billing_subscriptions").select("id,package_code,billing_interval,status,quantity,paid_count,remaining_count,short_url,current_start,current_end,charge_at,ended_at,cancel_at_cycle_end,checkout_verified_at,activated_at,cancelled_at,package_price_version_id,recurring_base_paise,gst_rate_bps,safe_metadata,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(10),
     admin.from("whatsapp_platform_billing_payments").select("id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(20),
     admin.from("whatsapp_platform_billing_renewal_price_changes").select("id,subscription_id,replacement_subscription_id,from_price_version_id,target_price_version_id,effective_at,status,notice_version,notice_shown_at,decided_at,created_at").eq("tenant_id", customer.tenant_id).in("status", ["pending_consent", "accepted", "processing", "failed"]).order("created_at", { ascending: false }),
+    admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id }),
   ]);
-  if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError; if (renewalError) throw renewalError;
+  if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError; if (renewalError) throw renewalError; if (entitlementError) throw entitlementError;
   const rows = subscriptions || [];
   const subscription = rows.find((row: any) => row.safe_metadata?.upgrade_activated_at && !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || rows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
@@ -285,7 +286,7 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     configured: razorpayConfigured(credentials), keyId: razorpayConfigured(credentials) ? credentials.keyId : "",
     mode: credentials.keyId?.startsWith("rzp_live_") ? "live" : "test",
     webhookUrl: `${env("SUPABASE_URL")}/functions/v1/whatsapp-platform-billing?webhook=razorpay`,
-    packages: publicPackages, subscription: publicSubscription, payments: payments || [], renewalPriceChanges: publicRenewalChanges,
+    packages: publicPackages, subscription: publicSubscription, payments: payments || [], renewalPriceChanges: publicRenewalChanges, entitlement,
     customer: { name: customer.display_name || customer.company_name || "", email: customer.email || "", companyName: customer.company_name || "" },
   };
 }
@@ -904,8 +905,13 @@ Deno.serve(async (req) => {
     const body = raw ? JSON.parse(raw) : {};
     const admin = adminClient();
     const customer = await customerSession(admin, body.sessionToken);
-    const credentials = await loadRazorpaySecrets(admin);
     const action = String(body.action || "summary");
+    if (action === "entitlement") {
+      const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+      if (error) throw error;
+      return json(req, { entitlement: data });
+    }
+    const credentials = await loadRazorpaySecrets(admin);
     if (action === "summary") return json(req, await billingSummary(admin, customer, credentials));
     if (action === "quote_subscription_checkout") return json(req, await quoteSubscriptionCheckout(admin, customer, body));
     if (action === "create_subscription") return json(req, await createSubscription(admin, customer, body, credentials));

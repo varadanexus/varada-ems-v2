@@ -36,6 +36,11 @@ async function customerSession(admin: any, tokenValue: unknown) {
   if (!row?.tenant_id || !row?.user_id) throw new Error("Unauthorized");
   return row;
 }
+async function billingEntitlement(admin: any, customer: any) {
+  const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+  if (error) throw error;
+  return data || { allowed: false, state: "payment_required", reason: "Billing access could not be verified." };
+}
 function cleanUuid(value: unknown, label: string) {
   const id = String(value || "");
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id)) throw new Error(`Invalid ${label}.`);
@@ -904,6 +909,10 @@ Deno.serve(async (req) => {
     const body = raw ? JSON.parse(raw) : {};
     const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "list");
+    if (action !== "package_master") {
+      const entitlement = await billingEntitlement(admin, customer);
+      if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
+    }
     if (customer.role_code === "agent" && !AGENT_ACTIONS.has(action)) {
       return json(req, { error: "Your agent role cannot access this workspace area." }, 403);
     }

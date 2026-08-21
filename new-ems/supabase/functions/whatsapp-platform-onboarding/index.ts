@@ -87,6 +87,11 @@ async function customerSession(admin: any, tokenValue: unknown) {
   if (!row?.tenant_id || !row?.user_id) throw new Error("Unauthorized");
   return row;
 }
+async function billingEntitlement(admin: any, customer: any) {
+  const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+  if (error) throw error;
+  return data || { allowed: false, state: "payment_required", reason: "Billing access could not be verified." };
+}
 
 function base64Url(bytes: Uint8Array) {
   let binary = "";
@@ -526,10 +531,14 @@ Deno.serve(async (req) => {
     }
     const body = rawBody ? JSON.parse(rawBody) : {};
     customer = await customerSession(admin, body.sessionToken);
+    const action = String(body.action || "status");
+    if (action !== "status") {
+      const entitlement = await billingEntitlement(admin, customer);
+      if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
+    }
     if (customer.role_code === "agent") {
       return json(req, { error: "Your agent role cannot access business onboarding." }, 403);
     }
-    const action = String(body.action || "status");
     if (action === "status") return json(req, await configurationStatus(admin, customer));
     if (!["owner", "admin"].includes(customer.role_code)) {
       return json(req, { error: "Only workspace owners and administrators can add business numbers." }, 403);

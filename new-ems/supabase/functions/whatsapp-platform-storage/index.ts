@@ -57,6 +57,11 @@ async function customerSession(admin: any, rawToken: unknown) {
   if (!customer?.tenant_id || !customer?.user_id) throw new Error("Unauthorized");
   return customer;
 }
+async function billingEntitlement(admin: any, customer: any) {
+  const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+  if (error) throw error;
+  return data || { allowed: false, state: "payment_required", reason: "Billing access could not be verified." };
+}
 
 function base64url(input: ArrayBuffer | string) {
   let text = "";
@@ -657,6 +662,10 @@ Deno.serve(async (req) => {
     const admin = adminClient();
     const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "profile");
+    if (!["profile", "verification_status"].includes(action)) {
+      const entitlement = await billingEntitlement(admin, customer);
+      if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
+    }
     if (action === "profile") return json(req, { profile: await tenantProfile(admin, customer) });
     if (action === "upload_logo") return json(req, await uploadLogo(admin, customer, body));
     if (action === "upload_business_profile_picture") return json(req, await uploadBusinessProfilePicture(admin, customer, body));
