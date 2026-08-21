@@ -1937,6 +1937,23 @@ function confirmBillingUpgrade(preview) {
     dialog.showModal();
   });
 }
+function confirmAddonChange(preview) {
+  let dialog = document.querySelector("#wpBillingAddonDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpBillingAddonDialog";
+    dialog.className = "wp-contact-dialog wp-billing-upgrade-dialog";
+    document.body.append(dialog);
+  }
+  const quote = preview.quote || {};
+  const money = (paise) => escapeHtml(billingMoney(Number(paise || 0) / 100, quote.currency));
+  const remainingDays = Number(quote.billableRemainingDays || 0).toFixed(2).replace(/\.00$/, "");
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Prorated add-on increase</span><h2>${escapeHtml(preview.addon?.name || "Add-on capacity")}</h2><p>Review the immediate prorated amount and the recurring total before authorizing payment.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote"><div><dt>Quantity</dt><dd>${Number(quote.currentQuantity || 0)} → ${Number(quote.targetQuantity || 0)}</dd></div><div><dt>Remaining service</dt><dd>${escapeHtml(remainingDays)} days</dd></div><div><dt>Prorated add-on base</dt><dd>${money(quote.proratedBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>New recurring base</dt><dd>${money(quote.targetRecurringBasePaise)} + GST</dd></div></dl><div class="wp-policy-note"><strong>Capacity after verified payment</strong><p>The increased capacity activates only after Razorpay confirms authorization. The current subscription is then scheduled to close automatically, and the replacement recurring total starts ${escapeHtml(formatProfileDate(quote.recurringStartsAt))}.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Keep current capacity</button><button class="wp-primary" type="submit" value="authorize">Authorize add-on</button></footer></form>`;
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "authorize"), { once: true });
+    dialog.showModal();
+  });
+}
 
 async function decideRenewalPriceChange(changeId, accepting) {
   let authorizationWindow = null;
@@ -1977,8 +1994,16 @@ function billingView() {
   const labels = { team_inbox:"Team inbox",contacts:"Contacts",templates:"Message templates",campaigns:"Campaigns",flows:"Flows",automations:"Automations",api_access:"API access",priority_support:"Priority support",analytics:"Analytics" };
   const features = Object.entries(pkg.entitlements || {}).map(([key,value]) => `<li class="${value === false ? "off" : "on"}"><span>${value === false ? "×" : "✓"}</span><strong>${escapeHtml(labels[key] || key.replaceAll("_", " "))}</strong><small>${typeof value === "string" ? escapeHtml(value) : value === false ? "Not included" : "Included"}</small></li>`).join("");
   const assignedCodes = new Set((workspacePackageMaster.addons || []).map((addon) => addon.code));
-  const assigned = (workspacePackageMaster.addons || []).map((addon) => `<article class="wp-billing-addon"><div><span class="wp-card-eyebrow">Active add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${Number(addon.quantity || 1)} × ${billingMoney(addon.unit_amount, addon.currency)}</strong><small>${escapeHtml(addon.billing_interval || "month")}</small></div></article>`).join("");
-  const available = (workspacePackageMaster.availableAddons || []).filter((addon) => !assignedCodes.has(addon.code)).map((addon) => `<article class="wp-billing-addon available"><div><span class="wp-card-eyebrow">Available add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${addon.billing_model === "contact_sales" ? "Custom quote" : billingMoney(addon.unit_amount, addon.currency)}</strong><a href="/contact.html?subject=${encodeURIComponent(`WhatsApp add-on: ${addon.name}`)}">Request add-on →</a></div></article>`).join("");
+  const addonManageReady = Boolean(canManage && workspaceBilling?.configured && subscription?.status === "active" && !subscription?.cancel_at_cycle_end);
+  const addonControl = (addon, currentQuantity = 0) => {
+    const selfService = addon.is_self_service && addon.billing_model === "recurring" && addon.billing_interval === subscription?.billing_interval;
+    if (!addonManageReady || !selfService || (currentQuantity > 0 && addon.billingManaged !== true)) return `<a href="/contact.html?subject=${encodeURIComponent(`WhatsApp add-on: ${addon.name}`)}">${canManage ? "Request add-on" : "Contact workspace owner"} →</a>`;
+    const step = Math.max(1, Number(addon.quantity_step || 1));
+    const minimum = currentQuantity ? currentQuantity + step : Math.max(1, Number(addon.minimum_quantity || 1));
+    return `<div class="wp-billing-addon-control"><input type="number" data-billing-addon-quantity="${escapeHtml(addon.code)}" min="${minimum}" ${addon.maximum_quantity == null ? "" : `max="${Number(addon.maximum_quantity)}"`} step="${step}" value="${minimum}" aria-label="${escapeHtml(addon.name)} target quantity"/><button class="wp-secondary" type="button" data-billing-addon-change="${escapeHtml(addon.code)}" data-billing-addon-current="${Number(currentQuantity)}">${currentQuantity ? "Increase capacity" : "Add to subscription"}</button></div>`;
+  };
+  const assigned = (workspacePackageMaster.addons || []).map((addon) => `<article class="wp-billing-addon"><div><span class="wp-card-eyebrow">Active add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${Number(addon.quantity || 1)} × ${billingMoney(addon.unit_amount, addon.currency)}</strong><small>${escapeHtml(addon.billing_interval || "month")} · base price + GST</small>${addonControl(addon, Number(addon.quantity || 0))}</div></article>`).join("");
+  const available = (workspacePackageMaster.availableAddons || []).filter((addon) => !assignedCodes.has(addon.code)).map((addon) => `<article class="wp-billing-addon available"><div><span class="wp-card-eyebrow">Available add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${addon.billing_model === "contact_sales" ? "Custom quote" : billingMoney(addon.unit_amount, addon.currency)}</strong><small>${addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval)} · base price + GST` : "Contact billing for terms"}</small>${addonControl(addon, 0)}</div></article>`).join("");
   const model = pkg.billing_model === "contact_sales" ? "Custom agreement" : pkg.billing_model === "free" ? "Free" : "Subscription";
   const statusLabel = String(subscription?.status || "No paid subscription").replaceAll("_", " ");
   const statusActions = subscription ? `<div class="wp-billing-subscription-actions"><button class="wp-secondary" type="button" data-billing-sync="${escapeHtml(subscription.id)}">Refresh status</button>${canManage && !["cancelled", "completed", "expired"].includes(subscription.status) ? `<button class="wp-danger-button" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel at period end</button>` : ""}</div>` : "";
@@ -2324,6 +2349,33 @@ async function renderDashboard() {
       } catch (error) {
         checkoutWindow?.close();
         showToast(error?.message || "Secure checkout could not be opened.", "error");
+        button.disabled = false; button.textContent = original;
+      }
+    }));
+    app.querySelectorAll("[data-billing-addon-change]").forEach((button) => button.addEventListener("click", async () => {
+      const quantityInput = app.querySelector(`[data-billing-addon-quantity="${CSS.escape(button.dataset.billingAddonChange)}"]`);
+      if (!quantityInput?.reportValidity()) return;
+      const original = button.textContent;
+      let checkoutWindow = null;
+      try {
+        checkoutWindow = window.open("about:blank", "_blank");
+        if (checkoutWindow) checkoutWindow.opener = null;
+        const request = { subscriptionId: workspaceBilling?.subscription?.id, addonCode: button.dataset.billingAddonChange, quantity: Number(quantityInput.value) };
+        button.disabled = true; button.textContent = "Calculating proration…";
+        const preview = await billingRequest("preview_addon_change", request);
+        const approved = await confirmAddonChange(preview);
+        if (!approved) {
+          checkoutWindow?.close(); button.disabled = false; button.textContent = original; return;
+        }
+        button.textContent = "Preparing add-on checkout…";
+        const change = await billingRequest("change_addons", request);
+        if (!change.shortUrl) throw new Error("Razorpay did not return an add-on authorization link.");
+        if (checkoutWindow) checkoutWindow.location.replace(change.shortUrl); else window.location.assign(change.shortUrl);
+        showToast(`Add-on authorization opened. Pay ${billingMoney(Number(change.quote?.checkoutAmountPaise || 0) / 100, change.quote?.currency || "INR")} to activate the increased capacity.`);
+        button.disabled = false; button.textContent = original;
+      } catch (error) {
+        checkoutWindow?.close();
+        showToast(error?.message || "Add-on checkout could not be opened.", "error");
         button.disabled = false; button.textContent = original;
       }
     }));

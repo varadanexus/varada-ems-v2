@@ -1889,6 +1889,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-billing-addon > div:last-child strong { color:var(--wp-text); }
 .wp-billing-addon > div:last-child small { color:var(--wp-muted); text-transform:capitalize; }
 .wp-billing-addon > div:last-child a { margin-top:6px; color:var(--wp-accent); font-weight:800; }
+.wp-billing-addon-control { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
+.wp-billing-addon-control input { width:86px; min-height:38px; padding:7px 9px; border:1px solid var(--wp-border); border-radius:9px; background:var(--wp-input); color:var(--wp-text); }
+.wp-billing-addon-control button { min-height:38px; padding:7px 11px; white-space:nowrap; }
 .wp-billing-heading-actions,.wp-billing-subscription-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .wp-billing-mode,.wp-billing-status,.wp-billing-current,.wp-billing-payment-status { display:inline-flex; align-items:center; justify-content:center; width:max-content; padding:7px 10px; border:1px solid color-mix(in srgb,#e5bd57 48%,var(--wp-border)); border-radius:999px; background:color-mix(in srgb,#e5bd57 12%,var(--wp-panel)); color:#e5bd57; font-size:.7rem; font-weight:850; text-transform:capitalize; }
 .wp-billing-mode.is-live,.wp-billing-status.active,.wp-billing-payment-status.captured { border-color:color-mix(in srgb,var(--wp-accent) 48%,var(--wp-border)); background:color-mix(in srgb,var(--wp-accent) 12%,var(--wp-panel)); color:var(--wp-accent); }
@@ -1966,7 +1969,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @media (max-width:720px) { .wp-billing-subscription,.wp-billing-hero,.wp-billing-price-change { align-items:flex-start; flex-direction:column; } .wp-billing-subscription > div:last-child { justify-items:start; } .wp-billing-price-change dl { flex-direction:column; gap:12px; } .wp-billing-price-consent { width:100%; } .wp-billing-grid { grid-template-columns:1fr; } .wp-billing-price { width:100%; padding:16px 0 0; border-top:1px solid var(--wp-border); border-left:0; text-align:left; } }
 @media(max-width:900px){.wp-billing-grid{grid-template-columns:1fr}.wp-billing-hero{align-items:flex-start;flex-direction:column}.wp-billing-price{width:100%;padding:18px 0 0;border-top:1px solid var(--wp-border);border-left:0;text-align:left}}
 @media(max-width:900px){.wp-checkout-page .wp-billing-grid{grid-template-columns:1fr}.wp-checkout-total{position:static}}
-@media(max-width:600px){.wp-billing-limits{grid-template-columns:1fr}.wp-billing-addon{align-items:flex-start;flex-direction:column}.wp-billing-addon>div:last-child{text-align:left}}
+@media(max-width:600px){.wp-billing-limits{grid-template-columns:1fr}.wp-billing-addon{align-items:flex-start;flex-direction:column}.wp-billing-addon>div:last-child{text-align:left}.wp-billing-addon-control{justify-content:flex-start;flex-wrap:wrap}}
 
 /* Workspace analytics */
 .wp-analytics-live {
