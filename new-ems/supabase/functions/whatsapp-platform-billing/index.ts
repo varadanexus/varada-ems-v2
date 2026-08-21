@@ -82,11 +82,19 @@ function unixDate(value: unknown) {
   const number = Number(value || 0);
   return Number.isFinite(number) && number > 0 ? new Date(number * 1000).toISOString() : null;
 }
+function requestIp(req: Request) {
+  const value = String(req.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+  return /^[0-9a-f:.]{3,45}$/i.test(value) ? value : null;
+}
 function packageBasePaise(pkg: any, interval: "month" | "year") {
   const amount = Number(interval === "month" ? pkg.monthly_amount : pkg.annual_amount);
   const paise = Math.round(amount * 100);
   if (!Number.isSafeInteger(paise) || paise < 100) throw new Error("This package does not have a valid self-service price.");
   return paise;
+}
+function packagePriceSnapshot(pkg: any, interval: "month" | "year") {
+  const priceVersionId = cleanUuid(pkg.current_price_version_id, "package price version");
+  return { package_price_version_id: priceVersionId, recurring_base_paise: packageBasePaise(pkg, interval), gst_rate_bps: 1800 };
 }
 function checkoutGrossPaise(basePaise: number) {
   const packageGstPaise = Math.round(basePaise * PACKAGE_GST_RATE);
@@ -193,23 +201,45 @@ async function syncSubscriptionEntity(admin: any, subscription: any, entity: any
   return data;
 }
 async function billingSummary(admin: any, customer: any, credentials: any) {
-  const [{ data: packages, error: packagesError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentsError }] = await Promise.all([
-    admin.from("whatsapp_platform_package_master").select("code,name,description,status,billing_model,currency,monthly_amount,annual_amount,trial_days,team_member_limit,whatsapp_number_limit,contact_limit,monthly_message_limit,template_limit,flow_limit,campaign_limit,automation_limit,integration_limit,storage_limit_mb,entitlements,sort_order").eq("status", "active").order("sort_order"),
-    admin.from("whatsapp_platform_billing_subscriptions").select("id,package_code,billing_interval,status,quantity,paid_count,remaining_count,current_start,current_end,charge_at,ended_at,cancel_at_cycle_end,checkout_verified_at,activated_at,cancelled_at,safe_metadata,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(10),
+  const [{ data: packages, error: packagesError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentsError }, { data: renewalChanges, error: renewalError }] = await Promise.all([
+    admin.from("whatsapp_platform_package_master").select("id,code,name,description,status,billing_model,currency,monthly_amount,annual_amount,trial_days,team_member_limit,whatsapp_number_limit,contact_limit,monthly_message_limit,template_limit,flow_limit,campaign_limit,automation_limit,integration_limit,storage_limit_mb,entitlements,sort_order,current_price_version_id").eq("status", "active").order("sort_order"),
+    admin.from("whatsapp_platform_billing_subscriptions").select("id,package_code,billing_interval,status,quantity,paid_count,remaining_count,current_start,current_end,charge_at,ended_at,cancel_at_cycle_end,checkout_verified_at,activated_at,cancelled_at,package_price_version_id,recurring_base_paise,gst_rate_bps,safe_metadata,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(10),
     admin.from("whatsapp_platform_billing_payments").select("id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(20),
+    admin.from("whatsapp_platform_billing_renewal_price_changes").select("id,subscription_id,from_price_version_id,target_price_version_id,effective_at,status,notice_version,notice_shown_at,decided_at,created_at").eq("tenant_id", customer.tenant_id).in("status", ["pending_consent", "accepted", "processing"]).order("created_at", { ascending: false }),
   ]);
-  if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError;
+  if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError; if (renewalError) throw renewalError;
   const rows = subscriptions || [];
   const subscription = rows.find((row: any) => row.safe_metadata?.upgrade_activated_at && !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || rows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
     || rows.find((row: any) => !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || rows[0] || null;
   const publicSubscription = subscription ? Object.fromEntries(Object.entries(subscription).filter(([key]) => key !== "safe_metadata")) : null;
+  const priceVersionIds = [...new Set((renewalChanges || []).flatMap((change: any) => [change.from_price_version_id, change.target_price_version_id]).filter(Boolean))];
+  let priceVersions: any[] = [];
+  if (priceVersionIds.length) {
+    const { data, error } = await admin.from("whatsapp_platform_package_price_versions").select("id,package_id,version_no,currency,monthly_base_paise,annual_base_paise,gst_rate_bps,effective_from").in("id", priceVersionIds);
+    if (error) throw error;
+    priceVersions = data || [];
+  }
+  const versionMap = new Map(priceVersions.map((version: any) => [version.id, version]));
+  const packageMap = new Map((packages || []).map((item: any) => [item.id, { code: item.code, name: item.name }]));
+  const publicPackages = (packages || []).map((item: any) => Object.fromEntries(Object.entries(item).filter(([key]) => !["id", "current_price_version_id"].includes(key))));
+  const publicRenewalChanges = (renewalChanges || []).map((change: any) => {
+    const from = versionMap.get(change.from_price_version_id) || null;
+    const target = versionMap.get(change.target_price_version_id) || null;
+    const publicVersion = (version: any) => version ? {
+      version_no: version.version_no, currency: version.currency, monthly_base_paise: version.monthly_base_paise,
+      annual_base_paise: version.annual_base_paise, gst_rate_bps: version.gst_rate_bps,
+      effective_from: version.effective_from, package: packageMap.get(version.package_id) || null,
+    } : null;
+    const { from_price_version_id: _fromId, target_price_version_id: _targetId, ...publicChange } = change;
+    return { ...publicChange, from: publicVersion(from), target: publicVersion(target) };
+  });
   return {
     configured: razorpayConfigured(credentials), keyId: razorpayConfigured(credentials) ? credentials.keyId : "",
     mode: credentials.keyId?.startsWith("rzp_live_") ? "live" : "test",
     webhookUrl: `${env("SUPABASE_URL")}/functions/v1/whatsapp-platform-billing?webhook=razorpay`,
-    packages: packages || [], subscription: publicSubscription, payments: payments || [],
+    packages: publicPackages, subscription: publicSubscription, payments: payments || [], renewalPriceChanges: publicRenewalChanges,
     customer: { name: customer.display_name || customer.company_name || "", email: customer.email || "", companyName: customer.company_name || "" },
   };
 }
@@ -252,6 +282,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
     };
   }
   const planId = await ensureRazorpayPlan(admin, pkg, interval, credentials);
+  const priceSnapshot = packagePriceSnapshot(pkg, interval);
   const { count: priorCount, error: countError } = await admin.from("whatsapp_platform_billing_subscriptions").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("package_code", packageCode);
   if (countError) throw countError;
   const trialDays = Number(priorCount || 0) === 0 ? Math.max(0, Number(pkg.trial_days || 0)) : 0;
@@ -268,7 +299,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
     tenant_id: customer.tenant_id, package_code: packageCode, billing_interval: interval, provider_plan_id: planId,
     provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
     total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
-    short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
+    short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id, ...priceSnapshot,
     safe_metadata: { trial_days: trialDays, trial_ends_at: trialEndsAt ? new Date(trialEndsAt * 1000).toISOString() : null, mode: credentials.keyId.startsWith("rzp_live_") ? "live" : "test" },
   }).select("id").single();
   if (error || !subscription) throw error || new Error("Subscription could not be recorded.");
@@ -309,6 +340,21 @@ async function syncSubscription(admin: any, customer: any, body: any, credential
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
   return { subscription: synced };
 }
+async function recordRenewalPriceConsent(admin: any, customer: any, body: any, req: Request) {
+  if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing consent.");
+  const changeId = cleanUuid(body.changeId, "renewal price change");
+  const decision = String(body.decision || "").toLowerCase();
+  if (!['accept', 'reject'].includes(decision)) throw new Error("Select whether to accept or reject the renewal price.");
+  const status = decision === "accept" ? "accepted" : "rejected";
+  const decidedAt = new Date().toISOString();
+  const { data, error } = await admin.from("whatsapp_platform_billing_renewal_price_changes").update({
+    status, notice_shown_at: decidedAt, decided_at: decidedAt, decided_by_user_id: customer.user_id,
+    decision_ip: requestIp(req), decision_user_agent: String(req.headers.get("user-agent") || "").slice(0, 500), updated_at: decidedAt,
+  }).eq("id", changeId).eq("tenant_id", customer.tenant_id).eq("status", "pending_consent").select("id,status,effective_at,decided_at").maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("This renewal price decision is no longer pending.");
+  return { priceChange: data, requiresAuthorization: status === "accepted" };
+}
 async function upgradeContext(admin: any, customer: any, body: any, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
   const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
@@ -335,7 +381,10 @@ async function upgradeContext(admin: any, customer: any, body: any, credentials:
   const currentBasisDays = syncedSubscription.billing_interval === "year" ? 365 : 30;
   const targetBasisDays = interval === "year" ? 365 : 30;
   const billableRemainingDays = Math.min(currentBasisDays, Math.max(0, rawRemainingDays));
-  const currentBasePaise = packageBasePaise(currentPackage, syncedSubscription.billing_interval);
+  const snapshottedCurrentBasePaise = Number(syncedSubscription.recurring_base_paise || 0);
+  const currentBasePaise = Number.isSafeInteger(snapshottedCurrentBasePaise) && snapshottedCurrentBasePaise >= 100
+    ? snapshottedCurrentBasePaise
+    : packageBasePaise(currentPackage, syncedSubscription.billing_interval);
   const targetBasePaise = packageBasePaise(targetPackage, interval);
   const unusedCreditBasePaise = Math.round((currentBasePaise / currentBasisDays) * billableRemainingDays);
   const targetProratedBasePaise = Math.round((targetBasePaise / targetBasisDays) * billableRemainingDays);
@@ -386,6 +435,7 @@ async function upgradeSubscription(admin: any, customer: any, body: any, credent
   }
 
   const planId = await ensureRazorpayPlan(admin, context.targetPackage, context.interval, credentials);
+  const priceSnapshot = packagePriceSnapshot(context.targetPackage, context.interval);
   const totalCount = context.interval === "month" ? 120 : 10;
   const intentId = crypto.randomUUID();
   const requestBody = {
@@ -402,7 +452,7 @@ async function upgradeSubscription(admin: any, customer: any, body: any, credent
       tenant_id: customer.tenant_id, package_code: context.targetPackage.code, billing_interval: context.interval, provider_plan_id: planId,
       provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
       total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
-      short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
+      short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id, ...priceSnapshot,
       safe_metadata: { upgrade_intent_id: intentId, upgrade_from_subscription_id: context.subscription.id, recurring_starts_at: context.quote.recurringStartsAt, proration: context.quote },
     }).select("*").single();
     if (error || !data) throw error || new Error("Replacement subscription could not be recorded.");
@@ -548,6 +598,7 @@ Deno.serve(async (req) => {
     if (action === "create_subscription") return json(req, await createSubscription(admin, customer, body, credentials));
     if (action === "verify_checkout") return json(req, await verifyCheckout(admin, customer, body, credentials));
     if (action === "sync_subscription") return json(req, await syncSubscription(admin, customer, body, credentials));
+    if (action === "record_renewal_price_consent") return json(req, await recordRenewalPriceConsent(admin, customer, body, req));
     if (action === "preview_upgrade") return json(req, await previewUpgrade(admin, customer, body, credentials));
     if (action === "upgrade_subscription") return json(req, await upgradeSubscription(admin, customer, body, credentials));
     if (action === "cancel_subscription") return json(req, await cancelSubscription(admin, customer, body, credentials));

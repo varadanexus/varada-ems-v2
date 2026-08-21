@@ -1,0 +1,33 @@
+create index if not exists whatsapp_platform_package_master_current_price_idx
+  on public.whatsapp_platform_package_master(current_price_version_id)
+  where current_price_version_id is not null;
+create index if not exists whatsapp_platform_addon_master_current_price_idx
+  on public.whatsapp_platform_addon_master(current_price_version_id)
+  where current_price_version_id is not null;
+
+create index if not exists whatsapp_platform_billing_subscriptions_package_code_idx
+  on public.whatsapp_platform_billing_subscriptions(package_code);
+create index if not exists whatsapp_platform_billing_subscriptions_created_by_idx
+  on public.whatsapp_platform_billing_subscriptions(created_by_user_id)
+  where created_by_user_id is not null;
+create index if not exists whatsapp_platform_tenant_addons_addon_code_idx
+  on public.whatsapp_platform_tenant_addons(addon_code);
+
+create index if not exists whatsapp_platform_renewal_price_changes_from_version_idx
+  on public.whatsapp_platform_billing_renewal_price_changes(from_price_version_id);
+create index if not exists whatsapp_platform_renewal_price_changes_target_version_idx
+  on public.whatsapp_platform_billing_renewal_price_changes(target_price_version_id);
+create index if not exists whatsapp_platform_renewal_price_changes_decided_by_idx
+  on public.whatsapp_platform_billing_renewal_price_changes(decided_by_user_id)
+  where decided_by_user_id is not null;
+create index if not exists whatsapp_platform_renewal_price_changes_replacement_idx
+  on public.whatsapp_platform_billing_renewal_price_changes(replacement_subscription_id)
+  where replacement_subscription_id is not null;
+
+create index if not exists whatsapp_platform_addon_price_changes_from_version_idx
+  on public.whatsapp_platform_billing_addon_price_changes(from_price_version_id);
+create index if not exists whatsapp_platform_addon_price_changes_target_version_idx
+  on public.whatsapp_platform_billing_addon_price_changes(target_price_version_id);
+create index if not exists whatsapp_platform_addon_price_changes_decided_by_idx
+  on public.whatsapp_platform_billing_addon_price_changes(decided_by_user_id)
+  where decided_by_user_id is not null;

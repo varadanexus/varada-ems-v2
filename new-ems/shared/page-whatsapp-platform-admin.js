@@ -494,8 +494,8 @@ function masterPackageForm(pkg) {
       <label>Billing model<select name="billingModel">${masterOption("subscription",p.billing_model,"Subscription")}${masterOption("contact_sales",p.billing_model,"Contact sales")}${masterOption("free",p.billing_model,"Free")}</select></label>
       <label>Currency<input name="currency" maxlength="3" pattern="[A-Z]{3}" value="${masterValue(p,"currency") || "INR"}"/></label>
       <label>Trial days<input name="trialDays" type="number" min="0" max="365" value="${masterValue(p,"trial_days") || 0}"/></label>
-      <label>Base monthly amount (GST and fees added at checkout)<input name="monthlyAmount" type="number" min="0" step="0.01" value="${masterValue(p,"monthly_amount") || 0}"/></label>
-      <label>Base annual amount (GST and fees added at checkout)<input name="annualAmount" type="number" min="0" step="0.01" value="${masterValue(p,"annual_amount") || 0}"/></label>
+      <label>Monthly base price — excluding GST/taxes<input name="monthlyAmount" type="number" min="0" step="0.01" value="${masterValue(p,"monthly_amount") || 0}"/><small>Authoritative customer price before GST and checkout adjustments.</small></label>
+      <label>Annual base price — excluding GST/taxes<input name="annualAmount" type="number" min="0" step="0.01" value="${masterValue(p,"annual_amount") || 0}"/><small>A price edit creates an immutable revision for the next renewal.</small></label>
       <label>Sort order<input name="sortOrder" type="number" value="${masterValue(p,"sort_order") || 0}"/></label>
     </div></div>
     <div class="wa-master-section"><h4>Enforced resource limits</h4><p class="wa-master-help">Blank means unlimited. Zero disables a metered capability.</p><div class="wa-master-limits">
@@ -511,7 +511,7 @@ function masterPackageForm(pkg) {
       <label>Storage (MB)<input name="storageLimitMb" type="number" min="0" value="${masterLimit(p,"storage_limit_mb")}" placeholder="Unlimited"/></label>
     </div></div>
     <div class="wa-master-section"><h4>Feature access</h4><div class="wa-master-toggles">${accessToggle("team_inbox","Team inbox")}${accessToggle("contacts","Contacts")}${accessToggle("templates","Message templates")}${accessToggle("campaigns","Campaigns")}${accessToggle("flows","Flows")}${accessToggle("automations","Automations")}${accessToggle("api_access","API access")}${accessToggle("priority_support","Priority support")}</div></div>
-    <footer><span>Last updated ${escapeHtml(formatDate(p.updated_at))}</span><button class="wa-admin-button primary" type="submit">${isNew ? "Create package" : "Save master package"}</button></footer>
+    <footer><span>${p.current_price_version_id ? "Versioned financial price · " : "New financial price · "}Last updated ${escapeHtml(formatDate(p.updated_at))}</span><button class="wa-admin-button primary" type="submit">${isNew ? "Create package" : "Save master package"}</button></footer>
   </form>`;
 }
 
@@ -529,7 +529,7 @@ function masterAddonForm(addon, packages) {
       <label>Billing model<select name="billingModel">${masterOption("recurring",a.billing_model,"Recurring")}${masterOption("one_time",a.billing_model,"One-time")}${masterOption("usage",a.billing_model,"Usage")}${masterOption("contact_sales",a.billing_model,"Contact sales")}</select></label>
       <label>Interval<select name="billingInterval">${masterOption("month",a.billing_interval,"Monthly")}${masterOption("year",a.billing_interval,"Annual")}${masterOption("one_time",a.billing_interval,"One-time")}${masterOption("usage",a.billing_interval,"Usage")}${masterOption("custom",a.billing_interval,"Custom")}</select></label>
       <label>Currency<input name="currency" maxlength="3" value="${masterValue(a,"currency") || "INR"}"/></label>
-      <label>Unit amount<input name="unitAmount" type="number" min="0" step="0.01" value="${masterValue(a,"unit_amount") || 0}"/></label>
+      <label>Unit base price — excluding GST/taxes<input name="unitAmount" type="number" min="0" step="0.01" value="${masterValue(a,"unit_amount") || 0}"/><small>Authoritative price per billing unit.</small></label>
       <label>Billing unit<input name="unitName" value="${masterValue(a,"unit_name") || "unit"}"/></label>
       <label>Quantity step<input name="quantityStep" type="number" min="1" value="${masterValue(a,"quantity_step") || 1}"/></label>
       <label>Minimum quantity<input name="minimumQuantity" type="number" min="0" value="${masterValue(a,"minimum_quantity") || 1}"/></label>
@@ -593,7 +593,7 @@ async function saveMasterPackage(event, form) {
   try {
     const { error } = await db.rpc("whatsapp_platform_admin_save_master_package", { p_id: form.dataset.masterPackageForm || null, p_payload: payload });
     if (error) throw error;
-    showToast("Package Master updated. Customer access will use this definition.", TOAST_TYPES.SUCCESS);
+    showToast("Package Master updated. Financial price revisions and renewal notices were created where required.", TOAST_TYPES.SUCCESS);
     state.packageMaster = null; await loadPackageMaster();
   } catch (error) { showToast(error?.message || "Could not save master package.", TOAST_TYPES.ERROR); button.disabled = false; }
 }
@@ -618,7 +618,7 @@ async function saveMasterAddon(event, form) {
   try {
     const { error } = await db.rpc("whatsapp_platform_admin_save_master_addon", { p_id: form.dataset.masterAddonForm || null, p_payload: payload });
     if (error) throw error;
-    showToast("Add-on Master updated.", TOAST_TYPES.SUCCESS);
+    showToast("Add-on Master updated. The tax-exclusive price revision is now authoritative.", TOAST_TYPES.SUCCESS);
     state.packageMaster = null; await loadPackageMaster();
   } catch (error) { showToast(error?.message || "Could not save master add-on.", TOAST_TYPES.ERROR); button.disabled = false; }
 }
