@@ -1931,6 +1931,12 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-upgrade-quote .is-credit dd { color:#25d887; }
 .wp-upgrade-quote .is-total { padding:16px 14px; background:color-mix(in srgb,#25d887 9%,var(--wp-panel)); }
 .wp-upgrade-quote .is-total dt,.wp-upgrade-quote .is-total dd { color:var(--wp-text); font-size:.9rem; font-weight:900; }
+.wp-checkout-page .wp-billing-grid { align-items:start; grid-template-columns:minmax(0,1fr) minmax(340px,.82fr); }
+.wp-checkout-page form { display:grid; gap:12px; margin-top:24px; padding-top:20px; border-top:1px solid var(--wp-border); }
+.wp-checkout-page form label { display:grid; gap:7px; color:var(--wp-text); font-size:.74rem; font-weight:800; }
+.wp-checkout-page form input { min-height:46px; padding:0 14px; border:1px solid var(--wp-border); border-radius:10px; background:var(--wp-surface); color:var(--wp-text); font:inherit; text-transform:uppercase; }
+.wp-checkout-total { position:sticky; top:20px; }
+.wp-checkout-total > .wp-primary { width:100%; margin-top:18px; }
 .wp-billing-history { padding:24px; }
 .wp-billing-table-wrap { overflow-x:auto; border:1px solid var(--wp-border); border-radius:13px; }
 .wp-billing-history table { width:100%; border-collapse:collapse; }
@@ -1942,6 +1948,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 @media (max-width:1000px) { .wp-billing-plans { grid-template-columns:1fr; } .wp-billing-plan { min-height:0; } }
 @media (max-width:720px) { .wp-billing-subscription,.wp-billing-hero,.wp-billing-price-change { align-items:flex-start; flex-direction:column; } .wp-billing-subscription > div:last-child { justify-items:start; } .wp-billing-price-change dl { flex-direction:column; gap:12px; } .wp-billing-price-consent { width:100%; } .wp-billing-grid { grid-template-columns:1fr; } .wp-billing-price { width:100%; padding:16px 0 0; border-top:1px solid var(--wp-border); border-left:0; text-align:left; } }
 @media(max-width:900px){.wp-billing-grid{grid-template-columns:1fr}.wp-billing-hero{align-items:flex-start;flex-direction:column}.wp-billing-price{width:100%;padding:18px 0 0;border-top:1px solid var(--wp-border);border-left:0;text-align:left}}
+@media(max-width:900px){.wp-checkout-page .wp-billing-grid{grid-template-columns:1fr}.wp-checkout-total{position:static}}
 @media(max-width:600px){.wp-billing-limits{grid-template-columns:1fr}.wp-billing-addon{align-items:flex-start;flex-direction:column}.wp-billing-addon>div:last-child{text-align:left}}
 
 /* Workspace analytics */

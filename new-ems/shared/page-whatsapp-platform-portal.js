@@ -81,6 +81,7 @@ let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
 let workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, error: "" };
+let workspaceCheckout = { quote: null, package: null, error: "" };
 let razorpayCheckoutPromise = null;
 const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
 
@@ -121,6 +122,7 @@ const WORKSPACE_VIEW_LABELS = {
   team: "Team & roles",
   integrations: "Integrations",
   billing: "Billing & usage",
+  checkout: "Secure checkout",
   settings: "Workspace settings",
 };
 
@@ -131,7 +133,7 @@ function isAgentWorkspaceRole() {
 }
 
 function canAccessWorkspaceView(view) {
-  if (view === "business-profile") return ["owner", "admin"].includes(session?.roleCode);
+  if (["business-profile", "checkout"].includes(view)) return ["owner", "admin"].includes(session?.roleCode);
   return !isAgentWorkspaceRole() || AGENT_WORKSPACE_VIEWS.has(view);
 }
 
@@ -2019,6 +2021,19 @@ function billingView() {
   return `<section class="wp-route-page wp-billing-page">${heading}${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}${renewalNotice}${subscriptionCard}<section><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section><section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section><section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Payment ledger</span><h2>Recent payments</h2><p>Verified Razorpay payments for this workspace.</p></div></div>${payments ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Payment</th><th>Method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${payments}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No payments yet</strong><p>Completed payments will appear here.</p></div>'}</section><section class="wp-card wp-billing-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Capacity extensions</span><h2>Add-ons</h2><p>Assigned add-ons extend the operational package independently of the public catalog.</p></div></div><div class="wp-billing-addon-list">${assigned || '<div class="wp-inbox-empty"><strong>No active add-ons</strong><p>Your package currently has no assigned extensions.</p></div>'}${available}</div></section></section>`;
 }
 
+function checkoutView() {
+  const params = new URLSearchParams(location.search);
+  const packageCode = String(params.get("package") || "").toLowerCase();
+  const interval = params.get("interval") === "year" ? "year" : "month";
+  const plan = (workspaceBilling?.packages || []).find((item) => item.code === packageCode && item.status === "active");
+  if (!plan) return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Secure checkout</span><h1>Package unavailable</h1><p>Select an active self-service package from Billing &amp; usage.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div></section>`;
+  const quote = workspaceCheckout?.quote;
+  const money = (paise) => billingMoney(Number(paise || 0) / 100, quote?.currency || plan.currency || "INR");
+  const baseAmount = interval === "year" ? plan.annual_amount : plan.monthly_amount;
+  const quotePanel = quote ? `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Server-verified quote</span><h2>Amount summary</h2><dl class="wp-upgrade-quote"><div><dt>Package base price</dt><dd>${money(quote.baseSubtotalPaise)}</dd></div>${quote.discountPaise ? `<div class="is-credit"><dt>Coupon ${escapeHtml(quote.couponCode || "discount")}</dt><dd>−${money(quote.discountPaise)}</dd></div>` : ""}<div><dt>Taxable base</dt><dd>${money(quote.taxableBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.packageGstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>${Number(plan.trial_days || 0) ? "Recurring amount after trial" : "Recurring payment"}</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div></dl><div class="wp-policy-note"><strong>Quote protected until ${escapeHtml(new Date(quote.expiresAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }))}</strong><p>The payment request uses this exact server-calculated amount. Changing the package price or letting the quote expire requires a new review.</p></div><button class="wp-primary" type="button" data-checkout-authorize="${escapeHtml(quote.id)}">Authorize securely with Razorpay</button></article>` : `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Amount summary</span><h2>Review required</h2><p>Apply an optional coupon and request a protected quote to see GST, the gateway adjustment, and the exact recurring amount.</p></article>`;
+  return `<section class="wp-route-page wp-checkout-page"><div class="wp-route-heading"><div><span class="wp-kicker">Dedicated subscription checkout</span><h1>Review and authorize</h1><p>Prices are loaded from the authoritative Package Master. No browser-entered amount is accepted.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div>${workspaceCheckout?.error ? `<div class="wp-verification-notice"><strong>Checkout notice</strong><p>${escapeHtml(workspaceCheckout.error)}</p></div>` : ""}<section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Selected package</span><h2>${escapeHtml(plan.name)}</h2><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${escapeHtml(billingMoney(baseAmount, plan.currency))}</strong><span>/ ${interval === "year" ? "year" : "month"} + GST</span></div>${Number(plan.trial_days || 0) ? `<div class="wp-policy-note"><strong>${Number(plan.trial_days)}-day free trial</strong><p>Authorization is collected now. The recurring package charge starts only after the trial ends.</p></div>` : ""}<form data-checkout-quote-form><input type="hidden" name="packageCode" value="${escapeHtml(plan.code)}"/><input type="hidden" name="billingInterval" value="${escapeHtml(interval)}"/><label><span>Coupon code <small>optional</small></span><input name="couponCode" maxlength="40" autocomplete="off" value="${escapeHtml(quote?.couponCode || "")}" placeholder="Enter coupon code"/></label><button class="wp-secondary" type="submit">${quote ? "Recalculate total" : "Calculate final total"}</button></form><small>Coupon eligibility, dates and redemption limits are validated by the billing server.</small></article>${quotePanel}</section></section>`;
+}
+
 function plannedView(view) {
   const [title, description, capabilities] = PLANNED_WORKSPACE_VIEWS[view];
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Product preview</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="wp-planned-badge">Coming soon</span></div><article class="wp-card wp-planned-card"><div class="wp-planned-visual" aria-hidden="true"><span>${escapeHtml(WORKSPACE_VIEW_LABELS[view].charAt(0))}</span></div><div><span class="wp-card-eyebrow">Designed for focused work</span><h2>Everything your team needs, in one clear workspace</h2><p>This module is being prepared as a dedicated experience with fast navigation, clear ownership and the same protected company context across your workspace.</p><ul>${capabilities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article></section>`;
@@ -2046,6 +2061,7 @@ function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "analytics") return analyticsView();
   if (view === "team") return teamView();
   if (view === "billing") return billingView();
+  if (view === "checkout") return checkoutView();
   if (view === "templates") return templatesViewV2(connections);
   if (view === "flows") return currentFlowBuilderId() ? renderFlowBuilderPage({ escapeHtml }) : renderFlowsView({ flows: workspaceFlows.flows, escapeHtml });
   if (Object.hasOwn(PLANNED_WORKSPACE_VIEWS, view)) return plannedView(view);
@@ -2307,45 +2323,11 @@ async function renderDashboard() {
           button.disabled = false; button.textContent = original;
           return;
         }
-        checkoutWindow = window.open("about:blank", "_blank");
-        if (checkoutWindow) checkoutWindow.opener = null;
-        button.disabled = true; button.textContent = "Preparing secure checkout…";
-        const checkout = await billingRequest("create_subscription", { packageCode: button.dataset.billingSubscribe, billingInterval });
-        const trialMessage = checkout.trialEndsAt ? ` No package charge is due today; the first charge is scheduled after the trial on ${new Date(checkout.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.` : "";
-        if (checkout.shortUrl) {
-          if (checkoutWindow) checkoutWindow.location.replace(checkout.shortUrl);
-          else window.location.assign(checkout.shortUrl);
-          showToast(`Razorpay authorization opened.${trialMessage} Return here after completing it.`);
-          button.disabled = false; button.textContent = original;
-          return;
-        }
-        checkoutWindow?.close();
-        await loadRazorpayCheckout();
-        const instance = new window.Razorpay({
-          key: checkout.keyId,
-          subscription_id: checkout.razorpaySubscriptionId,
-          name: "Varada Nexus",
-          description: `${checkout.package?.name || "WhatsApp Solutions"} subscription`,
-          prefill: { name: checkout.customer?.name || "", email: checkout.customer?.email || "" },
-          notes: { workspace: checkout.customer?.companyName || session.companyName || "" },
-          theme: { color: "#25d887" },
-          handler: async (result) => {
-            try {
-              showToast("Payment received. Verifying securely…");
-              await billingRequest("verify_checkout", {
-                subscriptionId: checkout.subscriptionId,
-                razorpayPaymentId: result.razorpay_payment_id,
-                razorpaySubscriptionId: result.razorpay_subscription_id,
-                razorpaySignature: result.razorpay_signature,
-              });
-              showToast("Subscription verified and billing activated.");
-              await renderDashboard();
-            } catch (error) { showToast(error?.message || "Payment verification failed.", "error"); }
-          },
-          modal: { ondismiss: () => { button.disabled = false; button.textContent = original; } },
-        });
-        instance.on("payment.failed", (result) => showToast(result?.error?.description || "Razorpay could not complete the payment.", "error"));
-        instance.open();
+        const checkoutUrl = new URL(workspacePath("checkout"), location.origin);
+        checkoutUrl.searchParams.set("package", button.dataset.billingSubscribe);
+        checkoutUrl.searchParams.set("interval", billingInterval);
+        location.assign(checkoutUrl.pathname + checkoutUrl.search);
+        return;
       } catch (error) {
         checkoutWindow?.close();
         showToast(error?.message || "Secure checkout could not be opened.", "error");
@@ -2363,6 +2345,71 @@ async function renderDashboard() {
       try { button.disabled = true; button.textContent = "Scheduling cancellation…"; await billingRequest("cancel_subscription", { subscriptionId: button.dataset.billingCancel, cancelAtCycleEnd: true }); showToast("Cancellation scheduled for the end of the billing period."); await renderDashboard(); }
       catch (error) { showToast(error?.message || "Subscription could not be cancelled.", "error"); button.disabled = false; button.textContent = original; }
     }));
+  }
+  if (view === "checkout") {
+    app.querySelector("[data-checkout-quote-form]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      if (!form.reportValidity()) return;
+      const button = form.querySelector('button[type="submit"]');
+      const values = new FormData(form);
+      const original = button.textContent;
+      try {
+        button.disabled = true; button.textContent = "Validating price…";
+        const result = await billingRequest("quote_subscription_checkout", {
+          packageCode: values.get("packageCode"), billingInterval: values.get("billingInterval"), couponCode: values.get("couponCode"),
+        });
+        workspaceCheckout = { quote: result.quote, package: result.package, error: "" };
+        showToast(result.quote?.couponCode ? `Coupon ${result.quote.couponCode} applied securely.` : "Final checkout total calculated securely.");
+        await renderDashboard();
+      } catch (error) {
+        workspaceCheckout = { quote: null, package: null, error: error?.message || "Checkout quote could not be calculated." };
+        showToast(workspaceCheckout.error, "error");
+        await renderDashboard();
+        button.disabled = false; button.textContent = original;
+      }
+    });
+    app.querySelector("[data-checkout-authorize]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.textContent;
+      let checkoutWindow = window.open("about:blank", "_blank");
+      if (checkoutWindow) checkoutWindow.opener = null;
+      try {
+        button.disabled = true; button.textContent = "Preparing Razorpay authorization…";
+        const checkout = await billingRequest("create_subscription", { quoteId: button.dataset.checkoutAuthorize });
+        const trialMessage = checkout.trialEndsAt ? ` The first recurring charge is scheduled after the trial on ${new Date(checkout.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.` : "";
+        if (checkout.shortUrl) {
+          if (checkoutWindow) checkoutWindow.location.replace(checkout.shortUrl); else window.location.assign(checkout.shortUrl);
+          showToast(`Razorpay authorization opened.${trialMessage}`);
+          button.disabled = false; button.textContent = original;
+          return;
+        }
+        checkoutWindow?.close(); checkoutWindow = null;
+        await loadRazorpayCheckout();
+        const instance = new window.Razorpay({
+          key: checkout.keyId, subscription_id: checkout.razorpaySubscriptionId, name: "Varada Nexus",
+          description: `${checkout.package?.name || "WhatsApp Solutions"} subscription`,
+          prefill: { name: checkout.customer?.name || "", email: checkout.customer?.email || "" },
+          notes: { workspace: checkout.customer?.companyName || session.companyName || "", checkout_quote_id: checkout.quote?.id || "" },
+          theme: { color: "#25d887" },
+          handler: async (result) => {
+            try {
+              showToast("Payment received. Verifying securely…");
+              await billingRequest("verify_checkout", { subscriptionId: checkout.subscriptionId, razorpayPaymentId: result.razorpay_payment_id, razorpaySubscriptionId: result.razorpay_subscription_id, razorpaySignature: result.razorpay_signature });
+              showToast("Subscription verified and billing activated.");
+              location.assign(workspacePath("billing"));
+            } catch (error) { showToast(error?.message || "Payment verification failed.", "error"); }
+          },
+          modal: { ondismiss: () => { button.disabled = false; button.textContent = original; } },
+        });
+        instance.on("payment.failed", (result) => showToast(result?.error?.description || "Razorpay could not complete the payment.", "error"));
+        instance.open();
+      } catch (error) {
+        checkoutWindow?.close();
+        showToast(error?.message || "Secure authorization could not be opened.", "error");
+        button.disabled = false; button.textContent = original;
+      }
+    });
   }
   if (view === "flows") {
     const numberScopedFlowRequest = (action, payload = {}) => messagingRequest(action, { ...payload, connectionId: workspaceSelectedConnectionId });
