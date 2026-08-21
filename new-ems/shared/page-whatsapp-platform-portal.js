@@ -1940,6 +1940,23 @@ function billingMoney(value, currency = "INR") {
   try { return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: amount % 1 ? 2 : 0 }).format(amount); }
   catch { return `${currency} ${amount.toLocaleString("en-IN")}`; }
 }
+function confirmBillingUpgrade(preview) {
+  let dialog = document.querySelector("#wpBillingUpgradeDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpBillingUpgradeDialog";
+    dialog.className = "wp-contact-dialog wp-billing-upgrade-dialog";
+    document.body.append(dialog);
+  }
+  const quote = preview.quote || {};
+  const money = (paise) => escapeHtml(billingMoney(Number(paise || 0) / 100, quote.currency));
+  const remainingDays = Number(quote.billableRemainingDays || 0).toFixed(2).replace(/\.00$/, "");
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Prorated subscription upgrade</span><h2>${escapeHtml(preview.currentPackage?.name || "Current package")} → ${escapeHtml(preview.package?.name || "New package")}</h2><p>Review the unused-plan credit and the adjusted amount before authorizing payment.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote"><div><dt>Remaining service</dt><dd>${escapeHtml(remainingDays)} days</dd></div><div><dt>New package for remaining days</dt><dd>${money(quote.targetProratedBasePaise)}</dd></div><div class="is-credit"><dt>Unused old-plan credit</dt><dd>−${money(quote.unusedCreditBasePaise)}</dd></div><div><dt>Net upgrade amount</dt><dd>${money(quote.netUpgradeBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.packageGstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div></dl><div class="wp-policy-note"><strong>Automatic subscription replacement</strong><p>${escapeHtml(preview.package?.name || "New package")} access starts after successful authorization. The old subscription is then scheduled to close automatically, and full recurring billing begins ${escapeHtml(formatProfileDate(quote.recurringStartsAt))}.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Keep current plan</button><button class="wp-primary" type="submit" value="upgrade">Authorize upgrade</button></footer></form>`;
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "upgrade"), { once: true });
+    dialog.showModal();
+  });
+}
 
 function billingView() {
   const pkg = workspacePackageMaster?.package;
@@ -2204,25 +2221,29 @@ async function renderDashboard() {
         const activeSubscription = workspaceBilling?.subscription;
         const upgrading = Boolean(activeSubscription && ["authenticated", "active"].includes(String(activeSubscription.status)) && activeSubscription.package_code !== button.dataset.billingSubscribe);
         if (upgrading) {
-          if (!window.confirm(`Upgrade to ${card?.querySelector("h3")?.textContent || "this package"} at the end of the current billing cycle? Razorpay will apply the new recurring price from the next cycle.`)) return;
-          button.disabled = true; button.textContent = "Scheduling upgrade…";
-          const upgrade = await billingRequest("upgrade_subscription", {
+          checkoutWindow = window.open("about:blank", "_blank");
+          if (checkoutWindow) checkoutWindow.opener = null;
+          button.disabled = true; button.textContent = "Calculating upgrade…";
+          const request = {
             subscriptionId: activeSubscription.id,
             currentPackageCode: workspacePackageMaster?.package?.code,
             packageCode: button.dataset.billingSubscribe,
             billingInterval,
-          });
-          if (upgrade.scheduled) {
-            showToast(`Upgrade to ${upgrade.package?.name || "the selected package"} scheduled for the next billing cycle.`);
-          } else if (upgrade.requiresReauthorization) {
-            const scheduleCancellation = window.confirm(`${upgrade.guidance}\n\nRazorpay response: ${upgrade.reason}\n\nSchedule the current plan to end after this billing cycle?`);
-            if (scheduleCancellation) {
-              await billingRequest("cancel_subscription", { subscriptionId: activeSubscription.id, cancelAtCycleEnd: true });
-              showToast("Current plan will end after this billing cycle. Return then to authorize the new package.");
-            }
+          };
+          const preview = await billingRequest("preview_upgrade", request);
+          const quote = preview.quote;
+          const money = (paise) => billingMoney(Number(paise || 0) / 100, quote.currency);
+          const approved = await confirmBillingUpgrade(preview);
+          if (!approved) {
+            checkoutWindow?.close(); button.disabled = false; button.textContent = original; return;
           }
+          button.textContent = "Preparing upgrade checkout…";
+          const upgrade = await billingRequest("upgrade_subscription", request);
+          if (!upgrade.shortUrl) throw new Error("Razorpay did not return an upgrade authorization link.");
+          if (checkoutWindow) checkoutWindow.location.replace(upgrade.shortUrl);
+          else window.location.assign(upgrade.shortUrl);
+          showToast(`Upgrade checkout opened. Pay ${money(upgrade.quote?.checkoutAmountPaise)} to activate ${upgrade.package?.name || "the new package"}; the old subscription will then close automatically.`);
           button.disabled = false; button.textContent = original;
-          await renderDashboard();
           return;
         }
         checkoutWindow = window.open("about:blank", "_blank");

@@ -1911,6 +1911,17 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-billing-plan > .wp-primary,.wp-billing-plan > .wp-secondary { width:100%; margin-top:4px; text-align:center; }
 .wp-billing-plan button:disabled { cursor:not-allowed; opacity:.55; }
 .wp-billing-current-action { display:flex; align-items:center; justify-content:center; min-height:46px; padding:11px 16px; border:1px solid color-mix(in srgb,#25d887 48%,var(--wp-border)); border-radius:12px; background:color-mix(in srgb,#25d887 10%,var(--wp-panel)); color:#25d887; font-weight:850; }
+.wp-billing-upgrade-dialog { width:min(620px,calc(100vw - 2rem)); }
+.wp-billing-upgrade-dialog header { align-items:flex-start; }
+.wp-billing-upgrade-dialog header p { margin:.35rem 0 0; color:var(--wp-muted); font-size:.68rem; line-height:1.5; }
+.wp-upgrade-quote { display:grid; margin:0; border:1px solid var(--wp-border); border-radius:14px; overflow:hidden; background:var(--wp-surface); }
+.wp-upgrade-quote > div { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:12px 14px; border-bottom:1px solid var(--wp-border); }
+.wp-upgrade-quote > div:last-child { border-bottom:0; }
+.wp-upgrade-quote dt { color:var(--wp-muted); font-size:.69rem; }
+.wp-upgrade-quote dd { margin:0; color:var(--wp-text); font-weight:800; }
+.wp-upgrade-quote .is-credit dd { color:#25d887; }
+.wp-upgrade-quote .is-total { padding:16px 14px; background:color-mix(in srgb,#25d887 9%,var(--wp-panel)); }
+.wp-upgrade-quote .is-total dt,.wp-upgrade-quote .is-total dd { color:var(--wp-text); font-size:.9rem; font-weight:900; }
 .wp-billing-history { padding:24px; }
 .wp-billing-table-wrap { overflow-x:auto; border:1px solid var(--wp-border); border-radius:13px; }
 .wp-billing-history table { width:100%; border-collapse:collapse; }
