@@ -502,10 +502,6 @@ function enhanceWorkspaceSidebar(root, sidebarState, isFlowBuilderRoute) {
     section.append(toggle, items);
   });
 
-  const footer = sidebar.querySelector(".wp-sidebar-footer");
-  if (footer) {
-    footer.innerHTML = `<a class="wp-sidebar-help" href="/contact.html" title="Help and support" aria-label="Help and support"><span class="wp-sidebar-footer-icon" aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.12c-.9.55-1.5 1.05-1.5 2.38M12 17h.01"/>')}</span><span class="wp-sidebar-footer-label">Help &amp; support</span></a><button class="wp-sidebar-signout" id="wpSidebarLogoutBtn" type="button" title="Sign out" aria-label="Sign out"><span class="wp-sidebar-footer-icon wp-sidebar-signout-icon" aria-hidden="true">${workspaceIcon('<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>')}</span><span class="wp-sidebar-footer-label">Sign out</span></button>`;
-  }
 }
 
 function businessNumberSelector(connections, selectedConnection) {
@@ -2380,7 +2376,10 @@ async function renderDashboard() {
   const sidebarNavigation = workspaceNavigationMarkup({ inboxUnread, contactCount, campaignCount, templateCount: workspaceTemplates.templates.length, flowCount: workspaceFlows.flows.length, connectedCount: connected.length, teamCount: workspaceTeam.members.length, packageName: operationalPackageName });
   const billingLocked = workspaceBilling?.entitlement?.allowed === false && !["billing", "checkout"].includes(view);
   const mainContent = billingLocked ? billingAccessRequiredView() : workspaceViewContent(view, connections, setupReady, workspaceProfile);
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarAccount}${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav><div class="wp-sidebar-footer"><a href="/contact.html">Help &amp; support</a><button id="wpSidebarLogoutBtn" type="button">Sign out</button></div></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button><div class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></div><span class="wp-user-avatar" aria-hidden="true">${escapeHtml((session.displayName || "U").charAt(0).toUpperCase())}</span></div></header><div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  const userInitial = escapeHtml((session.displayName || "U").charAt(0).toUpperCase());
+  const roleLabel = String(session.roleCode || "member").replaceAll("_", " ");
+  const profileMenu = `<div class="wp-profile-control"><button class="wp-profile-trigger" id="wpProfileMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="wpProfileMenu"><span class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></span><span class="wp-user-avatar" aria-hidden="true">${userInitial}</span><span class="wp-profile-chevron" aria-hidden="true">${workspaceIcon('<path d="m7 10 5 5 5-5"/>')}</span></button><div class="wp-profile-menu" id="wpProfileMenu" role="menu" hidden><header><span class="wp-profile-menu-avatar" aria-hidden="true">${userInitial}</span><div><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small><em>${escapeHtml(session.companyName)} · ${escapeHtml(roleLabel)}</em></div></header><nav aria-label="Account menu"><a href="${workspacePath("settings")}" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.37.38.7.66.98.3.27.68.42 1.08.42H21v4h-.1A1.7 1.7 0 0 0 19.4 15Z"/>')}</span><span><strong>Workspace settings</strong><small>Profile and preferences</small></span></a><a href="/contact.html" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.12c-.9.55-1.5 1.05-1.5 2.38M12 17h.01"/>')}</span><span><strong>Help &amp; support</strong><small>Contact the Varada Nexus team</small></span></a></nav><button class="wp-profile-logout" id="wpProfileLogoutBtn" type="button" role="menuitem"><span aria-hidden="true">${workspaceIcon('<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>')}</span><span><strong>Sign out</strong><small>End this secure session</small></span></button></div></div>`;
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarAccount}${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header><div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
   if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
   const workspaceSidebarState = readWorkspaceSidebarState();
   enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
@@ -2999,8 +2998,28 @@ async function renderDashboard() {
     const nextTheme = document.documentElement.dataset.wpTheme === "dark" ? "light" : "dark";
     applyTheme(nextTheme, true);
   });
-  app.querySelector("#wpSidebarLogoutBtn")?.addEventListener("click", () => signOut(true));
   const shell = app.querySelector(".wp-workspace-shell");
+  const profileMenuButton = app.querySelector("#wpProfileMenuBtn");
+  const profileMenuPanel = app.querySelector("#wpProfileMenu");
+  const setProfileMenuOpen = (open) => {
+    if (!profileMenuButton || !profileMenuPanel) return;
+    profileMenuPanel.hidden = !open;
+    profileMenuButton.setAttribute("aria-expanded", String(open));
+    profileMenuButton.closest(".wp-profile-control")?.classList.toggle("is-open", open);
+  };
+  profileMenuButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setProfileMenuOpen(profileMenuButton.getAttribute("aria-expanded") !== "true");
+  });
+  app.querySelector("#wpProfileLogoutBtn")?.addEventListener("click", () => signOut(true));
+  shell?.addEventListener("click", (event) => {
+    if (!event.target.closest(".wp-profile-control")) setProfileMenuOpen(false);
+  });
+  shell?.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || profileMenuButton?.getAttribute("aria-expanded") !== "true") return;
+    setProfileMenuOpen(false);
+    profileMenuButton.focus();
+  });
   const collapseButton = app.querySelector("#wpSidebarCollapseBtn");
   const syncSidebarCollapseButton = () => {
     const collapsed = Boolean(shell?.classList.contains("sidebar-collapsed"));
@@ -3021,7 +3040,7 @@ async function renderDashboard() {
   });
   app.querySelector(".wp-workspace-sidebar")?.addEventListener("click", (event) => {
     if (!shell?.classList.contains("sidebar-collapsed")) return;
-    if (event.target.closest("#wpSidebarCollapseBtn, .wp-workspace-nav a, .wp-sidebar-footer a, .wp-sidebar-footer button")) return;
+    if (event.target.closest("#wpSidebarCollapseBtn, .wp-workspace-nav a")) return;
     event.preventDefault();
     setSidebarCollapsed(false);
   });
