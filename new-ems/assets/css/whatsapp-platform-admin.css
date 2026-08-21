@@ -479,3 +479,44 @@
 .wa-verification-detail-readonly dd { margin:5px 0 0; color:#e7e3d9; }
 @media (max-width:900px){.wa-verification-card-grid{grid-template-columns:1fr}.wa-verification-case-shell{width:calc(100vw - 20px);max-height:calc(100dvh - 20px)}.wa-verification-case-modal{padding:10px}}
 @media (max-width:620px){.wa-gate-card>summary,.wa-verification-section-heading,.wa-verification-savebar,.wa-verification-case-shell>header{align-items:stretch;flex-direction:column}.wa-gate-card>summary>div:last-child,.wa-verification-case-shell>header>div:last-child{justify-content:space-between}.wa-verification-field-grid,.wa-verification-detail-readonly{grid-template-columns:1fr}.wa-verification-field-grid label.wide{grid-column:auto}.wa-verification-summary-card{grid-template-columns:auto minmax(0,1fr)}.wa-verification-summary-meta{grid-column:1/-1;justify-items:start;padding-left:58px}.wa-verification-summary-meta small{white-space:normal}}
+
+/* Corporate finance ledger, refund controls and reconciliation. */
+.wa-finance-stats { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.wa-admin-stat.attention { border-color:rgba(239,87,87,.48); box-shadow:inset 0 0 0 1px rgba(239,87,87,.08); }
+.wa-admin-stat.attention strong { color:#ff9b9b; }
+.wa-admin-stat.healthy { border-color:rgba(37,211,102,.3); }
+.wa-admin-button.danger { border-color:rgba(239,87,87,.5); background:rgba(239,87,87,.09); color:#ff9b9b; }
+.wa-admin-button.danger:hover { background:rgba(239,87,87,.18); }
+.wa-finance-settled { color:#7d8880; font-size:11px; font-weight:800; }
+.wa-finance-reconciliation.attention { border-color:rgba(239,87,87,.42); }
+.wa-finance-reconciliation.healthy { border-color:rgba(37,211,102,.27); }
+.wa-finance-checks { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.wa-finance-checks > div { padding:14px; border:1px solid rgba(255,255,255,.075); border-radius:12px; background:#090b0a; }
+.wa-finance-checks span,.wa-finance-checks strong { display:block; }
+.wa-finance-checks span { min-height:30px; color:#879089; font-size:10px; font-weight:800; line-height:1.45; text-transform:uppercase; }
+.wa-finance-checks strong { margin-top:7px; color:#f1eee4; font-size:24px; }
+.wa-finance-webhook-errors { margin-top:14px; padding-top:14px; border-top:1px solid rgba(239,87,87,.2); }
+.wa-finance-webhook-errors .wa-admin-row > span { max-width:55%; color:#ef9b9b; font-size:11px; overflow-wrap:anywhere; text-align:right; }
+.wa-finance-modal-open { overflow:hidden; }
+.wa-finance-refund-modal { position:fixed; inset:0; z-index:12500; display:grid; place-items:center; width:100vw; height:100dvh; padding:18px; background:rgba(0,0,0,.88); backdrop-filter:blur(12px); }
+.wa-finance-refund-modal[hidden] { display:none; }
+.wa-finance-refund-shell { width:min(640px,calc(100vw - 36px)); max-height:calc(100dvh - 36px); overflow:auto; border:1px solid rgba(239,87,87,.4); border-radius:18px; background:#0b0e0c; box-shadow:0 35px 110px rgba(0,0,0,.75); }
+.wa-finance-refund-shell > header { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:20px 22px; border-bottom:1px solid rgba(255,255,255,.08); background:linear-gradient(115deg,rgba(239,87,87,.09),rgba(218,178,83,.025)); }
+.wa-finance-refund-shell header span,.wa-finance-refund-shell header strong,.wa-finance-refund-shell header small { display:block; }
+.wa-finance-refund-shell header span { color:#ef9b9b; font-size:9px; font-weight:850; letter-spacing:.13em; text-transform:uppercase; }
+.wa-finance-refund-shell header strong { margin-top:5px; color:#f5f0e7; font-size:22px; }
+.wa-finance-refund-shell header small { margin-top:4px; color:#8e9790; }
+.wa-finance-refund-shell header button { width:38px; height:38px; border:1px solid rgba(255,255,255,.12); border-radius:10px; background:#171a17; color:#eeeae0; font-size:22px; cursor:pointer; }
+.wa-finance-refund-shell > main { display:grid; gap:15px; padding:22px; }
+.wa-finance-refund-balance { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px; border:1px solid rgba(218,178,83,.22); border-radius:11px; background:rgba(218,178,83,.04); }
+.wa-finance-refund-balance span { color:#9ca49e; font-size:11px; font-weight:800; text-transform:uppercase; }
+.wa-finance-refund-balance strong { color:#e8cb72; font-size:20px; }
+.wa-finance-refund-shell main > label { display:grid; gap:7px; color:#b9c0ba; font-size:11px; font-weight:800; }
+.wa-finance-refund-shell input[type=number],.wa-finance-refund-shell textarea { width:100%; padding:12px; border:1px solid rgba(255,255,255,.13); border-radius:10px; outline:none; background:#070907; color:#f0ece3; color-scheme:dark; font:inherit; }
+.wa-finance-refund-shell input:focus,.wa-finance-refund-shell textarea:focus { border-color:#ef5757; box-shadow:0 0 0 3px rgba(239,87,87,.1); }
+.wa-finance-refund-shell label small { color:#747d76; font-weight:500; }
+.wa-finance-confirm { grid-template-columns:auto minmax(0,1fr)!important; align-items:flex-start; padding:13px; border:1px solid rgba(239,87,87,.24); border-radius:10px; background:rgba(239,87,87,.055); color:#d5c0c0!important; line-height:1.5; }
+.wa-finance-confirm input { margin-top:3px; accent-color:#ef5757; }
+.wa-finance-refund-shell > footer { display:flex; justify-content:flex-end; gap:9px; padding:16px 22px; border-top:1px solid rgba(255,255,255,.08); }
+@media(max-width:1050px){.wa-finance-stats,.wa-finance-checks{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.wa-finance-stats,.wa-finance-checks{grid-template-columns:1fr}.wa-finance-refund-modal{padding:0}.wa-finance-refund-shell{width:100vw;max-height:100dvh;height:100dvh;border:0;border-radius:0}.wa-finance-refund-shell>footer{flex-direction:column}.wa-finance-refund-shell>footer .wa-admin-button{width:100%}}

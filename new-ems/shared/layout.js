@@ -4,7 +4,7 @@ import { logout, requireAuth, getCurrentAppUser, validateActiveUnlockedUser } fr
 import { isCooRestrictedModuleCode, isFinanceRestrictedEmail, isUltimateAuthorityEmail, PERMISSIONS, ROLES } from "../config/roles.js";
 import { renderNavbar } from "./navbar.js";
 import { getAccessibleModules, getUserDivisionAccessContext, hasAnyRolePermission, setDbPermissionSet } from "./permissions.js";
-import { getSearchIndex, renderSidebar } from "./sidebar.js";
+import { getSearchIndex, renderSidebar } from "./sidebar.js?whatsappBillingNav=2";
 import { initTheme } from "./theme.js";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
 import { initNotificationShell } from "./notification-ui.js?v=notifications-1";

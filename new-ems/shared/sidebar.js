@@ -201,7 +201,12 @@ const MENU_BY_WORKSPACE = {
       title: "Billing",
       items: [
         { module: MODULES.WHATSAPP_PLATFORM, label: "Billing Overview", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=billing` },
-        { module: MODULES.WHATSAPP_PLATFORM, label: "Subscriptions & Payments", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=subscriptions` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Subscriptions", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=subscriptions` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Payment Ledger", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=payments` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Invoices", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=invoices` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Refunds", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=refunds` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Credit Notes", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=credit-notes` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Reconciliation", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=reconciliation` },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Razorpay Settings", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=razorpay` }
       ]
     },

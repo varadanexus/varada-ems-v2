@@ -1,9 +1,10 @@
 import { MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseAccessToken, getSupabaseClient } from "../config/supabase.js";
-import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { bootstrapProtectedPage, renderModuleContent } from "./layout.js?whatsappBillingNav=2";
 import { showToast } from "./utils.js";
 
-const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", "billing", "subscriptions", "razorpay", "meta", "security"]);
+const BILLING_VIEWS = new Set(["billing", "subscriptions", "payments", "invoices", "refunds", "credit-notes", "reconciliation"]);
+const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", ...BILLING_VIEWS, "razorpay", "meta", "security"]);
 const VIEW_META = Object.freeze({
   overview: {
     title: "Platform overview",
@@ -48,10 +49,40 @@ const VIEW_META = Object.freeze({
     marker: "BO",
   },
   subscriptions: {
-    title: "Subscriptions & payments",
-    description: "Review customer subscription lifecycles and the verified Razorpay payment ledger.",
+    title: "Subscriptions",
+    description: "Review customer subscription lifecycles, billing dates, package state and provider status.",
     section: "Billing",
-    marker: "SP",
+    marker: "SU",
+  },
+  payments: {
+    title: "Payment ledger",
+    description: "Review captured Razorpay transactions, balances and protected refund actions.",
+    section: "Billing",
+    marker: "PL",
+  },
+  invoices: {
+    title: "Invoices",
+    description: "Review central EMS invoice numbers, GST breakdowns and Razorpay transaction references.",
+    section: "Billing",
+    marker: "IN",
+  },
+  refunds: {
+    title: "Refunds",
+    description: "Monitor Razorpay refund requests, processing state and customer credit outcomes.",
+    section: "Billing",
+    marker: "RF",
+  },
+  "credit-notes": {
+    title: "Credit notes",
+    description: "Review central EMS credit notes issued from processed Razorpay refunds.",
+    section: "Billing",
+    marker: "CN",
+  },
+  reconciliation: {
+    title: "Reconciliation",
+    description: "Resolve gaps between payments, invoices, refunds, credit notes and webhook processing.",
+    section: "Billing",
+    marker: "RC",
   },
   razorpay: {
     title: "Razorpay settings",
@@ -362,13 +393,37 @@ async function loadBillingSnapshot() {
   state.billingLoading = false; render();
 }
 
+async function submitBillingRefund(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = new FormData(form);
+  const amountPaise = Math.round(Number(values.get("amount") || 0) * 100);
+  const maxPaise = Number(values.get("maxPaise") || 0);
+  const reason = String(values.get("reason") || "").trim();
+  const button = form.querySelector('button[type="submit"]');
+  if (!Number.isSafeInteger(amountPaise) || amountPaise < 1 || amountPaise > maxPaise) { showToast("Enter an amount within the refundable balance.", TOAST_TYPES.ERROR); return; }
+  if (reason.length < 10 || reason.length > 500) { showToast("Enter a finance reason of 10 to 500 characters.", TOAST_TYPES.ERROR); return; }
+  if (values.get("confirmed") !== "on") { showToast("Confirm the irreversible Razorpay refund instruction.", TOAST_TYPES.ERROR); return; }
+  button.disabled = true; button.textContent = "Submitting securely…";
+  try {
+    const result = await providerSecretRequest("billing_refund", { paymentId: values.get("paymentId"), amountPaise, reason, confirmed: true });
+    showToast(`Refund ${result?.refund?.id || "request"} submitted to Razorpay.`, TOAST_TYPES.SUCCESS);
+    document.querySelector("[data-finance-refund-modal]")?.setAttribute("hidden", "");
+    document.body.classList.remove("wa-finance-modal-open");
+    await loadBillingSnapshot();
+  } catch (error) {
+    showToast(error?.message || "Refund could not be submitted.", TOAST_TYPES.ERROR);
+    button.disabled = false; button.textContent = "Submit refund";
+  }
+}
+
 function billingOverview() {
   if (state.billingLoading) return '<div class="wa-admin-empty">Loading protected billing data…</div>';
   if (state.billingError) return `<div class="wa-admin-notice"><strong>Billing data unavailable.</strong><br>${escapeHtml(state.billingError)}</div>`;
   const totals = state.billingSnapshot?.totals || {};
   const subscriptions = (state.billingSnapshot?.subscriptions || []).slice(0, 6);
   const payments = (state.billingSnapshot?.payments || []).slice(0, 6);
-  return `<section class="wa-admin-stats"><article class="wa-admin-stat"><span>Active subscriptions</span><strong>${Number(totals.activeSubscriptions || 0)}</strong><small>${Number(totals.subscriptions || 0)} total records</small></article><article class="wa-admin-stat"><span>Needs attention</span><strong>${Number(totals.pendingSubscriptions || 0)}</strong><small>Created, pending or halted</small></article><article class="wa-admin-stat"><span>Captured payments</span><strong>${Number(totals.capturedPayments || 0)}</strong><small>Signature-verified ledger</small></article><article class="wa-admin-stat"><span>Captured revenue</span><strong>${escapeHtml(adminBillingMoney(totals.capturedRevenuePaise))}</strong><small>Across recorded Razorpay payments</small></article></section><section class="wa-admin-grid"><article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Recent subscriptions</h3><p>Latest customer subscription activity.</p></div><a class="wa-admin-button" href="?view=subscriptions">View all</a></div><div class="wa-admin-list">${subscriptions.length ? subscriptions.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.package_code)} · ${escapeHtml(item.billing_interval)}</small></div>${status(item.status)}</div>`).join("") : '<div class="wa-admin-empty">No subscriptions yet.</div>'}</div></article><article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Recent payments</h3><p>Newest entries in the protected payment ledger.</p></div><a class="wa-admin-button" href="?view=subscriptions#payments">View ledger</a></div><div class="wa-admin-list">${payments.length ? payments.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.provider_payment_id)} · ${escapeHtml(formatDate(item.paid_at || item.created_at))}</small></div><span>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</span></div>`).join("") : '<div class="wa-admin-empty">No payments yet.</div>'}</div></article></section><section class="wa-admin-card"><h3>Billing controls</h3><p>Commercial definitions remain in Package Master; gateway credentials and webhook configuration remain in Razorpay Settings.</p><div class="wa-admin-actions"><a class="wa-admin-button" href="?view=package-master">Open Package Master</a><a class="wa-admin-button primary" href="?view=razorpay">Open Razorpay Settings</a></div></section>`;
+  return `<section class="wa-admin-stats wa-finance-stats"><article class="wa-admin-stat"><span>Active subscriptions</span><strong>${Number(totals.activeSubscriptions || 0)}</strong><small>${Number(totals.subscriptions || 0)} total records</small></article><article class="wa-admin-stat"><span>Needs attention</span><strong>${Number(totals.pendingSubscriptions || 0)}</strong><small>Created, pending or halted</small></article><article class="wa-admin-stat"><span>Captured payments</span><strong>${Number(totals.capturedPayments || 0)}</strong><small>${escapeHtml(adminBillingMoney(totals.capturedRevenuePaise))} gateway gross</small></article><article class="wa-admin-stat"><span>Issued invoices</span><strong>${Number(totals.invoices || 0)}</strong><small>${escapeHtml(adminBillingMoney(totals.issuedInvoicePaise))} documented</small></article><article class="wa-admin-stat"><span>Credit notes</span><strong>${Number(totals.creditNotes || 0)}</strong><small>${escapeHtml(adminBillingMoney(totals.issuedCreditPaise))} credited</small></article><article class="wa-admin-stat"><span>Net documented</span><strong>${escapeHtml(adminBillingMoney(totals.netDocumentedRevenuePaise))}</strong><small>Invoices less credit notes</small></article><article class="wa-admin-stat"><span>Processed refunds</span><strong>${Number(totals.processedRefunds || 0)}</strong><small>${Number(totals.pendingRefunds || 0)} pending at Razorpay</small></article><article class="wa-admin-stat ${Number(totals.reconciliationAlerts || 0) ? "attention" : "healthy"}"><span>Reconciliation alerts</span><strong>${Number(totals.reconciliationAlerts || 0)}</strong><small>${Number(totals.reconciliationAlerts || 0) ? "Requires finance review" : "Ledger is internally aligned"}</small></article></section><section class="wa-admin-grid"><article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Recent subscriptions</h3><p>Latest customer subscription activity.</p></div><a class="wa-admin-button" href="?view=subscriptions">View all</a></div><div class="wa-admin-list">${subscriptions.length ? subscriptions.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.package_code)} · ${escapeHtml(item.billing_interval)} · ${escapeHtml(item.mode)}</small></div>${status(item.status)}</div>`).join("") : '<div class="wa-admin-empty">No subscriptions yet.</div>'}</div></article><article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Recent payments</h3><p>Newest entries in the protected payment ledger.</p></div><a class="wa-admin-button" href="?view=payments">View ledger</a></div><div class="wa-admin-list">${payments.length ? payments.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.invoice_number || item.provider_payment_id)} · ${escapeHtml(formatDate(item.paid_at || item.created_at))}</small></div><span>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</span></div>`).join("") : '<div class="wa-admin-empty">No payments yet.</div>'}</div></article></section><section class="wa-admin-card"><h3>Billing controls</h3><p>Commercial definitions remain in Package Master. Each finance register now has a dedicated Billing page.</p><div class="wa-admin-actions"><a class="wa-admin-button" href="?view=package-master">Open Package Master</a><a class="wa-admin-button primary" href="?view=payments">Open payment ledger</a><a class="wa-admin-button" href="?view=reconciliation">Reconciliation</a><a class="wa-admin-button" href="?view=razorpay">Razorpay Settings</a></div></section>`;
 }
 
 function billingSubscriptions() {
@@ -376,9 +431,72 @@ function billingSubscriptions() {
   if (state.billingError) return `<div class="wa-admin-notice"><strong>Billing data unavailable.</strong><br>${escapeHtml(state.billingError)}</div>`;
   const subscriptions = state.billingSnapshot?.subscriptions || [];
   const payments = state.billingSnapshot?.payments || [];
+  const invoices = state.billingSnapshot?.invoices || [];
+  const refunds = state.billingSnapshot?.refunds || [];
+  const creditNotes = state.billingSnapshot?.creditNotes || [];
+  const reconciliation = state.billingSnapshot?.reconciliation || {};
   const subscriptionRows = subscriptions.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.id)}</small></td><td>${escapeHtml(item.package_code)}<br><small>${escapeHtml(item.billing_interval)}</small></td><td>${status(item.status)}</td><td>${Number(item.paid_count || 0)}<br><small>${item.remaining_count == null ? "—" : `${Number(item.remaining_count)} remaining`}</small></td><td>${escapeHtml(formatDate(item.current_end || item.charge_at || item.created_at))}</td></tr>`).join("");
-  const paymentRows = payments.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(item.provider_invoice_id || "—")}</td><td>${escapeHtml(item.payment_method || "—")}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</td><td>${escapeHtml(formatDate(item.paid_at || item.created_at))}</td></tr>`).join("");
-  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Customer subscriptions</h3><p>Razorpay lifecycle state synchronized by verified checkout callbacks and webhooks.</p></div>${status(`${subscriptions.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace</th><th>Package</th><th>Status</th><th>Payments</th><th>Next billing date</th></tr></thead><tbody>${subscriptionRows || '<tr><td colspan="5">No subscriptions yet.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card" id="payments"><div class="wa-admin-secret-heading"><div><h3>Payment ledger</h3><p>Only safe payment metadata is retained; card and bank credentials are never stored.</p></div>${status(`${payments.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace / payment</th><th>Invoice</th><th>Method</th><th>Status</th><th>Amount</th><th>Paid</th></tr></thead><tbody>${paymentRows || '<tr><td colspan="6">No payments yet.</td></tr>'}</tbody></table></div></section>`;
+  const paymentRows = payments.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.provider_payment_id)} · ${escapeHtml(item.mode)}</small></td><td><strong>${escapeHtml(item.invoice_number || "Awaiting EMS invoice")}</strong><br><small>${escapeHtml(item.provider_invoice_id || "No Razorpay invoice")}</small></td><td>${escapeHtml(item.payment_method || "—")}</td><td>${status(item.status)}</td><td><strong>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</strong><br><small>${Number(item.refunded_paise || 0) ? `${escapeHtml(adminBillingMoney(item.refunded_paise, item.currency))} refunded` : "No refund"}</small></td><td>${escapeHtml(formatDate(item.paid_at || item.created_at))}</td><td>${Number(item.refundable_paise || 0) > 0 ? `<button class="wa-admin-button danger" type="button" data-billing-refund-open="${escapeHtml(item.id)}" data-refund-workspace="${escapeHtml(item.tenant_name)}" data-refund-payment="${escapeHtml(item.provider_payment_id)}" data-refund-currency="${escapeHtml(item.currency)}" data-refund-balance="${Number(item.refundable_paise)}">Refund</button>` : '<span class="wa-finance-settled">Settled</span>'}</td></tr>`).join("");
+  const invoiceRows = invoices.map((item) => `<tr><td><strong>${escapeHtml(item.invoice_number)}</strong><br><small>${escapeHtml(item.document_environment)}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.taxable_base_paise, item.currency))}<br><small>GST ${escapeHtml(adminBillingMoney(item.gst_paise, item.currency))}</small></td><td>${escapeHtml(adminBillingMoney(item.total_paise, item.currency))}</td><td>${escapeHtml(item.provider_invoice_id)}<br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(formatDate(item.issued_at))}</td></tr>`).join("");
+  const refundRows = refunds.map((item) => `<tr><td><strong>${escapeHtml(item.provider_refund_id)}</strong><br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</td><td>${escapeHtml(item.credit_note_number || (item.status === "processed" ? "Credit note pending" : "Issued after processing"))}</td><td>${escapeHtml(item.reason || "—")}</td><td>${escapeHtml(formatDate(item.processed_at || item.created_at))}</td></tr>`).join("");
+  const creditRows = creditNotes.map((item) => `<tr><td><strong>${escapeHtml(item.credit_note_number)}</strong><br><small>${escapeHtml(item.document_environment)}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.total_paise, item.currency))}</td><td>${escapeHtml(item.provider_refund_id)}</td><td>${escapeHtml(item.provider_invoice_id)}</td><td>${escapeHtml(formatDate(item.issued_at))}</td></tr>`).join("");
+  const webhookRows = (reconciliation.webhookErrors || []).map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.event_type)}</strong><small>${escapeHtml(item.provider_event_id)} · ${escapeHtml(formatDate(item.received_at))}</small></div><span>${escapeHtml(item.processing_error)}</span></div>`).join("");
+  const refundModal = `<section class="wa-finance-refund-modal" data-finance-refund-modal hidden><form class="wa-finance-refund-shell" data-finance-refund-form><header><div><span>Protected finance action</span><strong>Issue Razorpay refund</strong><small data-refund-summary></small></div><button type="button" data-finance-refund-close aria-label="Close">×</button></header><main><div class="wa-finance-refund-balance"><span>Refundable balance</span><strong data-refund-balance-label></strong></div><input type="hidden" name="paymentId" /><input type="hidden" name="maxPaise" /><label>Refund amount<input name="amount" type="number" min="0.01" step="0.01" required /><small>The amount is submitted to Razorpay in the payment currency.</small></label><label>Finance reason<textarea name="reason" minlength="10" maxlength="500" rows="4" required placeholder="Explain why this refund is being issued."></textarea></label><label class="wa-finance-confirm"><input name="confirmed" type="checkbox" required /><span>I confirm this is an irreversible instruction to refund the customer through Razorpay. A central EMS credit note will be issued only when Razorpay reports the refund as processed.</span></label></main><footer><button class="wa-admin-button" type="button" data-finance-refund-close>Cancel</button><button class="wa-admin-button danger" type="submit">Submit refund</button></footer></form></section>`;
+  return `<section class="wa-admin-card wa-finance-reconciliation ${Number(state.billingSnapshot?.totals?.reconciliationAlerts || 0) ? "attention" : "healthy"}"><div class="wa-admin-secret-heading"><div><h3>Reconciliation control</h3><p>Cross-checks captured payments, EMS invoices, processed refunds, central credit notes and webhook processing.</p></div>${status(`${Number(state.billingSnapshot?.totals?.reconciliationAlerts || 0)}_alerts`)}</div><div class="wa-finance-checks"><div><span>Captured payments missing invoice</span><strong>${Number(reconciliation.missingInvoices || 0)}</strong></div><div><span>Processed refunds missing credit note</span><strong>${Number(reconciliation.missingCredits || 0)}</strong></div><div><span>Failed webhook events</span><strong>${Number((reconciliation.webhookErrors || []).length)}</strong></div><div><span>Expired refund reservations</span><strong>${Number(reconciliation.staleRefundRequests || 0)}</strong></div></div>${webhookRows ? `<div class="wa-admin-list wa-finance-webhook-errors">${webhookRows}</div>` : ""}</section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Customer subscriptions</h3><p>Razorpay lifecycle state synchronized by verified checkout callbacks and webhooks.</p></div>${status(`${subscriptions.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace</th><th>Package</th><th>Status</th><th>Payments</th><th>Next billing date</th></tr></thead><tbody>${subscriptionRows || '<tr><td colspan="5">No subscriptions yet.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card" id="payments"><div class="wa-admin-secret-heading"><div><h3>Payment &amp; refund ledger</h3><p>Refund commands are balance-checked, submitted server-side and recorded in the EMS audit log.</p></div>${status(`${payments.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace / payment</th><th>EMS / Razorpay invoice</th><th>Method</th><th>Status</th><th>Amount</th><th>Paid</th><th>Action</th></tr></thead><tbody>${paymentRows || '<tr><td colspan="7">No payments yet.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Central invoice register</h3><p>Taxable value, GST, central EMS sequence and Razorpay references.</p></div>${status(`${invoices.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS invoice</th><th>Workspace</th><th>Status</th><th>Taxable / GST</th><th>Total</th><th>Razorpay references</th><th>Issued</th></tr></thead><tbody>${invoiceRows || '<tr><td colspan="7">No invoices issued.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Refund register</h3><p>Razorpay refund state and the resulting EMS credit note.</p></div>${status(`${refunds.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Refund / payment</th><th>Workspace</th><th>Status</th><th>Amount</th><th>Credit note</th><th>Reason</th><th>Updated</th></tr></thead><tbody>${refundRows || '<tr><td colspan="7">No refunds recorded.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Central credit-note register</h3><p>Credit notes inherit the EMS-wide statutory sequence in live mode.</p></div>${status(`${creditNotes.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS credit note</th><th>Workspace</th><th>Status</th><th>Total</th><th>Razorpay refund</th><th>Razorpay invoice</th><th>Issued</th></tr></thead><tbody>${creditRows || '<tr><td colspan="7">No credit notes issued.</td></tr>'}</tbody></table></div></section>${refundModal}`;
+}
+
+function financePageState(loadingText) {
+  if (state.billingLoading) return `<div class="wa-admin-empty">${escapeHtml(loadingText)}</div>`;
+  if (state.billingError) return `<div class="wa-admin-notice"><strong>Billing data unavailable.</strong><br>${escapeHtml(state.billingError)}</div>`;
+  return "";
+}
+
+function financeRefundModal() {
+  return `<section class="wa-finance-refund-modal" data-finance-refund-modal hidden><form class="wa-finance-refund-shell" data-finance-refund-form><header><div><span>Protected finance action</span><strong>Issue Razorpay refund</strong><small data-refund-summary></small></div><button type="button" data-finance-refund-close aria-label="Close">×</button></header><main><div class="wa-finance-refund-balance"><span>Refundable balance</span><strong data-refund-balance-label></strong></div><input type="hidden" name="paymentId" /><input type="hidden" name="maxPaise" /><label>Refund amount<input name="amount" type="number" min="0.01" step="0.01" required /><small>The amount is submitted to Razorpay in the payment currency.</small></label><label>Finance reason<textarea name="reason" minlength="10" maxlength="500" rows="4" required placeholder="Explain why this refund is being issued."></textarea></label><label class="wa-finance-confirm"><input name="confirmed" type="checkbox" required /><span>I confirm this is an irreversible instruction to refund the customer through Razorpay. A central EMS credit note will be issued only when Razorpay reports the refund as processed.</span></label></main><footer><button class="wa-admin-button" type="button" data-finance-refund-close>Cancel</button><button class="wa-admin-button danger" type="submit">Submit refund</button></footer></form></section>`;
+}
+
+function billingSubscriptionsPage() {
+  const guard = financePageState("Loading customer subscriptions…"); if (guard) return guard;
+  const rows = (state.billingSnapshot?.subscriptions || []).map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.id)}</small></td><td>${escapeHtml(item.package_code)}<br><small>${escapeHtml(item.billing_interval)} · ${escapeHtml(item.mode)}</small></td><td>${status(item.status)}</td><td>${Number(item.paid_count || 0)}<br><small>${item.remaining_count == null ? "—" : `${Number(item.remaining_count)} remaining`}</small></td><td>${escapeHtml(formatDate(item.current_start || item.activated_at || item.created_at))}</td><td>${escapeHtml(formatDate(item.current_end || item.charge_at || item.created_at))}</td><td>${item.cancel_at_cycle_end ? status("ends_at_cycle") : status("recurring")}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Customer subscription register</h3><p>One focused lifecycle register for package, interval, provider mode and renewal state.</p></div>${status(`${(state.billingSnapshot?.subscriptions || []).length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace</th><th>Package</th><th>Status</th><th>Payments</th><th>Started</th><th>Next billing</th><th>Renewal</th></tr></thead><tbody>${rows || '<tr><td colspan="7">No subscriptions yet.</td></tr>'}</tbody></table></div></section>`;
+}
+
+function billingPaymentsPage() {
+  const guard = financePageState("Loading protected payment ledger…"); if (guard) return guard;
+  const payments = state.billingSnapshot?.payments || [];
+  const rows = payments.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.provider_payment_id)} · ${escapeHtml(item.mode)}</small></td><td><strong>${escapeHtml(item.invoice_number || "Awaiting EMS invoice")}</strong><br><small>${escapeHtml(item.provider_invoice_id || "No Razorpay invoice")}</small></td><td>${escapeHtml(item.payment_method || "—")}</td><td>${status(item.status)}</td><td><strong>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</strong><br><small>${Number(item.refunded_paise || 0) ? `${escapeHtml(adminBillingMoney(item.refunded_paise, item.currency))} refunded` : "No refund"}</small></td><td>${escapeHtml(adminBillingMoney(item.refundable_paise, item.currency))}</td><td>${escapeHtml(formatDate(item.paid_at || item.created_at))}</td><td>${Number(item.refundable_paise || 0) > 0 ? `<button class="wa-admin-button danger" type="button" data-billing-refund-open="${escapeHtml(item.id)}" data-refund-workspace="${escapeHtml(item.tenant_name)}" data-refund-payment="${escapeHtml(item.provider_payment_id)}" data-refund-currency="${escapeHtml(item.currency)}" data-refund-balance="${Number(item.refundable_paise)}">Refund</button>` : '<span class="wa-finance-settled">Settled</span>'}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Verified payment ledger</h3><p>Captured Razorpay transactions with EMS documents, refunded value and remaining refundable balance.</p></div>${status(`${payments.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace / payment</th><th>EMS / Razorpay invoice</th><th>Method</th><th>Status</th><th>Gross / refunded</th><th>Refundable</th><th>Paid</th><th>Action</th></tr></thead><tbody>${rows || '<tr><td colspan="8">No payments yet.</td></tr>'}</tbody></table></div></section>${financeRefundModal()}`;
+}
+
+function billingInvoicesPage() {
+  const guard = financePageState("Loading central invoice register…"); if (guard) return guard;
+  const invoices = state.billingSnapshot?.invoices || [];
+  const rows = invoices.map((item) => `<tr><td><strong>${escapeHtml(item.invoice_number)}</strong><br><small>${escapeHtml(item.document_environment)} · ${escapeHtml(formatDate(item.invoice_date))}</small></td><td>${escapeHtml(item.tenant_name)}<br><small>${escapeHtml(item.billing_gstin || "GSTIN not supplied")}</small></td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.taxable_base_paise, item.currency))}</td><td>${escapeHtml(adminBillingMoney(item.gst_paise, item.currency))}</td><td>${escapeHtml(adminBillingMoney(item.gateway_adjustment_paise, item.currency))}</td><td><strong>${escapeHtml(adminBillingMoney(item.total_paise, item.currency))}</strong></td><td>${escapeHtml(item.provider_invoice_id)}<br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(formatDate(item.issued_at))}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Central invoice register</h3><p>EMS invoice sequence, taxable value, GST, gateway adjustment and Razorpay references.</p></div>${status(`${invoices.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS invoice</th><th>Customer</th><th>Status</th><th>Taxable</th><th>GST</th><th>Gateway</th><th>Total</th><th>Razorpay references</th><th>Issued</th></tr></thead><tbody>${rows || '<tr><td colspan="9">No invoices issued.</td></tr>'}</tbody></table></div></section>`;
+}
+
+function billingRefundsPage() {
+  const guard = financePageState("Loading refund register…"); if (guard) return guard;
+  const refunds = state.billingSnapshot?.refunds || [];
+  const requests = state.billingSnapshot?.refundRequests || [];
+  const rows = refunds.map((item) => `<tr><td><strong>${escapeHtml(item.provider_refund_id)}</strong><br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</td><td>${escapeHtml(item.credit_note_number || (item.status === "processed" ? "Credit note pending" : "Issued after processing"))}</td><td>${escapeHtml(item.reason || "—")}</td><td>${escapeHtml(formatDate(item.processed_at || item.created_at))}</td></tr>`).join("");
+  const requestRows = requests.map((item) => `<tr><td><strong>${escapeHtml(item.id)}</strong><br><small>${escapeHtml(item.provider_refund_id || "Provider ID pending")}</small></td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</td><td>${escapeHtml(item.reason)}</td><td>${escapeHtml(item.provider_error || "—")}</td><td>${escapeHtml(formatDate(item.completed_at || item.submitted_at || item.created_at))}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Razorpay refund register</h3><p>Provider status, reason, amount and the linked central EMS credit note.</p></div>${status(`${refunds.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Refund / payment</th><th>Workspace</th><th>Status</th><th>Amount</th><th>Credit note</th><th>Reason</th><th>Updated</th></tr></thead><tbody>${rows || '<tr><td colspan="7">No refunds recorded.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Refund command audit</h3><p>Every EMS refund reservation, provider submission and failure remains traceable.</p></div>${status(`${requests.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS request / provider refund</th><th>Status</th><th>Amount</th><th>Reason</th><th>Provider error</th><th>Updated</th></tr></thead><tbody>${requestRows || '<tr><td colspan="6">No refund commands recorded.</td></tr>'}</tbody></table></div></section>`;
+}
+
+function billingCreditNotesPage() {
+  const guard = financePageState("Loading central credit-note register…"); if (guard) return guard;
+  const notes = state.billingSnapshot?.creditNotes || [];
+  const rows = notes.map((item) => `<tr><td><strong>${escapeHtml(item.credit_note_number)}</strong><br><small>${escapeHtml(item.document_environment)} · ${escapeHtml(formatDate(item.credit_note_date))}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td><strong>${escapeHtml(adminBillingMoney(item.total_paise, item.currency))}</strong></td><td>${escapeHtml(item.provider_refund_id)}</td><td>${escapeHtml(item.provider_invoice_id)}<br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(item.reason || "—")}</td><td>${escapeHtml(formatDate(item.issued_at))}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Central credit-note register</h3><p>EMS-wide credit-note sequence linked to the original Razorpay invoice, payment and refund.</p></div>${status(`${notes.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS credit note</th><th>Customer</th><th>Status</th><th>Total</th><th>Razorpay refund</th><th>Invoice / payment</th><th>Reason</th><th>Issued</th></tr></thead><tbody>${rows || '<tr><td colspan="8">No credit notes issued.</td></tr>'}</tbody></table></div></section>`;
+}
+
+function billingReconciliationPage() {
+  const guard = financePageState("Running finance reconciliation…"); if (guard) return guard;
+  const reconciliation = state.billingSnapshot?.reconciliation || {};
+  const total = Number(state.billingSnapshot?.totals?.reconciliationAlerts || 0);
+  const webhookRows = (reconciliation.webhookErrors || []).map((item) => `<tr><td>${escapeHtml(item.event_type)}</td><td>${escapeHtml(item.provider_event_id)}</td><td>${escapeHtml(item.processing_error)}</td><td>${escapeHtml(formatDate(item.received_at))}</td></tr>`).join("");
+  return `<section class="wa-admin-card wa-finance-reconciliation ${total ? "attention" : "healthy"}"><div class="wa-admin-secret-heading"><div><h3>Finance reconciliation status</h3><p>Cross-check captured payments, EMS documents, Razorpay refunds and webhook processing.</p></div>${status(`${total}_alerts`)}</div><div class="wa-finance-checks"><div><span>Captured payments missing invoice</span><strong>${Number(reconciliation.missingInvoices || 0)}</strong></div><div><span>Processed refunds missing credit note</span><strong>${Number(reconciliation.missingCredits || 0)}</strong></div><div><span>Failed webhook events</span><strong>${Number((reconciliation.webhookErrors || []).length)}</strong></div><div><span>Expired refund reservations</span><strong>${Number(reconciliation.staleRefundRequests || 0)}</strong></div></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Webhook processing exceptions</h3><p>Failures remain visible until the underlying event is reconciled.</p></div>${status(`${(reconciliation.webhookErrors || []).length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Event</th><th>Provider event ID</th><th>Error</th><th>Received</th></tr></thead><tbody>${webhookRows || '<tr><td colspan="4">No webhook processing exceptions.</td></tr>'}</tbody></table></div></section>`;
 }
 
 function providerSecretEndpoint() {
@@ -948,7 +1066,12 @@ function content() {
   if (state.view === "package-master") return packageMaster();
   if (state.view === "packages") return packages();
   if (state.view === "billing") return billingOverview();
-  if (state.view === "subscriptions") return billingSubscriptions();
+  if (state.view === "subscriptions") return billingSubscriptionsPage();
+  if (state.view === "payments") return billingPaymentsPage();
+  if (state.view === "invoices") return billingInvoicesPage();
+  if (state.view === "refunds") return billingRefundsPage();
+  if (state.view === "credit-notes") return billingCreditNotesPage();
+  if (state.view === "reconciliation") return billingReconciliationPage();
   if (state.view === "razorpay") return razorpaySetup();
   if (state.loading) return '<div class="wa-admin-empty">Loading platform operations…</div>';
   if (state.error) return `<div class="wa-admin-notice"><strong>Management data is not active yet.</strong><br>${escapeHtml(state.error)}<br><br>The internal console is ready; apply the pending WhatsApp Platform database migrations to activate live customer data.</div>${state.view === "meta" ? metaSetup() : state.view === "security" ? security() : overview()}`;
@@ -961,10 +1084,10 @@ function content() {
 }
 
 function render() {
-  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal],body > [data-master-modal]").forEach((modal) => modal.remove());
+  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal],body > [data-master-modal],body > [data-finance-refund-modal]").forEach((modal) => modal.remove());
   if (verificationPreviewUrl) URL.revokeObjectURL(verificationPreviewUrl);
   verificationPreviewUrl = "";
-  document.body.classList.remove("wa-document-review-open", "wa-verification-case-open", "wa-master-modal-open");
+  document.body.classList.remove("wa-document-review-open", "wa-verification-case-open", "wa-master-modal-open", "wa-finance-modal-open");
   const meta = VIEW_META[state.view] || VIEW_META.overview;
   const pageHead = document.querySelector(".page-head");
   if (pageHead) {
@@ -987,7 +1110,9 @@ function bind() {
   if (reviewModal) document.body.appendChild(reviewModal);
   const requestModal = document.querySelector("#waAdminContent [data-document-request-modal]");
   if (requestModal) document.body.appendChild(requestModal);
-  document.querySelector("#waRefresh")?.addEventListener("click", () => loadSnapshot());
+  const refundModal = document.querySelector("#waAdminContent [data-finance-refund-modal]");
+  if (refundModal) document.body.appendChild(refundModal);
+  document.querySelector("#waRefresh")?.addEventListener("click", () => BILLING_VIEWS.has(state.view) ? loadBillingSnapshot() : loadSnapshot());
   const closeMasterModal = (modal) => {
     if (!modal) return;
     modal.hidden = true;
@@ -1005,6 +1130,30 @@ function bind() {
     modal.addEventListener("click", (event) => { if (event.target === modal) closeMasterModal(modal); });
     modal.addEventListener("keydown", (event) => { if (event.key === "Escape") closeMasterModal(modal); });
   });
+  const closeRefundModal = () => {
+    const modal = document.querySelector("[data-finance-refund-modal]");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("wa-finance-modal-open");
+  };
+  document.querySelectorAll("[data-billing-refund-open]").forEach((button) => button.addEventListener("click", () => {
+    const modal = document.querySelector("[data-finance-refund-modal]");
+    const form = modal?.querySelector("[data-finance-refund-form]");
+    if (!modal || !form) return;
+    const balance = Number(button.dataset.refundBalance || 0);
+    form.reset();
+    form.elements.paymentId.value = button.dataset.billingRefundOpen || "";
+    form.elements.maxPaise.value = String(balance);
+    form.elements.amount.value = (balance / 100).toFixed(2);
+    form.elements.amount.max = (balance / 100).toFixed(2);
+    modal.querySelector("[data-refund-summary]").textContent = `${button.dataset.refundWorkspace || "Customer"} · ${button.dataset.refundPayment || "Payment"}`;
+    modal.querySelector("[data-refund-balance-label]").textContent = adminBillingMoney(balance, button.dataset.refundCurrency || "INR");
+    modal.hidden = false;
+    document.body.classList.add("wa-finance-modal-open");
+    form.elements.amount.focus(); form.elements.amount.select();
+  }));
+  document.querySelectorAll("[data-finance-refund-close]").forEach((button) => button.addEventListener("click", closeRefundModal));
+  document.querySelector("[data-finance-refund-modal]")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) closeRefundModal(); });
+  document.querySelector("[data-finance-refund-form]")?.addEventListener("submit", submitBillingRefund);
   document.querySelectorAll("[data-open-verification-case]").forEach((button) => button.addEventListener("click", () => {
     const modal = [...document.querySelectorAll("[data-verification-case-modal]")].find((item) => item.dataset.verificationCaseModal === button.dataset.openVerificationCase);
     if (!modal) return;
@@ -1219,7 +1368,7 @@ async function init() {
   state.canApprove = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && permission.action_code === "approve");
   await loadSnapshot();
   if (["meta", "razorpay"].includes(state.view) && state.hasFullAuthority) await loadProviderSecretStatus();
-  if (["billing", "subscriptions"].includes(state.view) && state.hasFullAuthority) await loadBillingSnapshot();
+  if (BILLING_VIEWS.has(state.view) && state.hasFullAuthority) await loadBillingSnapshot();
 }
 
 init().catch((error) => { state.loading = false; state.error = error?.message || "The management console could not start."; render(); });
