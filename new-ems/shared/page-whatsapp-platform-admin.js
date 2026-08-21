@@ -494,8 +494,8 @@ function masterPackageForm(pkg) {
       <label>Billing model<select name="billingModel">${masterOption("subscription",p.billing_model,"Subscription")}${masterOption("contact_sales",p.billing_model,"Contact sales")}${masterOption("free",p.billing_model,"Free")}</select></label>
       <label>Currency<input name="currency" maxlength="3" pattern="[A-Z]{3}" value="${masterValue(p,"currency") || "INR"}"/></label>
       <label>Trial days<input name="trialDays" type="number" min="0" max="365" value="${masterValue(p,"trial_days") || 0}"/></label>
-      <label>Monthly amount<input name="monthlyAmount" type="number" min="0" step="0.01" value="${masterValue(p,"monthly_amount") || 0}"/></label>
-      <label>Annual amount<input name="annualAmount" type="number" min="0" step="0.01" value="${masterValue(p,"annual_amount") || 0}"/></label>
+      <label>Monthly customer charge (fees included)<input name="monthlyAmount" type="number" min="0" step="0.01" value="${masterValue(p,"monthly_amount") || 0}"/></label>
+      <label>Annual customer charge (fees included)<input name="annualAmount" type="number" min="0" step="0.01" value="${masterValue(p,"annual_amount") || 0}"/></label>
       <label>Sort order<input name="sortOrder" type="number" value="${masterValue(p,"sort_order") || 0}"/></label>
     </div></div>
     <div class="wa-master-section"><h4>Enforced resource limits</h4><p class="wa-master-help">Blank means unlimited. Zero disables a metered capability.</p><div class="wa-master-limits">
