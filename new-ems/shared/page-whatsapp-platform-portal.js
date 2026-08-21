@@ -122,11 +122,21 @@ const WORKSPACE_VIEW_LABELS = {
   team: "Team & roles",
   integrations: "Integrations",
   billing: "Billing & usage",
+  "billing-plans": "Plans & subscription",
+  "billing-addons": "Add-ons",
+  "billing-invoices": "Invoices",
+  "billing-ledger": "Payment ledger",
+  "billing-refunds": "Refunds & credit notes",
   checkout: "Secure checkout",
   settings: "Workspace settings",
 };
 
 const AGENT_WORKSPACE_VIEWS = new Set(["inbox", "contacts", "campaigns", "templates", "flows", "analytics"]);
+const BILLING_WORKSPACE_VIEWS = new Set(["billing", "billing-plans", "billing-addons", "billing-invoices", "billing-ledger", "billing-refunds"]);
+
+function isBillingWorkspaceView(view) {
+  return BILLING_WORKSPACE_VIEWS.has(view);
+}
 
 function isAgentWorkspaceRole() {
   return session?.roleCode === "agent";
@@ -139,7 +149,8 @@ function canAccessWorkspaceView(view) {
 
 function currentWorkspaceView() {
   const relativePath = location.pathname.slice(WORKSPACE_PATH.length).replace(/^\/+|\/+$/g, "");
-  const view = relativePath.split("/")[0] || "overview";
+  const pathParts = relativePath.split("/").filter(Boolean);
+  const view = pathParts[0] === "billing" && pathParts[1] ? `billing-${pathParts[1]}` : pathParts[0] || "overview";
   if (view === "automations") {
     location.replace(`${workspacePath("flows")}${location.search}${location.hash}`);
     return "flows";
@@ -153,6 +164,7 @@ function currentWorkspaceView() {
 }
 
 function workspacePath(view) {
+  if (view.startsWith("billing-") && BILLING_WORKSPACE_VIEWS.has(view)) return `${WORKSPACE_PATH}billing/${view.slice(8)}/`;
   return view === "overview" ? WORKSPACE_PATH : `${WORKSPACE_PATH}${view}/`;
 }
 
@@ -394,6 +406,11 @@ const WORKSPACE_NAV_ICONS = {
   team: workspaceIcon('<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M18 8v6M21 11h-6"/>'),
   integrations: workspaceIcon('<path d="M12 22v-5M9 8V2M15 8V2M18 8H6v3a6 6 0 0 0 12 0V8Z"/>'),
   billing: workspaceIcon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/>'),
+  "billing-plans": workspaceIcon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6M7 16h8"/>'),
+  "billing-addons": workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'),
+  "billing-invoices": workspaceIcon('<path d="M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>'),
+  "billing-ledger": workspaceIcon('<path d="M4 3h16v18H4zM8 7h8M8 11h8M8 15h4"/>'),
+  "billing-refunds": workspaceIcon('<path d="M9 7H5v-4M5 7a8 8 0 1 1-1 8"/><path d="M8 12h8M12 9v6"/>'),
   settings: workspaceIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.15.38.36.72.6 1 .3.3.7.45 1.1.4H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z"/>'),
 };
 
@@ -410,7 +427,8 @@ function workspaceNavigationMarkup({ inboxUnread = 0, contactCount = 0, campaign
   const insights = `<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}`;
   if (isAgentWorkspaceRole()) return `${customers}${engage}${insights}`;
   const profileItem = ["owner", "admin"].includes(session?.roleCode) ? workspaceNavItem("business-profile", "◎") : "";
-  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${profileItem}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("billing", "₹", packageName)}${workspaceNavItem("settings", "⚙")}`;
+  const billing = `<span class="wp-nav-label">Billing &amp; usage</span>${workspaceNavItem("billing", "₹")}${workspaceNavItem("billing-plans", "▤", packageName)}${workspaceNavItem("billing-addons", "+")}${workspaceNavItem("billing-invoices", "▧", String(workspaceBilling?.invoices?.length || ""))}${workspaceNavItem("billing-ledger", "≡")}${workspaceNavItem("billing-refunds", "↶", String(workspaceBilling?.creditNotes?.length || ""))}`;
+  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${billing}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${profileItem}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("settings", "⚙")}`;
 }
 
 const WORKSPACE_SIDEBAR_KEY = "varada-whatsapp-workspace-sidebar";
@@ -1973,7 +1991,7 @@ async function decideRenewalPriceChange(changeId, accepting) {
 }
 
 function renewalConsentModal(view) {
-  if (view === "billing" || !["owner", "admin"].includes(session.roleCode)) return "";
+  if (isBillingWorkspaceView(view) || !["owner", "admin"].includes(session.roleCode)) return "";
   const change = (workspaceBilling?.renewalPriceChanges || []).find((item) => ["pending_consent", "failed"].includes(item.status));
   const subscription = workspaceBilling?.subscription;
   if (!change || !subscription) return "";
@@ -2026,13 +2044,22 @@ async function openBillingDocument(documentRecord, kind = "invoice") {
   dialog.showModal();
 }
 
-function billingView() {
+function billingView(view = "billing") {
   const pkg = workspacePackageMaster?.package;
   const canManage = ["owner", "admin"].includes(session.roleCode);
   const subscription = workspaceBilling?.subscription;
   const renewalChange = (workspaceBilling?.renewalPriceChanges || []).find((change) => ["pending_consent", "accepted", "processing", "failed"].includes(change.status));
   const billingError = workspaceBilling?.error || workspacePackageMaster?.error || "";
-  const heading = `<div class="wp-route-heading"><div><span class="wp-kicker">Subscription management</span><h1>Billing &amp; usage</h1><p>Package prices show the original base amount. Razorpay checkout shows the final total including 18% package GST, the gateway fee and GST on that fee.</p></div><div class="wp-billing-heading-actions"><span class="wp-billing-mode ${workspaceBilling?.mode === "live" ? "is-live" : ""}">${escapeHtml(workspaceBilling?.mode === "live" ? "Live payments" : "Test payments")}</span><a class="wp-secondary wp-button-link" href="/contact.html?subject=WhatsApp%20billing%20support">Billing support</a></div></div>`;
+  const pageCopy = {
+    billing: ["Billing overview", "Monitor your subscription, financial documents, payments, add-ons and refunds from one corporate billing centre."],
+    "billing-plans": ["Plans & subscription", "Review your current subscription, compare packages and authorize a plan change securely."],
+    "billing-addons": ["Add-ons", "Extend your package with approved recurring capacity and service add-ons."],
+    "billing-invoices": ["Invoices", "View and download statutory invoices issued after verified Razorpay payments."],
+    "billing-ledger": ["Payment ledger", "Review verified payment transactions and their current gateway status."],
+    "billing-refunds": ["Refunds & credit notes", "Track refunded amounts and the corresponding centralized EMS credit notes."],
+  };
+  const [pageTitle, pageDescription] = pageCopy[view] || pageCopy.billing;
+  const heading = `<div class="wp-route-heading"><div><span class="wp-kicker">Billing &amp; usage</span><h1>${escapeHtml(pageTitle)}</h1><p>${escapeHtml(pageDescription)}</p></div><div class="wp-billing-heading-actions"><span class="wp-billing-mode ${workspaceBilling?.mode === "live" ? "is-live" : ""}">${escapeHtml(workspaceBilling?.mode === "live" ? "Live payments" : "Test payments")}</span><a class="wp-secondary wp-button-link" href="/contact.html?subject=WhatsApp%20billing%20support">Billing support</a></div></div>`;
   if (!pkg) return `<section class="wp-route-page">${heading}<div class="wp-verification-notice"><strong>Billing data unavailable</strong><p>${escapeHtml(billingError || "No active package is available for this workspace.")}</p></div></section>`;
   const limits = [["Team seats",pkg.team_member_limit],["WhatsApp numbers",pkg.whatsapp_number_limit],["Contacts",pkg.contact_limit],["Messages / month",pkg.monthly_message_limit],["Templates",pkg.template_limit],["Flows",pkg.flow_limit],["Campaigns",pkg.campaign_limit],["Automations",pkg.automation_limit],["Integrations",pkg.integration_limit],["Storage",pkg.storage_limit_mb == null ? null : `${Number(pkg.storage_limit_mb).toLocaleString("en-IN")} MB`]];
   const labels = { team_inbox:"Team inbox",contacts:"Contacts",templates:"Message templates",campaigns:"Campaigns",flows:"Flows",automations:"Automations",api_access:"API access",priority_support:"Priority support",analytics:"Analytics" };
@@ -2069,6 +2096,27 @@ function billingView() {
   const invoices = (workspaceBilling?.invoices || []).map((invoice) => `<tr><td><strong>${escapeHtml(invoice.invoice_number)}</strong><small>${escapeHtml(formatProfileDate(invoice.invoice_date))}${invoice.document_environment === "test" ? " · Test document" : ""}</small></td><td><span class="wp-billing-payment-status ${escapeHtml(invoice.status)}">${escapeHtml(invoice.status)}</span></td><td><small>Razorpay invoice</small>${escapeHtml(invoice.provider_invoice_id)}<small>Transaction</small>${escapeHtml(invoice.provider_payment_id)}</td><td>${escapeHtml(billingMoney(Number(invoice.total_paise || 0) / 100, invoice.currency))}</td><td><button class="wp-secondary" type="button" data-billing-document="invoice:${escapeHtml(invoice.id)}">View PDF</button></td></tr>`).join("");
   const creditNotes = (workspaceBilling?.creditNotes || []).map((note) => `<tr><td><strong>${escapeHtml(note.credit_note_number)}</strong><small>${escapeHtml(formatProfileDate(note.credit_note_date))}${note.document_environment === "test" ? " · Test document" : ""}</small></td><td>${escapeHtml(note.reason || "Razorpay refund")}</td><td>${escapeHtml(note.provider_refund_id)}</td><td>${escapeHtml(billingMoney(Number(note.total_paise || 0) / 100, note.currency))}</td><td><button class="wp-secondary" type="button" data-billing-document="credit_note:${escapeHtml(note.id)}">View PDF</button></td></tr>`).join("");
   const setupNotice = workspaceBilling?.configured ? "" : `<div class="wp-verification-notice"><strong>Razorpay setup is waiting for API keys</strong><p>Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Supabase Edge Function Secrets. Checkout buttons will become available automatically.</p></div>`;
+  const billingNav = `<nav class="wp-billing-section-nav" aria-label="Billing pages">
+    <a class="${view === "billing" ? "active" : ""}" href="${workspacePath("billing")}"><span>${WORKSPACE_NAV_ICONS.billing}</span><strong>Overview</strong><small>Billing health</small></a>
+    <a class="${view === "billing-plans" ? "active" : ""}" href="${workspacePath("billing-plans")}"><span>${WORKSPACE_NAV_ICONS["billing-plans"]}</span><strong>Plans</strong><small>${escapeHtml(pkg.name)}</small></a>
+    <a class="${view === "billing-addons" ? "active" : ""}" href="${workspacePath("billing-addons")}"><span>${WORKSPACE_NAV_ICONS["billing-addons"]}</span><strong>Add-ons</strong><small>${Number((workspacePackageMaster.addons || []).length)} active</small></a>
+    <a class="${view === "billing-invoices" ? "active" : ""}" href="${workspacePath("billing-invoices")}"><span>${WORKSPACE_NAV_ICONS["billing-invoices"]}</span><strong>Invoices</strong><small>${Number((workspaceBilling.invoices || []).length)} issued</small></a>
+    <a class="${view === "billing-ledger" ? "active" : ""}" href="${workspacePath("billing-ledger")}"><span>${WORKSPACE_NAV_ICONS["billing-ledger"]}</span><strong>Ledger</strong><small>${Number((workspaceBilling.payments || []).length)} payments</small></a>
+    <a class="${view === "billing-refunds" ? "active" : ""}" href="${workspacePath("billing-refunds")}"><span>${WORKSPACE_NAV_ICONS["billing-refunds"]}</span><strong>Refunds</strong><small>${Number((workspaceBilling.creditNotes || []).length)} credit notes</small></a>
+  </nav>`;
+  const notices = `${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}`;
+  const packageDetails = `<section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section>`;
+  const invoicesSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Financial documents</span><h2>Invoices</h2><p>EMS invoice numbers continue the company-wide sequence. Razorpay invoice and transaction references are preserved on every document.</p></div></div>${invoices ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Invoice</th><th>Status</th><th>Gateway references</th><th>Total</th><th></th></tr></thead><tbody>${invoices}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No invoices yet</strong><p>A tax invoice is issued after Razorpay captures a subscription payment.</p></div>'}</section>`;
+  const ledgerSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Payment ledger</span><h2>Recent payments</h2><p>Verified Razorpay payments for this workspace.</p></div></div>${payments ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Payment</th><th>Method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${payments}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No payments yet</strong><p>Completed payments will appear here.</p></div>'}</section>`;
+  const addonsSection = `<section class="wp-card wp-billing-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Capacity extensions</span><h2>Add-ons</h2><p>Assigned add-ons extend the operational package independently of the public catalog.</p></div></div><div class="wp-billing-addon-list">${assigned || '<div class="wp-inbox-empty"><strong>No active add-ons</strong><p>Your package currently has no assigned extensions.</p></div>'}${available}</div></section>`;
+  const refundsSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Refund documents</span><h2>Refunds &amp; credit notes</h2><p>Every verified Razorpay refund is matched to its centralized EMS credit note and original payment reference.</p></div></div>${creditNotes ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Credit note</th><th>Reason</th><th>Refund ID</th><th>Total</th><th></th></tr></thead><tbody>${creditNotes}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No refunds or credit notes</strong><p>Verified refunds and their financial documents will appear here.</p></div>'}</section>`;
+  const page = (content) => `<section class="wp-route-page wp-billing-page">${heading}${notices}${billingNav}${content}</section>`;
+  if (view === "billing") return page(`<section class="wp-billing-overview-metrics"><article><span>Subscription</span><strong>${escapeHtml(statusLabel)}</strong><small>${subscription?.current_end ? `Renews ${escapeHtml(formatProfileDate(subscription.current_end))}` : "No renewal scheduled"}</small></article><article><span>Invoices</span><strong>${Number((workspaceBilling.invoices || []).length)}</strong><small>Issued documents</small></article><article><span>Payments</span><strong>${Number((workspaceBilling.payments || []).length)}</strong><small>Ledger entries</small></article><article><span>Refunds</span><strong>${Number((workspaceBilling.creditNotes || []).length)}</strong><small>Credit notes</small></article></section>${renewalNotice}${subscriptionCard}`);
+  if (view === "billing-plans") return page(`${renewalNotice}${subscriptionCard}<section><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section>${packageDetails}`);
+  if (view === "billing-addons") return page(`${subscriptionCard}${addonsSection}`);
+  if (view === "billing-invoices") return page(invoicesSection);
+  if (view === "billing-ledger") return page(ledgerSection);
+  if (view === "billing-refunds") return page(refundsSection);
   return `<section class="wp-route-page wp-billing-page">${heading}${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}${renewalNotice}${subscriptionCard}<section><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section><section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section><section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Financial documents</span><h2>Invoices</h2><p>EMS invoice numbers continue the company-wide sequence. Razorpay invoice and transaction references are preserved on every document.</p></div></div>${invoices ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Invoice</th><th>Status</th><th>Gateway references</th><th>Total</th><th></th></tr></thead><tbody>${invoices}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No invoices yet</strong><p>A tax invoice is issued after Razorpay captures a subscription payment.</p></div>'}${creditNotes ? `<div class="wp-card-heading wp-billing-subheading"><div><span class="wp-card-eyebrow">Refund documents</span><h2>Credit notes</h2></div></div><div class="wp-billing-table-wrap"><table><thead><tr><th>Credit note</th><th>Reason</th><th>Refund ID</th><th>Total</th><th></th></tr></thead><tbody>${creditNotes}</tbody></table></div>` : ""}</section><section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Payment ledger</span><h2>Recent payments</h2><p>Verified Razorpay payments for this workspace.</p></div></div>${payments ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Payment</th><th>Method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${payments}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No payments yet</strong><p>Completed payments will appear here.</p></div>'}</section><section class="wp-card wp-billing-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Capacity extensions</span><h2>Add-ons</h2><p>Assigned add-ons extend the operational package independently of the public catalog.</p></div></div><div class="wp-billing-addon-list">${assigned || '<div class="wp-inbox-empty"><strong>No active add-ons</strong><p>Your package currently has no assigned extensions.</p></div>'}${available}</div></section></section>`;
 }
 
@@ -2124,7 +2172,7 @@ function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "campaigns") return campaignsView();
   if (view === "analytics") return analyticsView();
   if (view === "team") return teamView();
-  if (view === "billing") return billingView();
+  if (isBillingWorkspaceView(view)) return billingView(view);
   if (view === "checkout") return checkoutView();
   if (view === "templates") return templatesViewV2(connections);
   if (view === "flows") return currentFlowBuilderId() ? renderFlowBuilderPage({ escapeHtml }) : renderFlowsView({ flows: workspaceFlows.flows, escapeHtml });
@@ -2185,7 +2233,7 @@ async function renderDashboard() {
     } catch (error) {
       workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: error?.message || "Package Master could not be loaded." };
     }
-    if (view === "billing" || ["owner", "admin"].includes(session.roleCode)) {
+    if (isBillingWorkspaceView(view) || ["owner", "admin"].includes(session.roleCode)) {
       try { workspaceBilling = { ...(await billingRequest("summary")), error: "" }; }
       catch (error) { workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: error?.message || "Billing could not be loaded." }; }
     } else {
@@ -2339,7 +2387,7 @@ async function renderDashboard() {
       }
     }));
   }
-  if (view === "billing") {
+  if (isBillingWorkspaceView(view)) {
     app.querySelectorAll("[data-billing-document]").forEach((button) => button.addEventListener("click", async () => {
       const original = button.textContent;
       try {

@@ -12,8 +12,21 @@ const DAY_MS = 86_400_000;
 const PACKAGE_GST_RATE = 0.18;
 const GATEWAY_RATE_WITH_TAX = 0.02 * 1.18;
 const DRIVE_ROOT_FOLDER_ID = Deno.env.get("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID") || "1Tnq1agDpaLCIT_ZGiDRjVOXa7KYDASQp";
-const BILLING_PDF_TEMPLATE_VERSION = 2;
+const BILLING_PDF_TEMPLATE_VERSION = 3;
 const BRAND_LOGO_URL = "https://www.varadanexus.com/images/logo.png";
+const DEFAULT_ISSUER = {
+  legalName: "Varada Nexus Private Limited",
+  registeredAddress: "D.No. 80-17-28, K.B. Nagar, A.V.A. Road",
+  city: "Rajahmundry, East Godavari",
+  gstStateName: "Andhra Pradesh",
+  stateCode: "37",
+  pincode: "533101",
+  gstin: "37AAKCV7495B1ZV",
+  cin: "U43121AP2025PTC117741",
+  pan: "AAKCV7495B",
+  email: "connect@varadanexus.com",
+  website: "www.varadanexus.com",
+};
 
 function env(name: string) { return Deno.env.get(name) || ""; }
 function adminClient() { return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } }); }
@@ -166,7 +179,8 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const brandLogo = await pdf.embedPng(await brandLogoBytes()).catch(() => null);
   const green = rgb(0.025, 0.19, 0.12), emerald = rgb(0.05, 0.67, 0.39), gold = rgb(0.82, 0.66, 0.25), ink = rgb(0.08, 0.12, 0.1), muted = rgb(0.35, 0.42, 0.38), pale = rgb(0.95, 0.97, 0.96), lineColor = rgb(0.84, 0.88, 0.85), white = rgb(1, 1, 1);
-  const issuer = invoice.issuer_snapshot || {};
+  const issuerSnapshot = invoice.issuer_snapshot || {};
+  const issuer = Object.fromEntries(Object.entries(DEFAULT_ISSUER).map(([key, value]) => [key, issuerSnapshot[key] || value]));
   const isCredit = kind === "credit_note";
   const number = isCredit ? documentRecord.credit_note_number : invoice.invoice_number;
   const date = isCredit ? documentRecord.credit_note_date : invoice.invoice_date;
@@ -182,9 +196,13 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
     page = pdf.addPage([595.28, 841.89]); pages.push(page); y = 710;
     page.drawRectangle({ x: 0, y: 752, width: 595.28, height: 89.89, color: green });
     page.drawRectangle({ x: 0, y: 747, width: 595.28, height: 5, color: gold });
-    if (brandLogo) page.drawImage(brandLogo, { x: 42, y: 773, width: 49, height: 45 });
-    page.drawText("VARADA NEXUS", { x: 103, y: 798, font: bold, size: 16, color: white });
-    page.drawText("PRIVATE LIMITED", { x: 103, y: 782, font: regular, size: 8, color: rgb(0.76, 0.82, 0.78) });
+    if (brandLogo) {
+      const logoScale = Math.min(68 / brandLogo.width, 48 / brandLogo.height);
+      const logoWidth = brandLogo.width * logoScale, logoHeight = brandLogo.height * logoScale;
+      page.drawImage(brandLogo, { x: 42, y: 773 + ((48 - logoHeight) / 2), width: logoWidth, height: logoHeight });
+    }
+    page.drawText("VARADA NEXUS", { x: 120, y: 798, font: bold, size: 16, color: white });
+    page.drawText("PRIVATE LIMITED", { x: 120, y: 782, font: regular, size: 8, color: rgb(0.76, 0.82, 0.78) });
     page.drawText(isCredit ? "CREDIT NOTE" : "TAX INVOICE", { x: 423, y: 798, font: bold, size: 12, color: white });
     page.drawText(pdfSafeText(number), { x: 423, y: 781, font: regular, size: 8, color: rgb(0.84, 0.88, 0.85), maxWidth: 140 });
   };
@@ -195,15 +213,16 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   }
   page.drawText(isCredit ? "Credit note details" : "Invoice details", { x: 42, y, font: bold, size: 18, color: green });
   page.drawText(`Issue date  ${pdfSafeText(new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }))}`, { x: 395, y: y + 3, font: regular, size: 9, color: muted }); y -= 28;
-  const boxY = y - 132;
-  page.drawRectangle({ x: 42, y: boxY, width: 248, height: 132, color: pale, borderColor: lineColor, borderWidth: 0.7 });
-  page.drawRectangle({ x: 305, y: boxY, width: 248, height: 132, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  const boxY = y - 148;
+  page.drawRectangle({ x: 42, y: boxY, width: 248, height: 148, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  page.drawRectangle({ x: 305, y: boxY, width: 248, height: 148, color: pale, borderColor: lineColor, borderWidth: 0.7 });
   page.drawText("SUPPLIER DETAILS", { x: 56, y: y - 18, font: bold, size: 8, color: emerald });
   page.drawText(issuerName, { x: 56, y: y - 37, font: bold, size: 10, color: ink, maxWidth: 220 });
   let supplierY = y - 53;
-  for (const text of wrapPdfText(issuerAddress || "Registered office address not configured", regular, 7.5, 220).slice(0, 3)) { page.drawText(text, { x: 56, y: supplierY, font: regular, size: 7.5, color: muted }); supplierY -= 10; }
-  for (const value of [["GSTIN", issuer.gstin], ["CIN", issuer.cin], ["PAN", issuer.pan], ["State code", issuer.stateCode]].filter((entry) => entry[1])) {
-    page.drawText(`${value[0]}: ${pdfSafeText(value[1])}`, { x: 56, y: supplierY, font: regular, size: 7.5, color: muted }); supplierY -= 10;
+  for (const text of wrapPdfText(issuerAddress, regular, 7.2, 220).slice(0, 3)) { page.drawText(text, { x: 56, y: supplierY, font: regular, size: 7.2, color: muted }); supplierY -= 9;
+  }
+  for (const value of [["GSTIN", issuer.gstin], ["CIN", issuer.cin], ["PAN", issuer.pan], ["State code", issuer.stateCode], ["Email", issuer.email], ["Web", issuer.website]].filter((entry) => entry[1])) {
+    page.drawText(`${value[0]}: ${pdfSafeText(value[1])}`, { x: 56, y: supplierY, font: regular, size: 7.2, color: muted, maxWidth: 220 }); supplierY -= 9;
   }
   page.drawText("BILL TO / RECIPIENT", { x: 319, y: y - 18, font: bold, size: 8, color: emerald });
   page.drawText(pdfSafeText(invoice.billing_name || "Customer"), { x: 319, y: y - 37, font: bold, size: 10, color: ink, maxWidth: 220 });
