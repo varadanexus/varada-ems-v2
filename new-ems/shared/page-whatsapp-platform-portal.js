@@ -2372,7 +2372,12 @@ async function renderDashboard() {
   const operationalPackageName = workspacePackageMaster?.package?.name || planName(workspaceProfile?.planCode);
   const sidebarNumberSelector = businessNumberSelector(connections, selectedConnection);
   const sidebarNavigation = workspaceNavigationMarkup({ inboxUnread, contactCount, campaignCount, templateCount: workspaceTemplates.templates.length, flowCount: workspaceFlows.flows.length, connectedCount: connected.length, teamCount: workspaceTeam.members.length, packageName: operationalPackageName });
-  const billingLocked = workspaceBilling?.entitlement?.allowed === false && !["billing", "checkout"].includes(view);
+  // Unpaid workspaces must retain the complete billing centre so owners and
+  // payment-provider reviewers can compare plans, reach protected checkout,
+  // and inspect billing recovery/history without gaining product access.
+  const billingLocked = workspaceBilling?.entitlement?.allowed === false
+    && !isBillingWorkspaceView(view)
+    && view !== "checkout";
   const mainContent = billingLocked ? billingAccessRequiredView() : workspaceViewContent(view, connections, setupReady, workspaceProfile);
   const userInitial = escapeHtml((session.displayName || "U").charAt(0).toUpperCase());
   const roleLabel = String(session.roleCode || "member").replaceAll("_", " ");
