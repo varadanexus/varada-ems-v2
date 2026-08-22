@@ -3443,9 +3443,11 @@ body.wp-verification-viewer-open { overflow: hidden; }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-number-selector {
     grid-template-columns: 1fr;
     justify-items: center;
-    min-height: 0;
-    margin-top: -.35rem;
-    padding: .45rem .3rem;
+    width: 56px;
+    min-height: 54px;
+    margin: .7rem auto 1rem;
+    padding: .55rem .3rem;
+    border-radius: 14px;
   }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-number-selector-icon {
     width: 34px;
