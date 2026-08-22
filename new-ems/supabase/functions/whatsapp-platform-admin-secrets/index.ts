@@ -262,6 +262,13 @@ Deno.serve(async (req) => {
       if (!/^\S{16,128}$/.test(keySecret)) return json(req, { error: "Enter the Razorpay Key Secret." }, 400);
       if (!/^\S{16,128}$/.test(webhookSecret)) return json(req, { error: "Enter a webhook signing secret of at least 16 characters." }, 400);
       const now = new Date().toISOString();
+      const providerMode = keyId.startsWith("rzp_live_") ? "live" : "test";
+      // Change the entitlement mode first. If credential persistence fails, the
+      // result is fail-closed rather than allowing test payments in production.
+      const { error: modeError } = await admin.from("whatsapp_platform_billing_runtime").upsert({
+        singleton: true, provider_mode: providerMode, changed_at: now, changed_by: appUserId,
+      }, { onConflict: "singleton" });
+      if (modeError) throw modeError;
       const rows = await Promise.all([
         ["razorpay_key_id", keyId], ["razorpay_key_secret", keySecret], ["razorpay_webhook_secret", webhookSecret],
       ].map(async ([settingKey, value]) => ({
@@ -275,7 +282,7 @@ Deno.serve(async (req) => {
       const { error: auditError } = await admin.from("audit_logs").insert({
         event_type: "whatsapp_platform_razorpay_credentials_updated", action: "provider_secret_rotated", module_code: "whatsapp-platform",
         actor_app_user_id: appUserId, entity_type: "whatsapp_platform_provider_settings",
-        details: { provider: "razorpay", mode: keyId.startsWith("rzp_live_") ? "live" : "test", secret_recorded: true },
+        details: { provider: "razorpay", mode: providerMode, secret_recorded: true },
         user_agent: req.headers.get("user-agent") || null, ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null,
       });
       if (auditError) console.error("Razorpay credential audit log failed", auditError.message);
