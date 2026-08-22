@@ -444,6 +444,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-profile-chevron svg { width:15px; height:15px; }
 .wp-profile-control.is-open .wp-profile-chevron { transform:rotate(180deg); }
 .wp-profile-menu { position:absolute; z-index:80; top:calc(100% + .55rem); right:0; display:flex; flex-direction:column; width:min(350px,calc(100vw - 1.5rem)); overflow:hidden; border:1px solid var(--wp-workspace-line-strong,rgba(139,226,180,.22)); border-radius:16px; background:var(--wp-workspace-surface-solid,#101713); color:var(--wp-workspace-text,#effff5); box-shadow:0 24px 70px rgba(0,0,0,.38); }
+.wp-profile-menu[hidden] { display:none !important; }
 .wp-profile-menu > .wp-profile-workspace-card { order: 1; }
 .wp-profile-menu > header { order: 2; }
 .wp-profile-menu > nav { order: 3; }
