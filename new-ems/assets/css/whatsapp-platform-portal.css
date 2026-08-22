@@ -3425,6 +3425,7 @@ body.wp-verification-viewer-open { overflow: hidden; }
   }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-brand { justify-content: flex-start; min-height: 76px; padding: .5rem 1rem; }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-topbar { padding-left: 224px; }
+  .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-topbar-title { display: none; }
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-workspace-account div,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-number-selector > span:last-child,
   .wp-workspace-shell.sidebar-collapsed:not(.wp-flow-builder-workspace) .wp-account-chevron,
