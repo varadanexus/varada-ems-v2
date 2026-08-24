@@ -296,6 +296,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-field input:focus, .wp-field select:focus, .wp-field textarea:focus { border-color: var(--wp-green); box-shadow: 0 0 0 3px rgba(43, 223, 131, .12); }
 .wp-field small { color: var(--wp-muted); font-size: .7rem; line-height: 1.4; }
 .wp-password-control { position: relative; display: block; color: inherit; font-size: inherit; font-weight: inherit; }
+.wp-phone-control { display: grid; grid-template-columns: minmax(7.5rem, .9fr) minmax(0, 1.25fr); gap: .45rem; color: inherit; font-size: inherit; font-weight: inherit; }
+.wp-phone-control select { min-width: 0; padding-inline: .65rem; }
 .wp-password-control input { padding-right: 4rem; }
 .wp-password-control button { position: absolute; top: 50%; right: .45rem; min-width: 3.1rem; padding: .42rem .5rem; transform: translateY(-50%); border: 0; border-radius: 8px; background: rgba(43,223,131,.1); color: #a9e8c6; font-size: .7rem; font-weight: 850; }
 .wp-password-control button:hover,.wp-password-control button:focus-visible { background: rgba(43,223,131,.18); color: var(--wp-text); outline: 1px solid rgba(43,223,131,.45); }

@@ -566,10 +566,6 @@ Deno.serve(async (req) => {
     const body = rawBody ? JSON.parse(rawBody) : {};
     customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "status");
-    if (action !== "status") {
-      const entitlement = await billingEntitlement(admin, customer);
-      if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
-    }
     if (customer.role_code === "agent") {
       return json(req, { error: "Your agent role cannot access business onboarding." }, 403);
     }

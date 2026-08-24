@@ -626,6 +626,53 @@ async function removeVerificationDocument(admin: any, customer: any, body: any) 
   return { ok: true, verification: await verificationState(admin, customer) };
 }
 
+async function previewVerificationDocument(admin: any, customer: any, body: any, req: Request) {
+  const documentId = String(body.documentId || "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(documentId)) throw new Error("A valid approved document is required.");
+  const { data: document, error } = await admin.from("whatsapp_platform_verification_documents")
+    .select("id,tenant_id,document_type,drive_file_id,original_file_name,mime_type,file_size,review_status,status")
+    .eq("id", documentId)
+    .eq("tenant_id", customer.tenant_id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (error) throw error;
+  if (!document || document.review_status !== "approved") throw new Error("Approved document was not found.");
+  if (!document.drive_file_id || Number(document.file_size || 0) > MAX_DOCUMENT_BYTES) throw new Error("Document could not be opened.");
+
+  const bytes = await driveFetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?alt=media&${DRIVE_QS}`,
+    await driveAccessToken(),
+    { headers: { Accept: "application/octet-stream" } },
+  );
+  const ipAddress = String(req.headers.get("x-forwarded-for") || "").split(",")[0].trim().slice(0, 80) || null;
+  const { error: auditError } = await admin.from("audit_logs").insert({
+    event_type: "whatsapp_verification_document_accessed",
+    action: "view",
+    module_code: "whatsapp-platform",
+    entity_type: "whatsapp_platform_verification_document",
+    entity_id: documentId,
+    details: {
+      tenant_id: customer.tenant_id,
+      customer_user_id: customer.user_id,
+      document_type: document.document_type,
+      file_name: document.original_file_name,
+      mime_type: document.mime_type,
+      file_size: document.file_size,
+      access_channel: "customer_portal_verified_record",
+    },
+    user_agent: String(req.headers.get("user-agent") || "").slice(0, 500) || null,
+    ip_address: ipAddress,
+  });
+  if (auditError) throw new Error("Document access audit could not be recorded.");
+
+  const headers = new Headers(responseHeaders(req));
+  headers.set("Content-Type", String(document.mime_type || "application/octet-stream"));
+  headers.set("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(String(document.original_file_name || "verification-document").slice(0, 120))}`);
+  headers.set("Content-Length", String(bytes.byteLength));
+  headers.delete("X-Frame-Options");
+  return new Response(bytes, { status: 200, headers });
+}
+
 async function submitVerification(admin: any, customer: any, body: any) {
   requireVerificationManager(customer);
   await saveVerification(admin, customer, body);
@@ -662,7 +709,16 @@ Deno.serve(async (req) => {
     const admin = adminClient();
     const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "profile");
-    if (!["profile", "verification_status"].includes(action)) {
+    const preBillingActions = new Set([
+      "profile",
+      "verification_status",
+      "save_verification",
+      "upload_verification_document",
+      "remove_verification_document",
+      "preview_verification_document",
+      "submit_verification",
+    ]);
+    if (!preBillingActions.has(action)) {
       const entitlement = await billingEntitlement(admin, customer);
       if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
     }
@@ -674,6 +730,7 @@ Deno.serve(async (req) => {
     if (action === "save_verification") return json(req, await saveVerification(admin, customer, body));
     if (action === "upload_verification_document") return json(req, await uploadVerificationDocument(admin, customer, body));
     if (action === "remove_verification_document") return json(req, await removeVerificationDocument(admin, customer, body));
+    if (action === "preview_verification_document") return await previewVerificationDocument(admin, customer, body, req);
     if (action === "submit_verification") return json(req, await submitVerification(admin, customer, body));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {
