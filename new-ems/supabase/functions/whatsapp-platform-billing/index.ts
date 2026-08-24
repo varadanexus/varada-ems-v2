@@ -1086,6 +1086,23 @@ async function syncSubscription(admin: any, customer: any, body: any, credential
   await finalizeAddonChange(admin, synced, credentials);
   return { subscription: synced };
 }
+async function paymentMethodPortal(admin: any, customer: any, body: any, credentials: any) {
+  if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage the payment method.");
+  const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
+  const { data: subscription, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("id", subscriptionId).eq("tenant_id", customer.tenant_id).single();
+  if (error || !subscription) throw new Error("Billing subscription not found.");
+  assertSubscriptionMode(subscription, credentials);
+  if (!['authenticated', 'active'].includes(String(subscription.status || '').toLowerCase())) throw new Error("The payment method can be updated only for an authorized or active subscription.");
+  const providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials);
+  const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
+  const portalUrl = String(providerSubscription?.short_url || synced?.short_url || subscription.short_url || '').trim();
+  if (!portalUrl) throw new Error("Razorpay did not return a payment-method management link for this subscription.");
+  let parsedUrl: URL;
+  try { parsedUrl = new URL(portalUrl); } catch { throw new Error("Razorpay returned an invalid payment-method management link."); }
+  const razorpayHost = parsedUrl.hostname === "razorpay.com" || parsedUrl.hostname.endsWith(".razorpay.com") || parsedUrl.hostname === "rzp.io" || parsedUrl.hostname.endsWith(".rzp.io");
+  if (parsedUrl.protocol !== "https:" || !razorpayHost) throw new Error("Razorpay returned an untrusted payment-method management link.");
+  return { portalUrl, subscription: { id: synced.id, status: synced.status } };
+}
 async function recordRenewalPriceConsent(admin: any, customer: any, body: any, req: Request, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing consent.");
   const changeId = cleanUuid(body.changeId, "renewal price change");
@@ -1727,7 +1744,7 @@ Deno.serve(async (req) => {
     const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "summary");
     const mutationActions = new Set(["create_subscription", "verify_checkout", "record_renewal_price_consent", "upgrade_subscription", "change_addons", "cancel_subscription"]);
-    const previewActions = new Set(["quote_subscription_checkout", "preview_upgrade", "preview_addon_change", "sync_subscription", "billing_document_pdf"]);
+    const previewActions = new Set(["quote_subscription_checkout", "preview_upgrade", "preview_addon_change", "sync_subscription", "payment_method_portal", "billing_document_pdf"]);
     const maxRequests = mutationActions.has(action) ? 10 : previewActions.has(action) ? 30 : 120;
     const { data: auditClaim, error: auditError } = await admin.rpc("whatsapp_platform_begin_billing_action", {
       p_tenant_id: customer.tenant_id, p_user_id: customer.user_id, p_action: action,
@@ -1749,6 +1766,7 @@ Deno.serve(async (req) => {
       else if (action === "create_subscription") result = await createSubscription(admin, customer, body, credentials);
       else if (action === "verify_checkout") result = await verifyCheckout(admin, customer, body, credentials);
       else if (action === "sync_subscription") result = await syncSubscription(admin, customer, body, credentials);
+      else if (action === "payment_method_portal") result = await paymentMethodPortal(admin, customer, body, credentials);
       else if (action === "record_renewal_price_consent") result = await recordRenewalPriceConsent(admin, customer, body, req, credentials);
       else if (action === "preview_upgrade") result = await previewUpgrade(admin, customer, body, credentials);
       else if (action === "upgrade_subscription") result = await upgradeSubscription(admin, customer, body, credentials);

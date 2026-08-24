@@ -2191,12 +2191,12 @@ function billingView(view = "billing") {
   const subscriptionOpen = subscription && !["cancelled", "completed", "expired"].includes(subscription.status);
   const trialEndsAt = subscription?.safe_metadata?.trial_ends_at || subscription?.charge_at || null;
   const trialActive = Boolean(subscription?.status === "authenticated" && Number(subscription?.safe_metadata?.trial_days || 0) > 0 && trialEndsAt && new Date(trialEndsAt).getTime() > Date.now());
-  const statusActions = subscription ? `<div class="wp-billing-subscription-actions">${canManage && subscriptionOpen && !subscription.cancel_at_cycle_end ? `<a class="wp-primary wp-button-link wp-billing-upgrade-action" href="${workspacePath("billing-plans")}#available-plans">Upgrade plan</a>${trialActive ? `<span class="wp-billing-cancellation-scheduled">Cancellation available after ${escapeHtml(formatProfileDate(trialEndsAt))}</span>` : `<button class="wp-billing-cancel-subtle" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel</button>`}` : subscription.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">Cancellation scheduled for ${escapeHtml(formatProfileDate(subscription.current_end))}</span>` : ""}</div>` : "";
+  const managedSubscription = Boolean(subscription && ["authenticated", "active"].includes(String(subscription.status)));
+  const statusActions = subscription ? `<div class="wp-billing-subscription-actions">${canManage && managedSubscription ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(subscription.id)}">Update payment method</button>` : ""}${canManage && subscriptionOpen && !subscription.cancel_at_cycle_end ? `<a class="wp-primary wp-button-link wp-billing-upgrade-action" href="${workspacePath("billing-plans")}#available-plans">Upgrade plan</a>${trialActive ? `<span class="wp-billing-cancellation-scheduled">Cancellation available after ${escapeHtml(formatProfileDate(trialEndsAt))}</span>` : `<button class="wp-billing-cancel-subtle" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel</button>`}` : subscription.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">Cancellation scheduled for ${escapeHtml(formatProfileDate(subscription.current_end))}</span>` : ""}</div>` : "";
   const subscriptionCard = `<section class="wp-billing-subscription"><div><span class="wp-card-eyebrow">Razorpay subscription</span><h2>${escapeHtml(subscription ? `${subscription.package_code} · ${subscription.billing_interval}ly` : "No active paid subscription")}</h2><p>${subscription ? `Status: ${escapeHtml(statusLabel)}${subscription.current_end ? ` · Current period ends ${escapeHtml(formatProfileDate(subscription.current_end))}` : ""}` : "Select a self-service package below to start secure checkout."}</p></div><div><span class="wp-billing-status ${escapeHtml(subscription?.status || "none")}">${escapeHtml(statusLabel)}</span>${statusActions}</div></section>`;
   const renewalInterval = subscription?.billing_interval === "year" ? "annual" : "monthly";
   const renewalAmount = (version) => Number(version?.[subscription?.billing_interval === "year" ? "annual_base_paise" : "monthly_base_paise"] || 0) / 100;
   const renewalNotice = renewalChange ? `<section class="wp-billing-price-change ${escapeHtml(renewalChange.status)}"><div><span class="wp-card-eyebrow">Renewal price notice</span><h2>${escapeHtml(renewalChange.target?.package?.name || subscription?.package_code || "Package")} ${escapeHtml(renewalInterval)} price update</h2><p>Your current billing period keeps its existing price. The revised tax-exclusive base price applies from ${escapeHtml(formatProfileDate(renewalChange.effective_at))} only after the required payment authorization.</p><dl><div><dt>Current base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.from), renewalChange.from?.currency || "INR"))}</dd></div><div><dt>New base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.target), renewalChange.target?.currency || "INR"))} + GST</dd></div></dl></div>${["pending_consent", "failed"].includes(renewalChange.status) && canManage ? `<div class="wp-billing-price-consent"><button class="wp-secondary" type="button" data-renewal-price-decision="reject" data-price-change-id="${escapeHtml(renewalChange.id)}">End at current period</button><button class="wp-primary" type="button" data-renewal-price-decision="accept" data-price-change-id="${escapeHtml(renewalChange.id)}">Accept &amp; authorize renewal</button></div>` : renewalChange.status === "accepted" && renewalChange.authorizationUrl ? `<div class="wp-billing-price-consent"><strong>Consent recorded</strong><small>Complete the replacement mandate before the renewal date.</small><a class="wp-primary wp-button-link" href="${escapeHtml(renewalChange.authorizationUrl)}" target="_blank" rel="noopener noreferrer">Continue Razorpay authorization</a></div>` : `<div class="wp-billing-price-consent"><strong>${renewalChange.status === "accepted" ? "Consent recorded" : renewalChange.status === "failed" ? "Authorization needs attention" : "Renewal update processing"}</strong><small>No revised charge occurs until Razorpay authorization is completed.</small></div>`}</section>` : "";
-  const managedSubscription = Boolean(subscription && ["authenticated", "active"].includes(String(subscription.status)));
   const packageCards = (workspaceBilling?.packages || []).map((plan) => {
     const selfService = plan.billing_model === "subscription";
     const active = plan.code === pkg.code;
@@ -2624,6 +2624,23 @@ async function renderDashboard() {
       const original = button.textContent;
       try { button.disabled = true; button.textContent = "Refreshing…"; await billingRequest("sync_subscription", { subscriptionId: button.dataset.billingSync }); showToast("Subscription status refreshed from Razorpay."); await renderDashboard(); }
       catch (error) { showToast(error?.message || "Subscription status could not be refreshed.", "error"); button.disabled = false; button.textContent = original; }
+    }));
+    app.querySelectorAll("[data-billing-update-payment]").forEach((button) => button.addEventListener("click", async () => {
+      const original = button.textContent;
+      const paymentWindow = window.open("about:blank", "_blank");
+      if (paymentWindow) paymentWindow.opener = null;
+      try {
+        if (!paymentWindow) throw new Error("Allow pop-ups for this site, then try updating the payment method again.");
+        button.disabled = true; button.textContent = "Opening Razorpay…";
+        const result = await billingRequest("payment_method_portal", { subscriptionId: button.dataset.billingUpdatePayment });
+        paymentWindow.location.replace(result.portalUrl);
+        showToast("Razorpay payment-method management opened securely in a new tab.");
+        button.disabled = false; button.textContent = original;
+      } catch (error) {
+        paymentWindow?.close();
+        showToast(error?.message || "Payment-method management could not be opened.", "error");
+        button.disabled = false; button.textContent = original;
+      }
     }));
     app.querySelectorAll("[data-billing-cancel]").forEach((button) => button.addEventListener("click", async () => {
       const confirmed = await confirmBillingCancellation(workspaceBilling?.subscription);
