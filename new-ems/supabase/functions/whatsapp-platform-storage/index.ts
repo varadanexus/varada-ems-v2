@@ -3,6 +3,7 @@
 // External customer sessions are validated server-side before any Drive call.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const ROOT_FOLDER_ID = Deno.env.get("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID") || "1Tnq1agDpaLCIT_ZGiDRjVOXa7KYDASQp";
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
@@ -690,6 +691,8 @@ async function submitVerification(admin: any, customer: any, body: any) {
   }).eq("tenant_id", customer.tenant_id).in("status", ["draft", "changes_requested", "rejected"]);
   if (error) throw error;
   await admin.from("whatsapp_platform_tenants").update({ verification_status: "submitted", updated_at: now }).eq("id", customer.tenant_id);
+  await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "verification_submitted")
+    .catch((emailError) => console.error("Verification-submitted email could not be queued", emailError));
   return { ok: true, verification: await verificationState(admin, customer) };
 }
 

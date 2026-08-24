@@ -3,6 +3,7 @@
 // Provider credentials are encrypted server-side and are never returned.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const MAX_BODY_BYTES = 24 * 1024;
 const ALLOWED_ORIGINS = new Set([
@@ -396,6 +397,10 @@ async function connectDeveloperTestNumber(admin: any, customer: any, body: any) 
 
   await admin.from("whatsapp_platform_tenants").update({ onboarding_status: "meta_connected", updated_at: now }).eq("id", customer.tenant_id);
   await recordEvent(admin, customer, "onboarding_completed", { wabaId, phoneNumberId, source: "developer_api_setup", testNumber: true }, connection.id);
+  await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "meta_connected")
+    .catch((emailError) => console.error("Meta-connected email could not be queued", emailError));
+  await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "number_confirmed")
+    .catch((emailError) => console.error("Number-confirmed email could not be queued", emailError));
   return { connection, expiresAt, temporaryCredential: true };
 }
 
@@ -538,6 +543,12 @@ async function completeOnboarding(admin: any, customer: any, body: any) {
     .update({ onboarding_status: phoneNumberId ? "meta_connected" : "meta_pending", updated_at: new Date().toISOString() })
     .eq("id", customer.tenant_id);
   await recordEvent(admin, customer, "onboarding_completed", { wabaId, phoneNumberId: phoneNumberId || null }, connection.id);
+  await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "meta_connected")
+    .catch((emailError) => console.error("Meta-connected email could not be queued", emailError));
+  if (phoneNumberId) {
+    await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "number_confirmed")
+      .catch((emailError) => console.error("Number-confirmed email could not be queued", emailError));
+  }
   const numberCapacity = await reconcileNumberCapacity(admin, customer);
   return { connection, numberCapacity };
 }

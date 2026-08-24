@@ -270,8 +270,18 @@ async function reviewVerification(tenantId, decision, notes, button) {
   }
   if (button) button.disabled = true;
   try {
-    const { error } = await db.rpc("whatsapp_platform_admin_review_verification", { p_tenant_id: tenantId, p_decision: decision, p_notes: notes || null });
-    if (error) throw error;
+    const token = await getSupabaseAccessToken();
+    if (!token) throw new Error("Your secure session has expired. Sign in again.");
+    const response = await fetch(`${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-admin-verification`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || "", "Content-Type": "application/json" },
+      credentials: "omit",
+      cache: "no-store",
+      referrerPolicy: "no-referrer",
+      body: JSON.stringify({ action: "review_verification", tenantId, decision, notes: notes || null }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result?.error || "Verification review could not be updated.");
     showToast(decision === "verified" ? "Provider business pre-check approved." : "Verification review updated.", TOAST_TYPES.SUCCESS);
     closeVerificationDocument();
     await loadSnapshot();

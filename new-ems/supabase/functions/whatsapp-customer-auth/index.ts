@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const JWT_TTL_SECONDS = 60 * 60;
 const MAX_BODY_BYTES = 16 * 1024;
@@ -260,6 +261,8 @@ Deno.serve(async (req) => {
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row?.session_token) return json(req, { error: "Invalid email or password." }, 401);
+      await sendWhatsAppMilestoneEmail(admin, row.tenant_id, "team_member_joined")
+        .catch((emailError) => console.error("Team-joined email could not be queued", emailError));
       return json(req, { session: publicSession(row) });
     }
 
@@ -276,6 +279,8 @@ Deno.serve(async (req) => {
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row?.session_token) throw new Error("This invitation is invalid or has expired.");
+      await sendWhatsAppMilestoneEmail(admin, row.tenant_id, "team_member_joined")
+        .catch((emailError) => console.error("Team-joined email could not be queued", emailError));
       return json(req, { session: publicSession(row) });
     }
 
@@ -309,6 +314,11 @@ Deno.serve(async (req) => {
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row?.session_token) throw new Error("Account could not be created.");
+      await sendWhatsAppMilestoneEmail(admin, row.tenant_id, "workspace_created", {
+        email: row.email,
+        name: row.display_name,
+        companyName: row.company_name,
+      }).catch((emailError) => console.error("Workspace-created email could not be queued", emailError));
       return json(req, { session: publicSession(row) }, 201);
     }
 
