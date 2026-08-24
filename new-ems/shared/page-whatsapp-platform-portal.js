@@ -691,44 +691,6 @@ async function billingRequest(action, payload = {}) {
   return data;
 }
 
-function wait(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-async function monitorHostedSubscription(subscriptionId, checkoutWindow) {
-  const timeoutAt = Date.now() + (10 * 60_000);
-  let closedAt = 0;
-  let lastError = null;
-  while (Date.now() < timeoutAt) {
-    await wait(4_000);
-    try {
-      const result = await billingRequest("sync_subscription", { subscriptionId });
-      const status = String(result?.subscription?.status || "").toLowerCase();
-      if (["authenticated", "active"].includes(status)) {
-        if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
-        const returnUrl = new URL(workspacePath("billing"), location.origin);
-        returnUrl.searchParams.set("checkout", "success");
-        location.assign(`${returnUrl.pathname}${returnUrl.search}`);
-        return true;
-      }
-      if (["cancelled", "completed", "expired", "halted"].includes(status)) {
-        throw new Error(`Razorpay returned subscription status: ${status}.`);
-      }
-      lastError = null;
-    } catch (error) {
-      lastError = error;
-      if (/status: (cancelled|completed|expired|halted)/i.test(error?.message || "")) throw error;
-    }
-    if (checkoutWindow?.closed) {
-      if (!closedAt) closedAt = Date.now();
-      if (Date.now() - closedAt > 20_000) {
-        throw lastError || new Error("Razorpay checkout was closed before payment authorization was confirmed.");
-      }
-    }
-  }
-  throw lastError || new Error("Payment is still being confirmed. Open Billing & usage and refresh the subscription status shortly.");
-}
-
 function loadRazorpayCheckout() {
   if (window.Razorpay) return Promise.resolve(window.Razorpay);
   if (razorpayCheckoutPromise) return razorpayCheckoutPromise;
@@ -2687,42 +2649,37 @@ async function renderDashboard() {
     app.querySelector("[data-checkout-authorize]")?.addEventListener("click", async (event) => {
       const button = event.currentTarget;
       const original = button.textContent;
-      let checkoutWindow = window.open("about:blank", "_blank");
-      if (checkoutWindow) checkoutWindow.opener = null;
       try {
         button.disabled = true; button.textContent = "Preparing Razorpay authorization…";
         const checkout = await billingRequest("create_subscription", { quoteId: button.dataset.checkoutAuthorize });
-        const trialMessage = checkout.trialEndsAt ? ` The first recurring charge is scheduled after the trial on ${new Date(checkout.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.` : "";
-        if (checkout.shortUrl) {
-          if (!checkoutWindow) throw new Error("Allow pop-ups for this site, then try the secure Razorpay authorization again.");
-          checkoutWindow.location.replace(checkout.shortUrl);
-          button.textContent = "Waiting for Razorpay confirmation…";
-          showToast(`Complete the authorization in the Razorpay window. This portal will return automatically after confirmation.${trialMessage}`);
-          await monitorHostedSubscription(checkout.subscriptionId, checkoutWindow);
-          return;
-        }
-        checkoutWindow?.close(); checkoutWindow = null;
         await loadRazorpayCheckout();
         const instance = new window.Razorpay({
-          key: checkout.keyId, subscription_id: checkout.razorpaySubscriptionId, name: "Varada Nexus",
+          key: checkout.keyId, subscription_id: checkout.razorpaySubscriptionId, name: "Varada Nexus Private Limited",
+          image: "https://www.varadanexus.com/images/logo.png",
           description: `${checkout.package?.name || "WhatsApp Solutions"} subscription`,
           prefill: { name: checkout.customer?.name || "", email: checkout.customer?.email || "" },
           notes: { workspace: checkout.customer?.companyName || session.companyName || "", checkout_quote_id: checkout.quote?.id || "" },
-          theme: { color: "#25d887" },
+          theme: { color: "#0b6b45" },
           handler: async (result) => {
             try {
               showToast("Payment received. Verifying securely…");
               await billingRequest("verify_checkout", { subscriptionId: checkout.subscriptionId, razorpayPaymentId: result.razorpay_payment_id, razorpaySubscriptionId: result.razorpay_subscription_id, razorpaySignature: result.razorpay_signature });
               showToast("Subscription verified and billing activated.");
-              location.assign(workspacePath("billing"));
+              const returnUrl = new URL(workspacePath("billing"), location.origin);
+              returnUrl.searchParams.set("checkout", "success");
+              location.assign(`${returnUrl.pathname}${returnUrl.search}`);
             } catch (error) { showToast(error?.message || "Payment verification failed.", "error"); }
           },
-          modal: { ondismiss: () => { button.disabled = false; button.textContent = original; } },
+          modal: {
+            confirm_close: true,
+            escape: true,
+            handleback: true,
+            ondismiss: () => { button.disabled = false; button.textContent = original; },
+          },
         });
         instance.on("payment.failed", (result) => showToast(result?.error?.description || "Razorpay could not complete the payment.", "error"));
         instance.open();
       } catch (error) {
-        checkoutWindow?.close();
         showToast(error?.message || "Secure authorization could not be opened.", "error");
         button.disabled = false; button.textContent = original;
       }
