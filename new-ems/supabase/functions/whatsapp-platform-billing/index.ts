@@ -1101,7 +1101,20 @@ async function paymentMethodPortal(admin: any, customer: any, body: any, credent
   try { parsedUrl = new URL(portalUrl); } catch { throw new Error("Razorpay returned an invalid payment-method management link."); }
   const razorpayHost = parsedUrl.hostname === "razorpay.com" || parsedUrl.hostname.endsWith(".razorpay.com") || parsedUrl.hostname === "rzp.io" || parsedUrl.hostname.endsWith(".rzp.io");
   if (parsedUrl.protocol !== "https:" || !razorpayHost) throw new Error("Razorpay returned an untrusted payment-method management link.");
-  return { portalUrl, subscription: { id: synced.id, status: synced.status } };
+  return {
+    keyId: credentials.keyId,
+    portalUrl,
+    subscription: {
+      id: synced.id,
+      status: synced.status,
+      razorpaySubscriptionId: synced.provider_subscription_id,
+    },
+    customer: {
+      name: customer.display_name,
+      email: customer.email,
+      companyName: customer.company_name,
+    },
+  };
 }
 async function recordRenewalPriceConsent(admin: any, customer: any, body: any, req: Request, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing consent.");

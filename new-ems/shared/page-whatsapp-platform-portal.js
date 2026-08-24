@@ -2591,17 +2591,49 @@ async function renderDashboard() {
     }));
     app.querySelectorAll("[data-billing-update-payment]").forEach((button) => button.addEventListener("click", async () => {
       const original = button.textContent;
-      const paymentWindow = window.open("about:blank", "_blank");
-      if (paymentWindow) paymentWindow.opener = null;
       try {
-        if (!paymentWindow) throw new Error("Allow pop-ups for this site, then try updating the payment method again.");
-        button.disabled = true; button.textContent = "Opening Razorpay…";
+        button.disabled = true; button.textContent = "Preparing secure update…";
         const result = await billingRequest("payment_method_portal", { subscriptionId: button.dataset.billingUpdatePayment });
-        paymentWindow.location.replace(result.portalUrl);
-        showToast("Razorpay payment-method management opened securely in a new tab.");
-        button.disabled = false; button.textContent = original;
+        await loadRazorpayCheckout();
+        const instance = new window.Razorpay({
+          key: result.keyId,
+          subscription_id: result.subscription?.razorpaySubscriptionId,
+          subscription_card_change: true,
+          name: "Varada Nexus Private Limited",
+          image: "https://www.varadanexus.com/images/logo.png",
+          description: "Update subscription payment method",
+          prefill: { name: result.customer?.name || "", email: result.customer?.email || "" },
+          notes: { workspace: result.customer?.companyName || session.companyName || "", action: "payment_method_update" },
+          theme: { color: "#0b6b45" },
+          handler: async (checkout) => {
+            try {
+              showToast("Payment method received. Verifying securely…");
+              await billingRequest("verify_checkout", {
+                subscriptionId: result.subscription.id,
+                razorpayPaymentId: checkout.razorpay_payment_id,
+                razorpaySubscriptionId: checkout.razorpay_subscription_id,
+                razorpaySignature: checkout.razorpay_signature,
+              });
+              showToast("Payment method updated successfully.");
+              await renderDashboard();
+            } catch (error) {
+              showToast(error?.message || "Payment-method verification failed.", "error");
+              button.disabled = false; button.textContent = original;
+            }
+          },
+          modal: {
+            confirm_close: true,
+            escape: true,
+            handleback: true,
+            ondismiss: () => { button.disabled = false; button.textContent = original; },
+          },
+        });
+        instance.on("payment.failed", (checkout) => {
+          showToast(checkout?.error?.description || "Razorpay could not update the payment method.", "error");
+          button.disabled = false; button.textContent = original;
+        });
+        instance.open();
       } catch (error) {
-        paymentWindow?.close();
         showToast(error?.message || "Payment-method management could not be opened.", "error");
         button.disabled = false; button.textContent = original;
       }
