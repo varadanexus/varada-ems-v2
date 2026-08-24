@@ -2,8 +2,6 @@ import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsap
 
 const SESSION_KEY = "vn_whatsapp_platform_session";
 const THEME_KEY = "vn_whatsapp_platform_theme";
-const CAMPAIGN_DRAFTS_KEY = "vn_whatsapp_campaign_drafts";
-const CAMPAIGN_SEGMENTS_KEY = "vn_whatsapp_campaign_segments";
 const SELECTED_NUMBER_KEY = "vn_whatsapp_selected_business_number";
 const OVERVIEW_PATH = "/whatsapp-platform";
 const ACCESS_PATH = "/whatsapp-platform/access/";
@@ -76,6 +74,7 @@ let workspaceContacts = { contacts: [], error: "" };
 let workspaceTemplates = { templates: [], connectionId: "", error: "" };
 let workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
 let workspaceFlows = { flows: [], error: "" };
+let workspaceCampaigns = { drafts: [], segments: [], error: "" };
 let workspaceSelectedConnectionId = "";
 let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
@@ -192,77 +191,53 @@ function selectWorkspaceConnection(connectionId) {
   try { localStorage.setItem(selectedNumberStorageKey(), workspaceSelectedConnectionId); } catch { /* Selection remains active for this visit. */ }
 }
 
-function campaignDraftsKey() {
-  return `${CAMPAIGN_DRAFTS_KEY}:${session?.tenantId || session?.email || "local"}:${workspaceSelectedConnectionId || "unassigned"}`;
-}
-
 function readCampaignDrafts() {
-  try {
-    const scoped = localStorage.getItem(campaignDraftsKey());
-    const legacy = localStorage.getItem(`${CAMPAIGN_DRAFTS_KEY}:${session?.tenantId || session?.email || "local"}`);
-    const parsed = JSON.parse(scoped ?? legacy ?? "[]");
-    const drafts = Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-    if (scoped === null && drafts.length) writeCampaignDrafts(drafts);
-    return drafts;
-  } catch {
-    return [];
-  }
+  return Array.isArray(workspaceCampaigns?.drafts) ? workspaceCampaigns.drafts : [];
 }
 
 function writeCampaignDrafts(drafts) {
-  try { localStorage.setItem(campaignDraftsKey(), JSON.stringify(drafts.slice(0, 80))); } catch { /* Drafts remain in memory only. */ }
-}
-
-function campaignSegmentsKey() {
-  return `${CAMPAIGN_SEGMENTS_KEY}:${session?.tenantId || session?.email || "local"}:${workspaceSelectedConnectionId || "unassigned"}`;
+  workspaceCampaigns.drafts = Array.isArray(drafts) ? drafts.slice(0, 200) : [];
 }
 
 function defaultCampaignSegments(contacts = []) {
   const activeContacts = contacts.filter((contact) => contact.status === "active");
-  const optedInContacts = activeContacts.filter((contact) => contact.opted_in !== false && contact.status !== "opted_out");
+  const optedInContacts = activeContacts.filter((contact) => contact.marketing_opt_in_at && !contact.marketing_opt_out_at);
   const recentCutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
   const recentContacts = activeContacts.filter((contact) => {
     const created = new Date(contact.created_at || contact.createdAt || 0).getTime();
     return created && created >= recentCutoff;
   });
   return [
-    { id: "active", name: "All active contacts", description: "Contacts available for customer communication.", count: activeContacts.length, system: true, rule: "status:active" },
-    { id: "opted_in", name: "Opt-in audience", description: "Contacts who have not opted out of WhatsApp messaging.", count: optedInContacts.length, system: true, rule: "opted_in:true" },
-    { id: "recent", name: "Recently added", description: "Active contacts added in the last 30 days.", count: recentContacts.length, system: true, rule: "created:last_30_days" },
+    { id: "marketing_opt_in", name: "Marketing opt-in audience", description: "Active contacts with recorded WhatsApp marketing consent.", count: optedInContacts.length, system: true, rule: "marketing_opt_in" },
+    { id: "recent_contact", name: "Recently added opt-ins", description: "Marketing opt-in contacts added in the last 30 days.", count: recentContacts.filter((contact) => contact.marketing_opt_in_at && !contact.marketing_opt_out_at).length, system: true, rule: "recent_contact" },
+    { id: "recent_message", name: "Recently engaged opt-ins", description: "Marketing opt-in contacts who messaged in the last 30 days.", count: optedInContacts.filter((contact) => new Date(contact.last_inbound_at || 0).getTime() >= recentCutoff).length, system: true, rule: "recent_message" },
   ];
 }
 
 function readCampaignSegments(contacts = []) {
-  try {
-    const scoped = localStorage.getItem(campaignSegmentsKey());
-    const legacy = localStorage.getItem(`${CAMPAIGN_SEGMENTS_KEY}:${session?.tenantId || session?.email || "local"}`);
-    const parsed = JSON.parse(scoped ?? legacy ?? "[]");
-    const custom = Array.isArray(parsed) ? parsed.filter(Boolean) : [];
-    if (scoped === null && custom.length) writeCampaignSegments(custom);
-    return [...defaultCampaignSegments(contacts), ...custom];
-  } catch {
-    return defaultCampaignSegments(contacts);
-  }
+  const custom = Array.isArray(workspaceCampaigns?.segments) ? workspaceCampaigns.segments : [];
+  return [...defaultCampaignSegments(contacts), ...custom];
 }
 
 function writeCampaignSegments(segments) {
   const custom = segments.filter((segment) => !segment.system).slice(0, 60);
-  try { localStorage.setItem(campaignSegmentsKey(), JSON.stringify(custom)); } catch { /* Segments remain in memory only. */ }
+  workspaceCampaigns.segments = custom;
 }
 
 function campaignSegmentRuleLabel(segment) {
   const value = String(segment?.ruleValue || "").trim();
   const labels = {
     manual: "Operator-managed estimate",
-    active: "Active contacts",
-    opted_in: "WhatsApp opt-in contacts",
-    recent_contact: "Added in the last 30 days",
-    recent_message: "Messaged in the last 30 days",
+    active: "Explicit marketing opt-ins",
+    opted_in: "Explicit marketing opt-ins",
+    marketing_opt_in: "Explicit marketing opt-ins",
+    recent_contact: "Opt-ins added in the last 30 days",
+    recent_message: "Opt-ins who messaged in the last 30 days",
     country_code: value ? `Number begins with ${value}` : "Country calling code",
     name_contains: value ? `Name contains “${value}”` : "Name contains text",
-    "status:active": "Active contacts",
-    "opted_in:true": "WhatsApp opt-in contacts",
-    "created:last_30_days": "Added in the last 30 days",
+    "status:active": "Explicit marketing opt-ins",
+    "opted_in:true": "Explicit marketing opt-ins",
+    "created:last_30_days": "Opt-ins added in the last 30 days",
   };
   return labels[segment?.rule] || segment?.rule || "Custom rule";
 }
@@ -271,10 +246,9 @@ function contactMatchesCampaignSegment(contact, segment) {
   const rule = segment?.rule || "manual";
   const value = String(segment?.ruleValue || "").trim().toLowerCase();
   const isActive = contact?.status === "active";
-  const isOptedIn = isActive && contact?.opted_in !== false && contact?.status !== "opted_out";
+  const isOptedIn = isActive && Boolean(contact?.marketing_opt_in_at) && !contact?.marketing_opt_out_at;
   const recentCutoff = Date.now() - (30 * 24 * 60 * 60 * 1000);
-  if (rule === "active") return isActive;
-  if (rule === "opted_in") return isOptedIn;
+  if (rule === "active" || rule === "opted_in" || rule === "marketing_opt_in") return isOptedIn;
   if (rule === "recent_contact") return isActive && new Date(contact?.created_at || contact?.createdAt || 0).getTime() >= recentCutoff;
   if (rule === "recent_message") return isOptedIn && new Date(contact?.last_inbound_at || contact?.lastInboundAt || 0).getTime() >= recentCutoff;
   if (rule === "country_code") return isOptedIn && String(contact?.phone_e164 || "").replace(/\s+/g, "").startsWith(value.replace(/\s+/g, ""));
@@ -304,7 +278,7 @@ function campaignDraftDate(value) {
 }
 
 function campaignStatusLabel(status) {
-  return ({ draft: "Draft", review: "Ready for approval", approved: "Approved", rejected: "Rejected", paused: "Paused" })[status] || "Draft";
+  return ({ draft: "Draft", review: "Ready for approval", approved: "Approved", rejected: "Rejected", paused: "Paused", scheduled: "Scheduled", sending: "Sending", completed: "Completed", failed: "Failed", cancelled: "Cancelled" })[status] || "Draft";
 }
 
 function campaignDetailUrl(id) {
@@ -358,7 +332,7 @@ function campaignReadinessItems(draft, templates = [], optedInContacts = []) {
     { label: "Eligible opt-in audience available", done: hasAudience },
     { label: "Campaign objective documented", done: Boolean(String(draft?.objective || "").trim()) },
     { label: "Future schedule and delivery window reviewed", done: hasFutureSchedule && Boolean(draft?.sendWindowStart && draft?.sendWindowEnd) },
-    { label: "Production sending still locked", done: true },
+    { label: "Administrator approval and final delivery confirmation", done: ["approved", "scheduled", "sending", "completed"].includes(draft?.status) },
   ];
 }
 
@@ -380,7 +354,7 @@ function campaignDetailMarkup(draft, templates = [], optedInContacts = []) {
   </section>
   <article class="wp-campaign-detail-objective"><span>Objective</span><p>${escapeHtml(draft.objective || "No objective documented yet.")}</p></article>
   <article class="wp-campaign-detail-preview"><span>Message preview</span><p>${escapeHtml(draft.previewBody || "No template preview available.")}</p></article>
-  <section class="wp-campaign-detail-readiness"><header><strong>${readinessDone}/${readiness.length} checks ready</strong><small>Production sending remains disabled until launch controls are completed.</small></header><ul>${readiness.map((item) => `<li class="${item.done ? "done" : ""}">${escapeHtml(item.label)}</li>`).join("")}</ul></section>
+  <section class="wp-campaign-detail-readiness"><header><strong>${readinessDone}/${readiness.length} checks ready</strong><small>Consent, package capacity, template approval and administrator authorization are rechecked before every delivery batch.</small></header><ul>${readiness.map((item) => `<li class="${item.done ? "done" : ""}">${escapeHtml(item.label)}</li>`).join("")}</ul></section>
   <section class="wp-campaign-audit"><header><strong>Approval history</strong><small>Reviewer decisions and status changes are kept with the draft.</small></header><ol>${campaignAuditMarkup(draft)}</ol></section>`;
 }
 
@@ -422,14 +396,20 @@ function workspaceNavItem(view, icon, badge = "") {
   return `<a class="${active ? "active" : ""}" href="${workspacePath(view)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" data-nav-label="${escapeHtml(label)}" ${active ? 'aria-current="page"' : ""}><span class="wp-nav-icon" aria-hidden="true">${iconMarkup}</span><span class="wp-nav-text">${escapeHtml(label)}</span>${badge ? `<em>${badge}</em>` : ""}</a>`;
 }
 
-function workspaceNavigationMarkup({ inboxUnread = 0, contactCount = 0, campaignCount = 0, templateCount = 0, flowCount = 0, connectedCount = 0, teamCount = 0, packageName = "" } = {}) {
+function workspaceNavigationMarkup({ inboxUnread = 0, contactCount = 0, campaignCount = 0, templateCount = 0, flowCount = 0, connectedCount = 0, teamCount = 0, packageName = "", entitlements = {} } = {}) {
+  const has = (feature) => !Object.hasOwn(entitlements || {}, feature) || ![false, 0, "none"].includes(entitlements?.[feature]);
   const customers = `<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}`;
-  const engage = `<span class="wp-nav-label">Engage</span>${workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "")}${workspaceNavItem("templates", "✦", templateCount ? String(templateCount) : "")}${workspaceNavItem("flows", "⌁", flowCount ? String(flowCount) : "")}`;
-  const insights = `<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}`;
+  const engage = `<span class="wp-nav-label">Engage</span>${has("campaigns") ? workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "") : ""}${has("templates") ? workspaceNavItem("templates", "✦", templateCount ? String(templateCount) : "") : ""}${has("flows") ? workspaceNavItem("flows", "⌁", flowCount ? String(flowCount) : "") : ""}`;
+  const insights = has("analytics") ? `<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}` : "";
   if (isAgentWorkspaceRole()) return `${customers}${engage}${insights}`;
   const profileItem = ["owner", "admin"].includes(session?.roleCode) ? workspaceNavItem("business-profile", "◎") : "";
   const billing = `<span class="wp-nav-label">Billing &amp; usage</span>${workspaceNavItem("billing", "₹")}${workspaceNavItem("billing-plans", "▤", packageName)}${workspaceNavItem("billing-addons", "+")}${workspaceNavItem("billing-invoices", "▧", String(workspaceBilling?.invoices?.length || ""))}${workspaceNavItem("billing-ledger", "≡")}${workspaceNavItem("billing-refunds", "↶", String(workspaceBilling?.creditNotes?.length || ""))}`;
   return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${billing}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${profileItem}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("settings", "⚙")}`;
+}
+
+function packageFeatureLockedView(feature) {
+  const label = WORKSPACE_VIEW_LABELS[feature] || String(feature || "Feature").replaceAll("_", " ");
+  return `<section class="wp-route-page wp-feature-lock"><article class="wp-card"><span class="wp-kicker">Package entitlement required</span><h1>${escapeHtml(label)}</h1><p>This module is not included in the active package. Package Master is the authority for feature access and limits.</p><a class="wp-primary wp-button-link" href="${workspacePath("billing-plans")}">View plans and upgrade</a></article></section>`;
 }
 
 const WORKSPACE_SIDEBAR_KEY = "varada-whatsapp-workspace-sidebar";
@@ -885,6 +865,20 @@ async function signOut(callServer = true) {
 
 function draftValue(name) { return escapeHtml(signupDraft[name] || ""); }
 function selected(name, value) { return signupDraft[name] === value ? "selected" : ""; }
+const BUSINESS_COUNTRY_CODES = "AF AX AL DZ AS AD AO AI AQ AG AR AM AW AU AT AZ BS BH BD BB BY BE BZ BJ BM BT BO BQ BA BW BV BR IO BN BG BF BI CV KH CM CA KY CF TD CL CN CX CC CO KM CG CD CK CR CI HR CU CW CY CZ DK DJ DM DO EC EG SV GQ ER EE SZ ET FK FO FJ FI FR GF PF TF GA GM GE DE GH GI GR GL GD GP GU GT GG GN GW GY HT HM VA HN HK HU IS IN ID IR IQ IE IM IL IT JM JP JE JO KZ KE KI KP KR KW KG LA LV LB LS LR LY LI LT LU MO MG MW MY MV ML MT MH MQ MR MU YT MX FM MD MC MN ME MS MA MZ MM NA NR NP NL NC NZ NI NE NG NU NF MK MP NO OM PK PW PS PA PG PY PE PH PN PL PT PR QA RE RO RU RW BL SH KN LC MF PM VC WS SM ST SA SN RS SC SL SG SX SK SI SB SO ZA GS SS ES LK SD SR SJ SE CH SY TW TJ TZ TH TL TG TK TO TT TN TR TM TC TV UG UA AE GB US UM UY UZ VU VE VN VG VI WF EH YE ZM ZW".split(" ");
+
+function businessCountryOptions() {
+  const current = signupDraft.country || "India";
+  const names = typeof Intl.DisplayNames === "function"
+    ? new Intl.DisplayNames(["en"], { type: "region" })
+    : null;
+  return BUSINESS_COUNTRY_CODES
+    .map((code) => names?.of(code) || code)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "en"))
+    .map((country) => `<option value="${escapeHtml(country)}" ${country === current ? "selected" : ""}>${escapeHtml(country)}</option>`)
+    .join("");
+}
 function normalizeWebsite(value) {
   const entered = String(value || "").trim();
   if (!entered) return "";
@@ -899,7 +893,7 @@ function signupFields() {
     <div class="wp-signup-heading"><strong>Tell us about your business</strong><span>Step 1 of 3</span></div>
     <label class="wp-field"><span>Legal business name</span><input name="legalName" value="${draftValue("legalName")}" autocomplete="organization" minlength="2" maxlength="160" required /><small>Use the name on your business registration or tax records.</small></label>
     <label class="wp-field"><span>Brand / trading name</span><input name="companyName" value="${draftValue("companyName")}" autocomplete="organization" minlength="2" maxlength="120" required /><small>Use the legal name again if you do not trade under another name.</small></label>
-    <div class="wp-form-row"><label class="wp-field"><span>Business website <small>(optional)</small></span><input name="website" value="${draftValue("website")}" type="text" inputmode="url" autocomplete="url" maxlength="300" placeholder="example.com" /><small>You can enter example.com or a complete https:// address.</small></label><label class="wp-field"><span>Country</span><input name="country" value="${draftValue("country")}" autocomplete="country-name" minlength="2" maxlength="80" required /><small aria-hidden="true">Country of business registration.</small></label></div>
+    <div class="wp-form-row"><label class="wp-field"><span>Business website <small>(optional)</small></span><input name="website" value="${draftValue("website")}" type="text" inputmode="url" autocomplete="url" maxlength="300" placeholder="example.com" /><small>You can enter example.com or a complete https:// address.</small></label><label class="wp-field"><span>Country</span><select name="country" autocomplete="country-name" required aria-describedby="wpSignupCountryHelp"><option value="" disabled>Select country</option>${businessCountryOptions()}</select><small id="wpSignupCountryHelp">Country of business registration.</small></label></div>
     <div class="wp-form-row"><label class="wp-field"><span>Business type</span><select name="businessType" required><option value="">Select type</option><option value="private_limited" ${selected("businessType","private_limited")}>Private limited company</option><option value="public_limited" ${selected("businessType","public_limited")}>Public limited company</option><option value="partnership" ${selected("businessType","partnership")}>Partnership / LLP</option><option value="sole_proprietor" ${selected("businessType","sole_proprietor")}>Sole proprietor</option><option value="nonprofit" ${selected("businessType","nonprofit")}>Non-profit</option><option value="government" ${selected("businessType","government")}>Government</option><option value="other" ${selected("businessType","other")}>Other</option></select></label><label class="wp-field"><span>Company size</span><select name="companySize" required><option value="">Select size</option><option value="1_10" ${selected("companySize","1_10")}>1–10 people</option><option value="11_50" ${selected("companySize","11_50")}>11–50 people</option><option value="51_200" ${selected("companySize","51_200")}>51–200 people</option><option value="201_1000" ${selected("companySize","201_1000")}>201–1,000 people</option><option value="1000_plus" ${selected("companySize","1000_plus")}>1,000+ people</option></select></label></div>`;
 
   if (signupStep === 2) return `
@@ -1646,9 +1640,10 @@ function contactsView() {
   const rows = contacts.map((contact) => {
     const name = inboxContactName(contact);
     const conversationUrl = contact.conversation?.id ? `${workspacePath("inbox")}?conversation=${encodeURIComponent(contact.conversation.id)}` : "";
-    return `<article class="wp-contact-row" data-contact-row><div class="wp-inbox-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</div><div class="wp-contact-identity"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(contact.phone_e164 || "")}</small></div><div class="wp-contact-activity"><span>${contact.last_inbound_at ? `Last message ${escapeHtml(inboxTime(contact.last_inbound_at))}` : "No inbound message"}</span><small>${contact.conversation ? `${escapeHtml(contact.conversation.status)} conversation` : "No conversation"}</small></div><span class="wp-contact-status ${escapeHtml(contact.status)}">${escapeHtml(contact.status.replaceAll("_", " "))}</span><div class="wp-contact-actions">${conversationUrl ? `<a href="${escapeHtml(conversationUrl)}">Open conversation</a>` : ""}<button type="button" data-edit-contact="${escapeHtml(contact.id)}" data-contact-name="${escapeHtml(contact.display_name || "")}" data-contact-status="${escapeHtml(contact.status)}">Edit</button></div></article>`;
+    const consentLabel = contact.marketing_opt_in_at && !contact.marketing_opt_out_at ? "Marketing opt-in recorded" : contact.marketing_opt_out_at ? "Marketing opted out" : "Marketing consent not recorded";
+    return `<article class="wp-contact-row" data-contact-row><div class="wp-inbox-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</div><div class="wp-contact-identity"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(contact.phone_e164 || "")}</small></div><div class="wp-contact-activity"><span>${contact.last_inbound_at ? `Last message ${escapeHtml(inboxTime(contact.last_inbound_at))}` : "No inbound message"}</span><small>${escapeHtml(consentLabel)}</small></div><span class="wp-contact-status ${escapeHtml(contact.status)}">${escapeHtml(contact.status.replaceAll("_", " "))}</span><div class="wp-contact-actions">${conversationUrl ? `<a href="${escapeHtml(conversationUrl)}">Open conversation</a>` : ""}<button type="button" data-edit-contact="${escapeHtml(contact.id)}" data-contact-name="${escapeHtml(contact.display_name || "")}" data-contact-status="${escapeHtml(contact.status)}">Edit</button></div></article>`;
   }).join("");
-  return `<section class="wp-route-page wp-contacts-page"><div class="wp-route-heading"><div><span class="wp-kicker">Customer records</span><h1>Contacts</h1><p>Manage customer identity, messaging eligibility and linked conversation history.</p></div><div class="wp-contact-summary"><strong>${contacts.length}</strong><span>total contacts</span></div></div>${workspaceContacts?.error ? `<div class="wp-verification-notice"><strong>Contacts unavailable</strong><p>${escapeHtml(workspaceContacts.error)}</p></div>` : ""}<section class="wp-contact-stats"><article><span>Active</span><strong>${Number(statusCounts.active || 0)}</strong></article><article><span>Blocked</span><strong>${Number(statusCounts.blocked || 0)}</strong></article><article><span>Opted out</span><strong>${Number(statusCounts.opted_out || 0)}</strong></article></section><section class="wp-card wp-contact-directory"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>WhatsApp contacts</h2></div><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search name or number" data-contact-search /></label></header><nav class="wp-inbox-filters" aria-label="Contact filters">${["all","active","blocked","opted_out"].map((filter) => { const url = new URL(workspacePath("contacts"), location.origin); if (filter !== "all") url.searchParams.set("status", filter); return `<a class="${status === filter ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}">${escapeHtml(filter.replaceAll("_", " "))}</a>`; }).join("")}</nav><div class="wp-contact-list">${rows || '<div class="wp-inbox-empty"><span>◎</span><strong>No contacts yet</strong><p>Contacts are created automatically when a customer messages a connected WhatsApp number.</p></div>'}</div></section><dialog class="wp-contact-dialog" id="wpContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Contact controls</span><h2>Edit customer</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><input type="hidden" name="contactId" /><label><span>Display name</span><input name="displayName" maxlength="200" autocomplete="off" /></label><label><span>Messaging status</span><select name="status"><option value="active">Active</option><option value="blocked">Blocked</option><option value="opted_out">Opted out</option></select><small>Blocked and opted-out contacts cannot receive messages from this workspace.</small></label><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="save">Save contact</button></footer></form></dialog></section>`;
+  return `<section class="wp-route-page wp-contacts-page"><div class="wp-route-heading"><div><span class="wp-kicker">Customer records</span><h1>Contacts</h1><p>Manage customer identity, messaging eligibility and linked conversation history.</p></div><div class="wp-contact-summary"><strong>${contacts.length}</strong><span>total contacts</span></div></div>${workspaceContacts?.error ? `<div class="wp-verification-notice"><strong>Contacts unavailable</strong><p>${escapeHtml(workspaceContacts.error)}</p></div>` : ""}<section class="wp-contact-stats"><article><span>Active</span><strong>${Number(statusCounts.active || 0)}</strong></article><article><span>Blocked</span><strong>${Number(statusCounts.blocked || 0)}</strong></article><article><span>Opted out</span><strong>${Number(statusCounts.opted_out || 0)}</strong></article></section><section class="wp-card wp-contact-directory"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>WhatsApp contacts</h2></div><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search name or number" data-contact-search /></label></header><nav class="wp-inbox-filters" aria-label="Contact filters">${["all","active","blocked","opted_out"].map((filter) => { const url = new URL(workspacePath("contacts"), location.origin); if (filter !== "all") url.searchParams.set("status", filter); return `<a class="${status === filter ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}">${escapeHtml(filter.replaceAll("_", " "))}</a>`; }).join("")}</nav><div class="wp-contact-list">${rows || '<div class="wp-inbox-empty"><span>◎</span><strong>No contacts yet</strong><p>Contacts are created automatically when a customer messages a connected WhatsApp number.</p></div>'}</div></section><dialog class="wp-contact-dialog" id="wpContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Contact controls</span><h2>Edit customer</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><input type="hidden" name="contactId" /><label><span>Display name</span><input name="displayName" maxlength="200" autocomplete="off" /></label><label><span>Messaging status</span><select name="status"><option value="active">Active</option><option value="blocked">Blocked</option><option value="opted_out">Opted out</option></select><small>Blocked and opted-out contacts cannot receive messages from this workspace.</small></label><label><span>WhatsApp marketing consent</span><select name="marketingConsent"><option value="unknown">Not recorded</option><option value="opted_in">Explicit opt-in recorded</option><option value="opted_out">Opted out</option></select><small>Campaigns include only contacts with explicit, auditable marketing consent.</small></label><label data-marketing-consent-source hidden><span>Consent source</span><select name="marketingOptInSource"><option value="manual_record">Manual record</option><option value="website">Website</option><option value="form">Form</option><option value="qr_code">QR code</option><option value="keyword">Keyword</option><option value="inbound_request">Inbound request</option><option value="imported_proof">Imported proof</option><option value="api">API</option></select></label><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="save">Save contact</button></footer></form></dialog></section>`;
 }
 
 function inboxView() {
@@ -1764,7 +1759,7 @@ function campaignsView() {
   const drafts = readCampaignDrafts();
   const contacts = workspaceContacts?.contacts || [];
   const activeContacts = contacts.filter((contact) => contact.status === "active");
-  const optedInContacts = activeContacts.filter((contact) => contact.opted_in !== false && contact.status !== "opted_out");
+  const optedInContacts = activeContacts.filter((contact) => contact.marketing_opt_in_at && !contact.marketing_opt_out_at);
   const templates = approvedWorkspaceTemplates();
   const segments = campaignSegmentsWithCounts(contacts);
   const firstDraft = drafts[0] || {};
@@ -1779,9 +1774,21 @@ function campaignsView() {
     return counts;
   }, {});
   const readyDrafts = drafts.filter((draft) => draft.status === "review" || draft.status === "approved").length;
+  const canReviewCampaigns = ["owner", "admin"].includes(session?.roleCode);
   const draftRows = drafts.map((draft) => {
     const readiness = campaignReadinessItems(draft, templates, optedInContacts);
     const readinessDone = readiness.filter((item) => item.done).length;
+    const deliveryLocked = ["scheduled","sending","completed","failed","cancelled"].includes(draft.status);
+    const statusControl = deliveryLocked
+      ? `<span class="wp-campaign-status ${escapeHtml(draft.status)}">${escapeHtml(campaignStatusLabel(draft.status))}</span>`
+      : `<label class="wp-campaign-status-control"><span>Workflow status</span><select data-campaign-status="${escapeHtml(draft.id)}" aria-label="Campaign status"><option value="draft" ${(!draft.status || draft.status === "draft") ? "selected" : ""}>Draft</option><option value="review" ${draft.status === "review" ? "selected" : ""}>Ready for approval</option><option value="approved" ${draft.status === "approved" ? "selected" : ""}>Approved</option><option value="rejected" ${draft.status === "rejected" ? "selected" : ""}>Rejected</option><option value="paused" ${draft.status === "paused" ? "selected" : ""}>Paused</option></select></label>`;
+    const deliveryAction = canReviewCampaigns && ["approved","scheduled","sending"].includes(draft.status)
+      ? `<button class="wp-primary" type="button" data-dispatch-campaign="${escapeHtml(draft.id)}">${draft.status === "sending" ? "Continue delivery" : draft.status === "scheduled" ? "Deliver when due" : "Start delivery"}</button>`
+      : "";
+    const reviewActions = canReviewCampaigns && !deliveryLocked
+      ? `<button type="button" data-approve-campaign="${escapeHtml(draft.id)}">Approve</button><button type="button" data-reject-campaign="${escapeHtml(draft.id)}">Reject</button>`
+      : "";
+    const deleteAction = deliveryLocked ? "" : `<button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button>`;
     return `<article class="wp-campaign-row">
       <div class="wp-campaign-row-main">
         <div class="wp-campaign-row-title">
@@ -1798,8 +1805,8 @@ function campaignsView() {
         <span><em>Readiness</em><strong>${readinessDone} of ${readiness.length} checks</strong></span>
       </div>
       <div class="wp-campaign-row-footer">
-        <label class="wp-campaign-status-control"><span>Workflow status</span><select data-campaign-status="${escapeHtml(draft.id)}" aria-label="Campaign status"><option value="draft" ${(!draft.status || draft.status === "draft") ? "selected" : ""}>Draft</option><option value="review" ${draft.status === "review" ? "selected" : ""}>Ready for approval</option><option value="approved" ${draft.status === "approved" ? "selected" : ""}>Approved</option><option value="rejected" ${draft.status === "rejected" ? "selected" : ""}>Rejected</option><option value="paused" ${draft.status === "paused" ? "selected" : ""}>Paused</option></select></label>
-        <div class="wp-campaign-row-actions"><a href="${escapeHtml(campaignDetailUrl(draft.id))}" data-view-campaign="${escapeHtml(draft.id)}">View</a><button type="button" data-edit-campaign="${escapeHtml(draft.id)}">Edit</button><button type="button" data-approve-campaign="${escapeHtml(draft.id)}">Approve</button><button type="button" data-reject-campaign="${escapeHtml(draft.id)}">Reject</button><button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button><button type="button" data-delete-campaign="${escapeHtml(draft.id)}">Delete</button></div>
+        ${statusControl}
+        <div class="wp-campaign-row-actions">${deliveryAction}<a href="${escapeHtml(campaignDetailUrl(draft.id))}" data-view-campaign="${escapeHtml(draft.id)}">View</a>${deliveryLocked ? "" : `<button type="button" data-edit-campaign="${escapeHtml(draft.id)}">Edit</button>`}${reviewActions}<button type="button" data-duplicate-campaign="${escapeHtml(draft.id)}">Copy</button>${deleteAction}</div>
       </div>
     </article>`;
   }).join("");
@@ -1809,8 +1816,13 @@ function campaignsView() {
     const campaignBody = selectedDraft ? campaignDetailMarkup(selectedDraft, templates, optedInContacts) : `<article class="wp-card wp-campaign-missing"><span>⌕</span><h2>Campaign draft not found</h2><p>This draft may have been deleted or exists in another workspace.</p><a class="wp-primary wp-button-link" href="${campaignListUrl()}">Back to campaigns</a></article>`;
     const selectedReadiness = selectedDraft ? campaignReadinessItems(selectedDraft, templates, optedInContacts) : [];
     const selectedReady = selectedReadiness.filter((item) => item.done).length;
+    const selectedLocked = selectedDraft && ["scheduled", "sending", "completed", "failed", "cancelled"].includes(selectedDraft.status);
+    const selectedDeliveryAction = selectedDraft && canReviewCampaigns && ["approved", "scheduled", "sending"].includes(selectedDraft.status)
+      ? `<button class="wp-primary" type="button" data-dispatch-campaign="${escapeHtml(selectedDraft.id)}">${selectedDraft.status === "sending" ? "Continue delivery" : selectedDraft.status === "scheduled" ? "Deliver when due" : "Start delivery"}</button>` : "";
+    const selectedReviewActions = selectedDraft && canReviewCampaigns && !selectedLocked
+      ? `<button class="wp-secondary" type="button" data-reject-campaign="${escapeHtml(selectedDraft.id)}">Reject</button><button class="wp-primary" type="button" data-approve-campaign="${escapeHtml(selectedDraft.id)}">Approve</button>` : "";
     return `<section class="wp-route-page wp-campaign-page wp-campaign-detail-page">
-      <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Campaign review</span><h1>${escapeHtml(selectedDraft?.name || "Campaign details")}</h1><p>${selectedDraft ? "Review audience, template, schedule, approval history and launch readiness from one focused workspace." : "The requested campaign draft is not available."}</p></div><div class="wp-campaign-actions"><a class="wp-secondary wp-button-link" href="${campaignListUrl()}">← Campaigns</a>${selectedDraft ? `<button class="wp-secondary" type="button" data-edit-campaign="${escapeHtml(selectedDraft.id)}">Edit draft</button><button class="wp-secondary" type="button" data-reject-campaign="${escapeHtml(selectedDraft.id)}">Reject</button><button class="wp-primary" type="button" data-approve-campaign="${escapeHtml(selectedDraft.id)}">Approve</button>` : ""}</div></div>
+      <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Campaign review</span><h1>${escapeHtml(selectedDraft?.name || "Campaign details")}</h1><p>${selectedDraft ? "Review audience, template, schedule, approval history and delivery outcomes from one focused workspace." : "The requested campaign draft is not available."}</p></div><div class="wp-campaign-actions"><a class="wp-secondary wp-button-link" href="${campaignListUrl()}">← Campaigns</a>${selectedDraft && !selectedLocked ? `<button class="wp-secondary" type="button" data-edit-campaign="${escapeHtml(selectedDraft.id)}">Edit draft</button>` : ""}${selectedReviewActions}${selectedDeliveryAction}</div></div>
       ${selectedDraft ? `<section class="wp-template-stats"><article><span>Status</span><strong>${escapeHtml(campaignStatusLabel(selectedDraft.status))}</strong></article><article><span>Readiness</span><strong>${selectedReady}/${selectedReadiness.length}</strong></article><article><span>Audience</span><strong>${Number(selectedDraft.estimatedAudience || 0)}</strong></article><article><span>Updated</span><strong>${escapeHtml(campaignDraftDate(selectedDraft.updatedAt))}</strong></article></section>` : ""}
       <article class="wp-card wp-campaign-detail-workspace">${campaignBody}</article>
       <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignDraftDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign planner</span><h2 data-campaign-dialog-title>Edit campaign draft</h2><p>Prepare campaign details before approval and production sending.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input name="campaignId" type="hidden" />
@@ -1821,7 +1833,7 @@ function campaignsView() {
         <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Workflow status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="paused">Paused</option></select><small>Approval is recorded through the campaign review action.</small></label></div>
         <label><span>Approved template</span><select name="templateKey" ${templates.length ? "required" : "disabled"}><option value="">Select template</option>${templateOptions}</select><small>${templates.length ? "Only templates already approved by Meta are available here." : `No approved template is available yet. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label>
         <div class="wp-campaign-live-preview"><span>Preview</span><p data-campaign-preview>${escapeHtml(previewTemplate ? templateBody(previewTemplate) : "Select an approved template to preview its body.")}</p></div>
-        <div class="wp-policy-note"><strong>Campaign safety gate</strong><p>This creates a planning draft only. Sending will require approved templates, eligible opt-in contacts, production approval and final operator confirmation.</p></div>
+        <div class="wp-policy-note"><strong>Campaign safety gate</strong><p>Delivery is enabled only after administrator approval, explicit-consent audience validation, an approved Meta template, package capacity and final operator confirmation.</p></div>
         <label class="wp-check-row"><input name="confirmOptIn" type="checkbox" required /><span><strong>Audience has opted in</strong><small>I will send only to contacts who expect this WhatsApp message.</small></span></label>
         <label class="wp-check-row"><input name="confirmPolicy" type="checkbox" required /><span><strong>Content follows WhatsApp policies</strong><small>No prohibited, misleading, sensitive or unsupported campaign content.</small></span></label>
         <footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save">Save draft</button></footer></form></dialog>
@@ -1829,13 +1841,14 @@ function campaignsView() {
     </section>`;
   }
   return `<section class="wp-route-page wp-campaign-page">
-    <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Engagement planning</span><h1>Campaigns</h1><p>Build opt-in WhatsApp campaign drafts with audience segments, approval checks, template previews and scheduling readiness. Sending stays locked until production gates are complete.</p></div><div class="wp-campaign-actions"><button class="wp-secondary" id="wpCreateSegmentBtn" type="button">＋ Segment</button><button class="wp-primary" id="wpCreateCampaignBtn" type="button">＋ Campaign draft</button></div></div>
+    <div class="wp-route-heading wp-campaign-heading"><div><span class="wp-kicker">Engagement planning</span><h1>Campaigns</h1><p>Build tenant-shared WhatsApp campaign drafts with explicit-consent audiences, approval history, template previews and scheduling controls.</p></div><div class="wp-campaign-actions"><button class="wp-secondary" id="wpCreateSegmentBtn" type="button">＋ Segment</button><button class="wp-primary" id="wpCreateCampaignBtn" type="button">＋ Campaign draft</button></div></div>
+    ${workspaceCampaigns?.error ? `<div class="wp-verification-notice"><strong>Campaign workspace unavailable</strong><p>${escapeHtml(workspaceCampaigns.error)}</p></div>` : ""}
     <section class="wp-template-stats"><article><span>Opt-in audience</span><strong>${optedInContacts.length}</strong></article><article><span>Segments</span><strong>${segments.length}</strong></article><article><span>Approved templates</span><strong>${templates.length}</strong></article><article><span>Ready drafts</span><strong>${readyDrafts}</strong></article></section>
-    <section class="wp-campaign-readiness"><article><span>Draft</span><strong>${statusCounts.draft || 0}</strong></article><article><span>Ready for approval</span><strong>${statusCounts.review || 0}</strong></article><article><span>Approved</span><strong>${statusCounts.approved || 0}</strong></article><article><span>Rejected</span><strong>${statusCounts.rejected || 0}</strong></article><article><span>Paused</span><strong>${statusCounts.paused || 0}</strong></article></section>
+    <section class="wp-campaign-readiness"><article><span>Draft</span><strong>${statusCounts.draft || 0}</strong></article><article><span>Review</span><strong>${statusCounts.review || 0}</strong></article><article><span>Approved / scheduled</span><strong>${Number(statusCounts.approved || 0) + Number(statusCounts.scheduled || 0)}</strong></article><article><span>Sending</span><strong>${statusCounts.sending || 0}</strong></article><article><span>Completed</span><strong>${statusCounts.completed || 0}</strong></article><article><span>Needs attention</span><strong>${Number(statusCounts.rejected || 0) + Number(statusCounts.failed || 0) + Number(statusCounts.paused || 0)}</strong></article></section>
     <section class="wp-campaign-grid">
-      <article class="wp-card wp-campaign-list"><header><div><span class="wp-card-eyebrow">Campaign command table</span><h2>Campaign drafts</h2></div><small>Drafts are stored for planning. No campaign blast is sent here.</small></header><div class="wp-campaign-table">${draftRows || `<div class="wp-inbox-empty"><span>◈</span><strong>No campaign drafts yet</strong><p>Create a draft to plan audience, template, schedule and approval checks.</p></div>`}</div></article>
+      <article class="wp-card wp-campaign-list"><header><div><span class="wp-card-eyebrow">Campaign command table</span><h2>Campaign drafts</h2></div><small>Shared securely across this workspace with an approval audit.</small></header><div class="wp-campaign-table">${draftRows || `<div class="wp-inbox-empty"><span>◈</span><strong>No campaign drafts yet</strong><p>Create a draft to plan audience, template, schedule and approval checks.</p></div>`}</div></article>
       <aside class="wp-campaign-side-stack">
-        <article class="wp-card wp-campaign-preview-card"><span class="wp-card-eyebrow">WhatsApp preview</span><div class="wp-campaign-phone"><div><strong>${escapeHtml(firstDraft.name || "Campaign preview")}</strong><small>${escapeHtml(firstDraft.templateName || "Approved template")}</small></div><p>${escapeHtml(previewBody)}</p><time>Preview only</time></div><ul class="wp-campaign-checklist"><li class="${workspaceVerification?.status === "verified" ? "done" : ""}">Business verification complete</li><li class="${templates.length ? "done" : ""}">Approved template available</li><li class="${optedInContacts.length ? "done" : ""}">Opt-in audience available</li><li>Production sending switch remains off until review and billing gates are ready</li></ul></article>
+        <article class="wp-card wp-campaign-preview-card"><span class="wp-card-eyebrow">WhatsApp preview</span><div class="wp-campaign-phone"><div><strong>${escapeHtml(firstDraft.name || "Campaign preview")}</strong><small>${escapeHtml(firstDraft.templateName || "Approved template")}</small></div><p>${escapeHtml(previewBody)}</p><time>Preview only</time></div><ul class="wp-campaign-checklist"><li class="${workspaceVerification?.status === "verified" ? "done" : ""}">Business verification complete</li><li class="${templates.length ? "done" : ""}">Approved template available</li><li class="${optedInContacts.length ? "done" : ""}">Opt-in audience available</li><li class="${["approved","sending","completed"].includes(firstDraft.status) ? "done" : ""}">Administrator approval and final delivery confirmation</li></ul></article>
         <article class="wp-card wp-campaign-segments"><header><div><span class="wp-card-eyebrow">Audience controls</span><h2>Segments</h2></div></header><div>${segmentCards}</div></article>
       </aside>
     </section>
@@ -1847,17 +1860,17 @@ function campaignsView() {
       <div class="wp-form-row"><label><span>Owner</span><input name="owner" maxlength="120" value="${escapeHtml(session.displayName || "")}" /></label><label><span>Workflow status</span><select name="status"><option value="draft">Draft</option><option value="review">Ready for approval</option><option value="paused">Paused</option></select><small>Approval is recorded through the campaign review action.</small></label></div>
       <label><span>Approved template</span><select name="templateKey" ${templates.length ? "required" : "disabled"}><option value="">Select template</option>${templateOptions}</select><small>${templates.length ? "Only templates already approved by Meta are available here." : `No approved template is available yet. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label>
       <div class="wp-campaign-live-preview"><span>Preview</span><p data-campaign-preview>${escapeHtml(previewTemplate ? templateBody(previewTemplate) : "Select an approved template to preview its body.")}</p></div>
-      <div class="wp-policy-note"><strong>Campaign safety gate</strong><p>This creates a planning draft only. Sending will require approved templates, eligible opt-in contacts, production approval and final operator confirmation.</p></div>
+      <div class="wp-policy-note"><strong>Campaign safety gate</strong><p>Delivery is enabled only after administrator approval, explicit-consent audience validation, an approved Meta template, package capacity and final operator confirmation.</p></div>
       <label class="wp-check-row"><input name="confirmOptIn" type="checkbox" required /><span><strong>Audience has opted in</strong><small>I will send only to contacts who expect this WhatsApp message.</small></span></label>
       <label class="wp-check-row"><input name="confirmPolicy" type="checkbox" required /><span><strong>Content follows WhatsApp policies</strong><small>No prohibited, misleading, sensitive or unsupported campaign content.</small></span></label>
       <footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save">Save draft</button></footer></form></dialog>
     <dialog class="wp-contact-dialog wp-campaign-dialog" id="wpCampaignSegmentDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Audience segment</span><h2>Create segment</h2><p>Use this for planning named campaign audiences before production targeting is enabled.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header>
       <label><span>Segment name</span><input name="name" maxlength="80" placeholder="High-intent enquiries" required /></label>
       <label><span>Description</span><textarea name="description" maxlength="240" rows="3" placeholder="Who belongs in this audience and when should they receive campaigns?"></textarea></label>
-      <div class="wp-form-row"><label><span>Audience rule</span><select name="rule"><option value="opted_in">WhatsApp opt-in contacts</option><option value="active">All active contacts</option><option value="recent_contact">Added in the last 30 days</option><option value="recent_message">Messaged in the last 30 days</option><option value="country_code">Country calling code</option><option value="name_contains">Contact name contains</option><option value="manual">Operator-managed estimate</option></select></label><label data-segment-rule-value-wrap hidden><span data-segment-rule-value-label>Rule value</span><input name="ruleValue" maxlength="80" placeholder="+91" /></label></div>
+      <div class="wp-form-row"><label><span>Audience rule</span><select name="rule"><option value="marketing_opt_in">Explicit marketing opt-ins</option><option value="recent_contact">Opt-ins added in the last 30 days</option><option value="recent_message">Opt-ins who messaged in the last 30 days</option><option value="country_code">Opt-ins by country calling code</option><option value="name_contains">Opt-ins whose contact name contains</option><option value="manual">Operator-managed estimate</option></select></label><label data-segment-rule-value-wrap hidden><span data-segment-rule-value-label>Rule value</span><input name="ruleValue" maxlength="80" placeholder="+91" /></label></div>
       <label data-segment-manual-count hidden><span>Estimated contacts</span><input name="count" type="number" min="0" step="1" value="0" /></label>
       <div class="wp-segment-estimate"><span>Matching eligible contacts</span><strong data-segment-estimate>0</strong><small>Calculated from the contacts currently available in this workspace.</small></div>
-      <div class="wp-policy-note"><strong>Planning only</strong><p>Final production targeting will be enforced server-side after Meta review and billing gates are completed.</p></div>
+      <div class="wp-policy-note"><strong>Consent enforced</strong><p>Computed rules include only active contacts with recorded WhatsApp marketing consent. Manual estimates cannot become a send audience without verified recipients.</p></div>
       <footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save_segment">Save segment</button></footer></form></dialog>
     <dialog class="wp-contact-dialog wp-campaign-detail-dialog" id="wpCampaignDetailDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Campaign brief</span><h2 data-campaign-detail-title>Campaign details</h2><p>Review the draft before editing or moving it into approval.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><div data-campaign-detail></div><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Close</button><button class="wp-secondary" type="button" data-detail-reject-campaign>Reject</button><button class="wp-secondary" type="button" data-detail-approve-campaign>Approve</button><button class="wp-primary" type="button" data-detail-edit-campaign>Edit draft</button></footer></form></dialog>
     <dialog class="wp-contact-dialog wp-campaign-approval-dialog" id="wpCampaignApprovalDialog"><form method="dialog" novalidate><header><div><span class="wp-card-eyebrow">Campaign decision</span><h2 data-campaign-decision-title>Approve campaign</h2><p data-campaign-decision-copy>Record the approval note before this draft moves forward.</p></div><button type="submit" value="cancel" formnovalidate aria-label="Close">×</button></header><input name="campaignId" type="hidden" /><input name="decision" type="hidden" /><label><span>Decision note</span><textarea name="note" maxlength="500" rows="4" placeholder="Add the reason, reviewer context, or changes required."></textarea><small data-campaign-decision-help>Approval notes are optional. Rejections require a clear reason.</small></label><footer><button class="wp-secondary" type="submit" value="cancel" formnovalidate>Cancel</button><button class="wp-primary" type="submit" value="save" data-campaign-decision-submit>Approve</button></footer></form></dialog>
@@ -1870,7 +1883,7 @@ function analyticsView() {
   const templates = workspaceTemplates?.templates || [];
   const campaigns = readCampaignDrafts();
   const activeContacts = contacts.filter((contact) => contact.status === "active");
-  const optedInContacts = activeContacts.filter((contact) => contact.opted_in !== false && contact.status !== "opted_out");
+  const optedInContacts = activeContacts.filter((contact) => contact.marketing_opt_in_at && !contact.marketing_opt_out_at);
   const openConversations = conversations.filter((conversation) => conversation.status === "open");
   const pendingConversations = conversations.filter((conversation) => conversation.status === "pending");
   const resolvedConversations = conversations.filter((conversation) => conversation.status === "resolved");
@@ -1881,9 +1894,13 @@ function analyticsView() {
     counts[status] = Number(counts[status] || 0) + 1;
     return counts;
   }, {});
-  const readyCampaigns = campaigns.filter((campaign) => campaign.status === "approved" && new Date(campaign.scheduledAt || 0).getTime() > Date.now());
+  const readyCampaigns = campaigns.filter((campaign) => ["approved", "scheduled", "sending"].includes(campaign.status));
+  const deliveredMessages = campaigns.reduce((total, campaign) => total + Number(campaign.deliveredCount || 0), 0);
+  const readMessages = campaigns.reduce((total, campaign) => total + Number(campaign.readCount || 0), 0);
+  const failedMessages = campaigns.reduce((total, campaign) => total + Number(campaign.failedCount || 0), 0);
+  const acceptedMessages = campaigns.reduce((total, campaign) => total + Number(campaign.acceptedCount || 0), 0);
   const campaignTotal = Math.max(campaigns.length, 1);
-  const statusBars = ["draft", "review", "approved", "rejected", "paused"].map((status) => {
+  const statusBars = ["draft", "review", "approved", "scheduled", "sending", "completed", "failed"].map((status) => {
     const count = Number(campaignStatuses[status] || 0);
     const width = Math.round((count / campaignTotal) * 100);
     return `<li><div><span>${escapeHtml(campaignStatusLabel(status))}</span><strong>${count}</strong></div><i><b style="width:${width}%"></b></i></li>`;
@@ -1909,7 +1926,7 @@ function analyticsView() {
       <article class="wp-card wp-analytics-panel"><header><div><span class="wp-card-eyebrow">Campaign operations</span><h2>Approval pipeline</h2></div><a href="${workspacePath("campaigns")}">Open campaigns →</a></header><ul class="wp-analytics-bars">${statusBars}</ul></article>
       <article class="wp-card wp-analytics-panel"><header><div><span class="wp-card-eyebrow">Customer operations</span><h2>Conversation workload</h2></div><a href="${workspacePath("inbox")}">Open inbox →</a></header><ul class="wp-analytics-workload">${workloadRows}</ul><footer><span>Unread across workspace</span><strong>${unreadMessages}</strong></footer></article>
       <article class="wp-card wp-analytics-panel wp-analytics-activity"><header><div><span class="wp-card-eyebrow">Recent activity</span><h2>Campaign updates</h2></div></header><div>${recentCampaigns || '<div class="wp-inbox-empty"><span>◈</span><strong>No campaign activity yet</strong><p>Create a campaign draft to begin tracking its readiness.</p></div>'}</div></article>
-      <article class="wp-card wp-analytics-panel wp-analytics-locked"><span class="wp-card-eyebrow">Production performance</span><div class="wp-analytics-lock-icon" aria-hidden="true">◇</div><h2>Messaging outcomes activate after launch</h2><p>Delivery, read, reply, failure and campaign-conversion metrics will appear only after production sending is enabled and real events are received.</p><ul><li>Delivery and failure rate</li><li>Read and response rate</li><li>Template and campaign comparison</li></ul><small>No simulated performance data is shown.</small></article>
+      <article class="wp-card wp-analytics-panel"><header><div><span class="wp-card-eyebrow">Production performance</span><h2>Campaign delivery outcomes</h2></div><a href="${workspacePath("campaigns")}">Review delivery →</a></header><dl class="wp-profile-details"><div><dt>Accepted by Meta</dt><dd>${acceptedMessages}</dd></div><div><dt>Delivered</dt><dd>${deliveredMessages}</dd></div><div><dt>Read</dt><dd>${readMessages}</dd></div><div><dt>Failed</dt><dd>${failedMessages}</dd></div></dl><small>Counts come from signed Meta webhook delivery events; no simulated performance data is shown.</small></article>
     </section>
   </section>`;
 }
@@ -2179,7 +2196,7 @@ function overviewView(connections, setupReady, profile) {
   const businessVerified = workspaceVerification?.status === "verified";
   const mayOnboard = businessVerified || workspaceVerification?.gateRequired === false;
   const progress = 20 + Number(businessVerified) * 20 + Number(metaConnected) * 20 + Number(phoneConnected) * 20;
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Business messaging workspace</span><h1>${escapeHtml(session.companyName)}</h1><p>Your operational summary and next actions. Use the sidebar to open each dedicated module.</p></div><a class="wp-primary wp-button-link" href="${workspacePath(mayOnboard ? "onboarding" : "verification")}">${mayOnboard ? "Continue setup" : "Verify business"}</a></div><section class="wp-status-grid" aria-label="Workspace status"><article class="wp-stat"><span>Workspace</span><strong><i class="wp-status-dot"></i> Active</strong></article><article class="wp-stat"><span>Verification</span><strong>${escapeHtml(String(workspaceVerification?.status || "not started").replaceAll("_", " "))}</strong></article><article class="wp-stat"><span>Current plan</span><strong>${escapeHtml(planName(profile?.planCode))}</strong></article><article class="wp-stat"><span>Setup progress</span><strong>${progress}%</strong></article></section><section class="wp-overview-actions"><a class="wp-card wp-action-card" href="${workspacePath(mayOnboard ? "onboarding" : "verification")}"><span class="wp-card-eyebrow">Next step</span><h2>${mayOnboard ? (setupReady ? "Connect Meta Business" : "Prepare your workspace") : "Verify your organisation"}</h2><p>${mayOnboard ? "Open the dedicated onboarding section to continue setup." : "Submit entity details and the required business evidence for review."}</p><strong>${mayOnboard ? "Open onboarding" : "Open verification"} →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("accounts")}"><span class="wp-card-eyebrow">Connected assets</span><h2>Business accounts</h2><p>${connections.length ? `${connections.length} account${connections.length === 1 ? "" : "s"} connected.` : "No account connected yet."}</p><strong>Manage accounts →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("inbox")}"><span class="wp-card-eyebrow">Communication</span><h2>Team inbox</h2><p>Your future shared customer conversation workspace.</p><strong>View module →</strong></a></section><section class="wp-workspace-note"><div><strong>Dedicated product workspace</strong><p>Every sidebar option opens a separate module route; overview remains a concise command surface.</p></div><a href="${workspacePath("settings")}">Workspace settings</a></section></section>`;
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Business messaging workspace</span><h1>${escapeHtml(session.companyName)}</h1><p>Your operational summary and next actions. Use the sidebar to open each dedicated module.</p></div><a class="wp-primary wp-button-link" href="${workspacePath(mayOnboard ? "onboarding" : "verification")}">${mayOnboard ? "Continue setup" : "Verify business"}</a></div><section class="wp-status-grid" aria-label="Workspace status"><article class="wp-stat"><span>Workspace</span><strong><i class="wp-status-dot"></i> Active</strong></article><article class="wp-stat"><span>Verification</span><strong>${escapeHtml(String(workspaceVerification?.status || "not started").replaceAll("_", " "))}</strong></article><article class="wp-stat"><span>Current plan</span><strong>${escapeHtml(planName(profile?.planCode))}</strong></article><article class="wp-stat"><span>Setup progress</span><strong>${progress}%</strong></article></section><section class="wp-overview-actions"><a class="wp-card wp-action-card" href="${workspacePath(mayOnboard ? "onboarding" : "verification")}"><span class="wp-card-eyebrow">Next step</span><h2>${mayOnboard ? (setupReady ? "Connect Meta Business" : "Prepare your workspace") : "Verify your organisation"}</h2><p>${mayOnboard ? "Open the dedicated onboarding section to continue setup." : "Submit entity details and the required business evidence for review."}</p><strong>${mayOnboard ? "Open onboarding" : "Open verification"} →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("accounts")}"><span class="wp-card-eyebrow">Connected assets</span><h2>Business accounts</h2><p>${connections.length ? `${connections.length} account${connections.length === 1 ? "" : "s"} connected.` : "No account connected yet."}</p><strong>Manage accounts →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("inbox")}"><span class="wp-card-eyebrow">Communication</span><h2>Team inbox</h2><p>Handle customer conversations, assignments, notes and replies from the shared inbox.</p><strong>View module →</strong></a></section><section class="wp-workspace-note"><div><strong>Dedicated product workspace</strong><p>Every sidebar option opens a separate module route; overview remains a concise command surface.</p></div><a href="${workspacePath("settings")}">Workspace settings</a></section></section>`;
 }
 
 function workspaceViewContent(view, connections, setupReady, profile) {
@@ -2351,6 +2368,21 @@ async function renderDashboard() {
       workspaceFlows = { flows: [], error: error?.message || "Flows could not be loaded." };
     }
   }
+  if (view === "campaigns") {
+    try {
+      if (!workspaceSelectedConnectionId) {
+        workspaceCampaigns = { drafts: [], segments: [], error: "Connect a WhatsApp business number first." };
+      } else {
+        const [campaignResult, segmentResult] = await Promise.all([
+          messagingRequest("list_campaigns", { connectionId: workspaceSelectedConnectionId }),
+          messagingRequest("list_campaign_segments", { connectionId: workspaceSelectedConnectionId }),
+        ]);
+        workspaceCampaigns = { drafts: campaignResult?.campaigns || [], segments: segmentResult?.segments || [], error: "" };
+      }
+    } catch (error) {
+      workspaceCampaigns = { drafts: [], segments: [], error: error?.message || "Campaign workspace could not be loaded." };
+    }
+  }
   if (view === "team") {
     try {
       const result = await messagingRequest("list_team");
@@ -2370,15 +2402,19 @@ async function renderDashboard() {
   const isFlowBuilderRoute = Boolean(currentFlowBuilderId());
   const isInboxRoute = view === "inbox";
   const operationalPackageName = workspacePackageMaster?.package?.name || planName(workspaceProfile?.planCode);
+  const operationalEntitlements = workspacePackageMaster?.package?.entitlements || {};
   const sidebarNumberSelector = businessNumberSelector(connections, selectedConnection);
-  const sidebarNavigation = workspaceNavigationMarkup({ inboxUnread, contactCount, campaignCount, templateCount: workspaceTemplates.templates.length, flowCount: workspaceFlows.flows.length, connectedCount: connected.length, teamCount: workspaceTeam.members.length, packageName: operationalPackageName });
+  const sidebarNavigation = workspaceNavigationMarkup({ inboxUnread, contactCount, campaignCount, templateCount: workspaceTemplates.templates.length, flowCount: workspaceFlows.flows.length, connectedCount: connected.length, teamCount: workspaceTeam.members.length, packageName: operationalPackageName, entitlements: operationalEntitlements });
   // Unpaid workspaces must retain the complete billing centre so owners and
   // payment-provider reviewers can compare plans, reach protected checkout,
   // and inspect billing recovery/history without gaining product access.
   const billingLocked = workspaceBilling?.entitlement?.allowed === false
     && !isBillingWorkspaceView(view)
     && view !== "checkout";
-  const mainContent = billingLocked ? billingAccessRequiredView() : workspaceViewContent(view, connections, setupReady, workspaceProfile);
+  const featureByView = { inbox: "team_inbox", contacts: "contacts", campaigns: "campaigns", templates: "templates", flows: "flows", analytics: "analytics" };
+  const requiredFeature = featureByView[view];
+  const featureLocked = requiredFeature && Object.hasOwn(operationalEntitlements, requiredFeature) && [false, 0, "none"].includes(operationalEntitlements[requiredFeature]);
+  const mainContent = billingLocked ? billingAccessRequiredView() : featureLocked ? packageFeatureLockedView(view) : workspaceViewContent(view, connections, setupReady, workspaceProfile);
   const userInitial = escapeHtml((session.displayName || "U").charAt(0).toUpperCase());
   const roleLabel = String(session.roleCode || "member").replaceAll("_", " ");
   const workspaceMenuCard = agentWorkspace
@@ -2774,7 +2810,7 @@ async function renderDashboard() {
       setFormValue("name", draft?.name || "");
       setFormValue("type", draft?.type || "announcement");
       setFormValue("objective", draft?.objective || "");
-      setFormValue("audience", draft?.audience || "active");
+      setFormValue("audience", draft?.audience || "marketing_opt_in");
       setFormValue("scheduledAt", draft?.scheduledAt || "");
       setFormValue("timezone", draft?.timezone || "Asia/Kolkata");
       setFormValue("sendWindowStart", draft?.sendWindowStart || "09:00");
@@ -2786,8 +2822,8 @@ async function renderDashboard() {
         const minimum = new Date(Date.now() + 5 * 60 * 1000);
         form.elements.scheduledAt.min = new Date(minimum.getTime() - minimum.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
       }
-      if (form?.elements.confirmOptIn) form.elements.confirmOptIn.checked = Boolean(draft);
-      if (form?.elements.confirmPolicy) form.elements.confirmPolicy.checked = Boolean(draft);
+      if (form?.elements.confirmOptIn) form.elements.confirmOptIn.checked = draft?.optInConfirmed === true;
+      if (form?.elements.confirmPolicy) form.elements.confirmPolicy.checked = draft?.policyConfirmed === true;
       dialog?.querySelector("[data-campaign-dialog-title]")?.replaceChildren(document.createTextNode(draft ? "Edit campaign draft" : "Create campaign draft"));
       updatePreview();
       updateAudienceEstimate();
@@ -2816,7 +2852,7 @@ async function renderDashboard() {
       const detail = detailDialog?.querySelector("[data-campaign-detail]");
       if (!detail) return;
       detailDialog.querySelector("[data-campaign-detail-title]")?.replaceChildren(document.createTextNode(draft.name || "Campaign details"));
-      detail.innerHTML = campaignDetailMarkup(draft, templates, workspaceContacts?.contacts?.filter((contact) => contact.status === "active" && contact.opted_in !== false && contact.status !== "opted_out") || []);
+      detail.innerHTML = campaignDetailMarkup(draft, templates, workspaceContacts?.contacts?.filter((contact) => contact.status === "active" && contact.marketing_opt_in_at && !contact.marketing_opt_out_at) || []);
       detailDialog.querySelector("[data-detail-edit-campaign]")?.setAttribute("data-detail-edit-campaign", draft.id);
       detailDialog.querySelector("[data-detail-approve-campaign]")?.setAttribute("data-detail-approve-campaign", draft.id);
       detailDialog.querySelector("[data-detail-reject-campaign]")?.setAttribute("data-detail-reject-campaign", draft.id);
@@ -2828,7 +2864,7 @@ async function renderDashboard() {
     const segmentEstimate = segmentForm?.querySelector("[data-segment-estimate]");
     const updateSegmentEstimate = () => {
       if (!segmentForm) return;
-      const rule = segmentRule?.value || "opted_in";
+      const rule = segmentRule?.value || "marketing_opt_in";
       const requiresValue = rule === "country_code" || rule === "name_contains";
       const isManual = rule === "manual";
       segmentRuleValueWrap?.toggleAttribute("hidden", !requiresValue);
@@ -2857,9 +2893,10 @@ async function renderDashboard() {
     segmentForm?.elements?.count?.addEventListener("input", updateSegmentEstimate);
     form?.elements.templateKey?.addEventListener("change", updatePreview);
     form?.elements.audience?.addEventListener("change", updateAudienceEstimate);
-    form?.addEventListener("submit", (event) => {
+    form?.addEventListener("submit", async (event) => {
       if (event.submitter?.value !== "save") return;
       event.preventDefault();
+      const submit = event.submitter;
       const selected = templates.find((template) => `${template.name}|${template.language}` === form.elements.templateKey?.value);
       if (!selected) return showToast("Choose an approved template first.", "error");
       if (!form.reportValidity()) return;
@@ -2876,7 +2913,7 @@ async function renderDashboard() {
       const existingId = form.elements.campaignId?.value || "";
       const existingDraft = drafts.find((draft) => draft.id === existingId);
       let nextDraft = {
-        id: existingId || `camp_${Date.now()}`,
+        id: existingId,
         name: form.elements.name.value.trim(),
         type: form.elements.type?.value || "announcement",
         objective: form.elements.objective?.value.trim() || "",
@@ -2899,51 +2936,94 @@ async function renderDashboard() {
       if (existingDraft && existingDraft.status !== nextDraft.status) {
         nextDraft = appendCampaignAudit(nextDraft, nextDraft.status, `Status changed from ${campaignStatusLabel(existingDraft.status)} to ${campaignStatusLabel(nextDraft.status)} while editing the draft.`);
       }
-      writeCampaignDrafts(existingId ? drafts.map((draft) => draft.id === existingId ? nextDraft : draft) : [nextDraft, ...drafts]);
-      dialog?.close("save");
-      showToast(existingId ? "Campaign draft updated." : "Campaign draft saved.");
-      renderDashboard();
+      submit.disabled = true;
+      submit.textContent = "Saving…";
+      try {
+        const result = await messagingRequest("save_campaign", {
+          connectionId: workspaceSelectedConnectionId,
+          campaignId: existingId || undefined,
+          ...nextDraft,
+          templateLanguage: selected.language,
+          audienceType: segment?.system ? segment.rule : "custom_segment",
+          audienceSegmentId: segment?.system ? undefined : segment?.id,
+          scheduledAt: scheduledValue ? new Date(scheduledValue).toISOString() : null,
+          confirmOptIn: Boolean(form.elements.confirmOptIn?.checked),
+          confirmPolicy: Boolean(form.elements.confirmPolicy?.checked),
+        });
+        const saved = result?.campaign;
+        if (!saved) throw new Error("Campaign was not returned after saving.");
+        writeCampaignDrafts(existingId ? drafts.map((draft) => draft.id === existingId ? saved : draft) : [saved, ...drafts]);
+        dialog?.close("save");
+        showToast(existingId ? "Campaign draft updated." : "Campaign draft saved.");
+        await renderDashboard();
+      } catch (error) {
+        showToast(error?.message || "Campaign draft could not be saved.", "error");
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Save draft";
+      }
     });
-    segmentForm?.addEventListener("submit", (event) => {
+    segmentForm?.addEventListener("submit", async (event) => {
       if (event.submitter?.value !== "save_segment") return;
       event.preventDefault();
       if (!segmentForm.reportValidity()) return;
+      const submit = event.submitter;
       const segments = readCampaignSegments(workspaceContacts?.contacts || []);
       const nextSegment = {
         id: `seg_${Date.now()}`,
         name: segmentForm.elements.name.value.trim(),
         description: segmentForm.elements.description?.value.trim() || "Custom campaign audience.",
-        rule: segmentForm.elements.rule?.value || "opted_in",
+        rule: segmentForm.elements.rule?.value || "marketing_opt_in",
         ruleValue: segmentForm.elements.ruleValue?.value.trim() || "",
         count: Math.max(0, Number(segmentForm.elements.count?.value || 0)),
         system: false,
         createdAt: new Date().toISOString(),
       };
-      nextSegment.count = campaignSegmentCount(nextSegment, workspaceContacts?.contacts || []);
-      segments.push(nextSegment);
-      writeCampaignSegments(segments);
-      segmentDialog?.close("save_segment");
-      showToast("Audience segment saved.");
-      renderDashboard();
+      submit.disabled = true;
+      submit.textContent = "Saving…";
+      try {
+        const result = await messagingRequest("save_campaign_segment", { connectionId: workspaceSelectedConnectionId, ...nextSegment });
+        if (!result?.segment) throw new Error("Segment was not returned after saving.");
+        writeCampaignSegments([...segments, result.segment]);
+        segmentDialog?.close("save_segment");
+        showToast("Audience segment saved.");
+        await renderDashboard();
+      } catch (error) {
+        showToast(error?.message || "Audience segment could not be saved.", "error");
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Save segment";
+      }
     });
-    app.querySelectorAll("[data-delete-campaign]").forEach((button) => button.addEventListener("click", () => {
-      const drafts = readCampaignDrafts().filter((draft) => draft.id !== button.dataset.deleteCampaign);
-      writeCampaignDrafts(drafts);
-      showToast("Campaign draft deleted.");
-      renderDashboard();
+    app.querySelectorAll("[data-delete-campaign]").forEach((button) => button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await messagingRequest("delete_campaign", { connectionId: workspaceSelectedConnectionId, campaignId: button.dataset.deleteCampaign });
+        writeCampaignDrafts(readCampaignDrafts().filter((draft) => draft.id !== button.dataset.deleteCampaign));
+        showToast("Campaign draft deleted.");
+        await renderDashboard();
+      } catch (error) { showToast(error?.message || "Campaign draft could not be deleted.", "error"); }
+      finally { button.disabled = false; }
     }));
-    approvalForm?.addEventListener("submit", (event) => {
+    approvalForm?.addEventListener("submit", async (event) => {
       if (event.submitter?.value !== "save") return;
       event.preventDefault();
       const id = approvalForm.elements.campaignId?.value || "";
       const decision = approvalForm.elements.decision?.value || "approved";
       const note = approvalForm.elements.note?.value.trim() || "";
       if (decision === "rejected" && !note) return showToast("Add a rejection note before rejecting the campaign.", "error");
-      const drafts = readCampaignDrafts().map((draft) => draft.id === id ? appendCampaignAudit(draft, decision, note) : draft);
-      writeCampaignDrafts(drafts);
-      approvalDialog?.close("save");
-      showToast(decision === "approved" ? "Campaign draft approved." : "Campaign draft rejected.");
-      renderDashboard();
+      const submit = event.submitter;
+      submit.disabled = true;
+      submit.textContent = decision === "approved" ? "Approving…" : "Rejecting…";
+      try {
+        const result = await messagingRequest("decide_campaign", { connectionId: workspaceSelectedConnectionId, campaignId: id, decision, note });
+        if (!result?.campaign) throw new Error("Campaign decision was not returned.");
+        writeCampaignDrafts(readCampaignDrafts().map((draft) => draft.id === id ? result.campaign : draft));
+        approvalDialog?.close("save");
+        showToast(decision === "approved" ? "Campaign draft approved." : "Campaign draft rejected.");
+        await renderDashboard();
+      } catch (error) { showToast(error?.message || "Campaign decision could not be recorded.", "error"); }
+      finally { submit.disabled = false; submit.textContent = decision === "approved" ? "Approve draft" : "Reject draft"; }
     });
     app.querySelectorAll("[data-approve-campaign],[data-reject-campaign]").forEach((button) => button.addEventListener("click", () => {
       const id = button.dataset.approveCampaign || button.dataset.rejectCampaign;
@@ -2952,12 +3032,29 @@ async function renderDashboard() {
       if (!draft) return showToast("Campaign draft not found.", "error");
       openCampaignDecisionDialog(draft, nextStatus);
     }));
-    app.querySelectorAll("[data-duplicate-campaign]").forEach((button) => button.addEventListener("click", () => {
+    app.querySelectorAll("[data-duplicate-campaign]").forEach((button) => button.addEventListener("click", async () => {
       const source = readCampaignDrafts().find((draft) => draft.id === button.dataset.duplicateCampaign);
       if (!source) return;
-      writeCampaignDrafts([{ ...source, id: `camp_${Date.now()}`, name: `${source.name} copy`, createdAt: new Date().toISOString() }, ...readCampaignDrafts()]);
-      showToast("Campaign draft copied.");
-      renderDashboard();
+      button.disabled = true;
+      try {
+        const result = await messagingRequest("save_campaign", {
+          connectionId: workspaceSelectedConnectionId,
+          ...source,
+          campaignId: undefined,
+          name: `${source.name} copy`,
+          status: "draft",
+          scheduledAt: null,
+          audienceType: source.audienceType,
+          audienceSegmentId: source.audienceSegmentId || undefined,
+          confirmOptIn: false,
+          confirmPolicy: false,
+        });
+        if (!result?.campaign) throw new Error("Campaign copy was not returned.");
+        writeCampaignDrafts([result.campaign, ...readCampaignDrafts()]);
+        showToast("Campaign draft copied.");
+        await renderDashboard();
+      } catch (error) { showToast(error?.message || "Campaign draft could not be copied.", "error"); }
+      finally { button.disabled = false; }
     }));
     app.querySelectorAll("[data-edit-campaign]").forEach((button) => button.addEventListener("click", () => {
       const draft = readCampaignDrafts().find((item) => item.id === button.dataset.editCampaign);
@@ -2986,17 +3083,54 @@ async function renderDashboard() {
       detailDialog.close("reject");
       if (draft) openCampaignDecisionDialog(draft, "rejected");
     });
-    app.querySelectorAll("[data-campaign-status]").forEach((select) => select.addEventListener("change", () => {
-      const drafts = readCampaignDrafts().map((draft) => draft.id === select.dataset.campaignStatus ? appendCampaignAudit(draft, select.value, `Status changed to ${campaignStatusLabel(select.value)} from the campaign command table.`) : draft);
-      writeCampaignDrafts(drafts);
-      showToast("Campaign status updated.");
-      renderDashboard();
+    app.querySelectorAll("[data-dispatch-campaign]").forEach((button) => button.addEventListener("click", async () => {
+      const draft = readCampaignDrafts().find((item) => item.id === button.dataset.dispatchCampaign);
+      if (!draft) return showToast("Campaign not found.", "error");
+      const audience = Number(draft.estimatedAudience || 0);
+      if (!window.confirm(`Start delivery of ${draft.name} to up to ${audience.toLocaleString("en-IN")} explicitly opted-in contact${audience === 1 ? "" : "s"}?\n\nOnly the approved Meta template will be sent. Package message limits and recipient consent are checked again by the server.`)) return;
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = "Delivering…";
+      try {
+        const result = await messagingRequest("dispatch_campaign", { connectionId: workspaceSelectedConnectionId, campaignId: draft.id });
+        if (!result?.campaign) throw new Error("Campaign delivery state was not returned.");
+        const batch = result.batch || {};
+        writeCampaignDrafts(readCampaignDrafts().map((item) => item.id === draft.id ? result.campaign : item));
+        showToast(Number(batch.remaining || 0) > 0 ? `Batch accepted. ${Number(batch.remaining).toLocaleString("en-IN")} recipients remain queued.` : `Campaign delivery started. ${Number(batch.accepted || 0).toLocaleString("en-IN")} message${Number(batch.accepted || 0) === 1 ? "" : "s"} accepted.`);
+        await renderDashboard();
+      } catch (error) {
+        showToast(error?.message || "Campaign delivery could not start.", "error");
+        button.disabled = false;
+        button.textContent = original;
+      }
     }));
-    app.querySelectorAll("[data-delete-segment]").forEach((button) => button.addEventListener("click", () => {
-      const segments = readCampaignSegments(workspaceContacts?.contacts || []).filter((segment) => segment.id !== button.dataset.deleteSegment);
-      writeCampaignSegments(segments);
-      showToast("Audience segment deleted.");
-      renderDashboard();
+    app.querySelectorAll("[data-campaign-status]").forEach((select) => select.addEventListener("change", async () => {
+      const draft = readCampaignDrafts().find((item) => item.id === select.dataset.campaignStatus);
+      if (!draft) return;
+      select.disabled = true;
+      try {
+        let result;
+        if (["approved","rejected","paused"].includes(select.value)) {
+          result = await messagingRequest("decide_campaign", { connectionId: workspaceSelectedConnectionId, campaignId: draft.id, decision: select.value, note: `Status changed to ${campaignStatusLabel(select.value)} from the campaign command table.` });
+        } else {
+          result = await messagingRequest("save_campaign", { connectionId: workspaceSelectedConnectionId, ...draft, campaignId: draft.id, status: select.value, templateLanguage: draft.templateLanguage, audienceType: draft.audienceType, audienceSegmentId: draft.audienceSegmentId || undefined, confirmOptIn: draft.optInConfirmed === true, confirmPolicy: draft.policyConfirmed === true });
+        }
+        if (!result?.campaign) throw new Error("Campaign status was not returned.");
+        writeCampaignDrafts(readCampaignDrafts().map((item) => item.id === draft.id ? result.campaign : item));
+        showToast("Campaign status updated.");
+        await renderDashboard();
+      } catch (error) { select.value = draft.status; showToast(error?.message || "Campaign status could not be updated.", "error"); }
+      finally { select.disabled = false; }
+    }));
+    app.querySelectorAll("[data-delete-segment]").forEach((button) => button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await messagingRequest("delete_campaign_segment", { connectionId: workspaceSelectedConnectionId, segmentId: button.dataset.deleteSegment });
+        writeCampaignSegments(readCampaignSegments(workspaceContacts?.contacts || []).filter((segment) => segment.id !== button.dataset.deleteSegment));
+        showToast("Audience segment deleted.");
+        await renderDashboard();
+      } catch (error) { showToast(error?.message || "Audience segment could not be deleted.", "error"); }
+      finally { button.disabled = false; }
     }));
   }
   applyTheme(document.documentElement.dataset.wpTheme || preferredTheme());
@@ -3519,17 +3653,26 @@ async function renderDashboard() {
   const contactDialog = app.querySelector("#wpContactDialog");
   const canManageContactStatus = ["owner", "admin"].includes(session.roleCode);
   const contactStatusField = contactDialog?.querySelector("select[name='status']");
+  const contactConsentField = contactDialog?.querySelector("select[name='marketingConsent']");
+  const contactConsentSource = contactDialog?.querySelector("[data-marketing-consent-source]");
+  const syncContactConsentSource = () => contactConsentSource?.toggleAttribute("hidden", contactConsentField?.value !== "opted_in");
   if (contactStatusField && !canManageContactStatus) {
     contactStatusField.disabled = true;
+    if (contactConsentField) contactConsentField.disabled = true;
     const guidance = contactStatusField.closest("label")?.querySelector("small");
     if (guidance) guidance.textContent = "Only workspace owners and administrators can change messaging status.";
   }
+  contactConsentField?.addEventListener("change", syncContactConsentSource);
   app.querySelectorAll("[data-edit-contact]").forEach((button) => button.addEventListener("click", () => {
     const form = contactDialog?.querySelector("form");
     if (!form) return;
+    const contact = (workspaceContacts?.contacts || []).find((item) => item.id === button.dataset.editContact);
     form.elements.contactId.value = button.dataset.editContact || "";
     form.elements.displayName.value = button.dataset.contactName || "";
     form.elements.status.value = button.dataset.contactStatus || "active";
+    if (form.elements.marketingConsent) form.elements.marketingConsent.value = contact?.marketing_opt_in_at && !contact?.marketing_opt_out_at ? "opted_in" : contact?.marketing_opt_out_at ? "opted_out" : "unknown";
+    if (form.elements.marketingOptInSource) form.elements.marketingOptInSource.value = contact?.marketing_opt_in_source || "manual_record";
+    syncContactConsentSource();
     contactDialog.showModal();
   }));
   contactDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
@@ -3540,7 +3683,11 @@ async function renderDashboard() {
     try {
       submitter.disabled = true; submitter.textContent = "Saving…";
       const payload = { contactId: form.elements.contactId.value, displayName: form.elements.displayName.value.trim() };
-      if (canManageContactStatus) payload.status = form.elements.status.value;
+      if (canManageContactStatus) {
+        payload.status = form.elements.status.value;
+        payload.marketingConsent = form.elements.marketingConsent.value;
+        payload.marketingOptInSource = form.elements.marketingOptInSource.value;
+      }
       await messagingRequest("update_contact", payload);
       contactDialog.close(); showToast("Contact updated."); await renderDashboard();
     } catch (error) { showToast(error?.message || "Contact could not be updated.", "error"); submitter.disabled = false; submitter.textContent = "Save contact"; }
