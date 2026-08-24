@@ -691,6 +691,44 @@ async function billingRequest(action, payload = {}) {
   return data;
 }
 
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function monitorHostedSubscription(subscriptionId, checkoutWindow) {
+  const timeoutAt = Date.now() + (10 * 60_000);
+  let closedAt = 0;
+  let lastError = null;
+  while (Date.now() < timeoutAt) {
+    await wait(4_000);
+    try {
+      const result = await billingRequest("sync_subscription", { subscriptionId });
+      const status = String(result?.subscription?.status || "").toLowerCase();
+      if (["authenticated", "active"].includes(status)) {
+        if (checkoutWindow && !checkoutWindow.closed) checkoutWindow.close();
+        const returnUrl = new URL(workspacePath("billing"), location.origin);
+        returnUrl.searchParams.set("checkout", "success");
+        location.assign(`${returnUrl.pathname}${returnUrl.search}`);
+        return true;
+      }
+      if (["cancelled", "completed", "expired", "halted"].includes(status)) {
+        throw new Error(`Razorpay returned subscription status: ${status}.`);
+      }
+      lastError = null;
+    } catch (error) {
+      lastError = error;
+      if (/status: (cancelled|completed|expired|halted)/i.test(error?.message || "")) throw error;
+    }
+    if (checkoutWindow?.closed) {
+      if (!closedAt) closedAt = Date.now();
+      if (Date.now() - closedAt > 20_000) {
+        throw lastError || new Error("Razorpay checkout was closed before payment authorization was confirmed.");
+      }
+    }
+  }
+  throw lastError || new Error("Payment is still being confirmed. Open Billing & usage and refresh the subscription status shortly.");
+}
+
 function loadRazorpayCheckout() {
   if (window.Razorpay) return Promise.resolve(window.Razorpay);
   if (razorpayCheckoutPromise) return razorpayCheckoutPromise;
@@ -2178,7 +2216,9 @@ function billingView(view = "billing") {
     <a class="${view === "billing-ledger" ? "active" : ""}" href="${workspacePath("billing-ledger")}"><span>${WORKSPACE_NAV_ICONS["billing-ledger"]}</span><strong>Ledger</strong><small>${Number((workspaceBilling.payments || []).length)} payments</small></a>
     <a class="${view === "billing-refunds" ? "active" : ""}" href="${workspacePath("billing-refunds")}"><span>${WORKSPACE_NAV_ICONS["billing-refunds"]}</span><strong>Refunds</strong><small>${Number((workspaceBilling.creditNotes || []).length)} credit notes</small></a>
   </nav>`;
-  const notices = `${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}`;
+  const checkoutSuccessful = new URLSearchParams(location.search).get("checkout") === "success";
+  const checkoutNotice = checkoutSuccessful ? `<div class="wp-verification-notice success" role="status"><strong>Subscription activated successfully</strong><p>Razorpay has confirmed your payment authorization. Your ${escapeHtml(pkg.name)} subscription is active and your workspace access has been updated.</p></div>` : "";
+  const notices = `${checkoutNotice}${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}`;
   const packageDetails = `<section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section>`;
   const invoicesSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Financial documents</span><h2>Invoices</h2><p>EMS invoice numbers continue the company-wide sequence. Razorpay invoice and transaction references are preserved on every document.</p></div></div>${invoices ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Invoice</th><th>Status</th><th>Gateway references</th><th>Total</th><th></th></tr></thead><tbody>${invoices}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No invoices yet</strong><p>A tax invoice is issued after Razorpay captures a subscription payment.</p></div>'}</section>`;
   const ledgerSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Payment ledger</span><h2>Recent payments</h2><p>Verified Razorpay payments for this workspace.</p></div></div>${payments ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Payment</th><th>Method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${payments}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No payments yet</strong><p>Completed payments will appear here.</p></div>'}</section>`;
@@ -2637,9 +2677,11 @@ async function renderDashboard() {
         const checkout = await billingRequest("create_subscription", { quoteId: button.dataset.checkoutAuthorize });
         const trialMessage = checkout.trialEndsAt ? ` The first recurring charge is scheduled after the trial on ${new Date(checkout.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.` : "";
         if (checkout.shortUrl) {
-          if (checkoutWindow) checkoutWindow.location.replace(checkout.shortUrl); else window.location.assign(checkout.shortUrl);
-          showToast(`Razorpay authorization opened.${trialMessage}`);
-          button.disabled = false; button.textContent = original;
+          if (!checkoutWindow) throw new Error("Allow pop-ups for this site, then try the secure Razorpay authorization again.");
+          checkoutWindow.location.replace(checkout.shortUrl);
+          button.textContent = "Waiting for Razorpay confirmation…";
+          showToast(`Complete the authorization in the Razorpay window. This portal will return automatically after confirmation.${trialMessage}`);
+          await monitorHostedSubscription(checkout.subscriptionId, checkoutWindow);
           return;
         }
         checkoutWindow?.close(); checkoutWindow = null;

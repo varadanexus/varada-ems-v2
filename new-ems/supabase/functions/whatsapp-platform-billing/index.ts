@@ -3,6 +3,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
+import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const MAX_BODY_BYTES = 512 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
@@ -1031,6 +1032,13 @@ async function finalizeCheckoutQuote(admin: any, subscription: any) {
     const { error: tenantError } = await admin.from("whatsapp_platform_tenants").update({ plan_code: subscription.package_code, updated_at: consumedAt }).eq("id", subscription.tenant_id);
     if (tenantError) throw tenantError;
   }
+  await sendWhatsAppMilestoneEmail(admin, subscription.tenant_id, "subscription_activated").catch((emailError) => {
+    console.error("Subscription activation email could not be queued", {
+      tenantId: subscription.tenant_id,
+      subscriptionId: subscription.id,
+      message: emailError instanceof Error ? emailError.message : String(emailError),
+    });
+  });
   return { completed: true };
 }
 async function verifyCheckout(admin: any, customer: any, body: any, credentials: any) {

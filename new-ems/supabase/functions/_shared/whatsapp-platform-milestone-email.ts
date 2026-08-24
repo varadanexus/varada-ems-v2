@@ -62,6 +62,14 @@ const MILESTONES: Record<string, MilestoneDefinition> = {
     ctaLabel: "Manage your team",
     ctaPath: "team/",
   },
+  subscription_activated: {
+    step: 5,
+    title: "Your subscription is active",
+    subject: "Subscription activated successfully",
+    message: "Razorpay has confirmed your payment authorization and your WhatsApp Solutions subscription is now active. Your workspace access has been updated according to the selected plan.",
+    ctaLabel: "Open billing and usage",
+    ctaPath: "billing/?checkout=success",
+  },
 };
 
 function env(name: string) { return Deno.env.get(name) || ""; }
