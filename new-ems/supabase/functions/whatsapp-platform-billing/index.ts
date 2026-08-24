@@ -1049,6 +1049,11 @@ async function verifyCheckout(admin: any, customer: any, body: any, credentials:
     razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials),
     razorpayRequest(`/payments/${encodeURIComponent(paymentId)}`, {}, credentials),
   ]);
+  const providerSubscriptionStatus = String(providerSubscription?.status || "").toLowerCase();
+  const paymentStatus = String(payment?.status || "").toLowerCase();
+  if (!['authenticated', 'active'].includes(providerSubscriptionStatus) || !['authorized', 'captured'].includes(paymentStatus)) {
+    throw new Error("Razorpay has not completed the subscription payment authorization. Workspace access remains locked.");
+  }
   await bindPaymentIntentEvidence(admin, subscription, payment);
   await upsertPayment(admin, subscription, payment);
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
@@ -1601,6 +1606,11 @@ async function cancelSubscription(admin: any, customer: any, body: any, credenti
   if (error || !subscription) throw new Error("Billing subscription not found.");
   assertSubscriptionMode(subscription, credentials);
   if (TERMINAL_SUBSCRIPTION_STATUSES.has(subscription.status)) return { subscription };
+  const trialEndsAt = new Date(subscription.safe_metadata?.trial_ends_at || subscription.charge_at || 0).getTime();
+  const trialDays = Number(subscription.safe_metadata?.trial_days || 0);
+  if (subscription.status === "authenticated" && Number.isSafeInteger(trialDays) && trialDays > 0 && trialEndsAt > Date.now()) {
+    throw new Error(`This authorized trial cannot be cancelled before ${new Date(trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}. Cancellation becomes available after the trial ends.`);
+  }
   const cancelAtCycleEnd = body.cancelAtCycleEnd !== false;
   const providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}/cancel`, {
     method: "POST", body: JSON.stringify({ cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 }),
