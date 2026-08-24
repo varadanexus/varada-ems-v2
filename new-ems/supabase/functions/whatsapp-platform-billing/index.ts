@@ -1104,6 +1104,7 @@ async function paymentMethodPortal(admin: any, customer: any, body: any, credent
   return {
     keyId: credentials.keyId,
     portalUrl,
+    paymentMethod: String(providerSubscription?.payment_method || "").trim().toLowerCase(),
     subscription: {
       id: synced.id,
       status: synced.status,

@@ -2026,6 +2026,23 @@ function confirmBillingCancellation(subscription) {
     dialog.showModal();
   });
 }
+function choosePaymentMethodUpdate(result) {
+  let dialog = document.querySelector("#wpPaymentMethodUpdateDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpPaymentMethodUpdateDialog";
+    dialog.className = "wp-contact-dialog wp-billing-upgrade-dialog";
+    document.body.append(dialog);
+  }
+  const paymentMethod = String(result?.paymentMethod || "").toLowerCase();
+  const cardSubscription = paymentMethod === "card";
+  const methodLabel = paymentMethod === "emandate" ? "bank eMandate" : paymentMethod === "upi" ? "UPI AutoPay" : paymentMethod === "card" ? "card" : "Razorpay mandate";
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Secure payment settings</span><h2>Update payment method</h2><p>Your current subscription is authorized using ${escapeHtml(methodLabel)}.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header>${cardSubscription ? `<div class="wp-policy-note"><strong>Change the subscription card</strong><p>Razorpay will open its secure card-update modal. A refundable ₹5 authorization may be used to validate the replacement card.</p></div>` : `<div class="wp-policy-note"><strong>Manage ${escapeHtml(methodLabel)} securely</strong><p>Razorpay and the authorizing bank require bank and UPI mandate changes in Razorpay’s secure mandate manager. It cannot be embedded inside another website.</p></div>`}<footer><button class="wp-secondary" type="submit" value="cancel">Keep current method</button><button class="wp-primary" type="submit" value="${cardSubscription ? "card" : "hosted"}">${cardSubscription ? "Change card" : "Continue securely"}</button></footer></form>`;
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue || "cancel"), { once: true });
+    dialog.showModal();
+  });
+}
 function confirmAddonChange(preview) {
   let dialog = document.querySelector("#wpBillingAddonDialog");
   if (!dialog) {
@@ -2594,12 +2611,21 @@ async function renderDashboard() {
       try {
         button.disabled = true; button.textContent = "Preparing secure update…";
         const result = await billingRequest("payment_method_portal", { subscriptionId: button.dataset.billingUpdatePayment });
+        const updateChoice = await choosePaymentMethodUpdate(result);
+        if (updateChoice === "cancel") {
+          button.disabled = false; button.textContent = original;
+          return;
+        }
+        if (updateChoice === "hosted") {
+          window.location.assign(result.portalUrl);
+          return;
+        }
         await loadRazorpayCheckout();
         const instance = new window.Razorpay({
           key: result.keyId,
           subscription_id: result.subscription?.razorpaySubscriptionId,
           subscription_card_change: true,
-          name: "Varada Nexus Private Limited",
+          name: "Varada Nexus",
           image: "https://www.varadanexus.com/images/logo.png",
           description: "Update subscription payment method",
           prefill: { name: result.customer?.name || "", email: result.customer?.email || "" },
@@ -2688,7 +2714,7 @@ async function renderDashboard() {
         const checkout = await billingRequest("create_subscription", { quoteId: button.dataset.checkoutAuthorize });
         await loadRazorpayCheckout();
         const instance = new window.Razorpay({
-          key: checkout.keyId, subscription_id: checkout.razorpaySubscriptionId, name: "Varada Nexus Private Limited",
+          key: checkout.keyId, subscription_id: checkout.razorpaySubscriptionId, name: "Varada Nexus",
           image: "https://www.varadanexus.com/images/logo.png",
           description: `${checkout.package?.name || "WhatsApp Solutions"} subscription`,
           prefill: { name: checkout.customer?.name || "", email: checkout.customer?.email || "" },
