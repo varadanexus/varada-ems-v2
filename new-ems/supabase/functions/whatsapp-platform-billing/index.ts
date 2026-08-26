@@ -770,6 +770,19 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
       const renewalGrossForPricing = Number(subscription.recurring_base_paise || 0) > 0
         ? checkoutGrossPaise(Number(subscription.recurring_base_paise))
         : null;
+      const checkoutAddons = Array.isArray(checkoutQuote.addon_selections) ? checkoutQuote.addon_selections : [];
+      let discountedAddonCodes: string[] = [];
+      if (!firstPaymentOnly && Number(checkoutQuote.discount_paise || 0) > 0 && checkoutQuote.coupon_code) {
+        const { data: couponConfig, error: couponConfigError } = await admin.from("whatsapp_platform_billing_coupons")
+          .select("applies_to_addon_codes")
+          .eq("code", checkoutQuote.coupon_code)
+          .maybeSingle();
+        if (couponConfigError) throw couponConfigError;
+        const configuredCodes = Array.isArray(couponConfig?.applies_to_addon_codes) ? couponConfig.applies_to_addon_codes : [];
+        discountedAddonCodes = checkoutAddons
+          .map((item: any) => String(item.code || ""))
+          .filter((code: string) => code && (!configuredCodes.length || configuredCodes.includes(code)));
+      }
       checkoutPricing = {
         currency: checkoutQuote.currency,
         package: {
@@ -777,8 +790,8 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
           name: checkoutQuote.quote_snapshot?.package_name || subscription.package_code,
           base_paise: Number(checkoutQuote.quote_snapshot?.package_base_paise || 0),
         },
-        addons: Array.isArray(checkoutQuote.addon_selections) ? checkoutQuote.addon_selections : [],
-        discounted_addon_codes: firstPaymentOnly ? [] : Array.isArray(checkoutQuote.quote_snapshot?.discounted_addon_codes) ? checkoutQuote.quote_snapshot.discounted_addon_codes : [],
+        addons: checkoutAddons,
+        discounted_addon_codes: discountedAddonCodes,
         coupon_code: firstPaymentOnly ? null : checkoutQuote.coupon_code || null,
         base_subtotal_paise: Number(checkoutQuote.base_subtotal_paise || 0),
         discount_paise: firstPaymentOnly ? 0 : Number(checkoutQuote.discount_paise || 0),
