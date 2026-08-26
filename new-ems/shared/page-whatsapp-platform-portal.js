@@ -75,6 +75,7 @@ let workspaceTemplates = { templates: [], connectionId: "", error: "" };
 let workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
 let workspaceFlows = { flows: [], error: "" };
 let workspaceCampaigns = { drafts: [], segments: [], error: "" };
+let workspaceConnections = [];
 let workspaceSelectedConnectionId = "";
 let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
@@ -84,6 +85,8 @@ let workspaceDeletion = { pending: false };
 let workspaceCheckout = { quote: null, package: null, error: "" };
 let razorpayCheckoutPromise = null;
 let profileMenuClickAwayHandler = null;
+let workspaceNavigationBound = false;
+let workspaceNavigationSequence = 0;
 const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
 
 function countryDialEntries() {
@@ -172,6 +175,48 @@ function currentWorkspaceView() {
 function workspacePath(view) {
   if (view.startsWith("billing-") && BILLING_WORKSPACE_VIEWS.has(view)) return `${WORKSPACE_PATH}billing/${view.slice(8)}/`;
   return view === "overview" ? WORKSPACE_PATH : `${WORKSPACE_PATH}${view}/`;
+}
+
+function workspaceLocationKey() {
+  return `${location.pathname}${location.search}${location.hash}`;
+}
+
+async function navigateWorkspace(url, { replace = false } = {}) {
+  const destination = url instanceof URL ? url : new URL(url, location.href);
+  if (destination.origin !== location.origin || !destination.pathname.startsWith(WORKSPACE_PATH)) {
+    location.assign(destination.href);
+    return;
+  }
+  const nextLocation = `${destination.pathname}${destination.search}${destination.hash}`;
+  if (nextLocation === workspaceLocationKey()) return;
+  if (replace) history.replaceState({}, "", nextLocation);
+  else history.pushState({}, "", nextLocation);
+  const sequence = ++workspaceNavigationSequence;
+  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  await renderDashboard({ refresh: false });
+  if (sequence !== workspaceNavigationSequence) return;
+  renderDashboard({ refresh: true, preserveScroll: true, navigationSequence: sequence }).catch(() => {});
+}
+
+function bindWorkspaceNavigation() {
+  if (workspaceNavigationBound) return;
+  workspaceNavigationBound = true;
+  document.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest?.("a[href]");
+    if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
+    const destination = new URL(link.href, location.href);
+    if (destination.origin !== location.origin || !destination.pathname.startsWith(WORKSPACE_PATH)) return;
+    event.preventDefault();
+    navigateWorkspace(destination).catch(() => location.assign(destination.href));
+  });
+  window.addEventListener("popstate", () => {
+    const sequence = ++workspaceNavigationSequence;
+    renderDashboard({ refresh: false }).then(() => {
+      if (sequence !== workspaceNavigationSequence) return;
+      renderDashboard({ refresh: true, preserveScroll: true, navigationSequence: sequence }).catch(() => {});
+    }).catch(() => {});
+  });
 }
 
 function selectedNumberStorageKey() {
@@ -812,7 +857,7 @@ async function startMetaOnboarding(button) {
   }
   if (workspaceVerification?.gateRequired !== false && workspaceVerification?.status !== "verified") {
     showToast("Complete the provider business pre-check before connecting production business assets.", "error");
-    location.href = workspacePath("verification");
+    await navigateWorkspace(workspacePath("verification"));
     return;
   }
   const configurationId = metaOnboardingStatus?.publicConfigurationId || runtime.embeddedSignupConfigId;
@@ -2444,16 +2489,27 @@ function verificationAttentionModal() {
   return `<section class="wp-verification-attention" data-verification-attention role="dialog" aria-modal="true" aria-labelledby="wpVerificationAttentionTitle"><div class="wp-verification-attention-card"><header><div><span class="wp-kicker">Action required</span><h2 id="wpVerificationAttentionTitle">Verification documents need your attention</h2><p>Resolve every request below to continue the business verification review.</p></div><button type="button" data-verification-attention-close aria-label="Close notification">×</button></header><div class="wp-attention-documents">${requestRows}${rejectedRows}</div><footer><small>This notice will appear again on your next sign-in until replacement evidence is submitted.</small><a class="wp-secondary wp-button-link" href="${workspacePath("verification")}">Open verification centre</a></footer></div></section>`;
 }
 
-async function renderDashboard() {
+async function renderDashboard({ refresh = true, preserveScroll = false, navigationSequence = workspaceNavigationSequence } = {}) {
+  const renderLocation = workspaceLocationKey();
+  const previousScrollTop = preserveScroll ? window.scrollY : 0;
   const view = currentWorkspaceView();
   const agentWorkspace = isAgentWorkspaceRole();
-  let connections = [];
-  if (!agentWorkspace) {
-    try {
-      metaOnboardingStatus = await onboardingRequest("status");
-      if (Array.isArray(metaOnboardingStatus.connections)) connections = metaOnboardingStatus.connections;
-    } catch {
-      metaOnboardingStatus = {
+  let connections = workspaceConnections;
+  if (!agentWorkspace && refresh) {
+    const billingAction = isBillingWorkspaceView(view) || ["owner", "admin"].includes(session.roleCode) ? "summary" : "entitlement";
+    const [onboardingResult, profileResult, deletionResult, verificationResult, packageResult, billingResult] = await Promise.allSettled([
+      onboardingRequest("status"),
+      storageRequest("profile"),
+      storageRequest("account_deletion_status"),
+      storageRequest("verification_status"),
+      messagingRequest("package_master"),
+      billingRequest(billingAction),
+    ]);
+    if (onboardingResult.status === "fulfilled") {
+      metaOnboardingStatus = onboardingResult.value;
+      if (Array.isArray(metaOnboardingStatus.connections)) workspaceConnections = metaOnboardingStatus.connections;
+    } else {
+      metaOnboardingStatus = metaOnboardingStatus || {
         configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
         publicAppId: runtime.metaAppId || null,
         publicConfigurationId: runtime.embeddedSignupConfigId || null,
@@ -2461,50 +2517,46 @@ async function renderDashboard() {
         environment: "testing",
       };
     }
-    try {
-      const storage = await storageRequest("profile");
-      workspaceProfile = storage?.profile || workspaceProfile;
-    } catch {
-      workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
-    }
-    try { workspaceDeletion = (await storageRequest("account_deletion_status"))?.deletion || { pending: false }; }
-    catch { workspaceDeletion = { pending: false }; }
-    try {
-      const result = await storageRequest("verification_status");
-      workspaceVerification = result?.verification || workspaceVerification;
-    } catch {
-      workspaceVerification = workspaceVerification || { status: "not_started", entityType: workspaceProfile?.businessType || "other", requirements: [], documents: [], canEdit: true };
-    }
-    try {
-      const result = await messagingRequest("package_master");
+    connections = workspaceConnections;
+    if (profileResult.status === "fulfilled") workspaceProfile = profileResult.value?.profile || workspaceProfile;
+    else workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+    workspaceDeletion = deletionResult.status === "fulfilled" ? (deletionResult.value?.deletion || { pending: false }) : (workspaceDeletion || { pending: false });
+    if (verificationResult.status === "fulfilled") workspaceVerification = verificationResult.value?.verification || workspaceVerification;
+    else workspaceVerification = workspaceVerification || { status: "not_started", entityType: workspaceProfile?.businessType || "other", requirements: [], documents: [], canEdit: true };
+    if (packageResult.status === "fulfilled") {
+      const result = packageResult.value;
       workspacePackageMaster = { package: result?.package || null, addons: result?.addons || [], availableAddons: result?.availableAddons || [], error: "" };
-    } catch (error) {
-      workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: error?.message || "Package Master could not be loaded." };
-    }
-    if (isBillingWorkspaceView(view) || ["owner", "admin"].includes(session.roleCode)) {
-      try { workspaceBilling = { ...(await billingRequest("summary")), error: "" }; }
-      catch (error) { workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: error?.message || "Billing could not be loaded." }; }
     } else {
-      try { workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, ...(await billingRequest("entitlement")), error: "" }; }
-      catch (error) { workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: error?.message || "Billing access could not be verified." }; }
+      workspacePackageMaster = { ...workspacePackageMaster, error: packageResult.reason?.message || "Package Master could not be loaded." };
+    }
+    if (billingResult.status === "fulfilled") {
+      workspaceBilling = billingAction === "summary"
+        ? { ...billingResult.value, error: "" }
+        : { ...workspaceBilling, ...billingResult.value, error: "" };
+    } else {
+      workspaceBilling = { ...workspaceBilling, error: billingResult.reason?.message || (billingAction === "summary" ? "Billing could not be loaded." : "Billing access could not be verified.") };
     }
   } else {
-    metaOnboardingStatus = {
+    metaOnboardingStatus = metaOnboardingStatus || {
       configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
       publicAppId: runtime.metaAppId || null,
       publicConfigurationId: runtime.embeddedSignupConfigId || null,
       publicGraphVersion: runtime.metaGraphVersion || null,
       environment: "testing",
     };
-    workspaceProfile = { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
-    workspaceVerification = null;
-    workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
-    workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
+    if (agentWorkspace) {
+      workspaceConnections = [];
+      connections = [];
+      workspaceProfile = { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+      workspaceVerification = null;
+      workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
+      workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
+    }
   }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const selectedConnection = resolveSelectedConnection(connections);
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
-  if (view === "business-profile") {
+  if (refresh && view === "business-profile") {
     if (workspaceSelectedConnectionId) {
       try {
         const result = await messagingRequest("get_business_profile", { connectionId: workspaceSelectedConnectionId });
@@ -2520,7 +2572,7 @@ async function renderDashboard() {
       workspaceBusinessProfile = { profile: null, connection: null, error: "Connect a WhatsApp business number first." };
     }
   }
-  if (["inbox", "analytics"].includes(view)) {
+  if (refresh && ["inbox", "analytics"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
       const listed = await messagingRequest("list", { status, connectionId: workspaceSelectedConnectionId });
@@ -2534,7 +2586,7 @@ async function renderDashboard() {
       workspaceInbox = { conversations: [], thread: null, error: error?.message || "The Team Inbox could not be loaded." };
     }
   }
-  if (["contacts","campaigns"].includes(view)) {
+  if (refresh && ["contacts","campaigns"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
       const listed = await messagingRequest("list_contacts", { status, connectionId: workspaceSelectedConnectionId });
@@ -2543,7 +2595,7 @@ async function renderDashboard() {
       workspaceContacts = { contacts: [], error: error?.message || "The contact directory could not be loaded." };
     }
   }
-  if (["templates","inbox","campaigns","analytics"].includes(view)) {
+  if (refresh && ["templates","inbox","campaigns","analytics"].includes(view)) {
     const templateConnections = connected.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId));
     const connectionId = templateConnections.some((connection) => connection.id === workspaceSelectedConnectionId) ? workspaceSelectedConnectionId : "";
     if (connectionId) {
@@ -2569,7 +2621,7 @@ async function renderDashboard() {
       workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
     }
   }
-  if (view === "flows") {
+  if (refresh && view === "flows") {
     try {
       const result = workspaceSelectedConnectionId ? await messagingRequest("list_flows", { connectionId: workspaceSelectedConnectionId }) : { flows: [] };
       workspaceFlows = { flows: result?.flows || [], error: "" };
@@ -2577,7 +2629,7 @@ async function renderDashboard() {
       workspaceFlows = { flows: [], error: error?.message || "Flows could not be loaded." };
     }
   }
-  if (view === "campaigns") {
+  if (refresh && view === "campaigns") {
     try {
       if (!workspaceSelectedConnectionId) {
         workspaceCampaigns = { drafts: [], segments: [], error: "Connect a WhatsApp business number first." };
@@ -2592,7 +2644,7 @@ async function renderDashboard() {
       workspaceCampaigns = { drafts: [], segments: [], error: error?.message || "Campaign workspace could not be loaded." };
     }
   }
-  if (view === "team") {
+  if (refresh && view === "team") {
     try {
       const result = await messagingRequest("list_team");
       workspaceTeam = { members: result?.members || [], currentUserId: result?.currentUserId || "", currentRole: result?.currentRole || session.roleCode || "", capacity: result?.capacity || {}, error: "" };
@@ -2600,6 +2652,7 @@ async function renderDashboard() {
       workspaceTeam = { members: [], currentUserId: "", currentRole: session.roleCode || "", error: error?.message || "The member directory could not be loaded." };
     }
   }
+  if (renderLocation !== workspaceLocationKey() || navigationSequence !== workspaceNavigationSequence) return;
   document.body.classList.add("wp-workspace-mode");
   document.title = `${WORKSPACE_VIEW_LABELS[view]} | Varada Nexus WhatsApp Solutions`;
   const sidebarLogo = workspaceProfile?.logoDataUrl
@@ -2632,25 +2685,48 @@ async function renderDashboard() {
     : `<a class="wp-profile-workspace-card" href="${workspacePath("profile")}" role="menuitem" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-profile-workspace-logo">${sidebarLogo}</span><span><em>Business account</em><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)} plan</small></span><span class="wp-profile-workspace-chevron" aria-hidden="true">›</span></a>`;
   const profileMenu = `<div class="wp-profile-control"><button class="wp-profile-trigger" id="wpProfileMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="wpProfileMenu"><span class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></span><span class="wp-user-avatar" aria-hidden="true">${userInitial}</span><span class="wp-profile-chevron" aria-hidden="true">${workspaceIcon('<path d="m7 10 5 5 5-5"/>')}</span></button><div class="wp-profile-menu" id="wpProfileMenu" role="menu" hidden><header><span class="wp-profile-menu-avatar" aria-hidden="true">${userInitial}</span><div><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small><em>${escapeHtml(session.companyName)} · ${escapeHtml(roleLabel)}</em></div></header>${workspaceMenuCard}<nav aria-label="Account menu"><a href="${workspacePath("settings")}" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.37.38.7.66.98.3.27.68.42 1.08.42H21v4h-.1A1.7 1.7 0 0 0 19.4 15Z"/>')}</span><span><strong>Workspace settings</strong><small>Profile and preferences</small></span></a><a href="/contact.html" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.12c-.9.55-1.5 1.05-1.5 2.38M12 17h.01"/>')}</span><span><strong>Help &amp; support</strong><small>Contact the Varada Nexus team</small></span></a></nav><button class="wp-profile-logout" id="wpProfileLogoutBtn" type="button" role="menuitem"><span aria-hidden="true">${workspaceIcon('<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>')}</span><span><strong>Sign out</strong><small>End this secure session</small></span></button></div></div>`;
   const deletionBanner = workspaceDeletion?.pending ? `<section class="wp-deletion-pending" role="alert"><div><span>Account deletion pending</span><strong>This workspace is scheduled for deletion on ${escapeHtml(new Date(workspaceDeletion.scheduledFor).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }))}.</strong><small>An owner or administrator can reverse this request during the 24-hour protection window.</small></div>${workspaceDeletion.canReverse ? `<button type="button" data-reverse-account-deletion>Keep this account</button>` : ""}</section>` : "";
+  const existingShell = app.querySelector(".wp-workspace-shell");
+  const preserveSidebar = Boolean(existingShell)
+    && !isFlowBuilderRoute
+    && !existingShell.classList.contains("wp-flow-builder-workspace")
+    && (preserveScroll || !refresh);
+  const persistentSidebar = preserveSidebar ? existingShell.querySelector(".wp-workspace-sidebar") : null;
+  const sidebarWasCollapsed = Boolean(existingShell?.classList.contains("sidebar-collapsed"));
   app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  const nextShell = app.querySelector(".wp-workspace-shell");
+  if (persistentSidebar) {
+    nextShell?.querySelector(".wp-workspace-sidebar")?.replaceWith(persistentSidebar);
+    nextShell?.classList.toggle("sidebar-collapsed", sidebarWasCollapsed);
+    persistentSidebar.querySelectorAll(".wp-workspace-nav a[href]").forEach((link) => {
+      const linkUrl = new URL(link.href, location.href);
+      const active = linkUrl.pathname === location.pathname;
+      link.classList.toggle("active", active);
+      if (active) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+  }
   bindQuantitySteppers(app);
   if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
   const workspaceSidebarState = readWorkspaceSidebarState();
-  enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
+  if (!persistentSidebar) enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
   app.querySelector("[data-reverse-account-deletion]")?.addEventListener("click", async (event) => {
     const button = event.currentTarget; const reason = window.prompt("Optional: why are you keeping this account?", "Deletion request withdrawn by workspace staff") || "";
     try { button.disabled = true; button.textContent = "Reversing…"; await storageRequest("reverse_account_deletion", { reason }); showToast("Account deletion has been reversed."); await renderDashboard(); }
     catch (error) { button.disabled = false; button.textContent = "Keep this account"; showToast(error?.message || "Deletion could not be reversed.", "error"); }
   });
-  app.querySelector("#wpBusinessNumberSelector")?.addEventListener("change", async (event) => {
-    selectWorkspaceConnection(event.currentTarget.value);
-    const url = new URL(location.href);
-    url.searchParams.delete("conversation");
-    url.searchParams.delete("connection");
-    history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-    await renderDashboard();
-    showToast("Business number changed.");
-  });
+  const businessNumberSelectorElement = app.querySelector("#wpBusinessNumberSelector");
+  if (businessNumberSelectorElement && !businessNumberSelectorElement.dataset.workspaceNumberBound) {
+    businessNumberSelectorElement.dataset.workspaceNumberBound = "true";
+    businessNumberSelectorElement.addEventListener("change", async (event) => {
+      selectWorkspaceConnection(event.currentTarget.value);
+      const url = new URL(location.href);
+      url.searchParams.delete("conversation");
+      url.searchParams.delete("connection");
+      history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      await renderDashboard();
+      showToast("Business number changed.");
+    });
+  }
   app.querySelector("[data-verification-attention-close]")?.addEventListener("click", () => {
     verificationAttentionDismissed = true;
     app.querySelector("[data-verification-attention]")?.remove();
@@ -2731,7 +2807,7 @@ async function renderDashboard() {
         const checkoutUrl = new URL(workspacePath("checkout"), location.origin);
         checkoutUrl.searchParams.set("package", button.dataset.billingSubscribe);
         checkoutUrl.searchParams.set("interval", billingInterval);
-        location.assign(checkoutUrl.pathname + checkoutUrl.search);
+        await navigateWorkspace(checkoutUrl);
         return;
       } catch (error) {
         showToast(error?.message || "Secure checkout could not be opened.", "error");
@@ -2981,7 +3057,7 @@ async function renderDashboard() {
               showToast("Subscription verified and billing activated.");
               const returnUrl = new URL(workspacePath("billing"), location.origin);
               returnUrl.searchParams.set("checkout", "success");
-              location.assign(`${returnUrl.pathname}${returnUrl.search}`);
+              await navigateWorkspace(returnUrl);
             } catch (error) { showToast(error?.message || "Payment verification failed.", "error"); }
           },
           modal: {
@@ -3531,7 +3607,8 @@ async function renderDashboard() {
     setProfileMenuOpen(false);
     profileMenuButton.focus();
   });
-  const collapseButton = app.querySelector("#wpSidebarCollapseBtn");
+  const sidebarElement = app.querySelector(".wp-workspace-sidebar");
+  const collapseButton = sidebarElement?.querySelector("#wpSidebarCollapseBtn");
   const syncSidebarCollapseButton = () => {
     const collapsed = Boolean(shell?.classList.contains("sidebar-collapsed"));
     collapseButton?.setAttribute("aria-expanded", String(!collapsed));
@@ -3540,32 +3617,44 @@ async function renderDashboard() {
     collapseButton?.classList.toggle("is-collapsed", collapsed);
   };
   syncSidebarCollapseButton();
-  const setSidebarCollapsed = (collapsed) => {
-    shell?.classList.toggle("sidebar-collapsed", collapsed);
-    workspaceSidebarState.collapsed = collapsed;
-    writeWorkspaceSidebarState(workspaceSidebarState);
-    syncSidebarCollapseButton();
-  };
-  collapseButton?.addEventListener("click", () => {
-    setSidebarCollapsed(!shell?.classList.contains("sidebar-collapsed"));
-  });
-  app.querySelector(".wp-workspace-sidebar")?.addEventListener("click", (event) => {
-    if (!shell?.classList.contains("sidebar-collapsed")) return;
-    if (event.target.closest("#wpSidebarCollapseBtn, .wp-workspace-nav a")) return;
-    event.preventDefault();
-    setSidebarCollapsed(false);
-  });
-  app.querySelectorAll("[data-workspace-section-toggle]").forEach((button) => button.addEventListener("click", () => {
-    const section = button.closest("[data-workspace-nav-section]");
-    const sectionId = button.dataset.workspaceSectionToggle;
-    if (!section || !sectionId) return;
-    const collapsed = !section.classList.contains("is-collapsed");
-    section.classList.toggle("is-collapsed", collapsed);
-    button.setAttribute("aria-expanded", String(!collapsed));
-    button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${button.querySelector(".wp-nav-label")?.textContent?.trim() || "navigation section"}`);
-    workspaceSidebarState.sections[sectionId] = !collapsed;
-    writeWorkspaceSidebarState(workspaceSidebarState);
-  }));
+  if (sidebarElement && !sidebarElement.dataset.workspaceInteractionsBound) {
+    sidebarElement.dataset.workspaceInteractionsBound = "true";
+    collapseButton?.addEventListener("click", () => {
+      const activeShell = sidebarElement.closest(".wp-workspace-shell");
+      const collapsed = !activeShell?.classList.contains("sidebar-collapsed");
+      activeShell?.classList.toggle("sidebar-collapsed", collapsed);
+      workspaceSidebarState.collapsed = collapsed;
+      writeWorkspaceSidebarState(workspaceSidebarState);
+      collapseButton.setAttribute("aria-expanded", String(!collapsed));
+      collapseButton.setAttribute("aria-label", collapsed ? "Expand workspace navigation" : "Collapse workspace navigation");
+      collapseButton.setAttribute("title", collapsed ? "Expand navigation" : "Collapse navigation");
+      collapseButton.classList.toggle("is-collapsed", collapsed);
+    });
+    sidebarElement.addEventListener("click", (event) => {
+      const activeShell = sidebarElement.closest(".wp-workspace-shell");
+      if (!activeShell?.classList.contains("sidebar-collapsed")) return;
+      if (event.target.closest("#wpSidebarCollapseBtn, .wp-workspace-nav a")) return;
+      event.preventDefault();
+      activeShell.classList.remove("sidebar-collapsed");
+      workspaceSidebarState.collapsed = false;
+      writeWorkspaceSidebarState(workspaceSidebarState);
+      collapseButton?.classList.remove("is-collapsed");
+      collapseButton?.setAttribute("aria-expanded", "true");
+      collapseButton?.setAttribute("aria-label", "Collapse workspace navigation");
+      collapseButton?.setAttribute("title", "Collapse navigation");
+    });
+    sidebarElement.querySelectorAll("[data-workspace-section-toggle]").forEach((button) => button.addEventListener("click", () => {
+      const section = button.closest("[data-workspace-nav-section]");
+      const sectionId = button.dataset.workspaceSectionToggle;
+      if (!section || !sectionId) return;
+      const collapsed = !section.classList.contains("is-collapsed");
+      section.classList.toggle("is-collapsed", collapsed);
+      button.setAttribute("aria-expanded", String(!collapsed));
+      button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${button.querySelector(".wp-nav-label")?.textContent?.trim() || "navigation section"}`);
+      workspaceSidebarState.sections[sectionId] = !collapsed;
+      writeWorkspaceSidebarState(workspaceSidebarState);
+    }));
+  }
   const toggleSidebar = (open) => {
     shell?.classList.toggle("sidebar-open", open);
     app.querySelector("#wpSidebarToggle")?.setAttribute("aria-expanded", String(open));
@@ -4176,7 +4265,7 @@ async function renderDashboard() {
       });
       newChatDialog.close();
       showToast("Template sent. Conversation opened.");
-      location.href = `${workspacePath("inbox")}?conversation=${encodeURIComponent(result.conversationId)}`;
+      await navigateWorkspace(`${workspacePath("inbox")}?conversation=${encodeURIComponent(result.conversationId)}`);
     } catch (error) {
       showToast(error?.message || "The new conversation could not be started.", "error");
       submitter.disabled = false; submitter.textContent = "Send template";
@@ -4334,6 +4423,7 @@ async function renderDashboard() {
       button.disabled = false; button.textContent = original;
     }
   }));
+  if (preserveScroll) window.scrollTo({ top: previousScrollTop, left: 0, behavior: "auto" });
   if (setupReady && ["onboarding", "accounts"].includes(view)) loadFacebookSdk().catch(() => {});
 }
 
@@ -4348,7 +4438,8 @@ async function init() {
       location.replace(`${ACCESS_PATH}#signin`);
       return;
     }
-    app.innerHTML = `<div class="wp-loading">Opening your business workspace…</div>`;
+    bindWorkspaceNavigation();
+    app.innerHTML = `<div class="wp-loading wp-branded-loading" role="status" aria-live="polite"><div class="wp-loading-brand"><span class="wp-loading-logo"><img src="/images/logo.png" alt="" /></span><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></div><div class="wp-loading-progress" aria-hidden="true"><i></i><i></i><i></i></div><p>Opening your workspace</p></div>`;
     try { await restoreSession(); }
     catch { clearSession(); location.replace(`${ACCESS_PATH}#signin`); }
     return;
