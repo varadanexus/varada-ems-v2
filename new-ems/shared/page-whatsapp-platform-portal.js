@@ -2076,7 +2076,17 @@ function confirmAddonChange(preview) {
   const quote = preview.quote || {};
   const money = (paise) => escapeHtml(billingMoney(Number(paise || 0) / 100, quote.currency));
   const remainingDays = Number(quote.billableRemainingDays || 0).toFixed(2).replace(/\.00$/, "");
-  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Prorated add-on increase</span><h2>${escapeHtml(preview.addon?.name || "Add-on capacity")}</h2><p>Review the immediate prorated amount and the recurring total before authorizing payment.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>Quantity</dt><dd>${Number(quote.currentQuantity || 0)} → ${Number(quote.targetQuantity || 0)}</dd></div>`}<div><dt>Remaining service</dt><dd>${escapeHtml(remainingDays)} days</dd></div><div><dt>Prorated add-on base</dt><dd>${money(quote.proratedBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>New recurring base</dt><dd>${money(quote.targetRecurringBasePaise)} + GST</dd></div></dl><div class="wp-policy-note"><strong>Independent add-on subscription</strong><p>The increased capacity activates only after Razorpay confirms authorization. Only the existing add-on subscription is replaced; your master plan remains active and unchanged. The new add-on recurring total starts ${escapeHtml(formatProfileDate(quote.recurringStartsAt))}.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Keep current capacity</button><button class="wp-primary" type="submit" value="authorize">Authorize add-on</button></footer></form>`;
+  const isNewSubscription = quote.isNewSubscription === true;
+  const eyebrow = isNewSubscription ? "Separate add-on subscription" : "Prorated add-on increase";
+  const introduction = isNewSubscription
+    ? "This purchase is separate from your master plan. Confirm the immediate charge before starting the add-on subscription."
+    : "Review the immediate prorated amount and the recurring total before authorizing payment.";
+  const serviceRow = isNewSubscription ? "" : `<div><dt>Remaining service</dt><dd>${escapeHtml(remainingDays)} days</dd></div>`;
+  const baseLabel = isNewSubscription ? "First billing cycle base" : "Prorated add-on base";
+  const policyText = isNewSubscription
+    ? `${quote.masterTrialActive ? "Your master-plan trial continues unchanged. " : "Your master plan remains unchanged. "}This add-on is charged now, activates only after Razorpay confirms payment, renews on its own billing cycle, and can be cancelled separately.`
+    : `The increased capacity activates only after Razorpay confirms authorization. Only the existing add-on subscription is replaced; your master plan remains active and unchanged. The new add-on recurring total starts ${escapeHtml(formatProfileDate(quote.recurringStartsAt))}.`;
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">${eyebrow}</span><h2>${escapeHtml(preview.addon?.name || "Add-on capacity")}</h2><p>${introduction}</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>Quantity</dt><dd>${Number(quote.currentQuantity || 0)} → ${Number(quote.targetQuantity || 0)}</dd></div>`}${serviceRow}<div><dt>${baseLabel}</dt><dd>${money(quote.proratedBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>Recurring base</dt><dd>${money(quote.targetRecurringBasePaise)} + GST</dd></div></dl><div class="wp-policy-note"><strong>Independent add-on subscription</strong><p>${policyText}</p></div><footer><button class="wp-secondary" type="submit" value="cancel">${isNewSubscription ? "Not now" : "Keep current capacity"}</button><button class="wp-primary" type="submit" value="authorize">${isNewSubscription ? "Confirm & pay now" : "Authorize add-on"}</button></footer></form>`;
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => resolve(dialog.returnValue === "authorize"), { once: true });
     dialog.showModal();
@@ -2218,7 +2228,7 @@ function billingView(view = "billing") {
   const features = Object.entries(pkg.entitlements || {}).map(([key,value]) => `<li class="${value === false ? "off" : "on"}"><span>${value === false ? "×" : "✓"}</span><strong>${escapeHtml(labels[key] || key.replaceAll("_", " "))}</strong><small>${typeof value === "string" ? escapeHtml(value) : value === false ? "Not included" : "Included"}</small></li>`).join("");
   const assignedCodes = new Set((workspacePackageMaster.addons || []).map((addon) => addon.code));
   const managedSubscription = Boolean(subscription && ["authenticated", "active"].includes(String(subscription.status)));
-  const addonManageReady = Boolean(canManage && workspaceBilling?.configured && subscription?.status === "active" && !subscription?.cancel_at_cycle_end);
+  const addonManageReady = Boolean(canManage && workspaceBilling?.configured && ["authenticated", "active"].includes(String(subscription?.status)) && !subscription?.cancel_at_cycle_end);
   const addonControl = (addon, currentQuantity = 0) => {
     const selfService = addon.is_self_service && addon.billing_model === "recurring" && addon.billing_interval === subscription?.billing_interval;
     if (!selfService) return `<a href="/contact.html?subject=${encodeURIComponent(`WhatsApp add-on: ${addon.name}`)}">Contact sales →</a>`;
@@ -2227,14 +2237,12 @@ function billingView(view = "billing") {
       ? "payment_setup"
       : subscription?.cancel_at_cycle_end
         ? "subscription_ending"
-        : subscription?.status === "authenticated"
-          ? "trial"
-          : subscription?.status !== "active"
+        : !["authenticated", "active"].includes(String(subscription?.status))
             ? "subscription_inactive"
             : currentQuantity > 0 && addon.billingManaged !== true
               ? "billing_support"
               : "";
-    if (!addonManageReady || unavailableReason) return `<button class="wp-secondary" type="button" data-billing-addon-unavailable="${escapeHtml(unavailableReason || "subscription_inactive")}" data-billing-addon-name="${escapeHtml(addon.name)}">${unavailableReason === "trial" ? "Available after trial" : unavailableReason === "billing_support" ? "Billing review required" : "Review requirements"}</button>`;
+    if (!addonManageReady || unavailableReason) return `<button class="wp-secondary" type="button" data-billing-addon-unavailable="${escapeHtml(unavailableReason || "subscription_inactive")}" data-billing-addon-name="${escapeHtml(addon.name)}">${unavailableReason === "billing_support" ? "Billing review required" : "Review requirements"}</button>`;
     const quantityEnabled = addon.quantity_enabled !== false;
     if (!quantityEnabled && currentQuantity > 0) return `<span class="wp-billing-current-action">Active</span>`;
     const step = Math.max(1, Number(addon.quantity_step || 1));
@@ -2299,7 +2307,7 @@ function billingView(view = "billing") {
   const refundsSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Refund documents</span><h2>Refunds &amp; credit notes</h2><p>Every verified Razorpay refund is matched to its centralized EMS credit note and original payment reference.</p></div></div>${creditNotes ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Credit note</th><th>Reason</th><th>Refund ID</th><th>Total</th><th></th></tr></thead><tbody>${creditNotes}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No refunds or credit notes</strong><p>Verified refunds and their financial documents will appear here.</p></div>'}</section>`;
   const page = (content) => `<section class="wp-route-page wp-billing-page">${heading}${notices}${billingNav}${content}</section>`;
   if (view === "billing") return page(`<section class="wp-billing-overview-metrics"><article><span>Subscription</span><strong>${escapeHtml(statusLabel)}</strong><small>${trialActive ? escapeHtml(trialCountdown) : subscription?.current_end ? `Renews ${escapeHtml(formatProfileDate(subscription.current_end))}` : "No renewal scheduled"}</small></article><article><span>Invoices</span><strong>${Number((workspaceBilling.invoices || []).length)}</strong><small>Issued documents</small></article><article><span>Payments</span><strong>${Number((workspaceBilling.payments || []).length)}</strong><small>Ledger entries</small></article><article><span>Refunds</span><strong>${Number((workspaceBilling.creditNotes || []).length)}</strong><small>Credit notes</small></article></section>${renewalNotice}${subscriptionCard}`);
-  if (view === "billing-plans") return page(`${renewalNotice}${subscriptionCard}${addonSubscriptionsSection}<section id="available-plans"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price. Add-ons are purchased and managed separately.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section>${packageDetails}`);
+  if (view === "billing-plans") return page(`${renewalNotice}${subscriptionCard}${addonSubscriptionsSection}<section id="available-plans"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price. Add-ons selected during initial checkout are bundled with the master plan; add-ons purchased later remain separate subscriptions.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section>${packageDetails}`);
   if (view === "billing-addons") return page(`${subscriptionCard}${addonSubscriptionsSection}${addonsSection}`);
   if (view === "billing-invoices") return page(invoicesSection);
   if (view === "billing-ledger") return page(ledgerSection);
@@ -2318,8 +2326,18 @@ function checkoutView() {
   const baseAmount = interval === "year" ? plan.annual_amount : plan.monthly_amount;
   const quoteAddonLines = (quote?.addons || []).map((addon) => `<div><dt>${escapeHtml(addon.name)}${addon.quantityEnabled === false ? "" : ` × ${Number(addon.quantity)}`}</dt><dd>${money(addon.baseSubtotalPaise)}</dd></div>`).join("");
   const packageQuotedBase = Math.max(0, Number(quote?.baseSubtotalPaise || 0) - (quote?.addons || []).reduce((total, addon) => total + Number(addon.baseSubtotalPaise || 0), 0));
+  const selectedCheckoutAddons = new Map((quote?.addons || []).map((addon) => [addon.code, Number(addon.quantity || 1)]));
+  const checkoutAddons = (workspaceBilling?.checkoutAddons || []).filter((addon) => addon.billing_interval === interval && (!Array.isArray(addon.eligible_plan_codes) || !addon.eligible_plan_codes.length || addon.eligible_plan_codes.includes(plan.code)));
+  const checkoutAddonFields = checkoutAddons.length ? `<fieldset class="wp-checkout-addons"><legend>Include add-ons in this master plan</legend><p>Add-ons selected here share the master plan's trial, renewal date and cancellation. Add-ons purchased later are separate subscriptions and are charged immediately.</p>${checkoutAddons.map((addon) => {
+    const selectedQuantity = selectedCheckoutAddons.get(addon.code);
+    const checked = selectedQuantity != null;
+    const quantityEnabled = addon.quantity_enabled !== false;
+    const minimum = Math.max(1, Number(addon.minimum_quantity || 1));
+    const quantity = checked ? selectedQuantity : minimum;
+    return `<label><input type="checkbox" name="checkoutAddon" value="${escapeHtml(addon.code)}" data-checkout-addon ${checked ? "checked" : ""}/><span><strong>${escapeHtml(addon.name)}</strong><small>${escapeHtml(addon.description || "Recurring capacity add-on")}</small><em>${escapeHtml(billingMoney(addon.unit_amount, addon.currency))} / ${escapeHtml(interval)} + GST</em></span>${quantityEnabled ? `<input type="number" value="${Number(quantity)}" min="${minimum}" ${addon.maximum_quantity == null ? "" : `max="${Number(addon.maximum_quantity)}"`} step="${Math.max(1, Number(addon.quantity_step || 1))}" data-checkout-addon-quantity="${escapeHtml(addon.code)}" aria-label="${escapeHtml(addon.name)} quantity" ${checked ? "" : "disabled"}/>` : ""}</label>`;
+  }).join("")}</fieldset>` : "";
   const quotePanel = quote ? `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Server-verified quote</span><h2>Amount summary</h2><dl class="wp-upgrade-quote"><div><dt>Package base price</dt><dd>${money(packageQuotedBase)}</dd></div>${quoteAddonLines}${quote.discountPaise ? `<div class="is-credit"><dt>Coupon ${escapeHtml(quote.couponCode || "discount")}</dt><dd>−${money(quote.discountPaise)}</dd></div>` : ""}<div><dt>Taxable base</dt><dd>${money(quote.taxableBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.packageGstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>${Number(plan.trial_days || 0) ? "Recurring amount after trial" : "Recurring payment"}</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div></dl><div class="wp-policy-note"><strong>Quote protected until ${escapeHtml(new Date(quote.expiresAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }))}</strong><p>The payment request uses this exact server-calculated amount. Changing the package price or letting the quote expire requires a new review.</p></div><button class="wp-primary" type="button" data-checkout-authorize="${escapeHtml(quote.id)}">Authorize securely with Razorpay</button></article>` : `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Amount summary</span><h2>Review required</h2><p>Apply a coupon if eligible and request a protected quote to see GST, the gateway adjustment, and the exact master-plan recurring amount.</p></article>`;
-  return `<section class="wp-route-page wp-checkout-page"><div class="wp-route-heading"><div><span class="wp-kicker">Dedicated master-plan checkout</span><h1>Review and authorize</h1><p>Prices are loaded from the authoritative Package Master. No browser-entered amount is accepted.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div>${workspaceCheckout?.error ? `<div class="wp-verification-notice"><strong>Checkout notice</strong><p>${escapeHtml(workspaceCheckout.error)}</p></div>` : ""}<section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Selected master plan</span><h2>${escapeHtml(plan.name)}</h2><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${escapeHtml(billingMoney(baseAmount, plan.currency))}</strong><span>/ ${interval === "year" ? "year" : "month"} + GST</span></div>${Number(plan.trial_days || 0) ? `<div class="wp-policy-note"><strong>${Number(plan.trial_days)}-day authorized free trial</strong><p>Razorpay payment authorization is required now and unlocks product features. The first recurring package charge occurs after the trial. Cancellation becomes available after the trial ends.</p></div>` : ""}<form data-checkout-quote-form><input type="hidden" name="packageCode" value="${escapeHtml(plan.code)}"/><input type="hidden" name="billingInterval" value="${escapeHtml(interval)}"/><label><span>Coupon code <small>optional</small></span><input name="couponCode" maxlength="40" autocomplete="off" value="${escapeHtml(quote?.couponCode || "")}" placeholder="Enter coupon code"/></label><button class="wp-secondary" type="submit">${quote ? "Recalculate total" : "Calculate final total"}</button></form><small>Coupon eligibility, dates and redemption limits are validated by the billing server. Recurring add-ons are purchased separately after the master plan becomes active.</small></article>${quotePanel}</section></section>`;
+  return `<section class="wp-route-page wp-checkout-page"><div class="wp-route-heading"><div><span class="wp-kicker">Dedicated master-plan checkout</span><h1>Review and authorize</h1><p>Prices are loaded from the authoritative Package Master. No browser-entered amount is accepted.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div>${workspaceCheckout?.error ? `<div class="wp-verification-notice"><strong>Checkout notice</strong><p>${escapeHtml(workspaceCheckout.error)}</p></div>` : ""}<section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Selected master plan</span><h2>${escapeHtml(plan.name)}</h2><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${escapeHtml(billingMoney(baseAmount, plan.currency))}</strong><span>/ ${interval === "year" ? "year" : "month"} + GST</span></div>${Number(plan.trial_days || 0) ? `<div class="wp-policy-note"><strong>${Number(plan.trial_days)}-day authorized free trial</strong><p>Razorpay payment authorization is required now and unlocks product features. The first recurring package charge occurs after the trial. Cancellation becomes available after the trial ends.</p></div>` : ""}<form data-checkout-quote-form><input type="hidden" name="packageCode" value="${escapeHtml(plan.code)}"/><input type="hidden" name="billingInterval" value="${escapeHtml(interval)}"/>${checkoutAddonFields}<label><span>Coupon code <small>optional</small></span><input name="couponCode" maxlength="40" autocomplete="off" value="${escapeHtml(quote?.couponCode || "")}" placeholder="Enter coupon code"/></label><button class="wp-secondary" type="submit">${quote ? "Recalculate total" : "Calculate final total"}</button></form><small>Coupon eligibility, dates and redemption limits are validated by the billing server. Add-ons included here become part of this master subscription; add-ons bought later remain independently cancellable subscriptions.</small></article>${quotePanel}</section></section>`;
 }
 
 function billingAccessRequiredView() {
@@ -2826,7 +2844,11 @@ async function renderDashboard() {
   }
   if (view === "checkout") {
     const quoteForm = app.querySelector("[data-checkout-quote-form]");
-    quoteForm?.addEventListener("input", () => {
+    quoteForm?.addEventListener("input", (event) => {
+      if (event.target?.matches?.("[data-checkout-addon]")) {
+        const quantityInput = [...quoteForm.querySelectorAll("[data-checkout-addon-quantity]")].find((input) => input.dataset.checkoutAddonQuantity === event.target.value);
+        if (quantityInput) quantityInput.disabled = !event.target.checked;
+      }
       const authorize = app.querySelector("[data-checkout-authorize]");
       if (!authorize) return;
       authorize.disabled = true;
@@ -2838,11 +2860,15 @@ async function renderDashboard() {
       if (!form.reportValidity()) return;
       const button = form.querySelector('button[type="submit"]');
       const values = new FormData(form);
+      const addons = [...form.querySelectorAll("[data-checkout-addon]:checked")].map((checkbox) => {
+        const quantityInput = [...form.querySelectorAll("[data-checkout-addon-quantity]")].find((input) => input.dataset.checkoutAddonQuantity === checkbox.value);
+        return { code: checkbox.value, quantity: quantityInput ? Number(quantityInput.value) : 1 };
+      });
       const original = button.textContent;
       try {
         button.disabled = true; button.textContent = "Validating price…";
         const result = await billingRequest("quote_subscription_checkout", {
-          packageCode: values.get("packageCode"), billingInterval: values.get("billingInterval"), couponCode: values.get("couponCode"), addons: [],
+          packageCode: values.get("packageCode"), billingInterval: values.get("billingInterval"), couponCode: values.get("couponCode"), addons,
         });
         workspaceCheckout = { quote: result.quote, package: result.package, error: "" };
         showToast(result.quote?.couponCode ? `Coupon ${result.quote.couponCode} applied securely.` : "Final checkout total calculated securely.");
