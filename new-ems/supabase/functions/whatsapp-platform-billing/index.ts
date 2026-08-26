@@ -670,6 +670,17 @@ async function recordRefund(admin: any, entity: any) {
   return data;
 }
 async function applyPackageForSubscription(admin: any, subscription: any, status: string) {
+  const subscriptionKind = String(subscription.subscription_kind || subscription.safe_metadata?.subscription_kind || "package");
+  if (subscriptionKind === "addon") {
+    if (TERMINAL_SUBSCRIPTION_STATUSES.has(status)) {
+      const endedAt = subscription.current_end || new Date().toISOString();
+      const { error: addonError } = await admin.from("whatsapp_platform_tenant_addons")
+        .update({ status: "paused", billing_ends_at: endedAt, updated_at: new Date().toISOString() })
+        .eq("source_subscription_id", subscription.id).in("status", ["pending", "active"]);
+      if (addonError) throw addonError;
+    }
+    return;
+  }
   if (status === "active") {
     const { error } = await admin.from("whatsapp_platform_tenants").update({ plan_code: subscription.package_code, updated_at: new Date().toISOString() }).eq("id", subscription.tenant_id);
     if (error) throw error;
@@ -680,6 +691,7 @@ async function applyPackageForSubscription(admin: any, subscription: any, status
     const { data: replacement, error: replacementError } = await admin.from("whatsapp_platform_billing_subscriptions")
       .select("id,package_code,status")
       .eq("tenant_id", subscription.tenant_id)
+      .eq("subscription_kind", "package")
       .neq("id", subscription.id)
       .in("status", ["authenticated", "active"])
       .order("created_at", { ascending: false })
@@ -726,7 +738,7 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
   const mode = billingMode(credentials);
   const [{ data: packages, error: packagesError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentsError }, { data: renewalChanges, error: renewalError }, { data: entitlement, error: entitlementError }, { data: invoices, error: invoicesError }, { data: creditNotes, error: creditNotesError }] = await Promise.all([
     admin.from("whatsapp_platform_package_master").select("id,code,name,description,status,billing_model,currency,monthly_amount,annual_amount,trial_days,team_member_limit,whatsapp_number_limit,contact_limit,monthly_message_limit,template_limit,flow_limit,campaign_limit,automation_limit,integration_limit,storage_limit_mb,entitlements,sort_order,current_price_version_id").eq("status", "active").order("sort_order"),
-    admin.from("whatsapp_platform_billing_subscriptions").select("id,package_code,billing_interval,status,quantity,paid_count,remaining_count,short_url,current_start,current_end,charge_at,ended_at,cancel_at_cycle_end,checkout_verified_at,activated_at,cancelled_at,package_price_version_id,recurring_base_paise,gst_rate_bps,safe_metadata,created_at").eq("tenant_id", customer.tenant_id).eq("safe_metadata->>mode", mode).order("created_at", { ascending: false }).limit(10),
+    admin.from("whatsapp_platform_billing_subscriptions").select("id,package_code,billing_interval,subscription_kind,addon_code,addon_quantity,parent_subscription_id,status,quantity,paid_count,remaining_count,short_url,current_start,current_end,charge_at,ended_at,cancel_at_cycle_end,checkout_verified_at,activated_at,cancelled_at,package_price_version_id,recurring_base_paise,gst_rate_bps,safe_metadata,created_at").eq("tenant_id", customer.tenant_id).eq("safe_metadata->>mode", mode).order("created_at", { ascending: false }).limit(50),
     admin.from("whatsapp_platform_billing_payments").select("id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").eq("tenant_id", customer.tenant_id).eq("safe_metadata->>mode", mode).order("created_at", { ascending: false }).limit(20),
     admin.from("whatsapp_platform_billing_renewal_price_changes").select("id,subscription_id,replacement_subscription_id,from_price_version_id,target_price_version_id,effective_at,status,notice_version,notice_shown_at,decided_at,created_at").eq("tenant_id", customer.tenant_id).in("status", ["pending_consent", "accepted", "processing", "failed"]).order("created_at", { ascending: false }),
     admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id }),
@@ -736,11 +748,30 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
   if (packagesError) throw packagesError; if (subscriptionError) throw subscriptionError; if (paymentsError) throw paymentsError; if (renewalError) throw renewalError; if (entitlementError) throw entitlementError; if (invoicesError) throw invoicesError; if (creditNotesError) throw creditNotesError;
   EdgeRuntime.waitUntil(archiveOutstandingBillingDocuments(admin, customer.tenant_id));
   const rows = subscriptions || [];
-  const subscription = rows.find((row: any) => row.safe_metadata?.upgrade_activated_at && !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
-    || rows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
-    || rows.find((row: any) => !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
-    || rows[0] || null;
-  const publicSubscription = subscription ? Object.fromEntries(Object.entries(subscription).filter(([key]) => !["safe_metadata", "short_url"].includes(key))) : null;
+  const packageRows = rows.filter((row: any) => String(row.subscription_kind || row.safe_metadata?.subscription_kind || "package") === "package");
+  const addonRows = rows.filter((row: any) => String(row.subscription_kind || row.safe_metadata?.subscription_kind || "package") === "addon");
+  const subscription = packageRows.find((row: any) => row.safe_metadata?.upgrade_activated_at && !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
+    || packageRows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
+    || packageRows.find((row: any) => !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
+    || packageRows[0] || null;
+  const publicSubscription = subscription ? {
+    ...Object.fromEntries(Object.entries(subscription).filter(([key]) => !["safe_metadata", "short_url"].includes(key))),
+    trial_days: Number(subscription.safe_metadata?.trial_days || 0),
+    trial_ends_at: subscription.safe_metadata?.trial_ends_at || subscription.charge_at || null,
+  } : null;
+  const addonCodes = [...new Set(addonRows.map((row: any) => row.addon_code).filter(Boolean))];
+  let addonMasters: any[] = [];
+  if (addonCodes.length) {
+    const { data, error } = await admin.from("whatsapp_platform_addon_master").select("code,name,description,unit_name,currency,billing_interval").in("code", addonCodes);
+    if (error) throw error;
+    addonMasters = data || [];
+  }
+  const addonMasterMap = new Map(addonMasters.map((addon: any) => [addon.code, addon]));
+  const publicAddonSubscriptions = addonRows.map((row: any) => {
+    const addon: any = addonMasterMap.get(row.addon_code) || {};
+    const publicRow = Object.fromEntries(Object.entries(row).filter(([key]) => !["safe_metadata", "short_url"].includes(key)));
+    return { ...publicRow, addon_name: addon.name || row.addon_code, addon_description: addon.description || "", unit_name: addon.unit_name || "unit", currency: addon.currency || "INR" };
+  });
   const priceVersionIds = [...new Set((renewalChanges || []).flatMap((change: any) => [change.from_price_version_id, change.target_price_version_id]).filter(Boolean))];
   let priceVersions: any[] = [];
   if (priceVersionIds.length) {
@@ -774,7 +805,7 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     configured: razorpayConfigured(credentials), keyId: razorpayConfigured(credentials) ? credentials.keyId : "",
     mode,
     webhookUrl: `${env("SUPABASE_URL")}/functions/v1/whatsapp-platform-billing?webhook=razorpay`,
-    packages: publicPackages, subscription: publicSubscription, payments: payments || [], invoices: invoices || [], creditNotes: creditNotes || [], renewalPriceChanges: publicRenewalChanges, entitlement,
+    packages: publicPackages, subscription: publicSubscription, addonSubscriptions: publicAddonSubscriptions, payments: payments || [], invoices: invoices || [], creditNotes: creditNotes || [], renewalPriceChanges: publicRenewalChanges, entitlement,
     customer: { name: customer.display_name || customer.company_name || "", email: customer.email || "", companyName: customer.company_name || "" },
   };
 }
@@ -785,6 +816,7 @@ async function quoteSubscriptionCheckout(admin: any, customer: any, body: any) {
   if (!['month', 'year'].includes(interval)) throw new Error("Select monthly or annual billing.");
   const couponCode = cleanCouponCode(body.couponCode);
   const requested = requestedAddons(body.addons);
+  if (requested.length) throw new Error("Authorize the master plan first, then purchase each recurring add-on from the Add-ons page as a separate subscription.");
   const { data: pkg, error: packageError } = await admin.from("whatsapp_platform_package_master").select("*").eq("code", packageCode).eq("status", "active").single();
   if (packageError || !pkg || pkg.billing_model !== "subscription") throw new Error("Selected package is unavailable for self-service checkout.");
   const priceSnapshot = packagePriceSnapshot(pkg, interval);
@@ -937,7 +969,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
   if (pkg.billing_model !== "subscription") throw new Error("This package requires a custom billing agreement.");
   if (pkg.current_price_version_id !== quote.package_price_version_id) throw new Error("Package pricing changed. Review a fresh checkout quote before authorizing payment.");
   const mode = billingMode(credentials);
-  const { data: existing, error: existingError } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("tenant_id", customer.tenant_id).eq("safe_metadata->>mode", mode).in("status", OPEN_SUBSCRIPTION_STATUSES).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const { data: existing, error: existingError } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("tenant_id", customer.tenant_id).eq("subscription_kind", "package").eq("safe_metadata->>mode", mode).in("status", OPEN_SUBSCRIPTION_STATUSES).order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (existingError) throw existingError;
   if (existing) {
     if (existing.package_code !== packageCode || existing.billing_interval !== interval) throw new Error("Cancel the current subscription before selecting a different package or billing interval.");
@@ -951,7 +983,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
   const planId = await ensureRazorpayPlanForQuote(admin, pkg, quote, credentials);
   const firstPaymentOnly = Boolean(quote.quote_snapshot?.coupon_first_payment_only);
   const priceSnapshot = { package_price_version_id: quote.package_price_version_id, recurring_base_paise: Number(firstPaymentOnly ? quote.base_subtotal_paise : quote.taxable_base_paise), gst_rate_bps: Number(quote.gst_rate_bps) };
-  const { count: priorCount, error: countError } = await admin.from("whatsapp_platform_billing_subscriptions").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("package_code", packageCode);
+  const { count: priorCount, error: countError } = await admin.from("whatsapp_platform_billing_subscriptions").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("subscription_kind", "package").eq("package_code", packageCode);
   if (countError) throw countError;
   const trialDays = Number(priorCount || 0) === 0 ? Math.max(0, Number(pkg.trial_days || 0)) : 0;
   const trialEndsAt = trialDays > 0 ? Math.floor((Date.now() + trialDays * 86_400_000) / 1000) : null;
@@ -965,7 +997,7 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
   const created = await razorpayRequest("/subscriptions", { method: "POST", body: JSON.stringify(requestBody) }, credentials);
   const providerSubscriptionId = providerId(created.id, "sub");
   const { data: subscription, error } = await admin.from("whatsapp_platform_billing_subscriptions").insert({
-    tenant_id: customer.tenant_id, package_code: packageCode, billing_interval: interval, provider_plan_id: planId,
+    tenant_id: customer.tenant_id, package_code: packageCode, billing_interval: interval, subscription_kind: "package", provider_plan_id: planId,
     provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
     total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
     short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id, ...priceSnapshot,
@@ -1170,7 +1202,9 @@ async function recordRenewalPriceConsent(admin: any, customer: any, body: any, r
     const interval = currentSubscription.billing_interval as "month" | "year";
     const packageRecurringBasePaise = Number(interval === "year" ? targetVersion.annual_base_paise : targetVersion.monthly_base_paise);
     if (!Number.isSafeInteger(packageRecurringBasePaise) || packageRecurringBasePaise < 100) throw new Error("The revised renewal price is invalid.");
-    const addonSelections = await activeAddonSelections(admin, customer.tenant_id, currentSubscription.id, pkg.code, interval);
+    // Add-ons have their own provider subscriptions and must never be folded
+    // into a package renewal-price authorization.
+    const addonSelections: any[] = [];
     const recurringBasePaise = packageRecurringBasePaise + addonSelections.reduce((total: number, item: any) => total + Number(item.baseSubtotalPaise), 0);
     const planId = await ensureRazorpayPlanForRecurringBase(admin, pkg, interval, recurringBasePaise, addonSelections, credentials, "renewal_price_change");
     const totalCount = interval === "month" ? 120 : 10;
@@ -1226,14 +1260,16 @@ async function upgradeContext(admin: any, customer: any, body: any, credentials:
 
   const providerEntity = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials);
   const syncedSubscription = await syncSubscriptionEntity(admin, subscription, providerEntity);
-  const addonSelections = await activeAddonSelections(admin, customer.tenant_id, syncedSubscription.id, targetPackage.code, interval);
+  // Package upgrades replace only the package subscription. Independent
+  // add-on subscriptions continue unchanged and remain separately cancellable.
+  const addonSelections: any[] = [];
   const cycleEndMs = new Date(syncedSubscription.current_end || 0).getTime();
   if (!Number.isFinite(cycleEndMs) || cycleEndMs <= Date.now() + 60_000) throw new Error("The current billing period has ended. Refresh billing before upgrading.");
   const rawRemainingDays = (cycleEndMs - Date.now()) / DAY_MS;
   const currentBasisDays = syncedSubscription.billing_interval === "year" ? 365 : 30;
   const targetBasisDays = interval === "year" ? 365 : 30;
   const billableRemainingDays = Math.min(currentBasisDays, Math.max(0, rawRemainingDays));
-  const snapshottedCurrentBasePaise = Number(syncedSubscription.recurring_base_paise || 0);
+  const snapshottedCurrentBasePaise = Number(syncedSubscription.safe_metadata?.package_recurring_base_paise || syncedSubscription.recurring_base_paise || 0);
   const currentBasePaise = Number.isSafeInteger(snapshottedCurrentBasePaise) && snapshottedCurrentBasePaise >= 100
     ? snapshottedCurrentBasePaise
     : packageBasePaise(currentPackage, syncedSubscription.billing_interval);
@@ -1367,7 +1403,6 @@ async function finalizeProratedUpgrade(admin: any, replacementSubscription: any,
       if (cancelFlagError) throw cancelFlagError;
     }
     const activatedAt = new Date().toISOString();
-    await reassignActiveAddons(admin, intent.tenant_id, oldSubscription.id, replacementSubscription.id, activatedAt);
     const replacementMetadata = { ...(replacementSubscription.safe_metadata || {}), upgrade_activated_at: activatedAt, upgrade_status: "completed" };
     const { error: replacementError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: replacementMetadata, checkout_verified_at: activatedAt, updated_at: activatedAt }).eq("id", replacementSubscription.id);
     if (replacementError) throw replacementError;
@@ -1403,7 +1438,6 @@ async function finalizeRenewalPriceChange(admin: any, replacementSubscription: a
       if (flagError) throw flagError;
     }
     const appliedAt = new Date().toISOString();
-    await reassignActiveAddons(admin, claimed.tenant_id, oldSubscription.id, replacementSubscription.id, appliedAt);
     const metadata = { ...(replacementSubscription.safe_metadata || {}), renewal_price_activated_at: appliedAt, renewal_price_status: "applied", authorization_payment_id: paymentId || null };
     const { error: replacementError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: metadata, checkout_verified_at: appliedAt, updated_at: appliedAt }).eq("id", replacementSubscription.id);
     if (replacementError) throw replacementError;
@@ -1429,6 +1463,7 @@ async function addonChangeContext(admin: any, customer: any, body: any, credenti
   ]);
   if (subscriptionError || !subscription) throw new Error("Billing subscription not found.");
   assertSubscriptionMode(subscription, credentials);
+  if (String(subscription.subscription_kind || subscription.safe_metadata?.subscription_kind || "package") !== "package") throw new Error("Select the master plan subscription before purchasing an add-on.");
   if (addonError || !addon) throw new Error("Selected add-on is unavailable.");
   if (assignmentError) throw assignmentError;
   if (subscription.status !== "active") throw new Error("Add-ons can be changed after the subscription becomes active.");
@@ -1447,59 +1482,50 @@ async function addonChangeContext(admin: any, customer: any, body: any, credenti
   if (!Number.isFinite(cycleEndMs) || cycleEndMs <= Date.now() + 60_000) throw new Error("The current billing period has ended. Refresh billing before changing add-ons.");
 
   const activeAssignments = assignments || [];
-  const customerAssignment = activeAssignments.find((item: any) => item.addon_code === addonCode) || null;
-  if (customerAssignment && customerAssignment.source_subscription_id !== syncedSubscription.id) {
-    throw new Error("This add-on is managed by billing support and cannot be changed through self-service checkout.");
+  const currentAssignment = activeAssignments.find((item: any) => item.addon_code === addonCode) || null;
+  let currentAddonSubscription: any = null;
+  if (currentAssignment?.source_subscription_id) {
+    const { data, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("*")
+      .eq("id", currentAssignment.source_subscription_id).eq("tenant_id", customer.tenant_id).maybeSingle();
+    if (error) throw error;
+    currentAddonSubscription = data;
+    if (!currentAddonSubscription || String(currentAddonSubscription.subscription_kind || currentAddonSubscription.safe_metadata?.subscription_kind || "package") !== "addon" || currentAddonSubscription.addon_code !== addonCode) {
+      throw new Error("This add-on is managed by billing support and cannot be changed through self-service checkout.");
+    }
+    if (currentAddonSubscription.cancel_at_cycle_end) throw new Error("This add-on is already scheduled to end. Wait for the cancellation to complete before purchasing it again.");
   }
-  const billedAssignments = activeAssignments.filter((item: any) => item.source_subscription_id === syncedSubscription.id);
-  const currentAssignment = billedAssignments.find((item: any) => item.addon_code === addonCode) || null;
   const currentQuantity = Number(currentAssignment?.quantity || 0);
   if (targetQuantity <= currentQuantity) throw new Error("Immediate self-service changes must increase add-on capacity. Reductions are scheduled through billing support until automated credits are enabled.");
   if (currentAssignment?.addon_price_version_id && currentAssignment.addon_price_version_id !== addon.current_price_version_id) {
     throw new Error("This add-on has a pending renewal price change. Approve the new renewal price before increasing its quantity.");
   }
 
-  const assignmentCodes = [...new Set(billedAssignments.map((item: any) => item.addon_code))];
-  const missingCodes = assignmentCodes.filter((code: string) => code !== addonCode);
-  let masters: any[] = [];
-  if (missingCodes.length) {
-    const { data, error } = await admin.from("whatsapp_platform_addon_master").select("*").in("code", missingCodes);
-    if (error) throw error;
-    masters = data || [];
-  }
-  const masterMap = new Map([...masters, addon].map((item: any) => [item.code, item]));
-  const beforeSelections = billedAssignments.map((assignment: any) => {
-    const master: any = masterMap.get(assignment.addon_code) || {};
-    const unitBasePaise = Number(assignment.unit_base_paise ?? Math.round(Number(master.unit_amount || 0) * 100));
-    return {
-      code: assignment.addon_code, name: master.name || assignment.addon_code, unitName: master.unit_name || "unit",
-      quantity: Number(assignment.quantity), addonPriceVersionId: assignment.addon_price_version_id || master.current_price_version_id,
-      unitBasePaise, gstRateBps: Number(assignment.gst_rate_bps || 1800), baseSubtotalPaise: unitBasePaise * Number(assignment.quantity),
-    };
-  }).sort((left: any, right: any) => left.code.localeCompare(right.code));
-  const targetSelections = beforeSelections.filter((item: any) => item.code !== addonCode);
+  const beforeSelections: any[] = [];
   const targetUnitBasePaise = Number(currentAssignment?.unit_base_paise ?? Math.round(Number(addon.unit_amount) * 100));
   if (!Number.isSafeInteger(targetUnitBasePaise) || targetUnitBasePaise < 1) throw new Error("This add-on does not have a valid self-service price.");
-  targetSelections.push({
+  if (currentQuantity > 0) beforeSelections.push({
+    code: addon.code, name: addon.name, unitName: addon.unit_name, quantity: currentQuantity,
+    addonPriceVersionId: currentAssignment?.addon_price_version_id || addon.current_price_version_id,
+    unitBasePaise: targetUnitBasePaise, gstRateBps: Number(currentAssignment?.gst_rate_bps || 1800), baseSubtotalPaise: targetUnitBasePaise * currentQuantity,
+  });
+  const targetSelections = [{
     code: addon.code, name: addon.name, unitName: addon.unit_name, quantity: targetQuantity,
     addonPriceVersionId: cleanUuid(currentAssignment?.addon_price_version_id || addon.current_price_version_id, "add-on price version"),
     unitBasePaise: targetUnitBasePaise, gstRateBps: Number(currentAssignment?.gst_rate_bps || 1800), baseSubtotalPaise: targetUnitBasePaise * targetQuantity,
-  });
-  targetSelections.sort((left: any, right: any) => left.code.localeCompare(right.code));
+  }];
   const currentAddonBasePaise = beforeSelections.reduce((total: number, item: any) => total + Number(item.baseSubtotalPaise), 0);
   const targetAddonBasePaise = targetSelections.reduce((total: number, item: any) => total + Number(item.baseSubtotalPaise), 0);
   const incrementalRecurringBasePaise = targetAddonBasePaise - currentAddonBasePaise;
   if (incrementalRecurringBasePaise < 1) throw new Error("The selected add-on change does not increase recurring capacity.");
-  const currentRecurringBasePaise = Number(syncedSubscription.recurring_base_paise || 0);
-  if (!Number.isSafeInteger(currentRecurringBasePaise) || currentRecurringBasePaise < 100) throw new Error("The current recurring price snapshot is unavailable. Contact billing support before changing add-ons.");
-  const targetRecurringBasePaise = currentRecurringBasePaise + incrementalRecurringBasePaise;
+  const currentRecurringBasePaise = currentAddonBasePaise;
+  const targetRecurringBasePaise = targetAddonBasePaise;
   const basisDays = syncedSubscription.billing_interval === "year" ? 365 : 30;
   const billableRemainingDays = Math.min(basisDays, Math.max(0, (cycleEndMs - Date.now()) / DAY_MS));
   const proratedBasePaise = Math.round((incrementalRecurringBasePaise / basisDays) * billableRemainingDays);
   if (proratedBasePaise < 100) throw new Error("The prorated add-on amount is too small to process. Add capacity after the next renewal.");
   const gross = checkoutGrossPaise(proratedBasePaise);
   return {
-    subscription: syncedSubscription, addon, beforeSelections, targetSelections, cycleEndMs,
+    subscription: syncedSubscription, currentAddonSubscription, addon, beforeSelections, targetSelections, cycleEndMs,
     quote: {
       currency: String(addon.currency || "INR").toUpperCase(), billableRemainingDays: Number(billableRemainingDays.toFixed(4)),
       currentQuantity, targetQuantity, currentRecurringBasePaise, targetRecurringBasePaise, incrementalRecurringBasePaise,
@@ -1515,7 +1541,7 @@ async function previewAddonChange(admin: any, customer: any, body: any, credenti
 async function changeAddons(admin: any, customer: any, body: any, credentials: any) {
   const context = await addonChangeContext(admin, customer, body, credentials);
   const { data: existingIntent, error: intentError } = await admin.from("whatsapp_platform_billing_addon_change_intents")
-    .select("*").eq("from_subscription_id", context.subscription.id).in("status", ["checkout_pending", "processing"])
+    .select("*").eq("tenant_id", customer.tenant_id).eq("addon_code", context.addon.code).in("status", ["checkout_pending", "processing"])
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (intentError) throw intentError;
   if (existingIntent) {
@@ -1531,8 +1557,8 @@ async function changeAddons(admin: any, customer: any, body: any, credentials: a
     method: "POST",
     body: JSON.stringify({
       period: context.subscription.billing_interval === "year" ? "yearly" : "monthly", interval: 1,
-      item: { name: `${context.subscription.package_code} with managed add-ons`.slice(0, 80), amount: recurringGross.checkoutAmountPaise, currency: context.quote.currency, description: "Varada Nexus package and recurring add-on capacity" },
-      notes: { product: "Varada Nexus WhatsApp Solutions", package_code: context.subscription.package_code, change_type: "addon_increase", recurring_base_paise: context.quote.targetRecurringBasePaise },
+      item: { name: `${context.addon.name} add-on`.slice(0, 80), amount: recurringGross.checkoutAmountPaise, currency: context.quote.currency, description: "Independent Varada Nexus recurring add-on subscription" },
+      notes: { product: "Varada Nexus WhatsApp Solutions", package_code: context.subscription.package_code, addon_code: context.addon.code, subscription_kind: "addon", recurring_base_paise: context.quote.targetRecurringBasePaise },
     }),
   }, credentials);
   const planId = providerId(plan.id, "plan");
@@ -1544,7 +1570,7 @@ async function changeAddons(admin: any, customer: any, body: any, credentials: a
       plan_id: planId, total_count: totalCount, quantity: 1, customer_notify: true,
       start_at: Math.floor(context.cycleEndMs / 1000),
       addons: [{ item: { name: `Prorated ${context.addon.name}`.slice(0, 80), amount: context.quote.checkoutAmountPaise, currency: context.quote.currency } }],
-      notes: { tenant_id: customer.tenant_id, package_code: context.subscription.package_code, billing_interval: context.subscription.billing_interval, addon_change_intent_id: intentId, replaces_subscription_id: context.subscription.id },
+      notes: { tenant_id: customer.tenant_id, package_code: context.subscription.package_code, billing_interval: context.subscription.billing_interval, addon_code: context.addon.code, subscription_kind: "addon", addon_change_intent_id: intentId, parent_subscription_id: context.subscription.id, replaces_addon_subscription_id: context.currentAddonSubscription?.id || "" },
     }),
   }, credentials);
   const providerSubscriptionId = providerId(created.id, "sub");
@@ -1552,17 +1578,18 @@ async function changeAddons(admin: any, customer: any, body: any, credentials: a
   try {
     const { data, error } = await admin.from("whatsapp_platform_billing_subscriptions").insert({
       tenant_id: customer.tenant_id, package_code: context.subscription.package_code, billing_interval: context.subscription.billing_interval,
+      subscription_kind: "addon", addon_code: context.addon.code, addon_quantity: context.quote.targetQuantity, parent_subscription_id: context.subscription.id,
       provider_plan_id: planId, provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
       total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
       short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
       package_price_version_id: context.subscription.package_price_version_id, recurring_base_paise: context.quote.targetRecurringBasePaise,
       gst_rate_bps: Number(context.subscription.gst_rate_bps || 1800),
-      safe_metadata: { addon_change_intent_id: intentId, addon_change_from_subscription_id: context.subscription.id, target_addon_selections: context.targetSelections, recurring_starts_at: context.quote.recurringStartsAt, proration: context.quote, mode: billingMode(credentials) },
+      safe_metadata: { subscription_kind: "addon", addon_code: context.addon.code, addon_change_intent_id: intentId, parent_subscription_id: context.subscription.id, replaces_addon_subscription_id: context.currentAddonSubscription?.id || null, target_addon_selections: context.targetSelections, recurring_starts_at: context.quote.recurringStartsAt, proration: context.quote, mode: billingMode(credentials) },
     }).select("*").single();
     if (error || !data) throw error || new Error("Add-on replacement subscription could not be recorded.");
     replacement = data;
     const { error: insertError } = await admin.from("whatsapp_platform_billing_addon_change_intents").insert({
-      id: intentId, tenant_id: customer.tenant_id, from_subscription_id: context.subscription.id, replacement_subscription_id: replacement.id,
+      id: intentId, tenant_id: customer.tenant_id, from_subscription_id: context.subscription.id, from_addon_subscription_id: context.currentAddonSubscription?.id || null, replacement_subscription_id: replacement.id, addon_code: context.addon.code,
       package_code: context.subscription.package_code, billing_interval: context.subscription.billing_interval, currency: context.quote.currency,
       cycle_end: context.quote.recurringStartsAt, billable_remaining_days: context.quote.billableRemainingDays,
       before_selections: context.beforeSelections, target_selections: context.targetSelections,
@@ -1601,30 +1628,32 @@ async function finalizeAddonChange(admin: any, replacementSubscription: any, cre
   if (claimError) throw claimError;
   if (!claimed) return { completed: false, processing: true };
   try {
-    const { data: oldSubscription, error: oldError } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("id", claimed.from_subscription_id).single();
-    if (oldError || !oldSubscription) throw oldError || new Error("Previous subscription not found.");
-    if (!TERMINAL_SUBSCRIPTION_STATUSES.has(oldSubscription.status) && !oldSubscription.cancel_at_cycle_end) {
-      const cancelled = await razorpayRequest(`/subscriptions/${encodeURIComponent(oldSubscription.provider_subscription_id)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 1 }) }, credentials);
-      await syncSubscriptionEntity(admin, oldSubscription, cancelled);
-      const { error } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: true, updated_at: new Date().toISOString() }).eq("id", oldSubscription.id);
-      if (error) throw error;
+    let oldAddonSubscription: any = null;
+    if (claimed.from_addon_subscription_id) {
+      const { data, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("id", claimed.from_addon_subscription_id).single();
+      if (error || !data) throw error || new Error("Previous add-on subscription not found.");
+      oldAddonSubscription = data;
+      if (String(oldAddonSubscription.subscription_kind || oldAddonSubscription.safe_metadata?.subscription_kind) !== "addon") throw new Error("Refusing to replace the master package subscription during an add-on change.");
+      if (!TERMINAL_SUBSCRIPTION_STATUSES.has(oldAddonSubscription.status) && !oldAddonSubscription.cancel_at_cycle_end) {
+        const cancelled = await razorpayRequest(`/subscriptions/${encodeURIComponent(oldAddonSubscription.provider_subscription_id)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 1 }) }, credentials);
+        await syncSubscriptionEntity(admin, oldAddonSubscription, cancelled);
+        const { error: flagError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: true, updated_at: new Date().toISOString() }).eq("id", oldAddonSubscription.id);
+        if (flagError) throw flagError;
+      }
     }
     const appliedAt = new Date().toISOString();
-    const { error: reassignError } = await admin.from("whatsapp_platform_tenant_addons").update({ source_subscription_id: replacementSubscription.id, status: "active", billing_ends_at: null, updated_at: appliedAt })
-      .eq("tenant_id", claimed.tenant_id).eq("source_subscription_id", oldSubscription.id).in("status", ["active", "paused"]);
-    if (reassignError) throw reassignError;
-    for (const selection of claimed.target_selections || []) {
-      const { error } = await admin.from("whatsapp_platform_tenant_addons").upsert({
-        tenant_id: claimed.tenant_id, addon_code: selection.code, quantity: Number(selection.quantity), status: "active",
-        billing_starts_at: appliedAt, billing_ends_at: null, addon_price_version_id: selection.addonPriceVersionId,
-        unit_base_paise: Number(selection.unitBasePaise), gst_rate_bps: Number(selection.gstRateBps || 1800),
-        source_checkout_quote_id: null, source_subscription_id: replacementSubscription.id, updated_at: appliedAt,
-      }, { onConflict: "tenant_id,addon_code" });
-      if (error) throw error;
-      if (selection.code === "extra_agent_seat") {
-        const { error: seatError } = await admin.from("whatsapp_platform_tenants").update({ additional_team_seats: Number(selection.quantity), updated_at: appliedAt }).eq("id", claimed.tenant_id);
-        if (seatError) throw seatError;
-      }
+    const selection = (claimed.target_selections || []).find((item: any) => item.code === claimed.addon_code) || (claimed.target_selections || [])[0];
+    if (!selection) throw new Error("The authorized add-on selection is missing.");
+    const { error: assignmentError } = await admin.from("whatsapp_platform_tenant_addons").upsert({
+      tenant_id: claimed.tenant_id, addon_code: selection.code, quantity: Number(selection.quantity), status: "active",
+      billing_starts_at: appliedAt, billing_ends_at: null, addon_price_version_id: selection.addonPriceVersionId,
+      unit_base_paise: Number(selection.unitBasePaise), gst_rate_bps: Number(selection.gstRateBps || 1800),
+      source_checkout_quote_id: null, source_subscription_id: replacementSubscription.id, updated_at: appliedAt,
+    }, { onConflict: "tenant_id,addon_code" });
+    if (assignmentError) throw assignmentError;
+    if (selection.code === "extra_agent_seat") {
+      const { error: seatError } = await admin.from("whatsapp_platform_tenants").update({ additional_team_seats: Number(selection.quantity), updated_at: appliedAt }).eq("id", claimed.tenant_id);
+      if (seatError) throw seatError;
     }
     const metadata = { ...(replacementSubscription.safe_metadata || {}), addon_change_activated_at: appliedAt, addon_change_status: "completed", authorization_payment_id: effectivePaymentId };
     const { error: replacementError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: metadata, checkout_verified_at: appliedAt, updated_at: appliedAt }).eq("id", replacementSubscription.id);

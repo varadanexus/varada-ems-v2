@@ -1945,6 +1945,16 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-billing-features small { color:var(--wp-muted); text-transform:capitalize; }
 .wp-billing-addons { padding:24px; }
 .wp-billing-addon-list { display:grid; gap:10px; }
+.wp-billing-addon-subscriptions { display:grid; gap:18px; }
+.wp-billing-addon-subscriptions .wp-card-heading { align-items:flex-start; }
+.wp-billing-addon-count { padding:7px 11px; border:1px solid color-mix(in srgb,#25d887 42%,var(--wp-border)); border-radius:999px; background:color-mix(in srgb,#25d887 10%,var(--wp-panel)); color:#25d887; font-size:.72rem; font-weight:850; white-space:nowrap; }
+.wp-billing-addon-subscription-list { display:grid; gap:12px; }
+.wp-billing-addon-subscription { display:flex; align-items:center; justify-content:space-between; gap:22px; padding:19px; border:1px solid var(--wp-border); border-radius:15px; background:color-mix(in srgb,var(--wp-panel) 88%,#082f22); }
+.wp-billing-addon-subscription h3 { margin:5px 0; color:var(--wp-text); }
+.wp-billing-addon-subscription p { margin:0; color:var(--wp-muted); }
+.wp-billing-addon-subscription-meta { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+.wp-billing-addon-subscription-meta span { padding:5px 8px; border:1px solid var(--wp-border); border-radius:999px; color:var(--wp-muted); font-size:.68rem; font-weight:750; }
+.wp-billing-addon-subscription-actions { display:grid; justify-items:end; gap:9px; flex:0 0 auto; }
 .wp-billing-addon { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:17px; border:1px solid var(--wp-border); border-radius:14px; background:color-mix(in srgb,var(--wp-panel) 78%,transparent); }
 .wp-billing-addon h3 { margin:4px 0; color:var(--wp-text); }
 .wp-billing-addon p { margin:0; color:var(--wp-muted); }
@@ -2074,6 +2084,7 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 @media (max-width:1000px) { .wp-billing-plans { grid-template-columns:1fr; } .wp-billing-plan { min-height:0; } }
 @media (max-width:1180px) { .wp-billing-section-nav { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 @media (max-width:720px) { .wp-billing-subscription,.wp-billing-hero,.wp-billing-price-change { align-items:flex-start; flex-direction:column; } .wp-billing-subscription > div:last-child { justify-items:start; } .wp-billing-price-change dl { flex-direction:column; gap:12px; } .wp-billing-price-consent { width:100%; } .wp-billing-grid { grid-template-columns:1fr; } .wp-billing-price { width:100%; padding:16px 0 0; border-top:1px solid var(--wp-border); border-left:0; text-align:left; } }
+@media (max-width:720px) { .wp-billing-addon-subscription { align-items:flex-start; flex-direction:column; } .wp-billing-addon-subscription-actions { justify-items:start; width:100%; } }
 @media (max-width:560px) { .wp-cancellation-summary { grid-template-columns:1fr; } .wp-billing-cancellation-scheduled { text-align:left; } }
 @media (max-width:720px) { .wp-billing-overview-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:900px){.wp-billing-grid{grid-template-columns:1fr}.wp-billing-hero{align-items:flex-start;flex-direction:column}.wp-billing-price{width:100%;padding:18px 0 0;border-top:1px solid var(--wp-border);border-left:0;text-align:left}}
