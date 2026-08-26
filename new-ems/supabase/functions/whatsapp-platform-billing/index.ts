@@ -829,6 +829,32 @@ async function quoteSubscriptionCheckout(admin: any, customer: any, body: any) {
   let addonSelections: any[] = [];
   if (requested.length) {
     const codes = requested.map((item) => item.code);
+    const { data: priorAssignments, error: priorAssignmentsError } = await admin.from("whatsapp_platform_tenant_addons")
+      .select("addon_code,source_subscription_id")
+      .eq("tenant_id", customer.tenant_id)
+      .in("addon_code", codes)
+      .in("status", ["pending", "active", "paused"]);
+    if (priorAssignmentsError) throw priorAssignmentsError;
+    const priorSourceIds = [...new Set((priorAssignments || []).map((item: any) => item.source_subscription_id).filter(Boolean))];
+    if (priorSourceIds.length) {
+      const { data: priorSources, error: priorSourcesError } = await admin.from("whatsapp_platform_billing_subscriptions")
+        .select("id,status")
+        .eq("tenant_id", customer.tenant_id)
+        .in("id", priorSourceIds);
+      if (priorSourcesError) throw priorSourcesError;
+      const terminalSourceIds = (priorSources || [])
+        .filter((item: any) => TERMINAL_SUBSCRIPTION_STATUSES.has(String(item.status || "").toLowerCase()))
+        .map((item: any) => item.id);
+      if (terminalSourceIds.length) {
+        const releasedAt = new Date().toISOString();
+        const { error: releaseError } = await admin.from("whatsapp_platform_tenant_addons")
+          .update({ status: "cancelled", quantity: 0, billing_ends_at: releasedAt, updated_at: releasedAt })
+          .eq("tenant_id", customer.tenant_id)
+          .in("status", ["pending", "active", "paused"])
+          .in("source_subscription_id", terminalSourceIds);
+        if (releaseError) throw releaseError;
+      }
+    }
     const [{ data: addons, error: addonsError }, { data: assigned, error: assignedError }] = await Promise.all([
       admin.from("whatsapp_platform_addon_master").select("*").in("code", codes),
       admin.from("whatsapp_platform_tenant_addons").select("addon_code,status").eq("tenant_id", customer.tenant_id).in("addon_code", codes).in("status", ["pending", "active", "paused"]),
@@ -1095,6 +1121,52 @@ async function createSubscription(admin: any, customer: any, body: any, credenti
     quote: publicCheckoutQuote({ ...quote, status: "authorization_pending", expires_at: authorizationExpiresAt }),
     trialDays, trialEndsAt: trialEndsAt ? new Date(trialEndsAt * 1000).toISOString() : null, trialEligibility: trialReservation, reused: false,
   };
+}
+async function abandonSubscriptionCheckout(admin: any, customer: any, body: any, credentials: any) {
+  if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
+  const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
+  const { data: subscription, error: subscriptionError } = await admin.from("whatsapp_platform_billing_subscriptions")
+    .select("*")
+    .eq("id", subscriptionId)
+    .eq("tenant_id", customer.tenant_id)
+    .eq("subscription_kind", "package")
+    .maybeSingle();
+  if (subscriptionError) throw subscriptionError;
+  if (!subscription || String(subscription.status).toLowerCase() !== "created" || subscription.checkout_verified_at || Number(subscription.paid_count || 0) > 0) {
+    return { abandoned: false };
+  }
+  assertSubscriptionMode(subscription, credentials);
+  const providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}/cancel`, {
+    method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }),
+  }, credentials);
+  const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
+  const abandonedAt = new Date().toISOString();
+  const quoteId = subscription.safe_metadata?.checkout_quote_id || null;
+  const { error: addonError } = await admin.from("whatsapp_platform_tenant_addons")
+    .update({ status: "cancelled", quantity: 0, billing_ends_at: abandonedAt, updated_at: abandonedAt })
+    .eq("tenant_id", customer.tenant_id)
+    .eq("source_subscription_id", subscription.id)
+    .in("status", ["pending", "active", "paused"]);
+  if (addonError) throw addonError;
+  if (quoteId) {
+    const { data: quote, error: quoteError } = await admin.from("whatsapp_platform_billing_checkout_quotes")
+      .update({ status: "cancelled", updated_at: abandonedAt })
+      .eq("id", quoteId)
+      .eq("tenant_id", customer.tenant_id)
+      .eq("subscription_id", subscription.id)
+      .eq("status", "authorization_pending")
+      .select("coupon_redemption_id")
+      .maybeSingle();
+    if (quoteError) throw quoteError;
+    if (quote?.coupon_redemption_id) {
+      const { error: couponError } = await admin.from("whatsapp_platform_billing_coupon_redemptions")
+        .update({ status: "released", released_at: abandonedAt, updated_at: abandonedAt })
+        .eq("id", quote.coupon_redemption_id)
+        .eq("status", "reserved");
+      if (couponError) throw couponError;
+    }
+  }
+  return { abandoned: true, subscription: synced };
 }
 async function finalizeCheckoutQuote(admin: any, subscription: any) {
   const quoteId = subscription?.safe_metadata?.checkout_quote_id;
@@ -1846,6 +1918,27 @@ async function cancelSubscription(admin: any, customer: any, body: any, credenti
   if (isAddonSubscription && !cancelAtCycleEnd) {
     await revokeAddonEntitlement(subscription);
   }
+  if (!isAddonSubscription && !cancelAtCycleEnd) {
+    const endedAt = new Date().toISOString();
+    const { data: packageAssignments, error: packageAssignmentReadError } = await admin.from("whatsapp_platform_tenant_addons")
+      .select("addon_code")
+      .eq("tenant_id", customer.tenant_id)
+      .eq("source_subscription_id", subscription.id)
+      .in("status", ["pending", "active", "paused"]);
+    if (packageAssignmentReadError) throw packageAssignmentReadError;
+    const { error: packageAssignmentError } = await admin.from("whatsapp_platform_tenant_addons")
+      .update({ status: "cancelled", quantity: 0, billing_ends_at: endedAt, updated_at: endedAt })
+      .eq("tenant_id", customer.tenant_id)
+      .eq("source_subscription_id", subscription.id)
+      .in("status", ["pending", "active", "paused"]);
+    if (packageAssignmentError) throw packageAssignmentError;
+    if ((packageAssignments || []).some((item: any) => item.addon_code === "extra_agent_seat")) {
+      const { error: seatError } = await admin.from("whatsapp_platform_tenants")
+        .update({ additional_team_seats: 0, updated_at: endedAt })
+        .eq("id", customer.tenant_id);
+      if (seatError) throw seatError;
+    }
+  }
   const cancelledAddons: Array<{ id: string; cancellationMode: "cycle_end" | "immediate" }> = [];
   if (!isAddonSubscription) {
     const { data: addonSubscriptions, error: addonReadError } = await admin.from("whatsapp_platform_billing_subscriptions")
@@ -1978,7 +2071,7 @@ Deno.serve(async (req) => {
     requestAdmin = admin;
     const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "summary");
-    const mutationActions = new Set(["create_subscription", "verify_checkout", "record_renewal_price_consent", "upgrade_subscription", "change_addons", "cancel_subscription"]);
+    const mutationActions = new Set(["create_subscription", "abandon_checkout", "verify_checkout", "record_renewal_price_consent", "upgrade_subscription", "change_addons", "cancel_subscription"]);
     const previewActions = new Set(["quote_subscription_checkout", "preview_upgrade", "preview_addon_change", "sync_subscription", "payment_method_portal", "billing_document_pdf"]);
     const maxRequests = mutationActions.has(action) ? 10 : previewActions.has(action) ? 30 : 120;
     const { data: auditClaim, error: auditError } = await admin.rpc("whatsapp_platform_begin_billing_action", {
@@ -1999,6 +2092,7 @@ Deno.serve(async (req) => {
       else if (action === "billing_document_pdf") result = await billingDocumentPdf(admin, customer, body);
       else if (action === "quote_subscription_checkout") result = await quoteSubscriptionCheckout(admin, customer, body);
       else if (action === "create_subscription") result = await createSubscription(admin, customer, body, credentials);
+      else if (action === "abandon_checkout") result = await abandonSubscriptionCheckout(admin, customer, body, credentials);
       else if (action === "verify_checkout") result = await verifyCheckout(admin, customer, body, credentials);
       else if (action === "sync_subscription") result = await syncSubscription(admin, customer, body, credentials);
       else if (action === "payment_method_portal") result = await paymentMethodPortal(admin, customer, body, credentials);

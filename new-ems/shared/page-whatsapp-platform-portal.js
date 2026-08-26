@@ -3227,6 +3227,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
         button.disabled = true; button.textContent = "Preparing secure authorization…";
         const checkout = await billingRequest("create_subscription", { quoteId: button.dataset.checkoutAuthorize });
         await loadRazorpayCheckout();
+        let checkoutCompleted = false;
         const instance = new window.Razorpay({
           key: checkout.keyId, subscription_id: checkout.razorpaySubscriptionId, name: "Varada Nexus",
           image: "https://www.varadanexus.com/images/logo.png",
@@ -3235,6 +3236,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
           notes: { workspace: checkout.customer?.companyName || session.companyName || "", checkout_quote_id: checkout.quote?.id || "" },
           theme: { color: "#0b6b45" },
           handler: async (result) => {
+            checkoutCompleted = true;
             try {
               showToast("Payment received. Verifying securely…");
               await billingRequest("verify_checkout", { subscriptionId: checkout.subscriptionId, razorpayPaymentId: result.razorpay_payment_id, razorpaySubscriptionId: result.razorpay_subscription_id, razorpaySignature: result.razorpay_signature });
@@ -3248,7 +3250,14 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
             confirm_close: true,
             escape: true,
             handleback: true,
-            ondismiss: () => { button.disabled = false; button.textContent = original; },
+            ondismiss: () => {
+              button.disabled = false; button.textContent = original;
+              if (!checkoutCompleted && checkout.subscriptionId) {
+                void billingRequest("abandon_checkout", { subscriptionId: checkout.subscriptionId })
+                  .then(() => showToast("Unpaid checkout closed. Reserved plan and add-ons were released."))
+                  .catch((error) => showToast(error?.message || "The unpaid checkout could not be released automatically.", "error"));
+              }
+            },
           },
         });
         instance.on("payment.failed", (result) => showToast(result?.error?.description || "The payment could not be completed.", "error"));
