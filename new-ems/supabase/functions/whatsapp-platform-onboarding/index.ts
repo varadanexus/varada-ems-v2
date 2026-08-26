@@ -251,7 +251,7 @@ async function configurationStatus(admin: any, customer: any) {
     numberCapacity = await reconcileNumberCapacity(admin, customer);
     const { data, error } = await admin
       .from("whatsapp_platform_connections")
-      .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
+      .select("id,status,meta_business_id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
       .eq("tenant_id", customer.tenant_id)
       .neq("status", "disconnected")
       .order("created_at", { ascending: false });
@@ -306,7 +306,7 @@ async function removeConnection(admin: any, customer: any, body: any) {
   const connectionId = String(body.connectionId || "").trim();
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(connectionId)) throw new Error("Select a valid WhatsApp business number.");
   const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
-    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,onboarding_metadata")
+    .select("id,status,meta_business_id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,onboarding_metadata")
     .eq("id", connectionId)
     .eq("tenant_id", customer.tenant_id)
     .neq("status", "disconnected")
@@ -778,7 +778,7 @@ async function refreshPhoneStatus(admin: any, customer: any, body: any) {
   if (!appSecret) throw new Error("Meta onboarding is not configured.");
 
   const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
-    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,onboarding_metadata")
+    .select("id,status,meta_business_id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,onboarding_metadata")
     .eq("id", connectionId)
     .eq("tenant_id", customer.tenant_id)
     .neq("status", "disconnected")
@@ -804,7 +804,14 @@ async function refreshPhoneStatus(admin: any, customer: any, body: any) {
   } catch {
     throw new Error("The secure Meta authorization could not be opened. Reconnect this number through Meta onboarding.");
   }
-  const phone = await fetchPhoneDetails(phoneNumberId, cleanMetaAccessToken(credentials?.accessToken), appSecret);
+  const accessToken = cleanMetaAccessToken(credentials?.accessToken);
+  const phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+  let metaBusinessId = String(connection.meta_business_id || connection.onboarding_metadata?.meta_business_id || "").trim();
+  if (!metaBusinessId && connection.whatsapp_business_account_id) {
+    const wabaId = cleanId(connection.whatsapp_business_account_id, "WhatsApp Business Account ID");
+    const waba = await graphRequest(`${wabaId}?fields=owner_business_info`, accessToken, appSecret);
+    metaBusinessId = String(waba?.owner_business_info?.id || "").trim();
+  }
   const now = new Date().toISOString();
   const registered = isPhoneRegistered(phone);
   const metadata = {
@@ -812,17 +819,19 @@ async function refreshPhoneStatus(admin: any, customer: any, body: any) {
     phone_status: phone.status || (registered ? "CONNECTED" : "PENDING"),
     code_verification_status: phone.code_verification_status || null,
     quality_rating: phone.quality_rating || null,
+    meta_business_id: metaBusinessId || null,
     last_meta_sync_at: now,
   };
   const { data: updatedConnection, error: updateError } = await admin.from("whatsapp_platform_connections").update({
     status: registered ? "connected" : "pending",
     display_phone_number: phone.display_phone_number || connection.display_phone_number || null,
     verified_name: phone.verified_name || connection.verified_name || null,
+    meta_business_id: metaBusinessId || connection.meta_business_id || null,
     connected_at: registered ? (connection.connected_at || now) : connection.connected_at,
     onboarding_metadata: metadata,
     updated_at: now,
   }).eq("id", connection.id).eq("tenant_id", customer.tenant_id)
-    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
+    .select("id,status,meta_business_id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
     .single();
   if (updateError) throw updateError;
   return { connection: updatedConnection, numberCapacity: await reconcileNumberCapacity(admin, customer) };
