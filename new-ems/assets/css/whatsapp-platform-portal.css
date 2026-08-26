@@ -521,6 +521,9 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-account-actions { display: flex; align-items: center; gap: .7rem; }
 .wp-account-remove { padding: .42rem .62rem; border: 1px solid rgba(239,107,115,.35); border-radius: 8px; background: rgba(239,107,115,.08); color: #ef8b92; font: inherit; font-size: .66rem; font-weight: 800; }
 .wp-account-remove:hover,.wp-account-remove:focus-visible { border-color: #ef6b73; background: rgba(239,107,115,.14); outline: none; }
+.wp-account-register { padding: .46rem .72rem; border: 1px solid #2edd91; border-radius: 8px; background: #2edd91; color: #03130c; font: inherit; font-size: .68rem; font-weight: 900; cursor: pointer; }
+.wp-account-register:hover,.wp-account-register:focus-visible { background: #55e7a8; border-color: #55e7a8; outline: none; }
+.wp-account-register:disabled { cursor: wait; opacity: .7; }
 .wp-number-heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .65rem; }
 .wp-number-unlock { border-color: rgba(216,178,75,.58); color: var(--wp-workspace-gold,#e0bd59); }
 .wp-number-capacity-bar { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:1rem; padding:1rem 1.1rem; border:1px solid rgba(47,214,143,.24); border-radius:14px; background:linear-gradient(120deg,rgba(10,48,34,.72),rgba(13,25,21,.9)); }
