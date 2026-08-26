@@ -303,7 +303,7 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   const refY = y - 172;
   page.drawRectangle({ x: 42, y: refY - 72, width: 511, height: 78, color: rgb(0.96, 0.98, 0.97), borderColor: emerald, borderWidth: 0.8 });
   page.drawText("PAYMENT GATEWAY REFERENCES", { x: 56, y: refY - 12, font: bold, size: 8, color: emerald });
-  page.drawText(pdfSafeText(`Razorpay invoice: ${documentRecord.provider_invoice_id || invoice.provider_invoice_id || "Not provided"}`), { x: 56, y: refY - 31, font: regular, size: 8, color: muted });
+  page.drawText(pdfSafeText(`Gateway invoice: ${documentRecord.provider_invoice_id || invoice.provider_invoice_id || "Not provided"}`), { x: 56, y: refY - 31, font: regular, size: 8, color: muted });
   page.drawText(pdfSafeText(`Transaction ID: ${documentRecord.provider_payment_id || invoice.provider_payment_id || "Not provided"}`), { x: 56, y: refY - 47, font: regular, size: 8, color: muted });
   if (isCredit) page.drawText(pdfSafeText(`Refund ID: ${documentRecord.provider_refund_id || "Not provided"}`), { x: 56, y: refY - 63, font: regular, size: 8, color: muted });
   pages.forEach((item, index) => {
@@ -409,7 +409,7 @@ async function encryptionKey() {
 }
 async function decryptSecret(value: string, context: string) {
   const [version, ivValue, cipherValue] = String(value || "").split(".");
-  if (version !== "v1" || !ivValue || !cipherValue) throw new Error("Stored Razorpay credentials are invalid.");
+  if (version !== "v1" || !ivValue || !cipherValue) throw new Error("Stored payment credentials are invalid.");
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: fromBase64Url(ivValue), additionalData: new TextEncoder().encode(context) },
     await encryptionKey(), fromBase64Url(cipherValue),
@@ -465,7 +465,7 @@ function cleanUuid(value: unknown, label: string) {
 }
 function providerId(value: unknown, prefix: string) {
   const id = String(value || "");
-  if (!new RegExp(`^${prefix}_[A-Za-z0-9]{6,64}$`).test(id)) throw new Error(`Invalid Razorpay ${prefix} identifier.`);
+  if (!new RegExp(`^${prefix}_[A-Za-z0-9]{6,64}$`).test(id)) throw new Error(`Invalid payment ${prefix} identifier.`);
   return id;
 }
 function unixDate(value: unknown) {
@@ -560,7 +560,7 @@ async function customerSession(admin: any, tokenValue: unknown) {
 }
 function razorpayConfigured(credentials: any) { return Boolean(credentials?.keyId && credentials?.keySecret); }
 function razorpayAuthorization(credentials: any) {
-  if (!razorpayConfigured(credentials)) throw new Error("Razorpay billing is not configured yet.");
+  if (!razorpayConfigured(credentials)) throw new Error("Payment processing is not configured yet.");
   return `Basic ${btoa(`${credentials.keyId}:${credentials.keySecret}`)}`;
 }
 async function razorpayRequest(path: string, init: RequestInit = {}, credentials: any) {
@@ -569,7 +569,7 @@ async function razorpayRequest(path: string, init: RequestInit = {}, credentials
     headers: { Authorization: razorpayAuthorization(credentials), "Content-Type": "application/json", ...(init.headers || {}) },
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload?.error?.description || payload?.error?.reason || "Razorpay could not process this billing request.");
+  if (!response.ok) throw new Error(payload?.error?.description || payload?.error?.reason || "The payment gateway could not process this billing request.");
   return payload;
 }
 async function sha256(value: string) {
@@ -610,12 +610,12 @@ async function upsertPayment(admin: any, subscription: any, entity: any) {
   if (!subscription || !entity?.id) return;
   const paymentId = providerId(entity.id, "pay");
   if (entity.subscription_id && providerId(entity.subscription_id, "sub") !== subscription.provider_subscription_id) {
-    throw new Error("Captured payment belongs to a different Razorpay subscription.");
+    throw new Error("Captured payment belongs to a different subscription.");
   }
   const amountPaise = Number(entity.amount);
-  if (!Number.isSafeInteger(amountPaise) || amountPaise < 0) throw new Error("Razorpay returned an invalid payment amount.");
+  if (!Number.isSafeInteger(amountPaise) || amountPaise < 0) throw new Error("The payment gateway returned an invalid payment amount.");
   const currency = String(entity.currency || "").toUpperCase();
-  if (currency !== "INR") throw new Error("Razorpay payment currency does not match the INR billing account.");
+  if (currency !== "INR") throw new Error("Payment currency does not match the INR billing account.");
   const values = {
     tenant_id: subscription.tenant_id, subscription_id: subscription.id, provider: "razorpay", provider_payment_id: paymentId,
     provider_invoice_id: entity.invoice_id ? String(entity.invoice_id) : null,
@@ -633,9 +633,9 @@ async function upsertPayment(admin: any, subscription: any, entity: any) {
 async function bindPaymentIntentEvidence(admin: any, subscription: any, entity: any) {
   if (!subscription?.id || !entity?.id || !entity.captured) return;
   const paymentId = providerId(entity.id, "pay");
-  if (entity.subscription_id && providerId(entity.subscription_id, "sub") !== subscription.provider_subscription_id) throw new Error("Captured payment belongs to a different Razorpay subscription.");
+  if (entity.subscription_id && providerId(entity.subscription_id, "sub") !== subscription.provider_subscription_id) throw new Error("Captured payment belongs to a different subscription.");
   const amountPaise = Number(entity.amount);
-  if (!Number.isSafeInteger(amountPaise) || amountPaise < 0) throw new Error("Razorpay returned an invalid captured payment amount.");
+  if (!Number.isSafeInteger(amountPaise) || amountPaise < 0) throw new Error("The payment gateway returned an invalid captured payment amount.");
   const candidates = [
     { table: "whatsapp_platform_billing_upgrade_intents", id: subscription.safe_metadata?.upgrade_intent_id },
     { table: "whatsapp_platform_billing_addon_change_intents", id: subscription.safe_metadata?.addon_change_intent_id },
@@ -655,7 +655,7 @@ async function recordRefund(admin: any, entity: any) {
   const refundId = providerId(entity.id, "rfnd");
   const paymentId = providerId(entity.payment_id, "pay");
   const notes = entity.notes && typeof entity.notes === "object" && !Array.isArray(entity.notes) ? entity.notes : {};
-  const reason = String(notes.comment || notes.reason || entity.receipt || "Razorpay refund").slice(0, 500);
+  const reason = String(notes.comment || notes.reason || entity.receipt || "Payment refund").slice(0, 500);
   const { data, error } = await admin.rpc("whatsapp_platform_record_billing_refund", {
     p_provider_refund_id: refundId, p_provider_payment_id: paymentId,
     p_amount_paise: Math.max(0, Number(entity.amount || 0)), p_currency: String(entity.currency || "INR").toUpperCase(),
@@ -859,7 +859,7 @@ async function quoteSubscriptionCheckout(admin: any, customer: any, body: any) {
     if (!redemption?.id) throw new Error("Coupon reservation could not be recorded.");
     const { data: couponRecord, error: couponError } = await admin.from("whatsapp_platform_billing_coupons").select("id,first_payment_only,provider_offer_id").eq("id", redemption.coupon_id).single();
     if (couponError || !couponRecord) throw couponError || new Error("Coupon configuration could not be loaded.");
-    if (couponRecord.first_payment_only && !couponRecord.provider_offer_id) throw new Error("This first-payment coupon is missing its Razorpay single-use Subscription Offer. Contact billing support.");
+    if (couponRecord.first_payment_only && !couponRecord.provider_offer_id) throw new Error("This first-payment coupon is missing its single-use payment offer. Contact billing support.");
     coupon = couponRecord;
   }
   const discountPaise = Number(redemption?.discount_paise || 0);
@@ -1082,9 +1082,9 @@ async function verifyCheckout(admin: any, customer: any, body: any, credentials:
   const { data: subscription, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("id", subscriptionId).eq("tenant_id", customer.tenant_id).single();
   if (error || !subscription) throw new Error("Billing subscription not found.");
   assertSubscriptionMode(subscription, credentials);
-  if (subscription.provider_subscription_id !== callbackSubscriptionId) throw new Error("Razorpay subscription mismatch.");
+  if (subscription.provider_subscription_id !== callbackSubscriptionId) throw new Error("Payment subscription mismatch.");
   const expectedSignature = await hmacSha256(credentials.keySecret, `${paymentId}|${subscription.provider_subscription_id}`);
-  if (!timingSafeHexEqual(expectedSignature, receivedSignature)) throw new Error("Razorpay payment signature verification failed.");
+  if (!timingSafeHexEqual(expectedSignature, receivedSignature)) throw new Error("Payment signature verification failed.");
   const [providerSubscription, payment] = await Promise.all([
     razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials),
     razorpayRequest(`/payments/${encodeURIComponent(paymentId)}`, {}, credentials),
@@ -1092,7 +1092,7 @@ async function verifyCheckout(admin: any, customer: any, body: any, credentials:
   const providerSubscriptionStatus = String(providerSubscription?.status || "").toLowerCase();
   const paymentStatus = String(payment?.status || "").toLowerCase();
   if (!['authenticated', 'active'].includes(providerSubscriptionStatus) || !['authorized', 'captured'].includes(paymentStatus)) {
-    throw new Error("Razorpay has not completed the subscription payment authorization. Workspace access remains locked.");
+    throw new Error("The subscription payment authorization is not complete. Workspace access remains locked.");
   }
   await bindPaymentIntentEvidence(admin, subscription, payment);
   await upsertPayment(admin, subscription, payment);
@@ -1128,11 +1128,11 @@ async function paymentMethodPortal(admin: any, customer: any, body: any, credent
   const providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials);
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
   const portalUrl = String(providerSubscription?.short_url || synced?.short_url || subscription.short_url || '').trim();
-  if (!portalUrl) throw new Error("Razorpay did not return a payment-method management link for this subscription.");
+  if (!portalUrl) throw new Error("The payment gateway did not return a payment-method management link for this subscription.");
   let parsedUrl: URL;
-  try { parsedUrl = new URL(portalUrl); } catch { throw new Error("Razorpay returned an invalid payment-method management link."); }
+  try { parsedUrl = new URL(portalUrl); } catch { throw new Error("The payment gateway returned an invalid payment-method management link."); }
   const razorpayHost = parsedUrl.hostname === "razorpay.com" || parsedUrl.hostname.endsWith(".razorpay.com") || parsedUrl.hostname === "rzp.io" || parsedUrl.hostname.endsWith(".rzp.io");
-  if (parsedUrl.protocol !== "https:" || !razorpayHost) throw new Error("Razorpay returned an untrusted payment-method management link.");
+  if (parsedUrl.protocol !== "https:" || !razorpayHost) throw new Error("The payment gateway returned an untrusted payment-method management link.");
   return {
     keyId: credentials.keyId,
     portalUrl,
@@ -1546,7 +1546,7 @@ async function addonChangeContext(admin: any, customer: any, body: any, credenti
     const { data: couponRecord, error: couponError } = await admin.from("whatsapp_platform_billing_coupons")
       .select("id,first_payment_only,provider_offer_id").eq("id", redemption.coupon_id).single();
     if (couponError || !couponRecord) throw couponError || new Error("Coupon configuration could not be loaded.");
-    if (couponRecord.first_payment_only && !couponRecord.provider_offer_id) throw new Error("This first-payment coupon is missing its Razorpay Subscription Offer. Contact billing support.");
+    if (couponRecord.first_payment_only && !couponRecord.provider_offer_id) throw new Error("This first-payment coupon is missing its payment offer. Contact billing support.");
     coupon = couponRecord;
   }
   const recurringDiscountPaise = Number(redemption?.discount_paise || 0);
@@ -1758,10 +1758,8 @@ async function cancelSubscription(admin: any, customer: any, body: any, credenti
   const isAddonSubscription = subscriptionKind === "addon";
   const trialEndsAt = new Date(subscription.safe_metadata?.trial_ends_at || subscription.charge_at || 0).getTime();
   const trialDays = Number(subscription.safe_metadata?.trial_days || 0);
-  if (!isAddonSubscription && subscription.status === "authenticated" && Number.isSafeInteger(trialDays) && trialDays > 0 && trialEndsAt > Date.now()) {
-    throw new Error(`This authorized trial cannot be cancelled before ${new Date(trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}. Cancellation becomes available after the trial ends.`);
-  }
-  let cancelAtCycleEnd = body.cancelAtCycleEnd !== false;
+  const trialActive = !isAddonSubscription && subscription.status === "authenticated" && Number.isSafeInteger(trialDays) && trialDays > 0 && trialEndsAt > Date.now();
+  let cancelAtCycleEnd = trialActive ? false : body.cancelAtCycleEnd !== false;
   let providerSubscription: any;
   try {
     providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}/cancel`, {
@@ -1769,7 +1767,7 @@ async function cancelSubscription(admin: any, customer: any, body: any, credenti
     }, credentials);
   } catch (providerError) {
     const message = providerError instanceof Error ? providerError.message : "";
-    if (!isAddonSubscription || !cancelAtCycleEnd || !/no billing cycle|billing cycle is going on/i.test(message)) throw providerError;
+    if (!cancelAtCycleEnd || !/no billing cycle|billing cycle is going on/i.test(message)) throw providerError;
     cancelAtCycleEnd = false;
     providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}/cancel`, {
       method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }),
@@ -1778,21 +1776,56 @@ async function cancelSubscription(admin: any, customer: any, body: any, credenti
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
   const { error: updateError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: cancelAtCycleEnd, updated_at: new Date().toISOString() }).eq("id", subscription.id);
   if (updateError) throw updateError;
-  if (isAddonSubscription && !cancelAtCycleEnd) {
+  const revokeAddonEntitlement = async (addonSubscription: any) => {
     const endedAt = new Date().toISOString();
     const { data: assignment, error: assignmentReadError } = await admin.from("whatsapp_platform_tenant_addons").select("addon_code")
-      .eq("tenant_id", customer.tenant_id).eq("source_subscription_id", subscription.id).maybeSingle();
+      .eq("tenant_id", customer.tenant_id).eq("source_subscription_id", addonSubscription.id).maybeSingle();
     if (assignmentReadError) throw assignmentReadError;
     const { error: assignmentError } = await admin.from("whatsapp_platform_tenant_addons")
       .update({ status: "cancelled", quantity: 0, billing_ends_at: endedAt, updated_at: endedAt })
-      .eq("tenant_id", customer.tenant_id).eq("source_subscription_id", subscription.id);
+      .eq("tenant_id", customer.tenant_id).eq("source_subscription_id", addonSubscription.id);
     if (assignmentError) throw assignmentError;
     if (assignment?.addon_code === "extra_agent_seat") {
       const { error: seatError } = await admin.from("whatsapp_platform_tenants").update({ additional_team_seats: 0, updated_at: endedAt }).eq("id", customer.tenant_id);
       if (seatError) throw seatError;
     }
+  };
+  if (isAddonSubscription && !cancelAtCycleEnd) {
+    await revokeAddonEntitlement(subscription);
   }
-  return { subscription: { ...synced, cancel_at_cycle_end: cancelAtCycleEnd }, cancellationMode: cancelAtCycleEnd ? "cycle_end" : "immediate" };
+  const cancelledAddons: Array<{ id: string; cancellationMode: "cycle_end" | "immediate" }> = [];
+  if (!isAddonSubscription) {
+    const { data: addonSubscriptions, error: addonReadError } = await admin.from("whatsapp_platform_billing_subscriptions")
+      .select("*").eq("tenant_id", customer.tenant_id);
+    if (addonReadError) throw addonReadError;
+    for (const addonSubscription of addonSubscriptions || []) {
+      const addonKind = String(addonSubscription.subscription_kind || addonSubscription.safe_metadata?.subscription_kind || "package");
+      if (addonKind !== "addon") continue;
+      if (TERMINAL_SUBSCRIPTION_STATUSES.has(addonSubscription.status)) continue;
+      assertSubscriptionMode(addonSubscription, credentials);
+      let addonCancelAtCycleEnd = cancelAtCycleEnd;
+      let addonProviderSubscription: any;
+      try {
+        addonProviderSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(addonSubscription.provider_subscription_id)}/cancel`, {
+          method: "POST", body: JSON.stringify({ cancel_at_cycle_end: addonCancelAtCycleEnd ? 1 : 0 }),
+        }, credentials);
+      } catch (providerError) {
+        const message = providerError instanceof Error ? providerError.message : "";
+        if (!addonCancelAtCycleEnd || !/no billing cycle|billing cycle is going on/i.test(message)) throw providerError;
+        addonCancelAtCycleEnd = false;
+        addonProviderSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(addonSubscription.provider_subscription_id)}/cancel`, {
+          method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }),
+        }, credentials);
+      }
+      await syncSubscriptionEntity(admin, addonSubscription, addonProviderSubscription);
+      const { error: addonUpdateError } = await admin.from("whatsapp_platform_billing_subscriptions")
+        .update({ cancel_at_cycle_end: addonCancelAtCycleEnd, updated_at: new Date().toISOString() }).eq("id", addonSubscription.id);
+      if (addonUpdateError) throw addonUpdateError;
+      if (!addonCancelAtCycleEnd) await revokeAddonEntitlement(addonSubscription);
+      cancelledAddons.push({ id: addonSubscription.id, cancellationMode: addonCancelAtCycleEnd ? "cycle_end" : "immediate" });
+    }
+  }
+  return { subscription: { ...synced, cancel_at_cycle_end: cancelAtCycleEnd }, cancellationMode: cancelAtCycleEnd ? "cycle_end" : "immediate", cancelledAddons };
 }
 async function processWebhook(admin: any, eventRecordId: string, payload: any, credentials: any) {
   const { data: claimed, error: claimError } = await admin.rpc("whatsapp_platform_claim_billing_webhook_event", { p_event_id: eventRecordId });
@@ -1857,7 +1890,7 @@ async function acceptWebhook(req: Request, raw: string) {
       return json(req, { received: true, retried: true, processed: Boolean(result.processed) }, result.processed ? 200 : 202);
     } catch (processError) {
       console.error("Razorpay billing webhook retry failed", { message: processError instanceof Error ? processError.message : "Webhook processing failed" });
-      return json(req, { error: "Webhook processing failed; Razorpay should retry delivery" }, 500);
+      return json(req, { error: "Webhook processing failed; the payment gateway should retry delivery" }, 500);
     }
   }
   if (error || !eventRecord) return json(req, { error: "Webhook could not be recorded" }, 500);
@@ -1866,7 +1899,7 @@ async function acceptWebhook(req: Request, raw: string) {
     return json(req, { received: true, processed: Boolean(result.processed) }, result.processed ? 200 : 202);
   } catch (processError) {
     console.error("Razorpay billing webhook processing failed", { message: processError instanceof Error ? processError.message : "Webhook processing failed" });
-    return json(req, { error: "Webhook processing failed; Razorpay should retry delivery" }, 500);
+    return json(req, { error: "Webhook processing failed; the payment gateway should retry delivery" }, 500);
   }
 }
 
