@@ -783,6 +783,41 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
           .map((item: any) => String(item.code || ""))
           .filter((code: string) => code && (!configuredCodes.length || configuredCodes.includes(code)));
       }
+      const recurringDiscountPaise = firstPaymentOnly ? 0 : Number(checkoutQuote.discount_paise || 0);
+      const discountedAddonCodeSet = new Set(discountedAddonCodes);
+      const pricingLines = [
+        {
+          code: "package",
+          name: checkoutQuote.quote_snapshot?.package_name || subscription.package_code,
+          quantity: 1,
+          base_paise: Number(checkoutQuote.quote_snapshot?.package_base_paise || 0),
+          discount_eligible: recurringDiscountPaise > 0,
+        },
+        ...checkoutAddons.map((item: any) => ({
+          code: String(item.code || ""),
+          name: item.name || item.code,
+          quantity: Number(item.quantity || 1),
+          base_paise: Number(item.baseSubtotalPaise || 0),
+          discount_eligible: recurringDiscountPaise > 0 && discountedAddonCodeSet.has(String(item.code || "")),
+        })),
+      ];
+      const eligiblePricingLines = pricingLines.filter((line: any) => line.discount_eligible);
+      const eligiblePricingBasePaise = eligiblePricingLines.reduce((total: number, line: any) => total + line.base_paise, 0);
+      let allocatedPricingDiscountPaise = 0;
+      for (const [index, line] of eligiblePricingLines.entries()) {
+        line.discount_paise = index === eligiblePricingLines.length - 1
+          ? recurringDiscountPaise - allocatedPricingDiscountPaise
+          : Math.round(recurringDiscountPaise * line.base_paise / Math.max(1, eligiblePricingBasePaise));
+        allocatedPricingDiscountPaise += line.discount_paise;
+      }
+      const pricingLineItems = pricingLines.map((line: any) => ({
+        code: line.code,
+        name: line.name,
+        quantity: line.quantity,
+        base_paise: line.base_paise,
+        discount_paise: Number(line.discount_paise || 0),
+        taxable_paise: line.base_paise - Number(line.discount_paise || 0),
+      }));
       checkoutPricing = {
         currency: checkoutQuote.currency,
         package: {
@@ -791,6 +826,7 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
           base_paise: Number(checkoutQuote.quote_snapshot?.package_base_paise || 0),
         },
         addons: checkoutAddons,
+        line_items: pricingLineItems,
         discounted_addon_codes: discountedAddonCodes,
         coupon_code: firstPaymentOnly ? null : checkoutQuote.coupon_code || null,
         base_subtotal_paise: Number(checkoutQuote.base_subtotal_paise || 0),

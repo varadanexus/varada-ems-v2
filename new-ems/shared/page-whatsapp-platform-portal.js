@@ -2369,28 +2369,20 @@ function showBillingPriceBreakdown(selectedAddonCode = "") {
     return;
   }
   const money = (paise) => billingMoney(Number(paise || 0) / 100, breakdown.currency || "INR");
-  const discountedAddonCodes = new Set(Array.isArray(breakdown.discounted_addon_codes) ? breakdown.discounted_addon_codes : []);
-  const lines = [
-    { code: "package", name: breakdown.package?.name || "Package", quantity: 1, basePaise: Number(breakdown.package?.base_paise || 0), discountEligible: Number(breakdown.discount_paise || 0) > 0 },
-    ...(Array.isArray(breakdown.addons) ? breakdown.addons : []).map((addon) => ({
-      code: addon.code,
-      name: addon.name || addon.code,
-      quantity: Number(addon.quantity || 1),
-      basePaise: Number(addon.baseSubtotalPaise || 0),
-      discountEligible: discountedAddonCodes.has(addon.code) && Number(breakdown.discount_paise || 0) > 0,
-    })),
-  ];
-  const eligibleBasePaise = lines.filter((line) => line.discountEligible).reduce((total, line) => total + line.basePaise, 0);
-  let allocatedDiscountPaise = 0;
-  const eligibleLines = lines.filter((line) => line.discountEligible);
-  for (const [index, line] of eligibleLines.entries()) {
-    line.discountPaise = index === eligibleLines.length - 1
-      ? Number(breakdown.discount_paise || 0) - allocatedDiscountPaise
-      : Math.round(Number(breakdown.discount_paise || 0) * line.basePaise / Math.max(1, eligibleBasePaise));
-    allocatedDiscountPaise += line.discountPaise;
+  const serverLines = Array.isArray(breakdown.line_items) ? breakdown.line_items : [];
+  const lines = serverLines.map((line) => ({
+    code: line.code,
+    name: line.name || line.code,
+    quantity: Number(line.quantity || 1),
+    basePaise: Number(line.base_paise || 0),
+    discountPaise: Number(line.discount_paise || 0),
+    taxablePaise: Number(line.taxable_paise ?? (Number(line.base_paise || 0) - Number(line.discount_paise || 0))),
+  }));
+  if (!lines.length) {
+    showToast("Refresh the page to load the secured itemized price breakdown.", "error");
+    return;
   }
-  for (const line of lines) if (!Number.isFinite(line.discountPaise)) line.discountPaise = 0;
-  const lineRows = lines.map((line) => `<div class="wp-price-breakdown-line ${line.code === selectedAddonCode ? "is-selected" : ""}"><div><strong>${escapeHtml(line.name)}</strong><small>${line.code === "package" ? "Package master" : `${line.quantity.toLocaleString("en-IN")} selected`}</small></div><span>${escapeHtml(money(line.basePaise))}</span><span>${line.discountPaise ? `−${escapeHtml(money(line.discountPaise))}` : "—"}</span><strong>${escapeHtml(money(line.basePaise - line.discountPaise))}</strong></div>`).join("");
+  const lineRows = lines.map((line) => `<div class="wp-price-breakdown-line ${line.code === selectedAddonCode ? "is-selected" : ""}"><div><strong>${escapeHtml(line.name)}</strong><small>${line.code === "package" ? "Package master" : `${line.quantity.toLocaleString("en-IN")} selected`}</small></div><span>${escapeHtml(money(line.basePaise))}</span><span>${line.discountPaise ? `−${escapeHtml(money(line.discountPaise))}` : "—"}</span><strong>${escapeHtml(money(line.taxablePaise))}</strong></div>`).join("");
   let dialog = document.querySelector("#wpBillingPriceBreakdownDialog");
   if (!dialog) {
     dialog = document.createElement("dialog");
