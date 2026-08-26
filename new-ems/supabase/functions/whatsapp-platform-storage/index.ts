@@ -290,6 +290,135 @@ async function tenantProfile(admin: any, customer: any) {
   };
 }
 
+async function accountDeletionStatus(admin: any, customer: any, sessionToken: string) {
+  const { data, error } = await admin.rpc("whatsapp_platform_account_deletion_status", { p_session_token: sessionToken });
+  if (error) throw error;
+  return data || { pending: false };
+}
+
+async function reverseAccountDeletion(admin: any, customer: any, sessionToken: string, body: any) {
+  if (!["owner", "admin"].includes(String(customer.role_code || ""))) throw new Error("Only a workspace owner or administrator can reverse deletion.");
+  const reason = String(body.reason || "").trim();
+  if (reason && (reason.length < 5 || reason.length > 500)) throw new Error("A reversal reason must be 5 to 500 characters.");
+  const { data, error } = await admin.rpc("whatsapp_platform_reverse_account_deletion", { p_session_token: sessionToken, p_reason: reason || null });
+  if (error) throw error;
+  return data || { success: true, status: "reversed" };
+}
+
+function validateDeletionPhoto(bytes: Uint8Array, requestedMime: string) {
+  const png = bytes.length > 8 && [137,80,78,71,13,10,26,10].every((value, index) => bytes[index] === value);
+  const jpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const detected = png ? "image/png" : jpeg ? "image/jpeg" : "";
+  if (!detected || detected !== requestedMime) throw new Error("Capture or upload a valid JPG or PNG evidence photo.");
+  return detected;
+}
+
+function sanitizeExportValue(value: any): any {
+  if (Array.isArray(value)) return value.map(sanitizeExportValue);
+  if (!value || typeof value !== "object") return value;
+  const blocked = /(password|secret|token|credential|cipher|encrypted|hash|reset|otp|session)/i;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !blocked.test(key))
+    .map(([key, child]) => [key, sanitizeExportValue(child)]));
+}
+
+async function exportAccountData(admin: any, customer: any) {
+  if (!['owner', 'admin'].includes(String(customer.role_code || ''))) throw new Error("Only a workspace owner or administrator can export account data.");
+  const tables = [
+    "whatsapp_platform_tenants", "whatsapp_platform_users", "whatsapp_platform_connections",
+    "whatsapp_platform_business_verifications", "whatsapp_platform_verification_documents",
+    "whatsapp_platform_contacts", "whatsapp_platform_conversations", "whatsapp_platform_messages",
+    "whatsapp_platform_templates", "whatsapp_platform_campaigns", "whatsapp_platform_flows",
+    "whatsapp_platform_subscriptions", "whatsapp_platform_billing_payments",
+    "whatsapp_platform_billing_invoices", "whatsapp_platform_billing_credit_notes",
+    "whatsapp_platform_billing_refunds", "whatsapp_platform_addon_subscriptions",
+  ];
+  const records: Record<string, any[]> = {};
+  const omitted: string[] = [];
+  for (const table of tables) {
+    const query = admin.from(table).select("*");
+    const { data, error } = table === "whatsapp_platform_tenants"
+      ? await query.eq("id", customer.tenant_id).limit(1)
+      : await query.eq("tenant_id", customer.tenant_id).limit(10000);
+    if (error) { omitted.push(table); continue; }
+    records[table] = sanitizeExportValue(data || []);
+  }
+  return {
+    fileName: `${safeSegment(customer.company_name || customer.tenant_name || "workspace", "workspace")}-account-export-${new Date().toISOString().slice(0, 10)}.json`,
+    export: {
+      format: "varada-nexus-whatsapp-account-export-v1",
+      generatedAt: new Date().toISOString(),
+      generatedForTenantId: customer.tenant_id,
+      generatedBy: { userId: customer.user_id, email: customer.email || null, role: customer.role_code || null },
+      securityNotice: "Authentication secrets, password material, session tokens and encrypted provider credentials are intentionally excluded.",
+      omittedUnavailableCollections: omitted,
+      records,
+    },
+  };
+}
+
+async function scheduleAccountDeletion(admin: any, customer: any, body: any, req: Request) {
+  if (!["owner", "admin"].includes(String(customer.role_code || ""))) throw new Error("Only a workspace owner or administrator can request account deletion.");
+  const requestedBy = String(body.requestedBy || "").trim();
+  const internalNote = String(body.internalNote || "").trim();
+  const exactCompanyName = String(body.exactCompanyName || "").trim();
+  const mimeType = String(body.evidenceMimeType || "").toLowerCase();
+  const rawBase64 = String(body.evidenceBase64 || "");
+  const latitude = Number(body.latitude);
+  const longitude = Number(body.longitude);
+  const locationAccuracy = body.locationAccuracy === null || body.locationAccuracy === undefined ? null : Number(body.locationAccuracy);
+  const capturedAt = new Date(String(body.locationCapturedAt || ""));
+  if (requestedBy.length < 3 || requestedBy.length > 200) throw new Error("Enter who requested the deletion.");
+  if (internalNote.length < 10 || internalNote.length > 2000) throw new Error("Enter an internal deletion note of 10 to 2,000 characters.");
+  if (body.evidenceConsent !== true) throw new Error("Confirm consent for the evidence photo and device location.");
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180 || Number.isNaN(capturedAt.getTime())) throw new Error("Capture the current device location before submitting.");
+  if (!rawBase64 || rawBase64.length > Math.ceil(MAX_LOGO_BYTES * 4 / 3) + 16) throw new Error("Evidence photo must be 2 MB or smaller.");
+  const bytes = base64ToBytes(rawBase64);
+  if (!bytes.length || bytes.length > MAX_LOGO_BYTES) throw new Error("Evidence photo must be 2 MB or smaller.");
+  validateDeletionPhoto(bytes, mimeType);
+  const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
+    .select("name,owner_email,drive_root_folder_id").eq("id", customer.tenant_id).single();
+  if (tenantError || !tenant) throw new Error("Workspace could not be found.");
+  if (exactCompanyName !== tenant.name) throw new Error("Enter the company name exactly as shown to confirm deletion.");
+  const { data: pending } = await admin.from("whatsapp_platform_account_deletion_requests")
+    .select("id,scheduled_for").eq("tenant_id", customer.tenant_id).eq("status", "pending").maybeSingle();
+  if (pending) throw new Error(`Deletion is already scheduled for ${new Date(pending.scheduled_for).toLocaleString("en-IN")}.`);
+
+  const token = await driveAccessToken();
+  const tenantFolderName = `${safeSegment(tenant.name, "Business")} - ${String(customer.tenant_id).slice(0, 8)}`;
+  const tenantFolderId = tenant.drive_root_folder_id || await findOrCreateFolder(token, ROOT_FOLDER_ID, tenantFolderName);
+  const governanceFolderId = await findOrCreateFolder(token, tenantFolderId, "Account Governance");
+  const deletionFolderId = await findOrCreateFolder(token, governanceFolderId, "Deletion Requests");
+  const extension = mimeType === "image/png" ? "png" : "jpg";
+  const storedName = `deletion-request-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
+  const uploaded = await uploadFile(token, deletionFolderId, storedName, mimeType, bytes);
+  const evidenceHash = await sha256Hex(bytes);
+  const now = new Date();
+  const scheduledFor = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const { data: request, error: insertError } = await admin.from("whatsapp_platform_account_deletion_requests").insert({
+    tenant_id: customer.tenant_id, tenant_name: tenant.name, owner_email: tenant.owner_email || customer.email || null,
+    requested_by_description: requestedBy, internal_note: internalNote,
+    actor_app_user_id: customer.user_id,
+    actor_name: customer.display_name || requestedBy, actor_email: customer.email || null,
+    evidence_drive_file_id: uploaded.id, evidence_drive_folder_id: deletionFolderId,
+    evidence_file_name: uploaded.name || storedName, evidence_mime_type: mimeType, evidence_sha256: evidenceHash,
+    latitude, longitude, location_accuracy_m: Number.isFinite(locationAccuracy) ? locationAccuracy : null,
+    location_captured_at: capturedAt.toISOString(), consent_confirmed_at: now.toISOString(),
+    requested_at: now.toISOString(), scheduled_for: scheduledFor.toISOString(), status: "pending",
+  }).select("id,scheduled_for").single();
+  if (insertError) { await trashFile(token, uploaded.id).catch(() => {}); throw insertError; }
+  await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenantFolderName, updated_at: now.toISOString() }).eq("id", customer.tenant_id);
+  await admin.from("audit_logs").insert({
+    event_type: "whatsapp_platform_account_deletion_requested", action: "schedule_account_deletion", module_code: "whatsapp-platform",
+    entity_type: "whatsapp_platform_account_deletion_requests", entity_id: request.id,
+    details: { tenant_id: customer.tenant_id, requested_by: requestedBy, actor_user_id: customer.user_id, actor_email: customer.email || null,
+      internal_note: internalNote, scheduled_for: request.scheduled_for, evidence_file_id: uploaded.id,
+      location: { latitude, longitude, accuracy_m: Number.isFinite(locationAccuracy) ? locationAccuracy : null, captured_at: capturedAt.toISOString() },
+      source: "customer_workspace", user_agent: req.headers.get("user-agent") || null, forwarded_for: req.headers.get("x-forwarded-for") || null },
+  });
+  return { ok: true, requestId: request.id, scheduledFor: request.scheduled_for, reversibleUntil: request.scheduled_for };
+}
+
 async function uploadLogo(admin: any, customer: any, body: any) {
   if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can change the logo.");
   const mimeType = String(body.mimeType || "").toLowerCase();
@@ -720,12 +849,20 @@ Deno.serve(async (req) => {
       "remove_verification_document",
       "preview_verification_document",
       "submit_verification",
+      "account_deletion_status",
+      "reverse_account_deletion",
+      "export_account_data",
+      "schedule_account_deletion",
     ]);
     if (!preBillingActions.has(action)) {
       const entitlement = await billingEntitlement(admin, customer);
       if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
     }
     if (action === "profile") return json(req, { profile: await tenantProfile(admin, customer) });
+    if (action === "account_deletion_status") return json(req, { deletion: await accountDeletionStatus(admin, customer, String(body.sessionToken || "")) });
+    if (action === "reverse_account_deletion") return json(req, await reverseAccountDeletion(admin, customer, String(body.sessionToken || ""), body));
+    if (action === "export_account_data") return json(req, await exportAccountData(admin, customer));
+    if (action === "schedule_account_deletion") return json(req, await scheduleAccountDeletion(admin, customer, body, req));
     if (action === "upload_logo") return json(req, await uploadLogo(admin, customer, body));
     if (action === "upload_business_profile_picture") return json(req, await uploadBusinessProfilePicture(admin, customer, body));
     if (action === "remove_logo") return json(req, await removeLogo(admin, customer));

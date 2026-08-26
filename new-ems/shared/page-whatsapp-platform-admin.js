@@ -5,6 +5,12 @@ import { showToast } from "./utils.js";
 
 const BILLING_VIEWS = new Set(["billing", "subscriptions", "payments", "invoices", "refunds", "credit-notes", "reconciliation"]);
 const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", ...BILLING_VIEWS, "razorpay", "meta", "security"]);
+const fileAsBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+  reader.onerror = () => reject(new Error("The evidence photo could not be read."));
+  reader.readAsDataURL(file);
+});
 const VIEW_META = Object.freeze({
   overview: {
     title: "Platform overview",
@@ -172,7 +178,7 @@ function customers() {
       <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>People &amp; access</span><h3>Users and roles</h3></div><small>${members.length} total records</small></div><div class="wa-admin-table-wrap"><table class="wa-admin-table wa-customer-users"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>${memberRows}</tbody></table></div></section>
       <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Connected assets</span><h3>WhatsApp Business accounts</h3></div><small>${connections.length} connections</small></div><div class="wa-customer-connections">${connectionRows}</div></section>
       ${state.canManage ? `<section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Account controls</span><h3>Plan and access</h3></div><small>Changes apply to this workspace</small></div><form class="wa-customer-account-form" data-tenant-form="${escapeHtml(item.id)}"><label><span>Package Master assignment</span><select name="plan">${packageOptions}</select></label><label><span>Extra seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extra}" /></label><label><span>Status</span><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select></label><button class="wa-admin-button primary" type="submit">Save account</button></form></section>` : ""}
-      ${state.hasFullAuthority ? `<section class="wa-customer-danger"><div><span>Danger zone</span><h3>Permanently delete account</h3><p>Available only for clean or test workspaces. Live subscriptions, invoices, credit notes or payments are retained and prevent deletion.</p></div><form data-customer-delete-form="${escapeHtml(item.id)}" data-customer-name="${escapeHtml(item.name)}"><label><span>Type <strong>${escapeHtml(item.name)}</strong> to confirm</span><input name="confirmationName" autocomplete="off" required /></label><label class="wa-customer-delete-check"><input name="confirmed" type="checkbox" required /><span>I understand this permanently removes the workspace, users, sessions, messages, contacts, stored file references and Meta connections.</span></label><button class="wa-admin-button danger" type="submit" disabled>Permanently delete account</button></form></section>` : ""}
+      ${state.hasFullAuthority ? `<section class="wa-customer-danger"><div><span>Danger zone</span><h3>Schedule complete account deletion</h3><p>Evidence is stored in the company’s protected Drive folder. The workspace owner or an administrator can reverse the request for 24 hours before guarded deletion begins.</p><button class="wa-admin-button danger" type="button" data-customer-delete-open="${escapeHtml(item.id)}">Delete account</button></div><form class="wa-customer-delete-form" data-customer-delete-form="${escapeHtml(item.id)}" data-customer-name="${escapeHtml(item.name)}" hidden><div class="wa-customer-delete-form-head"><strong>Deletion request and evidence</strong><button type="button" data-customer-delete-cancel>Cancel</button></div><label><span>Who requested this deletion?</span><input name="requestedBy" maxlength="160" autocomplete="off" placeholder="Customer name and email, or authorised requester" required /></label><label><span>Internal note</span><textarea name="internalNote" rows="3" minlength="10" maxlength="1000" placeholder="Record the request source, reason and internal context." required></textarea></label><label><span>Photo evidence of requester</span><input name="evidencePhoto" type="file" accept="image/png,image/jpeg" capture="user" required /><small>JPG or PNG, maximum 2 MB. Capture only with the person’s consent.</small></label><div class="wa-customer-location"><button class="wa-admin-button" type="button" data-capture-delete-location>Capture current location</button><span data-delete-location-status>Location not captured</span></div><input name="latitude" type="hidden" /><input name="longitude" type="hidden" /><input name="locationAccuracy" type="hidden" /><input name="locationCapturedAt" type="hidden" /><label><span>Type <strong>${escapeHtml(item.name)}</strong> to confirm</span><input name="confirmationName" autocomplete="off" required /></label><label class="wa-customer-delete-check"><input name="confirmed" type="checkbox" required /><span>I confirm the requester consented to the photo and location evidence. This request may be reversed within 24 hours; after that, guarded deletion is final.</span></label><button class="wa-admin-button danger" type="submit" disabled>Schedule deletion</button></form></section>` : ""}
     </main></div></section>`;
     return `<article class="wa-customer-card"><button type="button" class="wa-customer-card-open" data-open-customer="${escapeHtml(item.id)}"><header><span class="wa-customer-avatar">${escapeHtml(String(item.name || "C").slice(0, 1).toUpperCase())}</span><div><span>${escapeHtml(masterPackage?.name || planCode)} package</span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.ownerEmail)}</small></div>${status(item.status)}</header><div class="wa-customer-card-metrics"><div><span>Team</span><strong>${Number(item.userCount || 0)} / ${capacity}</strong></div><div><span>Connections</span><strong>${connections.length}</strong></div><div><span>Verification</span><strong>${escapeHtml(verification?.status || item.verificationStatus || "not started")}</strong></div></div><footer><span>Created ${escapeHtml(formatDate(item.createdAt))}</span><strong>Open account →</strong></footer></button></article>${modal}`;
   }).join("");
@@ -567,6 +573,8 @@ async function saveProviderSecret(event) {
   try {
     state.providerSecretStatus = await providerSecretRequest("set", { secret });
     form.reset();
+    const locationStatus = form.querySelector("[data-delete-location-status]");
+    if (locationStatus) locationStatus.textContent = "Location not captured";
     input.type = "password";
     showToast("Meta App Secret encrypted and saved.", TOAST_TYPES.SUCCESS);
     render();
@@ -1170,25 +1178,64 @@ function bind() {
     modal.addEventListener("click", (event) => { if (event.target === modal) closeCustomerModal(modal); });
     modal.addEventListener("keydown", (event) => { if (event.key === "Escape") closeCustomerModal(modal); });
   });
+  document.querySelectorAll("[data-customer-delete-open]").forEach((button) => button.addEventListener("click", () => {
+    const modal = button.closest("[data-customer-modal]");
+    const form = modal?.querySelector(`[data-customer-delete-form="${CSS.escape(button.dataset.customerDeleteOpen)}"]`);
+    if (!form) return;
+    form.hidden = false;
+    button.hidden = true;
+    form.elements.requestedBy?.focus();
+  }));
+  document.querySelectorAll("[data-customer-delete-cancel]").forEach((button) => button.addEventListener("click", () => {
+    const form = button.closest("[data-customer-delete-form]");
+    const modal = button.closest("[data-customer-modal]");
+    const opener = modal?.querySelector(`[data-customer-delete-open="${CSS.escape(form?.dataset.customerDeleteForm || "")}"]`);
+    if (!form) return;
+    form.reset();
+    form.hidden = true;
+    if (opener) { opener.hidden = false; opener.focus(); }
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+  }));
   document.querySelectorAll("[data-customer-delete-form]").forEach((form) => {
     const input = form.elements.confirmationName;
+    const requestedBy = form.elements.requestedBy;
+    const internalNote = form.elements.internalNote;
     const check = form.elements.confirmed;
+    const photo = form.elements.evidencePhoto;
+    const locationStatus = form.querySelector("[data-delete-location-status]");
     const button = form.querySelector('button[type="submit"]');
-    const validate = () => { button.disabled = input.value !== form.dataset.customerName || !check.checked; };
+    const validate = () => { button.disabled = input.value !== form.dataset.customerName || requestedBy.value.trim().length < 2 || internalNote.value.trim().length < 10 || !photo.files?.[0] || !form.elements.latitude.value || !form.elements.longitude.value || !check.checked; };
     input.addEventListener("input", validate);
+    requestedBy.addEventListener("input", validate);
+    internalNote.addEventListener("input", validate);
+    photo.addEventListener("change", validate);
     check.addEventListener("change", validate);
+    form.querySelector("[data-capture-delete-location]")?.addEventListener("click", () => {
+      if (!navigator.geolocation) { showToast("Location capture is not available on this device.", TOAST_TYPES.ERROR); return; }
+      locationStatus.textContent = "Requesting consent and location…";
+      navigator.geolocation.getCurrentPosition((position) => {
+        form.elements.latitude.value = String(position.coords.latitude);
+        form.elements.longitude.value = String(position.coords.longitude);
+        form.elements.locationAccuracy.value = String(position.coords.accuracy || "");
+        form.elements.locationCapturedAt.value = new Date(position.timestamp || Date.now()).toISOString();
+        locationStatus.textContent = `Captured to ±${Math.round(position.coords.accuracy || 0)} m`;
+        validate();
+      }, (error) => { locationStatus.textContent = "Location permission was not granted"; showToast(error.message || "Location could not be captured.", TOAST_TYPES.ERROR); validate(); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
     form.addEventListener("submit", async (event) => {
       event.preventDefault(); validate(); if (button.disabled) return;
-      button.disabled = true; button.textContent = "Deleting account…";
+      button.disabled = true; button.textContent = "Archiving evidence…";
       try {
-        await providerSecretRequest("hard_delete_tenant", { tenantId: form.dataset.customerDeleteForm, confirmationName: input.value, confirmed: true });
+        const evidenceFile = photo.files[0];
+        const result = await providerSecretRequest("schedule_tenant_deletion", { tenantId: form.dataset.customerDeleteForm, confirmationName: input.value, requestedBy: requestedBy.value.trim(), internalNote: internalNote.value.trim(), confirmed: true, evidenceConsent: true, photo: { fileName: evidenceFile.name, mimeType: evidenceFile.type, base64: await fileAsBase64(evidenceFile) }, location: { latitude: Number(form.elements.latitude.value), longitude: Number(form.elements.longitude.value), accuracy: Number(form.elements.locationAccuracy.value || 0), capturedAt: form.elements.locationCapturedAt.value } });
         closeCustomerModal(form.closest("[data-customer-modal]"));
-        showToast("Customer account permanently deleted.", TOAST_TYPES.SUCCESS);
+        showToast(`Deletion scheduled. It can be reversed until ${formatDate(result.reversibleUntil)}.`, TOAST_TYPES.SUCCESS);
         state.packageMaster = null;
         await loadSnapshot();
       } catch (error) {
         showToast(error?.message || "Customer account could not be deleted.", TOAST_TYPES.ERROR);
-        button.textContent = "Permanently delete account"; validate();
+        button.textContent = "Schedule deletion"; validate();
       }
     });
   });

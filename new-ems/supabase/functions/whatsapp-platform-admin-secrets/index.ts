@@ -3,7 +3,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const MAX_BODY_BYTES = 8 * 1024;
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const MAX_EVIDENCE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_ORIGINS = new Set([
   "https://www.varadanexus.com",
   "https://varadanexus.com",
@@ -43,6 +44,56 @@ function adminClient() {
   return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+function base64url(input: ArrayBuffer | string) {
+  let text = "";
+  if (typeof input === "string") text = btoa(input);
+  else { const bytes = new Uint8Array(input); for (const byte of bytes) text += String.fromCharCode(byte); text = btoa(text); }
+  return text.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function pemToPkcs8(pem: string) {
+  const binary = atob(pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s+/g, ""));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0)).buffer;
+}
+let cachedDriveToken: { value: string; exp: number } | null = null;
+async function driveAccessToken() {
+  const now = Math.floor(Date.now() / 1000);
+  if (cachedDriveToken && cachedDriveToken.exp - 60 > now) return cachedDriveToken.value;
+  const account = JSON.parse(env("GOOGLE_SERVICE_ACCOUNT_JSON") || "{}");
+  if (!account.client_email || !account.private_key) throw new Error("Google Drive evidence storage is not configured.");
+  const unsigned = `${base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${base64url(JSON.stringify({ iss: account.client_email, scope: "https://www.googleapis.com/auth/drive", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 }))}`;
+  const key = await crypto.subtle.importKey("pkcs8", pemToPkcs8(account.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
+  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${unsigned}.${base64url(signature)}` }) });
+  const payload = await response.json();
+  if (!response.ok || !payload.access_token) throw new Error("Google Drive evidence storage is unavailable.");
+  cachedDriveToken = { value: payload.access_token, exp: now + Number(payload.expires_in || 3600) };
+  return cachedDriveToken.value;
+}
+const DRIVE_QS = "supportsAllDrives=true&includeItemsFromAllDrives=true";
+async function driveJson(url: string, token: string, init: RequestInit = {}) {
+  const response = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init.headers || {}) } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error?.message || "Google Drive request failed.");
+  return payload;
+}
+const escapeDriveQuery = (value: string) => value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+async function findOrCreateFolder(token: string, parentId: string, name: string) {
+  const query = [`name='${escapeDriveQuery(name)}'`, `'${parentId}' in parents`, "mimeType='application/vnd.google-apps.folder'", "trashed=false"].join(" and ");
+  const found = await driveJson(`https://www.googleapis.com/drive/v3/files?${DRIVE_QS}&corpora=allDrives&q=${encodeURIComponent(query)}&fields=files(id)`, token);
+  if (found?.files?.[0]?.id) return found.files[0].id;
+  const created = await driveJson(`https://www.googleapis.com/drive/v3/files?${DRIVE_QS}&fields=id`, token, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] }) });
+  return created.id;
+}
+function safeSegment(value: unknown, fallback: string) { return String(value || fallback).normalize("NFKC").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().slice(0, 80) || fallback; }
+function base64ToBytes(value: string) { const binary = atob(value); return Uint8Array.from(binary, (character) => character.charCodeAt(0)); }
+async function sha256Hex(bytes: Uint8Array) { const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)); return Array.from(digest).map((value) => value.toString(16).padStart(2, "0")).join(""); }
+async function uploadDriveFile(token: string, folderId: string, name: string, mimeType: string, bytes: Uint8Array) {
+  const boundary = `vnbnd${crypto.randomUUID().replace(/-/g, "")}`; const encoder = new TextEncoder();
+  const start = encoder.encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [folderId] })}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`); const end = encoder.encode(`\r\n--${boundary}--`);
+  const payload = new Uint8Array(start.length + bytes.length + end.length); payload.set(start); payload.set(bytes, start.length); payload.set(end, start.length + bytes.length);
+  return driveJson(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&${DRIVE_QS}&fields=id,name`, token, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${boundary}` }, body: payload });
 }
 
 function base64Url(bytes: Uint8Array) {
@@ -169,30 +220,51 @@ Deno.serve(async (req) => {
       await admin.from("audit_logs").insert({ event_type: "whatsapp_platform_webhook_token_rotated", action: "webhook_token_rotated", module_code: "whatsapp-platform", actor_app_user_id: appUserId, entity_type: "whatsapp_platform_provider_settings", details: { setting_key: "webhook_verify_token", secret_recorded: true }, user_agent: req.headers.get("user-agent") || null, ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null });
       return json(req, { success: true, webhookConfigured: true, webhookUpdatedAt: now, token });
     }
-    if (action === "hard_delete_tenant") {
+    if (action === "schedule_tenant_deletion") {
       const tenantId = String(body.tenantId || "").trim();
       const confirmationName = String(body.confirmationName || "").trim();
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tenantId)) {
         return json(req, { error: "Select a valid customer account." }, 400);
       }
-      if (body.confirmed !== true) return json(req, { error: "Confirm permanent account deletion." }, 400);
+      if (body.confirmed !== true || body.evidenceConsent !== true) return json(req, { error: "Confirm the evidence capture and deletion request." }, 400);
       if (confirmationName.length < 2 || confirmationName.length > 160) {
         return json(req, { error: "Enter the complete company name to confirm deletion." }, 400);
       }
+      const requestedBy = String(body.requestedBy || "").trim();
+      const internalNote = String(body.internalNote || "").trim();
+      if (requestedBy.length < 2 || requestedBy.length > 160) return json(req, { error: "Record who requested deletion." }, 400);
+      if (internalNote.length < 10 || internalNote.length > 1000) return json(req, { error: "Enter an internal note of 10 to 1000 characters." }, 400);
+      const latitude = Number(body.location?.latitude); const longitude = Number(body.location?.longitude); const accuracy = Number(body.location?.accuracy || 0);
+      const locationCapturedAt = String(body.location?.capturedAt || "");
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180 || !locationCapturedAt) return json(req, { error: "Capture the requester's current location with consent." }, 400);
+      const mimeType = String(body.photo?.mimeType || ""); const fileName = safeSegment(body.photo?.fileName, "deletion-request-evidence.jpg"); const photoBase64 = String(body.photo?.base64 || "");
+      if (!["image/jpeg", "image/png"].includes(mimeType) || !photoBase64) return json(req, { error: "Capture or upload a JPG or PNG evidence photo." }, 400);
+      const photoBytes = base64ToBytes(photoBase64); if (!photoBytes.length || photoBytes.length > MAX_EVIDENCE_BYTES) return json(req, { error: "Evidence photo must be 2 MB or smaller." }, 400);
+      const jpeg = photoBytes[0] === 0xff && photoBytes[1] === 0xd8 && photoBytes[2] === 0xff; const png = photoBytes.length > 8 && [137,80,78,71,13,10,26,10].every((value, index) => photoBytes[index] === value);
+      if ((mimeType === "image/jpeg" && !jpeg) || (mimeType === "image/png" && !png)) return json(req, { error: "Evidence photo content is invalid." }, 400);
       const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
-        .select("id,name").eq("id", tenantId).maybeSingle();
+        .select("id,name,owner_email,drive_root_folder_id,drive_root_folder_path").eq("id", tenantId).maybeSingle();
       if (tenantError) throw tenantError;
       if (!tenant) return json(req, { error: "Customer account not found." }, 404);
       if (confirmationName !== tenant.name) {
         return json(req, { error: "The confirmation name does not exactly match the customer account." }, 400);
       }
-      const { data: result, error: deleteError } = await admin.rpc("whatsapp_platform_admin_hard_delete_tenant", {
-        p_tenant_id: tenantId,
-        p_confirmation_name: confirmationName,
-        p_actor_app_user_id: appUserId,
-      });
-      if (deleteError) throw deleteError;
-      return json(req, result || { success: true, tenantId });
+      const { data: existing } = await admin.from("whatsapp_platform_account_deletion_requests").select("id,scheduled_for").eq("tenant_id", tenantId).eq("status", "pending").maybeSingle();
+      if (existing) return json(req, { error: `Deletion is already scheduled until ${existing.scheduled_for}.` }, 409);
+      const [{ data: actor }, driveToken] = await Promise.all([admin.from("app_users").select("display_name,email").eq("id", appUserId).maybeSingle(), driveAccessToken()]);
+      const rootId = env("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID"); if (!rootId) throw new Error("WhatsApp Platform Drive storage is not configured.");
+      const tenantFolderName = `${safeSegment(tenant.name, "Business")} - ${tenantId.slice(0, 8)}`;
+      const tenantFolderId = tenant.drive_root_folder_id || await findOrCreateFolder(driveToken, rootId, tenantFolderName);
+      const governanceFolderId = await findOrCreateFolder(driveToken, tenantFolderId, "Account Governance");
+      const deletionFolderId = await findOrCreateFolder(driveToken, governanceFolderId, "Deletion Requests");
+      const requestId = crypto.randomUUID(); const storedName = `${new Date().toISOString().replace(/[:.]/g, "-")} - ${requestId.slice(0, 8)} - ${fileName}`;
+      const uploaded = await uploadDriveFile(driveToken, deletionFolderId, storedName, mimeType, photoBytes);
+      const scheduledFor = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const { error: insertError } = await admin.from("whatsapp_platform_account_deletion_requests").insert({ id: requestId, tenant_id: tenantId, tenant_name: tenant.name, owner_email: tenant.owner_email, requested_by_description: requestedBy, internal_note: internalNote, actor_app_user_id: appUserId, actor_name: actor?.display_name || null, actor_email: actor?.email || null, evidence_drive_file_id: uploaded.id, evidence_drive_folder_id: deletionFolderId, evidence_file_name: storedName, evidence_mime_type: mimeType, evidence_sha256: await sha256Hex(photoBytes), latitude, longitude, location_accuracy_m: accuracy || null, location_captured_at: locationCapturedAt, consent_confirmed_at: new Date().toISOString(), scheduled_for: scheduledFor });
+      if (insertError) throw insertError;
+      await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenant.drive_root_folder_path || tenantFolderName, updated_at: new Date().toISOString() }).eq("id", tenantId);
+      await admin.from("audit_logs").insert({ event_type: "whatsapp_platform_account_deletion_scheduled", action: "schedule_account_deletion", module_code: "whatsapp-platform", actor_app_user_id: appUserId, entity_type: "whatsapp_platform_account_deletion_requests", entity_id: requestId, details: { tenant_id: tenantId, tenant_name: tenant.name, requested_by: requestedBy, internal_note: internalNote, scheduled_for: scheduledFor, evidence_file_id: uploaded.id, location: { latitude, longitude, accuracy }, reversal_window_hours: 24 }, user_agent: req.headers.get("user-agent") || null, ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null });
+      return json(req, { success: true, requestId, tenantId, status: "pending", scheduledFor, reversibleUntil: scheduledFor });
     }
     if (action === "billing_snapshot") {
       const [{ data: tenants, error: tenantError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentError }, { data: invoices, error: invoiceError }, { data: refunds, error: refundError }, { data: creditNotes, error: creditError }, { data: refundRequests, error: requestError }, { data: webhookErrors, error: webhookError }] = await Promise.all([

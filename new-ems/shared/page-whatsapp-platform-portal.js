@@ -80,6 +80,7 @@ let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
 let workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], invoices: [], creditNotes: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
+let workspaceDeletion = { pending: false };
 let workspaceCheckout = { quote: null, package: null, error: "" };
 let razorpayCheckoutPromise = null;
 let profileMenuClickAwayHandler = null;
@@ -1582,10 +1583,15 @@ function profileView(profile) {
 
 function settingsView(profile) {
   const canManageBranding = ["owner", "admin"].includes(session.roleCode);
+  const canDeleteWorkspace = ["owner", "admin"].includes(session.roleCode);
   const logo = profile?.logoDataUrl
     ? `<img src="${escapeHtml(profile.logoDataUrl)}" alt="${escapeHtml(session.companyName)} logo" />`
     : `<span aria-hidden="true">${escapeHtml((session.companyName || "B").charAt(0).toUpperCase())}</span>`;
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("profile")}">View full profile</a></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button>${profile?.logoDataUrl ? `<button class="wp-remove-logo" id="wpRemoveLogoBtn" type="button">Remove logo</button>` : ""}</form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(profile?.companyName || session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(profile?.displayName || session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(profile?.email || session.email)}</dd></div><div><dt>Plan</dt><dd>${escapeHtml(planName(profile?.planCode))}</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div></article></section></section>`;
+  const deletionControl = canDeleteWorkspace
+    ? `<div class="wp-danger-zone"><div><strong>Delete this workspace</strong><p>Download a copy of your account data, then submit a protected deletion request. The request can be reversed for 24 hours.</p></div><button class="wp-danger-button" id="wpRequestDeletionBtn" type="button" ${workspaceDeletion?.pending ? "disabled" : ""}>${workspaceDeletion?.pending ? "Deletion pending" : "Request deletion"}</button></div>`
+    : `<p class="wp-settings-permission">Only a workspace owner or administrator can export or delete this account.</p>`;
+  const deletionDialog = canDeleteWorkspace ? `<dialog class="wp-account-deletion-dialog" id="wpAccountDeletionDialog"><form id="wpAccountDeletionForm"><header><div><span>Protected account action</span><h2>Request workspace deletion</h2><p>This removes the workspace, users, messages, contacts and other operational platform data after a 24-hour reversal window. Stored Meta connections will be unlinked; the customer’s Meta Business Portfolio is not deleted. Statutory invoices, credit notes and audit evidence are retained where legally required.</p></div><button type="button" data-close-deletion-dialog aria-label="Close">×</button></header><section class="wp-deletion-export-step"><div><strong>1. Download your data</strong><p>The export excludes passwords, login sessions and encrypted provider credentials.</p></div><button class="wp-secondary" id="wpExportAccountDataBtn" type="button">Download account data</button></section><div class="wp-deletion-form-grid"><label class="wp-field"><span>Who requested this deletion</span><input name="requestedBy" maxlength="200" value="${escapeHtml(profile?.displayName || session.displayName)}" required /></label><label class="wp-field"><span>Internal note</span><textarea name="internalNote" minlength="10" maxlength="2000" placeholder="Reason, approval reference, and any internal context" required></textarea></label><label class="wp-field"><span>Requester evidence photo</span><input name="evidencePhoto" type="file" accept="image/jpeg,image/png" capture="user" required /><small>JPG or PNG, maximum 2 MB. Capture the consenting requester.</small></label><div class="wp-location-capture"><span>Device location evidence</span><button class="wp-secondary" id="wpCaptureDeletionLocationBtn" type="button">Capture current location</button><small id="wpDeletionLocationStatus">Location has not been captured.</small><input name="latitude" type="hidden" /><input name="longitude" type="hidden" /><input name="locationAccuracy" type="hidden" /><input name="locationCapturedAt" type="hidden" /></div><label class="wp-field wp-confirm-company"><span>Type <strong>${escapeHtml(profile?.companyName || session.companyName)}</strong> to confirm</span><input name="exactCompanyName" autocomplete="off" required /></label><label class="wp-check wp-deletion-consent"><input name="evidenceConsent" type="checkbox" required /><span>I confirm that the requester consented to capturing the photo and device location as evidence for this deletion request.</span></label></div><footer><button class="wp-secondary" type="button" data-close-deletion-dialog>Keep workspace</button><button class="wp-danger-button" type="submit">Schedule deletion</button></footer><p class="wp-form-message" id="wpAccountDeletionMessage" role="alert"></p></form></dialog>` : "";
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("profile")}">View full profile</a></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button>${profile?.logoDataUrl ? `<button class="wp-remove-logo" id="wpRemoveLogoBtn" type="button">Remove logo</button>` : ""}</form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(profile?.companyName || session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(profile?.displayName || session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(profile?.email || session.email)}</dd></div><div><dt>Plan</dt><dd>${escapeHtml(planName(profile?.planCode))}</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div>${deletionControl}</article></section>${deletionDialog}</section>`;
 }
 
 function verifiedVerificationView(data) {
@@ -2316,6 +2322,8 @@ async function renderDashboard() {
     } catch {
       workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
     }
+    try { workspaceDeletion = (await storageRequest("account_deletion_status"))?.deletion || { pending: false }; }
+    catch { workspaceDeletion = { pending: false }; }
     try {
       const result = await storageRequest("verification_status");
       workspaceVerification = result?.verification || workspaceVerification;
@@ -2478,10 +2486,16 @@ async function renderDashboard() {
     ? `<div class="wp-profile-workspace-card" aria-label="${escapeHtml(session.companyName)} agent workspace"><span class="wp-profile-workspace-logo">${sidebarLogo}</span><span><em>Current workspace</em><strong>${escapeHtml(session.companyName)}</strong><small>Agent workspace</small></span></div>`
     : `<a class="wp-profile-workspace-card" href="${workspacePath("profile")}" role="menuitem" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-profile-workspace-logo">${sidebarLogo}</span><span><em>Business account</em><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)} plan</small></span><span class="wp-profile-workspace-chevron" aria-hidden="true">›</span></a>`;
   const profileMenu = `<div class="wp-profile-control"><button class="wp-profile-trigger" id="wpProfileMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="wpProfileMenu"><span class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></span><span class="wp-user-avatar" aria-hidden="true">${userInitial}</span><span class="wp-profile-chevron" aria-hidden="true">${workspaceIcon('<path d="m7 10 5 5 5-5"/>')}</span></button><div class="wp-profile-menu" id="wpProfileMenu" role="menu" hidden><header><span class="wp-profile-menu-avatar" aria-hidden="true">${userInitial}</span><div><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small><em>${escapeHtml(session.companyName)} · ${escapeHtml(roleLabel)}</em></div></header>${workspaceMenuCard}<nav aria-label="Account menu"><a href="${workspacePath("settings")}" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.37.38.7.66.98.3.27.68.42 1.08.42H21v4h-.1A1.7 1.7 0 0 0 19.4 15Z"/>')}</span><span><strong>Workspace settings</strong><small>Profile and preferences</small></span></a><a href="/contact.html" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.12c-.9.55-1.5 1.05-1.5 2.38M12 17h.01"/>')}</span><span><strong>Help &amp; support</strong><small>Contact the Varada Nexus team</small></span></a></nav><button class="wp-profile-logout" id="wpProfileLogoutBtn" type="button" role="menuitem"><span aria-hidden="true">${workspaceIcon('<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>')}</span><span><strong>Sign out</strong><small>End this secure session</small></span></button></div></div>`;
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header><div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  const deletionBanner = workspaceDeletion?.pending ? `<section class="wp-deletion-pending" role="alert"><div><span>Account deletion pending</span><strong>This workspace is scheduled for deletion on ${escapeHtml(new Date(workspaceDeletion.scheduledFor).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }))}.</strong><small>An owner or administrator can reverse this request during the 24-hour protection window.</small></div>${workspaceDeletion.canReverse ? `<button type="button" data-reverse-account-deletion>Keep this account</button>` : ""}</section>` : "";
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
   if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
   const workspaceSidebarState = readWorkspaceSidebarState();
   enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
+  app.querySelector("[data-reverse-account-deletion]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget; const reason = window.prompt("Optional: why are you keeping this account?", "Deletion request withdrawn by workspace staff") || "";
+    try { button.disabled = true; button.textContent = "Reversing…"; await storageRequest("reverse_account_deletion", { reason }); showToast("Account deletion has been reversed."); await renderDashboard(); }
+    catch (error) { button.disabled = false; button.textContent = "Keep this account"; showToast(error?.message || "Deletion could not be reversed.", "error"); }
+  });
   app.querySelector("#wpBusinessNumberSelector")?.addEventListener("change", async (event) => {
     selectWorkspaceConnection(event.currentTarget.value);
     const url = new URL(location.href);
@@ -3359,6 +3373,79 @@ async function renderDashboard() {
       showToast(error?.message || "The logo could not be removed.", "error");
       button.disabled = false;
       button.textContent = originalText;
+    }
+  });
+  const deletionDialog = app.querySelector("#wpAccountDeletionDialog");
+  app.querySelector("#wpRequestDeletionBtn")?.addEventListener("click", () => deletionDialog?.showModal());
+  app.querySelectorAll("[data-close-deletion-dialog]").forEach((button) => button.addEventListener("click", () => deletionDialog?.close()));
+  deletionDialog?.addEventListener("click", (event) => {
+    if (event.target === deletionDialog) deletionDialog.close();
+  });
+  app.querySelector("#wpExportAccountDataBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const original = button.textContent;
+    try {
+      button.disabled = true; button.textContent = "Preparing export…";
+      const result = await storageRequest("export_account_data");
+      const blob = new Blob([JSON.stringify(result.export, null, 2)], { type: "application/json" });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href; anchor.download = result.fileName || "workspace-account-export.json";
+      document.body.append(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+      button.textContent = "Data downloaded";
+      showToast("Account data export downloaded.");
+    } catch (error) {
+      button.disabled = false; button.textContent = original;
+      showToast(error?.message || "Account data could not be exported.", "error");
+    }
+  });
+  app.querySelector("#wpCaptureDeletionLocationBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const form = button.closest("form");
+    const status = form?.querySelector("#wpDeletionLocationStatus");
+    if (!navigator.geolocation) return showToast("Location capture is not supported by this browser.", "error");
+    button.disabled = true; button.textContent = "Capturing…";
+    navigator.geolocation.getCurrentPosition((position) => {
+      form.elements.latitude.value = String(position.coords.latitude);
+      form.elements.longitude.value = String(position.coords.longitude);
+      form.elements.locationAccuracy.value = String(position.coords.accuracy || "");
+      form.elements.locationCapturedAt.value = new Date(position.timestamp || Date.now()).toISOString();
+      if (status) status.textContent = `Location captured (accuracy approximately ${Math.round(position.coords.accuracy || 0)} m).`;
+      button.textContent = "Location captured";
+    }, (error) => {
+      button.disabled = false; button.textContent = "Capture current location";
+      if (status) status.textContent = "Location capture failed. Allow location access and try again.";
+      showToast(error?.message || "Current location could not be captured.", "error");
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  });
+  app.querySelector("#wpAccountDeletionForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = event.submitter;
+    const message = form.querySelector("#wpAccountDeletionMessage");
+    const file = form.elements.evidencePhoto?.files?.[0];
+    if (!file || !["image/jpeg", "image/png"].includes(file.type) || file.size > 2 * 1024 * 1024) return showToast("Choose a JPG or PNG evidence photo up to 2 MB.", "error");
+    if (!form.elements.locationCapturedAt.value) return showToast("Capture the current device location before submitting.", "error");
+    if (form.elements.exactCompanyName.value.trim() !== (workspaceProfile?.companyName || session.companyName)) return showToast("The company name confirmation does not match.", "error");
+    const original = button?.textContent || "Schedule deletion";
+    try {
+      if (button) { button.disabled = true; button.textContent = "Securing request…"; }
+      const result = await storageRequest("schedule_account_deletion", {
+        requestedBy: form.elements.requestedBy.value.trim(), internalNote: form.elements.internalNote.value.trim(),
+        exactCompanyName: form.elements.exactCompanyName.value.trim(), evidenceConsent: form.elements.evidenceConsent.checked,
+        evidenceMimeType: file.type, evidenceBase64: await readFileBase64(file),
+        latitude: Number(form.elements.latitude.value), longitude: Number(form.elements.longitude.value),
+        locationAccuracy: form.elements.locationAccuracy.value ? Number(form.elements.locationAccuracy.value) : null,
+        locationCapturedAt: form.elements.locationCapturedAt.value,
+      });
+      deletionDialog?.close();
+      showToast(`Deletion scheduled. It can be reversed until ${new Date(result.reversibleUntil).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}.`);
+      await renderDashboard();
+    } catch (error) {
+      if (message) message.textContent = error?.message || "Deletion could not be scheduled.";
+      if (button) { button.disabled = false; button.textContent = original; }
+      showToast(error?.message || "Deletion could not be scheduled.", "error");
     }
   });
   const verificationForm = app.querySelector("#wpVerificationForm");

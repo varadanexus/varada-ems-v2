@@ -579,7 +579,19 @@
 .wa-customer-danger > div > span { color:#f08d8d; font-size:9px; font-weight:850; letter-spacing:.13em; text-transform:uppercase; }
 .wa-customer-danger h3 { margin:5px 0 7px; color:#f6eeee; font-size:18px; }
 .wa-customer-danger p { margin:0; color:#a99797; font-size:11px; line-height:1.55; }
+.wa-customer-danger > div > .wa-admin-button { margin-top:14px; }
 .wa-customer-danger form { display:grid; gap:11px; }
+.wa-customer-delete-form[hidden] { display:none; }
+.wa-customer-delete-form-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:9px; border-bottom:1px solid rgba(239,87,87,.18); }
+.wa-customer-delete-form-head strong { color:#f1dddd; font-size:12px; }
+.wa-customer-delete-form-head button { border:0; background:transparent; color:#a99797; font:inherit; font-size:10px; cursor:pointer; }
+.wa-customer-delete-form-head button:hover { color:#fff; }
+.wa-customer-danger textarea { width:100%; resize:vertical; min-height:84px; padding:10px 11px; border:1px solid rgba(218,178,83,.2); border-radius:9px; background:#070907; color:#eeeae0; color-scheme:dark; font:inherit; line-height:1.45; }
+.wa-customer-danger label { display:grid; gap:6px; color:#aeb6b0; font-size:10px; font-weight:800; }
+.wa-customer-danger label small { color:#817a76; font-weight:500; line-height:1.45; }
+.wa-customer-danger input[type=file] { padding:9px; border:1px dashed rgba(239,87,87,.35); border-radius:9px; background:#070907; color:#cfc7c1; }
+.wa-customer-location { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px; border:1px solid rgba(255,255,255,.07); border-radius:10px; background:rgba(255,255,255,.02); }
+.wa-customer-location span { color:#aeb6b0; font-size:10px; }
 .wa-customer-delete-check { display:grid!important; grid-template-columns:auto minmax(0,1fr); gap:9px!important; align-items:start; color:#c7b2b2!important; font-size:10px!important; line-height:1.45; }
 .wa-customer-delete-check input { margin-top:2px; accent-color:#ef5757; }
 .wa-customer-danger .wa-admin-button { justify-self:start; }
