@@ -2117,19 +2117,25 @@ function confirmAddonChange(preview, enteredCouponCode = "") {
   const money = (paise) => escapeHtml(billingMoney(Number(paise || 0) / 100, quote.currency));
   const remainingDays = Number(quote.billableRemainingDays || 0).toFixed(2).replace(/\.00$/, "");
   const isNewSubscription = quote.isNewSubscription === true;
-  const eyebrow = isNewSubscription ? "Separate add-on subscription" : "Prorated add-on increase";
-  const introduction = isNewSubscription
-    ? "This purchase is separate from your master plan. Confirm the immediate charge before starting the add-on subscription."
-    : "Review the immediate prorated amount and the recurring total before authorizing payment.";
+  const addonIdentity = `${preview.addon?.code || ""} ${preview.addon?.name || ""} ${preview.addon?.unitName || ""}`.toLowerCase();
+  const packageLimit = addonIdentity.includes("seat")
+    ? Number(workspacePackageMaster?.package?.team_member_limit || 0)
+    : addonIdentity.includes("whatsapp") && addonIdentity.includes("number")
+      ? Number(workspacePackageMaster?.package?.whatsapp_number_limit || 0)
+      : 0;
+  const quantityLabel = addonIdentity.includes("seat")
+    ? "Team seats"
+    : addonIdentity.includes("whatsapp") && addonIdentity.includes("number")
+      ? "WhatsApp numbers"
+      : "Quantity";
+  const currentCapacity = packageLimit + Number(quote.currentQuantity || 0);
+  const targetCapacity = packageLimit + Number(quote.targetQuantity || 0);
   const serviceRow = isNewSubscription ? "" : `<div><dt>Remaining service</dt><dd>${escapeHtml(remainingDays)} days</dd></div>`;
-  const baseLabel = isNewSubscription ? "First billing cycle base" : "Prorated add-on base";
+  const baseLabel = isNewSubscription ? "Add-on price" : "Prorated price";
   const discountRow = Number(quote.discountPaise || 0) > 0 ? `<div class="is-credit"><dt>Coupon ${escapeHtml(quote.couponCode || "")}</dt><dd>−${money(quote.discountPaise)}</dd></div>` : "";
   const recurringBase = Number(quote.discountedRecurringBasePaise ?? quote.targetRecurringBasePaise);
-  const policyText = isNewSubscription
-    ? `${quote.masterTrialActive ? "Your master-plan trial continues unchanged. " : "Your master plan remains unchanged. "}This add-on is charged now, activates only after Razorpay confirms payment, renews on its own billing cycle, and can be cancelled separately.`
-    : `The increased capacity activates only after Razorpay confirms authorization. Only the existing add-on subscription is replaced; your master plan remains active and unchanged. The new add-on recurring total starts ${escapeHtml(formatProfileDate(quote.recurringStartsAt))}.`;
   const couponValue = String(quote.couponCode || enteredCouponCode || "").trim().toUpperCase();
-  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">${eyebrow}</span><h2>${escapeHtml(preview.addon?.name || "Add-on capacity")}</h2><p>${introduction}</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>Quantity</dt><dd>${Number(quote.currentQuantity || 0)} → ${Number(quote.targetQuantity || 0)}</dd></div>`}${serviceRow}<div><dt>${baseLabel}</dt><dd>${money(quote.proratedBasePaise)}</dd></div>${discountRow}<div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>Recurring base</dt><dd>${money(recurringBase)} + GST</dd></div></dl><section class="wp-addon-coupon"><label><span>Coupon code <small>optional</small></span><input name="couponCode" autocomplete="off" maxlength="40" value="${escapeHtml(couponValue)}" placeholder="Enter coupon code"></label><div class="wp-addon-coupon-actions"><button class="wp-secondary" type="submit" value="apply">${quote.couponCode ? "Recalculate" : "Apply coupon"}</button>${quote.couponCode ? `<button class="wp-secondary" type="submit" value="remove">Remove coupon</button>` : ""}</div><small>Coupon eligibility, dates, add-on applicability and redemption limits are verified by the billing server.</small></section><div class="wp-policy-note"><strong>Independent add-on subscription</strong><p>${policyText}${quote.couponFirstPaymentOnly ? " This coupon applies only to the first successful add-on payment; later renewals use the standard add-on price." : quote.couponCode ? " The displayed coupon discount continues on this add-on subscription while the coupon terms remain applicable." : ""}</p></div><footer><button class="wp-secondary" type="submit" value="cancel">${isNewSubscription ? "Not now" : "Keep current capacity"}</button><button class="wp-primary" type="submit" value="authorize">${isNewSubscription ? "Confirm & pay now" : "Authorize add-on"}</button></footer></form>`;
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on</span><h2>${escapeHtml(preview.addon?.name || "Add-on")}</h2><p>Review the price and confirm.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>${quantityLabel}</dt><dd>${currentCapacity} → ${targetCapacity}</dd></div>`}${serviceRow}<div><dt>${baseLabel}</dt><dd>${money(quote.proratedBasePaise)}</dd></div>${discountRow}<div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>Renewal price</dt><dd>${money(recurringBase)} + GST</dd></div></dl><section class="wp-addon-coupon"><label><span>Coupon code <small>optional</small></span><input name="couponCode" autocomplete="off" maxlength="40" value="${escapeHtml(couponValue)}" placeholder="Enter coupon code"></label><div class="wp-addon-coupon-actions"><button class="wp-secondary" type="submit" value="apply">${quote.couponCode ? "Recalculate" : "Apply coupon"}</button>${quote.couponCode ? `<button class="wp-secondary" type="submit" value="remove">Remove coupon</button>` : ""}</div></section><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="authorize">Confirm &amp; pay</button></footer></form>`;
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => resolve({
       action: dialog.returnValue || "cancel",
@@ -2746,7 +2752,7 @@ async function renderDashboard() {
       try {
         const request = { subscriptionId: workspaceBilling?.subscription?.id, addonCode: button.dataset.billingAddonChange, quantity: quantityInput ? Number(quantityInput.value) : 1 };
         request.couponCode = "";
-        button.disabled = true; button.textContent = "Calculating proration…";
+        button.disabled = true; button.textContent = "Adding…";
         let preview = await billingRequest("preview_addon_change", request);
         while (true) {
           const decision = await confirmAddonChange(preview, request.couponCode);
@@ -2755,7 +2761,7 @@ async function renderDashboard() {
           }
           if (decision.action === "apply" || decision.action === "remove") {
             request.couponCode = decision.action === "remove" ? "" : decision.couponCode;
-            button.textContent = request.couponCode ? "Applying coupon…" : "Recalculating total…";
+            button.textContent = request.couponCode ? "Applying…" : "Updating…";
             try {
               preview = await billingRequest("preview_addon_change", request);
               showToast(preview.quote?.couponCode ? `Coupon ${preview.quote.couponCode} applied securely.` : "Add-on total recalculated.");
@@ -2764,12 +2770,12 @@ async function renderDashboard() {
               preview = await billingRequest("preview_addon_change", request);
               showToast(error?.message || "This coupon could not be applied.", "error");
             }
-            button.textContent = "Reviewing add-on…";
+            button.textContent = "Adding…";
             continue;
           }
           if (decision.action === "authorize") break;
         }
-        button.textContent = "Preparing add-on checkout…";
+        button.textContent = "Opening payment…";
         const change = await billingRequest("change_addons", request);
         if (!change.razorpaySubscriptionId || !change.keyId) throw new Error("Razorpay did not return a secure add-on authorization session.");
         await loadRazorpayCheckout();
