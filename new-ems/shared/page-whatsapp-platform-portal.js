@@ -2503,8 +2503,15 @@ function billingView(view = "billing") {
   const overviewPlanPrice = pkg.billing_model === "contact_sales"
     ? "Custom quote"
     : `${billingMoney(overviewPlanBase, pkg.currency)} + GST`;
+  const overviewNextBillingAmount = Number(subscription?.next_billing_amount_paise || 0) > 0
+    ? billingMoney(Number(subscription.next_billing_amount_paise) / 100, pkg.currency)
+    : "Pending confirmation";
+  const overviewNextBillingDate = subscription?.current_end ? formatProfileDate(subscription.current_end) : "Date not scheduled";
+  const overviewNextBilling = subscription?.cancel_at_cycle_end
+    ? `<div><span>Next billing amount</span><strong>No further charge</strong><small>Subscription ends ${escapeHtml(overviewNextBillingDate)}</small></div>`
+    : `<div><span>${trialActive ? "First billing amount" : "Next billing amount"}</span><strong>${escapeHtml(overviewNextBillingAmount)}</strong><small>${escapeHtml(overviewNextBillingDate)} · Includes GST and gateway adjustment</small></div>`;
   const overviewPlanDetails = subscription
-    ? `<section class="wp-card wp-billing-overview-plan"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Current plan</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-plans")}">View plan</a></div><div class="wp-billing-overview-plan-grid"><div><span>Billing</span><strong>${escapeHtml(subscription.billing_interval === "year" ? "Annual" : "Monthly")}</strong></div><div><span>Base price</span><strong>${escapeHtml(overviewPlanPrice)}</strong></div><div><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></div><div><span>${trialActive ? "Trial" : "Next billing"}</span><strong>${escapeHtml(trialActive ? trialCountdown : subscription.current_end ? formatProfileDate(subscription.current_end) : "Not scheduled")}</strong></div></div></section>`
+    ? `<section class="wp-card wp-billing-overview-plan"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Current plan</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-plans")}">View plan</a></div><div class="wp-billing-overview-plan-grid"><div><span>Billing</span><strong>${escapeHtml(subscription.billing_interval === "year" ? "Annual" : "Monthly")}</strong></div><div><span>Base price</span><strong>${escapeHtml(overviewPlanPrice)}</strong></div><div><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></div>${overviewNextBilling}</div></section>`
     : `<section class="wp-card wp-billing-overview-plan"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Subscription</span><h2>No plan selected</h2><p>Choose a package to start with a fresh subscription.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("billing-plans")}">Choose a plan</a></div></section>`;
   const overviewAddonRows = overviewActiveAddons.map((item) => {
     const quantity = Math.max(1, Number(item.addon_quantity || item.quantity || 1));

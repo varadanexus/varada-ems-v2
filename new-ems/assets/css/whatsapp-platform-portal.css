@@ -2189,6 +2189,7 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-billing-overview-plan-grid > div { display:grid; align-content:center; min-height:82px; gap:6px; padding:15px; background:var(--wp-panel); }
 .wp-billing-overview-plan-grid span { color:var(--wp-muted); font-size:.68rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
 .wp-billing-overview-plan-grid strong { color:var(--wp-text); font-size:.92rem; }
+.wp-billing-overview-plan-grid small { color:var(--wp-muted); font-size:.7rem; line-height:1.45; }
 .wp-billing-overview-addon-list { display:grid; gap:9px; }
 .wp-billing-overview-addon-list article { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:14px 15px; border:1px solid var(--wp-border); border-radius:13px; background:color-mix(in srgb,var(--wp-panel) 86%,#082f22); }
 .wp-billing-overview-addon-list article > div { display:grid; gap:4px; min-width:0; }

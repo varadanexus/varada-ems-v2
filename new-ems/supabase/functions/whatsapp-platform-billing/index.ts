@@ -756,10 +756,17 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     || packageRows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
     || packageRows.find((row: any) => !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || null;
+  const recurringGross = subscription && Number(subscription.recurring_base_paise || 0) > 0
+    ? checkoutGrossPaise(Number(subscription.recurring_base_paise))
+    : null;
   const publicSubscription = subscription ? {
     ...Object.fromEntries(Object.entries(subscription).filter(([key]) => !["safe_metadata", "short_url"].includes(key))),
     trial_days: Number(subscription.safe_metadata?.trial_days || 0),
     trial_ends_at: subscription.safe_metadata?.trial_ends_at || subscription.charge_at || null,
+    next_billing_base_paise: recurringGross ? Number(subscription.recurring_base_paise) : null,
+    next_billing_gst_paise: recurringGross?.packageGstPaise ?? null,
+    next_billing_gateway_adjustment_paise: recurringGross?.gatewayAdjustmentPaise ?? null,
+    next_billing_amount_paise: recurringGross?.checkoutAmountPaise ?? null,
   } : null;
   const currentRenewalChanges = subscription
     ? (renewalChanges || []).filter((change: any) => change.subscription_id === subscription.id)
