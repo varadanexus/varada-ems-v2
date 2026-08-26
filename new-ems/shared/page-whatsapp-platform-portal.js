@@ -2074,10 +2074,17 @@ function confirmAddonSubscriptionCancellation(subscription) {
     document.body.append(dialog);
   }
   const addonName = subscription?.addon_name || subscription?.addon_code || "Add-on";
-  const periodEnd = subscription?.current_end ? formatProfileDate(subscription.current_end) : "the end of its current billed cycle";
-  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on subscription cancellation</span><h2>Cancel ${escapeHtml(addonName)} separately?</h2><p>This affects only this recurring add-on. Your master plan remains active and unchanged.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Add-on</span><strong>${escapeHtml(addonName)}</strong></div><div><span>Add-on access remains active until</span><strong>${escapeHtml(periodEnd)}</strong></div></section><ul class="wp-cancellation-effects"><li>${escapeHtml(addonName)} remains available through ${escapeHtml(periodEnd)}.</li><li>Only this add-on renewal is cancelled; the master package is not cancelled or replaced.</li><li>Other separately purchased add-ons continue on their own subscriptions.</li></ul><div class="wp-policy-note"><strong>Independent cancellation</strong><p>The related add-on capacity is removed after Razorpay closes this add-on’s billed cycle. Package access and its primary allowances remain intact.</p></div><footer><button class="wp-secondary" type="submit" value="keep">Keep add-on</button><button class="wp-confirm-cancel" type="submit" value="confirm">Cancel add-on at period end</button></footer></form>`;
+  const hasActiveCycle = Boolean(subscription?.current_end) && Number(subscription?.paid_count || 0) > 0 && String(subscription?.status) === "active";
+  const periodEnd = hasActiveCycle ? formatProfileDate(subscription.current_end) : "Immediately after confirmation";
+  const timingCopy = hasActiveCycle
+    ? `${escapeHtml(addonName)} remains available through ${escapeHtml(periodEnd)}.`
+    : `${escapeHtml(addonName)} has not entered a paid billing cycle, so its capacity will be removed immediately.`;
+  const policyCopy = hasActiveCycle
+    ? "The related add-on capacity is removed after Razorpay closes this add-on’s billed cycle."
+    : "Razorpay has no billed cycle to close. The authorization and related add-on capacity will be cancelled now.";
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on subscription cancellation</span><h2>Cancel ${escapeHtml(addonName)} separately?</h2><p>This affects only this recurring add-on. Your master plan remains active and unchanged.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Add-on</span><strong>${escapeHtml(addonName)}</strong></div><div><span>${hasActiveCycle ? "Add-on access remains active until" : "Cancellation timing"}</span><strong>${escapeHtml(periodEnd)}</strong></div></section><ul class="wp-cancellation-effects"><li>${timingCopy}</li><li>Only this add-on is cancelled; the master package is not cancelled or replaced.</li><li>Other separately purchased add-ons continue on their own subscriptions.</li></ul><div class="wp-policy-note"><strong>Independent cancellation</strong><p>${policyCopy} Package access and its primary allowances remain intact.</p></div><footer><button class="wp-secondary" type="submit" value="keep">Keep add-on</button><button class="wp-confirm-cancel" type="submit" value="confirm">${hasActiveCycle ? "Cancel add-on at period end" : "Cancel add-on now"}</button></footer></form>`;
   return new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm" ? { confirmed: true, cancelAtCycleEnd: hasActiveCycle } : { confirmed: false, cancelAtCycleEnd: hasActiveCycle }), { once: true });
     dialog.showModal();
   });
 }
@@ -2116,13 +2123,34 @@ function confirmAddonChange(preview) {
     : "Review the immediate prorated amount and the recurring total before authorizing payment.";
   const serviceRow = isNewSubscription ? "" : `<div><dt>Remaining service</dt><dd>${escapeHtml(remainingDays)} days</dd></div>`;
   const baseLabel = isNewSubscription ? "First billing cycle base" : "Prorated add-on base";
+  const discountRow = Number(quote.discountPaise || 0) > 0 ? `<div class="is-credit"><dt>Coupon ${escapeHtml(quote.couponCode || "")}</dt><dd>−${money(quote.discountPaise)}</dd></div>` : "";
+  const recurringBase = Number(quote.discountedRecurringBasePaise ?? quote.targetRecurringBasePaise);
   const policyText = isNewSubscription
     ? `${quote.masterTrialActive ? "Your master-plan trial continues unchanged. " : "Your master plan remains unchanged. "}This add-on is charged now, activates only after Razorpay confirms payment, renews on its own billing cycle, and can be cancelled separately.`
     : `The increased capacity activates only after Razorpay confirms authorization. Only the existing add-on subscription is replaced; your master plan remains active and unchanged. The new add-on recurring total starts ${escapeHtml(formatProfileDate(quote.recurringStartsAt))}.`;
-  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">${eyebrow}</span><h2>${escapeHtml(preview.addon?.name || "Add-on capacity")}</h2><p>${introduction}</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>Quantity</dt><dd>${Number(quote.currentQuantity || 0)} → ${Number(quote.targetQuantity || 0)}</dd></div>`}${serviceRow}<div><dt>${baseLabel}</dt><dd>${money(quote.proratedBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>Recurring base</dt><dd>${money(quote.targetRecurringBasePaise)} + GST</dd></div></dl><div class="wp-policy-note"><strong>Independent add-on subscription</strong><p>${policyText}</p></div><footer><button class="wp-secondary" type="submit" value="cancel">${isNewSubscription ? "Not now" : "Keep current capacity"}</button><button class="wp-primary" type="submit" value="authorize">${isNewSubscription ? "Confirm & pay now" : "Authorize add-on"}</button></footer></form>`;
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">${eyebrow}</span><h2>${escapeHtml(preview.addon?.name || "Add-on capacity")}</h2><p>${introduction}</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>Quantity</dt><dd>${Number(quote.currentQuantity || 0)} → ${Number(quote.targetQuantity || 0)}</dd></div>`}${serviceRow}<div><dt>${baseLabel}</dt><dd>${money(quote.proratedBasePaise)}</dd></div>${discountRow}<div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>Recurring base</dt><dd>${money(recurringBase)} + GST</dd></div></dl><div class="wp-policy-note"><strong>Independent add-on subscription</strong><p>${policyText}${quote.couponFirstPaymentOnly ? " This coupon applies only to the first successful add-on payment; later renewals use the standard add-on price." : quote.couponCode ? " The displayed coupon discount continues on this add-on subscription while the coupon terms remain applicable." : ""}</p></div><footer><button class="wp-secondary" type="submit" value="cancel">${isNewSubscription ? "Not now" : "Keep current capacity"}</button><button class="wp-primary" type="submit" value="authorize">${isNewSubscription ? "Confirm & pay now" : "Authorize add-on"}</button></footer></form>`;
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => resolve(dialog.returnValue === "authorize"), { once: true });
     dialog.showModal();
+  });
+}
+
+function requestAddonCoupon(addonName) {
+  let dialog = document.querySelector("#wpBillingAddonCouponDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpBillingAddonCouponDialog";
+    dialog.className = "wp-contact-dialog wp-billing-upgrade-dialog";
+    document.body.append(dialog);
+  }
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on checkout</span><h2>Have a coupon?</h2><p>Enter an optional coupon for ${escapeHtml(addonName || "this add-on")}. Eligibility and the exact discount are verified securely before payment.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label>Coupon code (optional)<input name="couponCode" autocomplete="off" maxlength="40" placeholder="Enter coupon code"></label><div class="wp-policy-note"><strong>Verified pricing</strong><p>Only active coupons permitted for this add-on, plan and billing interval will be accepted.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="continue">Review price</button></footer></form>`;
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => {
+      const couponCode = String(dialog.querySelector('[name="couponCode"]')?.value || "").trim().toUpperCase();
+      resolve(dialog.returnValue === "continue" ? { proceed: true, couponCode } : { proceed: false, couponCode: "" });
+    }, { once: true });
+    dialog.showModal();
+    dialog.querySelector('[name="couponCode"]')?.focus();
   });
 }
 
@@ -2732,6 +2760,10 @@ async function renderDashboard() {
       const original = button.textContent;
       try {
         const request = { subscriptionId: workspaceBilling?.subscription?.id, addonCode: button.dataset.billingAddonChange, quantity: quantityInput ? Number(quantityInput.value) : 1 };
+        const addonName = workspacePackageMaster?.availableAddons?.find((item) => item.code === request.addonCode)?.name || "this add-on";
+        const couponChoice = await requestAddonCoupon(addonName);
+        if (!couponChoice.proceed) return;
+        request.couponCode = couponChoice.couponCode;
         button.disabled = true; button.textContent = "Calculating proration…";
         const preview = await billingRequest("preview_addon_change", request);
         const approved = await confirmAddonChange(preview);
@@ -2860,14 +2892,16 @@ async function renderDashboard() {
     app.querySelectorAll("[data-billing-cancel-addon]").forEach((button) => button.addEventListener("click", async () => {
       const addonSubscription = (workspaceBilling?.addonSubscriptions || []).find((item) => item.id === button.dataset.billingCancelAddon);
       if (!addonSubscription) { showToast("Add-on subscription could not be found.", "error"); return; }
-      const confirmed = await confirmAddonSubscriptionCancellation(addonSubscription);
-      if (!confirmed) return;
+      const cancellation = await confirmAddonSubscriptionCancellation(addonSubscription);
+      if (!cancellation.confirmed) return;
       const original = button.textContent;
       try {
         button.disabled = true;
-        button.textContent = "Scheduling…";
-        await billingRequest("cancel_subscription", { subscriptionId: addonSubscription.id, cancelAtCycleEnd: true });
-        showToast(`${addonSubscription.addon_name || "Add-on"} cancellation scheduled. Your master plan remains active.`);
+        button.textContent = cancellation.cancelAtCycleEnd ? "Scheduling…" : "Cancelling…";
+        const result = await billingRequest("cancel_subscription", { subscriptionId: addonSubscription.id, cancelAtCycleEnd: cancellation.cancelAtCycleEnd });
+        showToast(result.cancellationMode === "immediate"
+          ? `${addonSubscription.addon_name || "Add-on"} cancelled. Its add-on capacity has been removed; your master plan remains active.`
+          : `${addonSubscription.addon_name || "Add-on"} cancellation scheduled for its period end. Your master plan remains active.`);
         await renderDashboard();
       } catch (error) {
         showToast(error?.message || "Add-on subscription could not be cancelled.", "error");

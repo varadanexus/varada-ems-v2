@@ -1527,15 +1527,47 @@ async function addonChangeContext(admin: any, customer: any, body: any, credenti
   const billableRemainingDays = isNewSubscription ? basisDays : Math.min(basisDays, Math.max(0, (cycleEndMs - Date.now()) / DAY_MS));
   const proratedBasePaise = isNewSubscription ? targetAddonBasePaise : Math.round((incrementalRecurringBasePaise / basisDays) * billableRemainingDays);
   if (proratedBasePaise < 100) throw new Error(isNewSubscription ? "The add-on amount is too small to process." : "The prorated add-on amount is too small to process. Add capacity after the next renewal.");
-  const gross = checkoutGrossPaise(proratedBasePaise);
+  const couponCode = String(body.couponCode || "").trim().toUpperCase();
+  let coupon: any = null;
+  let redemption: any = null;
+  if (couponCode) {
+    const { data, error } = await admin.rpc("whatsapp_platform_reserve_billing_coupon", {
+      p_tenant_id: customer.tenant_id,
+      p_coupon_code: couponCode,
+      p_package_code: syncedSubscription.package_code,
+      p_billing_interval: syncedSubscription.billing_interval,
+      p_package_price_version_id: syncedSubscription.package_price_version_id,
+      p_subtotal_paise: incrementalRecurringBasePaise,
+      p_quote_snapshot: { source: "addon_checkout", addon_code: addonCode, addon_quantity: targetQuantity },
+    });
+    if (error) throw new Error(error.message || "Coupon could not be applied to this add-on.");
+    redemption = Array.isArray(data) ? data[0] : data;
+    if (!redemption?.id) throw new Error("Coupon reservation could not be recorded.");
+    const { data: couponRecord, error: couponError } = await admin.from("whatsapp_platform_billing_coupons")
+      .select("id,first_payment_only,provider_offer_id").eq("id", redemption.coupon_id).single();
+    if (couponError || !couponRecord) throw couponError || new Error("Coupon configuration could not be loaded.");
+    if (couponRecord.first_payment_only && !couponRecord.provider_offer_id) throw new Error("This first-payment coupon is missing its Razorpay Subscription Offer. Contact billing support.");
+    coupon = couponRecord;
+  }
+  const recurringDiscountPaise = Number(redemption?.discount_paise || 0);
+  const discountPaise = isNewSubscription
+    ? recurringDiscountPaise
+    : Math.min(proratedBasePaise - 1, Math.round((recurringDiscountPaise / basisDays) * billableRemainingDays));
+  const discountedProratedBasePaise = proratedBasePaise - discountPaise;
+  const discountedRecurringBasePaise = targetRecurringBasePaise - recurringDiscountPaise;
+  if (discountedProratedBasePaise < 1 || discountedRecurringBasePaise < 1) throw new Error("Coupon discount exceeds the add-on charge.");
+  const gross = checkoutGrossPaise(discountedProratedBasePaise);
   const masterTrialEndMs = new Date(syncedSubscription.safe_metadata?.trial_ends_at || syncedSubscription.charge_at || 0).getTime();
   const masterTrialActive = String(syncedSubscription.status) === "authenticated" && Number.isFinite(masterTrialEndMs) && masterTrialEndMs > Date.now();
   return {
-    subscription: syncedSubscription, currentAddonSubscription, addon, beforeSelections, targetSelections, cycleEndMs,
+    subscription: syncedSubscription, currentAddonSubscription, addon, beforeSelections, targetSelections, cycleEndMs, coupon, redemption,
     quote: {
       currency: String(addon.currency || "INR").toUpperCase(), billableRemainingDays: Number(billableRemainingDays.toFixed(4)), isNewSubscription, masterTrialActive,
       currentQuantity, targetQuantity, currentRecurringBasePaise, targetRecurringBasePaise, incrementalRecurringBasePaise,
-      proratedBasePaise, gstPaise: gross.packageGstPaise, gatewayAdjustmentPaise: gross.gatewayAdjustmentPaise,
+      proratedBasePaise, discountPaise, discountedProratedBasePaise, recurringDiscountPaise,
+      discountedRecurringBasePaise: coupon?.first_payment_only ? targetRecurringBasePaise : discountedRecurringBasePaise,
+      couponCode: redemption?.coupon_code || null, couponFirstPaymentOnly: Boolean(coupon?.first_payment_only),
+      gstPaise: gross.packageGstPaise, gatewayAdjustmentPaise: gross.gatewayAdjustmentPaise,
       checkoutAmountPaise: gross.checkoutAmountPaise, recurringStartsAt: new Date(cycleEndMs).toISOString(),
     },
   };
@@ -1545,20 +1577,50 @@ async function previewAddonChange(admin: any, customer: any, body: any, credenti
   return { addon: { code: context.addon.code, name: context.addon.name, unitName: context.addon.unit_name, quantityEnabled: context.addon.quantity_enabled !== false }, quote: context.quote };
 }
 async function changeAddons(admin: any, customer: any, body: any, credentials: any) {
-  const context = await addonChangeContext(admin, customer, body, credentials);
+  if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
+  const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
+  const addonCode = cleanCode(body.addonCode, "add-on");
+  const targetQuantity = Number(body.quantity);
+  if (!Number.isSafeInteger(targetQuantity) || targetQuantity < 1 || targetQuantity > 10000) throw new Error("Select a valid add-on quantity.");
   const { data: existingIntent, error: intentError } = await admin.from("whatsapp_platform_billing_addon_change_intents")
-    .select("*").eq("tenant_id", customer.tenant_id).eq("addon_code", context.addon.code).in("status", ["checkout_pending", "processing"])
+    .select("*").eq("tenant_id", customer.tenant_id).eq("from_subscription_id", subscriptionId).eq("addon_code", addonCode).in("status", ["checkout_pending", "processing"])
     .order("created_at", { ascending: false }).limit(1).maybeSingle();
   if (intentError) throw intentError;
   if (existingIntent) {
-    const selectionSignature = (items: any[]) => (items || []).map((item: any) => `${item.code}:${Number(item.quantity)}:${item.addonPriceVersionId || ""}`).sort().join("|");
-    if (selectionSignature(existingIntent.target_selections) !== selectionSignature(context.targetSelections)) throw new Error("Complete the existing add-on authorization before starting another change.");
-    const { data: replacement, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("id,provider_subscription_id,short_url,status").eq("id", existingIntent.replacement_subscription_id).single();
+    const storedTarget = Array.isArray(existingIntent.target_selections) ? existingIntent.target_selections[0] : null;
+    if (Number(storedTarget?.quantity || 0) !== targetQuantity) throw new Error("Complete the existing add-on authorization before starting another change.");
+    if (String(existingIntent.coupon_code || "") !== String(body.couponCode || "").trim().toUpperCase()) throw new Error("Complete or dismiss the existing add-on authorization before changing its coupon.");
+    const [{ data: replacement, error }, { data: addon }] = await Promise.all([
+      admin.from("whatsapp_platform_billing_subscriptions").select("id,provider_subscription_id,short_url,status,safe_metadata").eq("id", existingIntent.replacement_subscription_id).single(),
+      admin.from("whatsapp_platform_addon_master").select("code,name,unit_name,quantity_enabled").eq("code", addonCode).maybeSingle(),
+    ]);
     if (error || !replacement) throw error || new Error("Pending add-on replacement subscription was not found.");
-    return { keyId: credentials.keyId, subscriptionId: replacement.id, razorpaySubscriptionId: replacement.provider_subscription_id, shortUrl: replacement.short_url, addon: { code: context.addon.code, name: context.addon.name }, quote: context.quote, reused: true };
+    const storedQuote = replacement.safe_metadata?.proration || {
+      currency: existingIntent.currency,
+      billableRemainingDays: Number(existingIntent.billable_remaining_days || 0),
+      currentRecurringBasePaise: Number(existingIntent.current_recurring_base_paise || 0),
+      targetRecurringBasePaise: Number(existingIntent.target_recurring_base_paise || 0),
+      incrementalRecurringBasePaise: Number(existingIntent.incremental_recurring_base_paise || 0),
+      proratedBasePaise: Number(existingIntent.prorated_base_paise || 0) + Number(existingIntent.discount_paise || 0),
+      discountPaise: Number(existingIntent.discount_paise || 0),
+      discountedProratedBasePaise: Number(existingIntent.prorated_base_paise || 0),
+      recurringDiscountPaise: Number(existingIntent.recurring_discount_paise || 0),
+      discountedRecurringBasePaise: Number(existingIntent.target_recurring_base_paise || 0) - Number(existingIntent.recurring_discount_paise || 0),
+      couponCode: existingIntent.coupon_code || null,
+      gstPaise: Number(existingIntent.gst_paise || 0),
+      gatewayAdjustmentPaise: Number(existingIntent.gateway_adjustment_paise || 0),
+      checkoutAmountPaise: Number(existingIntent.checkout_amount_paise || 0),
+      recurringStartsAt: existingIntent.cycle_end,
+      currentQuantity: Number(existingIntent.before_selections?.[0]?.quantity || 0),
+      targetQuantity,
+      isNewSubscription: !Number(existingIntent.before_selections?.[0]?.quantity || 0),
+    };
+    return { keyId: credentials.keyId, subscriptionId: replacement.id, razorpaySubscriptionId: replacement.provider_subscription_id, shortUrl: replacement.short_url, addon: { code: addonCode, name: addon?.name || storedTarget?.name || addonCode, unitName: addon?.unit_name || storedTarget?.unitName || "unit", quantityEnabled: addon?.quantity_enabled !== false }, quote: storedQuote, reused: true };
   }
 
-  const recurringGross = checkoutGrossPaise(context.quote.targetRecurringBasePaise);
+  const context = await addonChangeContext(admin, customer, body, credentials);
+
+  const recurringGross = checkoutGrossPaise(context.quote.discountedRecurringBasePaise);
   const plan = await razorpayRequest("/plans", {
     method: "POST",
     body: JSON.stringify({
@@ -1574,6 +1636,7 @@ async function changeAddons(admin: any, customer: any, body: any, credentials: a
     plan_id: planId, total_count: totalCount, quantity: 1, customer_notify: true,
     notes: { tenant_id: customer.tenant_id, package_code: context.subscription.package_code, billing_interval: context.subscription.billing_interval, addon_code: context.addon.code, subscription_kind: "addon", addon_change_intent_id: intentId, parent_subscription_id: context.subscription.id, replaces_addon_subscription_id: context.currentAddonSubscription?.id || "" },
   };
+  if (context.coupon?.first_payment_only) subscriptionRequest.offer_id = providerId(context.coupon.provider_offer_id, "offer");
   if (!context.quote.isNewSubscription) {
     subscriptionRequest.start_at = Math.floor(context.cycleEndMs / 1000);
     subscriptionRequest.addons = [{ item: { name: `Prorated ${context.addon.name}`.slice(0, 80), amount: context.quote.checkoutAmountPaise, currency: context.quote.currency } }];
@@ -1593,7 +1656,7 @@ async function changeAddons(admin: any, customer: any, body: any, credentials: a
       short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
       package_price_version_id: context.subscription.package_price_version_id, recurring_base_paise: context.quote.targetRecurringBasePaise,
       gst_rate_bps: Number(context.subscription.gst_rate_bps || 1800),
-      safe_metadata: { subscription_kind: "addon", addon_code: context.addon.code, addon_change_intent_id: intentId, parent_subscription_id: context.subscription.id, replaces_addon_subscription_id: context.currentAddonSubscription?.id || null, target_addon_selections: context.targetSelections, recurring_starts_at: context.quote.recurringStartsAt, proration: context.quote, mode: billingMode(credentials) },
+      safe_metadata: { subscription_kind: "addon", addon_code: context.addon.code, addon_change_intent_id: intentId, parent_subscription_id: context.subscription.id, replaces_addon_subscription_id: context.currentAddonSubscription?.id || null, target_addon_selections: context.targetSelections, recurring_starts_at: context.quote.recurringStartsAt, coupon_code: context.quote.couponCode, coupon_redemption_id: context.redemption?.id || null, coupon_first_payment_only: context.quote.couponFirstPaymentOnly, provider_offer_id: context.coupon?.provider_offer_id || null, proration: context.quote, mode: billingMode(credentials) },
     }).select("*").single();
     if (error || !data) throw error || new Error("Add-on replacement subscription could not be recorded.");
     replacement = data;
@@ -1603,7 +1666,10 @@ async function changeAddons(admin: any, customer: any, body: any, credentials: a
       cycle_end: context.quote.recurringStartsAt, billable_remaining_days: context.quote.billableRemainingDays,
       before_selections: context.beforeSelections, target_selections: context.targetSelections,
       current_recurring_base_paise: context.quote.currentRecurringBasePaise, target_recurring_base_paise: context.quote.targetRecurringBasePaise,
-      incremental_recurring_base_paise: context.quote.incrementalRecurringBasePaise, prorated_base_paise: context.quote.proratedBasePaise,
+      incremental_recurring_base_paise: context.quote.incrementalRecurringBasePaise, prorated_base_paise: context.quote.discountedProratedBasePaise,
+      coupon_id: context.redemption?.coupon_id || null, coupon_redemption_id: context.redemption?.id || null,
+      coupon_code: context.quote.couponCode, discount_paise: context.quote.discountPaise,
+      recurring_discount_paise: context.quote.recurringDiscountPaise,
       gst_paise: context.quote.gstPaise, gateway_adjustment_paise: context.quote.gatewayAdjustmentPaise,
       checkout_amount_paise: context.quote.checkoutAmountPaise, created_by_user_id: customer.user_id,
     });
@@ -1611,6 +1677,7 @@ async function changeAddons(admin: any, customer: any, body: any, credentials: a
   } catch (error) {
     await razorpayRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }) }, credentials).catch(() => null);
     if (replacement?.id) await admin.from("whatsapp_platform_billing_subscriptions").delete().eq("id", replacement.id);
+    if (context.redemption?.id) await admin.from("whatsapp_platform_billing_coupon_redemptions").update({ status: "released", released_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", context.redemption.id).eq("status", "reserved");
     throw error;
   }
   return { keyId: credentials.keyId, subscriptionId: replacement.id, razorpaySubscriptionId: providerSubscriptionId, shortUrl: created.short_url, addon: { code: context.addon.code, name: context.addon.name }, customer: { name: customer.display_name, email: customer.email, companyName: customer.company_name }, quote: context.quote, reused: false };
@@ -1669,6 +1736,10 @@ async function finalizeAddonChange(admin: any, replacementSubscription: any, cre
     if (replacementError) throw replacementError;
     const { error: completeError } = await admin.from("whatsapp_platform_billing_addon_change_intents").update({ status: "completed", provider_payment_id: effectivePaymentId, processing_error: null, completed_at: appliedAt, updated_at: appliedAt }).eq("id", claimed.id).eq("status", "processing");
     if (completeError) throw completeError;
+    if (claimed.coupon_redemption_id) {
+      const { error: couponError } = await admin.from("whatsapp_platform_billing_coupon_redemptions").update({ status: "applied", applied_at: appliedAt, provider_payment_id: effectivePaymentId, updated_at: appliedAt }).eq("id", claimed.coupon_redemption_id).eq("status", "reserved");
+      if (couponError) throw couponError;
+    }
     return { completed: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Add-on change finalization failed";
@@ -1683,19 +1754,45 @@ async function cancelSubscription(admin: any, customer: any, body: any, credenti
   if (error || !subscription) throw new Error("Billing subscription not found.");
   assertSubscriptionMode(subscription, credentials);
   if (TERMINAL_SUBSCRIPTION_STATUSES.has(subscription.status)) return { subscription };
+  const subscriptionKind = String(subscription.subscription_kind || subscription.safe_metadata?.subscription_kind || "package");
+  const isAddonSubscription = subscriptionKind === "addon";
   const trialEndsAt = new Date(subscription.safe_metadata?.trial_ends_at || subscription.charge_at || 0).getTime();
   const trialDays = Number(subscription.safe_metadata?.trial_days || 0);
-  if (subscription.status === "authenticated" && Number.isSafeInteger(trialDays) && trialDays > 0 && trialEndsAt > Date.now()) {
+  if (!isAddonSubscription && subscription.status === "authenticated" && Number.isSafeInteger(trialDays) && trialDays > 0 && trialEndsAt > Date.now()) {
     throw new Error(`This authorized trial cannot be cancelled before ${new Date(trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}. Cancellation becomes available after the trial ends.`);
   }
-  const cancelAtCycleEnd = body.cancelAtCycleEnd !== false;
-  const providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}/cancel`, {
-    method: "POST", body: JSON.stringify({ cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 }),
-  }, credentials);
+  let cancelAtCycleEnd = body.cancelAtCycleEnd !== false;
+  let providerSubscription: any;
+  try {
+    providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}/cancel`, {
+      method: "POST", body: JSON.stringify({ cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0 }),
+    }, credentials);
+  } catch (providerError) {
+    const message = providerError instanceof Error ? providerError.message : "";
+    if (!isAddonSubscription || !cancelAtCycleEnd || !/no billing cycle|billing cycle is going on/i.test(message)) throw providerError;
+    cancelAtCycleEnd = false;
+    providerSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}/cancel`, {
+      method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }),
+    }, credentials);
+  }
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
   const { error: updateError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: cancelAtCycleEnd, updated_at: new Date().toISOString() }).eq("id", subscription.id);
   if (updateError) throw updateError;
-  return { subscription: { ...synced, cancel_at_cycle_end: cancelAtCycleEnd } };
+  if (isAddonSubscription && !cancelAtCycleEnd) {
+    const endedAt = new Date().toISOString();
+    const { data: assignment, error: assignmentReadError } = await admin.from("whatsapp_platform_tenant_addons").select("addon_code")
+      .eq("tenant_id", customer.tenant_id).eq("source_subscription_id", subscription.id).maybeSingle();
+    if (assignmentReadError) throw assignmentReadError;
+    const { error: assignmentError } = await admin.from("whatsapp_platform_tenant_addons")
+      .update({ status: "cancelled", quantity: 0, billing_ends_at: endedAt, updated_at: endedAt })
+      .eq("tenant_id", customer.tenant_id).eq("source_subscription_id", subscription.id);
+    if (assignmentError) throw assignmentError;
+    if (assignment?.addon_code === "extra_agent_seat") {
+      const { error: seatError } = await admin.from("whatsapp_platform_tenants").update({ additional_team_seats: 0, updated_at: endedAt }).eq("id", customer.tenant_id);
+      if (seatError) throw seatError;
+    }
+  }
+  return { subscription: { ...synced, cancel_at_cycle_end: cancelAtCycleEnd }, cancellationMode: cancelAtCycleEnd ? "cycle_end" : "immediate" };
 }
 async function processWebhook(admin: any, eventRecordId: string, payload: any, credentials: any) {
   const { data: claimed, error: claimError } = await admin.rpc("whatsapp_platform_claim_billing_webhook_event", { p_event_id: eventRecordId });
