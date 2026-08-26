@@ -2722,6 +2722,13 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
     }
   }
+  const checkoutSubscriptionStatus = String(workspaceBilling?.subscription?.status || "").toLowerCase();
+  if (view === "checkout" && ["authenticated", "active"].includes(checkoutSubscriptionStatus)) {
+    const returnUrl = new URL(workspacePath("billing"), location.origin);
+    returnUrl.searchParams.set("checkout", "success");
+    window.history.replaceState(null, "", returnUrl.pathname + returnUrl.search);
+    return renderDashboard({ refresh: false, preserveScroll: false, navigationSequence });
+  }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const selectedConnection = resolveSelectedConnection(connections);
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
@@ -3227,7 +3234,47 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
         button.disabled = true; button.textContent = "Preparing secure authorization…";
         const checkout = await billingRequest("create_subscription", { quoteId: button.dataset.checkoutAuthorize });
         await loadRazorpayCheckout();
-        let checkoutCompleted = false;
+        let checkoutFinalized = false;
+        let callbackInFlight = false;
+        let statusPollAttempts = 0;
+        const successfulStatuses = new Set(["authenticated", "active"]);
+        const terminalStatuses = new Set(["cancelled", "completed", "expired"]);
+        const finishSuccessfulCheckout = async () => {
+          if (checkoutFinalized) return;
+          checkoutFinalized = true;
+          showToast("Subscription verified and billing activated.");
+          const returnUrl = new URL(workspacePath("billing"), location.origin);
+          returnUrl.searchParams.set("checkout", "success");
+          await navigateWorkspace(returnUrl);
+        };
+        const pollSubscriptionStatus = async () => {
+          if (checkoutFinalized) return;
+          if (callbackInFlight) {
+            window.setTimeout(pollSubscriptionStatus, 2500);
+            return;
+          }
+          statusPollAttempts += 1;
+          try {
+            const synced = await billingRequest("sync_subscription", { subscriptionId: checkout.subscriptionId });
+            const status = String(synced?.subscription?.status || "").toLowerCase();
+            if (successfulStatuses.has(status)) {
+              await finishSuccessfulCheckout();
+              return;
+            }
+            if (terminalStatuses.has(status)) {
+              button.disabled = false; button.textContent = original;
+              showToast("The payment authorization did not complete. Please review the subscription status.", "error");
+              return;
+            }
+          } catch (error) {
+            if (statusPollAttempts >= 48) {
+              button.disabled = false; button.textContent = "Check payment status";
+              showToast(error?.message || "Payment was submitted, but confirmation is taking longer than expected. Check billing status before retrying.", "error");
+              return;
+            }
+          }
+          if (statusPollAttempts < 48) window.setTimeout(pollSubscriptionStatus, 2500);
+        };
         const instance = new window.Razorpay({
           key: checkout.keyId, subscription_id: checkout.razorpaySubscriptionId, name: "Varada Nexus",
           image: "https://www.varadanexus.com/images/logo.png",
@@ -3236,32 +3283,44 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
           notes: { workspace: checkout.customer?.companyName || session.companyName || "", checkout_quote_id: checkout.quote?.id || "" },
           theme: { color: "#0b6b45" },
           handler: async (result) => {
-            checkoutCompleted = true;
+            callbackInFlight = true;
             try {
               showToast("Payment received. Verifying securely…");
               await billingRequest("verify_checkout", { subscriptionId: checkout.subscriptionId, razorpayPaymentId: result.razorpay_payment_id, razorpaySubscriptionId: result.razorpay_subscription_id, razorpaySignature: result.razorpay_signature });
-              showToast("Subscription verified and billing activated.");
-              const returnUrl = new URL(workspacePath("billing"), location.origin);
-              returnUrl.searchParams.set("checkout", "success");
-              await navigateWorkspace(returnUrl);
-            } catch (error) { showToast(error?.message || "Payment verification failed.", "error"); }
+              await finishSuccessfulCheckout();
+            } catch (error) {
+              showToast(error?.message || "Payment verification is still processing. Checking its status…", "error");
+            } finally {
+              callbackInFlight = false;
+              if (!checkoutFinalized) window.setTimeout(pollSubscriptionStatus, 1000);
+            }
           },
           modal: {
             confirm_close: true,
             escape: true,
             handleback: true,
-            ondismiss: () => {
+            ondismiss: async () => {
               button.disabled = false; button.textContent = original;
-              if (!checkoutCompleted && checkout.subscriptionId) {
-                void billingRequest("abandon_checkout", { subscriptionId: checkout.subscriptionId })
-                  .then(() => showToast("Unpaid checkout closed. Reserved plan and add-ons were released."))
-                  .catch((error) => showToast(error?.message || "The unpaid checkout could not be released automatically.", "error"));
+              if (!checkoutFinalized && checkout.subscriptionId) {
+                try {
+                  const synced = await billingRequest("sync_subscription", { subscriptionId: checkout.subscriptionId });
+                  const status = String(synced?.subscription?.status || "").toLowerCase();
+                  if (successfulStatuses.has(status)) {
+                    await finishSuccessfulCheckout();
+                    return;
+                  }
+                  const abandoned = await billingRequest("abandon_checkout", { subscriptionId: checkout.subscriptionId });
+                  if (abandoned?.abandoned) showToast("Unpaid checkout closed. Reserved plan and add-ons were released.");
+                } catch (error) {
+                  showToast(error?.message || "Payment confirmation is still processing. Use Check payment status before retrying.", "error");
+                }
               }
             },
           },
         });
         instance.on("payment.failed", (result) => showToast(result?.error?.description || "The payment could not be completed.", "error"));
         instance.open();
+        window.setTimeout(pollSubscriptionStatus, 2500);
       } catch (error) {
         showToast(error?.message || "Secure authorization could not be opened.", "error");
         button.disabled = false; button.textContent = original;
