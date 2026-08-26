@@ -87,6 +87,7 @@ let razorpayCheckoutPromise = null;
 let profileMenuClickAwayHandler = null;
 let workspaceNavigationBound = false;
 let workspaceNavigationSequence = 0;
+let businessNumberRefreshTimer = null;
 const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
 
 function countryDialEntries() {
@@ -661,6 +662,27 @@ async function onboardingRequest(action, payload = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || "Meta onboarding request failed.");
   return data;
+}
+
+async function refreshBusinessNumberStatuses({ silent = false } = {}) {
+  const candidates = workspaceConnections.filter((connection) => connection.status !== "disconnected" && connection.phone_number_id);
+  if (!candidates.length) return;
+  const results = await Promise.allSettled(candidates.map((connection) => onboardingRequest("refresh_phone_status", { connectionId: connection.id })));
+  let refreshed = 0;
+  let firstError = "";
+  results.forEach((result) => {
+    if (result.status === "fulfilled" && result.value?.connection) {
+      const updated = result.value.connection;
+      const index = workspaceConnections.findIndex((connection) => connection.id === updated.id);
+      if (index >= 0) workspaceConnections[index] = { ...workspaceConnections[index], ...updated };
+      if (result.value.numberCapacity && metaOnboardingStatus) metaOnboardingStatus.numberCapacity = result.value.numberCapacity;
+      refreshed += 1;
+    } else if (result.status === "rejected" && !firstError) {
+      firstError = result.reason?.message || "A number status could not be refreshed.";
+    }
+  });
+  if (!silent) showToast(refreshed ? `${refreshed} business number${refreshed === 1 ? "" : "s"} refreshed.` : firstError, refreshed ? "success" : "error");
+  await renderDashboard({ refresh: false, preserveScroll: true });
 }
 
 function storageEndpoint() {
@@ -1553,6 +1575,30 @@ function onboardingView(setupReady, connections) {
   </section>`;
 }
 
+function accountConnectionCard(row, canManageNumbers) {
+  const label = row.display_phone_number || row.verified_name || "Number setup pending";
+  const metadata = row.onboarding_metadata || {};
+  const isTest = metadata.test_number === true;
+  const isPrimary = metadata.billing_primary === true && !isTest;
+  const isBillingBlocked = metadata.billing_restricted === true;
+  const rawPhoneStatus = String(metadata.phone_status || row.status || "pending").trim().toUpperCase();
+  const needsRegistration = !isTest && Boolean(row.phone_number_id) && !["CONNECTED", "ACTIVE", "READY"].includes(rawPhoneStatus);
+  const metaStatus = isBillingBlocked ? "Add-on payment required" : needsRegistration ? "Registration required" : rawPhoneStatus.replaceAll("_", " ").toLowerCase();
+  const quality = String(metadata.quality_rating || "Not available").replaceAll("_", " ").toLowerCase();
+  const verification = String(metadata.code_verification_status || (needsRegistration ? "Pending" : "Verified")).replaceAll("_", " ").toLowerCase();
+  const lastSync = metadata.last_meta_sync_at ? formatProfileDate(metadata.last_meta_sync_at) : "Awaiting first live sync";
+  return `<article class="wp-account-entry ${isBillingBlocked ? "billing-blocked" : ""}" data-business-number-card="${escapeHtml(row.id)}">
+    <div class="wp-account-row">
+      <span class="wp-account-icon">WA</span>
+      <div class="wp-account-summary"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}${isPrimary ? ` <span class="wp-primary-number-badge">Primary</span>` : ""}${isTest ? ` <span class="wp-test-number-badge">Developer test</span>` : ""}${isBillingBlocked ? ` <span class="wp-billing-blocked-badge">Blocked</span>` : ""}</small></div>
+      <div class="wp-account-actions"><span class="wp-live-number-status"><i></i>${escapeHtml(metaStatus)}</span><button class="wp-account-details-toggle" type="button" data-business-number-details="${escapeHtml(row.id)}" aria-expanded="false">Details</button>${isBillingBlocked ? `<a class="wp-account-unlock" href="${workspacePath("billing-addons")}">Restore access</a>` : ""}${needsRegistration && canManageNumbers ? `<button class="wp-account-register" type="button" data-register-business-number="${escapeHtml(row.id)}">Complete registration</button>` : ""}${canManageNumbers && !isTest && row.whatsapp_business_account_id ? `<button class="wp-meta-billing" type="button" data-meta-billing-waba="${escapeHtml(row.whatsapp_business_account_id)}" data-meta-billing-business="${escapeHtml(metadata.meta_business_id || "")}">Meta payment method</button>` : ""}${canManageNumbers ? `<button class="wp-account-remove" type="button" data-remove-business-number="${escapeHtml(row.id)}" data-business-number-label="${escapeHtml(label)}">Remove</button>` : ""}</div>
+    </div>
+    <div class="wp-account-details" data-business-number-detail-panel="${escapeHtml(row.id)}" hidden>
+      <div><span>Registration</span><strong>${escapeHtml(verification)}</strong></div><div><span>Quality</span><strong>${escapeHtml(quality)}</strong></div><div><span>Phone number ID</span><strong>${escapeHtml(row.phone_number_id || "Not assigned")}</strong></div><div><span>Last checked</span><strong>${escapeHtml(lastSync)}</strong></div>
+    </div>
+  </article>`;
+}
+
 function accountsView(connections, setupReady) {
   const canManageNumbers = ["owner", "admin"].includes(session?.roleCode);
   const productionConnections = connections.filter((row) => row.status !== "disconnected" && row.onboarding_metadata?.test_number !== true);
@@ -1569,7 +1615,8 @@ function accountsView(connections, setupReady) {
   const testDialog = canManageNumbers ? `<dialog class="wp-contact-dialog wp-test-number-dialog" id="wpTestNumberDialog"><form id="wpTestNumberForm" autocomplete="off"><header><div><span class="wp-card-eyebrow">Meta developer testing</span><h2>Connect a test number</h2><p>Developer-created test WABAs do not appear in Embedded Signup. Connect the number securely using its Meta credentials.</p></div><button type="button" data-close-test-number aria-label="Close">×</button></header><div class="wp-policy-note"><strong>Use a token that can manage the profile</strong><p>In Meta Business Settings, assign the WABA to a System User and generate an access token for your app with <code>whatsapp_business_management</code> and <code>whatsapp_business_messaging</code>. Temporary API Setup tokens are accepted only when they include both permissions.</p></div><label><span>WhatsApp Business Account ID</span><input name="wabaId" inputmode="numeric" pattern="[0-9]{5,40}" maxlength="40" required placeholder="1794119041601235" /></label><label><span>Phone Number ID <small>Optional for a single-number WABA</small></span><input name="phoneNumberId" inputmode="numeric" pattern="[0-9]{5,40}" maxlength="40" placeholder="Meta Phone Number ID" /></label><label><span>Meta access token</span><textarea name="accessToken" minlength="20" maxlength="4096" rows="5" required spellcheck="false" autocomplete="off" placeholder="Paste a System User or API Setup access token"></textarea><small>The token is validated for both required permissions, encrypted immediately, and never returned to the browser.</small></label><footer><button class="wp-secondary" type="button" data-close-test-number>Cancel</button><button class="wp-primary" type="submit">Connect test number</button></footer></form></dialog>` : "";
   const capacityDialog = canManageNumbers ? `<dialog class="wp-contact-dialog wp-number-capacity-dialog" id="wpNumberCapacityDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Paid number capacity</span><h2>Additional number access required</h2><p>Your current package and paid add-ons have no unused production-number slots.</p></div><button type="submit" value="close" aria-label="Close">×</button></header><div class="wp-number-capacity-summary"><div><span>Production slots available</span><strong>${allowedLimit == null ? "Unlimited" : `${activeCount} / ${allowedLimit} in use`}</strong></div>${blockedCount ? `<div><span>Additional numbers blocked</span><strong>${blockedCount}</strong></div>` : ""}</div><div class="wp-policy-note"><strong>Your primary number remains active</strong><p>Purchase the Extra WhatsApp number add-on before starting Meta onboarding. If that add-on is later cancelled, only the excess add-on number is blocked; the primary number remains intact.</p></div><footer><button class="wp-secondary" type="submit" value="close">Not now</button><a class="wp-primary wp-button-link" href="${workspacePath("billing-addons")}">View number add-on</a></footer></form></dialog>` : "";
   const capacityNotice = allowedLimit == null ? "" : `<div class="wp-number-capacity-bar ${blockedCount ? "has-blocked" : ""}"><div><span class="wp-card-eyebrow">Production number allowance</span><strong>${activeCount} of ${allowedLimit} paid slot${allowedLimit === 1 ? "" : "s"} in use</strong><small>Developer test numbers do not use this allowance.</small></div>${blockedCount ? `<a href="${workspacePath("billing-addons")}">${blockedCount} number${blockedCount === 1 ? "" : "s"} blocked · Restore add-on</a>` : capacityBlocked ? `<a href="${workspacePath("billing-addons")}">Purchase another number slot</a>` : `<em>${Math.max(allowedLimit - activeCount, 0)} available</em>`}</div>`;
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div><div class="wp-number-heading-actions">${testButton}${addButton}</div></div>${capacityNotice}<article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2></div><strong>${connections.length}</strong></div><p>Each number is connected securely through your company’s Meta Business account.</p>${connections.length ? connections.map((row) => { const label = row.display_phone_number || row.verified_name || "Number setup pending"; const isTest = row.onboarding_metadata?.test_number === true; const isPrimary = row.onboarding_metadata?.billing_primary === true && !isTest; const isBillingBlocked = row.onboarding_metadata?.billing_restricted === true; const rawPhoneStatus = String(row.onboarding_metadata?.phone_status || "").trim().toUpperCase(); const needsRegistration = !isTest && Boolean(row.phone_number_id) && !["CONNECTED", "ACTIVE", "READY"].includes(rawPhoneStatus); const metaStatus = isBillingBlocked ? "Add-on payment required" : needsRegistration ? "Registration required" : String(row.onboarding_metadata?.phone_status || row.status || "").replaceAll("_", " ").toLowerCase(); return `<div class="wp-account-row ${isBillingBlocked ? "billing-blocked" : ""}"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}${isPrimary ? ` <span class="wp-primary-number-badge">Primary</span>` : ""}${isTest ? ` <span class="wp-test-number-badge">Developer test</span>` : ""}${isBillingBlocked ? ` <span class="wp-billing-blocked-badge">Blocked</span>` : ""}</small></div><div class="wp-account-actions"><em>${escapeHtml(metaStatus)}</em>${isBillingBlocked ? `<a class="wp-account-unlock" href="${workspacePath("billing-addons")}">Restore access</a>` : ""}${needsRegistration && canManageNumbers ? `<button class="wp-account-register" type="button" data-register-business-number="${escapeHtml(row.id)}">Complete registration</button>` : ""}${canManageNumbers ? `<button class="wp-account-remove" type="button" data-remove-business-number="${escapeHtml(row.id)}" data-business-number-label="${escapeHtml(label)}">Remove</button>` : ""}</div></div>`; }).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta${capacityAttribute}>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</article>${testDialog}${capacityDialog}</section>`;
+  const removeDialog = canManageNumbers ? `<dialog class="wp-contact-dialog wp-remove-number-dialog" id="wpRemoveNumberDialog"><form method="dialog" id="wpRemoveNumberForm"><header><div><span class="wp-card-eyebrow">Disconnect WhatsApp number</span><h2>Remove and deregister number</h2><p>This stops WhatsApp messaging at Meta and removes this workspace’s authorization. Your Meta Business Portfolio and WhatsApp Business Account are not deleted.</p></div><button type="button" data-close-remove-number aria-label="Close">×</button></header><div class="wp-remove-number-body"><div class="wp-remove-number-target"><span>Number</span><strong data-remove-number-name>—</strong></div><ul><li>The phone is deregistered from WhatsApp Cloud API first.</li><li>If Meta rejects deregistration, the local connection stays intact.</li><li>Existing conversation and audit records are retained.</li></ul><label><span>Type <strong>REMOVE</strong> to confirm</span><input name="confirmation" autocomplete="off" required pattern="REMOVE" /></label></div><footer><button class="wp-secondary" type="button" data-close-remove-number>Keep number</button><button class="wp-danger-button" type="submit" value="remove">Remove number</button></footer></form></dialog>` : "";
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div><div class="wp-number-heading-actions">${testButton}${addButton}</div></div>${capacityNotice}<article class="wp-card wp-route-card wp-business-numbers-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2><p>Live registration and quality status for every connected number.</p></div><div class="wp-business-number-card-tools"><span><i></i>Live</span><button class="wp-secondary" id="wpRefreshBusinessNumbersBtn" type="button">Refresh</button><strong>${connections.length}</strong></div></div><div class="wp-account-list">${connections.length ? connections.map((row) => accountConnectionCard(row, canManageNumbers)).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta${capacityAttribute}>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</div></article>${testDialog}${capacityDialog}${removeDialog}</section>`;
 }
 
 const WHATSAPP_BUSINESS_VERTICALS = {
@@ -2510,6 +2557,10 @@ function verificationAttentionModal() {
 }
 
 async function renderDashboard({ refresh = true, preserveScroll = false, navigationSequence = workspaceNavigationSequence } = {}) {
+  if (businessNumberRefreshTimer) {
+    window.clearTimeout(businessNumberRefreshTimer);
+    businessNumberRefreshTimer = null;
+  }
   const renderLocation = workspaceLocationKey();
   const previousScrollTop = preserveScroll ? window.scrollY : 0;
   const view = currentWorkspaceView();
@@ -4443,24 +4494,79 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       button.textContent = original;
     }
   }));
-  app.querySelectorAll("[data-remove-business-number]").forEach((button) => button.addEventListener("click", async () => {
-    const connectionId = button.dataset.removeBusinessNumber || "";
-    const label = button.dataset.businessNumberLabel || "this number";
-    if (!window.confirm(`Remove ${label} from this workspace?\n\nSending will stop immediately. Existing conversations, messages and Drive archives will be retained.`)) return;
-    const original = button.textContent || "Remove";
+  app.querySelector("#wpRefreshBusinessNumbersBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
     try {
-      button.disabled = true; button.textContent = "Removing…";
+      button.disabled = true;
+      button.textContent = "Refreshing…";
+      await refreshBusinessNumberStatuses();
+    } catch (error) {
+      showToast(error?.message || "Business number status could not be refreshed.", "error");
+      button.disabled = false;
+      button.textContent = "Refresh";
+    }
+  });
+  app.querySelectorAll("[data-business-number-details]").forEach((button) => button.addEventListener("click", () => {
+    const panel = app.querySelector(`[data-business-number-detail-panel="${CSS.escape(button.dataset.businessNumberDetails || "")}"]`);
+    if (!panel) return;
+    const willOpen = panel.hidden;
+    panel.hidden = !willOpen;
+    button.setAttribute("aria-expanded", String(willOpen));
+    button.textContent = willOpen ? "Hide details" : "Details";
+  }));
+  app.querySelectorAll("[data-meta-billing-waba]").forEach((button) => button.addEventListener("click", () => {
+    const wabaId = String(button.dataset.metaBillingWaba || "").replace(/\D/g, "");
+    const businessId = String(button.dataset.metaBillingBusiness || "").replace(/\D/g, "");
+    if (!wabaId || !businessId) {
+      showToast("Meta billing details are not available for this connection. Refresh or reconnect the number.", "error");
+      return;
+    }
+    const query = new URLSearchParams({ business_id: businessId, asset_id: wabaId, placement: "whatsapp_ads" });
+    const url = `https://business.facebook.com/latest/billing_hub/payment_methods/?${query}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }));
+  const removeNumberDialog = app.querySelector("#wpRemoveNumberDialog");
+  const removeNumberForm = app.querySelector("#wpRemoveNumberForm");
+  app.querySelectorAll("[data-remove-business-number]").forEach((button) => button.addEventListener("click", () => {
+    if (!removeNumberDialog || !removeNumberForm) return;
+    removeNumberForm.dataset.connectionId = button.dataset.removeBusinessNumber || "";
+    removeNumberForm.dataset.numberLabel = button.dataset.businessNumberLabel || "this number";
+    removeNumberForm.reset();
+    const target = removeNumberForm.querySelector("[data-remove-number-name]");
+    if (target) target.textContent = removeNumberForm.dataset.numberLabel;
+    removeNumberDialog.showModal();
+  }));
+  removeNumberDialog?.querySelectorAll("[data-close-remove-number]").forEach((button) => button.addEventListener("click", () => removeNumberDialog.close()));
+  removeNumberDialog?.addEventListener("click", (event) => { if (event.target === removeNumberDialog) removeNumberDialog.close(); });
+  removeNumberForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!removeNumberForm.reportValidity()) return;
+    const connectionId = removeNumberForm.dataset.connectionId || "";
+    const label = removeNumberForm.dataset.numberLabel || "This number";
+    const submit = event.submitter || removeNumberForm.querySelector('[type="submit"]');
+    try {
+      submit.disabled = true;
+      submit.textContent = "Removing…";
       await onboardingRequest("remove_connection", { connectionId });
       if (workspaceSelectedConnectionId === connectionId) selectWorkspaceConnection("");
-      showToast(`${label} was removed from this workspace. Message history was retained.`);
+      removeNumberDialog?.close();
+      showToast(`${label} was deregistered from WhatsApp and removed from this workspace. Message history was retained.`);
       await renderDashboard();
     } catch (error) {
       showToast(error?.message || "The business number could not be removed.", "error");
-      button.disabled = false; button.textContent = original;
+      submit.disabled = false;
+      submit.textContent = "Remove number";
     }
-  }));
+  });
   if (preserveScroll) window.scrollTo({ top: previousScrollTop, left: 0, behavior: "auto" });
   if (setupReady && ["onboarding", "accounts"].includes(view)) loadFacebookSdk().catch(() => {});
+  if (view === "accounts" && workspaceConnections.some((connection) => connection.status !== "disconnected" && connection.phone_number_id)) {
+    businessNumberRefreshTimer = window.setTimeout(() => {
+      if (currentWorkspaceView() === "accounts" && document.visibilityState === "visible") {
+        refreshBusinessNumberStatuses({ silent: true }).catch(() => {});
+      }
+    }, 30000);
+  }
 }
 
 async function init() {

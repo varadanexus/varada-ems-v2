@@ -306,18 +306,64 @@ async function removeConnection(admin: any, customer: any, body: any) {
   const connectionId = String(body.connectionId || "").trim();
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(connectionId)) throw new Error("Select a valid WhatsApp business number.");
   const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
-    .select("id,status,display_phone_number,verified_name,onboarding_metadata")
+    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,onboarding_metadata")
     .eq("id", connectionId)
     .eq("tenant_id", customer.tenant_id)
     .neq("status", "disconnected")
     .single();
   if (connectionError || !connection) throw new Error("This WhatsApp business number has already been removed.");
 
+  const phoneNumberId = cleanId(connection.phone_number_id, "phone number ID");
+  const { data: stored, error: storedError } = await admin.from("whatsapp_platform_provider_credentials")
+    .select("credential_ciphertext,expires_at")
+    .eq("connection_id", connection.id)
+    .eq("tenant_id", customer.tenant_id)
+    .maybeSingle();
+  if (storedError) throw storedError;
+  if (!stored?.credential_ciphertext) {
+    throw new Error("The Meta authorization for this number is unavailable. Reconnect the number before removing it from WhatsApp.");
+  }
+  if (stored.expires_at && new Date(stored.expires_at).getTime() <= Date.now()) {
+    throw new Error("The Meta authorization has expired. Reconnect the number before removing it from WhatsApp.");
+  }
+  let credentials: any;
+  try {
+    credentials = JSON.parse(await decryptCredential(stored.credential_ciphertext));
+  } catch {
+    throw new Error("The secure Meta authorization could not be opened. Reconnect the number before removing it from WhatsApp.");
+  }
+  const accessToken = cleanMetaAccessToken(credentials?.accessToken);
+  const appSecret = await providerAppSecret(admin);
+  if (!appSecret) throw new Error("Meta onboarding is not configured.");
+
+  let phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+  if (isPhoneRegistered(phone)) {
+    await graphRequest(`${phoneNumberId}/deregister`, accessToken, appSecret, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp" }),
+    });
+    for (const delay of [750, 1500, 3000, 5000]) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+      if (!isPhoneRegistered(phone)) break;
+    }
+    if (isPhoneRegistered(phone)) {
+      throw new Error("Meta accepted the deregistration request but the number is still connected. Nothing was removed locally; try again shortly.");
+    }
+  }
+
   const now = new Date().toISOString();
   const { error: updateError } = await admin.from("whatsapp_platform_connections").update({
     status: "disconnected",
     updated_at: now,
-    onboarding_metadata: { ...(connection.onboarding_metadata || {}), removed_from_workspace_at: now, removal_source: "customer_workspace" },
+    onboarding_metadata: {
+      ...(connection.onboarding_metadata || {}),
+      phone_status: String(phone?.status || "DEREGISTERED").toUpperCase(),
+      removed_from_workspace_at: now,
+      deregistered_from_meta_at: now,
+      removal_source: "customer_workspace",
+    },
   }).eq("id", connection.id).eq("tenant_id", customer.tenant_id);
   if (updateError) throw updateError;
 
@@ -350,6 +396,9 @@ async function removeConnection(admin: any, customer: any, body: any) {
   await recordEvent(admin, customer, "connection_disconnected", {
     displayPhoneNumber: connection.display_phone_number || null,
     verifiedName: connection.verified_name || null,
+    phoneNumberId,
+    whatsappBusinessAccountId: connection.whatsapp_business_account_id || null,
+    deregisteredFromMeta: true,
     source: "customer_workspace",
   }, connection.id);
   const numberCapacity = await reconcileNumberCapacity(admin, customer);
@@ -720,6 +769,65 @@ async function registerPendingPhone(admin: any, customer: any, body: any) {
   return { connection: updatedConnection, numberCapacity: await reconcileNumberCapacity(admin, customer) };
 }
 
+async function refreshPhoneStatus(admin: any, customer: any, body: any) {
+  const connectionId = String(body.connectionId || "").trim();
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(connectionId)) {
+    throw new Error("Select a valid WhatsApp business number.");
+  }
+  const appSecret = await providerAppSecret(admin);
+  if (!appSecret) throw new Error("Meta onboarding is not configured.");
+
+  const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
+    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,onboarding_metadata")
+    .eq("id", connectionId)
+    .eq("tenant_id", customer.tenant_id)
+    .neq("status", "disconnected")
+    .single();
+  if (connectionError || !connection) throw new Error("This WhatsApp business number is no longer available.");
+  const phoneNumberId = cleanId(connection.phone_number_id, "phone number ID");
+
+  const { data: stored, error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+    .select("credential_ciphertext,expires_at")
+    .eq("connection_id", connection.id)
+    .eq("tenant_id", customer.tenant_id)
+    .single();
+  if (credentialError || !stored?.credential_ciphertext) {
+    throw new Error("The secure Meta authorization is unavailable. Reconnect this number through Meta onboarding.");
+  }
+  if (stored.expires_at && new Date(stored.expires_at).getTime() <= Date.now()) {
+    throw new Error("The Meta authorization has expired. Reconnect this number through Meta onboarding.");
+  }
+
+  let credentials: any;
+  try {
+    credentials = JSON.parse(await decryptCredential(stored.credential_ciphertext));
+  } catch {
+    throw new Error("The secure Meta authorization could not be opened. Reconnect this number through Meta onboarding.");
+  }
+  const phone = await fetchPhoneDetails(phoneNumberId, cleanMetaAccessToken(credentials?.accessToken), appSecret);
+  const now = new Date().toISOString();
+  const registered = isPhoneRegistered(phone);
+  const metadata = {
+    ...(connection.onboarding_metadata || {}),
+    phone_status: phone.status || (registered ? "CONNECTED" : "PENDING"),
+    code_verification_status: phone.code_verification_status || null,
+    quality_rating: phone.quality_rating || null,
+    last_meta_sync_at: now,
+  };
+  const { data: updatedConnection, error: updateError } = await admin.from("whatsapp_platform_connections").update({
+    status: registered ? "connected" : "pending",
+    display_phone_number: phone.display_phone_number || connection.display_phone_number || null,
+    verified_name: phone.verified_name || connection.verified_name || null,
+    connected_at: registered ? (connection.connected_at || now) : connection.connected_at,
+    onboarding_metadata: metadata,
+    updated_at: now,
+  }).eq("id", connection.id).eq("tenant_id", customer.tenant_id)
+    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
+    .single();
+  if (updateError) throw updateError;
+  return { connection: updatedConnection, numberCapacity: await reconcileNumberCapacity(admin, customer) };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     if (!allowedOrigin(req)) return json(req, { error: "Origin not allowed" }, 403);
@@ -748,6 +856,7 @@ Deno.serve(async (req) => {
       return json(req, { error: "Your agent role cannot access business onboarding." }, 403);
     }
     if (action === "status") return json(req, await configurationStatus(admin, customer));
+    if (action === "refresh_phone_status") return json(req, await refreshPhoneStatus(admin, customer, body));
     if (!["owner", "admin"].includes(customer.role_code)) {
       return json(req, { error: "Only workspace owners and administrators can add business numbers." }, 403);
     }
