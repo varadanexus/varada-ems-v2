@@ -3489,7 +3489,7 @@ async function renderDashboard() {
       form.elements.longitude.value = String(position.coords.longitude);
       form.elements.locationAccuracy.value = String(position.coords.accuracy || "");
       form.elements.locationCapturedAt.value = capturedAt.toISOString();
-      preview.src = URL.createObjectURL(blob);
+      preview.src = `data:${deletionEvidence.mimeType};base64,${deletionEvidence.base64}`;
       preview.hidden = false;
       video.hidden = true;
       button.hidden = true;
@@ -3508,7 +3508,6 @@ async function renderDashboard() {
     const start = app.querySelector("#wpStartDeletionCameraBtn");
     const retake = app.querySelector("#wpRetakeDeletionEvidenceBtn");
     const status = app.querySelector("#wpDeletionLocationStatus");
-    if (preview?.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
     if (preview) { preview.removeAttribute("src"); preview.hidden = true; }
     retake.hidden = true;
     start.hidden = false; start.disabled = false; start.textContent = "Start camera";
