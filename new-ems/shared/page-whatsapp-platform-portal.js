@@ -1590,7 +1590,7 @@ function settingsView(profile) {
   const deletionControl = canDeleteWorkspace
     ? `<div class="wp-danger-zone"><div><strong>Delete this workspace</strong><p>Download a copy of your account data, then submit a protected deletion request. The request can be reversed for 24 hours.</p></div><button class="wp-danger-button" id="wpRequestDeletionBtn" type="button" ${workspaceDeletion?.pending ? "disabled" : ""}>${workspaceDeletion?.pending ? "Deletion pending" : "Request deletion"}</button></div>`
     : `<p class="wp-settings-permission">Only a workspace owner or administrator can export or delete this account.</p>`;
-  const deletionDialog = canDeleteWorkspace ? `<dialog class="wp-account-deletion-dialog" id="wpAccountDeletionDialog"><form id="wpAccountDeletionForm"><header><div><span>Protected account action</span><h2>Request workspace deletion</h2><p>This removes the workspace, users, messages, contacts and other operational platform data after a 24-hour reversal window. Stored Meta connections will be unlinked; the customer’s Meta Business Portfolio is not deleted. Statutory invoices, credit notes and audit evidence are retained where legally required.</p></div><button type="button" data-close-deletion-dialog aria-label="Close">×</button></header><section class="wp-deletion-export-step"><div><strong>1. Download your data</strong><p>The export excludes passwords, login sessions and encrypted provider credentials.</p></div><button class="wp-secondary" id="wpExportAccountDataBtn" type="button">Download account data</button></section><div class="wp-deletion-form-grid"><label class="wp-field"><span>Who requested this deletion</span><input name="requestedBy" maxlength="200" value="${escapeHtml(profile?.displayName || session.displayName)}" required /></label><label class="wp-field"><span>Internal note</span><textarea name="internalNote" minlength="10" maxlength="2000" placeholder="Reason, approval reference, and any internal context" required></textarea></label><label class="wp-field"><span>Requester evidence photo</span><input name="evidencePhoto" type="file" accept="image/jpeg,image/png" capture="user" required /><small>JPG or PNG, maximum 2 MB. Capture the consenting requester.</small></label><div class="wp-location-capture"><span>Device location evidence</span><button class="wp-secondary" id="wpCaptureDeletionLocationBtn" type="button">Capture current location</button><small id="wpDeletionLocationStatus">Location has not been captured.</small><input name="latitude" type="hidden" /><input name="longitude" type="hidden" /><input name="locationAccuracy" type="hidden" /><input name="locationCapturedAt" type="hidden" /></div><label class="wp-field wp-confirm-company"><span>Type <strong>${escapeHtml(profile?.companyName || session.companyName)}</strong> to confirm</span><input name="exactCompanyName" autocomplete="off" required /></label><label class="wp-check wp-deletion-consent"><input name="evidenceConsent" type="checkbox" required /><span>I confirm that the requester consented to capturing the photo and device location as evidence for this deletion request.</span></label></div><footer><button class="wp-secondary" type="button" data-close-deletion-dialog>Keep workspace</button><button class="wp-danger-button" type="submit">Schedule deletion</button></footer><p class="wp-form-message" id="wpAccountDeletionMessage" role="alert"></p></form></dialog>` : "";
+  const deletionDialog = canDeleteWorkspace ? `<dialog class="wp-account-deletion-dialog" id="wpAccountDeletionDialog"><form id="wpAccountDeletionForm"><header><div><span>Protected account action</span><h2>Request workspace deletion</h2><p>This removes the workspace, users, messages, contacts and other operational platform data after a 24-hour reversal window. Stored Meta connections will be unlinked; the customer’s Meta Business Portfolio is not deleted. Statutory invoices, credit notes and audit evidence are retained where legally required.</p></div><button type="button" data-close-deletion-dialog aria-label="Close">×</button></header><section class="wp-deletion-export-step"><div><strong>1. Download your data</strong><p>The export excludes passwords, login sessions and encrypted provider credentials.</p></div><button class="wp-secondary" id="wpExportAccountDataBtn" type="button">Download account data</button></section><div class="wp-deletion-form-grid"><label class="wp-field"><span>Who requested this deletion</span><input name="requestedBy" maxlength="200" value="${escapeHtml(profile?.displayName || session.displayName)}" required /></label><label class="wp-field"><span>Internal note</span><textarea name="internalNote" minlength="10" maxlength="2000" placeholder="Reason, approval reference, and any internal context" required></textarea></label><section class="wp-deletion-camera" aria-labelledby="wpDeletionCameraTitle"><div><strong id="wpDeletionCameraTitle">Requester camera evidence</strong><p>Use this device’s camera. Uploading an existing image is not permitted. The captured photo is stamped with its timestamp and location.</p></div><div class="wp-deletion-camera-stage"><video id="wpDeletionCameraVideo" playsinline muted hidden></video><canvas id="wpDeletionCameraCanvas" hidden></canvas><img id="wpDeletionCameraPreview" alt="Captured requester evidence with timestamp and location" hidden /><div id="wpDeletionCameraPlaceholder">Camera evidence has not been captured.</div></div><div class="wp-deletion-camera-actions"><button class="wp-secondary" id="wpStartDeletionCameraBtn" type="button">Start camera</button><button class="wp-primary" id="wpCaptureDeletionEvidenceBtn" type="button" hidden>Capture photo &amp; location</button><button class="wp-secondary" id="wpRetakeDeletionEvidenceBtn" type="button" hidden>Retake</button></div><small id="wpDeletionLocationStatus">Timestamp and location will be captured with the photo.</small><input name="latitude" type="hidden" /><input name="longitude" type="hidden" /><input name="locationAccuracy" type="hidden" /><input name="locationCapturedAt" type="hidden" /></section><label class="wp-field wp-confirm-company"><span>Type <strong>${escapeHtml(profile?.companyName || session.companyName)}</strong> to confirm</span><input name="exactCompanyName" autocomplete="off" required /></label><label class="wp-check wp-deletion-consent"><input name="evidenceConsent" type="checkbox" required /><span>I confirm that the requester consented to capturing the photo and device location as evidence for this deletion request.</span></label></div><footer><button class="wp-secondary" type="button" data-close-deletion-dialog>Keep workspace</button><button class="wp-danger-button" type="submit">Schedule deletion</button></footer><p class="wp-form-message" id="wpAccountDeletionMessage" role="alert"></p></form></dialog>` : "";
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("profile")}">View full profile</a></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button>${profile?.logoDataUrl ? `<button class="wp-remove-logo" id="wpRemoveLogoBtn" type="button">Remove logo</button>` : ""}</form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(profile?.companyName || session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(profile?.displayName || session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(profile?.email || session.email)}</dd></div><div><dt>Plan</dt><dd>${escapeHtml(planName(profile?.planCode))}</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div>${deletionControl}</article></section>${deletionDialog}</section>`;
 }
 
@@ -3376,11 +3376,34 @@ async function renderDashboard() {
     }
   });
   const deletionDialog = app.querySelector("#wpAccountDeletionDialog");
+  let deletionCameraStream = null;
+  let deletionEvidence = null;
+  const stopDeletionCamera = () => {
+    deletionCameraStream?.getTracks?.().forEach((track) => track.stop());
+    deletionCameraStream = null;
+    const video = app.querySelector("#wpDeletionCameraVideo");
+    if (video) video.srcObject = null;
+  };
+  const closeDeletionDialog = () => {
+    stopDeletionCamera();
+    if (!deletionEvidence) {
+      const video = app.querySelector("#wpDeletionCameraVideo");
+      const placeholder = app.querySelector("#wpDeletionCameraPlaceholder");
+      const start = app.querySelector("#wpStartDeletionCameraBtn");
+      const capture = app.querySelector("#wpCaptureDeletionEvidenceBtn");
+      if (video) video.hidden = true;
+      if (placeholder) placeholder.hidden = false;
+      if (start) { start.hidden = false; start.disabled = false; start.textContent = "Start camera"; }
+      if (capture) capture.hidden = true;
+    }
+    deletionDialog?.close();
+  };
   app.querySelector("#wpRequestDeletionBtn")?.addEventListener("click", () => deletionDialog?.showModal());
-  app.querySelectorAll("[data-close-deletion-dialog]").forEach((button) => button.addEventListener("click", () => deletionDialog?.close()));
+  app.querySelectorAll("[data-close-deletion-dialog]").forEach((button) => button.addEventListener("click", closeDeletionDialog));
   deletionDialog?.addEventListener("click", (event) => {
-    if (event.target === deletionDialog) deletionDialog.close();
+    if (event.target === deletionDialog) closeDeletionDialog();
   });
+  deletionDialog?.addEventListener("cancel", stopDeletionCamera);
   app.querySelector("#wpExportAccountDataBtn")?.addEventListener("click", async (event) => {
     const button = event.currentTarget;
     const original = button.textContent;
@@ -3400,32 +3423,103 @@ async function renderDashboard() {
       showToast(error?.message || "Account data could not be exported.", "error");
     }
   });
-  app.querySelector("#wpCaptureDeletionLocationBtn")?.addEventListener("click", async (event) => {
+  const currentDeletionLocation = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error("Location capture is not supported by this browser."));
+    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  });
+  app.querySelector("#wpStartDeletionCameraBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const video = app.querySelector("#wpDeletionCameraVideo");
+    const placeholder = app.querySelector("#wpDeletionCameraPlaceholder");
+    const captureButton = app.querySelector("#wpCaptureDeletionEvidenceBtn");
+    const status = app.querySelector("#wpDeletionLocationStatus");
+    if (!navigator.mediaDevices?.getUserMedia) return showToast("Camera capture is not supported by this browser.", "error");
+    try {
+      button.disabled = true; button.textContent = "Starting camera…";
+      deletionCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      video.srcObject = deletionCameraStream;
+      await video.play();
+      video.hidden = false;
+      if (placeholder) placeholder.hidden = true;
+      button.hidden = true;
+      captureButton.hidden = false; captureButton.disabled = false; captureButton.textContent = "Capture photo & location";
+      if (status) status.textContent = "Camera ready. Capture the photo to record a fresh timestamp and location.";
+    } catch (error) {
+      button.disabled = false; button.textContent = "Start camera";
+      showToast(error?.message || "Camera access could not be started.", "error");
+    }
+  });
+  app.querySelector("#wpCaptureDeletionEvidenceBtn")?.addEventListener("click", async (event) => {
     const button = event.currentTarget;
     const form = button.closest("form");
-    const status = form?.querySelector("#wpDeletionLocationStatus");
-    if (!navigator.geolocation) return showToast("Location capture is not supported by this browser.", "error");
-    button.disabled = true; button.textContent = "Capturing…";
-    navigator.geolocation.getCurrentPosition((position) => {
+    const video = app.querySelector("#wpDeletionCameraVideo");
+    const canvas = app.querySelector("#wpDeletionCameraCanvas");
+    const preview = app.querySelector("#wpDeletionCameraPreview");
+    const status = app.querySelector("#wpDeletionLocationStatus");
+    const retake = app.querySelector("#wpRetakeDeletionEvidenceBtn");
+    if (!video?.videoWidth || !canvas) return showToast("Wait for the camera preview, then try again.", "error");
+    try {
+      button.disabled = true; button.textContent = "Capturing location…";
+      const position = await currentDeletionLocation();
+      const capturedAt = new Date();
+      const maxWidth = 1280;
+      const scale = Math.min(1, maxWidth / video.videoWidth);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      const context = canvas.getContext("2d");
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const stampHeight = Math.max(104, Math.round(canvas.height * .17));
+      context.fillStyle = "rgba(0,0,0,.76)";
+      context.fillRect(0, canvas.height - stampHeight, canvas.width, stampHeight);
+      const pad = Math.max(18, Math.round(canvas.width * .018));
+      const headingSize = Math.max(20, Math.round(canvas.width * .022));
+      const detailSize = Math.max(15, Math.round(canvas.width * .016));
+      context.fillStyle = "#ffffff";
+      context.font = `700 ${headingSize}px Arial, sans-serif`;
+      context.fillText("Varada Nexus · Account deletion evidence", pad, canvas.height - stampHeight + headingSize + 12);
+      context.fillStyle = "#d8e7df";
+      context.font = `500 ${detailSize}px Arial, sans-serif`;
+      const coordinates = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)} · accuracy ±${Math.round(position.coords.accuracy || 0)} m`;
+      context.fillText(capturedAt.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "medium" }), pad, canvas.height - detailSize - 28);
+      context.fillText(coordinates, pad, canvas.height - 12);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", .82));
+      if (!blob || blob.size > 2 * 1024 * 1024) throw new Error("The captured image is too large. Retake it at a lower camera resolution.");
+      deletionEvidence = { mimeType: "image/jpeg", base64: await readFileBase64(blob) };
       form.elements.latitude.value = String(position.coords.latitude);
       form.elements.longitude.value = String(position.coords.longitude);
       form.elements.locationAccuracy.value = String(position.coords.accuracy || "");
-      form.elements.locationCapturedAt.value = new Date(position.timestamp || Date.now()).toISOString();
-      if (status) status.textContent = `Location captured (accuracy approximately ${Math.round(position.coords.accuracy || 0)} m).`;
-      button.textContent = "Location captured";
-    }, (error) => {
-      button.disabled = false; button.textContent = "Capture current location";
-      if (status) status.textContent = "Location capture failed. Allow location access and try again.";
-      showToast(error?.message || "Current location could not be captured.", "error");
-    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+      form.elements.locationCapturedAt.value = capturedAt.toISOString();
+      preview.src = URL.createObjectURL(blob);
+      preview.hidden = false;
+      video.hidden = true;
+      button.hidden = true;
+      retake.hidden = false;
+      stopDeletionCamera();
+      if (status) status.textContent = `Captured ${capturedAt.toLocaleString("en-IN")} at ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)} (±${Math.round(position.coords.accuracy || 0)} m).`;
+    } catch (error) {
+      button.disabled = false; button.textContent = "Capture photo & location";
+      if (status) status.textContent = "Capture failed. Allow camera and precise location access, then try again.";
+      showToast(error?.message || "Camera evidence could not be captured.", "error");
+    }
+  });
+  app.querySelector("#wpRetakeDeletionEvidenceBtn")?.addEventListener("click", async () => {
+    deletionEvidence = null;
+    const preview = app.querySelector("#wpDeletionCameraPreview");
+    const start = app.querySelector("#wpStartDeletionCameraBtn");
+    const retake = app.querySelector("#wpRetakeDeletionEvidenceBtn");
+    const status = app.querySelector("#wpDeletionLocationStatus");
+    if (preview?.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
+    if (preview) { preview.removeAttribute("src"); preview.hidden = true; }
+    retake.hidden = true;
+    start.hidden = false; start.disabled = false; start.textContent = "Start camera";
+    if (status) status.textContent = "Previous capture cleared. Start the camera to take fresh evidence.";
   });
   app.querySelector("#wpAccountDeletionForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     const button = event.submitter;
     const message = form.querySelector("#wpAccountDeletionMessage");
-    const file = form.elements.evidencePhoto?.files?.[0];
-    if (!file || !["image/jpeg", "image/png"].includes(file.type) || file.size > 2 * 1024 * 1024) return showToast("Choose a JPG or PNG evidence photo up to 2 MB.", "error");
+    if (!deletionEvidence?.base64) return showToast("Capture a fresh requester photo with timestamp and location before submitting.", "error");
     if (!form.elements.locationCapturedAt.value) return showToast("Capture the current device location before submitting.", "error");
     if (form.elements.exactCompanyName.value.trim() !== (workspaceProfile?.companyName || session.companyName)) return showToast("The company name confirmation does not match.", "error");
     const original = button?.textContent || "Schedule deletion";
@@ -3434,7 +3528,7 @@ async function renderDashboard() {
       const result = await storageRequest("schedule_account_deletion", {
         requestedBy: form.elements.requestedBy.value.trim(), internalNote: form.elements.internalNote.value.trim(),
         exactCompanyName: form.elements.exactCompanyName.value.trim(), evidenceConsent: form.elements.evidenceConsent.checked,
-        evidenceMimeType: file.type, evidenceBase64: await readFileBase64(file),
+        evidenceMimeType: deletionEvidence.mimeType, evidenceBase64: deletionEvidence.base64,
         latitude: Number(form.elements.latitude.value), longitude: Number(form.elements.longitude.value),
         locationAccuracy: form.elements.locationAccuracy.value ? Number(form.elements.locationAccuracy.value) : null,
         locationCapturedAt: form.elements.locationCapturedAt.value,
