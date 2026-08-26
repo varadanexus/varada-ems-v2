@@ -756,6 +756,40 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     || packageRows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
     || packageRows.find((row: any) => !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || null;
+  let checkoutPricing: any = null;
+  const checkoutQuoteId = subscription?.safe_metadata?.checkout_quote_id || null;
+  if (checkoutQuoteId) {
+    const { data: checkoutQuote, error: checkoutQuoteError } = await admin.from("whatsapp_platform_billing_checkout_quotes")
+      .select("currency,base_subtotal_paise,discount_paise,taxable_base_paise,package_gst_paise,gateway_adjustment_paise,checkout_amount_paise,coupon_code,addon_selections,quote_snapshot")
+      .eq("id", checkoutQuoteId)
+      .eq("tenant_id", customer.tenant_id)
+      .maybeSingle();
+    if (checkoutQuoteError) throw checkoutQuoteError;
+    if (checkoutQuote) {
+      const firstPaymentOnly = Boolean(checkoutQuote.quote_snapshot?.coupon_first_payment_only);
+      const renewalGrossForPricing = Number(subscription.recurring_base_paise || 0) > 0
+        ? checkoutGrossPaise(Number(subscription.recurring_base_paise))
+        : null;
+      checkoutPricing = {
+        currency: checkoutQuote.currency,
+        package: {
+          code: subscription.package_code,
+          name: checkoutQuote.quote_snapshot?.package_name || subscription.package_code,
+          base_paise: Number(checkoutQuote.quote_snapshot?.package_base_paise || 0),
+        },
+        addons: Array.isArray(checkoutQuote.addon_selections) ? checkoutQuote.addon_selections : [],
+        discounted_addon_codes: firstPaymentOnly ? [] : Array.isArray(checkoutQuote.quote_snapshot?.discounted_addon_codes) ? checkoutQuote.quote_snapshot.discounted_addon_codes : [],
+        coupon_code: firstPaymentOnly ? null : checkoutQuote.coupon_code || null,
+        base_subtotal_paise: Number(checkoutQuote.base_subtotal_paise || 0),
+        discount_paise: firstPaymentOnly ? 0 : Number(checkoutQuote.discount_paise || 0),
+        taxable_base_paise: firstPaymentOnly ? Number(subscription.recurring_base_paise || 0) : Number(checkoutQuote.taxable_base_paise || 0),
+        gst_paise: firstPaymentOnly ? Number(renewalGrossForPricing?.packageGstPaise || 0) : Number(checkoutQuote.package_gst_paise || 0),
+        gateway_adjustment_paise: firstPaymentOnly ? Number(renewalGrossForPricing?.gatewayAdjustmentPaise || 0) : Number(checkoutQuote.gateway_adjustment_paise || 0),
+        total_paise: firstPaymentOnly ? Number(renewalGrossForPricing?.checkoutAmountPaise || 0) : Number(checkoutQuote.checkout_amount_paise || 0),
+        first_payment_coupon_completed: firstPaymentOnly,
+      };
+    }
+  }
   const recurringGross = subscription && Number(subscription.recurring_base_paise || 0) > 0
     ? checkoutGrossPaise(Number(subscription.recurring_base_paise))
     : null;
@@ -767,6 +801,7 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     next_billing_gst_paise: recurringGross?.packageGstPaise ?? null,
     next_billing_gateway_adjustment_paise: recurringGross?.gatewayAdjustmentPaise ?? null,
     next_billing_amount_paise: recurringGross?.checkoutAmountPaise ?? null,
+    pricing_breakdown: checkoutPricing,
   } : null;
   const currentRenewalChanges = subscription
     ? (renewalChanges || []).filter((change: any) => change.subscription_id === subscription.id)

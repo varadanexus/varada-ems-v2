@@ -2362,6 +2362,46 @@ function explainAddonAvailability({ addonName, reason }) {
   dialog.showModal();
 }
 
+function showBillingPriceBreakdown(selectedAddonCode = "") {
+  const breakdown = workspaceBilling?.subscription?.pricing_breakdown;
+  if (!breakdown) {
+    showToast("The secured recurring-price breakdown is not available for this subscription yet.", "error");
+    return;
+  }
+  const money = (paise) => billingMoney(Number(paise || 0) / 100, breakdown.currency || "INR");
+  const discountedAddonCodes = new Set(Array.isArray(breakdown.discounted_addon_codes) ? breakdown.discounted_addon_codes : []);
+  const lines = [
+    { code: "package", name: breakdown.package?.name || "Package", quantity: 1, basePaise: Number(breakdown.package?.base_paise || 0), discountEligible: Number(breakdown.discount_paise || 0) > 0 },
+    ...(Array.isArray(breakdown.addons) ? breakdown.addons : []).map((addon) => ({
+      code: addon.code,
+      name: addon.name || addon.code,
+      quantity: Number(addon.quantity || 1),
+      basePaise: Number(addon.baseSubtotalPaise || 0),
+      discountEligible: discountedAddonCodes.has(addon.code) && Number(breakdown.discount_paise || 0) > 0,
+    })),
+  ];
+  const eligibleBasePaise = lines.filter((line) => line.discountEligible).reduce((total, line) => total + line.basePaise, 0);
+  let allocatedDiscountPaise = 0;
+  const eligibleLines = lines.filter((line) => line.discountEligible);
+  for (const [index, line] of eligibleLines.entries()) {
+    line.discountPaise = index === eligibleLines.length - 1
+      ? Number(breakdown.discount_paise || 0) - allocatedDiscountPaise
+      : Math.round(Number(breakdown.discount_paise || 0) * line.basePaise / Math.max(1, eligibleBasePaise));
+    allocatedDiscountPaise += line.discountPaise;
+  }
+  for (const line of lines) if (!Number.isFinite(line.discountPaise)) line.discountPaise = 0;
+  const lineRows = lines.map((line) => `<div class="wp-price-breakdown-line ${line.code === selectedAddonCode ? "is-selected" : ""}"><div><strong>${escapeHtml(line.name)}</strong><small>${line.code === "package" ? "Package master" : `${line.quantity.toLocaleString("en-IN")} selected`}</small></div><span>${escapeHtml(money(line.basePaise))}</span><span>${line.discountPaise ? `−${escapeHtml(money(line.discountPaise))}` : "—"}</span><strong>${escapeHtml(money(line.basePaise - line.discountPaise))}</strong></div>`).join("");
+  let dialog = document.querySelector("#wpBillingPriceBreakdownDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpBillingPriceBreakdownDialog";
+    dialog.className = "wp-contact-dialog wp-billing-price-breakdown-dialog";
+    document.body.append(dialog);
+  }
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Recurring billing</span><h2>Detailed price breakdown</h2><p>See how the package, selected add-ons and deductions produce your next billing amount.</p></div><button type="submit" value="close" aria-label="Close">×</button></header><div class="wp-price-breakdown-table"><div class="wp-price-breakdown-head"><span>Item</span><span>Listed</span><span>Deduction</span><span>Taxable</span></div>${lineRows}</div><dl class="wp-upgrade-quote"><div><dt>Subtotal before deductions</dt><dd>${escapeHtml(money(breakdown.base_subtotal_paise))}</dd></div>${Number(breakdown.discount_paise || 0) ? `<div class="is-credit"><dt>Coupon ${escapeHtml(breakdown.coupon_code || "discount")}</dt><dd>−${escapeHtml(money(breakdown.discount_paise))}</dd></div>` : ""}<div><dt>Taxable base</dt><dd>${escapeHtml(money(breakdown.taxable_base_paise))}</dd></div><div><dt>GST</dt><dd>${escapeHtml(money(breakdown.gst_paise))}</dd></div><div><dt>Gateway adjustment</dt><dd>${escapeHtml(money(breakdown.gateway_adjustment_paise))}</dd></div><div class="is-total"><dt>Next billing amount</dt><dd>${escapeHtml(money(breakdown.total_paise))}</dd></div></dl><div class="wp-policy-note"><strong>Server-verified recurring price</strong><p>Deductions are allocated proportionally across coupon-eligible package and add-on lines. The final total matches the protected Razorpay recurring plan.</p></div><footer><button class="wp-primary" type="submit" value="close">Done</button></footer></form>`;
+  dialog.showModal();
+}
+
 async function decideRenewalPriceChange(changeId, accepting) {
   let authorizationWindow = null;
   try {
@@ -2515,9 +2555,7 @@ function billingView(view = "billing") {
     : `<section class="wp-card wp-billing-overview-plan"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Subscription</span><h2>No plan selected</h2><p>Choose a package to start with a fresh subscription.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("billing-plans")}">Choose a plan</a></div></section>`;
   const overviewAddonRows = overviewActiveAddons.map((item) => {
     const quantity = Math.max(1, Number(item.addon_quantity || item.quantity || 1));
-    const base = Number(item.recurring_base_paise || 0) > 0 ? Number(item.recurring_base_paise) / 100 : Number(item.unit_amount || 0) * quantity;
-    const price = base > 0 ? `${billingMoney(base, item.currency || "INR")} + GST` : "Price confirmed at billing";
-    return `<article><div><strong>${escapeHtml(item.name || item.addon_name || item.addon_code || "Add-on")}</strong><small>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"} · ${escapeHtml(item.billing_interval === "year" ? "Annual" : "Monthly")}</small></div><span>${escapeHtml(price)}</span></article>`;
+    return `<button type="button" data-billing-price-breakdown="${escapeHtml(item.code || item.addon_code || "")}"><div><strong>${escapeHtml(item.name || item.addon_name || item.addon_code || "Add-on")}</strong><small>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"} · ${escapeHtml(item.billing_interval === "year" ? "Annual" : "Monthly")}</small></div><span>View price breakdown →</span></button>`;
   }).join("");
   const overviewAddons = `<section class="wp-card wp-billing-overview-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Add-ons</span><h2>${overviewActiveAddons.length ? `${overviewActiveAddons.length} active` : "No active add-ons"}</h2><p>${overviewActiveAddons.length ? "Extra services currently included in your workspace." : "Add capacity or services whenever you need them."}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-addons")}">${overviewActiveAddons.length ? "Manage add-ons" : "Select add-on"}</a></div>${overviewAddonRows ? `<div class="wp-billing-overview-addon-list">${overviewAddonRows}</div>` : ""}</section>`;
   const addonSubscriptionCards = activeAddonSubscriptions.map((item) => {
@@ -2930,6 +2968,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     }));
   }
   if (isBillingWorkspaceView(view)) {
+    app.querySelectorAll("[data-billing-price-breakdown]").forEach((button) => button.addEventListener("click", () => showBillingPriceBreakdown(button.dataset.billingPriceBreakdown || "")));
     app.querySelectorAll("[data-billing-document]").forEach((button) => button.addEventListener("click", async () => {
       const original = button.textContent;
       try {

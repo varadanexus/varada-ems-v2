@@ -2191,10 +2191,23 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-billing-overview-plan-grid strong { color:var(--wp-text); font-size:.92rem; }
 .wp-billing-overview-plan-grid small { color:var(--wp-muted); font-size:.7rem; line-height:1.45; }
 .wp-billing-overview-addon-list { display:grid; gap:9px; }
-.wp-billing-overview-addon-list article { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:14px 15px; border:1px solid var(--wp-border); border-radius:13px; background:color-mix(in srgb,var(--wp-panel) 86%,#082f22); }
-.wp-billing-overview-addon-list article > div { display:grid; gap:4px; min-width:0; }
+.wp-billing-overview-addon-list > article,.wp-billing-overview-addon-list > button { display:flex; align-items:center; justify-content:space-between; width:100%; gap:18px; padding:14px 15px; border:1px solid var(--wp-border); border-radius:13px; background:color-mix(in srgb,var(--wp-panel) 86%,#082f22); color:var(--wp-text); text-align:left; }
+.wp-billing-overview-addon-list > button { cursor:pointer; }
+.wp-billing-overview-addon-list > button:hover { border-color:var(--wp-accent); background:color-mix(in srgb,var(--wp-panel) 78%,#064e3b); }
+.wp-billing-overview-addon-list > article > div,.wp-billing-overview-addon-list > button > div { display:grid; gap:4px; min-width:0; }
 .wp-billing-overview-addon-list strong { overflow:hidden; color:var(--wp-text); text-overflow:ellipsis; white-space:nowrap; }
 .wp-billing-overview-addon-list small { color:var(--wp-muted); }
+.wp-billing-overview-addon-list > button > span { color:var(--wp-accent); font-size:.76rem; font-weight:800; white-space:nowrap; }
+.wp-billing-price-breakdown-dialog { width:min(760px,calc(100vw - 28px)); }
+.wp-price-breakdown-table { display:grid; overflow:hidden; border:1px solid var(--wp-border); border-radius:14px; background:var(--wp-border); gap:1px; }
+.wp-price-breakdown-head,.wp-price-breakdown-line { display:grid; grid-template-columns:minmax(180px,1fr) repeat(3,minmax(90px,.55fr)); align-items:center; gap:12px; padding:12px 14px; background:var(--wp-panel); }
+.wp-price-breakdown-head { color:var(--wp-muted); font-size:.68rem; font-weight:850; letter-spacing:.07em; text-transform:uppercase; }
+.wp-price-breakdown-head span:not(:first-child),.wp-price-breakdown-line > span,.wp-price-breakdown-line > strong:last-child { text-align:right; }
+.wp-price-breakdown-line > div { display:grid; gap:3px; }
+.wp-price-breakdown-line > div small { color:var(--wp-muted); }
+.wp-price-breakdown-line.is-selected { background:color-mix(in srgb,var(--wp-panel) 72%,#065f46); box-shadow:inset 3px 0 var(--wp-accent); }
+.wp-price-breakdown-line > span:nth-child(3) { color:var(--wp-accent); }
+@media(max-width:640px){.wp-price-breakdown-table{overflow-x:auto}.wp-price-breakdown-head,.wp-price-breakdown-line{min-width:620px}}
 .wp-billing-overview-addon-list article > span { flex:0 0 auto; color:var(--wp-text); font-size:.82rem; font-weight:800; }
 @media (max-width:1000px) { .wp-billing-plans { grid-template-columns:1fr; } .wp-billing-plan { min-height:0; } }
 @media (max-width:1180px) { .wp-billing-section-nav { grid-template-columns:repeat(3,minmax(0,1fr)); } }
