@@ -82,7 +82,7 @@ let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: ""
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
 let workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], invoices: [], creditNotes: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
 let workspaceDeletion = { pending: false };
-let workspaceCheckout = { quote: null, package: null, error: "" };
+let workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: "" };
 let razorpayCheckoutPromise = null;
 let profileMenuClickAwayHandler = null;
 let workspaceNavigationBound = false;
@@ -683,6 +683,64 @@ async function refreshBusinessNumberStatuses({ silent = false } = {}) {
   });
   if (!silent) showToast(refreshed ? `${refreshed} business number${refreshed === 1 ? "" : "s"} refreshed.` : firstError, refreshed ? "success" : "error");
   await renderDashboard({ refresh: false, preserveScroll: true });
+}
+
+function metaBillingPresentation(status) {
+  const normalized = String(status || "unchecked").toLowerCase();
+  const labels = {
+    configured: "Payment method set",
+    not_detected: "Payment method not found",
+    verification_limited: "Verify in Meta",
+    unavailable: "Status unavailable",
+    not_applicable: "Not applicable",
+    unchecked: "Checking…",
+    checking: "Checking…",
+  };
+  return { status: normalized, label: labels[normalized] || labels.unavailable };
+}
+
+function updateBusinessNumberBillingStatus(container, metadata = {}, { pending = false, error = "" } = {}) {
+  if (!container) return;
+  const status = pending ? "checking" : String(metadata.meta_billing_status || "unavailable");
+  const presentation = metaBillingPresentation(status);
+  const label = container.querySelector("[data-meta-billing-label]");
+  const checked = container.querySelector("[data-meta-billing-checked]");
+  const badge = container.querySelector("[data-meta-billing-badge]");
+  if (label) label.textContent = presentation.label;
+  if (checked) {
+    const verificationLimited = presentation.status === "verification_limited";
+    checked.textContent = pending
+      ? "Contacting Meta securely"
+      : error
+        ? "Use Refresh status to try again"
+        : verificationLimited
+          ? "Meta keeps payment confirmation in Business Manager"
+        : metadata.meta_billing_checked_at
+          ? `Checked ${formatProfileDate(metadata.meta_billing_checked_at)}`
+          : "Status check completed";
+  }
+  if (badge) {
+    badge.className = `wp-meta-billing-status is-${presentation.status}`;
+    badge.textContent = `Meta payment: ${presentation.label}`;
+  }
+}
+
+async function refreshBusinessNumberStatus(connectionId, container) {
+  if (!connectionId) throw new Error("This business number could not be identified.");
+  updateBusinessNumberBillingStatus(container, {}, { pending: true });
+  try {
+    const result = await onboardingRequest("refresh_phone_status", { connectionId });
+    const updated = result?.connection;
+    if (!updated) throw new Error("Meta did not return the latest number status.");
+    const index = workspaceConnections.findIndex((connection) => connection.id === updated.id);
+    if (index >= 0) workspaceConnections[index] = { ...workspaceConnections[index], ...updated };
+    if (result.numberCapacity && metaOnboardingStatus) metaOnboardingStatus.numberCapacity = result.numberCapacity;
+    updateBusinessNumberBillingStatus(container, updated.onboarding_metadata || {});
+    return updated;
+  } catch (error) {
+    updateBusinessNumberBillingStatus(container, {}, { error: error?.message || "Status check failed." });
+    throw error;
+  }
 }
 
 function storageEndpoint() {
@@ -1587,16 +1645,41 @@ function accountConnectionCard(row, canManageNumbers) {
   const quality = String(metadata.quality_rating || "Not available").replaceAll("_", " ").toLowerCase();
   const verification = String(metadata.code_verification_status || (needsRegistration ? "Pending" : "Verified")).replaceAll("_", " ").toLowerCase();
   const lastSync = metadata.last_meta_sync_at ? formatProfileDate(metadata.last_meta_sync_at) : "Awaiting first live sync";
+  const billingStatus = String(metadata.meta_billing_status || (isTest ? "not_applicable" : "unchecked"));
+  const metaBusinessId = String(row.meta_business_id || metadata.meta_business_id || "");
+  const billingPresentation = metaBillingPresentation(billingStatus);
+  const billingLabel = billingPresentation.label;
+  const billingChecked = metadata.meta_billing_checked_at ? formatProfileDate(metadata.meta_billing_checked_at) : "Not checked yet";
+  const billingBadge = !isTest && row.whatsapp_business_account_id
+    ? `<span class="wp-meta-billing-status is-${escapeHtml(billingStatus)}" data-meta-billing-badge title="Payment status for this WhatsApp Business Account">Meta payment: ${escapeHtml(billingLabel)}</span>`
+    : "";
+  const dialogId = `wpBusinessNumberDialog-${row.id}`;
+  const numberType = isTest ? "Developer test number" : isPrimary ? "Primary business number" : "Business number";
   return `<article class="wp-account-entry ${isBillingBlocked ? "billing-blocked" : ""}" data-business-number-card="${escapeHtml(row.id)}">
-    <div class="wp-account-row">
+    <button class="wp-number-card-trigger" type="button" data-open-business-number="${escapeHtml(dialogId)}" data-business-number-id="${escapeHtml(row.id)}" data-meta-billing-status="${escapeHtml(billingStatus)}" aria-haspopup="dialog" aria-controls="${escapeHtml(dialogId)}">
       <span class="wp-account-icon">WA</span>
-      <div class="wp-account-summary"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}${isPrimary ? ` <span class="wp-primary-number-badge">Primary</span>` : ""}${isTest ? ` <span class="wp-test-number-badge">Developer test</span>` : ""}${isBillingBlocked ? ` <span class="wp-billing-blocked-badge">Blocked</span>` : ""}</small></div>
-      <div class="wp-account-actions"><span class="wp-live-number-status"><i></i>${escapeHtml(metaStatus)}</span><button class="wp-account-details-toggle" type="button" data-business-number-details="${escapeHtml(row.id)}" aria-expanded="false">Details</button>${isBillingBlocked ? `<a class="wp-account-unlock" href="${workspacePath("billing-addons")}">Restore access</a>` : ""}${needsRegistration && canManageNumbers ? `<button class="wp-account-register" type="button" data-register-business-number="${escapeHtml(row.id)}">Complete registration</button>` : ""}${canManageNumbers && !isTest && row.whatsapp_business_account_id ? `<button class="wp-meta-billing" type="button" data-meta-billing-waba="${escapeHtml(row.whatsapp_business_account_id)}" data-meta-billing-business="${escapeHtml(row.meta_business_id || metadata.meta_business_id || "")}">Meta payment method</button>` : ""}${canManageNumbers ? `<button class="wp-account-remove" type="button" data-remove-business-number="${escapeHtml(row.id)}" data-business-number-label="${escapeHtml(label)}">Remove</button>` : ""}</div>
-    </div>
-    <div class="wp-account-details" data-business-number-detail-panel="${escapeHtml(row.id)}" hidden>
-      <div><span>Registration</span><strong>${escapeHtml(verification)}</strong></div><div><span>Quality</span><strong>${escapeHtml(quality)}</strong></div><div><span>Phone number ID</span><strong>${escapeHtml(row.phone_number_id || "Not assigned")}</strong></div><div><span>Last checked</span><strong>${escapeHtml(lastSync)}</strong></div>
-    </div>
-  </article>`;
+      <span class="wp-account-summary"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}</small><span class="wp-number-card-badges">${isPrimary ? `<em class="wp-primary-number-badge">Primary</em>` : ""}${isTest ? `<em class="wp-test-number-badge">Developer test</em>` : ""}${isBillingBlocked ? `<em class="wp-billing-blocked-badge">Blocked</em>` : ""}</span></span>
+      <span class="wp-number-card-side"><span class="wp-live-number-status"><i></i>${escapeHtml(metaStatus)}</span>${billingBadge}<span class="wp-number-card-open">View details <b aria-hidden="true">→</b></span></span>
+    </button>
+  </article>
+  <dialog class="wp-contact-dialog wp-business-number-dialog" id="${escapeHtml(dialogId)}">
+    <form method="dialog">
+      <header><div><span class="wp-card-eyebrow">${escapeHtml(numberType)}</span><h2>${escapeHtml(label)}</h2><p>${escapeHtml(row.verified_name || "WhatsApp Business number")}</p></div><button type="submit" value="close" aria-label="Close number details">×</button></header>
+      <section class="wp-number-modal-identity ${isBillingBlocked ? "is-blocked" : ""}"><span class="wp-account-icon">WA</span><div><small>Current status</small><strong>${escapeHtml(metaStatus)}</strong></div><span class="wp-number-modal-live"><i></i>${isBillingBlocked ? "Action required" : "Live connection"}</span></section>
+      <section class="wp-number-modal-grid" aria-label="Business number details">
+        <div><span>Display number</span><strong>${escapeHtml(row.display_phone_number || "Not assigned")}</strong></div>
+        <div><span>Verified name</span><strong>${escapeHtml(row.verified_name || "Not available")}</strong></div>
+        <div><span>Registration</span><strong>${escapeHtml(verification)}</strong></div>
+        <div><span>Quality rating</span><strong>${escapeHtml(quality)}</strong></div>
+        ${!isTest ? `<div data-meta-billing-result><span>Meta payment</span><strong data-meta-billing-label>${escapeHtml(billingLabel)}</strong><small data-meta-billing-checked>${billingStatus === "unchecked" ? "Check starts when opened" : `Checked ${escapeHtml(billingChecked)}`}</small></div>` : ""}
+        <div><span>Phone number ID</span><strong>${escapeHtml(row.phone_number_id || "Not assigned")}</strong></div>
+        <div><span>WhatsApp Business Account ID</span><strong>${escapeHtml(row.whatsapp_business_account_id || "Not assigned")}</strong></div>
+        <div><span>Meta business ID</span><strong>${escapeHtml(metaBusinessId || "Not available")}</strong></div>
+        <div><span>Last status check</span><strong>${escapeHtml(lastSync)}</strong></div>
+      </section>
+      <footer class="wp-number-modal-actions"><button class="wp-secondary" type="button" data-refresh-business-number data-business-number-id="${escapeHtml(row.id)}">Refresh status</button>${isBillingBlocked ? `<a class="wp-account-unlock wp-button-link" href="${workspacePath("billing-addons")}">Restore access</a>` : ""}${needsRegistration && canManageNumbers ? `<button class="wp-primary" type="button" data-register-business-number="${escapeHtml(row.id)}">Complete registration</button>` : ""}${canManageNumbers && !isTest && row.whatsapp_business_account_id ? `<button class="wp-secondary wp-meta-billing" type="button" data-meta-billing-waba="${escapeHtml(row.whatsapp_business_account_id)}" data-meta-billing-business="${escapeHtml(metaBusinessId)}">Manage Meta payment</button>` : ""}${canManageNumbers ? `<button class="wp-danger-button wp-account-remove" type="button" data-remove-business-number="${escapeHtml(row.id)}" data-business-number-label="${escapeHtml(label)}">Remove number</button>` : ""}</footer>
+    </form>
+  </dialog>`;
 }
 
 function accountsView(connections, setupReady) {
@@ -2353,7 +2436,10 @@ async function openBillingDocument(documentRecord, kind = "invoice") {
 function billingView(view = "billing") {
   const pkg = workspacePackageMaster?.package;
   const canManage = ["owner", "admin"].includes(session.roleCode);
-  const subscription = workspaceBilling?.subscription;
+  const returnedSubscription = workspaceBilling?.subscription;
+  const subscription = returnedSubscription && !["cancelled", "completed", "expired"].includes(String(returnedSubscription.status).toLowerCase())
+    ? returnedSubscription
+    : null;
   const addonSubscriptions = workspaceBilling?.addonSubscriptions || [];
   const renewalChange = (workspaceBilling?.renewalPriceChanges || []).find((change) => ["pending_consent", "accepted", "processing", "failed"].includes(change.status));
   const billingError = workspaceBilling?.error || workspacePackageMaster?.error || "";
@@ -2417,14 +2503,16 @@ function billingView(view = "billing") {
   const overviewPlanPrice = pkg.billing_model === "contact_sales"
     ? "Custom quote"
     : `${billingMoney(overviewPlanBase, pkg.currency)} + GST`;
-  const overviewPlanDetails = `<section class="wp-card wp-billing-overview-plan"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Current plan</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-plans")}">View plan</a></div><div class="wp-billing-overview-plan-grid"><div><span>Billing</span><strong>${escapeHtml(subscription?.billing_interval === "year" ? "Annual" : "Monthly")}</strong></div><div><span>Base price</span><strong>${escapeHtml(overviewPlanPrice)}</strong></div><div><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></div><div><span>${trialActive ? "Trial" : "Next billing"}</span><strong>${escapeHtml(trialActive ? trialCountdown : subscription?.current_end ? formatProfileDate(subscription.current_end) : "Not scheduled")}</strong></div></div></section>`;
+  const overviewPlanDetails = subscription
+    ? `<section class="wp-card wp-billing-overview-plan"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Current plan</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-plans")}">View plan</a></div><div class="wp-billing-overview-plan-grid"><div><span>Billing</span><strong>${escapeHtml(subscription.billing_interval === "year" ? "Annual" : "Monthly")}</strong></div><div><span>Base price</span><strong>${escapeHtml(overviewPlanPrice)}</strong></div><div><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></div><div><span>${trialActive ? "Trial" : "Next billing"}</span><strong>${escapeHtml(trialActive ? trialCountdown : subscription.current_end ? formatProfileDate(subscription.current_end) : "Not scheduled")}</strong></div></div></section>`
+    : `<section class="wp-card wp-billing-overview-plan"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Subscription</span><h2>No plan selected</h2><p>Choose a package to start with a fresh subscription.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("billing-plans")}">Choose a plan</a></div></section>`;
   const overviewAddonRows = overviewActiveAddons.map((item) => {
     const quantity = Math.max(1, Number(item.addon_quantity || item.quantity || 1));
     const base = Number(item.recurring_base_paise || 0) > 0 ? Number(item.recurring_base_paise) / 100 : Number(item.unit_amount || 0) * quantity;
     const price = base > 0 ? `${billingMoney(base, item.currency || "INR")} + GST` : "Price confirmed at billing";
     return `<article><div><strong>${escapeHtml(item.name || item.addon_name || item.addon_code || "Add-on")}</strong><small>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"} · ${escapeHtml(item.billing_interval === "year" ? "Annual" : "Monthly")}</small></div><span>${escapeHtml(price)}</span></article>`;
   }).join("");
-  const overviewAddons = `<section class="wp-card wp-billing-overview-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Add-ons</span><h2>${overviewActiveAddons.length ? `${overviewActiveAddons.length} active` : "No active add-ons"}</h2><p>${overviewActiveAddons.length ? "Extra services currently included in your workspace." : "Add capacity or services whenever you need them."}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-addons")}">${overviewActiveAddons.length ? "Manage add-ons" : "View add-ons"}</a></div>${overviewAddonRows ? `<div class="wp-billing-overview-addon-list">${overviewAddonRows}</div>` : ""}</section>`;
+  const overviewAddons = `<section class="wp-card wp-billing-overview-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Add-ons</span><h2>${overviewActiveAddons.length ? `${overviewActiveAddons.length} active` : "No active add-ons"}</h2><p>${overviewActiveAddons.length ? "Extra services currently included in your workspace." : "Add capacity or services whenever you need them."}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-addons")}">${overviewActiveAddons.length ? "Manage add-ons" : "Select add-on"}</a></div>${overviewAddonRows ? `<div class="wp-billing-overview-addon-list">${overviewAddonRows}</div>` : ""}</section>`;
   const addonSubscriptionCards = activeAddonSubscriptions.map((item) => {
     const addonStatus = String(item.status || "created").replaceAll("_", " ");
     const addonOpen = !["cancelled", "completed", "expired"].includes(String(item.status));
@@ -2442,13 +2530,15 @@ function billingView(view = "billing") {
   const addonSubscriptionsSection = activeAddonSubscriptions.length ? `<section class="wp-card wp-billing-addon-subscriptions"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Add-ons</span><h2>Your add-ons</h2><p>View renewals, update payment details or cancel an add-on.</p></div><span class="wp-billing-addon-count">${activeAddonSubscriptions.length} active</span></div><div class="wp-billing-addon-subscription-list">${addonSubscriptionCards}</div></section>` : "";
   const renewalInterval = subscription?.billing_interval === "year" ? "annual" : "monthly";
   const renewalAmount = (version) => Number(version?.[subscription?.billing_interval === "year" ? "annual_base_paise" : "monthly_base_paise"] || 0) / 100;
+  const companyTrialEligible = workspaceBilling?.trialEligibility?.eligible === true;
   const renewalNotice = renewalChange ? `<section class="wp-billing-price-change ${escapeHtml(renewalChange.status)}"><div><span class="wp-card-eyebrow">Renewal price notice</span><h2>${escapeHtml(renewalChange.target?.package?.name || subscription?.package_code || "Package")} ${escapeHtml(renewalInterval)} price update</h2><p>Your current billing period keeps its existing price. The revised tax-exclusive base price applies from ${escapeHtml(formatProfileDate(renewalChange.effective_at))} only after the required payment authorization.</p><dl><div><dt>Current base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.from), renewalChange.from?.currency || "INR"))}</dd></div><div><dt>New base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.target), renewalChange.target?.currency || "INR"))} + GST</dd></div></dl></div>${["pending_consent", "failed"].includes(renewalChange.status) && canManage ? `<div class="wp-billing-price-consent"><button class="wp-secondary" type="button" data-renewal-price-decision="reject" data-price-change-id="${escapeHtml(renewalChange.id)}">End at current period</button><button class="wp-primary" type="button" data-renewal-price-decision="accept" data-price-change-id="${escapeHtml(renewalChange.id)}">Accept &amp; authorize renewal</button></div>` : renewalChange.status === "accepted" && renewalChange.authorizationUrl ? `<div class="wp-billing-price-consent"><strong>Consent recorded</strong><small>Complete the replacement mandate before the renewal date.</small><a class="wp-primary wp-button-link" href="${escapeHtml(renewalChange.authorizationUrl)}" target="_blank" rel="noopener noreferrer">Continue authorization</a></div>` : `<div class="wp-billing-price-consent"><strong>${renewalChange.status === "accepted" ? "Consent recorded" : renewalChange.status === "failed" ? "Authorization needs attention" : "Renewal update processing"}</strong><small>No revised charge occurs until payment authorization is completed.</small></div>`}</section>` : "";
   const packageCards = (workspaceBilling?.packages || []).map((plan) => {
     const selfService = plan.billing_model === "subscription";
-    const active = plan.code === pkg.code;
+    const planTrialDays = companyTrialEligible ? Number(plan.trial_days || 0) : 0;
+    const active = Boolean(subscription && !["cancelled", "completed", "expired"].includes(subscription.status) && plan.code === subscription.package_code);
     const locked = Boolean(subscription && !["cancelled", "completed", "expired"].includes(subscription.status) && subscription.package_code !== plan.code);
     const upgrade = Boolean(managedSubscription && locked && Number(plan.sort_order || 0) > Number(pkg.sort_order || 0));
-    return `<article class="wp-billing-plan ${active ? "is-current" : ""}" data-billing-plan="${escapeHtml(plan.code)}"><header><div><span class="wp-card-eyebrow">${active ? "Current package" : selfService ? "Self-service package" : "Tailored package"}</span><h3>${escapeHtml(plan.name)}</h3></div>${active ? '<span class="wp-billing-current">Current</span>' : ""}</header><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${selfService ? billingMoney(plan.monthly_amount, plan.currency) : "Custom"}</strong><span>${selfService ? "/ month + GST extra" : "quote"}</span></div>${selfService ? `<small>Additional gateway fee added at checkout</small><label><span>Billing interval</span><select data-billing-interval><option value="month">Monthly · ${escapeHtml(billingMoney(plan.monthly_amount, plan.currency))} + GST</option><option value="year">Annual · ${escapeHtml(billingMoney(plan.annual_amount, plan.currency))} + GST</option></select></label>${Number(plan.trial_days || 0) ? `<small>${Number(plan.trial_days)}-day free trial starts after payment authorization. The first charge occurs after the trial. You can cancel at any time.</small>` : ""}${active && managedSubscription ? '<span class="wp-billing-current-action">Current plan active</span>' : `<button class="wp-primary" type="button" data-billing-subscribe="${escapeHtml(plan.code)}" ${!canManage || !workspaceBilling?.configured || (locked && !upgrade) ? "disabled" : ""}>${!canManage ? "Owner or admin required" : !workspaceBilling?.configured ? "Payment setup pending" : upgrade ? `Upgrade to ${escapeHtml(plan.name)}` : locked ? "Current plan active" : `Choose ${escapeHtml(plan.name)}`}</button>`}` : `<a class="wp-secondary wp-button-link" href="/contact.html?subject=${encodeURIComponent(`Enterprise billing: ${plan.name}`)}">Contact sales</a>`}</article>`;
+    return `<article class="wp-billing-plan ${active ? "is-current" : ""}" data-billing-plan="${escapeHtml(plan.code)}"><header><div><span class="wp-card-eyebrow">${active ? "Current package" : selfService ? "Self-service package" : "Tailored package"}</span><h3>${escapeHtml(plan.name)}</h3></div>${active ? '<span class="wp-billing-current">Current</span>' : ""}</header><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${selfService ? billingMoney(plan.monthly_amount, plan.currency) : "Custom"}</strong><span>${selfService ? "/ month + GST extra" : "quote"}</span></div>${selfService ? `<small>Additional gateway fee added at checkout</small><label><span>Billing interval</span><select data-billing-interval><option value="month">Monthly · ${escapeHtml(billingMoney(plan.monthly_amount, plan.currency))} + GST</option><option value="year">Annual · ${escapeHtml(billingMoney(plan.annual_amount, plan.currency))} + GST</option></select></label>${planTrialDays ? `<small>${planTrialDays}-day free trial starts after payment authorization. The first charge occurs after the trial. You can cancel at any time.</small>` : ""}${active && managedSubscription ? '<span class="wp-billing-current-action">Current plan active</span>' : `<button class="wp-primary" type="button" data-billing-subscribe="${escapeHtml(plan.code)}" ${!canManage || !workspaceBilling?.configured || (locked && !upgrade) ? "disabled" : ""}>${!canManage ? "Owner or admin required" : !workspaceBilling?.configured ? "Payment setup pending" : upgrade ? `Upgrade to ${escapeHtml(plan.name)}` : locked ? "Current plan active" : `Choose ${escapeHtml(plan.name)}`}</button>`}` : `<a class="wp-secondary wp-button-link" href="/contact.html?subject=${encodeURIComponent(`Enterprise billing: ${plan.name}`)}">Contact sales</a>`}</article>`;
   }).join("");
   const payments = (workspaceBilling?.payments || []).map((payment) => `<tr><td><strong>${escapeHtml(String(payment.provider_payment_id || "Payment"))}</strong><small>${escapeHtml(formatProfileDate(payment.paid_at || payment.created_at))}</small></td><td>${escapeHtml(payment.payment_method || "—")}</td><td><span class="wp-billing-payment-status ${escapeHtml(payment.status)}">${escapeHtml(payment.status)}</span></td><td>${escapeHtml(billingMoney(Number(payment.amount_paise || 0) / 100, payment.currency))}</td></tr>`).join("");
   const invoices = (workspaceBilling?.invoices || []).map((invoice) => `<tr><td><strong>${escapeHtml(invoice.invoice_number)}</strong><small>${escapeHtml(formatProfileDate(invoice.invoice_date))}${invoice.document_environment === "test" ? " · Test document" : ""}</small></td><td><span class="wp-billing-payment-status ${escapeHtml(invoice.status)}">${escapeHtml(invoice.status)}</span></td><td><small>Gateway invoice</small>${escapeHtml(invoice.provider_invoice_id)}<small>Transaction</small>${escapeHtml(invoice.provider_payment_id)}</td><td>${escapeHtml(billingMoney(Number(invoice.total_paise || 0) / 100, invoice.currency))}</td><td><button class="wp-secondary" type="button" data-billing-document="invoice:${escapeHtml(invoice.id)}">View PDF</button></td></tr>`).join("");
@@ -2456,8 +2546,11 @@ function billingView(view = "billing") {
   const setupNotice = workspaceBilling?.configured ? "" : `<div class="wp-verification-notice"><strong>Payment setup is in progress</strong><p>Checkout will become available when configuration is complete.</p></div>`;
   const checkoutSuccessful = new URLSearchParams(location.search).get("checkout") === "success";
   const checkoutNotice = checkoutSuccessful ? `<div class="wp-verification-notice success" role="status"><strong>Subscription activated successfully</strong><p>Your payment authorization is confirmed. Your ${escapeHtml(pkg.name)} subscription is active and workspace access has been updated.</p></div>` : "";
-  const notices = `${checkoutNotice}${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}`;
-  const packageDetails = `<section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section>`;
+  const trialEligibilityNotice = !subscription && workspaceBilling?.trialEligibility?.eligible === false
+    ? `<div class="wp-verification-notice"><strong>${workspaceBilling.trialEligibility.alreadyUsedByWorkspace ? "Trial completed" : "Not eligible for free trial"}</strong><p>${workspaceBilling.trialEligibility.alreadyUsedByWorkspace ? "Not eligible for another trial. This company has completed its one-time trial, so payment is due immediately after authorization." : "A matching company name, email, GSTIN or registration/CIN has already received the one-time trial. Payment is due immediately after authorization."}</p></div>`
+    : "";
+  const notices = `${checkoutNotice}${trialEligibilityNotice}${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}`;
+  const packageDetails = `<section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${companyTrialEligible && Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section>`;
   const invoicesSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Financial documents</span><h2>Invoices</h2><p>Invoice numbers follow the company-wide sequence, with gateway and transaction references preserved.</p></div></div>${invoices ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Invoice</th><th>Status</th><th>Gateway references</th><th>Total</th><th></th></tr></thead><tbody>${invoices}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No invoices yet</strong><p>A tax invoice is issued after a subscription payment is confirmed.</p></div>'}</section>`;
   const ledgerSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Payment ledger</span><h2>Recent payments</h2><p>Verified payments for this workspace.</p></div></div>${payments ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Payment</th><th>Method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${payments}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No payments yet</strong><p>Completed payments will appear here.</p></div>'}</section>`;
   const addonsSection = `<section class="wp-card wp-billing-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available add-ons</span><h2>Add-ons</h2><p>Add capacity or services to your workspace.</p></div></div><div class="wp-billing-addon-list">${available || '<div class="wp-inbox-empty"><strong>No add-ons available</strong><p>New add-ons will appear here when available.</p></div>'}</div></section>`;
@@ -2479,22 +2572,27 @@ function checkoutView() {
   const plan = (workspaceBilling?.packages || []).find((item) => item.code === packageCode && item.status === "active");
   if (!plan) return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Secure checkout</span><h1>Package unavailable</h1><p>Select an active self-service package from Billing &amp; usage.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div></section>`;
   const quote = workspaceCheckout?.quote?.packageCode === packageCode && workspaceCheckout?.quote?.billingInterval === interval ? workspaceCheckout.quote : null;
+  const checkoutTrialEligible = (workspaceCheckout?.trialEligibility || workspaceBilling?.trialEligibility)?.eligible === true;
+  const checkoutTrialDays = checkoutTrialEligible
+    ? quote && workspaceCheckout?.package ? Number(workspaceCheckout.package.trialDays || 0) : Number(plan.trial_days || 0)
+    : 0;
   const money = (paise) => billingMoney(Number(paise || 0) / 100, quote?.currency || plan.currency || "INR");
   const baseAmount = interval === "year" ? plan.annual_amount : plan.monthly_amount;
   const quoteAddonLines = (quote?.addons || []).map((addon) => `<div><dt>${escapeHtml(addon.name)}${addon.quantityEnabled === false ? "" : ` × ${Number(addon.quantity)}`}</dt><dd>${money(addon.baseSubtotalPaise)}</dd></div>`).join("");
   const packageQuotedBase = Math.max(0, Number(quote?.baseSubtotalPaise || 0) - (quote?.addons || []).reduce((total, addon) => total + Number(addon.baseSubtotalPaise || 0), 0));
   const selectedCheckoutAddons = new Map((quote?.addons || []).map((addon) => [addon.code, Number(addon.quantity || 1)]));
-  const checkoutAddons = (workspaceBilling?.checkoutAddons || []).filter((addon) => addon.billing_interval === interval && (!Array.isArray(addon.eligible_plan_codes) || !addon.eligible_plan_codes.length || addon.eligible_plan_codes.includes(plan.code)));
+  const checkoutAddons = (workspaceBilling?.checkoutAddons || []).filter((addon) => (addon.billing_interval === interval || (interval === "year" && addon.billing_interval === "month")) && (!Array.isArray(addon.eligible_plan_codes) || !addon.eligible_plan_codes.length || addon.eligible_plan_codes.includes(plan.code)));
   const checkoutAddonFields = checkoutAddons.length ? `<fieldset class="wp-checkout-addons"><legend>Add-ons</legend><p>Selected add-ons are included in the plan total.</p>${checkoutAddons.map((addon) => {
     const selectedQuantity = selectedCheckoutAddons.get(addon.code);
     const checked = selectedQuantity != null;
     const quantityEnabled = addon.quantity_enabled !== false;
     const minimum = Math.max(1, Number(addon.minimum_quantity || 1));
     const quantity = checked ? selectedQuantity : minimum;
-    return `<label><input type="checkbox" name="checkoutAddon" value="${escapeHtml(addon.code)}" data-checkout-addon ${checked ? "checked" : ""}/><span><strong>${escapeHtml(addon.name)}</strong><small>${escapeHtml(addon.description || "Recurring capacity add-on")}</small><em>${escapeHtml(billingMoney(addon.unit_amount, addon.currency))} / ${escapeHtml(interval)} + GST</em></span>${quantityEnabled ? `<div class="wp-quantity-stepper" data-quantity-stepper><button type="button" data-quantity-step="-1" aria-label="Decrease ${escapeHtml(addon.name)} quantity" ${checked ? "" : "disabled"}>−</button><input type="number" value="${Number(quantity)}" min="${minimum}" ${addon.maximum_quantity == null ? "" : `max="${Number(addon.maximum_quantity)}"`} step="${Math.max(1, Number(addon.quantity_step || 1))}" data-checkout-addon-quantity="${escapeHtml(addon.code)}" aria-label="${escapeHtml(addon.name)} quantity" readonly ${checked ? "" : "disabled"}/><button type="button" data-quantity-step="1" aria-label="Increase ${escapeHtml(addon.name)} quantity" ${checked ? "" : "disabled"}>+</button></div>` : ""}</label>`;
+    const checkoutUnitAmount = Number(addon.unit_amount || 0) * (interval === "year" && addon.billing_interval === "month" ? 12 : 1);
+    return `<label><input type="checkbox" name="checkoutAddon" value="${escapeHtml(addon.code)}" data-checkout-addon ${checked ? "checked" : ""}/><span><strong>${escapeHtml(addon.name)}</strong><small>${escapeHtml(addon.description || "Recurring capacity add-on")}</small><em>${escapeHtml(billingMoney(checkoutUnitAmount, addon.currency))} / ${escapeHtml(interval)} + GST${interval === "year" && addon.billing_interval === "month" ? " · annualized from monthly price" : ""}</em></span>${quantityEnabled ? `<div class="wp-quantity-stepper" data-quantity-stepper><button type="button" data-quantity-step="-1" aria-label="Decrease ${escapeHtml(addon.name)} quantity" ${checked ? "" : "disabled"}>−</button><input type="number" value="${Number(quantity)}" min="${minimum}" ${addon.maximum_quantity == null ? "" : `max="${Number(addon.maximum_quantity)}"`} step="${Math.max(1, Number(addon.quantity_step || 1))}" data-checkout-addon-quantity="${escapeHtml(addon.code)}" aria-label="${escapeHtml(addon.name)} quantity" readonly ${checked ? "" : "disabled"}/><button type="button" data-quantity-step="1" aria-label="Increase ${escapeHtml(addon.name)} quantity" ${checked ? "" : "disabled"}>+</button></div>` : ""}</label>`;
   }).join("")}</fieldset>` : "";
-  const quotePanel = quote ? `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Verified quote</span><h2>Amount summary</h2><dl class="wp-upgrade-quote"><div><dt>Package base price</dt><dd>${money(packageQuotedBase)}</dd></div>${quoteAddonLines}${quote.discountPaise ? `<div class="is-credit"><dt>Coupon ${escapeHtml(quote.couponCode || "discount")}</dt><dd>−${money(quote.discountPaise)}</dd></div>` : ""}<div><dt>Taxable base</dt><dd>${money(quote.taxableBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.packageGstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>${Number(plan.trial_days || 0) ? "Recurring amount after trial" : "Recurring payment"}</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div></dl><div class="wp-policy-note"><strong>Quote protected until ${escapeHtml(new Date(quote.expiresAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }))}</strong><p>The payment request uses this exact amount. If the quote expires, review it again.</p></div><button class="wp-primary" type="button" data-checkout-authorize="${escapeHtml(quote.id)}">Authorize securely</button></article>` : `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Amount summary</span><h2>Review required</h2><p>Apply a coupon if eligible and calculate the final total.</p></article>`;
-  return `<section class="wp-route-page wp-checkout-page"><div class="wp-route-heading"><div><span class="wp-kicker">Subscription checkout</span><h1>Review and authorize</h1><p>Confirm your plan, add-ons and final total.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div>${workspaceCheckout?.error ? `<div class="wp-verification-notice"><strong>Checkout notice</strong><p>${escapeHtml(workspaceCheckout.error)}</p></div>` : ""}<section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Selected plan</span><h2>${escapeHtml(plan.name)}</h2><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${escapeHtml(billingMoney(baseAmount, plan.currency))}</strong><span>/ ${interval === "year" ? "year" : "month"} + GST</span></div>${Number(plan.trial_days || 0) ? `<div class="wp-policy-note"><strong>${Number(plan.trial_days)}-day free trial</strong><p>Set up payment now. Your first plan charge starts after the trial.</p></div>` : ""}<form data-checkout-quote-form><input type="hidden" name="packageCode" value="${escapeHtml(plan.code)}"/><input type="hidden" name="billingInterval" value="${escapeHtml(interval)}"/>${checkoutAddonFields}<label><span>Coupon code <small>optional</small></span><input name="couponCode" maxlength="40" autocomplete="off" value="${escapeHtml(quote?.couponCode || "")}" placeholder="Enter coupon code"/></label><button class="wp-secondary" type="submit">${quote ? "Recalculate total" : "Calculate final total"}</button></form><small>Prices and coupons are verified securely.</small></article>${quotePanel}</section></section>`;
+  const quotePanel = quote ? `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Verified quote</span><h2>Amount summary</h2><dl class="wp-upgrade-quote"><div><dt>Package base price</dt><dd>${money(packageQuotedBase)}</dd></div>${quoteAddonLines}${quote.discountPaise ? `<div class="is-credit"><dt>Coupon ${escapeHtml(quote.couponCode || "discount")}</dt><dd>−${money(quote.discountPaise)}</dd></div>` : ""}<div><dt>Taxable base</dt><dd>${money(quote.taxableBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.packageGstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>${checkoutTrialDays ? "Recurring amount after trial" : "Payment due immediately"}</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div></dl><div class="wp-policy-note"><strong>${checkoutTrialDays ? `Quote protected until ${escapeHtml(new Date(quote.expiresAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }))}` : "Not eligible for free trial"}</strong><p>${checkoutTrialDays ? `This company is eligible for one ${checkoutTrialDays}-day trial. The first charge starts after the trial.` : "A matching company identity has already received the one-time trial. Payment starts immediately after authorization."}</p></div><button class="wp-primary" type="button" data-checkout-authorize="${escapeHtml(quote.id)}">Authorize securely</button></article>` : `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Amount summary</span><h2>Review required</h2><p>Apply a coupon if eligible and calculate the final total.</p></article>`;
+  return `<section class="wp-route-page wp-checkout-page"><div class="wp-route-heading"><div><span class="wp-kicker">Subscription checkout</span><h1>Review and authorize</h1><p>Confirm your plan, add-ons and final total.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div>${workspaceCheckout?.error ? `<div class="wp-verification-notice"><strong>Checkout notice</strong><p>${escapeHtml(workspaceCheckout.error)}</p></div>` : ""}<section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Selected plan</span><h2>${escapeHtml(plan.name)}</h2><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${escapeHtml(billingMoney(baseAmount, plan.currency))}</strong><span>/ ${interval === "year" ? "year" : "month"} + GST</span></div>${Number(plan.trial_days || 0) ? checkoutTrialDays ? `<div class="wp-policy-note"><strong>${checkoutTrialDays}-day free trial</strong><p>Set up payment now. Your first plan charge starts after the trial.</p></div>` : '<div class="wp-policy-note"><strong>Not eligible for free trial</strong><p>A matching company name, email, GSTIN or registration/CIN has already received the one-time trial. Payment is due immediately.</p></div>' : ""}<form data-checkout-quote-form><input type="hidden" name="packageCode" value="${escapeHtml(plan.code)}"/><input type="hidden" name="billingInterval" value="${escapeHtml(interval)}"/><div class="wp-checkout-interval"><span class="wp-checkout-interval-label">Billing interval</span><div class="wp-checkout-interval-toggle" role="group" aria-label="Billing interval"><button type="button" data-checkout-interval="month" class="${interval === "month" ? "is-active" : ""}" aria-pressed="${String(interval === "month")}"><span>Monthly</span><small>${escapeHtml(billingMoney(plan.monthly_amount, plan.currency))} + GST</small></button><button type="button" data-checkout-interval="year" class="${interval === "year" ? "is-active" : ""}" aria-pressed="${String(interval === "year")}"><span>Annual</span><small>${escapeHtml(billingMoney(plan.annual_amount, plan.currency))} + GST</small></button></div></div>${checkoutAddonFields}<label><span>Coupon code <small>optional</small></span><input name="couponCode" maxlength="40" autocomplete="off" value="${escapeHtml(quote?.couponCode || "")}" placeholder="Enter coupon code"/></label><button class="wp-secondary" type="submit">${quote ? "Recalculate total" : "Calculate final total"}</button></form><small>Coupons apply to the Package Master base price and selected add-ons enabled for that coupon. Prices and eligibility are verified securely.</small></article>${quotePanel}</section></section>`;
 }
 
 function billingAccessRequiredView() {
@@ -3068,6 +3166,21 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   }
   if (view === "checkout") {
     const quoteForm = app.querySelector("[data-checkout-quote-form]");
+    quoteForm?.querySelectorAll("[data-checkout-interval]").forEach((button) => button.addEventListener("click", async () => {
+      const nextInterval = button.dataset.checkoutInterval === "year" ? "year" : "month";
+      if (nextInterval === new FormData(quoteForm).get("billingInterval")) return;
+      quoteForm.querySelectorAll("[data-checkout-interval]").forEach((item) => {
+        const active = item === button;
+        item.classList.toggle("is-active", active);
+        item.setAttribute("aria-pressed", String(active));
+        item.disabled = true;
+      });
+      const checkoutUrl = new URL(workspacePath("checkout"), location.origin);
+      checkoutUrl.searchParams.set("package", new FormData(quoteForm).get("packageCode"));
+      checkoutUrl.searchParams.set("interval", nextInterval);
+      workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: "" };
+      await navigateWorkspace(checkoutUrl);
+    }));
     quoteForm?.addEventListener("input", (event) => {
       if (event.target?.matches?.("[data-checkout-addon]")) {
         const quantityInput = [...quoteForm.querySelectorAll("[data-checkout-addon-quantity]")].find((input) => input.dataset.checkoutAddonQuantity === event.target.value);
@@ -3097,11 +3210,11 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
         const result = await billingRequest("quote_subscription_checkout", {
           packageCode: values.get("packageCode"), billingInterval: values.get("billingInterval"), couponCode: values.get("couponCode"), addons,
         });
-        workspaceCheckout = { quote: result.quote, package: result.package, error: "" };
+        workspaceCheckout = { quote: result.quote, package: result.package, trialEligibility: result.trialEligibility, error: "" };
         showToast(result.quote?.couponCode ? `Coupon ${result.quote.couponCode} applied securely.` : "Final checkout total calculated securely.");
         await renderDashboard();
       } catch (error) {
-        workspaceCheckout = { quote: null, package: null, error: error?.message || "Checkout quote could not be calculated." };
+        workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: error?.message || "Checkout quote could not be calculated." };
         showToast(workspaceCheckout.error, "error");
         await renderDashboard();
         button.disabled = false; button.textContent = original;
@@ -4506,13 +4619,44 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       button.textContent = "Refresh";
     }
   });
-  app.querySelectorAll("[data-business-number-details]").forEach((button) => button.addEventListener("click", () => {
-    const panel = app.querySelector(`[data-business-number-detail-panel="${CSS.escape(button.dataset.businessNumberDetails || "")}"]`);
-    if (!panel) return;
-    const willOpen = panel.hidden;
-    panel.hidden = !willOpen;
-    button.setAttribute("aria-expanded", String(willOpen));
-    button.textContent = willOpen ? "Hide details" : "Details";
+  app.querySelectorAll("[data-open-business-number]").forEach((button) => button.addEventListener("click", async () => {
+    const dialog = document.getElementById(button.dataset.openBusinessNumber || "");
+    dialog?.showModal();
+    if (!dialog || button.dataset.metaBillingStatus !== "unchecked" || button.dataset.billingCheckStarted === "true") return;
+    button.dataset.billingCheckStarted = "true";
+    try {
+      const updated = await refreshBusinessNumberStatus(button.dataset.businessNumberId || "", dialog);
+      button.dataset.metaBillingStatus = String(updated?.onboarding_metadata?.meta_billing_status || "unavailable");
+      updateBusinessNumberBillingStatus(button.closest(".wp-account-entry"), updated?.onboarding_metadata || {});
+    } catch (error) {
+      button.dataset.metaBillingStatus = "unavailable";
+      showToast(error?.message || "Meta payment status could not be verified.", "error");
+    }
+  }));
+  app.querySelectorAll(".wp-business-number-dialog").forEach((dialog) => dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  }));
+  app.querySelectorAll("[data-refresh-business-number]").forEach((button) => button.addEventListener("click", async () => {
+    const original = button.textContent;
+    try {
+      button.disabled = true;
+      button.textContent = "Refreshing…";
+      const dialog = button.closest("dialog");
+      const updated = await refreshBusinessNumberStatus(button.dataset.businessNumberId || "", dialog);
+      const trigger = app.querySelector(`[data-business-number-id="${CSS.escape(String(button.dataset.businessNumberId || ""))}"][data-open-business-number]`);
+      if (trigger) {
+        trigger.dataset.metaBillingStatus = String(updated?.onboarding_metadata?.meta_billing_status || "unavailable");
+        trigger.dataset.billingCheckStarted = "true";
+        updateBusinessNumberBillingStatus(trigger.closest(".wp-account-entry"), updated?.onboarding_metadata || {});
+      }
+      showToast("Business number status refreshed.");
+      button.disabled = false;
+      button.textContent = original;
+    } catch (error) {
+      showToast(error?.message || "Business number status could not be refreshed.", "error");
+      button.disabled = false;
+      button.textContent = original;
+    }
   }));
   app.querySelectorAll("[data-meta-billing-waba]").forEach((button) => button.addEventListener("click", () => {
     const wabaId = String(button.dataset.metaBillingWaba || "").replace(/\D/g, "");
@@ -4529,6 +4673,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const removeNumberForm = app.querySelector("#wpRemoveNumberForm");
   app.querySelectorAll("[data-remove-business-number]").forEach((button) => button.addEventListener("click", () => {
     if (!removeNumberDialog || !removeNumberForm) return;
+    button.closest("dialog")?.close();
     removeNumberForm.dataset.connectionId = button.dataset.removeBusinessNumber || "";
     removeNumberForm.dataset.numberLabel = button.dataset.businessNumberLabel || "this number";
     removeNumberForm.reset();
