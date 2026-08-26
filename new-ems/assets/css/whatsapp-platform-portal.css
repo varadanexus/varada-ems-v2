@@ -2041,6 +2041,14 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-upgrade-quote .is-credit dd { color:#25d887; }
 .wp-upgrade-quote .is-total { padding:16px 14px; background:color-mix(in srgb,#25d887 9%,var(--wp-panel)); }
 .wp-upgrade-quote .is-total dt,.wp-upgrade-quote .is-total dd { color:var(--wp-text); font-size:.9rem; font-weight:900; }
+.wp-addon-coupon { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 12px; align-items:end; padding:14px; border:1px solid var(--wp-border); border-radius:14px; background:var(--wp-surface); }
+.wp-addon-coupon label { margin:0; }
+.wp-addon-coupon label > span { display:block; margin-bottom:7px; color:var(--wp-text); font-size:.7rem; font-weight:800; }
+.wp-addon-coupon label small { color:var(--wp-muted); font-weight:500; }
+.wp-addon-coupon input { width:100%; }
+.wp-addon-coupon-actions { display:flex; gap:8px; }
+.wp-addon-coupon > small { grid-column:1 / -1; color:var(--wp-muted); font-size:.6rem; line-height:1.45; }
+@media (max-width:600px) { .wp-addon-coupon { grid-template-columns:1fr; } .wp-addon-coupon-actions,.wp-addon-coupon > small { grid-column:1; } .wp-addon-coupon-actions .wp-secondary { flex:1; } }
 .wp-checkout-page .wp-billing-grid { align-items:start; grid-template-columns:minmax(0,1fr) minmax(340px,.82fr); }
 .wp-checkout-page form { display:grid; gap:12px; margin-top:24px; padding-top:20px; border-top:1px solid var(--wp-border); }
 .wp-checkout-page form label { display:grid; gap:7px; color:var(--wp-text); font-size:.74rem; font-weight:800; }

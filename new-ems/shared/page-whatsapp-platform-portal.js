@@ -2105,7 +2105,7 @@ function choosePaymentMethodUpdate(result) {
     dialog.showModal();
   });
 }
-function confirmAddonChange(preview) {
+function confirmAddonChange(preview, enteredCouponCode = "") {
   let dialog = document.querySelector("#wpBillingAddonDialog");
   if (!dialog) {
     dialog = document.createElement("dialog");
@@ -2128,29 +2128,14 @@ function confirmAddonChange(preview) {
   const policyText = isNewSubscription
     ? `${quote.masterTrialActive ? "Your master-plan trial continues unchanged. " : "Your master plan remains unchanged. "}This add-on is charged now, activates only after Razorpay confirms payment, renews on its own billing cycle, and can be cancelled separately.`
     : `The increased capacity activates only after Razorpay confirms authorization. Only the existing add-on subscription is replaced; your master plan remains active and unchanged. The new add-on recurring total starts ${escapeHtml(formatProfileDate(quote.recurringStartsAt))}.`;
-  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">${eyebrow}</span><h2>${escapeHtml(preview.addon?.name || "Add-on capacity")}</h2><p>${introduction}</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>Quantity</dt><dd>${Number(quote.currentQuantity || 0)} → ${Number(quote.targetQuantity || 0)}</dd></div>`}${serviceRow}<div><dt>${baseLabel}</dt><dd>${money(quote.proratedBasePaise)}</dd></div>${discountRow}<div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>Recurring base</dt><dd>${money(recurringBase)} + GST</dd></div></dl><div class="wp-policy-note"><strong>Independent add-on subscription</strong><p>${policyText}${quote.couponFirstPaymentOnly ? " This coupon applies only to the first successful add-on payment; later renewals use the standard add-on price." : quote.couponCode ? " The displayed coupon discount continues on this add-on subscription while the coupon terms remain applicable." : ""}</p></div><footer><button class="wp-secondary" type="submit" value="cancel">${isNewSubscription ? "Not now" : "Keep current capacity"}</button><button class="wp-primary" type="submit" value="authorize">${isNewSubscription ? "Confirm & pay now" : "Authorize add-on"}</button></footer></form>`;
+  const couponValue = String(quote.couponCode || enteredCouponCode || "").trim().toUpperCase();
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">${eyebrow}</span><h2>${escapeHtml(preview.addon?.name || "Add-on capacity")}</h2><p>${introduction}</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>Quantity</dt><dd>${Number(quote.currentQuantity || 0)} → ${Number(quote.targetQuantity || 0)}</dd></div>`}${serviceRow}<div><dt>${baseLabel}</dt><dd>${money(quote.proratedBasePaise)}</dd></div>${discountRow}<div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>Recurring base</dt><dd>${money(recurringBase)} + GST</dd></div></dl><section class="wp-addon-coupon"><label><span>Coupon code <small>optional</small></span><input name="couponCode" autocomplete="off" maxlength="40" value="${escapeHtml(couponValue)}" placeholder="Enter coupon code"></label><div class="wp-addon-coupon-actions"><button class="wp-secondary" type="submit" value="apply">${quote.couponCode ? "Recalculate" : "Apply coupon"}</button>${quote.couponCode ? `<button class="wp-secondary" type="submit" value="remove">Remove coupon</button>` : ""}</div><small>Coupon eligibility, dates, add-on applicability and redemption limits are verified by the billing server.</small></section><div class="wp-policy-note"><strong>Independent add-on subscription</strong><p>${policyText}${quote.couponFirstPaymentOnly ? " This coupon applies only to the first successful add-on payment; later renewals use the standard add-on price." : quote.couponCode ? " The displayed coupon discount continues on this add-on subscription while the coupon terms remain applicable." : ""}</p></div><footer><button class="wp-secondary" type="submit" value="cancel">${isNewSubscription ? "Not now" : "Keep current capacity"}</button><button class="wp-primary" type="submit" value="authorize">${isNewSubscription ? "Confirm & pay now" : "Authorize add-on"}</button></footer></form>`;
   return new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue === "authorize"), { once: true });
+    dialog.addEventListener("close", () => resolve({
+      action: dialog.returnValue || "cancel",
+      couponCode: String(dialog.querySelector('[name="couponCode"]')?.value || "").trim().toUpperCase(),
+    }), { once: true });
     dialog.showModal();
-  });
-}
-
-function requestAddonCoupon(addonName) {
-  let dialog = document.querySelector("#wpBillingAddonCouponDialog");
-  if (!dialog) {
-    dialog = document.createElement("dialog");
-    dialog.id = "wpBillingAddonCouponDialog";
-    dialog.className = "wp-contact-dialog wp-billing-upgrade-dialog";
-    document.body.append(dialog);
-  }
-  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on checkout</span><h2>Have a coupon?</h2><p>Enter an optional coupon for ${escapeHtml(addonName || "this add-on")}. Eligibility and the exact discount are verified securely before payment.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label>Coupon code (optional)<input name="couponCode" autocomplete="off" maxlength="40" placeholder="Enter coupon code"></label><div class="wp-policy-note"><strong>Verified pricing</strong><p>Only active coupons permitted for this add-on, plan and billing interval will be accepted.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="continue">Review price</button></footer></form>`;
-  return new Promise((resolve) => {
-    dialog.addEventListener("close", () => {
-      const couponCode = String(dialog.querySelector('[name="couponCode"]')?.value || "").trim().toUpperCase();
-      resolve(dialog.returnValue === "continue" ? { proceed: true, couponCode } : { proceed: false, couponCode: "" });
-    }, { once: true });
-    dialog.showModal();
-    dialog.querySelector('[name="couponCode"]')?.focus();
   });
 }
 
@@ -2760,15 +2745,29 @@ async function renderDashboard() {
       const original = button.textContent;
       try {
         const request = { subscriptionId: workspaceBilling?.subscription?.id, addonCode: button.dataset.billingAddonChange, quantity: quantityInput ? Number(quantityInput.value) : 1 };
-        const addonName = workspacePackageMaster?.availableAddons?.find((item) => item.code === request.addonCode)?.name || "this add-on";
-        const couponChoice = await requestAddonCoupon(addonName);
-        if (!couponChoice.proceed) return;
-        request.couponCode = couponChoice.couponCode;
+        request.couponCode = "";
         button.disabled = true; button.textContent = "Calculating proration…";
-        const preview = await billingRequest("preview_addon_change", request);
-        const approved = await confirmAddonChange(preview);
-        if (!approved) {
-          button.disabled = false; button.textContent = original; return;
+        let preview = await billingRequest("preview_addon_change", request);
+        while (true) {
+          const decision = await confirmAddonChange(preview, request.couponCode);
+          if (decision.action === "cancel") {
+            button.disabled = false; button.textContent = original; return;
+          }
+          if (decision.action === "apply" || decision.action === "remove") {
+            request.couponCode = decision.action === "remove" ? "" : decision.couponCode;
+            button.textContent = request.couponCode ? "Applying coupon…" : "Recalculating total…";
+            try {
+              preview = await billingRequest("preview_addon_change", request);
+              showToast(preview.quote?.couponCode ? `Coupon ${preview.quote.couponCode} applied securely.` : "Add-on total recalculated.");
+            } catch (error) {
+              request.couponCode = "";
+              preview = await billingRequest("preview_addon_change", request);
+              showToast(error?.message || "This coupon could not be applied.", "error");
+            }
+            button.textContent = "Reviewing add-on…";
+            continue;
+          }
+          if (decision.action === "authorize") break;
         }
         button.textContent = "Preparing add-on checkout…";
         const change = await billingRequest("change_addons", request);
