@@ -169,6 +169,31 @@ Deno.serve(async (req) => {
       await admin.from("audit_logs").insert({ event_type: "whatsapp_platform_webhook_token_rotated", action: "webhook_token_rotated", module_code: "whatsapp-platform", actor_app_user_id: appUserId, entity_type: "whatsapp_platform_provider_settings", details: { setting_key: "webhook_verify_token", secret_recorded: true }, user_agent: req.headers.get("user-agent") || null, ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null });
       return json(req, { success: true, webhookConfigured: true, webhookUpdatedAt: now, token });
     }
+    if (action === "hard_delete_tenant") {
+      const tenantId = String(body.tenantId || "").trim();
+      const confirmationName = String(body.confirmationName || "").trim();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tenantId)) {
+        return json(req, { error: "Select a valid customer account." }, 400);
+      }
+      if (body.confirmed !== true) return json(req, { error: "Confirm permanent account deletion." }, 400);
+      if (confirmationName.length < 2 || confirmationName.length > 160) {
+        return json(req, { error: "Enter the complete company name to confirm deletion." }, 400);
+      }
+      const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
+        .select("id,name").eq("id", tenantId).maybeSingle();
+      if (tenantError) throw tenantError;
+      if (!tenant) return json(req, { error: "Customer account not found." }, 404);
+      if (confirmationName !== tenant.name) {
+        return json(req, { error: "The confirmation name does not exactly match the customer account." }, 400);
+      }
+      const { data: result, error: deleteError } = await admin.rpc("whatsapp_platform_admin_hard_delete_tenant", {
+        p_tenant_id: tenantId,
+        p_confirmation_name: confirmationName,
+        p_actor_app_user_id: appUserId,
+      });
+      if (deleteError) throw deleteError;
+      return json(req, result || { success: true, tenantId });
+    }
     if (action === "billing_snapshot") {
       const [{ data: tenants, error: tenantError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentError }, { data: invoices, error: invoiceError }, { data: refunds, error: refundError }, { data: creditNotes, error: creditError }, { data: refundRequests, error: requestError }, { data: webhookErrors, error: webhookError }] = await Promise.all([
         admin.from("whatsapp_platform_tenants").select("id,name,plan_code,status"),

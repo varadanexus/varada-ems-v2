@@ -154,7 +154,7 @@ function customers() {
   const masterPackages = (state.packageMaster?.packages || []).filter((pkg) => pkg.status === "active");
   const rows = state.snapshot?.tenants || [];
   if (!rows.length) return '<section class="wa-admin-card"><h3>Customer companies</h3><p>Manage product tenants, plans and access status.</p><div class="wa-admin-empty">No customers yet. New public signups will appear here.</div></section>';
-  return `<section class="wa-admin-card"><h3>Customer companies</h3><p>Plans supply included team seats. Extra purchased seats can be assigned per customer; active members and pending invitations both consume capacity.</p><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Company</th><th>Owner</th><th>Team seats</th><th>Connections</th><th>Plan, extra seats &amp; status</th><th>Created</th></tr></thead><tbody>${rows.map((item) => {
+  const cards = rows.map((item) => {
     const planCode = item.planCode === "starter" ? "launch" : item.planCode;
     const masterPackage = masterPackages.find((pkg) => pkg.code === planCode);
     const included = masterPackage ? (masterPackage.team_member_limit == null ? null : Number(masterPackage.team_member_limit)) : (item.includedTeamSeats == null ? null : Number(item.includedTeamSeats));
@@ -162,8 +162,21 @@ function customers() {
     const extra = seatAssignment ? Number(seatAssignment.quantity || 0) : Number(item.additionalTeamSeats || 0);
     const capacity = included == null ? "Unlimited" : String(included + extra);
     const packageOptions = masterPackages.length ? masterPackages.map((pkg) => `<option value="${escapeHtml(pkg.code)}" ${planCode === pkg.code ? "selected" : ""}>${escapeHtml(pkg.name)}${pkg.status === "draft" ? " (draft)" : ""}</option>`).join("") : `<option value="${escapeHtml(planCode)}" selected>${escapeHtml(masterPackage?.name || planCode)}</option>`;
-    return `<tr><td><strong>${escapeHtml(item.name)}</strong><br><small>${escapeHtml(item.slug)}</small></td><td>${escapeHtml(item.ownerEmail)}</td><td><strong>${Number(item.userCount || 0)} / ${capacity}</strong><br><small>${included == null ? "Package unlimited" : `${included} included + ${extra} extra`}</small></td><td>${Number(item.connectionCount || 0)}</td><td>${state.canManage ? `<form class="wa-admin-inline-form" data-tenant-form="${escapeHtml(item.id)}"><label><span>Package Master assignment</span><select name="plan">${packageOptions}</select></label><label><span>Extra seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extra}" /></label><label><span>Status</span><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select></label><button type="submit">Save</button></form>` : `${escapeHtml(masterPackage?.name || planCode)} · ${capacity} seats · ${status(item.status)}`}</td><td>${escapeHtml(formatDate(item.createdAt))}</td></tr>`;
-  }).join("")}</tbody></table></div></section>`;
+    const members = item.users || [];
+    const connections = item.connections || (state.snapshot?.connections || []).filter((connection) => connection.tenantId === item.id);
+    const verification = item.verification || (state.snapshot?.verifications || []).find((entry) => entry.tenantId === item.id);
+    const memberRows = members.length ? members.map((member) => `<tr><td><strong>${escapeHtml(member.displayName || "Unnamed member")}</strong><small>${escapeHtml(member.email)}</small></td><td>${status(member.roleCode || "viewer")}</td><td>${status(member.status || "disabled")}</td><td>${escapeHtml(member.lastLoginAt ? formatDate(member.lastLoginAt) : "Never")}</td></tr>`).join("") : '<tr><td colspan="4"><div class="wa-admin-empty">No users are attached to this account.</div></td></tr>';
+    const connectionRows = connections.length ? connections.map((connection) => `<div class="wa-customer-connection"><div><strong>${escapeHtml(connection.verifiedName || connection.displayPhoneNumber || "WhatsApp connection")}</strong><small>${escapeHtml(connection.displayPhoneNumber || "Number not assigned")} · ${escapeHtml(connection.whatsappBusinessAccountId || "WABA not assigned")}</small></div>${status(connection.status || "pending")}</div>`).join("") : '<div class="wa-admin-empty">No Meta connection has been created.</div>';
+    const modal = `<section class="wa-customer-modal" data-customer-modal="${escapeHtml(item.id)}" hidden role="dialog" aria-modal="true" aria-labelledby="waCustomer-${escapeHtml(item.id)}"><div class="wa-customer-modal-shell"><header><div><span>Customer account</span><strong id="waCustomer-${escapeHtml(item.id)}">${escapeHtml(item.name)}</strong><small>${escapeHtml(item.ownerEmail)} · created ${escapeHtml(formatDate(item.createdAt))}</small></div><div>${status(item.status)}<button type="button" data-customer-modal-close aria-label="Close customer account">×</button></div></header><main>
+      <section class="wa-customer-detail-grid"><article><span>Workspace ID</span><strong class="wa-admin-code">${escapeHtml(item.id)}</strong></article><article><span>Workspace slug</span><strong>${escapeHtml(item.slug)}</strong></article><article><span>Package</span><strong>${escapeHtml(masterPackage?.name || planCode)}</strong></article><article><span>Verification</span><strong>${escapeHtml(verification?.status || item.verificationStatus || "not started")}</strong></article><article><span>Seat usage</span><strong>${Number(item.userCount || 0)} / ${capacity}</strong></article><article><span>Meta connections</span><strong>${connections.length}</strong></article></section>
+      <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>People &amp; access</span><h3>Users and roles</h3></div><small>${members.length} total records</small></div><div class="wa-admin-table-wrap"><table class="wa-admin-table wa-customer-users"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>${memberRows}</tbody></table></div></section>
+      <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Connected assets</span><h3>WhatsApp Business accounts</h3></div><small>${connections.length} connections</small></div><div class="wa-customer-connections">${connectionRows}</div></section>
+      ${state.canManage ? `<section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Account controls</span><h3>Plan and access</h3></div><small>Changes apply to this workspace</small></div><form class="wa-customer-account-form" data-tenant-form="${escapeHtml(item.id)}"><label><span>Package Master assignment</span><select name="plan">${packageOptions}</select></label><label><span>Extra seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extra}" /></label><label><span>Status</span><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select></label><button class="wa-admin-button primary" type="submit">Save account</button></form></section>` : ""}
+      ${state.hasFullAuthority ? `<section class="wa-customer-danger"><div><span>Danger zone</span><h3>Permanently delete account</h3><p>Available only for clean or test workspaces. Live subscriptions, invoices, credit notes or payments are retained and prevent deletion.</p></div><form data-customer-delete-form="${escapeHtml(item.id)}" data-customer-name="${escapeHtml(item.name)}"><label><span>Type <strong>${escapeHtml(item.name)}</strong> to confirm</span><input name="confirmationName" autocomplete="off" required /></label><label class="wa-customer-delete-check"><input name="confirmed" type="checkbox" required /><span>I understand this permanently removes the workspace, users, sessions, messages, contacts, stored file references and Meta connections.</span></label><button class="wa-admin-button danger" type="submit" disabled>Permanently delete account</button></form></section>` : ""}
+    </main></div></section>`;
+    return `<article class="wa-customer-card"><button type="button" class="wa-customer-card-open" data-open-customer="${escapeHtml(item.id)}"><header><span class="wa-customer-avatar">${escapeHtml(String(item.name || "C").slice(0, 1).toUpperCase())}</span><div><span>${escapeHtml(masterPackage?.name || planCode)} package</span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.ownerEmail)}</small></div>${status(item.status)}</header><div class="wa-customer-card-metrics"><div><span>Team</span><strong>${Number(item.userCount || 0)} / ${capacity}</strong></div><div><span>Connections</span><strong>${connections.length}</strong></div><div><span>Verification</span><strong>${escapeHtml(verification?.status || item.verificationStatus || "not started")}</strong></div></div><footer><span>Created ${escapeHtml(formatDate(item.createdAt))}</span><strong>Open account →</strong></footer></button></article>${modal}`;
+  }).join("");
+  return `<section class="wa-admin-card wa-customer-directory"><div class="wa-admin-secret-heading"><div><h3>Customer companies</h3><p>Open a company card to review its full workspace record, users, roles, connected assets, plan and protected account controls.</p></div>${status(`${rows.length}_accounts`)}</div><div class="wa-customer-card-grid">${cards}</div></section>`;
 }
 
 function connections() {
@@ -1110,10 +1123,10 @@ function content() {
 }
 
 function render() {
-  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal],body > [data-master-modal],body > [data-finance-refund-modal]").forEach((modal) => modal.remove());
+  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal],body > [data-master-modal],body > [data-finance-refund-modal],body > [data-customer-modal]").forEach((modal) => modal.remove());
   if (verificationPreviewUrl) URL.revokeObjectURL(verificationPreviewUrl);
   verificationPreviewUrl = "";
-  document.body.classList.remove("wa-document-review-open", "wa-verification-case-open", "wa-master-modal-open", "wa-finance-modal-open");
+  document.body.classList.remove("wa-document-review-open", "wa-verification-case-open", "wa-master-modal-open", "wa-finance-modal-open", "wa-customer-modal-open");
   const meta = VIEW_META[state.view] || VIEW_META.overview;
   const pageHead = document.querySelector(".page-head");
   if (pageHead) {
@@ -1130,6 +1143,7 @@ function render() {
 }
 
 function bind() {
+  document.querySelectorAll("#waAdminContent [data-customer-modal]").forEach((modal) => document.body.appendChild(modal));
   document.querySelectorAll("#waAdminContent [data-verification-case-modal]").forEach((modal) => document.body.appendChild(modal));
   document.querySelectorAll("#waAdminContent [data-master-modal]").forEach((modal) => document.body.appendChild(modal));
   const reviewModal = document.querySelector("#waAdminContent [data-document-review-modal]");
@@ -1139,6 +1153,45 @@ function bind() {
   const refundModal = document.querySelector("#waAdminContent [data-finance-refund-modal]");
   if (refundModal) document.body.appendChild(refundModal);
   document.querySelector("#waRefresh")?.addEventListener("click", () => BILLING_VIEWS.has(state.view) ? loadBillingSnapshot() : loadSnapshot());
+  const closeCustomerModal = (modal) => {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.classList.remove("wa-customer-modal-open");
+  };
+  document.querySelectorAll("[data-open-customer]").forEach((button) => button.addEventListener("click", () => {
+    const modal = [...document.querySelectorAll("[data-customer-modal]")].find((item) => item.dataset.customerModal === button.dataset.openCustomer);
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add("wa-customer-modal-open");
+    modal.querySelector("button, input, select")?.focus();
+  }));
+  document.querySelectorAll("[data-customer-modal-close]").forEach((button) => button.addEventListener("click", () => closeCustomerModal(button.closest("[data-customer-modal]"))));
+  document.querySelectorAll("[data-customer-modal]").forEach((modal) => {
+    modal.addEventListener("click", (event) => { if (event.target === modal) closeCustomerModal(modal); });
+    modal.addEventListener("keydown", (event) => { if (event.key === "Escape") closeCustomerModal(modal); });
+  });
+  document.querySelectorAll("[data-customer-delete-form]").forEach((form) => {
+    const input = form.elements.confirmationName;
+    const check = form.elements.confirmed;
+    const button = form.querySelector('button[type="submit"]');
+    const validate = () => { button.disabled = input.value !== form.dataset.customerName || !check.checked; };
+    input.addEventListener("input", validate);
+    check.addEventListener("change", validate);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault(); validate(); if (button.disabled) return;
+      button.disabled = true; button.textContent = "Deleting account…";
+      try {
+        await providerSecretRequest("hard_delete_tenant", { tenantId: form.dataset.customerDeleteForm, confirmationName: input.value, confirmed: true });
+        closeCustomerModal(form.closest("[data-customer-modal]"));
+        showToast("Customer account permanently deleted.", TOAST_TYPES.SUCCESS);
+        state.packageMaster = null;
+        await loadSnapshot();
+      } catch (error) {
+        showToast(error?.message || "Customer account could not be deleted.", TOAST_TYPES.ERROR);
+        button.textContent = "Permanently delete account"; validate();
+      }
+    });
+  });
   const closeMasterModal = (modal) => {
     if (!modal) return;
     modal.hidden = true;
@@ -1361,6 +1414,10 @@ async function loadSnapshot() {
   if (error) { state.error = error.message || "Database setup is pending."; state.snapshot = null; }
   else {
     state.snapshot = data || {};
+    if (state.view === "customers") {
+      const { data: directory, error: directoryError } = await db.rpc("whatsapp_platform_admin_customer_directory");
+      if (!directoryError && Array.isArray(directory)) state.snapshot.tenants = directory;
+    }
     const [{ data: reviews, error: reviewError }, { data: requests, error: requestError }] = await Promise.all([
       db.rpc("whatsapp_platform_admin_document_reviews"),
       db.rpc("whatsapp_platform_admin_document_requests"),
