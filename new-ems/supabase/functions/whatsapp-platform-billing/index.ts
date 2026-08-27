@@ -13,7 +13,7 @@ const DAY_MS = 86_400_000;
 const PACKAGE_GST_RATE = 0.18;
 const GATEWAY_RATE_WITH_TAX = 0.02 * 1.18;
 const DRIVE_ROOT_FOLDER_ID = Deno.env.get("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID") || "1Tnq1agDpaLCIT_ZGiDRjVOXa7KYDASQp";
-const BILLING_PDF_TEMPLATE_VERSION = 4;
+const BILLING_PDF_TEMPLATE_VERSION = 5;
 const BRAND_LOGO_URL = "https://www.varadanexus.com/images/logo.png";
 const DEFAULT_ISSUER = {
   legalName: "Varada Nexus Private Limited",
@@ -169,6 +169,18 @@ async function updateDriveFileContent(token: string, fileId: string, bytes: Uint
     const payload = await response.json().catch(() => null);
     throw new Error(payload?.error?.message || "Archived billing PDF could not be upgraded.");
   }
+}
+async function updateDriveFileName(token: string, fileId: string, fileName: string) {
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?supportsAllDrives=true&fields=id,name`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: fileName }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.error?.message || "Archived billing PDF could not be renamed.");
+  }
+  return response.json();
 }
 async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invoice" | "credit_note") {
   const pdf = await PDFDocument.create();
@@ -340,24 +352,28 @@ async function loadBillingDocument(admin: any, tenantId: string, kind: "invoice"
 async function archiveBillingDocument(admin: any, tenantId: string, kind: "invoice" | "credit_note", documentId: string, uploadedByUserId: string | null = null) {
   const table = kind === "invoice" ? "whatsapp_platform_billing_invoices" : "whatsapp_platform_billing_credit_notes";
   const { documentRecord, invoice } = await loadBillingDocument(admin, tenantId, kind, documentId);
+  const number = kind === "invoice" ? documentRecord.invoice_number : documentRecord.credit_note_number;
+  const financialYear = String(number || "").split("/").find((part: string) => /^\d{2}-\d{2}$/.test(part)) || "Unsorted";
+  const fileName = `${safeDriveSegment(number, kind === "invoice" ? "Invoice" : "Credit-Note")}.pdf`;
   if (documentRecord.pdf_drive_file_id) {
     const token = await driveAccessToken();
-    if (Number(documentRecord.pdf_template_version || 1) >= BILLING_PDF_TEMPLATE_VERSION) {
+    if (Number(documentRecord.pdf_template_version || 1) >= BILLING_PDF_TEMPLATE_VERSION && documentRecord.pdf_file_name === fileName) {
       const bytes = await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentRecord.pdf_drive_file_id)}?alt=media&${DRIVE_QS}`, token, { headers: { Accept: "application/octet-stream" } });
       return { bytes, documentRecord, invoice, archived: true };
     }
     const bytes = await generateBillingPdf(documentRecord, invoice, kind);
     await updateDriveFileContent(token, documentRecord.pdf_drive_file_id, bytes);
+    const renamed = await updateDriveFileName(token, documentRecord.pdf_drive_file_id, fileName);
+    const archivedFileName = renamed?.name || fileName;
     const upgradedAt = new Date().toISOString();
-    const { error: updateError } = await admin.from(table).update({ pdf_template_version: BILLING_PDF_TEMPLATE_VERSION, pdf_archived_at: upgradedAt, pdf_archive_error: null, updated_at: upgradedAt }).eq("id", documentId).eq("tenant_id", tenantId);
+    const { error: updateError } = await admin.from(table).update({ pdf_file_name: archivedFileName, pdf_template_version: BILLING_PDF_TEMPLATE_VERSION, pdf_archived_at: upgradedAt, pdf_archive_error: null, updated_at: upgradedAt }).eq("id", documentId).eq("tenant_id", tenantId);
     if (updateError) throw updateError;
-    await admin.from("whatsapp_platform_documents").update({ file_size: bytes.length, updated_at: upgradedAt }).eq("tenant_id", tenantId).eq("entity_type", kind === "invoice" ? "billing_invoice" : "billing_credit_note").eq("entity_id", documentId).eq("status", "active");
-    return { bytes, documentRecord: { ...documentRecord, pdf_template_version: BILLING_PDF_TEMPLATE_VERSION, pdf_archived_at: upgradedAt }, invoice, archived: true };
+    const { error: registryError } = await admin.from("whatsapp_platform_documents").update({ original_file_name: fileName, stored_file_name: archivedFileName, file_size: bytes.length, updated_at: upgradedAt }).eq("tenant_id", tenantId).eq("entity_type", kind === "invoice" ? "billing_invoice" : "billing_credit_note").eq("entity_id", documentId).eq("status", "active");
+    if (registryError) throw registryError;
+    return { bytes, documentRecord: { ...documentRecord, pdf_file_name: archivedFileName, pdf_template_version: BILLING_PDF_TEMPLATE_VERSION, pdf_archived_at: upgradedAt }, invoice, archived: true };
   }
   const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("id,name,drive_root_folder_id").eq("id", tenantId).single();
   if (tenantError || !tenant) throw new Error("Workspace Drive folder could not be resolved.");
-  const number = kind === "invoice" ? documentRecord.invoice_number : documentRecord.credit_note_number;
-  const financialYear = String(number || "").split("/").find((part: string) => /^\d{2}-\d{2}$/.test(part)) || "Unsorted";
   const token = await driveAccessToken();
   const tenantFolderName = safeDriveSegment(tenant.name, `Workspace-${tenantId.slice(0, 8)}`);
   const tenantFolderId = tenant.drive_root_folder_id || await findOrCreateDriveFolder(token, DRIVE_ROOT_FOLDER_ID, tenantFolderName);
@@ -366,7 +382,6 @@ async function archiveBillingDocument(admin: any, tenantId: string, kind: "invoi
   const typeFolderId = await findOrCreateDriveFolder(token, financeFolderId, typeFolderName);
   const yearFolderId = await findOrCreateDriveFolder(token, typeFolderId, financialYear);
   const folderPath = `${tenantFolderName} / Finance / ${typeFolderName} / ${financialYear}`;
-  const fileName = `${safeDriveSegment(number, kind === "invoice" ? "Invoice" : "Credit-Note")}.pdf`;
   const bytes = await generateBillingPdf(documentRecord, invoice, kind);
   let uploaded: any = null;
   try {
@@ -397,8 +412,8 @@ async function archiveInvoiceForPayment(admin: any, tenantId: string, providerPa
 }
 async function archiveOutstandingBillingDocuments(admin: any, tenantId: string) {
   const [{ data: invoices }, { data: notes }] = await Promise.all([
-    admin.from("whatsapp_platform_billing_invoices").select("id").eq("tenant_id", tenantId).is("pdf_drive_file_id", null).order("issued_at", { ascending: true }).limit(10),
-    admin.from("whatsapp_platform_billing_credit_notes").select("id").eq("tenant_id", tenantId).is("pdf_drive_file_id", null).order("issued_at", { ascending: true }).limit(10),
+    admin.from("whatsapp_platform_billing_invoices").select("id").eq("tenant_id", tenantId).or(`pdf_drive_file_id.is.null,pdf_template_version.lt.${BILLING_PDF_TEMPLATE_VERSION}`).order("issued_at", { ascending: true }).limit(10),
+    admin.from("whatsapp_platform_billing_credit_notes").select("id").eq("tenant_id", tenantId).or(`pdf_drive_file_id.is.null,pdf_template_version.lt.${BILLING_PDF_TEMPLATE_VERSION}`).order("issued_at", { ascending: true }).limit(10),
   ]);
   for (const invoice of invoices || []) await archiveBillingDocument(admin, tenantId, "invoice", invoice.id).catch((error) => console.error("Invoice PDF archive pending", { invoiceId: invoice.id, message: error?.message }));
   for (const note of notes || []) await archiveBillingDocument(admin, tenantId, "credit_note", note.id).catch((error) => console.error("Credit-note PDF archive pending", { creditNoteId: note.id, message: error?.message }));
@@ -2171,8 +2186,8 @@ Deno.serve(async (req) => {
     const body = raw ? JSON.parse(raw) : {};
     const admin = adminClient();
     requestAdmin = admin;
-    const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "summary");
+    const customer = await customerSession(admin, body.sessionToken);
     const mutationActions = new Set(["create_subscription", "abandon_checkout", "verify_checkout", "record_renewal_price_consent", "upgrade_subscription", "change_addons", "cancel_subscription"]);
     const previewActions = new Set(["quote_subscription_checkout", "preview_upgrade", "preview_addon_change", "sync_subscription", "payment_method_portal", "billing_document_pdf"]);
     const maxRequests = mutationActions.has(action) ? 10 : previewActions.has(action) ? 30 : 120;
