@@ -13,7 +13,7 @@ const DAY_MS = 86_400_000;
 const PACKAGE_GST_RATE = 0.18;
 const GATEWAY_RATE_WITH_TAX = 0.02 * 1.18;
 const DRIVE_ROOT_FOLDER_ID = Deno.env.get("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID") || "1Tnq1agDpaLCIT_ZGiDRjVOXa7KYDASQp";
-const BILLING_PDF_TEMPLATE_VERSION = 3;
+const BILLING_PDF_TEMPLATE_VERSION = 4;
 const BRAND_LOGO_URL = "https://www.varadanexus.com/images/logo.png";
 const DEFAULT_ISSUER = {
   legalName: "Varada Nexus Private Limited",
@@ -191,6 +191,15 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   const issuerName = pdfSafeText(issuer.legalName || issuer.tradeName || "Varada Nexus Private Limited");
   const issuerAddress = [issuer.registeredAddress, [issuer.city, issuer.gstStateName, issuer.pincode].filter(Boolean).join(", ")].filter(Boolean).join(", ");
   const customerAddress = pdfSafeText(invoice.billing_address || "Address not provided");
+  const customerStateMatch = customerAddress.match(/\bState\s*:\s*([^,]+?)(?=\s+PIN\s+Code\b|,|$)/i);
+  const customerGstin = pdfSafeText(invoice.billing_gstin || "");
+  const customerStateCode = /^\d{2}/.test(customerGstin) ? customerGstin.slice(0, 2) : "";
+  const placeOfSupply = pdfSafeText(
+    invoice.safe_metadata?.placeOfSupply
+      || invoice.safe_metadata?.place_of_supply
+      || customerStateMatch?.[1]?.trim()
+      || (customerStateCode ? `State code ${customerStateCode}` : "India"),
+  );
   const pages: any[] = [];
   let page: any, y = 0;
   const addPage = () => {
@@ -214,16 +223,17 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   }
   page.drawText(isCredit ? "Credit note details" : "Invoice details", { x: 42, y, font: bold, size: 18, color: green });
   page.drawText(`Issue date  ${pdfSafeText(new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }))}`, { x: 395, y: y + 3, font: regular, size: 9, color: muted }); y -= 28;
-  const boxY = y - 148;
-  page.drawRectangle({ x: 42, y: boxY, width: 248, height: 148, color: pale, borderColor: lineColor, borderWidth: 0.7 });
-  page.drawRectangle({ x: 305, y: boxY, width: 248, height: 148, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  const detailBoxHeight = 118;
+  const boxY = y - detailBoxHeight;
+  page.drawRectangle({ x: 42, y: boxY, width: 248, height: detailBoxHeight, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  page.drawRectangle({ x: 305, y: boxY, width: 248, height: detailBoxHeight, color: pale, borderColor: lineColor, borderWidth: 0.7 });
   page.drawText("SUPPLIER DETAILS", { x: 56, y: y - 18, font: bold, size: 8, color: emerald });
   page.drawText(issuerName, { x: 56, y: y - 37, font: bold, size: 10, color: ink, maxWidth: 220 });
   let supplierY = y - 53;
-  for (const text of wrapPdfText(issuerAddress, regular, 7.2, 220).slice(0, 3)) { page.drawText(text, { x: 56, y: supplierY, font: regular, size: 7.2, color: muted }); supplierY -= 9;
+  for (const text of wrapPdfText(issuerAddress, regular, 6.8, 220).slice(0, 2)) { page.drawText(text, { x: 56, y: supplierY, font: regular, size: 6.8, color: muted }); supplierY -= 8;
   }
   for (const value of [["GSTIN", issuer.gstin], ["CIN", issuer.cin], ["PAN", issuer.pan], ["State code", issuer.stateCode], ["Email", issuer.email], ["Web", issuer.website]].filter((entry) => entry[1])) {
-    page.drawText(`${value[0]}: ${pdfSafeText(value[1])}`, { x: 56, y: supplierY, font: regular, size: 7.2, color: muted, maxWidth: 220 }); supplierY -= 9;
+    page.drawText(`${value[0]}: ${pdfSafeText(value[1])}`, { x: 56, y: supplierY, font: regular, size: 6.8, color: muted, maxWidth: 220 }); supplierY -= 8;
   }
   page.drawText("BILL TO / RECIPIENT", { x: 319, y: y - 18, font: bold, size: 8, color: emerald });
   page.drawText(pdfSafeText(invoice.billing_name || "Customer"), { x: 319, y: y - 37, font: bold, size: 10, color: ink, maxWidth: 220 });
@@ -231,14 +241,15 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   for (const text of wrapPdfText(customerAddress, regular, 7.5, 220).slice(0, 4)) { page.drawText(text, { x: 319, y: billY, font: regular, size: 7.5, color: muted }); billY -= 10; }
   const billLines = [invoice.billing_email ? `Email: ${invoice.billing_email}` : "", invoice.billing_gstin ? `GSTIN: ${invoice.billing_gstin}` : "GSTIN: Unregistered / not provided"].filter(Boolean);
   for (const value of billLines) { page.drawText(pdfSafeText(value), { x: 319, y: billY, font: regular, size: 7.5, color: muted, maxWidth: 220 }); billY -= 10; }
-  const summaryY = boxY - 78;
-  page.drawRectangle({ x: 42, y: summaryY, width: 511, height: 66, color: white, borderColor: lineColor, borderWidth: 0.7 });
+  const summaryHeight = 66;
+  const summaryY = boxY - summaryHeight - 12;
+  page.drawRectangle({ x: 42, y: summaryY, width: 511, height: summaryHeight, color: white, borderColor: lineColor, borderWidth: 0.7 });
   page.drawText("DOCUMENT & TAX SUMMARY", { x: 56, y: summaryY + 49, font: bold, size: 8, color: emerald });
   const issueDate = pdfSafeText(new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }));
   const summaryRows = [
     [`Invoice number: ${number}`, `Issue / supply date: ${issueDate}`],
     [`Service: ${invoice.package_code || "WhatsApp Solutions"} (${invoice.billing_interval || "recurring"})`, `SAC: ${sacCode}`],
-    [`Place of supply: ${customerAddress}`, `Reverse charge: No`],
+    [`Place of supply: ${placeOfSupply}${customerStateCode ? ` (${customerStateCode})` : ""}`, `Reverse charge: No`],
   ];
   let summaryTextY = summaryY + 34;
   for (const row of summaryRows) {
@@ -246,7 +257,7 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
     page.drawText(pdfSafeText(row[1]), { x: 319, y: summaryTextY, font: regular, size: 7.3, color: muted, maxWidth: 220 }); summaryTextY -= 13;
   }
   if (isCredit && documentRecord.reason) page.drawText(pdfSafeText(`Reason: ${documentRecord.reason}`), { x: 56, y: summaryY + 7, font: regular, size: 7.3, color: muted, maxWidth: 470 });
-  y = summaryY - 24;
+  y = summaryY - 14;
   const rows: any[] = [];
   if (isCredit) rows.push({ description: `Credit against ${invoice.invoice_number || documentRecord.provider_invoice_id || "original invoice"}`, sac: sacCode, quantity: 1, basePaise: documentRecord.taxable_base_paise });
   else {
@@ -267,7 +278,7 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   drawTableHeader();
   for (const row of rows) {
     const descriptions = wrapPdfText(row.description, regular, 9, 235);
-    const rowHeight = Math.max(30, descriptions.length * 12 + 14);
+    const rowHeight = Math.max(27, descriptions.length * 11 + 12);
     if (y - rowHeight < 205) { addPage(); drawTableHeader(); }
     page.drawRectangle({ x: 42, y: y - rowHeight + 4, width: 511, height: rowHeight, color: white, borderColor: lineColor, borderWidth: 0.5 });
     let textY = y - 14;
@@ -277,8 +288,8 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
     const rate = pdfMoney(Math.round(Number(row.basePaise || 0) / Math.max(1, Number(row.quantity || 1))), currency); page.drawText(rate, { x: 466 - regular.widthOfTextAtSize(rate, 8), y: y - 14, font: regular, size: 8, color: ink });
     const money = pdfMoney(row.basePaise, currency); page.drawText(money, { x: 541 - bold.widthOfTextAtSize(money, 9), y: y - 14, font: bold, size: 9, color: ink }); y -= rowHeight;
   }
-  if (y < 345) addPage();
-  y -= 16;
+  if (y < 300) addPage();
+  y -= 10;
   const totals = [
     ["Gross service value", documentRecord.base_subtotal_paise ?? invoice.base_subtotal_paise ?? invoice.taxable_base_paise],
     ["Less: discount", -Number(documentRecord.discount_paise ?? invoice.discount_paise ?? 0)],
@@ -286,7 +297,7 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
     [`GST @ ${gstRate.toFixed(2)}%`, documentRecord.gst_paise ?? invoice.gst_paise],
     ["Additional gateway adjustment", documentRecord.gateway_adjustment_paise ?? invoice.gateway_adjustment_paise],
   ];
-  page.drawRectangle({ x: 42, y: y - 142, width: 248, height: 150, color: rgb(0.96, 0.98, 0.97), borderColor: lineColor, borderWidth: 0.7 });
+  page.drawRectangle({ x: 42, y: y - 118, width: 248, height: 126, color: rgb(0.96, 0.98, 0.97), borderColor: lineColor, borderWidth: 0.7 });
   page.drawText("AMOUNT IN WORDS", { x: 56, y: y - 16, font: bold, size: 8, color: emerald });
   let wordsY = y - 35;
   for (const text of wrapPdfText(amountInWords(documentRecord.total_paise ?? invoice.total_paise), bold, 8.5, 220).slice(0, 4)) { page.drawText(text, { x: 56, y: wordsY, font: bold, size: 8.5, color: ink }); wordsY -= 12; }
@@ -294,14 +305,14 @@ async function generateBillingPdf(documentRecord: any, invoice: any, kind: "invo
   page.drawText(`GST rate: ${gstRate.toFixed(2)}%  |  Reverse charge: No`, { x: 56, y: wordsY - 25, font: regular, size: 7.5, color: muted });
   page.drawText(`Payment status: ${isCredit ? "Refund processed" : "Paid / captured"}`, { x: 56, y: wordsY - 39, font: regular, size: 7.5, color: muted });
   page.drawText("Supply classification: Information technology services", { x: 56, y: wordsY - 53, font: regular, size: 7.2, color: muted, maxWidth: 220 });
-  page.drawRectangle({ x: 305, y: y - 142, width: 248, height: 150, color: pale, borderColor: lineColor, borderWidth: 0.7 });
+  page.drawRectangle({ x: 305, y: y - 118, width: 248, height: 126, color: pale, borderColor: lineColor, borderWidth: 0.7 });
   let totalsY = y - 15;
-  for (const [label, value] of totals) { page.drawText(String(label), { x: 319, y: totalsY, font: regular, size: 8.2, color: muted }); const money = pdfMoney(value, currency); page.drawText(money, { x: 539 - bold.widthOfTextAtSize(money, 8.5), y: totalsY, font: bold, size: 8.5, color: ink }); totalsY -= 19; }
+  for (const [label, value] of totals) { page.drawText(String(label), { x: 319, y: totalsY, font: regular, size: 8.2, color: muted }); const money = pdfMoney(value, currency); page.drawText(money, { x: 539 - bold.widthOfTextAtSize(money, 8.5), y: totalsY, font: bold, size: 8.5, color: ink }); totalsY -= 16; }
   page.drawLine({ start: { x: 319, y: totalsY + 8 }, end: { x: 539, y: totalsY + 8 }, thickness: 1, color: green });
   page.drawText(isCredit ? "Credit total" : "Invoice total", { x: 319, y: totalsY - 8, font: bold, size: 10, color: green });
   const grand = pdfMoney(documentRecord.total_paise ?? invoice.total_paise, currency); page.drawText(grand, { x: 539 - bold.widthOfTextAtSize(grand, 12), y: totalsY - 9, font: bold, size: 12, color: green });
-  const refY = y - 172;
-  page.drawRectangle({ x: 42, y: refY - 72, width: 511, height: 78, color: rgb(0.96, 0.98, 0.97), borderColor: emerald, borderWidth: 0.8 });
+  const refY = y - 142;
+  page.drawRectangle({ x: 42, y: refY - 54, width: 511, height: 60, color: rgb(0.96, 0.98, 0.97), borderColor: emerald, borderWidth: 0.8 });
   page.drawText("PAYMENT GATEWAY REFERENCES", { x: 56, y: refY - 12, font: bold, size: 8, color: emerald });
   page.drawText(pdfSafeText(`Gateway invoice: ${documentRecord.provider_invoice_id || invoice.provider_invoice_id || "Not provided"}`), { x: 56, y: refY - 31, font: regular, size: 8, color: muted });
   page.drawText(pdfSafeText(`Transaction ID: ${documentRecord.provider_payment_id || invoice.provider_payment_id || "Not provided"}`), { x: 56, y: refY - 47, font: regular, size: 8, color: muted });
