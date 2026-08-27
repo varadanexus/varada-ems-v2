@@ -2513,7 +2513,7 @@ function billingView(view = "billing") {
     const assignment = assignedAddonMap.get(addon.code);
     const currentQuantity = assignment?.assignmentStatus === "active" ? Math.max(0, Number(assignment.quantity || 0)) : 0;
     const quantityEnabled = addon.quantity_enabled !== false;
-    if (currentQuantity > 0 && addon.billing_model === "one_time") return "";
+    if (currentQuantity > 0 && !quantityEnabled) return "";
     const managedAddon = { ...addon, billingManaged: assignment?.billingManaged === true };
     const recurrence = addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval)} · recurring base price + GST` : "Contact billing for terms";
     const current = currentQuantity > 0
