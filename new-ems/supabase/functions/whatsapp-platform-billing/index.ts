@@ -2016,7 +2016,13 @@ async function cancelSubscription(admin: any, customer: any, body: any, credenti
     }, credentials);
   }
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
-  const { error: updateError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: cancelAtCycleEnd, updated_at: new Date().toISOString() }).eq("id", subscription.id);
+  const cancellationMetadata = {
+    ...(subscription.safe_metadata || {}),
+    cancellation_reason: "customer_requested",
+    cancellation_requested_at: new Date().toISOString(),
+    disconnect_connections_requested: !isAddonSubscription && body.disconnectConnections === true,
+  };
+  const { error: updateError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: cancelAtCycleEnd, safe_metadata: cancellationMetadata, updated_at: new Date().toISOString() }).eq("id", subscription.id);
   if (updateError) throw updateError;
   const revokeAddonEntitlement = async (addonSubscription: any) => {
     const endedAt = new Date().toISOString();

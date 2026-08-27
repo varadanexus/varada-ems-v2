@@ -136,6 +136,91 @@ async function decryptSecret(value: string, context: string) {
   return new TextDecoder().decode(decrypted);
 }
 
+async function decryptConnectionCredential(value: string) {
+  const [version, ivText, payloadText] = String(value || "").split(".");
+  if (version !== "v1" || !ivText || !payloadText) throw new Error("The stored Meta authorization is invalid.");
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: decodeBase64Url(ivText) },
+    await encryptionKey(),
+    decodeBase64Url(payloadText),
+  );
+  return JSON.parse(new TextDecoder().decode(decrypted));
+}
+
+function graphVersion() {
+  const version = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
+  if (!/^v\d{1,3}\.0$/.test(version)) throw new Error("Meta connection management is not configured.");
+  return version;
+}
+
+async function appSecretProof(accessToken: string, appSecret: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(appSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(accessToken));
+  return Array.from(new Uint8Array(signature)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function graphRequest(path: string, accessToken: string, appSecret: string, init: RequestInit = {}) {
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/${path.replace(/^\//, "")}`);
+  url.searchParams.set("appsecret_proof", await appSecretProof(accessToken, appSecret));
+  const response = await fetch(url, { ...init, headers: { Authorization: `Bearer ${accessToken}`, ...(init.headers || {}) } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error?.message || `Meta request failed (${response.status}).`);
+  return payload;
+}
+
+async function disconnectConnection(admin: any, appUserId: string, connectionId: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) throw new Error("Select a valid WhatsApp connection.");
+  const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
+    .select("id,tenant_id,status,phone_number_id,display_phone_number,verified_name,whatsapp_business_account_id,onboarding_metadata")
+    .eq("id", connectionId).neq("status", "disconnected").maybeSingle();
+  if (connectionError) throw connectionError;
+  if (!connection) throw new Error("This number is already disconnected.");
+  if (!/^\d{5,40}$/.test(String(connection.phone_number_id || ""))) throw new Error("This connection does not have a valid Meta phone number ID.");
+  const { data: stored, error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+    .select("credential_ciphertext,expires_at").eq("connection_id", connection.id).eq("tenant_id", connection.tenant_id).maybeSingle();
+  if (credentialError) throw credentialError;
+  if (!stored?.credential_ciphertext) throw new Error("The Meta authorization is unavailable. Ask the customer to reconnect before removing this number.");
+  if (stored.expires_at && new Date(stored.expires_at).getTime() <= Date.now()) throw new Error("The Meta authorization has expired. Ask the customer to reconnect before removing this number.");
+  const credentials = await decryptConnectionCredential(stored.credential_ciphertext);
+  const accessToken = String(credentials?.accessToken || "").trim();
+  if (accessToken.length < 20) throw new Error("The stored Meta authorization is invalid.");
+  const { data: appSecretRow, error: appSecretError } = await admin.from("whatsapp_platform_provider_settings").select("encrypted_value").eq("setting_key", "meta_app_secret").maybeSingle();
+  if (appSecretError) throw appSecretError;
+  const appSecret = appSecretRow?.encrypted_value ? await decryptSecret(appSecretRow.encrypted_value, "meta_app_secret") : env("WHATSAPP_PLATFORM_META_APP_SECRET");
+  if (!appSecret) throw new Error("Meta connection management is not configured.");
+  const phoneNumberId = String(connection.phone_number_id);
+  let phone = await graphRequest(`${phoneNumberId}?fields=id,status`, accessToken, appSecret);
+  if (["CONNECTED", "ACTIVE", "READY"].includes(String(phone?.status || "").toUpperCase())) {
+    await graphRequest(`${phoneNumberId}/deregister`, accessToken, appSecret, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp" }) });
+    for (const delay of [750, 1500, 3000, 5000]) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      phone = await graphRequest(`${phoneNumberId}?fields=id,status`, accessToken, appSecret);
+      if (!["CONNECTED", "ACTIVE", "READY"].includes(String(phone?.status || "").toUpperCase())) break;
+    }
+    if (["CONNECTED", "ACTIVE", "READY"].includes(String(phone?.status || "").toUpperCase())) throw new Error("Meta accepted the request but the number is still connected. Nothing was removed locally; try again shortly.");
+  }
+  const now = new Date().toISOString();
+  const { error: updateError } = await admin.from("whatsapp_platform_connections").update({
+    status: "disconnected", updated_at: now,
+    onboarding_metadata: { ...(connection.onboarding_metadata || {}), phone_status: String(phone?.status || "DEREGISTERED").toUpperCase(), removed_from_workspace_at: now, deregistered_from_meta_at: now, removal_source: "ems_admin_customer_request", removed_by_app_user_id: appUserId },
+  }).eq("id", connection.id).eq("tenant_id", connection.tenant_id);
+  if (updateError) throw updateError;
+  const { error: deleteError } = await admin.from("whatsapp_platform_provider_credentials").delete().eq("connection_id", connection.id).eq("tenant_id", connection.tenant_id);
+  if (deleteError) {
+    await admin.from("whatsapp_platform_connections").update({ status: connection.status, onboarding_metadata: connection.onboarding_metadata || {}, updated_at: new Date().toISOString() }).eq("id", connection.id).eq("tenant_id", connection.tenant_id);
+    throw deleteError;
+  }
+  const { data: remaining, error: remainingError } = await admin.from("whatsapp_platform_connections").select("status").eq("tenant_id", connection.tenant_id).in("status", ["connected", "pending"]);
+  if (remainingError) throw remainingError;
+  const onboardingStatus = (remaining || []).some((item: any) => item.status === "connected") ? "meta_connected" : (remaining || []).some((item: any) => item.status === "pending") ? "meta_pending" : "profile_complete";
+  await admin.from("whatsapp_platform_tenants").update({ onboarding_status: onboardingStatus, updated_at: now }).eq("id", connection.tenant_id);
+  await Promise.all([
+    admin.from("whatsapp_platform_onboarding_events").insert({ tenant_id: connection.tenant_id, connection_id: connection.id, event_code: "connection_disconnected", safe_metadata: { source: "ems_admin_customer_request", displayPhoneNumber: connection.display_phone_number || null, verifiedName: connection.verified_name || null, phoneNumberId, whatsappBusinessAccountId: connection.whatsapp_business_account_id || null, deregisteredFromMeta: true, actorAppUserId: appUserId } }),
+    admin.from("audit_logs").insert({ event_type: "whatsapp_platform_connection_disconnected", action: "disconnect_connection", module_code: "whatsapp-platform", actor_app_user_id: appUserId, entity_type: "whatsapp_platform_connections", entity_id: connection.id, details: { tenant_id: connection.tenant_id, phone_number_id: phoneNumberId, display_phone_number: connection.display_phone_number || null, source: "explicit_customer_request", non_payment_action: false } }),
+  ]);
+  return { success: true, connectionId: connection.id, tenantId: connection.tenant_id, status: "disconnected" };
+}
+
 async function razorpayCredentials(admin: any) {
   const { data, error } = await admin.from("whatsapp_platform_provider_settings").select("setting_key,encrypted_value").in("setting_key", ["razorpay_key_id", "razorpay_key_secret"]);
   if (error) throw error;
@@ -193,6 +278,10 @@ Deno.serve(async (req) => {
     const body = raw ? JSON.parse(raw) : {};
     const { appUserId, admin } = await authority(req);
     const action = String(body.action || "status");
+    if (action === "disconnect_connection") {
+      if (String(body.confirmation || "") !== "DISCONNECT") return json(req, { error: "Type DISCONNECT to confirm permanent number removal." }, 400);
+      return json(req, await disconnectConnection(admin, appUserId, String(body.connectionId || "").trim()));
+    }
     if (action === "status") {
       const { data, error } = await admin.from("whatsapp_platform_provider_settings")
         .select("setting_key,updated_at").in("setting_key", ["meta_app_secret", "webhook_verify_token", "razorpay_key_id", "razorpay_key_secret", "razorpay_webhook_secret"]);

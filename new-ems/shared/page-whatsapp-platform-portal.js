@@ -2233,12 +2233,8 @@ function confirmBillingCancellation(subscription) {
     dialog.className = "wp-contact-dialog wp-billing-cancellation-dialog";
     document.body.append(dialog);
   }
-  const trialEndsAt = subscription?.trial_ends_at || subscription?.charge_at || null;
-  const trialActive = Boolean(subscription?.status === "authenticated" && Number(subscription?.trial_days || 0) > 0 && trialEndsAt && new Date(trialEndsAt).getTime() > Date.now());
-  const periodEnd = subscription?.current_end ? formatProfileDate(subscription.current_end) : "the end of the current billed cycle";
-  dialog.innerHTML = trialActive
-    ? `<form method="dialog"><header><div><span class="wp-card-eyebrow">Subscription cancellation</span><h2>Cancel your free trial now?</h2><p>Your plan, add-ons and workspace access will end immediately.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Current plan</span><strong>${escapeHtml(planName(subscription?.package_code || workspacePackageMaster?.package?.code))}</strong></div><div><span>Cancellation timing</span><strong>Immediately</strong></div></section><ul class="wp-cancellation-effects"><li>No subscription or add-on renewal charge will be collected.</li><li>Invoices and payment records remain available in Billing &amp; usage.</li></ul><footer><button class="wp-secondary" type="submit" value="keep">Keep trial</button><button class="wp-confirm-cancel" type="submit" value="confirm">Cancel trial now</button></footer></form>`
-    : `<form method="dialog"><header><div><span class="wp-card-eyebrow">Subscription cancellation</span><h2>Cancel at the end of this billing cycle?</h2><p>Your paid access remains active until the current cycle ends.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Current plan</span><strong>${escapeHtml(planName(subscription?.package_code || workspacePackageMaster?.package?.code))}</strong></div><div><span>Access remains active until</span><strong>${escapeHtml(periodEnd)}</strong></div></section><ul class="wp-cancellation-effects"><li>Your current package and paid features remain available through ${escapeHtml(periodEnd)}.</li><li>The plan and its add-ons will not renew for another cycle.</li><li>Invoices and payment records remain available in Billing &amp; usage.</li></ul><footer><button class="wp-secondary" type="submit" value="keep">Keep subscription</button><button class="wp-confirm-cancel" type="submit" value="confirm">Cancel at period end</button></footer></form>`;
+  const attachedNumbers = workspaceConnections.filter((connection) => connection.status !== "disconnected").length;
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Subscription cancellation</span><h2>Cancel subscription and disconnect numbers?</h2><p>This is a voluntary cancellation. Plan access, add-ons and Meta connections will end immediately.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Current plan</span><strong>${escapeHtml(planName(subscription?.package_code || workspacePackageMaster?.package?.code))}</strong></div><div><span>Numbers to disconnect</span><strong>${attachedNumbers}</strong></div></section><ul class="wp-cancellation-effects"><li>Every attached number will be deregistered from WhatsApp Cloud API and its stored authorization removed.</li><li>Existing conversations, invoices, payment records and audit history remain available.</li><li>A payment failure does not perform this removal; it blocks access and preserves all number connections.</li></ul><label><span>Type <strong>CANCEL</strong> to confirm</span><input name="confirmation" autocomplete="off" required pattern="CANCEL" /></label><footer><button class="wp-secondary" type="submit" value="keep">Keep subscription</button><button class="wp-confirm-cancel" type="submit" value="confirm">Cancel and disconnect</button></footer></form>`;
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
     dialog.showModal();
@@ -3174,16 +3170,18 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       const confirmed = await confirmBillingCancellation(workspaceBilling?.subscription);
       if (!confirmed) return;
       const original = button.textContent;
-      const subscription = workspaceBilling?.subscription;
-      const trialEndsAt = subscription?.trial_ends_at || subscription?.charge_at || null;
-      const trialActive = Boolean(subscription?.status === "authenticated" && Number(subscription?.trial_days || 0) > 0 && trialEndsAt && new Date(trialEndsAt).getTime() > Date.now());
       try {
         button.disabled = true;
-        button.textContent = trialActive ? "Cancelling…" : "Scheduling…";
-        const result = await billingRequest("cancel_subscription", { subscriptionId: button.dataset.billingCancel, cancelAtCycleEnd: !trialActive });
-        showToast(result.cancellationMode === "immediate"
-          ? "Trial cancelled. Subscription and add-on access have ended."
-          : `Cancellation scheduled. The plan and add-ons remain active until their current billing periods end.`);
+        button.textContent = "Cancelling and disconnecting…";
+        await billingRequest("cancel_subscription", { subscriptionId: button.dataset.billingCancel, cancelAtCycleEnd: false, cancellationReason: "customer_requested", disconnectConnections: true });
+        const connections = workspaceConnections.filter((connection) => connection.status !== "disconnected");
+        const failures = [];
+        for (const connection of connections) {
+          try { await onboardingRequest("remove_connection", { connectionId: connection.id }); }
+          catch (error) { failures.push(`${connection.display_phone_number || connection.verified_name || "Number"}: ${error?.message || "disconnection failed"}`); }
+        }
+        if (failures.length) throw new Error(`Subscription cancelled, but ${failures.length} number connection${failures.length === 1 ? "" : "s"} still require removal. ${failures.join(" ")}`);
+        showToast(`Subscription cancelled. ${connections.length} number connection${connections.length === 1 ? "" : "s"} removed from Meta.`);
         await renderDashboard();
       }
       catch (error) { showToast(error?.message || "Subscription could not be cancelled.", "error"); button.disabled = false; button.textContent = original; }
