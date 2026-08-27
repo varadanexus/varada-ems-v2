@@ -1972,8 +1972,11 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-billing-addon-subscription-meta span { padding:5px 8px; border:1px solid var(--wp-border); border-radius:999px; color:var(--wp-muted); font-size:.68rem; font-weight:750; }
 .wp-billing-addon-subscription-actions { display:grid; justify-items:end; gap:9px; flex:0 0 auto; }
 .wp-billing-addon { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:17px; border:1px solid var(--wp-border); border-radius:14px; background:color-mix(in srgb,var(--wp-panel) 78%,transparent); }
+.wp-billing-addon.is-active-recurring { border-color:color-mix(in srgb,var(--wp-accent) 34%,var(--wp-border)); background:linear-gradient(110deg,color-mix(in srgb,var(--wp-accent) 7%,var(--wp-panel)),color-mix(in srgb,var(--wp-panel) 82%,transparent)); }
 .wp-billing-addon h3 { margin:4px 0; color:var(--wp-text); }
 .wp-billing-addon p { margin:0; color:var(--wp-muted); }
+.wp-billing-addon-current { display:block; width:max-content; margin-top:9px; padding:5px 8px; border:1px solid color-mix(in srgb,var(--wp-accent) 30%,var(--wp-border)); border-radius:999px; color:var(--wp-muted); font-size:.69rem; }
+.wp-billing-addon-current strong { color:var(--wp-accent); }
 .wp-billing-addon > div:last-child { min-width:155px; text-align:right; }
 .wp-billing-addon > div:last-child strong,.wp-billing-addon > div:last-child small,.wp-billing-addon > div:last-child a { display:block; }
 .wp-billing-addon > div:last-child strong { color:var(--wp-text); }

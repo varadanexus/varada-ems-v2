@@ -2485,11 +2485,12 @@ function billingView(view = "billing") {
   const limits = [["Team seats",pkg.team_member_limit],["WhatsApp numbers",pkg.whatsapp_number_limit],["Contacts",pkg.contact_limit],["Messages / month",pkg.monthly_message_limit],["Templates",pkg.template_limit],["Flows",pkg.flow_limit],["Campaigns",pkg.campaign_limit],["Automations",pkg.automation_limit],["Integrations",pkg.integration_limit],["Storage",pkg.storage_limit_mb == null ? null : `${Number(pkg.storage_limit_mb).toLocaleString("en-IN")} MB`]];
   const labels = { team_inbox:"Team inbox",contacts:"Contacts",templates:"Message templates",campaigns:"Campaigns",flows:"Flows",automations:"Automations",api_access:"API access",priority_support:"Priority support",analytics:"Analytics" };
   const features = Object.entries(pkg.entitlements || {}).map(([key,value]) => `<li class="${value === false ? "off" : "on"}"><span>${value === false ? "×" : "✓"}</span><strong>${escapeHtml(labels[key] || key.replaceAll("_", " "))}</strong><small>${typeof value === "string" ? escapeHtml(value) : value === false ? "Not included" : "Included"}</small></li>`).join("");
-  const assignedCodes = new Set((workspacePackageMaster.addons || []).map((addon) => addon.code));
+  const assignedAddonMap = new Map((workspacePackageMaster.addons || []).map((addon) => [addon.code, addon]));
   const managedSubscription = Boolean(subscription && ["authenticated", "active"].includes(String(subscription.status)));
   const addonManageReady = Boolean(canManage && workspaceBilling?.configured && ["authenticated", "active"].includes(String(subscription?.status)) && !subscription?.cancel_at_cycle_end);
   const addonControl = (addon, currentQuantity = 0) => {
-    const selfService = addon.is_self_service && addon.billing_model === "recurring" && addon.billing_interval === subscription?.billing_interval;
+    const intervalCompatible = addon.billing_interval === subscription?.billing_interval || (subscription?.billing_interval === "year" && addon.billing_interval === "month");
+    const selfService = addon.is_self_service && addon.billing_model === "recurring" && intervalCompatible;
     if (!selfService) return `<a href="/contact.html?subject=${encodeURIComponent(`WhatsApp add-on: ${addon.name}`)}">Contact sales →</a>`;
     if (!canManage) return '<span class="wp-billing-current-action">Owner or admin required</span>';
     const unavailableReason = !workspaceBilling?.configured
@@ -2508,7 +2509,18 @@ function billingView(view = "billing") {
     const minimum = currentQuantity ? currentQuantity + step : Math.max(1, Number(addon.minimum_quantity || 1));
     return `<div class="wp-billing-addon-control">${quantityEnabled ? `<div class="wp-quantity-stepper" data-quantity-stepper><button type="button" data-quantity-step="-1" aria-label="Decrease ${escapeHtml(addon.name)} quantity">−</button><input type="number" data-billing-addon-quantity="${escapeHtml(addon.code)}" min="${minimum}" ${addon.maximum_quantity == null ? "" : `max="${Number(addon.maximum_quantity)}"`} step="${step}" value="${minimum}" aria-label="${escapeHtml(addon.name)} quantity" readonly/><button type="button" data-quantity-step="1" aria-label="Increase ${escapeHtml(addon.name)} quantity">+</button></div>` : ""}<button class="wp-secondary" type="button" data-billing-addon-change="${escapeHtml(addon.code)}" data-billing-addon-current="${Number(currentQuantity)}">${currentQuantity ? "Increase" : "Add"}</button></div>`;
   };
-  const available = (workspacePackageMaster.availableAddons || []).filter((addon) => !assignedCodes.has(addon.code)).map((addon) => `<article class="wp-billing-addon available"><div><span class="wp-card-eyebrow">Available add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${addon.billing_model === "contact_sales" ? "Custom quote" : billingMoney(addon.unit_amount, addon.currency)}</strong><small>${addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval)} · base price + GST` : "Contact billing for terms"}</small>${addonControl(addon, 0)}</div></article>`).join("");
+  const available = (workspacePackageMaster.availableAddons || []).map((addon) => {
+    const assignment = assignedAddonMap.get(addon.code);
+    const currentQuantity = assignment?.assignmentStatus === "active" ? Math.max(0, Number(assignment.quantity || 0)) : 0;
+    const quantityEnabled = addon.quantity_enabled !== false;
+    if (currentQuantity > 0 && addon.billing_model === "one_time") return "";
+    const managedAddon = { ...addon, billingManaged: assignment?.billingManaged === true };
+    const recurrence = addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval)} · recurring base price + GST` : "Contact billing for terms";
+    const current = currentQuantity > 0
+      ? `<small class="wp-billing-addon-current">Current recurring quantity: <strong>${currentQuantity.toLocaleString("en-IN")} ${escapeHtml(addon.unit_name || "unit")}${currentQuantity === 1 ? "" : "s"}</strong></small>`
+      : "";
+    return `<article class="wp-billing-addon available ${currentQuantity ? "is-active-recurring" : ""}"><div><span class="wp-card-eyebrow">${currentQuantity ? "Active recurring add-on" : "Available add-on"}</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p>${current}</div><div><strong>${addon.billing_model === "contact_sales" ? "Custom quote" : billingMoney(addon.unit_amount, addon.currency)}</strong><small>${recurrence}</small>${addon.billing_model === "recurring" || !currentQuantity ? addonControl(managedAddon, quantityEnabled ? currentQuantity : 0) : '<span class="wp-billing-current-action">Active</span>'}</div></article>`;
+  }).join("");
   const model = pkg.billing_model === "contact_sales" ? "Custom agreement" : pkg.billing_model === "free" ? "Free" : "Subscription";
   const statusLabel = String(subscription?.status || "No paid subscription").replaceAll("_", " ");
   const subscriptionOpen = subscription && !["cancelled", "completed", "expired"].includes(subscription.status);
