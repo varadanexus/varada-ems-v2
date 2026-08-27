@@ -188,6 +188,8 @@
 .wa-status.pending,.wa-status.not_connected { background: rgba(231,190,82,.12); color: #e4c266 !important; }
 .wa-status.checking,.wa-status.not_configured { background: rgba(231,190,82,.12); color: #e4c266 !important; }
 .wa-status.suspended,.wa-status.restricted,.wa-status.disconnected { background: rgba(239,87,87,.12); color: #f18989 !important; }
+.wa-status.access_blocked { background:rgba(239,87,87,.12); color:#f18989 !important; }
+.wa-status.access_unknown { background:rgba(231,190,82,.12); color:#e4c266 !important; }
 .wa-admin-table-wrap { overflow-x: auto; border: 1px solid rgba(255,255,255,.07); border-radius: 14px; }
 .wa-admin-table { width: 100%; border-collapse: collapse; min-width: 760px; }
 .wa-admin-table th,.wa-admin-table td { padding: 14px; border-bottom: 1px solid rgba(255,255,255,.07); text-align: left; vertical-align: middle; }
@@ -570,6 +572,11 @@
 .wa-customer-connections { display:grid; gap:9px; }
 .wa-customer-connection { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px; border:1px solid rgba(255,255,255,.07); border-radius:11px; background:#090b0a; }
 .wa-connection-company-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(310px,1fr)); gap:14px; margin-top:20px; }
+.wa-connection-search { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:5px 14px; margin-top:18px; padding:12px 14px; border:1px solid rgba(255,255,255,.085); border-radius:12px; background:#0b0f0c; }
+.wa-connection-search > span { grid-column:1/-1; color:#d8ba63; font-size:9px; font-weight:850; letter-spacing:.1em; text-transform:uppercase; }
+.wa-connection-search input { width:100%; padding:11px 12px; border:1px solid rgba(37,211,102,.2); border-radius:9px; outline:0; background:#090b0a; color:#f2f4ef; }
+.wa-connection-search input:focus { border-color:rgba(37,211,102,.58); box-shadow:0 0 0 3px rgba(37,211,102,.08); }
+.wa-connection-search small { color:#7f8982; }
 .wa-connection-company-card { overflow:hidden; border:1px solid rgba(218,178,83,.18); border-radius:15px; background:linear-gradient(145deg,#0b120e,#0a0d0b); transition:border-color .18s ease,transform .18s ease,box-shadow .18s ease; }
 .wa-connection-company-card:hover { transform:translateY(-2px); border-color:rgba(37,211,102,.46); box-shadow:0 18px 44px rgba(0,0,0,.26); }
 .wa-connection-company-card > button { width:100%; padding:0; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }

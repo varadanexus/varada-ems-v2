@@ -282,6 +282,15 @@ Deno.serve(async (req) => {
       if (String(body.confirmation || "") !== "DISCONNECT") return json(req, { error: "Type DISCONNECT to confirm permanent number removal." }, 400);
       return json(req, await disconnectConnection(admin, appUserId, String(body.connectionId || "").trim()));
     }
+    if (action === "connection_access_snapshot") {
+      const { data: tenants, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("id").limit(1000);
+      if (tenantError) throw tenantError;
+      const accessEntries = await Promise.all((tenants || []).map(async (tenant: any) => {
+        const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: tenant.id });
+        return [tenant.id, error ? { allowed: null, state: "unknown", reason: "Billing access could not be verified." } : data];
+      }));
+      return json(req, { accessByTenant: Object.fromEntries(accessEntries) });
+    }
     if (action === "status") {
       const { data, error } = await admin.from("whatsapp_platform_provider_settings")
         .select("setting_key,updated_at").in("setting_key", ["meta_app_secret", "webhook_verify_token", "razorpay_key_id", "razorpay_key_secret", "razorpay_webhook_secret"]);
