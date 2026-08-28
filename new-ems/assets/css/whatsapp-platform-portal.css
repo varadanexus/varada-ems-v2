@@ -1733,6 +1733,10 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-contact-identity strong,.wp-contact-identity small,.wp-contact-activity span,.wp-contact-activity small { display: block; }
 .wp-contact-identity strong { color: var(--wp-workspace-text); font-size: .72rem; }
 .wp-contact-identity small,.wp-contact-activity small { margin-top: .2rem; color: var(--wp-workspace-subtle); font-size: .59rem; }
+.wp-contact-category { width: fit-content; display: inline-flex; margin-top: .35rem; padding: .2rem .42rem; border: 1px solid var(--wp-workspace-line); border-radius: 999px; background: var(--wp-workspace-surface-soft); color: var(--wp-workspace-muted); font-size: .5rem; font-style: normal; font-weight: 850; letter-spacing: .035em; text-transform: uppercase; }
+.wp-contact-category.is-lead,.wp-contact-category.is-prospect { border-color: color-mix(in srgb,var(--wp-workspace-gold) 36%,var(--wp-workspace-line)); color: var(--wp-workspace-gold); }
+.wp-contact-category.is-customer { border-color: color-mix(in srgb,var(--wp-workspace-accent) 38%,var(--wp-workspace-line)); color: var(--wp-workspace-accent-strong); }
+.wp-contact-category.is-partner,.wp-contact-category.is-vendor { border-color: color-mix(in srgb,#739ff5 38%,var(--wp-workspace-line)); color: #8fb2f8; }
 .wp-contact-activity span { color: var(--wp-workspace-muted); font-size: .65rem; }
 .wp-contact-status { padding: .28rem .5rem; border: 1px solid var(--wp-workspace-line); border-radius: 999px; color: var(--wp-workspace-muted); font-size: .58rem; font-weight: 800; text-transform: capitalize; }
 .wp-contact-status.active { border-color: color-mix(in srgb,var(--wp-workspace-accent) 30%,var(--wp-workspace-line)); color: var(--wp-workspace-accent-strong); }

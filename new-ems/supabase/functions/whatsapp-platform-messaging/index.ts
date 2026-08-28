@@ -314,12 +314,15 @@ async function updateTeamMember(admin: any, customer: any, body: any) {
 async function listContacts(admin: any, customer: any, body: any) {
   const requestedStatus = String(body.status || "");
   const status = ["active","blocked"].includes(requestedStatus) ? requestedStatus : null;
+  const requestedCategory = String(body.category || "");
+  const category = ["uncategorized","lead","prospect","customer","partner","vendor","other"].includes(requestedCategory) ? requestedCategory : null;
   const marketingOptedOut = requestedStatus === "opted_out";
   const connection = body.connectionId ? await ownedBusinessNumber(admin, customer, body.connectionId) : null;
   let query = admin.from("whatsapp_platform_contacts")
-    .select("id,wa_id,phone_e164,profile_name,display_name,status,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,last_inbound_at,last_outbound_at,created_at,updated_at")
+    .select("id,wa_id,phone_e164,profile_name,display_name,status,contact_category,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,last_inbound_at,last_outbound_at,created_at,updated_at")
     .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).limit(500);
   if (status) query = query.eq("status", status);
+  if (category) query = query.eq("contact_category", category);
   if (marketingOptedOut) query = query.not("marketing_opt_out_at", "is", null);
   const { data: contacts, error } = await query;
   if (error) throw error;
@@ -969,6 +972,10 @@ async function addNote(admin: any, customer: any, body: any) {
 async function updateContact(admin: any, customer: any, body: any) {
   if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot update contacts.");
   const contactId = cleanUuid(body.contactId, "contact");
+  const { data: current, error: currentError } = await admin.from("whatsapp_platform_contacts")
+    .select("id,contact_category,marketing_opt_in_at,marketing_opt_out_at")
+    .eq("id", contactId).eq("tenant_id", customer.tenant_id).maybeSingle();
+  if (currentError || !current) throw new Error("Contact not found.");
   const updates: any = { updated_at: new Date().toISOString() };
   if (body.displayName !== undefined) {
     const displayName = String(body.displayName || "").trim();
@@ -981,8 +988,13 @@ async function updateContact(admin: any, customer: any, body: any) {
     if (!["active","blocked"].includes(status)) throw new Error("Invalid contact status.");
     updates.status = status;
   }
+  if (body.contactCategory !== undefined) {
+    const category = String(body.contactCategory || "uncategorized");
+    if (!["uncategorized","lead","prospect","customer","partner","vendor","other"].includes(category)) throw new Error("Select a valid contact category.");
+    updates.contact_category = category;
+  }
+  let consentEventType = "";
   if (body.marketingConsent !== undefined) {
-    if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can record marketing consent.");
     const consent = String(body.marketingConsent || "unknown");
     const sources = new Set(["website","form","qr_code","keyword","inbound_request","imported_proof","manual_record","api"]);
     if (!['unknown','opted_in','opted_out'].includes(consent)) throw new Error("Select a valid marketing consent state.");
@@ -992,16 +1004,26 @@ async function updateContact(admin: any, customer: any, body: any) {
       updates.marketing_opt_in_at = new Date().toISOString();
       updates.marketing_opt_in_source = source;
       updates.marketing_opt_out_at = null;
+      if (!current.marketing_opt_in_at || current.marketing_opt_out_at) consentEventType = "opt_in";
     } else if (consent === "opted_out") {
       updates.marketing_opt_out_at = new Date().toISOString();
+      if (!current.marketing_opt_out_at) consentEventType = "opt_out";
     } else {
       updates.marketing_opt_in_at = null;
       updates.marketing_opt_in_source = null;
       updates.marketing_opt_out_at = null;
     }
   }
-  const { data, error } = await admin.from("whatsapp_platform_contacts").update(updates).eq("id", contactId).eq("tenant_id", customer.tenant_id).select("id,display_name,status,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,updated_at").single();
+  const { data, error } = await admin.from("whatsapp_platform_contacts").update(updates).eq("id", contactId).eq("tenant_id", customer.tenant_id).select("id,display_name,status,contact_category,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,updated_at").single();
   if (error || !data) throw new Error("Contact could not be updated.");
+  if (consentEventType) {
+    const { error: eventError } = await admin.from("whatsapp_platform_marketing_consent_events").insert({
+      tenant_id: customer.tenant_id, connection_id: null, contact_id: contactId,
+      event_type: consentEventType, source: "manual", keyword: null,
+      confirmation_status: "recorded", occurred_at: new Date().toISOString(),
+    });
+    if (eventError) throw new Error("Contact was updated, but the consent audit event could not be recorded.");
+  }
   return { contact: data };
 }
 
