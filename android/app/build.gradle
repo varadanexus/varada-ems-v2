@@ -10,6 +10,9 @@ android {
     namespace = "com.varadanexus.ems"
     compileSdk = rootProject.ext.compileSdkVersion
     flavorDimensions "distribution"
+    buildFeatures {
+        buildConfig = true
+    }
     defaultConfig {
         applicationId "com.varadanexus.ems"
         minSdkVersion rootProject.ext.minSdkVersion
