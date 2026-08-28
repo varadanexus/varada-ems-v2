@@ -1566,6 +1566,96 @@ async function submitAuthForm(event) {
   }
 }
 
+function onboardingWalkthroughs() {
+  return [
+    {
+      title: "Team inbox",
+      description: "Handle customer conversations together with ownership, status and a complete message history.",
+      href: workspacePath("inbox"),
+      action: "Take me to the inbox",
+      points: ["See every customer conversation in one shared queue", "Assign ownership and keep follow-ups organised", "Reply with complete customer and message context"],
+      visual: `<div class="wp-tour-inbox"><span class="wp-tour-avatar">A</span><div><i></i><i></i><i></i></div><b>2</b></div>`
+    },
+    {
+      title: "Contacts",
+      description: "Keep customer identity, consent and conversation activity organised in one directory.",
+      href: workspacePath("contacts"),
+      action: "Explore contacts",
+      points: ["Search customer records by identity and number", "Review consent and messaging eligibility", "Open linked conversations without losing context"],
+      visual: `<div class="wp-tour-contacts"><span>A</span><span>R</span><span>S</span><div><i></i><i></i></div></div>`
+    },
+    {
+      title: "Campaigns",
+      description: "Build targeted WhatsApp campaigns using approved templates and consent-aware audiences.",
+      href: workspacePath("campaigns"),
+      action: "Explore campaigns",
+      points: ["Choose an eligible customer audience", "Use approved templates for compliant outreach", "Review delivery progress and campaign performance"],
+      visual: `<div class="wp-tour-campaign"><span>◎</span><div><i></i><i></i><i></i></div><b>74%</b></div>`
+    },
+    {
+      title: "Message templates",
+      description: "Create and manage reusable Meta-approved messages for customer-initiated outreach.",
+      href: workspacePath("templates"),
+      action: "Explore templates",
+      points: ["Build utility, marketing and authentication messages", "Track Meta review and approval status", "Reuse approved content across campaigns and conversations"],
+      visual: `<div class="wp-tour-template"><span>Hi {{1}}</span><i></i><i></i><b>Approved</b></div>`
+    },
+    {
+      title: "Flows & automation",
+      description: "Design guided customer journeys and connect repeatable actions without manual work.",
+      href: workspacePath("flows"),
+      action: "Explore flows",
+      points: ["Build connected steps on a visual canvas", "Route customers using buttons and conditions", "Reduce repetitive work with reusable journeys"],
+      visual: `<div class="wp-tour-flow"><span>Start</span><i></i><span>Message</span><i></i><span>Done</span></div>`
+    },
+    {
+      title: "Analytics",
+      description: "Track messaging activity, service performance and operational trends across your workspace.",
+      href: workspacePath("analytics"),
+      action: "Explore analytics",
+      points: ["Understand message and conversation volume", "Monitor response and resolution performance", "Use workspace trends to improve operations"],
+      visual: `<div class="wp-tour-analytics"><i style="height:34%"></i><i style="height:58%"></i><i style="height:46%"></i><i style="height:82%"></i><i style="height:68%"></i></div>`
+    }
+  ];
+}
+
+function onboardingWalkthroughDialog() {
+  return `<dialog class="wp-onboarding-tour-dialog" id="wpOnboardingTourDialog">
+    <div class="wp-onboarding-tour-dialog-shell">
+      <header><div><span class="wp-card-eyebrow">Interactive portal walkthrough</span><h2 data-tour-title>Feature walkthrough</h2></div><button type="button" data-close-onboarding-tour aria-label="Close walkthrough">×</button></header>
+      <div class="wp-onboarding-tour-player" data-tour-player aria-label="Animated feature preview"></div>
+      <section class="wp-onboarding-tour-details"><p data-tour-description></p><ul data-tour-points></ul></section>
+      <footer><a class="wp-primary wp-button-link" data-tour-destination href="${workspacePath("overview")}">Take me there <span aria-hidden="true">→</span></a></footer>
+    </div>
+  </dialog>`;
+}
+
+function bindOnboardingWalkthrough(root) {
+  const dialog = root.querySelector("#wpOnboardingTourDialog");
+  if (!dialog) return;
+  const walkthroughs = onboardingWalkthroughs();
+  const title = dialog.querySelector("[data-tour-title]");
+  const description = dialog.querySelector("[data-tour-description]");
+  const points = dialog.querySelector("[data-tour-points]");
+  const player = dialog.querySelector("[data-tour-player]");
+  const destination = dialog.querySelector("[data-tour-destination]");
+  root.querySelectorAll("[data-open-onboarding-tour]").forEach((button) => button.addEventListener("click", () => {
+    const index = Number(button.dataset.openOnboardingTour);
+    const item = walkthroughs[index];
+    if (!item) return;
+    title.textContent = item.title;
+    description.textContent = item.description;
+    points.innerHTML = item.points.map((point) => `<li><span aria-hidden="true">✓</span>${escapeHtml(point)}</li>`).join("");
+    player.className = `wp-onboarding-tour-player is-${index + 1}`;
+    player.innerHTML = `<div class="wp-tour-live-label"><i></i>Live preview</div><div class="wp-onboarding-tour-live-visual">${item.visual}</div>`;
+    destination.href = item.href;
+    destination.innerHTML = `${escapeHtml(item.action)} <span aria-hidden="true">→</span>`;
+    dialog.showModal();
+  }));
+  dialog.querySelector("[data-close-onboarding-tour]")?.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+}
+
 function onboardingView(setupReady, connections) {
   const metaConnected = connections.length > 0;
   const phoneConnected = connections.some((row) => row.phone_number_id);
@@ -1583,54 +1673,10 @@ function onboardingView(setupReady, connections) {
   const onboardingComplete = stages.every((stage) => stage.complete);
 
   if (onboardingComplete) {
-    const walkthroughs = [
-      {
-        title: "Team inbox",
-        description: "Handle customer conversations together with ownership, status and a complete message history.",
-        href: workspacePath("inbox"),
-        action: "Open team inbox",
-        visual: `<div class="wp-tour-inbox"><span class="wp-tour-avatar">A</span><div><i></i><i></i><i></i></div><b>2</b></div>`
-      },
-      {
-        title: "Contacts",
-        description: "Keep customer identity, consent and conversation activity organised in one directory.",
-        href: workspacePath("contacts"),
-        action: "View contacts",
-        visual: `<div class="wp-tour-contacts"><span>A</span><span>R</span><span>S</span><div><i></i><i></i></div></div>`
-      },
-      {
-        title: "Campaigns",
-        description: "Build targeted WhatsApp campaigns using approved templates and consent-aware audiences.",
-        href: workspacePath("campaigns"),
-        action: "Explore campaigns",
-        visual: `<div class="wp-tour-campaign"><span>◎</span><div><i></i><i></i><i></i></div><b>74%</b></div>`
-      },
-      {
-        title: "Message templates",
-        description: "Create and manage reusable Meta-approved messages for customer-initiated outreach.",
-        href: workspacePath("templates"),
-        action: "Manage templates",
-        visual: `<div class="wp-tour-template"><span>Hi {{1}}</span><i></i><i></i><b>Approved</b></div>`
-      },
-      {
-        title: "Flows & automation",
-        description: "Design guided customer journeys and connect repeatable actions without manual work.",
-        href: workspacePath("flows"),
-        action: "Open flows",
-        visual: `<div class="wp-tour-flow"><span>Start</span><i></i><span>Message</span><i></i><span>Done</span></div>`
-      },
-      {
-        title: "Analytics",
-        description: "Track messaging activity, service performance and operational trends across your workspace.",
-        href: workspacePath("analytics"),
-        action: "View analytics",
-        visual: `<div class="wp-tour-analytics"><i style="height:34%"></i><i style="height:58%"></i><i style="height:46%"></i><i style="height:82%"></i><i style="height:68%"></i></div>`
-      }
-    ];
-    const walkthroughCards = walkthroughs.map((item, index) => `<a class="wp-onboarding-tour-card" href="${item.href}" aria-label="${escapeHtml(item.action)}">
+    const walkthroughCards = onboardingWalkthroughs().map((item, index) => `<button class="wp-onboarding-tour-card" type="button" data-open-onboarding-tour="${index}" aria-label="Preview ${escapeHtml(item.title)}">
       <div class="wp-onboarding-tour-visual is-${index + 1}" aria-hidden="true">${item.visual}</div>
-      <div class="wp-onboarding-tour-copy"><span>0${index + 1}</span><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.description)}</p><strong>${escapeHtml(item.action)} <b aria-hidden="true">→</b></strong></div>
-    </a>`).join("");
+      <div class="wp-onboarding-tour-copy"><span>0${index + 1}</span><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.description)}</p><strong>View walkthrough <b aria-hidden="true">→</b></strong></div>
+    </button>`).join("");
     return `<section class="wp-route-page wp-onboarding-page wp-onboarding-complete-page">
       <section class="wp-onboarding-complete-hero">
         <div class="wp-onboarding-complete-copy"><span class="wp-kicker">Premium onboarding completed</span><h1>Your WhatsApp workspace is ready</h1><p><strong>${escapeHtml(session.companyName || "Your business")}</strong> is verified, connected to Meta and ready to serve customers. Use this guided walkthrough to explore the portal.</p><div class="wp-onboarding-complete-actions"><a class="wp-primary wp-button-link" href="${workspacePath("overview")}">Go to workspace overview <span aria-hidden="true">→</span></a><a class="wp-secondary wp-button-link" href="${workspacePath("inbox")}">Start with the inbox</a></div></div>
@@ -1639,6 +1685,7 @@ function onboardingView(setupReady, connections) {
       <section class="wp-onboarding-tour-intro"><div><span class="wp-card-eyebrow">Portal walkthrough</span><h2>Everything you need to operate WhatsApp</h2><p>Select any feature to open it directly. You can return to this walkthrough from Onboarding at any time.</p></div><span class="wp-onboarding-complete-badge">4 of 4 setup steps complete</span></section>
       <div class="wp-onboarding-tour-grid">${walkthroughCards}</div>
       <section class="wp-onboarding-next-steps wp-card"><div><span class="wp-card-eyebrow">Optional next step</span><h2>Bring your team into the workspace</h2><p>Team invitation is not required for onboarding. Add colleagues only when you are ready to share conversations and assign roles.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("team")}">Manage team &amp; roles <span aria-hidden="true">→</span></a></section>
+      ${onboardingWalkthroughDialog()}
     </section>`;
   }
 
@@ -2975,6 +3022,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const persistentSidebar = preserveSidebar ? existingShell.querySelector(".wp-workspace-sidebar") : null;
   const sidebarWasCollapsed = Boolean(existingShell?.classList.contains("sidebar-collapsed"));
   app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  bindOnboardingWalkthrough(app);
   const nextShell = app.querySelector(".wp-workspace-shell");
   if (persistentSidebar) {
     nextShell?.querySelector(".wp-workspace-sidebar")?.replaceWith(persistentSidebar);
