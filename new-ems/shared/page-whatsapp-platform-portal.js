@@ -3873,7 +3873,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog" id="wpAddContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Add contact</h2></div><button type="button" data-close-add-contact aria-label="Close">×</button></header><label><span>Contact name</span><input name="displayName" maxlength="200" autocomplete="name" required /></label><label><span>WhatsApp number</span><input name="phone" type="tel" inputmode="tel" maxlength="24" placeholder="+91 98765 43210" autocomplete="tel" required /><small>Include the country code. We will store the number in international format.</small></label><footer><button class="wp-secondary" type="button" data-close-add-contact>Cancel</button><button class="wp-primary" type="submit" value="save">Add contact</button></footer></form></dialog>`);
     app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-contact-duplicate-dialog" id="wpDuplicateContactDialog"><section><header><div><span class="wp-card-eyebrow">Duplicate contact found</span><h2>Choose which contact details to keep</h2><p>The WhatsApp number already belongs to a contact. No duplicate will be created.</p></div><button type="button" data-close-contact-duplicate aria-label="Close">×</button></header><div class="wp-duplicate-contact-choices"><button type="button" data-manual-duplicate-choice="existing"><span>Existing contact</span><strong data-duplicate-existing-name>—</strong><small data-duplicate-existing-phone>—</small><b>Keep existing</b></button><button type="button" data-manual-duplicate-choice="incoming"><span>New contact details</span><strong data-duplicate-incoming-name>—</strong><small data-duplicate-incoming-phone>—</small><b>Use new details</b></button></div><p class="wp-duplicate-guidance">Choosing new details updates the existing contact name; message history and consent records remain attached to the same number.</p></section></dialog>`);
     const importCountryOptions = countryDialEntries().map((country) => `<option value="${country.dial}" ${country.code === "IN" ? "selected" : ""}>${countryFlag(country.code)} ${escapeHtml(country.name)} (${country.dial})</option>`).join("");
-    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-contact-import-dialog" id="wpImportContactsDialog"><form id="wpImportContactsForm"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Import contacts</h2><p>Bring contacts from another phone, CRM or spreadsheet. Large imports are processed securely in batches.</p></div><button type="button" data-close-contact-import aria-label="Close">×</button></header><section class="wp-import-methods"><article><strong>Upload a file</strong><span>CSV, Google Contacts, Outlook or vCard</span><label class="wp-import-file"><input name="contactFile" type="file" accept=".csv,.txt,.vcf,text/csv,text/plain,text/vcard" /><b>Choose CSV or VCF</b><small data-import-file-name>No file selected</small></label></article><article><strong>Paste a list</strong><span>One contact per line: Name, +number</span><textarea name="pastedContacts" rows="6" placeholder="Ananya Rao, +91 98765 43210&#10;Rohan Mehta, +44 7700 900123"></textarea></article></section><div class="wp-import-options"><label><span>Default country for local numbers</span><select name="defaultDialCode">${importCountryOptions}</select></label><div><span>Duplicate protection</span><strong>Every duplicate must be reviewed before import</strong></div></div><div class="wp-policy-note"><strong>Marketing consent is not imported automatically</strong><p>Imported contacts are eligible for service conversations only. Record explicit, auditable consent before including them in marketing campaigns.</p></div><section class="wp-import-preview" data-import-preview><div><strong>Ready to review</strong><span>Choose a file or paste contacts to see a validated preview.</span></div></section><footer><button class="wp-secondary" type="button" data-download-contact-template>Download CSV template</button><button class="wp-secondary" type="button" data-close-contact-import>Cancel</button><button class="wp-primary" type="submit" disabled>Review contacts</button></footer></form></dialog>`);
+    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-contact-import-dialog" id="wpImportContactsDialog"><form id="wpImportContactsForm"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Import contacts</h2><p>Bring contacts from Google, another phone, CRM or spreadsheet. Large imports are processed securely in batches.</p></div><button type="button" data-close-contact-import aria-label="Close">×</button></header><button class="wp-google-contact-import" type="button" data-google-contact-import><span aria-hidden="true"><b>G</b></span><span><strong>Import from Google Contacts</strong><small>Sign in to Google and grant one-time, read-only access. You review every contact before importing.</small></span><em>Continue with Google&nbsp; →</em></button><section class="wp-import-methods"><article><strong>Upload a file</strong><span>CSV, Google export, Outlook or vCard</span><label class="wp-import-file"><input name="contactFile" type="file" accept=".csv,.txt,.vcf,text/csv,text/plain,text/vcard" /><b>Choose CSV or VCF</b><small data-import-file-name>No file selected</small></label></article><article><strong>Paste a list</strong><span>One contact per line: Name, +number</span><textarea name="pastedContacts" rows="6" placeholder="Ananya Rao, +91 98765 43210&#10;Rohan Mehta, +44 7700 900123"></textarea></article></section><div class="wp-import-options"><label><span>Default country for local numbers</span><select name="defaultDialCode">${importCountryOptions}</select></label><div><span>Duplicate protection</span><strong>Every duplicate must be reviewed before import</strong></div></div><div class="wp-policy-note"><strong>Marketing consent is not imported automatically</strong><p>Imported contacts are eligible for service conversations only. Record explicit, auditable consent before including them in marketing campaigns.</p></div><section class="wp-import-preview" data-import-preview><div><strong>Ready to review</strong><span>Connect Google, choose a file or paste contacts to see a validated preview.</span></div></section><footer><button class="wp-secondary" type="button" data-download-contact-template>Download CSV template</button><button class="wp-secondary" type="button" data-close-contact-import>Cancel</button><button class="wp-primary" type="submit" disabled>Review contacts</button></footer></form></dialog>`);
   }
   if (view === "inbox") {
     const activeContacts = (workspaceContacts?.contacts || []).filter((contact) => contact.status === "active");
@@ -4951,6 +4951,8 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const importPreview = importContactsForm?.querySelector("[data-import-preview]");
   let importFileText = "";
   let importFileName = "";
+  let importProviderContacts = [];
+  let importProviderLabel = "";
   let importReadyContacts = [];
   let importLocalChoices = new Map();
   let importExistingDuplicates = new Map();
@@ -4964,7 +4966,16 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     if (!importContactsForm || !importPreview) return;
     const pasteMode = Boolean(importPasteInput?.value.trim());
     const source = pasteMode ? importPasteInput.value : importFileText;
-    const parsed = source ? parseContactImport(source, importFileName, importContactsForm.elements.defaultDialCode.value, pasteMode) : { contacts: [], errors: [] };
+    const defaultDialCode = importContactsForm.elements.defaultDialCode.value;
+    const providerParsed = importProviderContacts.length ? importProviderContacts.reduce((result, contact, index) => {
+      const phone = normalizeImportedPhone(contact?.phone, defaultDialCode);
+      const displayName = String(contact?.displayName || `Google contact ${index + 1}`).trim().replace(/\s+/g, " ").slice(0, 200) || `Google contact ${index + 1}`;
+      if (phone) result.contacts.push({ displayName, phone });
+      else result.errors.push(`${displayName}: invalid phone number.`);
+      return result;
+    }, { contacts: [], errors: [] }) : null;
+    const parsed = providerParsed || (source ? parseContactImport(source, importFileName, defaultDialCode, pasteMode) : { contacts: [], errors: [] });
+    const hasSource = Boolean(importProviderContacts.length || source);
     const groups = new Map();
     parsed.contacts.forEach((contact) => groups.set(contact.phone, [...(groups.get(contact.phone) || []), contact]));
     [...importLocalChoices.keys()].forEach((phone) => { if (!groups.has(phone)) importLocalChoices.delete(phone); });
@@ -4973,8 +4984,8 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     const submitter = importContactsForm.querySelector('button[type="submit"]');
     submitter.disabled = !importReadyContacts.length;
     submitter.textContent = importReadyContacts.length ? `${importDuplicatesReviewed ? "Import" : "Review"} ${importReadyContacts.length.toLocaleString("en-IN")} contact${importReadyContacts.length === 1 ? "" : "s"}` : "Review contacts";
-    if (!source) {
-      importPreview.innerHTML = "<div><strong>Ready to review</strong><span>Choose a file or paste contacts to see a validated preview.</span></div>";
+    if (!hasSource) {
+      importPreview.innerHTML = "<div><strong>Ready to review</strong><span>Connect Google, choose a file or paste contacts to see a validated preview.</span></div>";
       return;
     }
     const rows = importReadyContacts.slice(0, 8).map((contact) => `<li><span>${escapeHtml(contact.displayName)}</span><strong>${escapeHtml(contact.phone)}</strong></li>`).join("");
@@ -4987,7 +4998,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     }).join("") : "";
     const workspaceDuplicates = importDuplicatesReviewed ? `<section class="wp-import-duplicates wp-workspace-import-duplicates"><header><div><strong>${importExistingDuplicates.size.toLocaleString("en-IN")} duplicate${importExistingDuplicates.size === 1 ? "" : "s"} already in the workspace</strong><span>${importExistingDuplicates.size ? "Choose the details to keep for every matching number." : "No existing workspace duplicates were found."}</span></div><b>${importExistingDuplicates.size ? "Selection required" : "Clear"}</b></header>${workspaceDuplicateRows ? `<div>${workspaceDuplicateRows}</div>` : ""}</section>` : "";
     const issueCopy = [duplicateGroups.length ? `${duplicateGroups.length} duplicate number${duplicateGroups.length === 1 ? "" : "s"} in file` : "", parsed.errors.length ? `${parsed.errors.length} invalid row${parsed.errors.length === 1 ? "" : "s"} skipped` : ""].filter(Boolean).join(" · ");
-    importPreview.innerHTML = `<header><div><strong>${importReadyContacts.length.toLocaleString("en-IN")} unique valid contact${importReadyContacts.length === 1 ? "" : "s"}</strong><span>${issueCopy || "All local rows passed validation"}</span></div><b>${importDuplicatesReviewed ? "Reviewed" : "Review required"}</b></header>${rows ? `<ol>${rows}</ol>` : ""}${importReadyContacts.length > 8 ? `<small>Plus ${(importReadyContacts.length - 8).toLocaleString("en-IN")} more contacts</small>` : ""}${localDuplicates}${workspaceDuplicates}${parsed.errors.length ? `<details><summary>View skipped rows</summary><p>${parsed.errors.slice(0, 100).map(escapeHtml).join("<br>")}${parsed.errors.length > 100 ? `<br>Plus ${(parsed.errors.length - 100).toLocaleString("en-IN")} more invalid rows` : ""}</p></details>` : ""}`;
+    importPreview.innerHTML = `<header><div><strong>${importReadyContacts.length.toLocaleString("en-IN")} unique valid contact${importReadyContacts.length === 1 ? "" : "s"}</strong><span>${importProviderLabel ? `${escapeHtml(importProviderLabel)} · ` : ""}${issueCopy || "All rows passed validation"}</span></div><b>${importDuplicatesReviewed ? "Reviewed" : "Review required"}</b></header>${rows ? `<ol>${rows}</ol>` : ""}${importReadyContacts.length > 8 ? `<small>Plus ${(importReadyContacts.length - 8).toLocaleString("en-IN")} more contacts</small>` : ""}${localDuplicates}${workspaceDuplicates}${parsed.errors.length ? `<details><summary>View skipped rows</summary><p>${parsed.errors.slice(0, 100).map(escapeHtml).join("<br>")}${parsed.errors.length > 100 ? `<br>Plus ${(parsed.errors.length - 100).toLocaleString("en-IN")} more invalid rows` : ""}</p></details>` : ""}`;
     importPreview.querySelectorAll("[data-local-duplicate-phone]").forEach((input) => input.addEventListener("change", () => {
       importLocalChoices.set(input.dataset.localDuplicatePhone, Number(input.value)); resetImportDuplicateReview(); refreshContactImportPreview();
     }));
@@ -4995,9 +5006,25 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   };
   app.querySelector("#wpImportContactsBtn")?.addEventListener("click", () => importContactsDialog?.showModal());
   importContactsDialog?.querySelectorAll("[data-close-contact-import]").forEach((button) => button.addEventListener("click", () => importContactsDialog.close()));
+  importContactsForm?.querySelector("[data-google-contact-import]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    try {
+      button.disabled = true;
+      const original = button.querySelector("em")?.textContent || "Continue with Google →";
+      if (button.querySelector("em")) button.querySelector("em").textContent = "Opening Google…";
+      const result = await messagingRequest("start_google_contacts_import", { returnUrl: `${location.origin}${workspacePath("contacts")}` });
+      if (!result?.authorizationUrl) throw new Error("Google Contacts sign-in could not be started.");
+      location.assign(result.authorizationUrl);
+      setTimeout(() => { button.disabled = false; if (button.querySelector("em")) button.querySelector("em").textContent = original; }, 2500);
+    } catch (error) {
+      showToast(error?.message || "Google Contacts sign-in could not be started.", "error");
+      button.disabled = false;
+      if (button.querySelector("em")) button.querySelector("em").textContent = "Continue with Google →";
+    }
+  });
   importFileInput?.addEventListener("change", async () => {
     const file = importFileInput.files?.[0];
-    importFileText = ""; importFileName = file?.name || "";
+    importFileText = ""; importFileName = file?.name || ""; importProviderContacts = []; importProviderLabel = "";
     const fileNameLabel = importContactsForm.querySelector("[data-import-file-name]");
     if (fileNameLabel) fileNameLabel.textContent = file?.name || "No file selected";
     if (!file) { refreshContactImportPreview(); return; }
@@ -5007,6 +5034,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     refreshContactImportPreview();
   });
   importPasteInput?.addEventListener("input", () => {
+    importProviderContacts = []; importProviderLabel = "";
     if (importPasteInput.value.trim() && importFileInput) {
       importFileInput.value = ""; importFileText = ""; importFileName = "";
       const fileNameLabel = importContactsForm.querySelector("[data-import-file-name]");
@@ -5016,6 +5044,25 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     refreshContactImportPreview();
   });
   importContactsForm?.elements.defaultDialCode?.addEventListener("change", () => { importLocalChoices = new Map(); resetImportDuplicateReview(); refreshContactImportPreview(); });
+  const googleImportParams = new URLSearchParams(location.search);
+  const googleImportError = googleImportParams.get("google_contacts_error") || "";
+  const googleImportToken = googleImportParams.get("google_contacts_import") || "";
+  if (googleImportError || googleImportToken) {
+    googleImportParams.delete("google_contacts_error"); googleImportParams.delete("google_contacts_import");
+    history.replaceState({}, "", `${location.pathname}${googleImportParams.toString() ? `?${googleImportParams}` : ""}${location.hash}`);
+    if (googleImportError) showToast(googleImportError, "error");
+    if (googleImportToken) {
+      messagingRequest("consume_google_contacts_import", { importToken: googleImportToken }).then((result) => {
+        importFileText = ""; importFileName = ""; importProviderContacts = Array.isArray(result?.contacts) ? result.contacts : [];
+        importProviderLabel = result?.providerEmail ? `Google account ${result.providerEmail}` : "Google Contacts";
+        if (importFileInput) importFileInput.value = "";
+        if (importPasteInput) importPasteInput.value = "";
+        importLocalChoices = new Map(); resetImportDuplicateReview(); refreshContactImportPreview();
+        importContactsDialog?.showModal();
+        showToast(`${importProviderContacts.length.toLocaleString("en-IN")} Google contact record${importProviderContacts.length === 1 ? "" : "s"} ready to review.`);
+      }).catch((error) => showToast(error?.message || "Google Contacts could not be opened for review.", "error"));
+    }
+  }
   importContactsForm?.querySelector("[data-download-contact-template]")?.addEventListener("click", () => {
     const blob = new Blob(["Name,Phone Number\r\nAnanya Rao,+919876543210\r\nRohan Mehta,+447700900123\r\n"], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);

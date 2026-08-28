@@ -7,7 +7,7 @@ const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
 const AGENT_ACTIONS = new Set([
   "list", "thread", "send_text", "update_conversation", "add_note",
-  "list_contacts", "list_marketing_consent_events", "create_contact", "preview_contact_import", "import_contacts", "start_chat", "update_contact",
+  "list_contacts", "list_marketing_consent_events", "create_contact", "preview_contact_import", "import_contacts", "start_google_contacts_import", "consume_google_contacts_import", "start_chat", "update_contact",
   "list_templates", "list_template_library", "list_flows",
   "list_campaigns", "list_campaign_segments", "save_campaign",
   "list_notifications", "mark_notification_read", "mark_all_notifications_read", "dismiss_notification",
@@ -31,6 +31,7 @@ function headers(req: Request) {
   return { ...(origin ? { "Access-Control-Allow-Origin": origin } : {}), "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Max-Age": "600", "Cache-Control": "no-store", "Content-Type": "application/json", "Vary": "Origin", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer" };
 }
 function json(req: Request, body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: headers(req) }); }
+function redirect(url: string) { return new Response(null, { status: 302, headers: { Location: url, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff" } }); }
 function adminClient() { return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } }); }
 async function customerSession(admin: any, tokenValue: unknown) {
   const token = String(tokenValue || "");
@@ -1499,7 +1500,153 @@ async function dismissNotification(admin: any, customer: any, body: any) {
   return { dismissed: Boolean(data), notificationId };
 }
 
+const GOOGLE_CONTACTS_SCOPE = "openid email https://www.googleapis.com/auth/contacts.readonly";
+function googleContactsCredentials() {
+  const clientId = env("GOOGLE_CONTACTS_OAUTH_CLIENT_ID").trim();
+  const clientSecret = env("GOOGLE_CONTACTS_OAUTH_CLIENT_SECRET").trim();
+  if (!clientId || !clientSecret) throw new Error("Google Contacts import is not configured yet. Add the Google OAuth client ID and secret to the billing environment.");
+  return { clientId, clientSecret };
+}
+function googleContactsCallbackUrl() {
+  const configured = env("GOOGLE_CONTACTS_OAUTH_REDIRECT_URI").trim();
+  if (configured) return configured;
+  const base = env("SUPABASE_URL").replace(/\/+$/, "");
+  if (!base) throw new Error("Google Contacts import is not configured yet.");
+  return `${base}/functions/v1/whatsapp-platform-messaging?google_contacts_callback=1`;
+}
+function safeContactsReturnUrl(value: unknown) {
+  const fallback = "https://varadanexus.com/whatsapp-platform/workspace/contacts/";
+  try {
+    const url = new URL(String(value || fallback));
+    const allowed = ALLOWED_ORIGINS.has(url.origin) || isLoopback(url.origin);
+    if (!allowed || !url.pathname.startsWith("/whatsapp-platform/workspace/contacts")) return fallback;
+    url.hash = "";
+    url.search = "";
+    return url.toString();
+  } catch { return fallback; }
+}
+function withGoogleImportResult(returnUrl: string, key: string, value: string) {
+  const url = new URL(safeContactsReturnUrl(returnUrl));
+  url.searchParams.set(key, value.slice(0, 500));
+  return url.toString();
+}
+async function startGoogleContactsImport(admin: any, customer: any, body: any) {
+  if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot import contacts.");
+  const { clientId } = googleContactsCredentials();
+  const state = randomHex(32);
+  const stateHash = await sha256(state);
+  const returnUrl = safeContactsReturnUrl(body.returnUrl);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000).toISOString();
+  await admin.from("whatsapp_platform_google_contact_imports")
+    .update({ status: "expired", updated_at: now.toISOString() })
+    .eq("tenant_id", customer.tenant_id).eq("user_id", customer.user_id).eq("status", "pending").lt("expires_at", now.toISOString());
+  const { error } = await admin.from("whatsapp_platform_google_contact_imports").insert({
+    tenant_id: customer.tenant_id, user_id: customer.user_id, state_hash: stateHash,
+    status: "pending", return_url: returnUrl, expires_at: expiresAt,
+  });
+  if (error) throw new Error("Google Contacts sign-in could not be started.");
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("redirect_uri", googleContactsCallbackUrl());
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", GOOGLE_CONTACTS_SCOPE);
+  url.searchParams.set("state", state);
+  url.searchParams.set("access_type", "online");
+  url.searchParams.set("include_granted_scopes", "true");
+  url.searchParams.set("prompt", "consent select_account");
+  return { authorizationUrl: url.toString(), expiresAt };
+}
+async function fetchGoogleContacts(accessToken: string) {
+  const contacts: Array<{ displayName: string; phone: string }> = [];
+  let pageToken = "";
+  let page = 0;
+  do {
+    const url = new URL("https://people.googleapis.com/v1/people/me/connections");
+    url.searchParams.set("personFields", "names,phoneNumbers");
+    url.searchParams.set("pageSize", "1000");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error?.message || "Google Contacts could not be read.");
+    for (const person of Array.isArray(payload.connections) ? payload.connections : []) {
+      const names = Array.isArray(person?.names) ? person.names : [];
+      const primaryName = names.find((item: any) => item?.metadata?.primary) || names[0] || {};
+      const displayName = cleanText(primaryName.displayName || primaryName.unstructuredName || "Google contact", 200) || "Google contact";
+      for (const number of Array.isArray(person?.phoneNumbers) ? person.phoneNumbers : []) {
+        const phone = cleanText(number?.canonicalForm || number?.value, 64);
+        if (phone && phone.replace(/\D/g, "").length >= 7) contacts.push({ displayName, phone });
+      }
+    }
+    pageToken = String(payload.nextPageToken || "");
+    page += 1;
+  } while (pageToken && page < 1000);
+  return contacts;
+}
+async function googleContactsCallback(req: Request, admin: any) {
+  const requestUrl = new URL(req.url);
+  const state = String(requestUrl.searchParams.get("state") || "");
+  if (!/^[a-f0-9]{64}$/i.test(state)) return redirect("https://varadanexus.com/whatsapp-platform/workspace/contacts/?google_contacts_error=Invalid%20or%20expired%20Google%20sign-in");
+  const stateHash = await sha256(state);
+  const { data: record } = await admin.from("whatsapp_platform_google_contact_imports")
+    .select("id,tenant_id,user_id,status,return_url,expires_at")
+    .eq("state_hash", stateHash).maybeSingle();
+  if (!record || record.status !== "pending" || new Date(record.expires_at).getTime() <= Date.now()) {
+    return redirect("https://varadanexus.com/whatsapp-platform/workspace/contacts/?google_contacts_error=Invalid%20or%20expired%20Google%20sign-in");
+  }
+  const fail = async (message: string) => {
+    const safeMessage = cleanText(message, 500) || "Google Contacts import was cancelled.";
+    await admin.from("whatsapp_platform_google_contact_imports").update({ status: "failed", error_message: safeMessage, updated_at: new Date().toISOString() }).eq("id", record.id);
+    return redirect(withGoogleImportResult(record.return_url, "google_contacts_error", safeMessage));
+  };
+  if (requestUrl.searchParams.get("error")) return fail(requestUrl.searchParams.get("error_description") || "Google Contacts access was not granted.");
+  const code = String(requestUrl.searchParams.get("code") || "");
+  if (!code) return fail("Google did not return an authorization code.");
+  try {
+    const { clientId, clientSecret } = googleContactsCredentials();
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: googleContactsCallbackUrl(), grant_type: "authorization_code" }),
+    });
+    const token = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok || !token.access_token) throw new Error(token?.error_description || "Google authorization could not be completed.");
+    const [contacts, profileResponse] = await Promise.all([
+      fetchGoogleContacts(String(token.access_token)),
+      fetch("https://openidconnect.googleapis.com/v1/userinfo", { headers: { Authorization: `Bearer ${token.access_token}`, Accept: "application/json" } }),
+    ]);
+    const profile = await profileResponse.json().catch(() => ({}));
+    const resultToken = randomHex(32);
+    const { error } = await admin.from("whatsapp_platform_google_contact_imports").update({
+      status: "ready", contacts, provider_email: cleanText(profile?.email, 254) || null,
+      result_token_hash: await sha256(resultToken), expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(), updated_at: new Date().toISOString(),
+    }).eq("id", record.id).eq("status", "pending");
+    if (error) throw new Error("Google Contacts could not be prepared for review.");
+    return redirect(withGoogleImportResult(record.return_url, "google_contacts_import", resultToken));
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Google Contacts import failed.");
+  }
+}
+async function consumeGoogleContactsImport(admin: any, customer: any, body: any) {
+  const token = String(body.importToken || "");
+  if (!/^[a-f0-9]{64}$/i.test(token)) throw new Error("This Google Contacts import link is invalid or expired.");
+  const tokenHash = await sha256(token);
+  const { data: record, error } = await admin.from("whatsapp_platform_google_contact_imports")
+    .select("id,status,contacts,provider_email,expires_at")
+    .eq("tenant_id", customer.tenant_id).eq("user_id", customer.user_id).eq("result_token_hash", tokenHash).maybeSingle();
+  if (error || !record || record.status !== "ready" || new Date(record.expires_at).getTime() <= Date.now()) throw new Error("This Google Contacts import link is invalid or expired.");
+  const contacts = Array.isArray(record.contacts) ? record.contacts : [];
+  const { error: updateError } = await admin.from("whatsapp_platform_google_contact_imports").update({
+    status: "consumed", contacts: [], result_token_hash: null, consumed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  }).eq("id", record.id).eq("status", "ready");
+  if (updateError) throw new Error("Google Contacts could not be opened for review.");
+  return { contacts, providerEmail: record.provider_email || "" };
+}
+
 Deno.serve(async (req) => {
+  const admin = adminClient();
+  if (req.method === "GET" && new URL(req.url).searchParams.get("google_contacts_callback") === "1") {
+    return googleContactsCallback(req, admin);
+  }
   if (req.method === "OPTIONS") {
     if (!allowedOrigin(req)) return json(req, { error: "Origin not allowed" }, 403);
     return new Response("ok", { headers: headers(req) });
@@ -1508,7 +1655,6 @@ Deno.serve(async (req) => {
   if (!allowedOrigin(req)) return json(req, { error: "Origin not allowed" }, 403);
   if (!(req.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) return json(req, { error: "Content type must be application/json" }, 415);
   if (Number(req.headers.get("content-length") || 0) > MAX_BODY_BYTES) return json(req, { error: "Request too large" }, 413);
-  const admin = adminClient();
   try {
     const raw = await req.text();
     if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) return json(req, { error: "Request too large" }, 413);
@@ -1525,7 +1671,7 @@ Deno.serve(async (req) => {
     const featureByAction: Record<string, string> = {
       list: "team_inbox", thread: "team_inbox", send_text: "team_inbox", start_chat: "team_inbox",
       update_conversation: "team_inbox", add_note: "team_inbox",
-      list_contacts: "contacts", create_contact: "contacts", preview_contact_import: "contacts", import_contacts: "contacts", update_contact: "contacts",
+      list_contacts: "contacts", create_contact: "contacts", preview_contact_import: "contacts", import_contacts: "contacts", start_google_contacts_import: "contacts", consume_google_contacts_import: "contacts", update_contact: "contacts",
       list_marketing_consent_events: "contacts",
       list_templates: "templates", list_template_library: "templates", create_template: "templates",
       list_flows: "flows", save_flow: "flows", set_flow_status: "flows", delete_flow: "flows",
@@ -1568,6 +1714,8 @@ Deno.serve(async (req) => {
     if (action === "create_contact") return json(req, await createContact(admin, customer, body));
     if (action === "preview_contact_import") return json(req, await previewContactImport(admin, customer, body));
     if (action === "import_contacts") return json(req, await importContacts(admin, customer, body));
+    if (action === "start_google_contacts_import") return json(req, await startGoogleContactsImport(admin, customer, body));
+    if (action === "consume_google_contacts_import") return json(req, await consumeGoogleContactsImport(admin, customer, body));
     if (action === "start_chat") return json(req, await startChat(admin, customer, body));
     if (action === "update_conversation") return json(req, await updateConversation(admin, customer, body));
     if (action === "add_note") return json(req, await addNote(admin, customer, body));

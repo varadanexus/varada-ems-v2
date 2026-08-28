@@ -1762,6 +1762,15 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-contact-import-dialog { width: min(780px,calc(100% - 2rem)); max-height: min(850px,calc(100dvh - 2rem)); overflow-y: auto; }
 .wp-contact-import-dialog header { align-items: flex-start; }
 .wp-contact-import-dialog header p { margin: .35rem 0 0; color: var(--wp-workspace-muted); font-size: .66rem; }
+.wp-google-contact-import { width: 100%; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: .8rem; padding: .8rem .9rem; border: 1px solid color-mix(in srgb,#4285f4 55%,var(--wp-workspace-line)); border-radius: 13px; background: color-mix(in srgb,#4285f4 7%,var(--wp-workspace-surface-soft)); color: var(--wp-workspace-text); font: inherit; text-align: left; cursor: pointer; }
+.wp-google-contact-import:hover,.wp-google-contact-import:focus-visible { outline: 0; border-color: #4285f4; box-shadow: 0 0 0 3px color-mix(in srgb,#4285f4 13%,transparent); transform: translateY(-1px); }
+.wp-google-contact-import:disabled { opacity: .62; cursor: wait; transform: none; }
+.wp-google-contact-import > span:first-child { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.14); }
+.wp-google-contact-import > span:first-child b { font: 800 1.15rem/1 Arial,sans-serif; color: #4285f4; }
+.wp-google-contact-import > span:nth-child(2) { min-width: 0; display: grid; gap: .2rem; }
+.wp-google-contact-import strong { font-size: .72rem; }
+.wp-google-contact-import small { color: var(--wp-workspace-muted); font-size: .58rem; line-height: 1.4; }
+.wp-google-contact-import em { color: #79a7f8; font-size: .61rem; font-style: normal; font-weight: 800; white-space: nowrap; }
 .wp-import-methods { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
 .wp-import-methods > article { display: grid; align-content: start; gap: .35rem; padding: .85rem; border: 1px solid var(--wp-workspace-line); border-radius: 13px; background: var(--wp-workspace-surface-soft); }
 .wp-import-methods > article > strong { color: var(--wp-workspace-text); font-size: .72rem; }
@@ -1822,6 +1831,8 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
   .wp-import-duplicates article,.wp-import-duplicate-pair,.wp-duplicate-contact-choices { grid-template-columns: 1fr; }
   .wp-contact-import-dialog footer { align-items: stretch; flex-direction: column-reverse; }
   .wp-contact-import-dialog footer button { width: 100%; }
+  .wp-google-contact-import { grid-template-columns: auto minmax(0,1fr); }
+  .wp-google-contact-import em { grid-column: 2; }
 }
 .wp-phone-input { display: grid; grid-template-columns: minmax(180px,.9fr) minmax(150px,1fr); gap: .55rem; }
 .wp-phone-input select { text-overflow: ellipsis; }
