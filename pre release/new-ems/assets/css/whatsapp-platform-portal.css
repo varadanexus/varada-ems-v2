@@ -1729,6 +1729,7 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-contact-directory > .wp-inbox-filters { padding: 0 1rem .8rem; }
 .wp-contact-list { border-top: 1px solid var(--wp-workspace-line); }
 .wp-contact-row { display: grid; grid-template-columns: 40px minmax(160px,1.3fr) minmax(160px,1fr) auto auto; gap: .8rem; align-items: center; padding: .85rem 1rem; border-bottom: 1px solid var(--wp-workspace-line); }
+.wp-contact-row[hidden] { display: none !important; }
 .wp-contact-row:last-child { border-bottom: 0; }
 .wp-contact-identity strong,.wp-contact-identity small,.wp-contact-activity span,.wp-contact-activity small { display: block; }
 .wp-contact-identity strong { color: var(--wp-workspace-text); font-size: .72rem; }
