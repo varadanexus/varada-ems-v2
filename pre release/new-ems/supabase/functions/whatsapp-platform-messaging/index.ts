@@ -320,7 +320,7 @@ async function listContacts(admin: any, customer: any, body: any) {
   const connection = body.connectionId ? await ownedBusinessNumber(admin, customer, body.connectionId) : null;
   let query = admin.from("whatsapp_platform_contacts")
     .select("id,wa_id,phone_e164,profile_name,display_name,status,contact_category,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,last_inbound_at,last_outbound_at,created_at,updated_at")
-    .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).limit(500);
+    .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).limit(5000);
   if (status) query = query.eq("status", status);
   if (category) query = query.eq("contact_category", category);
   if (marketingOptedOut) query = query.not("marketing_opt_out_at", "is", null);
