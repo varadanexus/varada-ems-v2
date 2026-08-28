@@ -1047,7 +1047,11 @@ async function updateContact(admin: any, customer: any, body: any) {
 async function deleteContacts(admin: any, customer: any, body: any) {
   if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can delete contacts.");
   if (body.allMatching === true) {
-    const { data, error } = await admin.from("whatsapp_platform_contacts").delete().eq("tenant_id", customer.tenant_id).select("id");
+    const excluded = [...new Set((Array.isArray(body.excludeContactIds) ? body.excludeContactIds : []).map((id: unknown) => cleanUuid(id, "excluded contact")))];
+    if (excluded.length > 5000) throw new Error("Too many contact exclusions were supplied.");
+    let query = admin.from("whatsapp_platform_contacts").delete().eq("tenant_id", customer.tenant_id);
+    if (excluded.length) query = query.not("id", "in", `(${excluded.join(",")})`);
+    const { data, error } = await query.select("id");
     if (error) throw error;
     return { deletedCount: (data || []).length };
   }
