@@ -198,6 +198,19 @@ const MENU_BY_WORKSPACE = {
       ]
     },
     {
+      title: "Billing",
+      items: [
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Billing Overview", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=billing` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Subscriptions", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=subscriptions` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Payment Ledger", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=payments` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Invoices", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=invoices` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Refunds", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=refunds` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Credit Notes", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=credit-notes` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Reconciliation", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=reconciliation` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Razorpay Settings", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=razorpay` }
+      ]
+    },
+    {
       title: "Application Control",
       items: [
         { module: MODULES.WHATSAPP_PLATFORM, label: "Meta App Setup", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=meta` },
@@ -295,10 +308,16 @@ const MENU_BY_WORKSPACE = {
       ]
     },
     {
+      title: "Ads",
+      items: [
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ads Campaigns", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=campaigns` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ad Analytics", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=ads-analytics` }
+      ]
+    },
+    {
       title: "Connections",
       items: [
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Social Accounts", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=accounts` },
-        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ads Campaigns", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=campaigns` },
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Settings", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=settings` },
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Audit History", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=audit` }
       ]
@@ -481,7 +500,15 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
   const isCurrentItem = (href) => {
     const itemUrl = new URL(href, window.location.origin);
     if (itemUrl.pathname !== currentUrl.pathname) return false;
-    if (workspace === WORKSPACES.WHATSAPP_PLATFORM) return itemUrl.search === currentUrl.search;
+    const querySensitivePaths = new Set([
+      ROUTES.SOCIAL_MEDIA_MANAGER,
+      ROUTES.WHATSAPP_PLATFORM_ADMIN,
+      ROUTES.SUPPORT_TICKETS,
+      ROUTES.DIGITAL_SERVICES_BILLING,
+    ]);
+    if (workspace === WORKSPACES.WHATSAPP_PLATFORM || querySensitivePaths.has(itemUrl.pathname)) {
+      return itemUrl.search === currentUrl.search;
+    }
     return itemUrl.search ? itemUrl.search === currentUrl.search : true;
   };
   const contextualSections = Array.isArray(context?.sections) ? context.sections : null;

@@ -204,6 +204,35 @@ async function fetchPhoneDetails(phoneNumberId: string, accessToken: string, app
   );
 }
 
+async function fetchMetaBillingStatus(wabaId: string, accessToken: string, appSecret: string) {
+  const checkedAt = new Date().toISOString();
+  if (!wabaId) return { status: "unavailable", checkedAt, reason: "missing_waba_id" };
+  try {
+    // Meta exposes only the presence of the WABA's primary funding source here. Never
+    // return or persist its identifier; the portal only needs a safe yes/no signal.
+    const waba = await graphRequest(`${wabaId}?fields=id,primary_funding_id`, accessToken, appSecret);
+    return {
+      status: String(waba?.primary_funding_id || "").trim() ? "configured" : "not_detected",
+      checkedAt,
+      reason: null,
+    };
+  } catch (error) {
+    const message = String(error instanceof Error ? error.message : error || "").toLowerCase();
+    const restricted = message.includes("primary_funding_id") ||
+      message.includes("nonexisting field") ||
+      message.includes("unknown field") ||
+      message.includes("unsupported get request") ||
+      message.includes("permissions error") ||
+      message.includes("permission");
+    if (restricted) {
+      // Direct/self-pay WABAs do not consistently expose their funding source to
+      // connected apps. This is an API visibility limitation, not a failed payment.
+      return { status: "verification_limited", checkedAt, reason: "meta_api_restricted" };
+    }
+    return { status: "unavailable", checkedAt, reason: "meta_request_failed" };
+  }
+}
+
 async function ensurePhoneRegistered(
   phoneNumberId: string,
   accessToken: string,
@@ -806,9 +835,14 @@ async function refreshPhoneStatus(admin: any, customer: any, body: any) {
   }
   const accessToken = cleanMetaAccessToken(credentials?.accessToken);
   const phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+  const wabaId = connection.whatsapp_business_account_id
+    ? cleanId(connection.whatsapp_business_account_id, "WhatsApp Business Account ID")
+    : "";
+  const metaBilling = connection.onboarding_metadata?.test_number === true
+    ? { status: "not_applicable", checkedAt: new Date().toISOString() }
+    : await fetchMetaBillingStatus(wabaId, accessToken, appSecret);
   let metaBusinessId = String(connection.meta_business_id || connection.onboarding_metadata?.meta_business_id || "").trim();
   if (!metaBusinessId && connection.whatsapp_business_account_id) {
-    const wabaId = cleanId(connection.whatsapp_business_account_id, "WhatsApp Business Account ID");
     const waba = await graphRequest(`${wabaId}?fields=owner_business_info`, accessToken, appSecret);
     metaBusinessId = String(waba?.owner_business_info?.id || "").trim();
   }
@@ -820,6 +854,9 @@ async function refreshPhoneStatus(admin: any, customer: any, body: any) {
     code_verification_status: phone.code_verification_status || null,
     quality_rating: phone.quality_rating || null,
     meta_business_id: metaBusinessId || null,
+    meta_billing_status: metaBilling.status,
+    meta_billing_checked_at: metaBilling.checkedAt,
+    meta_billing_verification: metaBilling.reason || null,
     last_meta_sync_at: now,
   };
   const { data: updatedConnection, error: updateError } = await admin.from("whatsapp_platform_connections").update({

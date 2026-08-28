@@ -3,6 +3,7 @@
 // External customer sessions are validated server-side before any Drive call.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const ROOT_FOLDER_ID = Deno.env.get("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID") || "1Tnq1agDpaLCIT_ZGiDRjVOXa7KYDASQp";
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
@@ -56,6 +57,11 @@ async function customerSession(admin: any, rawToken: unknown) {
   const customer = Array.isArray(data) ? data[0] : data;
   if (!customer?.tenant_id || !customer?.user_id) throw new Error("Unauthorized");
   return customer;
+}
+async function billingEntitlement(admin: any, customer: any) {
+  const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+  if (error) throw error;
+  return data || { allowed: false, state: "payment_required", reason: "Billing access could not be verified." };
 }
 
 function base64url(input: ArrayBuffer | string) {
@@ -284,6 +290,135 @@ async function tenantProfile(admin: any, customer: any) {
   };
 }
 
+async function accountDeletionStatus(admin: any, customer: any, sessionToken: string) {
+  const { data, error } = await admin.rpc("whatsapp_platform_account_deletion_status", { p_session_token: sessionToken });
+  if (error) throw error;
+  return data || { pending: false };
+}
+
+async function reverseAccountDeletion(admin: any, customer: any, sessionToken: string, body: any) {
+  if (!["owner", "admin"].includes(String(customer.role_code || ""))) throw new Error("Only a workspace owner or administrator can reverse deletion.");
+  const reason = String(body.reason || "").trim();
+  if (reason && (reason.length < 5 || reason.length > 500)) throw new Error("A reversal reason must be 5 to 500 characters.");
+  const { data, error } = await admin.rpc("whatsapp_platform_reverse_account_deletion", { p_session_token: sessionToken, p_reason: reason || null });
+  if (error) throw error;
+  return data || { success: true, status: "reversed" };
+}
+
+function validateDeletionPhoto(bytes: Uint8Array, requestedMime: string) {
+  const png = bytes.length > 8 && [137,80,78,71,13,10,26,10].every((value, index) => bytes[index] === value);
+  const jpeg = bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const detected = png ? "image/png" : jpeg ? "image/jpeg" : "";
+  if (!detected || detected !== requestedMime) throw new Error("Capture or upload a valid JPG or PNG evidence photo.");
+  return detected;
+}
+
+function sanitizeExportValue(value: any): any {
+  if (Array.isArray(value)) return value.map(sanitizeExportValue);
+  if (!value || typeof value !== "object") return value;
+  const blocked = /(password|secret|token|credential|cipher|encrypted|hash|reset|otp|session)/i;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !blocked.test(key))
+    .map(([key, child]) => [key, sanitizeExportValue(child)]));
+}
+
+async function exportAccountData(admin: any, customer: any) {
+  if (!['owner', 'admin'].includes(String(customer.role_code || ''))) throw new Error("Only a workspace owner or administrator can export account data.");
+  const tables = [
+    "whatsapp_platform_tenants", "whatsapp_platform_users", "whatsapp_platform_connections",
+    "whatsapp_platform_business_verifications", "whatsapp_platform_verification_documents",
+    "whatsapp_platform_contacts", "whatsapp_platform_conversations", "whatsapp_platform_messages",
+    "whatsapp_platform_templates", "whatsapp_platform_campaigns", "whatsapp_platform_flows",
+    "whatsapp_platform_subscriptions", "whatsapp_platform_billing_payments",
+    "whatsapp_platform_billing_invoices", "whatsapp_platform_billing_credit_notes",
+    "whatsapp_platform_billing_refunds", "whatsapp_platform_addon_subscriptions",
+  ];
+  const records: Record<string, any[]> = {};
+  const omitted: string[] = [];
+  for (const table of tables) {
+    const query = admin.from(table).select("*");
+    const { data, error } = table === "whatsapp_platform_tenants"
+      ? await query.eq("id", customer.tenant_id).limit(1)
+      : await query.eq("tenant_id", customer.tenant_id).limit(10000);
+    if (error) { omitted.push(table); continue; }
+    records[table] = sanitizeExportValue(data || []);
+  }
+  return {
+    fileName: `${safeSegment(customer.company_name || customer.tenant_name || "workspace", "workspace")}-account-export-${new Date().toISOString().slice(0, 10)}.json`,
+    export: {
+      format: "varada-nexus-whatsapp-account-export-v1",
+      generatedAt: new Date().toISOString(),
+      generatedForTenantId: customer.tenant_id,
+      generatedBy: { userId: customer.user_id, email: customer.email || null, role: customer.role_code || null },
+      securityNotice: "Authentication secrets, password material, session tokens and encrypted provider credentials are intentionally excluded.",
+      omittedUnavailableCollections: omitted,
+      records,
+    },
+  };
+}
+
+async function scheduleAccountDeletion(admin: any, customer: any, body: any, req: Request) {
+  if (!["owner", "admin"].includes(String(customer.role_code || ""))) throw new Error("Only a workspace owner or administrator can request account deletion.");
+  const requestedBy = String(body.requestedBy || "").trim();
+  const internalNote = String(body.internalNote || "").trim();
+  const exactCompanyName = String(body.exactCompanyName || "").trim();
+  const mimeType = String(body.evidenceMimeType || "").toLowerCase();
+  const rawBase64 = String(body.evidenceBase64 || "");
+  const latitude = Number(body.latitude);
+  const longitude = Number(body.longitude);
+  const locationAccuracy = body.locationAccuracy === null || body.locationAccuracy === undefined ? null : Number(body.locationAccuracy);
+  const capturedAt = new Date(String(body.locationCapturedAt || ""));
+  if (requestedBy.length < 3 || requestedBy.length > 200) throw new Error("Enter who requested the deletion.");
+  if (internalNote.length < 10 || internalNote.length > 2000) throw new Error("Enter an internal deletion note of 10 to 2,000 characters.");
+  if (body.evidenceConsent !== true) throw new Error("Confirm consent for the evidence photo and device location.");
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180 || Number.isNaN(capturedAt.getTime())) throw new Error("Capture the current device location before submitting.");
+  if (!rawBase64 || rawBase64.length > Math.ceil(MAX_LOGO_BYTES * 4 / 3) + 16) throw new Error("Evidence photo must be 2 MB or smaller.");
+  const bytes = base64ToBytes(rawBase64);
+  if (!bytes.length || bytes.length > MAX_LOGO_BYTES) throw new Error("Evidence photo must be 2 MB or smaller.");
+  validateDeletionPhoto(bytes, mimeType);
+  const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
+    .select("name,owner_email,drive_root_folder_id").eq("id", customer.tenant_id).single();
+  if (tenantError || !tenant) throw new Error("Workspace could not be found.");
+  if (exactCompanyName !== tenant.name) throw new Error("Enter the company name exactly as shown to confirm deletion.");
+  const { data: pending } = await admin.from("whatsapp_platform_account_deletion_requests")
+    .select("id,scheduled_for").eq("tenant_id", customer.tenant_id).eq("status", "pending").maybeSingle();
+  if (pending) throw new Error(`Deletion is already scheduled for ${new Date(pending.scheduled_for).toLocaleString("en-IN")}.`);
+
+  const token = await driveAccessToken();
+  const tenantFolderName = `${safeSegment(tenant.name, "Business")} - ${String(customer.tenant_id).slice(0, 8)}`;
+  const tenantFolderId = tenant.drive_root_folder_id || await findOrCreateFolder(token, ROOT_FOLDER_ID, tenantFolderName);
+  const governanceFolderId = await findOrCreateFolder(token, tenantFolderId, "Account Governance");
+  const deletionFolderId = await findOrCreateFolder(token, governanceFolderId, "Deletion Requests");
+  const extension = mimeType === "image/png" ? "png" : "jpg";
+  const storedName = `deletion-request-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
+  const uploaded = await uploadFile(token, deletionFolderId, storedName, mimeType, bytes);
+  const evidenceHash = await sha256Hex(bytes);
+  const now = new Date();
+  const scheduledFor = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const { data: request, error: insertError } = await admin.from("whatsapp_platform_account_deletion_requests").insert({
+    tenant_id: customer.tenant_id, tenant_name: tenant.name, owner_email: tenant.owner_email || customer.email || null,
+    requested_by_description: requestedBy, internal_note: internalNote,
+    actor_app_user_id: customer.user_id,
+    actor_name: customer.display_name || requestedBy, actor_email: customer.email || null,
+    evidence_drive_file_id: uploaded.id, evidence_drive_folder_id: deletionFolderId,
+    evidence_file_name: uploaded.name || storedName, evidence_mime_type: mimeType, evidence_sha256: evidenceHash,
+    latitude, longitude, location_accuracy_m: Number.isFinite(locationAccuracy) ? locationAccuracy : null,
+    location_captured_at: capturedAt.toISOString(), consent_confirmed_at: now.toISOString(),
+    requested_at: now.toISOString(), scheduled_for: scheduledFor.toISOString(), status: "pending",
+  }).select("id,scheduled_for").single();
+  if (insertError) { await trashFile(token, uploaded.id).catch(() => {}); throw insertError; }
+  await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenantFolderName, updated_at: now.toISOString() }).eq("id", customer.tenant_id);
+  await admin.from("audit_logs").insert({
+    event_type: "whatsapp_platform_account_deletion_requested", action: "schedule_account_deletion", module_code: "whatsapp-platform",
+    entity_type: "whatsapp_platform_account_deletion_requests", entity_id: request.id,
+    details: { tenant_id: customer.tenant_id, requested_by: requestedBy, actor_user_id: customer.user_id, actor_email: customer.email || null,
+      internal_note: internalNote, scheduled_for: request.scheduled_for, evidence_file_id: uploaded.id,
+      location: { latitude, longitude, accuracy_m: Number.isFinite(locationAccuracy) ? locationAccuracy : null, captured_at: capturedAt.toISOString() },
+      source: "customer_workspace", user_agent: req.headers.get("user-agent") || null, forwarded_for: req.headers.get("x-forwarded-for") || null },
+  });
+  return { ok: true, requestId: request.id, scheduledFor: request.scheduled_for, reversibleUntil: request.scheduled_for };
+}
+
 async function uploadLogo(admin: any, customer: any, body: any) {
   if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can change the logo.");
   const mimeType = String(body.mimeType || "").toLowerCase();
@@ -355,6 +490,85 @@ async function uploadLogo(admin: any, customer: any, body: any) {
   return { ok: true, profile: { companyName: tenant.name, logoDataUrl: `data:${mimeType};base64,${rawBase64}`, logoFileName: originalName, logoUpdatedAt: now } };
 }
 
+async function uploadBusinessProfilePicture(admin: any, customer: any, body: any) {
+  if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can change the WhatsApp profile picture.");
+  const connectionId = String(body.connectionId || "").trim();
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(connectionId)) throw new Error("Select a valid WhatsApp business number.");
+  const mimeType = String(body.mimeType || "").toLowerCase();
+  if (!["image/png", "image/jpeg"].includes(mimeType)) throw new Error("The WhatsApp profile picture must be a PNG or JPG image.");
+  const rawBase64 = String(body.base64 || "");
+  if (!rawBase64 || rawBase64.length > Math.ceil(MAX_LOGO_BYTES * 4 / 3) + 16) throw new Error("The WhatsApp profile picture must be 2 MB or smaller.");
+  const bytes = base64ToBytes(rawBase64);
+  if (!bytes.length || bytes.length > MAX_LOGO_BYTES) throw new Error("The WhatsApp profile picture must be 2 MB or smaller.");
+  validateLogo(bytes, mimeType);
+
+  const [{ data: tenant, error: tenantError }, { data: connection, error: connectionError }] = await Promise.all([
+    admin.from("whatsapp_platform_tenants").select("name,drive_root_folder_id").eq("id", customer.tenant_id).single(),
+    admin.from("whatsapp_platform_connections").select("id,display_phone_number,verified_name,status").eq("id", connectionId).eq("tenant_id", customer.tenant_id).single(),
+  ]);
+  if (tenantError) throw tenantError;
+  if (connectionError || !connection || connection.status !== "connected") throw new Error("Select a connected WhatsApp business number.");
+
+  const token = await driveAccessToken();
+  const tenantFolderName = `${safeSegment(tenant.name, "Business")} - ${String(customer.tenant_id).slice(0, 8)}`;
+  const tenantFolderId = tenant.drive_root_folder_id || await findOrCreateFolder(token, ROOT_FOLDER_ID, tenantFolderName);
+  const brandFolderId = await findOrCreateFolder(token, tenantFolderId, "Brand");
+  const profilesFolderId = await findOrCreateFolder(token, brandFolderId, "WhatsApp Profiles");
+  const numberFolderName = safeSegment(`${connection.verified_name || "WhatsApp"} - ${connection.display_phone_number || connection.id.slice(0, 8)}`, `Number-${connection.id.slice(0, 8)}`);
+  const numberFolderId = await findOrCreateFolder(token, profilesFolderId, numberFolderName);
+  const extension = mimeType === "image/png" ? "png" : "jpg";
+  const storedName = `whatsapp-profile-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
+  const originalName = safeSegment(body.fileName, storedName);
+  const uploaded = await uploadFile(token, numberFolderId, storedName, mimeType, bytes);
+  const folderPath = `${tenantFolderName} / Brand / WhatsApp Profiles / ${numberFolderName}`;
+  const now = new Date().toISOString();
+
+  const { data: previous, error: previousError } = await admin.from("whatsapp_platform_documents")
+    .select("id,drive_file_id")
+    .eq("tenant_id", customer.tenant_id)
+    .eq("category", "other")
+    .eq("entity_type", "whatsapp_business_profile_picture")
+    .eq("entity_id", connection.id)
+    .eq("status", "active");
+  if (previousError) {
+    await trashFile(token, uploaded.id).catch(() => {});
+    throw previousError;
+  }
+
+  const { data: document, error: documentError } = await admin.from("whatsapp_platform_documents").insert({
+    tenant_id: customer.tenant_id,
+    uploaded_by_user_id: customer.user_id,
+    category: "other",
+    entity_type: "whatsapp_business_profile_picture",
+    entity_id: connection.id,
+    original_file_name: originalName,
+    stored_file_name: uploaded.name || storedName,
+    mime_type: mimeType,
+    file_size: Number(uploaded.size || bytes.length),
+    drive_file_id: uploaded.id,
+    drive_folder_id: numberFolderId,
+    drive_folder_path: folderPath,
+  }).select("id").single();
+  if (documentError) {
+    await trashFile(token, uploaded.id).catch(() => {});
+    throw documentError;
+  }
+
+  if (previous?.length) {
+    const { error: replaceError } = await admin.from("whatsapp_platform_documents").update({ status: "replaced", updated_at: now })
+      .eq("tenant_id", customer.tenant_id)
+      .eq("category", "other")
+      .eq("entity_type", "whatsapp_business_profile_picture")
+      .eq("entity_id", connection.id)
+      .eq("status", "active")
+      .neq("id", document.id);
+    if (replaceError) console.error("WhatsApp profile picture history update failed", replaceError);
+    else await Promise.all(previous.map((item: any) => trashFile(token, item.drive_file_id).catch((error) => console.error("Old WhatsApp profile picture cleanup failed", error))));
+  }
+  await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenantFolderName, updated_at: now }).eq("id", customer.tenant_id);
+  return { ok: true, archive: { documentId: document.id, driveFileId: uploaded.id, driveFolderId: numberFolderId, driveFolderPath: folderPath, storedFileName: uploaded.name || storedName } };
+}
+
 async function removeLogo(admin: any, customer: any) {
   if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can remove the logo.");
   const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
@@ -404,12 +618,18 @@ async function verificationState(admin: any, customer: any) {
     .eq("tenant_id", customer.tenant_id).maybeSingle();
   if (error) throw error;
   let documents: any[] = [];
+  let documentRequests: any[] = [];
   if (verification?.id) {
     const { data, error: documentError } = await admin.from("whatsapp_platform_verification_documents")
-      .select("id,document_type,original_file_name,mime_type,file_size,created_at")
+      .select("id,document_type,original_file_name,mime_type,file_size,review_status,review_notes,reviewed_at,created_at")
       .eq("tenant_id", customer.tenant_id).eq("verification_id", verification.id).eq("status", "active").order("created_at", { ascending: false });
     if (documentError) throw documentError;
     documents = data || [];
+    const { data: requests, error: requestError } = await admin.from("whatsapp_platform_verification_document_requests")
+      .select("id,requested_document_type,title,instructions,due_at,status,fulfilled_document_id,requested_at,fulfilled_at")
+      .eq("tenant_id", customer.tenant_id).eq("verification_id", verification.id).neq("status", "cancelled").order("requested_at", { ascending: false });
+    if (requestError && requestError.code !== "42P01") throw requestError;
+    documentRequests = requests || [];
   }
   const entityType = verification?.entity_type || tenant.business_type || "other";
   const { data: gate, error: gateError } = await admin.from("whatsapp_platform_verification_gate_settings")
@@ -431,7 +651,8 @@ async function verificationState(admin: any, customer: any) {
     reviewedAt: verification?.reviewed_at || null,
     reviewNotes: verification?.review_notes || "",
     requirements: VERIFICATION_REQUIREMENTS[entityType] || VERIFICATION_REQUIREMENTS.other,
-    documents: documents.map((item) => ({ id: item.id, type: item.document_type, name: item.original_file_name, mimeType: item.mime_type, size: item.file_size, uploadedAt: item.created_at })),
+    documents: documents.map((item) => ({ id: item.id, type: item.document_type, name: item.original_file_name, mimeType: item.mime_type, size: item.file_size, reviewStatus: item.review_status || "pending", reviewNotes: item.review_notes || "", reviewedAt: item.reviewed_at || null, uploadedAt: item.created_at })),
+    documentRequests: documentRequests.map((item) => ({ id: item.id, type: item.requested_document_type, title: item.title, instructions: item.instructions || "", dueAt: item.due_at, status: item.status, documentId: item.fulfilled_document_id, requestedAt: item.requested_at, fulfilledAt: item.fulfilled_at })),
     canEdit: ["not_started", "draft", "changes_requested", "rejected"].includes(verification?.status || tenant.verification_status || "not_started"),
     gateRequired: !bypassActive,
     gateTemporarilyPaused: Boolean(bypassActive),
@@ -472,7 +693,16 @@ async function uploadVerificationDocument(admin: any, customer: any, body: any) 
     current = await verificationState(admin, customer);
   }
   const documentType = String(body.documentType || "");
-  const allowedTypes = new Set([...(VERIFICATION_REQUIREMENTS[current.entityType] || []).map((item) => item.type), "gst_certificate"]);
+  const requestId = String(body.requestId || "").trim();
+  let documentRequest: any = null;
+  if (requestId) {
+    const { data, error } = await admin.from("whatsapp_platform_verification_document_requests")
+      .select("id,requested_document_type,status").eq("id", requestId).eq("tenant_id", customer.tenant_id).in("status", ["requested", "uploaded"]).single();
+    if (error || !data) throw new Error("This document request is no longer open.");
+    documentRequest = data;
+    if (documentRequest.requested_document_type !== documentType) throw new Error("Upload the document type requested by the verification team.");
+  }
+  const allowedTypes = new Set([...(VERIFICATION_REQUIREMENTS[current.entityType] || []).map((item) => item.type), "gst_certificate", ...(documentRequest ? [documentRequest.requested_document_type] : [])]);
   if (!allowedTypes.has(documentType)) throw new Error("This document type is not required for the selected entity.");
   const mimeType = String(body.mimeType || "").toLowerCase();
   const rawBase64 = String(body.base64 || "");
@@ -492,18 +722,22 @@ async function uploadVerificationDocument(admin: any, customer: any, body: any) 
   const storedName = `${documentType}-${new Date().toISOString().replace(/[:.]/g, "-")}.${extension}`;
   const uploaded = await uploadFile(token, documentsFolderId, storedName, mimeType, bytes);
   const now = new Date().toISOString();
-  const { error: insertError } = await admin.from("whatsapp_platform_verification_documents").insert({
+  const { data: inserted, error: insertError } = await admin.from("whatsapp_platform_verification_documents").insert({
     verification_id: (await admin.from("whatsapp_platform_business_verifications").select("id").eq("tenant_id", customer.tenant_id).single()).data.id,
     tenant_id: customer.tenant_id, uploaded_by_user_id: customer.user_id, document_type: documentType,
     original_file_name: originalName, stored_file_name: uploaded.name || storedName, mime_type: mimeType,
     file_size: Number(uploaded.size || bytes.length), sha256: await sha256Hex(bytes), drive_file_id: uploaded.id,
     drive_folder_id: documentsFolderId, drive_folder_path: `${tenantFolderName} / Verification / Documents`,
-  });
+  }).select("id").single();
   if (insertError) { await trashFile(token, uploaded.id).catch(() => {}); throw insertError; }
   const previous = current.documents.filter((item: any) => item.type === documentType);
   if (previous.length) {
     await admin.from("whatsapp_platform_verification_documents").update({ status: "replaced", updated_at: now })
       .eq("tenant_id", customer.tenant_id).eq("document_type", documentType).eq("status", "active").neq("drive_file_id", uploaded.id);
+  }
+  if (documentRequest) {
+    const { error: requestUpdateError } = await admin.from("whatsapp_platform_verification_document_requests").update({ status: "uploaded", fulfilled_document_id: inserted.id, fulfilled_at: now, updated_at: now }).eq("id", documentRequest.id).eq("tenant_id", customer.tenant_id);
+    if (requestUpdateError) throw requestUpdateError;
   }
   await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenantFolderName, updated_at: now }).eq("id", customer.tenant_id);
   return { ok: true, verification: await verificationState(admin, customer) };
@@ -520,6 +754,53 @@ async function removeVerificationDocument(admin: any, customer: any, body: any) 
   await admin.from("whatsapp_platform_verification_documents").update({ status: "deleted", updated_at: new Date().toISOString() }).eq("id", document.id).eq("tenant_id", customer.tenant_id);
   try { await trashFile(await driveAccessToken(), document.drive_file_id); } catch (error) { console.error("Verification document cleanup failed", error); }
   return { ok: true, verification: await verificationState(admin, customer) };
+}
+
+async function previewVerificationDocument(admin: any, customer: any, body: any, req: Request) {
+  const documentId = String(body.documentId || "").trim();
+  if (!/^[0-9a-f-]{36}$/i.test(documentId)) throw new Error("A valid approved document is required.");
+  const { data: document, error } = await admin.from("whatsapp_platform_verification_documents")
+    .select("id,tenant_id,document_type,drive_file_id,original_file_name,mime_type,file_size,review_status,status")
+    .eq("id", documentId)
+    .eq("tenant_id", customer.tenant_id)
+    .eq("status", "active")
+    .maybeSingle();
+  if (error) throw error;
+  if (!document || document.review_status !== "approved") throw new Error("Approved document was not found.");
+  if (!document.drive_file_id || Number(document.file_size || 0) > MAX_DOCUMENT_BYTES) throw new Error("Document could not be opened.");
+
+  const bytes = await driveFetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?alt=media&${DRIVE_QS}`,
+    await driveAccessToken(),
+    { headers: { Accept: "application/octet-stream" } },
+  );
+  const ipAddress = String(req.headers.get("x-forwarded-for") || "").split(",")[0].trim().slice(0, 80) || null;
+  const { error: auditError } = await admin.from("audit_logs").insert({
+    event_type: "whatsapp_verification_document_accessed",
+    action: "view",
+    module_code: "whatsapp-platform",
+    entity_type: "whatsapp_platform_verification_document",
+    entity_id: documentId,
+    details: {
+      tenant_id: customer.tenant_id,
+      customer_user_id: customer.user_id,
+      document_type: document.document_type,
+      file_name: document.original_file_name,
+      mime_type: document.mime_type,
+      file_size: document.file_size,
+      access_channel: "customer_portal_verified_record",
+    },
+    user_agent: String(req.headers.get("user-agent") || "").slice(0, 500) || null,
+    ip_address: ipAddress,
+  });
+  if (auditError) throw new Error("Document access audit could not be recorded.");
+
+  const headers = new Headers(responseHeaders(req));
+  headers.set("Content-Type", String(document.mime_type || "application/octet-stream"));
+  headers.set("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(String(document.original_file_name || "verification-document").slice(0, 120))}`);
+  headers.set("Content-Length", String(bytes.byteLength));
+  headers.delete("X-Frame-Options");
+  return new Response(bytes, { status: 200, headers });
 }
 
 async function submitVerification(admin: any, customer: any, body: any) {
@@ -539,6 +820,8 @@ async function submitVerification(admin: any, customer: any, body: any) {
   }).eq("tenant_id", customer.tenant_id).in("status", ["draft", "changes_requested", "rejected"]);
   if (error) throw error;
   await admin.from("whatsapp_platform_tenants").update({ verification_status: "submitted", updated_at: now }).eq("id", customer.tenant_id);
+  await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "verification_submitted")
+    .catch((emailError) => console.error("Verification-submitted email could not be queued", emailError));
   return { ok: true, verification: await verificationState(admin, customer) };
 }
 
@@ -558,13 +841,36 @@ Deno.serve(async (req) => {
     const admin = adminClient();
     const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "profile");
+    const preBillingActions = new Set([
+      "profile",
+      "verification_status",
+      "save_verification",
+      "upload_verification_document",
+      "remove_verification_document",
+      "preview_verification_document",
+      "submit_verification",
+      "account_deletion_status",
+      "reverse_account_deletion",
+      "export_account_data",
+      "schedule_account_deletion",
+    ]);
+    if (!preBillingActions.has(action)) {
+      const entitlement = await billingEntitlement(admin, customer);
+      if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
+    }
     if (action === "profile") return json(req, { profile: await tenantProfile(admin, customer) });
+    if (action === "account_deletion_status") return json(req, { deletion: await accountDeletionStatus(admin, customer, String(body.sessionToken || "")) });
+    if (action === "reverse_account_deletion") return json(req, await reverseAccountDeletion(admin, customer, String(body.sessionToken || ""), body));
+    if (action === "export_account_data") return json(req, await exportAccountData(admin, customer));
+    if (action === "schedule_account_deletion") return json(req, await scheduleAccountDeletion(admin, customer, body, req));
     if (action === "upload_logo") return json(req, await uploadLogo(admin, customer, body));
+    if (action === "upload_business_profile_picture") return json(req, await uploadBusinessProfilePicture(admin, customer, body));
     if (action === "remove_logo") return json(req, await removeLogo(admin, customer));
     if (action === "verification_status") return json(req, { verification: await verificationState(admin, customer) });
     if (action === "save_verification") return json(req, await saveVerification(admin, customer, body));
     if (action === "upload_verification_document") return json(req, await uploadVerificationDocument(admin, customer, body));
     if (action === "remove_verification_document") return json(req, await removeVerificationDocument(admin, customer, body));
+    if (action === "preview_verification_document") return await previewVerificationDocument(admin, customer, body, req);
     if (action === "submit_verification") return json(req, await submitVerification(admin, customer, body));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {

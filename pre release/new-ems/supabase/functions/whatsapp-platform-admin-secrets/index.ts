@@ -3,7 +3,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const MAX_BODY_BYTES = 8 * 1024;
+const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const MAX_EVIDENCE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_ORIGINS = new Set([
   "https://www.varadanexus.com",
   "https://varadanexus.com",
@@ -45,6 +46,56 @@ function adminClient() {
   });
 }
 
+function base64url(input: ArrayBuffer | string) {
+  let text = "";
+  if (typeof input === "string") text = btoa(input);
+  else { const bytes = new Uint8Array(input); for (const byte of bytes) text += String.fromCharCode(byte); text = btoa(text); }
+  return text.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function pemToPkcs8(pem: string) {
+  const binary = atob(pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s+/g, ""));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0)).buffer;
+}
+let cachedDriveToken: { value: string; exp: number } | null = null;
+async function driveAccessToken() {
+  const now = Math.floor(Date.now() / 1000);
+  if (cachedDriveToken && cachedDriveToken.exp - 60 > now) return cachedDriveToken.value;
+  const account = JSON.parse(env("GOOGLE_SERVICE_ACCOUNT_JSON") || "{}");
+  if (!account.client_email || !account.private_key) throw new Error("Google Drive evidence storage is not configured.");
+  const unsigned = `${base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${base64url(JSON.stringify({ iss: account.client_email, scope: "https://www.googleapis.com/auth/drive", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 }))}`;
+  const key = await crypto.subtle.importKey("pkcs8", pemToPkcs8(account.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned));
+  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${unsigned}.${base64url(signature)}` }) });
+  const payload = await response.json();
+  if (!response.ok || !payload.access_token) throw new Error("Google Drive evidence storage is unavailable.");
+  cachedDriveToken = { value: payload.access_token, exp: now + Number(payload.expires_in || 3600) };
+  return cachedDriveToken.value;
+}
+const DRIVE_QS = "supportsAllDrives=true&includeItemsFromAllDrives=true";
+async function driveJson(url: string, token: string, init: RequestInit = {}) {
+  const response = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, ...(init.headers || {}) } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error?.message || "Google Drive request failed.");
+  return payload;
+}
+const escapeDriveQuery = (value: string) => value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+async function findOrCreateFolder(token: string, parentId: string, name: string) {
+  const query = [`name='${escapeDriveQuery(name)}'`, `'${parentId}' in parents`, "mimeType='application/vnd.google-apps.folder'", "trashed=false"].join(" and ");
+  const found = await driveJson(`https://www.googleapis.com/drive/v3/files?${DRIVE_QS}&corpora=allDrives&q=${encodeURIComponent(query)}&fields=files(id)`, token);
+  if (found?.files?.[0]?.id) return found.files[0].id;
+  const created = await driveJson(`https://www.googleapis.com/drive/v3/files?${DRIVE_QS}&fields=id`, token, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] }) });
+  return created.id;
+}
+function safeSegment(value: unknown, fallback: string) { return String(value || fallback).normalize("NFKC").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ").trim().slice(0, 80) || fallback; }
+function base64ToBytes(value: string) { const binary = atob(value); return Uint8Array.from(binary, (character) => character.charCodeAt(0)); }
+async function sha256Hex(bytes: Uint8Array) { const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)); return Array.from(digest).map((value) => value.toString(16).padStart(2, "0")).join(""); }
+async function uploadDriveFile(token: string, folderId: string, name: string, mimeType: string, bytes: Uint8Array) {
+  const boundary = `vnbnd${crypto.randomUUID().replace(/-/g, "")}`; const encoder = new TextEncoder();
+  const start = encoder.encode(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [folderId] })}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`); const end = encoder.encode(`\r\n--${boundary}--`);
+  const payload = new Uint8Array(start.length + bytes.length + end.length); payload.set(start); payload.set(bytes, start.length); payload.set(end, start.length + bytes.length);
+  return driveJson(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&${DRIVE_QS}&fields=id,name`, token, { method: "POST", headers: { "Content-Type": `multipart/related; boundary=${boundary}` }, body: payload });
+}
+
 function base64Url(bytes: Uint8Array) {
   let binary = "";
   bytes.forEach((value) => { binary += String.fromCharCode(value); });
@@ -83,6 +134,91 @@ async function decryptSecret(value: string, context: string) {
     decodeBase64Url(payloadText),
   );
   return new TextDecoder().decode(decrypted);
+}
+
+async function decryptConnectionCredential(value: string) {
+  const [version, ivText, payloadText] = String(value || "").split(".");
+  if (version !== "v1" || !ivText || !payloadText) throw new Error("The stored Meta authorization is invalid.");
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: decodeBase64Url(ivText) },
+    await encryptionKey(),
+    decodeBase64Url(payloadText),
+  );
+  return JSON.parse(new TextDecoder().decode(decrypted));
+}
+
+function graphVersion() {
+  const version = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
+  if (!/^v\d{1,3}\.0$/.test(version)) throw new Error("Meta connection management is not configured.");
+  return version;
+}
+
+async function appSecretProof(accessToken: string, appSecret: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(appSecret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(accessToken));
+  return Array.from(new Uint8Array(signature)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function graphRequest(path: string, accessToken: string, appSecret: string, init: RequestInit = {}) {
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/${path.replace(/^\//, "")}`);
+  url.searchParams.set("appsecret_proof", await appSecretProof(accessToken, appSecret));
+  const response = await fetch(url, { ...init, headers: { Authorization: `Bearer ${accessToken}`, ...(init.headers || {}) } });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error?.message || `Meta request failed (${response.status}).`);
+  return payload;
+}
+
+async function disconnectConnection(admin: any, appUserId: string, connectionId: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(connectionId)) throw new Error("Select a valid WhatsApp connection.");
+  const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
+    .select("id,tenant_id,status,phone_number_id,display_phone_number,verified_name,whatsapp_business_account_id,onboarding_metadata")
+    .eq("id", connectionId).neq("status", "disconnected").maybeSingle();
+  if (connectionError) throw connectionError;
+  if (!connection) throw new Error("This number is already disconnected.");
+  if (!/^\d{5,40}$/.test(String(connection.phone_number_id || ""))) throw new Error("This connection does not have a valid Meta phone number ID.");
+  const { data: stored, error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+    .select("credential_ciphertext,expires_at").eq("connection_id", connection.id).eq("tenant_id", connection.tenant_id).maybeSingle();
+  if (credentialError) throw credentialError;
+  if (!stored?.credential_ciphertext) throw new Error("The Meta authorization is unavailable. Ask the customer to reconnect before removing this number.");
+  if (stored.expires_at && new Date(stored.expires_at).getTime() <= Date.now()) throw new Error("The Meta authorization has expired. Ask the customer to reconnect before removing this number.");
+  const credentials = await decryptConnectionCredential(stored.credential_ciphertext);
+  const accessToken = String(credentials?.accessToken || "").trim();
+  if (accessToken.length < 20) throw new Error("The stored Meta authorization is invalid.");
+  const { data: appSecretRow, error: appSecretError } = await admin.from("whatsapp_platform_provider_settings").select("encrypted_value").eq("setting_key", "meta_app_secret").maybeSingle();
+  if (appSecretError) throw appSecretError;
+  const appSecret = appSecretRow?.encrypted_value ? await decryptSecret(appSecretRow.encrypted_value, "meta_app_secret") : env("WHATSAPP_PLATFORM_META_APP_SECRET");
+  if (!appSecret) throw new Error("Meta connection management is not configured.");
+  const phoneNumberId = String(connection.phone_number_id);
+  let phone = await graphRequest(`${phoneNumberId}?fields=id,status`, accessToken, appSecret);
+  if (["CONNECTED", "ACTIVE", "READY"].includes(String(phone?.status || "").toUpperCase())) {
+    await graphRequest(`${phoneNumberId}/deregister`, accessToken, appSecret, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp" }) });
+    for (const delay of [750, 1500, 3000, 5000]) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      phone = await graphRequest(`${phoneNumberId}?fields=id,status`, accessToken, appSecret);
+      if (!["CONNECTED", "ACTIVE", "READY"].includes(String(phone?.status || "").toUpperCase())) break;
+    }
+    if (["CONNECTED", "ACTIVE", "READY"].includes(String(phone?.status || "").toUpperCase())) throw new Error("Meta accepted the request but the number is still connected. Nothing was removed locally; try again shortly.");
+  }
+  const now = new Date().toISOString();
+  const { error: updateError } = await admin.from("whatsapp_platform_connections").update({
+    status: "disconnected", updated_at: now,
+    onboarding_metadata: { ...(connection.onboarding_metadata || {}), phone_status: String(phone?.status || "DEREGISTERED").toUpperCase(), removed_from_workspace_at: now, deregistered_from_meta_at: now, removal_source: "ems_admin_customer_request", removed_by_app_user_id: appUserId },
+  }).eq("id", connection.id).eq("tenant_id", connection.tenant_id);
+  if (updateError) throw updateError;
+  const { error: deleteError } = await admin.from("whatsapp_platform_provider_credentials").delete().eq("connection_id", connection.id).eq("tenant_id", connection.tenant_id);
+  if (deleteError) {
+    await admin.from("whatsapp_platform_connections").update({ status: connection.status, onboarding_metadata: connection.onboarding_metadata || {}, updated_at: new Date().toISOString() }).eq("id", connection.id).eq("tenant_id", connection.tenant_id);
+    throw deleteError;
+  }
+  const { data: remaining, error: remainingError } = await admin.from("whatsapp_platform_connections").select("status").eq("tenant_id", connection.tenant_id).in("status", ["connected", "pending"]);
+  if (remainingError) throw remainingError;
+  const onboardingStatus = (remaining || []).some((item: any) => item.status === "connected") ? "meta_connected" : (remaining || []).some((item: any) => item.status === "pending") ? "meta_pending" : "profile_complete";
+  await admin.from("whatsapp_platform_tenants").update({ onboarding_status: onboardingStatus, updated_at: now }).eq("id", connection.tenant_id);
+  await Promise.all([
+    admin.from("whatsapp_platform_onboarding_events").insert({ tenant_id: connection.tenant_id, connection_id: connection.id, event_code: "connection_disconnected", safe_metadata: { source: "ems_admin_customer_request", displayPhoneNumber: connection.display_phone_number || null, verifiedName: connection.verified_name || null, phoneNumberId, whatsappBusinessAccountId: connection.whatsapp_business_account_id || null, deregisteredFromMeta: true, actorAppUserId: appUserId } }),
+    admin.from("audit_logs").insert({ event_type: "whatsapp_platform_connection_disconnected", action: "disconnect_connection", module_code: "whatsapp-platform", actor_app_user_id: appUserId, entity_type: "whatsapp_platform_connections", entity_id: connection.id, details: { tenant_id: connection.tenant_id, phone_number_id: phoneNumberId, display_phone_number: connection.display_phone_number || null, source: "explicit_customer_request", non_payment_action: false } }),
+  ]);
+  return { success: true, connectionId: connection.id, tenantId: connection.tenant_id, status: "disconnected" };
 }
 
 async function razorpayCredentials(admin: any) {
@@ -142,6 +278,19 @@ Deno.serve(async (req) => {
     const body = raw ? JSON.parse(raw) : {};
     const { appUserId, admin } = await authority(req);
     const action = String(body.action || "status");
+    if (action === "disconnect_connection") {
+      if (String(body.confirmation || "") !== "DISCONNECT") return json(req, { error: "Type DISCONNECT to confirm permanent number removal." }, 400);
+      return json(req, await disconnectConnection(admin, appUserId, String(body.connectionId || "").trim()));
+    }
+    if (action === "connection_access_snapshot") {
+      const { data: tenants, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("id").limit(1000);
+      if (tenantError) throw tenantError;
+      const accessEntries = await Promise.all((tenants || []).map(async (tenant: any) => {
+        const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: tenant.id });
+        return [tenant.id, error ? { allowed: null, state: "unknown", reason: "Billing access could not be verified." } : data];
+      }));
+      return json(req, { accessByTenant: Object.fromEntries(accessEntries) });
+    }
     if (action === "status") {
       const { data, error } = await admin.from("whatsapp_platform_provider_settings")
         .select("setting_key,updated_at").in("setting_key", ["meta_app_secret", "webhook_verify_token", "razorpay_key_id", "razorpay_key_secret", "razorpay_webhook_secret"]);
@@ -169,30 +318,51 @@ Deno.serve(async (req) => {
       await admin.from("audit_logs").insert({ event_type: "whatsapp_platform_webhook_token_rotated", action: "webhook_token_rotated", module_code: "whatsapp-platform", actor_app_user_id: appUserId, entity_type: "whatsapp_platform_provider_settings", details: { setting_key: "webhook_verify_token", secret_recorded: true }, user_agent: req.headers.get("user-agent") || null, ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null });
       return json(req, { success: true, webhookConfigured: true, webhookUpdatedAt: now, token });
     }
-    if (action === "hard_delete_tenant") {
+    if (action === "schedule_tenant_deletion") {
       const tenantId = String(body.tenantId || "").trim();
       const confirmationName = String(body.confirmationName || "").trim();
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tenantId)) {
         return json(req, { error: "Select a valid customer account." }, 400);
       }
-      if (body.confirmed !== true) return json(req, { error: "Confirm permanent account deletion." }, 400);
+      if (body.confirmed !== true || body.evidenceConsent !== true) return json(req, { error: "Confirm the evidence capture and deletion request." }, 400);
       if (confirmationName.length < 2 || confirmationName.length > 160) {
         return json(req, { error: "Enter the complete company name to confirm deletion." }, 400);
       }
+      const requestedBy = String(body.requestedBy || "").trim();
+      const internalNote = String(body.internalNote || "").trim();
+      if (requestedBy.length < 2 || requestedBy.length > 160) return json(req, { error: "Record who requested deletion." }, 400);
+      if (internalNote.length < 10 || internalNote.length > 1000) return json(req, { error: "Enter an internal note of 10 to 1000 characters." }, 400);
+      const latitude = Number(body.location?.latitude); const longitude = Number(body.location?.longitude); const accuracy = Number(body.location?.accuracy || 0);
+      const locationCapturedAt = String(body.location?.capturedAt || "");
+      if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180 || !locationCapturedAt) return json(req, { error: "Capture the requester's current location with consent." }, 400);
+      const mimeType = String(body.photo?.mimeType || ""); const fileName = safeSegment(body.photo?.fileName, "deletion-request-evidence.jpg"); const photoBase64 = String(body.photo?.base64 || "");
+      if (!["image/jpeg", "image/png"].includes(mimeType) || !photoBase64) return json(req, { error: "Capture or upload a JPG or PNG evidence photo." }, 400);
+      const photoBytes = base64ToBytes(photoBase64); if (!photoBytes.length || photoBytes.length > MAX_EVIDENCE_BYTES) return json(req, { error: "Evidence photo must be 2 MB or smaller." }, 400);
+      const jpeg = photoBytes[0] === 0xff && photoBytes[1] === 0xd8 && photoBytes[2] === 0xff; const png = photoBytes.length > 8 && [137,80,78,71,13,10,26,10].every((value, index) => photoBytes[index] === value);
+      if ((mimeType === "image/jpeg" && !jpeg) || (mimeType === "image/png" && !png)) return json(req, { error: "Evidence photo content is invalid." }, 400);
       const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
-        .select("id,name").eq("id", tenantId).maybeSingle();
+        .select("id,name,owner_email,drive_root_folder_id,drive_root_folder_path").eq("id", tenantId).maybeSingle();
       if (tenantError) throw tenantError;
       if (!tenant) return json(req, { error: "Customer account not found." }, 404);
       if (confirmationName !== tenant.name) {
         return json(req, { error: "The confirmation name does not exactly match the customer account." }, 400);
       }
-      const { data: result, error: deleteError } = await admin.rpc("whatsapp_platform_admin_hard_delete_tenant", {
-        p_tenant_id: tenantId,
-        p_confirmation_name: confirmationName,
-        p_actor_app_user_id: appUserId,
-      });
-      if (deleteError) throw deleteError;
-      return json(req, result || { success: true, tenantId });
+      const { data: existing } = await admin.from("whatsapp_platform_account_deletion_requests").select("id,scheduled_for").eq("tenant_id", tenantId).eq("status", "pending").maybeSingle();
+      if (existing) return json(req, { error: `Deletion is already scheduled until ${existing.scheduled_for}.` }, 409);
+      const [{ data: actor }, driveToken] = await Promise.all([admin.from("app_users").select("display_name,email").eq("id", appUserId).maybeSingle(), driveAccessToken()]);
+      const rootId = env("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID"); if (!rootId) throw new Error("WhatsApp Platform Drive storage is not configured.");
+      const tenantFolderName = `${safeSegment(tenant.name, "Business")} - ${tenantId.slice(0, 8)}`;
+      const tenantFolderId = tenant.drive_root_folder_id || await findOrCreateFolder(driveToken, rootId, tenantFolderName);
+      const governanceFolderId = await findOrCreateFolder(driveToken, tenantFolderId, "Account Governance");
+      const deletionFolderId = await findOrCreateFolder(driveToken, governanceFolderId, "Deletion Requests");
+      const requestId = crypto.randomUUID(); const storedName = `${new Date().toISOString().replace(/[:.]/g, "-")} - ${requestId.slice(0, 8)} - ${fileName}`;
+      const uploaded = await uploadDriveFile(driveToken, deletionFolderId, storedName, mimeType, photoBytes);
+      const scheduledFor = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const { error: insertError } = await admin.from("whatsapp_platform_account_deletion_requests").insert({ id: requestId, tenant_id: tenantId, tenant_name: tenant.name, owner_email: tenant.owner_email, requested_by_description: requestedBy, internal_note: internalNote, actor_app_user_id: appUserId, actor_name: actor?.display_name || null, actor_email: actor?.email || null, evidence_drive_file_id: uploaded.id, evidence_drive_folder_id: deletionFolderId, evidence_file_name: storedName, evidence_mime_type: mimeType, evidence_sha256: await sha256Hex(photoBytes), latitude, longitude, location_accuracy_m: accuracy || null, location_captured_at: locationCapturedAt, consent_confirmed_at: new Date().toISOString(), scheduled_for: scheduledFor });
+      if (insertError) throw insertError;
+      await admin.from("whatsapp_platform_tenants").update({ drive_root_folder_id: tenantFolderId, drive_root_folder_path: tenant.drive_root_folder_path || tenantFolderName, updated_at: new Date().toISOString() }).eq("id", tenantId);
+      await admin.from("audit_logs").insert({ event_type: "whatsapp_platform_account_deletion_scheduled", action: "schedule_account_deletion", module_code: "whatsapp-platform", actor_app_user_id: appUserId, entity_type: "whatsapp_platform_account_deletion_requests", entity_id: requestId, details: { tenant_id: tenantId, tenant_name: tenant.name, requested_by: requestedBy, internal_note: internalNote, scheduled_for: scheduledFor, evidence_file_id: uploaded.id, location: { latitude, longitude, accuracy }, reversal_window_hours: 24 }, user_agent: req.headers.get("user-agent") || null, ip_address: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null });
+      return json(req, { success: true, requestId, tenantId, status: "pending", scheduledFor, reversibleUntil: scheduledFor });
     }
     if (action === "billing_snapshot") {
       const [{ data: tenants, error: tenantError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentError }, { data: invoices, error: invoiceError }, { data: refunds, error: refundError }, { data: creditNotes, error: creditError }, { data: refundRequests, error: requestError }, { data: webhookErrors, error: webhookError }] = await Promise.all([

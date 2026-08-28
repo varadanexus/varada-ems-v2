@@ -5,6 +5,12 @@ import { showToast } from "./utils.js";
 
 const BILLING_VIEWS = new Set(["billing", "subscriptions", "payments", "invoices", "refunds", "credit-notes", "reconciliation"]);
 const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", ...BILLING_VIEWS, "razorpay", "meta", "security"]);
+const fileAsBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+  reader.onerror = () => reject(new Error("The evidence photo could not be read."));
+  reader.readAsDataURL(file);
+});
 const VIEW_META = Object.freeze({
   overview: {
     title: "Platform overview",
@@ -172,7 +178,7 @@ function customers() {
       <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>People &amp; access</span><h3>Users and roles</h3></div><small>${members.length} total records</small></div><div class="wa-admin-table-wrap"><table class="wa-admin-table wa-customer-users"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>${memberRows}</tbody></table></div></section>
       <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Connected assets</span><h3>WhatsApp Business accounts</h3></div><small>${connections.length} connections</small></div><div class="wa-customer-connections">${connectionRows}</div></section>
       ${state.canManage ? `<section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Account controls</span><h3>Plan and access</h3></div><small>Changes apply to this workspace</small></div><form class="wa-customer-account-form" data-tenant-form="${escapeHtml(item.id)}"><label><span>Package Master assignment</span><select name="plan">${packageOptions}</select></label><label><span>Extra seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extra}" /></label><label><span>Status</span><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select></label><button class="wa-admin-button primary" type="submit">Save account</button></form></section>` : ""}
-      ${state.hasFullAuthority ? `<section class="wa-customer-danger"><div><span>Danger zone</span><h3>Permanently delete account</h3><p>Available only for clean or test workspaces. Live subscriptions, invoices, credit notes or payments are retained and prevent deletion.</p></div><form data-customer-delete-form="${escapeHtml(item.id)}" data-customer-name="${escapeHtml(item.name)}"><label><span>Type <strong>${escapeHtml(item.name)}</strong> to confirm</span><input name="confirmationName" autocomplete="off" required /></label><label class="wa-customer-delete-check"><input name="confirmed" type="checkbox" required /><span>I understand this permanently removes the workspace, users, sessions, messages, contacts, stored file references and Meta connections.</span></label><button class="wa-admin-button danger" type="submit" disabled>Permanently delete account</button></form></section>` : ""}
+      ${state.hasFullAuthority ? `<section class="wa-customer-danger"><div><span>Danger zone</span><h3>Schedule complete account deletion</h3><p>Evidence is stored in the company’s protected Drive folder. The workspace owner or an administrator can reverse the request for 24 hours before guarded deletion begins.</p><button class="wa-admin-button danger" type="button" data-customer-delete-open="${escapeHtml(item.id)}">Delete account</button></div><form class="wa-customer-delete-form" data-customer-delete-form="${escapeHtml(item.id)}" data-customer-name="${escapeHtml(item.name)}" hidden><div class="wa-customer-delete-form-head"><strong>Deletion request and evidence</strong><button type="button" data-customer-delete-cancel>Cancel</button></div><label><span>Who requested this deletion?</span><input name="requestedBy" maxlength="160" autocomplete="off" placeholder="Customer name and email, or authorised requester" required /></label><label><span>Internal note</span><textarea name="internalNote" rows="3" minlength="10" maxlength="1000" placeholder="Record the request source, reason and internal context." required></textarea></label><label><span>Photo evidence of requester</span><input name="evidencePhoto" type="file" accept="image/png,image/jpeg" capture="user" required /><small>JPG or PNG, maximum 2 MB. Capture only with the person’s consent.</small></label><div class="wa-customer-location"><button class="wa-admin-button" type="button" data-capture-delete-location>Capture current location</button><span data-delete-location-status>Location not captured</span></div><input name="latitude" type="hidden" /><input name="longitude" type="hidden" /><input name="locationAccuracy" type="hidden" /><input name="locationCapturedAt" type="hidden" /><label><span>Type <strong>${escapeHtml(item.name)}</strong> to confirm</span><input name="confirmationName" autocomplete="off" required /></label><label class="wa-customer-delete-check"><input name="confirmed" type="checkbox" required /><span>I confirm the requester consented to the photo and location evidence. This request may be reversed within 24 hours; after that, guarded deletion is final.</span></label><button class="wa-admin-button danger" type="submit" disabled>Schedule deletion</button></form></section>` : ""}
     </main></div></section>`;
     return `<article class="wa-customer-card"><button type="button" class="wa-customer-card-open" data-open-customer="${escapeHtml(item.id)}"><header><span class="wa-customer-avatar">${escapeHtml(String(item.name || "C").slice(0, 1).toUpperCase())}</span><div><span>${escapeHtml(masterPackage?.name || planCode)} package</span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.ownerEmail)}</small></div>${status(item.status)}</header><div class="wa-customer-card-metrics"><div><span>Team</span><strong>${Number(item.userCount || 0)} / ${capacity}</strong></div><div><span>Connections</span><strong>${connections.length}</strong></div><div><span>Verification</span><strong>${escapeHtml(verification?.status || item.verificationStatus || "not started")}</strong></div></div><footer><span>Created ${escapeHtml(formatDate(item.createdAt))}</span><strong>Open account →</strong></footer></button></article>${modal}`;
   }).join("");
@@ -180,8 +186,25 @@ function customers() {
 }
 
 function connections() {
-  const rows = state.snapshot?.connections || [];
-  return `<section class="wa-admin-card"><h3>Customer Meta connections</h3><p>Safe operational view of customer-owned WhatsApp Business Accounts. Provider secrets are never displayed.</p>${rows.length ? `<div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Company</th><th>Verified name</th><th>Phone</th><th>WABA ID</th><th>Status</th><th>Connected</th></tr></thead><tbody>${rows.map((item) => `<tr><td>${escapeHtml(item.tenantName)}</td><td>${escapeHtml(item.verifiedName || "—")}</td><td>${escapeHtml(item.displayPhoneNumber || "—")}</td><td><span class="wa-admin-code">${escapeHtml(item.whatsappBusinessAccountId || "not assigned")}</span></td><td>${status(item.status)}</td><td>${escapeHtml(formatDate(item.connectedAt))}</td></tr>`).join("")}</tbody></table></div>` : '<div class="wa-admin-empty">No customer has connected a Meta Business Account.</div>'}</section>`;
+  const tenants = (state.snapshot?.tenants || []).filter((tenant) => (tenant.connections || []).length);
+  if (!tenants.length) return '<section class="wa-admin-card"><h3>Customer Meta connections</h3><p>Safe operational view of customer-owned WhatsApp Business Accounts. Provider secrets are never displayed.</p><div class="wa-admin-empty">No customer has connected a Meta Business Account.</div></section>';
+  const cards = tenants.map((tenant) => {
+    const rows = tenant.connections || [];
+    const activeRows = rows.filter((connection) => connection.status !== "disconnected");
+    const billing = tenant.billingAccess || {};
+    const billingKnown = typeof billing.allowed === "boolean";
+    const accessLabel = !billingKnown ? "access_unknown" : billing.allowed ? (billing.state === "trial" ? "trial_access" : "access_active") : "access_blocked";
+    const connectionRows = rows.map((connection) => {
+      const label = connection.verifiedName || connection.displayPhoneNumber || "WhatsApp number";
+      const metadata = connection.onboardingMetadata || {};
+      const canDisconnect = state.hasFullAuthority && connection.status !== "disconnected";
+      return `<article class="wa-connection-detail"><header><div><span>WhatsApp number</span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(connection.displayPhoneNumber || "Number not assigned")}</small></div>${status(connection.status || "pending")}</header><dl><div><dt>WABA ID</dt><dd class="wa-admin-code">${escapeHtml(connection.whatsappBusinessAccountId || "Not assigned")}</dd></div><div><dt>Phone number ID</dt><dd class="wa-admin-code">${escapeHtml(connection.phoneNumberId || "Not assigned")}</dd></div><div><dt>Meta business ID</dt><dd class="wa-admin-code">${escapeHtml(connection.metaBusinessId || "Not assigned")}</dd></div><div><dt>Provider</dt><dd>${escapeHtml(connection.provider || "meta")}</dd></div><div><dt>Quality</dt><dd>${escapeHtml(metadata.qualityRating || "Not reported")}</dd></div><div><dt>Phone status</dt><dd>${escapeHtml(metadata.phoneStatus || metadata.codeVerificationStatus || "Not reported")}</dd></div><div><dt>Connected</dt><dd>${escapeHtml(formatDate(connection.connectedAt))}</dd></div><div><dt>Last updated</dt><dd>${escapeHtml(formatDate(connection.updatedAt || connection.createdAt))}</dd></div></dl>${canDisconnect ? `<div class="wa-connection-controls"><button class="wa-admin-button danger" type="button" data-disconnect-open="${escapeHtml(connection.id)}">Disconnect number</button><form data-connection-disconnect-form="${escapeHtml(connection.id)}" data-connection-label="${escapeHtml(label)}" hidden><div class="wa-connection-warning"><strong>This is a permanent Meta disconnection.</strong><p>The number will be deregistered from WhatsApp Cloud API and its stored authorization removed. Conversation and audit history will remain.</p><p>Non-payment must never use this control: billing failure blocks workspace access while preserving the number connection.</p></div><label><span>Type <strong>DISCONNECT</strong> to confirm</span><input name="confirmation" autocomplete="off" pattern="DISCONNECT" required /></label><div><button class="wa-admin-button" type="button" data-disconnect-cancel>Keep connected</button><button class="wa-admin-button danger" type="submit">Disconnect permanently</button></div></form></div>` : ""}</article>`;
+    }).join("");
+    const modal = `<section class="wa-customer-modal" data-customer-modal="connection-${escapeHtml(tenant.id)}" hidden role="dialog" aria-modal="true" aria-labelledby="waConnectionCompany-${escapeHtml(tenant.id)}"><div class="wa-customer-modal-shell"><header><div><span>Company Meta connections</span><strong id="waConnectionCompany-${escapeHtml(tenant.id)}">${escapeHtml(tenant.name)}</strong><small>${escapeHtml(tenant.ownerEmail)} · ${rows.length} total connection${rows.length === 1 ? "" : "s"}</small></div><div>${status(accessLabel)}<button type="button" data-customer-modal-close aria-label="Close company connections">×</button></div></header><main><section class="wa-customer-detail-grid"><article><span>Workspace status</span><strong>${escapeHtml(tenant.status || "unknown")}</strong></article><article><span>Billing access</span><strong>${escapeHtml(!billingKnown ? "Unknown" : billing.allowed ? "Allowed" : "Blocked")}</strong></article><article><span>Billing reason</span><strong>${escapeHtml(billing.reason || "Billing summary has not loaded. Refresh data to verify access.")}</strong></article><article><span>Package</span><strong>${escapeHtml(billing.packageCode || tenant.planCode || "Not assigned")}</strong></article><article><span>Connected numbers</span><strong>${activeRows.length}</strong></article><article><span>Workspace ID</span><strong class="wa-admin-code">${escapeHtml(tenant.id)}</strong></article></section><section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Connected assets</span><h3>All numbers and Meta connections</h3></div><small>Credentials are never displayed</small></div><div class="wa-company-connections">${connectionRows}</div></section><section class="wa-access-separation-note"><strong>Access and connection are separate controls</strong><p>A missed or failed payment blocks product access only. It does not deregister a customer-owned WhatsApp number. Disconnection is reserved for an explicit customer removal request or voluntary subscription cancellation after a warning.</p></section></main></div></section>`;
+    const searchable = [tenant.name, tenant.ownerEmail, ...rows.flatMap((connection) => [connection.displayPhoneNumber, connection.verifiedName, connection.whatsappBusinessAccountId])].filter(Boolean).join(" ").toLocaleLowerCase();
+    return `<article class="wa-connection-company-card" data-connection-company-card data-connection-search="${escapeHtml(searchable)}"><button type="button" data-open-customer="connection-${escapeHtml(tenant.id)}"><header><span class="wa-customer-avatar">${escapeHtml(String(tenant.name || "C").slice(0, 1).toUpperCase())}</span><div><span>Customer company</span><strong>${escapeHtml(tenant.name)}</strong><small>${escapeHtml(tenant.ownerEmail)}</small></div>${status(accessLabel)}</header><div class="wa-connection-company-metrics"><div><span>Active connections</span><strong>${activeRows.length}</strong></div><div><span>Total records</span><strong>${rows.length}</strong></div><div><span>Workspace</span><strong>${escapeHtml(tenant.status || "unknown")}</strong></div></div><footer><span>${escapeHtml(activeRows[0]?.displayPhoneNumber || "No active number")}</span><strong>Open details →</strong></footer></button></article>${modal}`;
+  }).join("");
+  return `<section class="wa-admin-card wa-connections-directory"><div class="wa-admin-secret-heading"><div><h3>Customer Meta connections</h3><p>Select a company to review every attached number, Meta identifier, billing access state and protected disconnection controls.</p></div>${status(`${tenants.length}_companies`)}</div><label class="wa-connection-search"><span>Search connections</span><input type="search" data-connection-search-input placeholder="Company name, email or mobile number" autocomplete="off" /><small>Search also matches verified names and WABA IDs.</small></label><div class="wa-connection-company-grid">${cards}</div><div class="wa-admin-empty" data-connection-search-empty hidden>No company matches this search.</div></section>`;
 }
 
 function verificationLegacy() {
@@ -567,6 +590,8 @@ async function saveProviderSecret(event) {
   try {
     state.providerSecretStatus = await providerSecretRequest("set", { secret });
     form.reset();
+    const locationStatus = form.querySelector("[data-delete-location-status]");
+    if (locationStatus) locationStatus.textContent = "Location not captured";
     input.type = "password";
     showToast("Meta App Secret encrypted and saved.", TOAST_TYPES.SUCCESS);
     render();
@@ -703,7 +728,7 @@ function masterCouponForm(coupon, packages, addons) {
   const maximumDiscount = c.max_discount_paise == null ? "" : Number(c.max_discount_paise) / 100;
   const minimumSubtotal = c.minimum_subtotal_paise == null ? 0 : Number(c.minimum_subtotal_paise) / 100;
   return `<form class="wa-master-record compact" data-master-coupon-form="${escapeHtml(c.id || "")}">
-    <header><div><span class="wa-admin-kicker">${isNew ? "New coupon" : `Coupon · ${escapeHtml(c.code)}`}</span><h3>${escapeHtml(c.name || "Create coupon code")}</h3><p>Discounts are validated and calculated server-side against the tax-exclusive Package Master price.</p></div><span class="wa-master-state ${escapeHtml(c.status || "draft")}">${escapeHtml(c.status || "draft")}</span></header>
+    <header><div><span class="wa-admin-kicker">${isNew ? "New coupon" : `Coupon · ${escapeHtml(c.code)}`}</span><h3>${escapeHtml(c.name || "Create coupon code")}</h3><p>Discounts are validated server-side against the tax-exclusive Package Master price and eligible selected add-ons.</p></div><span class="wa-master-state ${escapeHtml(c.status || "draft")}">${escapeHtml(c.status || "draft")}</span></header>
     <div class="wa-pkg-grid">
       <label>Coupon code<input name="code" required minlength="3" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,39}" value="${masterValue(c,"code")}" placeholder="WELCOME20"/><small>Customer enters this code at checkout.</small></label>
       <label>Internal name<input name="name" required maxlength="120" value="${masterValue(c,"name")}" placeholder="Launch offer"/></label>
@@ -723,7 +748,7 @@ function masterCouponForm(coupon, packages, addons) {
     </div>
     <div class="wa-master-section"><h4>Eligible billing intervals</h4><div class="wa-master-toggles"><label class="wa-master-toggle"><input type="checkbox" name="interval_month" ${intervals.includes("month") ? "checked" : ""}/><span>Monthly</span></label><label class="wa-master-toggle"><input type="checkbox" name="interval_year" ${intervals.includes("year") ? "checked" : ""}/><span>Annual</span></label><label class="wa-master-toggle"><input type="checkbox" name="firstPaymentOnly" ${c.first_payment_only ? "checked" : ""}/><span>First successful payment only</span></label></div></div>
     <div class="wa-master-section"><h4>Eligible packages</h4><p class="wa-master-help">Leave all unchecked to allow every active package.</p><div class="wa-master-toggles">${packages.map((p) => `<label class="wa-master-toggle"><input type="checkbox" name="package_${escapeHtml(p.code)}" ${packageCodes.includes(p.code) ? "checked" : ""}/><span>${escapeHtml(p.name)}</span></label>`).join("") || "<span>Create a package first.</span>"}</div></div>
-    <div class="wa-master-section"><h4>Eligible add-ons</h4><p class="wa-master-help">Leave all unchecked to allow package-only checkout and every eligible add-on.</p><div class="wa-master-toggles">${addons.map((a) => `<label class="wa-master-toggle"><input type="checkbox" name="addon_${escapeHtml(a.code)}" ${addonCodes.includes(a.code) ? "checked" : ""}/><span>${escapeHtml(a.name)}</span></label>`).join("") || "<span>No add-ons configured.</span>"}</div></div>
+    <div class="wa-master-section"><h4>Eligible add-ons</h4><p class="wa-master-help">Selected add-ons are included in the coupon discount. Leave all unchecked to include every eligible selected add-on.</p><div class="wa-master-toggles">${addons.map((a) => `<label class="wa-master-toggle"><input type="checkbox" name="addon_${escapeHtml(a.code)}" ${addonCodes.includes(a.code) ? "checked" : ""}/><span>${escapeHtml(a.name)}</span></label>`).join("") || "<span>No add-ons configured.</span>"}</div></div>
     <footer><span>Coupon values reduce the base subtotal before GST. Redemption is recorded only by verified checkout.</span><button class="wa-admin-button primary" type="submit">${isNew ? "Create coupon" : "Save coupon"}</button></footer>
   </form>`;
 }
@@ -1170,25 +1195,108 @@ function bind() {
     modal.addEventListener("click", (event) => { if (event.target === modal) closeCustomerModal(modal); });
     modal.addEventListener("keydown", (event) => { if (event.key === "Escape") closeCustomerModal(modal); });
   });
+  document.querySelector("[data-connection-search-input]")?.addEventListener("input", (event) => {
+    const query = String(event.currentTarget.value || "").trim().toLocaleLowerCase();
+    let visible = 0;
+    document.querySelectorAll("[data-connection-company-card]").forEach((card) => {
+      const matches = !query || String(card.dataset.connectionSearch || "").includes(query);
+      card.hidden = !matches;
+      if (matches) visible += 1;
+    });
+    const empty = document.querySelector("[data-connection-search-empty]");
+    if (empty) empty.hidden = visible !== 0;
+  });
+  document.querySelectorAll("[data-disconnect-open]").forEach((button) => button.addEventListener("click", () => {
+    const form = button.parentElement?.querySelector(`[data-connection-disconnect-form="${CSS.escape(button.dataset.disconnectOpen)}"]`);
+    if (!form) return;
+    form.hidden = false;
+    button.hidden = true;
+    form.elements.confirmation?.focus();
+  }));
+  document.querySelectorAll("[data-disconnect-cancel]").forEach((button) => button.addEventListener("click", () => {
+    const form = button.closest("[data-connection-disconnect-form]");
+    if (!form) return;
+    form.reset();
+    form.hidden = true;
+    const opener = form.parentElement?.querySelector("[data-disconnect-open]");
+    if (opener) opener.hidden = false;
+  }));
+  document.querySelectorAll("[data-connection-disconnect-form]").forEach((form) => form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const submit = event.submitter || form.querySelector('[type="submit"]');
+    const original = submit.textContent;
+    try {
+      submit.disabled = true;
+      submit.textContent = "Disconnecting at Meta…";
+      await providerSecretRequest("disconnect_connection", { connectionId: form.dataset.connectionDisconnectForm, confirmation: form.elements.confirmation.value });
+      closeCustomerModal(form.closest("[data-customer-modal]"));
+      showToast(`${form.dataset.connectionLabel || "The number"} was deregistered from Meta and disconnected.`, TOAST_TYPES.SUCCESS);
+      await loadSnapshot();
+    } catch (error) {
+      showToast(error?.message || "The number could not be disconnected.", TOAST_TYPES.ERROR);
+      submit.disabled = false;
+      submit.textContent = original;
+    }
+  }));
+  document.querySelectorAll("[data-customer-delete-open]").forEach((button) => button.addEventListener("click", () => {
+    const modal = button.closest("[data-customer-modal]");
+    const form = modal?.querySelector(`[data-customer-delete-form="${CSS.escape(button.dataset.customerDeleteOpen)}"]`);
+    if (!form) return;
+    form.hidden = false;
+    button.hidden = true;
+    form.elements.requestedBy?.focus();
+  }));
+  document.querySelectorAll("[data-customer-delete-cancel]").forEach((button) => button.addEventListener("click", () => {
+    const form = button.closest("[data-customer-delete-form]");
+    const modal = button.closest("[data-customer-modal]");
+    const opener = modal?.querySelector(`[data-customer-delete-open="${CSS.escape(form?.dataset.customerDeleteForm || "")}"]`);
+    if (!form) return;
+    form.reset();
+    form.hidden = true;
+    if (opener) { opener.hidden = false; opener.focus(); }
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+  }));
   document.querySelectorAll("[data-customer-delete-form]").forEach((form) => {
     const input = form.elements.confirmationName;
+    const requestedBy = form.elements.requestedBy;
+    const internalNote = form.elements.internalNote;
     const check = form.elements.confirmed;
+    const photo = form.elements.evidencePhoto;
+    const locationStatus = form.querySelector("[data-delete-location-status]");
     const button = form.querySelector('button[type="submit"]');
-    const validate = () => { button.disabled = input.value !== form.dataset.customerName || !check.checked; };
+    const validate = () => { button.disabled = input.value !== form.dataset.customerName || requestedBy.value.trim().length < 2 || internalNote.value.trim().length < 10 || !photo.files?.[0] || !form.elements.latitude.value || !form.elements.longitude.value || !check.checked; };
     input.addEventListener("input", validate);
+    requestedBy.addEventListener("input", validate);
+    internalNote.addEventListener("input", validate);
+    photo.addEventListener("change", validate);
     check.addEventListener("change", validate);
+    form.querySelector("[data-capture-delete-location]")?.addEventListener("click", () => {
+      if (!navigator.geolocation) { showToast("Location capture is not available on this device.", TOAST_TYPES.ERROR); return; }
+      locationStatus.textContent = "Requesting consent and location…";
+      navigator.geolocation.getCurrentPosition((position) => {
+        form.elements.latitude.value = String(position.coords.latitude);
+        form.elements.longitude.value = String(position.coords.longitude);
+        form.elements.locationAccuracy.value = String(position.coords.accuracy || "");
+        form.elements.locationCapturedAt.value = new Date(position.timestamp || Date.now()).toISOString();
+        locationStatus.textContent = `Captured to ±${Math.round(position.coords.accuracy || 0)} m`;
+        validate();
+      }, (error) => { locationStatus.textContent = "Location permission was not granted"; showToast(error.message || "Location could not be captured.", TOAST_TYPES.ERROR); validate(); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
     form.addEventListener("submit", async (event) => {
       event.preventDefault(); validate(); if (button.disabled) return;
-      button.disabled = true; button.textContent = "Deleting account…";
+      button.disabled = true; button.textContent = "Archiving evidence…";
       try {
-        await providerSecretRequest("hard_delete_tenant", { tenantId: form.dataset.customerDeleteForm, confirmationName: input.value, confirmed: true });
+        const evidenceFile = photo.files[0];
+        const result = await providerSecretRequest("schedule_tenant_deletion", { tenantId: form.dataset.customerDeleteForm, confirmationName: input.value, requestedBy: requestedBy.value.trim(), internalNote: internalNote.value.trim(), confirmed: true, evidenceConsent: true, photo: { fileName: evidenceFile.name, mimeType: evidenceFile.type, base64: await fileAsBase64(evidenceFile) }, location: { latitude: Number(form.elements.latitude.value), longitude: Number(form.elements.longitude.value), accuracy: Number(form.elements.locationAccuracy.value || 0), capturedAt: form.elements.locationCapturedAt.value } });
         closeCustomerModal(form.closest("[data-customer-modal]"));
-        showToast("Customer account permanently deleted.", TOAST_TYPES.SUCCESS);
+        showToast(`Deletion scheduled. It can be reversed until ${formatDate(result.reversibleUntil)}.`, TOAST_TYPES.SUCCESS);
         state.packageMaster = null;
         await loadSnapshot();
       } catch (error) {
         showToast(error?.message || "Customer account could not be deleted.", TOAST_TYPES.ERROR);
-        button.textContent = "Permanently delete account"; validate();
+        button.textContent = "Schedule deletion"; validate();
       }
     });
   });
@@ -1414,9 +1522,19 @@ async function loadSnapshot() {
   if (error) { state.error = error.message || "Database setup is pending."; state.snapshot = null; }
   else {
     state.snapshot = data || {};
-    if (state.view === "customers") {
+    if (["customers", "connections"].includes(state.view)) {
       const { data: directory, error: directoryError } = await db.rpc("whatsapp_platform_admin_customer_directory");
       if (!directoryError && Array.isArray(directory)) state.snapshot.tenants = directory;
+    }
+    if (state.view === "connections" && state.hasFullAuthority) {
+      try {
+        const access = await providerSecretRequest("connection_access_snapshot");
+        (state.snapshot.tenants || []).forEach((tenant) => {
+          if (access?.accessByTenant?.[tenant.id]) tenant.billingAccess = access.accessByTenant[tenant.id];
+        });
+      } catch (accessError) {
+        console.warn("Connection billing-access snapshot unavailable", accessError);
+      }
     }
     const [{ data: reviews, error: reviewError }, { data: requests, error: requestError }] = await Promise.all([
       db.rpc("whatsapp_platform_admin_document_reviews"),

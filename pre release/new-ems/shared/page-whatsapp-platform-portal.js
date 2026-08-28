@@ -75,14 +75,23 @@ let workspaceTemplates = { templates: [], connectionId: "", error: "" };
 let workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
 let workspaceFlows = { flows: [], error: "" };
 let workspaceCampaigns = { drafts: [], segments: [], error: "" };
+let workspaceConnections = [];
 let workspaceSelectedConnectionId = "";
 let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
+let workspaceMessagingPreferences = { stopMarketingOptOutEnabled: true, error: "" };
+let workspaceNotifications = { notifications: [], unreadCount: 0, error: "" };
 let workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], invoices: [], creditNotes: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
-let workspaceCheckout = { quote: null, package: null, error: "" };
+let workspaceDeletion = { pending: false };
+let workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: "" };
 let razorpayCheckoutPromise = null;
 let profileMenuClickAwayHandler = null;
+let notificationClickAwayHandler = null;
+let workspaceNotificationRefreshTimer = null;
+let workspaceNavigationBound = false;
+let workspaceNavigationSequence = 0;
+let businessNumberRefreshTimer = null;
 const COUNTRY_DIAL_CODES = "AC:+247,AD:+376,AE:+971,AF:+93,AG:+1,AI:+1,AL:+355,AM:+374,AO:+244,AR:+54,AS:+1,AT:+43,AU:+61,AW:+297,AX:+358,AZ:+994,BA:+387,BB:+1,BD:+880,BE:+32,BF:+226,BG:+359,BH:+973,BI:+257,BJ:+229,BL:+590,BM:+1,BN:+673,BO:+591,BQ:+599,BR:+55,BS:+1,BT:+975,BW:+267,BY:+375,BZ:+501,CA:+1,CC:+61,CD:+243,CF:+236,CG:+242,CH:+41,CI:+225,CK:+682,CL:+56,CM:+237,CN:+86,CO:+57,CR:+506,CU:+53,CV:+238,CW:+599,CX:+61,CY:+357,CZ:+420,DE:+49,DJ:+253,DK:+45,DM:+1,DO:+1,DZ:+213,EC:+593,EE:+372,EG:+20,EH:+212,ER:+291,ES:+34,ET:+251,FI:+358,FJ:+679,FK:+500,FM:+691,FO:+298,FR:+33,GA:+241,GB:+44,GD:+1,GE:+995,GF:+594,GG:+44,GH:+233,GI:+350,GL:+299,GM:+220,GN:+224,GP:+590,GQ:+240,GR:+30,GT:+502,GU:+1,GW:+245,GY:+592,HK:+852,HN:+504,HR:+385,HT:+509,HU:+36,ID:+62,IE:+353,IL:+972,IM:+44,IN:+91,IO:+246,IQ:+964,IR:+98,IS:+354,IT:+39,JE:+44,JM:+1,JO:+962,JP:+81,KE:+254,KG:+996,KH:+855,KI:+686,KM:+269,KN:+1,KP:+850,KR:+82,KW:+965,KY:+1,KZ:+7,LA:+856,LB:+961,LC:+1,LI:+423,LK:+94,LR:+231,LS:+266,LT:+370,LU:+352,LV:+371,LY:+218,MA:+212,MC:+377,MD:+373,ME:+382,MF:+590,MG:+261,MH:+692,MK:+389,ML:+223,MM:+95,MN:+976,MO:+853,MP:+1,MQ:+596,MR:+222,MS:+1,MT:+356,MU:+230,MV:+960,MW:+265,MX:+52,MY:+60,MZ:+258,NA:+264,NC:+687,NE:+227,NF:+672,NG:+234,NI:+505,NL:+31,NO:+47,NP:+977,NR:+674,NU:+683,NZ:+64,OM:+968,PA:+507,PE:+51,PF:+689,PG:+675,PH:+63,PK:+92,PL:+48,PM:+508,PR:+1,PS:+970,PT:+351,PW:+680,PY:+595,QA:+974,RE:+262,RO:+40,RS:+381,RU:+7,RW:+250,SA:+966,SB:+677,SC:+248,SD:+249,SE:+46,SG:+65,SH:+290,SI:+386,SJ:+47,SK:+421,SL:+232,SM:+378,SN:+221,SO:+252,SR:+597,SS:+211,ST:+239,SV:+503,SX:+1,SY:+963,SZ:+268,TA:+290,TC:+1,TD:+235,TG:+228,TH:+66,TJ:+992,TK:+690,TL:+670,TM:+993,TN:+216,TO:+676,TR:+90,TT:+1,TV:+688,TW:+886,TZ:+255,UA:+380,UG:+256,US:+1,UY:+598,UZ:+998,VA:+39,VC:+1,VE:+58,VG:+1,VI:+1,VN:+84,VU:+678,WF:+681,WS:+685,XK:+383,YE:+967,YT:+262,ZA:+27,ZM:+260,ZW:+263".split(",").map((entry) => { const [code, dial] = entry.split(":"); return { code, dial }; });
 
 function countryDialEntries() {
@@ -133,9 +142,14 @@ const WORKSPACE_VIEW_LABELS = {
 
 const AGENT_WORKSPACE_VIEWS = new Set(["inbox", "contacts", "campaigns", "templates", "flows", "analytics"]);
 const BILLING_WORKSPACE_VIEWS = new Set(["billing", "billing-plans", "billing-addons", "billing-invoices", "billing-ledger", "billing-refunds"]);
+const PRE_BILLING_WORKSPACE_VIEWS = new Set(["overview", "verification", "onboarding"]);
 
 function isBillingWorkspaceView(view) {
   return BILLING_WORKSPACE_VIEWS.has(view);
+}
+
+function isPreBillingWorkspaceView(view) {
+  return PRE_BILLING_WORKSPACE_VIEWS.has(view);
 }
 
 function isAgentWorkspaceRole() {
@@ -166,6 +180,48 @@ function currentWorkspaceView() {
 function workspacePath(view) {
   if (view.startsWith("billing-") && BILLING_WORKSPACE_VIEWS.has(view)) return `${WORKSPACE_PATH}billing/${view.slice(8)}/`;
   return view === "overview" ? WORKSPACE_PATH : `${WORKSPACE_PATH}${view}/`;
+}
+
+function workspaceLocationKey() {
+  return `${location.pathname}${location.search}${location.hash}`;
+}
+
+async function navigateWorkspace(url, { replace = false } = {}) {
+  const destination = url instanceof URL ? url : new URL(url, location.href);
+  if (destination.origin !== location.origin || !destination.pathname.startsWith(WORKSPACE_PATH)) {
+    location.assign(destination.href);
+    return;
+  }
+  const nextLocation = `${destination.pathname}${destination.search}${destination.hash}`;
+  if (nextLocation === workspaceLocationKey()) return;
+  if (replace) history.replaceState({}, "", nextLocation);
+  else history.pushState({}, "", nextLocation);
+  const sequence = ++workspaceNavigationSequence;
+  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  await renderDashboard({ refresh: false });
+  if (sequence !== workspaceNavigationSequence) return;
+  renderDashboard({ refresh: true, preserveScroll: true, navigationSequence: sequence }).catch(() => {});
+}
+
+function bindWorkspaceNavigation() {
+  if (workspaceNavigationBound) return;
+  workspaceNavigationBound = true;
+  document.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest?.("a[href]");
+    if (!link || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
+    const destination = new URL(link.href, location.href);
+    if (destination.origin !== location.origin || !destination.pathname.startsWith(WORKSPACE_PATH)) return;
+    event.preventDefault();
+    navigateWorkspace(destination).catch(() => location.assign(destination.href));
+  });
+  window.addEventListener("popstate", () => {
+    const sequence = ++workspaceNavigationSequence;
+    renderDashboard({ refresh: false }).then(() => {
+      if (sequence !== workspaceNavigationSequence) return;
+      renderDashboard({ refresh: true, preserveScroll: true, navigationSequence: sequence }).catch(() => {});
+    }).catch(() => {});
+  });
 }
 
 function selectedNumberStorageKey() {
@@ -550,6 +606,140 @@ function showToast(message, type = "info") {
   showToast.timer = setTimeout(() => { toast.hidden = true; }, 5000);
 }
 
+function notificationActionUrl(value) {
+  const path = String(value || "");
+  return /^\/whatsapp-platform\/workspace(?:\/|$)/.test(path) ? path : "";
+}
+
+function notificationTime(value) {
+  const timestamp = new Date(value || "").getTime();
+  if (!Number.isFinite(timestamp)) return "Recently";
+  const elapsed = Math.max(0, Date.now() - timestamp);
+  if (elapsed < 60_000) return "Just now";
+  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m ago`;
+  if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}h ago`;
+  if (elapsed < 604_800_000) return `${Math.floor(elapsed / 86_400_000)}d ago`;
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(timestamp));
+}
+
+function notificationCentreMarkup() {
+  const notifications = workspaceNotifications.notifications || [];
+  const unreadCount = Number(workspaceNotifications.unreadCount || 0);
+  const rows = notifications.map((item) => {
+    const actionUrl = notificationActionUrl(item.actionUrl);
+    const action = actionUrl ? `<a href="${escapeHtml(actionUrl)}" data-notification-open="${escapeHtml(item.id)}">${escapeHtml(item.actionLabel || "Open")}</a>` : "";
+    return `<article class="wp-notification-item ${item.readAt ? "" : "is-unread"} severity-${escapeHtml(item.severity || "info")}" data-notification-id="${escapeHtml(item.id)}"><span class="wp-notification-status" aria-hidden="true"></span><div><header><strong>${escapeHtml(item.title)}</strong><time datetime="${escapeHtml(item.createdAt || "")}">${escapeHtml(notificationTime(item.createdAt))}</time></header><p>${escapeHtml(item.message)}</p><footer>${action}<button type="button" data-notification-dismiss="${escapeHtml(item.id)}" aria-label="Dismiss ${escapeHtml(item.title)}">Dismiss</button></footer></div></article>`;
+  }).join("");
+  const content = rows || `<div class="wp-notification-empty"><span aria-hidden="true">✓</span><strong>You’re all caught up</strong><p>Important workspace updates will appear here.</p></div>`;
+  return `<div class="wp-notification-control"><button class="wp-notification-trigger" id="wpNotificationBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="wpNotificationPanel" aria-label="Notifications${unreadCount ? `, ${unreadCount} unread` : ""}">${workspaceIcon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>')}<span class="wp-notification-badge" ${unreadCount ? "" : "hidden"}>${unreadCount > 99 ? "99+" : unreadCount}</span></button><section class="wp-notification-panel" id="wpNotificationPanel" role="dialog" aria-modal="false" aria-labelledby="wpNotificationTitle" hidden><header><div><span>Workspace updates</span><h2 id="wpNotificationTitle">Notifications</h2></div>${unreadCount ? `<button type="button" data-notifications-read-all>Mark all as read</button>` : ""}</header><div class="wp-notification-feed">${content}</div><footer><small>${workspaceNotifications.error ? escapeHtml(workspaceNotifications.error) : "Updates are created securely from verified workspace events."}</small></footer></section></div>`;
+}
+
+async function refreshWorkspaceNotifications({ updateDom = false } = {}) {
+  if (!session?.sessionToken) return;
+  try {
+    const result = await messagingRequest("list_notifications", { limit: 40 });
+    workspaceNotifications = { notifications: result?.notifications || [], unreadCount: Number(result?.unreadCount || 0), error: "" };
+  } catch (error) {
+    workspaceNotifications = { ...workspaceNotifications, error: error?.message || "Notifications could not be loaded." };
+  }
+  if (!updateDom) return;
+  const existing = app.querySelector(".wp-notification-control");
+  if (existing) {
+    const holder = document.createElement("div");
+    holder.innerHTML = notificationCentreMarkup();
+    existing.replaceWith(holder.firstElementChild);
+    bindNotificationCentre(app);
+  }
+}
+
+function scheduleNotificationRefresh() {
+  if (workspaceNotificationRefreshTimer) window.clearTimeout(workspaceNotificationRefreshTimer);
+  workspaceNotificationRefreshTimer = window.setTimeout(async () => {
+    await refreshWorkspaceNotifications({ updateDom: true });
+    scheduleNotificationRefresh();
+  }, 60_000);
+}
+
+function bindNotificationCentre(root) {
+  const control = root.querySelector(".wp-notification-control");
+  const button = control?.querySelector("#wpNotificationBtn");
+  const panel = control?.querySelector("#wpNotificationPanel");
+  if (!control || !button || !panel || control.dataset.notificationBound) return;
+  control.dataset.notificationBound = "true";
+  const setOpen = (open) => {
+    panel.hidden = !open;
+    button.setAttribute("aria-expanded", String(open));
+    control.classList.toggle("is-open", open);
+  };
+  const syncBadge = () => {
+    const count = Number(workspaceNotifications.unreadCount || 0);
+    const badge = control.querySelector(".wp-notification-badge");
+    if (badge) { badge.hidden = count === 0; badge.textContent = count > 99 ? "99+" : String(count); }
+    button.setAttribute("aria-label", `Notifications${count ? `, ${count} unread` : ""}`);
+  };
+  const markLocalRead = (id) => {
+    const item = workspaceNotifications.notifications.find((entry) => entry.id === id);
+    if (!item || item.readAt) return;
+    item.readAt = new Date().toISOString();
+    workspaceNotifications.unreadCount = Math.max(0, Number(workspaceNotifications.unreadCount || 0) - 1);
+    control.querySelector(`[data-notification-id="${CSS.escape(id)}"]`)?.classList.remove("is-unread");
+    syncBadge();
+  };
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setOpen(button.getAttribute("aria-expanded") !== "true");
+  });
+  panel.querySelector("[data-notifications-read-all]")?.addEventListener("click", async (event) => {
+    const target = event.currentTarget;
+    try {
+      target.disabled = true;
+      await messagingRequest("mark_all_notifications_read");
+      const timestamp = new Date().toISOString();
+      workspaceNotifications.notifications.forEach((item) => { if (!item.readAt) item.readAt = timestamp; });
+      workspaceNotifications.unreadCount = 0;
+      panel.querySelectorAll(".wp-notification-item.is-unread").forEach((row) => row.classList.remove("is-unread"));
+      target.remove();
+      syncBadge();
+    } catch (error) { target.disabled = false; showToast(error?.message || "Notifications could not be updated.", "error"); }
+  });
+  panel.querySelectorAll("[data-notification-dismiss]").forEach((dismissButton) => dismissButton.addEventListener("click", async (event) => {
+    event.preventDefault(); event.stopPropagation();
+    const id = dismissButton.dataset.notificationDismiss;
+    try {
+      dismissButton.disabled = true;
+      await messagingRequest("dismiss_notification", { notificationId: id });
+      const item = workspaceNotifications.notifications.find((entry) => entry.id === id);
+      if (item && !item.readAt) workspaceNotifications.unreadCount = Math.max(0, workspaceNotifications.unreadCount - 1);
+      workspaceNotifications.notifications = workspaceNotifications.notifications.filter((entry) => entry.id !== id);
+      dismissButton.closest(".wp-notification-item")?.remove();
+      if (!workspaceNotifications.notifications.length) panel.querySelector(".wp-notification-feed").innerHTML = `<div class="wp-notification-empty"><span aria-hidden="true">✓</span><strong>You’re all caught up</strong><p>Important workspace updates will appear here.</p></div>`;
+      syncBadge();
+    } catch (error) { dismissButton.disabled = false; showToast(error?.message || "Notification could not be dismissed.", "error"); }
+  }));
+  panel.querySelectorAll("[data-notification-open]").forEach((link) => link.addEventListener("click", async (event) => {
+    event.preventDefault();
+    const id = link.dataset.notificationOpen;
+    const url = notificationActionUrl(link.getAttribute("href"));
+    try { await messagingRequest("mark_notification_read", { notificationId: id }); markLocalRead(id); } catch { /* The destination remains available. */ }
+    if (url) location.href = url;
+  }));
+  panel.querySelectorAll(".wp-notification-item.is-unread").forEach((row) => row.addEventListener("click", async (event) => {
+    if (event.target.closest("a,button")) return;
+    const id = row.dataset.notificationId;
+    try { await messagingRequest("mark_notification_read", { notificationId: id }); markLocalRead(id); }
+    catch (error) { showToast(error?.message || "Notification could not be updated.", "error"); }
+  }));
+  if (notificationClickAwayHandler) document.removeEventListener("pointerdown", notificationClickAwayHandler, true);
+  notificationClickAwayHandler = (event) => {
+    if (button.getAttribute("aria-expanded") === "true" && !control.contains(event.target)) setOpen(false);
+  };
+  document.addEventListener("pointerdown", notificationClickAwayHandler, true);
+  control.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || button.getAttribute("aria-expanded") !== "true") return;
+    setOpen(false); button.focus();
+  });
+}
+
 function readSession() {
   try {
     const parsed = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
@@ -610,6 +800,85 @@ async function onboardingRequest(action, payload = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || "Meta onboarding request failed.");
   return data;
+}
+
+async function refreshBusinessNumberStatuses({ silent = false } = {}) {
+  const candidates = workspaceConnections.filter((connection) => connection.status !== "disconnected" && connection.phone_number_id);
+  if (!candidates.length) return;
+  const results = await Promise.allSettled(candidates.map((connection) => onboardingRequest("refresh_phone_status", { connectionId: connection.id })));
+  let refreshed = 0;
+  let firstError = "";
+  results.forEach((result) => {
+    if (result.status === "fulfilled" && result.value?.connection) {
+      const updated = result.value.connection;
+      const index = workspaceConnections.findIndex((connection) => connection.id === updated.id);
+      if (index >= 0) workspaceConnections[index] = { ...workspaceConnections[index], ...updated };
+      if (result.value.numberCapacity && metaOnboardingStatus) metaOnboardingStatus.numberCapacity = result.value.numberCapacity;
+      refreshed += 1;
+    } else if (result.status === "rejected" && !firstError) {
+      firstError = result.reason?.message || "A number status could not be refreshed.";
+    }
+  });
+  if (!silent) showToast(refreshed ? `${refreshed} business number${refreshed === 1 ? "" : "s"} refreshed.` : firstError, refreshed ? "success" : "error");
+  await renderDashboard({ refresh: false, preserveScroll: true });
+}
+
+function metaBillingPresentation(status) {
+  const normalized = String(status || "unchecked").toLowerCase();
+  const labels = {
+    configured: "Payment method set",
+    not_detected: "Payment method not found",
+    verification_limited: "Verify in Meta",
+    unavailable: "Status unavailable",
+    not_applicable: "Not applicable",
+    unchecked: "Checking…",
+    checking: "Checking…",
+  };
+  return { status: normalized, label: labels[normalized] || labels.unavailable };
+}
+
+function updateBusinessNumberBillingStatus(container, metadata = {}, { pending = false, error = "" } = {}) {
+  if (!container) return;
+  const status = pending ? "checking" : String(metadata.meta_billing_status || "unavailable");
+  const presentation = metaBillingPresentation(status);
+  const label = container.querySelector("[data-meta-billing-label]");
+  const checked = container.querySelector("[data-meta-billing-checked]");
+  const badge = container.querySelector("[data-meta-billing-badge]");
+  if (label) label.textContent = presentation.label;
+  if (checked) {
+    const verificationLimited = presentation.status === "verification_limited";
+    checked.textContent = pending
+      ? "Contacting Meta securely"
+      : error
+        ? "Use Refresh status to try again"
+        : verificationLimited
+          ? "Meta keeps payment confirmation in Business Manager"
+        : metadata.meta_billing_checked_at
+          ? `Checked ${formatProfileDate(metadata.meta_billing_checked_at)}`
+          : "Status check completed";
+  }
+  if (badge) {
+    badge.className = `wp-meta-billing-status is-${presentation.status}`;
+    badge.textContent = `Meta payment: ${presentation.label}`;
+  }
+}
+
+async function refreshBusinessNumberStatus(connectionId, container) {
+  if (!connectionId) throw new Error("This business number could not be identified.");
+  updateBusinessNumberBillingStatus(container, {}, { pending: true });
+  try {
+    const result = await onboardingRequest("refresh_phone_status", { connectionId });
+    const updated = result?.connection;
+    if (!updated) throw new Error("Meta did not return the latest number status.");
+    const index = workspaceConnections.findIndex((connection) => connection.id === updated.id);
+    if (index >= 0) workspaceConnections[index] = { ...workspaceConnections[index], ...updated };
+    if (result.numberCapacity && metaOnboardingStatus) metaOnboardingStatus.numberCapacity = result.numberCapacity;
+    updateBusinessNumberBillingStatus(container, updated.onboarding_metadata || {});
+    return updated;
+  } catch (error) {
+    updateBusinessNumberBillingStatus(container, {}, { error: error?.message || "Status check failed." });
+    throw error;
+  }
 }
 
 function storageEndpoint() {
@@ -693,8 +962,8 @@ function loadRazorpayCheckout() {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     script.async = true;
-    script.onload = () => window.Razorpay ? resolve(window.Razorpay) : reject(new Error("Razorpay Checkout did not initialize."));
-    script.onerror = () => reject(new Error("Razorpay Checkout could not be loaded."));
+    script.onload = () => window.Razorpay ? resolve(window.Razorpay) : reject(new Error("Secure checkout did not initialize."));
+    script.onerror = () => reject(new Error("Secure checkout could not be loaded."));
     document.head.append(script);
   }).catch((error) => { razorpayCheckoutPromise = null; throw error; });
   return razorpayCheckoutPromise;
@@ -806,7 +1075,7 @@ async function startMetaOnboarding(button) {
   }
   if (workspaceVerification?.gateRequired !== false && workspaceVerification?.status !== "verified") {
     showToast("Complete the provider business pre-check before connecting production business assets.", "error");
-    location.href = workspacePath("verification");
+    await navigateWorkspace(workspacePath("verification"));
     return;
   }
   const configurationId = metaOnboardingStatus?.publicConfigurationId || runtime.embeddedSignupConfigId;
@@ -854,6 +1123,9 @@ async function restoreSession() {
 
 async function signOut(callServer = true) {
   const token = session?.sessionToken;
+  if (workspaceNotificationRefreshTimer) window.clearTimeout(workspaceNotificationRefreshTimer);
+  workspaceNotificationRefreshTimer = null;
+  workspaceNotifications = { notifications: [], unreadCount: 0, error: "" };
   clearSession();
   if (callServer && token) authRequest("logout", { sessionToken: token }).catch(() => {});
   if (isWorkspacePage()) {
@@ -879,6 +1151,34 @@ function businessCountryOptions() {
     .map((country) => `<option value="${escapeHtml(country)}" ${country === current ? "selected" : ""}>${escapeHtml(country)}</option>`)
     .join("");
 }
+
+const BUSINESS_DIAL_CODES = new Map("AF:+93|AL:+355|DZ:+213|AS:+1-684|AD:+376|AO:+244|AI:+1-264|AG:+1-268|AR:+54|AM:+374|AW:+297|AU:+61|AT:+43|AZ:+994|BS:+1-242|BH:+973|BD:+880|BB:+1-246|BY:+375|BE:+32|BZ:+501|BJ:+229|BM:+1-441|BT:+975|BO:+591|BA:+387|BW:+267|BR:+55|BN:+673|BG:+359|BF:+226|BI:+257|CV:+238|KH:+855|CM:+237|CA:+1|KY:+1-345|CF:+236|TD:+235|CL:+56|CN:+86|CO:+57|KM:+269|CG:+242|CD:+243|CK:+682|CR:+506|CI:+225|HR:+385|CU:+53|CW:+599|CY:+357|CZ:+420|DK:+45|DJ:+253|DM:+1-767|DO:+1-809|EC:+593|EG:+20|SV:+503|GQ:+240|ER:+291|EE:+372|SZ:+268|ET:+251|FK:+500|FO:+298|FJ:+679|FI:+358|FR:+33|GF:+594|PF:+689|GA:+241|GM:+220|GE:+995|DE:+49|GH:+233|GI:+350|GR:+30|GL:+299|GD:+1-473|GP:+590|GU:+1-671|GT:+502|GG:+44|GN:+224|GW:+245|GY:+592|HT:+509|VA:+379|HN:+504|HK:+852|HU:+36|IS:+354|IN:+91|ID:+62|IR:+98|IQ:+964|IE:+353|IM:+44|IL:+972|IT:+39|JM:+1-876|JP:+81|JE:+44|JO:+962|KZ:+7|KE:+254|KI:+686|KP:+850|KR:+82|KW:+965|KG:+996|LA:+856|LV:+371|LB:+961|LS:+266|LR:+231|LY:+218|LI:+423|LT:+370|LU:+352|MO:+853|MG:+261|MW:+265|MY:+60|MV:+960|ML:+223|MT:+356|MH:+692|MQ:+596|MR:+222|MU:+230|YT:+262|MX:+52|FM:+691|MD:+373|MC:+377|MN:+976|ME:+382|MS:+1-664|MA:+212|MZ:+258|MM:+95|NA:+264|NR:+674|NP:+977|NL:+31|NC:+687|NZ:+64|NI:+505|NE:+227|NG:+234|NU:+683|NF:+672|MK:+389|MP:+1-670|NO:+47|OM:+968|PK:+92|PW:+680|PS:+970|PA:+507|PG:+675|PY:+595|PE:+51|PH:+63|PL:+48|PT:+351|PR:+1-787|QA:+974|RE:+262|RO:+40|RU:+7|RW:+250|BL:+590|SH:+290|KN:+1-869|LC:+1-758|MF:+590|PM:+508|VC:+1-784|WS:+685|SM:+378|ST:+239|SA:+966|SN:+221|RS:+381|SC:+248|SL:+232|SG:+65|SX:+1-721|SK:+421|SI:+386|SB:+677|SO:+252|ZA:+27|SS:+211|ES:+34|LK:+94|SD:+249|SR:+597|SE:+46|CH:+41|SY:+963|TW:+886|TJ:+992|TZ:+255|TH:+66|TL:+670|TG:+228|TK:+690|TO:+676|TT:+1-868|TN:+216|TR:+90|TM:+993|TC:+1-649|TV:+688|UG:+256|UA:+380|AE:+971|GB:+44|US:+1|UY:+598|UZ:+998|VU:+678|VE:+58|VN:+84|VG:+1-284|VI:+1-340|WF:+681|EH:+212|YE:+967|ZM:+260|ZW:+263".split("|").map((entry) => entry.split(":")));
+
+function businessPhoneCodeOptions() {
+  const names = typeof Intl.DisplayNames === "function" ? new Intl.DisplayNames(["en"], { type: "region" }) : null;
+  const countryCode = BUSINESS_COUNTRY_CODES.find((code) => (names?.of(code) || code) === (signupDraft.country || "India"));
+  const current = signupDraft.phoneCountryCode || BUSINESS_DIAL_CODES.get(countryCode) || "+91";
+  return [...BUSINESS_DIAL_CODES.entries()]
+    .map(([code, dial]) => ({ code, dial, country: names?.of(code) || code }))
+    .sort((a, b) => a.country.localeCompare(b.country, "en"))
+    .map(({ code, dial, country }) => {
+      const flag = String.fromCodePoint(...code.split("").map((letter) => 127397 + letter.charCodeAt(0)));
+      return `<option value="${escapeHtml(dial)}" ${dial === current ? "selected" : ""}>${flag} ${escapeHtml(country)} (${escapeHtml(dial)})</option>`;
+    })
+    .join("");
+}
+
+function internationalBusinessPhone(dialCode, enteredNumber) {
+  const entered = String(enteredNumber || "").trim();
+  const digits = entered.replace(/\D/g, "");
+  if (!digits) return "";
+  if (entered.startsWith("+")) return `+${digits}`;
+  const dialDigits = String(dialCode || "+91").replace(/\D/g, "");
+  const nationalDigits = digits.replace(/^0+/, "");
+  return nationalDigits.startsWith(dialDigits) && nationalDigits.length > dialDigits.length + 6
+    ? `+${nationalDigits}`
+    : `+${dialDigits}${nationalDigits}`;
+}
 function normalizeWebsite(value) {
   const entered = String(value || "").trim();
   if (!entered) return "";
@@ -899,7 +1199,7 @@ function signupFields() {
   if (signupStep === 2) return `
     <div class="wp-signup-heading"><strong>Create the account owner</strong><span>Step 2 of 3</span></div>
     <div class="wp-form-row"><label class="wp-field"><span>Full name</span><input name="displayName" value="${draftValue("displayName")}" autocomplete="name" minlength="2" maxlength="100" required /></label><label class="wp-field"><span>Job title</span><input name="jobTitle" value="${draftValue("jobTitle")}" autocomplete="organization-title" minlength="2" maxlength="100" required /></label></div>
-    <div class="wp-form-row"><label class="wp-field"><span>Work email</span><input name="email" value="${draftValue("email")}" type="email" autocomplete="email" maxlength="254" required /></label><label class="wp-field"><span>Business phone</span><input name="contactPhone" value="${draftValue("contactPhone")}" type="tel" autocomplete="tel" minlength="7" maxlength="24" placeholder="+91 98765 43210" required /></label></div>
+    <div class="wp-form-row"><label class="wp-field"><span>Work email</span><input name="email" value="${draftValue("email")}" type="email" autocomplete="email" maxlength="254" required /></label><label class="wp-field"><span>Business phone</span><span class="wp-phone-control"><select name="phoneCountryCode" autocomplete="tel-country-code" aria-label="Phone country code" required>${businessPhoneCodeOptions()}</select><input name="contactPhone" value="${draftValue("contactPhone")}" type="tel" inputmode="tel" autocomplete="tel-national" minlength="7" maxlength="24" pattern="[+]?[0-9 ()-]{6,22}" placeholder="98765 43210" aria-label="Business phone number" required /></span></label></div>
     <div class="wp-form-row wp-password-row"><label class="wp-field"><span>Password</span><span class="wp-password-control"><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><button type="button" data-password-toggle aria-label="Show password" aria-pressed="false">Show</button></span><small>10+ characters with uppercase, lowercase and a number.</small></label><label class="wp-field"><span>Confirm password</span><span class="wp-password-control"><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required /><button type="button" data-password-toggle aria-label="Show confirm password" aria-pressed="false">Show</button></span><small aria-hidden="true">Re-enter the same password.</small></label></div>`;
 
   const timezone = signupDraft.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -1382,7 +1682,7 @@ async function submitAuthForm(event) {
           displayName: String(signupDraft.displayName || "").trim(),
           jobTitle: String(signupDraft.jobTitle || "").trim(),
           email: String(signupDraft.email || "").trim(),
-          contactPhone: String(signupDraft.contactPhone || "").trim(),
+          contactPhone: internationalBusinessPhone(signupDraft.phoneCountryCode, signupDraft.contactPhone),
           password: signupDraft.password,
           useCase: signupDraft.useCase,
           expectedMonthlyMessages: Number(signupDraft.expectedMonthlyMessages),
@@ -1407,6 +1707,107 @@ async function submitAuthForm(event) {
   }
 }
 
+function onboardingWalkthroughs() {
+  return [
+    {
+      title: "Team inbox",
+      description: "Handle customer conversations together with ownership, status and a complete message history.",
+      href: workspacePath("inbox"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/team-inbox.mp4?v=2",
+      action: "Take me to the inbox",
+      points: ["See every customer conversation in one shared queue", "Assign ownership and keep follow-ups organised", "Reply with complete customer and message context"],
+      visual: `<div class="wp-tour-inbox"><span class="wp-tour-avatar">A</span><div><i></i><i></i><i></i></div><b>2</b></div>`
+    },
+    {
+      title: "Contacts",
+      description: "Keep customer identity, consent and conversation activity organised in one directory.",
+      href: workspacePath("contacts"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/contacts.mp4?v=2",
+      action: "Explore contacts",
+      points: ["Search customer records by identity and number", "Review consent and messaging eligibility", "Open linked conversations without losing context"],
+      visual: `<div class="wp-tour-contacts"><span>A</span><span>R</span><span>S</span><div><i></i><i></i></div></div>`
+    },
+    {
+      title: "Campaigns",
+      description: "Build targeted WhatsApp campaigns using approved templates and consent-aware audiences.",
+      href: workspacePath("campaigns"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/campaigns.mp4?v=2",
+      action: "Explore campaigns",
+      points: ["Choose an eligible customer audience", "Use approved templates for compliant outreach", "Review delivery progress and campaign performance"],
+      visual: `<div class="wp-tour-campaign"><span>◎</span><div><i></i><i></i><i></i></div><b>74%</b></div>`
+    },
+    {
+      title: "Message templates",
+      description: "Create and manage reusable Meta-approved messages for customer-initiated outreach.",
+      href: workspacePath("templates"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/templates.mp4?v=2",
+      action: "Explore templates",
+      points: ["Build utility, marketing and authentication messages", "Track Meta review and approval status", "Reuse approved content across campaigns and conversations"],
+      visual: `<div class="wp-tour-template"><span>Hi {{1}}</span><i></i><i></i><b>Approved</b></div>`
+    },
+    {
+      title: "Flows & automation",
+      description: "Design guided customer journeys and connect repeatable actions without manual work.",
+      href: workspacePath("flows"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/flows.mp4?v=2",
+      action: "Explore flows",
+      points: ["Build connected steps on a visual canvas", "Route customers using buttons and conditions", "Reduce repetitive work with reusable journeys"],
+      visual: `<div class="wp-tour-flow"><span>Start</span><i></i><span>Message</span><i></i><span>Done</span></div>`
+    },
+    {
+      title: "Analytics",
+      description: "Track messaging activity, service performance and operational trends across your workspace.",
+      href: workspacePath("analytics"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/analytics.mp4?v=2",
+      action: "Explore analytics",
+      points: ["Understand message and conversation volume", "Monitor response and resolution performance", "Use workspace trends to improve operations"],
+      visual: `<div class="wp-tour-analytics"><i style="height:34%"></i><i style="height:58%"></i><i style="height:46%"></i><i style="height:82%"></i><i style="height:68%"></i></div>`
+    }
+  ];
+}
+
+function onboardingWalkthroughDialog() {
+  return `<dialog class="wp-onboarding-tour-dialog" id="wpOnboardingTourDialog">
+    <div class="wp-onboarding-tour-dialog-shell">
+      <header><div><span class="wp-card-eyebrow">Interactive portal walkthrough</span><h2 data-tour-title>Feature walkthrough</h2></div><button type="button" data-close-onboarding-tour aria-label="Close walkthrough">×</button></header>
+      <div class="wp-onboarding-tour-player" data-tour-player aria-label="Feature how-to video"></div>
+      <section class="wp-onboarding-tour-details"><p data-tour-description></p><ul data-tour-points></ul></section>
+      <footer><a class="wp-primary wp-button-link" data-tour-destination href="${workspacePath("overview")}">Take me there <span aria-hidden="true">→</span></a></footer>
+    </div>
+  </dialog>`;
+}
+
+function bindOnboardingWalkthrough(root) {
+  const dialog = root.querySelector("#wpOnboardingTourDialog");
+  if (!dialog) return;
+  const walkthroughs = onboardingWalkthroughs();
+  const title = dialog.querySelector("[data-tour-title]");
+  const description = dialog.querySelector("[data-tour-description]");
+  const points = dialog.querySelector("[data-tour-points]");
+  const player = dialog.querySelector("[data-tour-player]");
+  const destination = dialog.querySelector("[data-tour-destination]");
+  root.querySelectorAll("[data-open-onboarding-tour]").forEach((button) => button.addEventListener("click", () => {
+    const index = Number(button.dataset.openOnboardingTour);
+    const item = walkthroughs[index];
+    if (!item) return;
+    title.textContent = item.title;
+    description.textContent = item.description;
+    points.innerHTML = item.points.map((point) => `<li><span aria-hidden="true">✓</span>${escapeHtml(point)}</li>`).join("");
+    player.className = `wp-onboarding-tour-player is-${index + 1}`;
+    player.innerHTML = `<div class="wp-tour-live-label"><i></i>How-to video</div><div class="wp-tour-video-frame"><video src="${escapeHtml(item.video)}" title="How to use ${escapeHtml(item.title)}" autoplay muted loop playsinline preload="auto" disablepictureinpicture controlslist="nodownload noplaybackrate nofullscreen"></video></div>`;
+    destination.href = item.href;
+    destination.innerHTML = `${escapeHtml(item.action)} <span aria-hidden="true">→</span>`;
+    dialog.showModal();
+    const video = player.querySelector("video");
+    if (video) {
+      video.muted = true;
+      video.play().catch(() => {});
+    }
+  }));
+  dialog.querySelector("[data-close-onboarding-tour]")?.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+}
+
 function onboardingView(setupReady, connections) {
   const metaConnected = connections.length > 0;
   const phoneConnected = connections.some((row) => row.phone_number_id);
@@ -1414,19 +1815,37 @@ function onboardingView(setupReady, connections) {
   const gatePaused = workspaceVerification?.gateRequired === false;
   const mayOnboard = businessVerified || gatePaused;
   const completed = 1 + Number(businessVerified) + Number(metaConnected) + Number(phoneConnected);
-  const progress = completed * 20;
+  const progress = completed * 25;
   const stages = [
     { title: "Create your business workspace", description: `Workspace created for ${session.email}.`, complete: true },
     { title: "Verify your business", description: businessVerified ? "Your organisation passed the provider business pre-check." : `Verification is ${String(workspaceVerification?.status || "not started").replaceAll("_", " ")}.`, complete: businessVerified, href: workspacePath("verification") },
     { title: "Connect Meta Business", description: metaConnected ? "Your WhatsApp Business Account is securely connected." : mayOnboard && setupReady ? "Connect the Meta business assets owned by your organisation." : "Available after business verification.", complete: metaConnected, metaAction: mayOnboard },
-    { title: "Confirm your WhatsApp number", description: phoneConnected ? "Your business number is registered and ready." : "Select or register a WhatsApp number owned by your business.", complete: phoneConnected, href: workspacePath("accounts") },
-    { title: "Invite your team", description: "Add colleagues, assign roles and prepare the shared workspace.", complete: false, href: workspacePath("team") }
+    { title: "Confirm your WhatsApp number", description: phoneConnected ? "Your business number is registered and ready." : "Select or register a WhatsApp number owned by your business.", complete: phoneConnected, href: workspacePath("accounts") }
   ];
+  const onboardingComplete = stages.every((stage) => stage.complete);
+
+  if (onboardingComplete) {
+    const walkthroughCards = onboardingWalkthroughs().map((item, index) => `<button class="wp-onboarding-tour-card" type="button" data-open-onboarding-tour="${index}" aria-label="Preview ${escapeHtml(item.title)}">
+      <div class="wp-onboarding-tour-visual is-${index + 1}" aria-hidden="true">${item.visual}</div>
+      <div class="wp-onboarding-tour-copy"><span>0${index + 1}</span><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.description)}</p><strong>View walkthrough <b aria-hidden="true">→</b></strong></div>
+    </button>`).join("");
+    return `<section class="wp-route-page wp-onboarding-page wp-onboarding-complete-page">
+      <section class="wp-onboarding-complete-hero">
+        <div class="wp-onboarding-complete-copy"><span class="wp-kicker">Onboarding completed</span><h1>Your WhatsApp workspace is ready</h1><p><strong>${escapeHtml(session.companyName || "Your business")}</strong> is verified, connected to Meta and ready to serve customers. Use this guided walkthrough to explore the portal.</p><div class="wp-onboarding-complete-actions"><a class="wp-primary wp-button-link" href="${workspacePath("overview")}">Go to workspace overview <span aria-hidden="true">→</span></a><a class="wp-secondary wp-button-link" href="${workspacePath("inbox")}">Start with the inbox</a></div></div>
+        <div class="wp-onboarding-complete-art" aria-hidden="true"><div class="wp-complete-orbit"><span>✓</span><i></i><i></i><i></i></div><div class="wp-complete-company"><small>Workspace live</small><strong>${escapeHtml(session.companyName || "Business workspace")}</strong><span>${escapeHtml(planName(workspaceProfile?.planCode))} package</span></div></div>
+      </section>
+      <section class="wp-onboarding-tour-intro"><div><span class="wp-card-eyebrow">Portal walkthrough</span><h2>Everything you need to operate WhatsApp</h2><p>Select any feature to open it directly. You can return to this walkthrough from Onboarding at any time.</p></div><span class="wp-onboarding-complete-badge">4 of 4 setup steps complete</span></section>
+      <div class="wp-onboarding-tour-grid">${walkthroughCards}</div>
+      <section class="wp-onboarding-next-steps wp-card"><div><span class="wp-card-eyebrow">Optional next step</span><h2>Bring your team into the workspace</h2><p>Team invitation is not required for onboarding. Add colleagues only when you are ready to share conversations and assign roles.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("team")}">Manage team &amp; roles <span aria-hidden="true">→</span></a></section>
+      ${onboardingWalkthroughDialog()}
+    </section>`;
+  }
+
   const nextStageIndex = stages.findIndex((stage) => !stage.complete);
   const nextStage = stages[nextStageIndex] || stages[stages.length - 1];
   const nextAction = nextStage.metaAction && !metaConnected
     ? `<button class="wp-primary" type="button" data-connect-meta>${setupReady ? "Connect Meta Business" : "Check connection status"}</button>`
-    : `<a class="wp-primary wp-button-link" href="${nextStage.href || workspacePath("overview")}">${nextStageIndex === 4 ? "Invite team members" : "Continue setup"}<span aria-hidden="true">→</span></a>`;
+    : `<a class="wp-primary wp-button-link" href="${nextStage.href || workspacePath("overview")}">Continue setup<span aria-hidden="true">→</span></a>`;
   const stageRows = stages.map((stage, index) => {
     const current = index === nextStageIndex;
     const state = stage.complete ? "complete" : current ? "current" : "pending";
@@ -1440,12 +1859,12 @@ function onboardingView(setupReady, connections) {
   return `<section class="wp-route-page wp-onboarding-page">
     <div class="wp-route-heading wp-onboarding-heading">
       <div><span class="wp-kicker">Workspace setup</span><h1>Launch your workspace</h1><p>Follow one guided path from company verification to a team-ready WhatsApp operation.</p></div>
-      <div class="wp-onboarding-progress" role="img" aria-label="${completed} of 5 onboarding stages complete">
+      <div class="wp-onboarding-progress" role="img" aria-label="${completed} of 4 onboarding stages complete">
         <svg viewBox="0 0 44 44" aria-hidden="true" focusable="false">
           <circle class="wp-onboarding-progress-track" cx="22" cy="22" r="18"></circle>
           <circle class="wp-onboarding-progress-value" cx="22" cy="22" r="18" pathLength="100" stroke-dasharray="${progress} ${100 - progress}"></circle>
         </svg>
-        <span><strong>${completed}</strong><small>of 5 complete</small></span>
+        <span><strong>${completed}</strong><small>of 4 complete</small></span>
       </div>
     </div>
     <section class="wp-onboarding-hero wp-card">
@@ -1457,8 +1876,8 @@ function onboardingView(setupReady, connections) {
       </div>
       <div class="wp-onboarding-meter" aria-hidden="true"><span style="width:${progress}%"></span></div>
       <dl class="wp-onboarding-summary">
-        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 12.5 3.4 3.4 7.6-8" /></svg></span><div><dt>Completed</dt><dd><strong>${completed}</strong> of 5 milestones</dd><small>Setup tasks finished</small></div></div>
-        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg></span><div><dt>Remaining</dt><dd><strong>${5 - completed}</strong> ${5 - completed === 1 ? "milestone" : "milestones"}</dd><small>${escapeHtml(nextStage.title)}</small></div></div>
+        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 12.5 3.4 3.4 7.6-8" /></svg></span><div><dt>Completed</dt><dd><strong>${completed}</strong> of 4 milestones</dd><small>Setup tasks finished</small></div></div>
+        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg></span><div><dt>Remaining</dt><dd><strong>${4 - completed}</strong> ${4 - completed === 1 ? "milestone" : "milestones"}</dd><small>${escapeHtml(nextStage.title)}</small></div></div>
         <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M6 20V8l6-4 6 4v12M9 12h1m4 0h1M9 16h1m4 0h1"/></svg></span><div><dt>Workspace</dt><dd>${escapeHtml(session.companyName || "Business workspace")}</dd><small>${escapeHtml(planName(workspaceProfile?.planCode))} package</small></div></div>
       </dl>
     </section>
@@ -1468,10 +1887,59 @@ function onboardingView(setupReady, connections) {
       ${!mayOnboard ? `<a class="wp-secondary wp-button-link" href="${workspacePath("verification")}">Review verification</a>` : ""}
     </div>
     <article class="wp-card wp-route-card wp-onboarding-roadmap">
-      <header><div><span class="wp-card-eyebrow">Setup roadmap</span><h2>Five milestones to go live</h2></div><span>${completed}/5</span></header>
+      <header><div><span class="wp-card-eyebrow">Setup roadmap</span><h2>Four milestones to go live</h2></div><span>${completed}/4</span></header>
       <ol class="wp-steps wp-route-steps">${stageRows}</ol>
     </article>
   </section>`;
+}
+
+function accountConnectionCard(row, canManageNumbers) {
+  const label = row.display_phone_number || row.verified_name || "Number setup pending";
+  const metadata = row.onboarding_metadata || {};
+  const isTest = metadata.test_number === true;
+  const isPrimary = metadata.billing_primary === true && !isTest;
+  const isBillingBlocked = metadata.billing_restricted === true;
+  const rawPhoneStatus = String(metadata.phone_status || row.status || "pending").trim().toUpperCase();
+  const needsRegistration = !isTest && Boolean(row.phone_number_id) && !["CONNECTED", "ACTIVE", "READY"].includes(rawPhoneStatus);
+  const metaStatus = isBillingBlocked ? "Add-on payment required" : needsRegistration ? "Registration required" : rawPhoneStatus.replaceAll("_", " ").toLowerCase();
+  const quality = String(metadata.quality_rating || "Not available").replaceAll("_", " ").toLowerCase();
+  const verification = String(metadata.code_verification_status || (needsRegistration ? "Pending" : "Verified")).replaceAll("_", " ").toLowerCase();
+  const lastSync = metadata.last_meta_sync_at ? formatProfileDate(metadata.last_meta_sync_at) : "Awaiting first live sync";
+  const billingStatus = String(metadata.meta_billing_status || (isTest ? "not_applicable" : "unchecked"));
+  const metaBusinessId = String(row.meta_business_id || metadata.meta_business_id || "");
+  const billingPresentation = metaBillingPresentation(billingStatus);
+  const billingLabel = billingPresentation.label;
+  const billingChecked = metadata.meta_billing_checked_at ? formatProfileDate(metadata.meta_billing_checked_at) : "Not checked yet";
+  const billingBadge = !isTest && row.whatsapp_business_account_id
+    ? `<span class="wp-meta-billing-status is-${escapeHtml(billingStatus)}" data-meta-billing-badge title="Payment status for this WhatsApp Business Account">Meta payment: ${escapeHtml(billingLabel)}</span>`
+    : "";
+  const dialogId = `wpBusinessNumberDialog-${row.id}`;
+  const numberType = isTest ? "Developer test number" : isPrimary ? "Primary business number" : "Business number";
+  return `<article class="wp-account-entry ${isBillingBlocked ? "billing-blocked" : ""}" data-business-number-card="${escapeHtml(row.id)}">
+    <button class="wp-number-card-trigger" type="button" data-open-business-number="${escapeHtml(dialogId)}" data-business-number-id="${escapeHtml(row.id)}" data-meta-billing-status="${escapeHtml(billingStatus)}" aria-haspopup="dialog" aria-controls="${escapeHtml(dialogId)}">
+      <span class="wp-account-icon">WA</span>
+      <span class="wp-account-summary"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}</small><span class="wp-number-card-badges">${isPrimary ? `<em class="wp-primary-number-badge">Primary</em>` : ""}${isTest ? `<em class="wp-test-number-badge">Developer test</em>` : ""}${isBillingBlocked ? `<em class="wp-billing-blocked-badge">Blocked</em>` : ""}</span></span>
+      <span class="wp-number-card-side"><span class="wp-live-number-status"><i></i>${escapeHtml(metaStatus)}</span>${billingBadge}<span class="wp-number-card-open">View details <b aria-hidden="true">→</b></span></span>
+    </button>
+  </article>
+  <dialog class="wp-contact-dialog wp-business-number-dialog" id="${escapeHtml(dialogId)}">
+    <form method="dialog">
+      <header><div><span class="wp-card-eyebrow">${escapeHtml(numberType)}</span><h2>${escapeHtml(label)}</h2><p>${escapeHtml(row.verified_name || "WhatsApp Business number")}</p></div><button type="submit" value="close" aria-label="Close number details">×</button></header>
+      <section class="wp-number-modal-identity ${isBillingBlocked ? "is-blocked" : ""}"><span class="wp-account-icon">WA</span><div><small>Current status</small><strong>${escapeHtml(metaStatus)}</strong></div><span class="wp-number-modal-live"><i></i>${isBillingBlocked ? "Action required" : "Live connection"}</span></section>
+      <section class="wp-number-modal-grid" aria-label="Business number details">
+        <div><span>Display number</span><strong>${escapeHtml(row.display_phone_number || "Not assigned")}</strong></div>
+        <div><span>Verified name</span><strong>${escapeHtml(row.verified_name || "Not available")}</strong></div>
+        <div><span>Registration</span><strong>${escapeHtml(verification)}</strong></div>
+        <div><span>Quality rating</span><strong>${escapeHtml(quality)}</strong></div>
+        ${!isTest ? `<div data-meta-billing-result><span>Meta payment</span><strong data-meta-billing-label>${escapeHtml(billingLabel)}</strong><small data-meta-billing-checked>${billingStatus === "unchecked" ? "Check starts when opened" : `Checked ${escapeHtml(billingChecked)}`}</small></div>` : ""}
+        <div><span>Phone number ID</span><strong>${escapeHtml(row.phone_number_id || "Not assigned")}</strong></div>
+        <div><span>WhatsApp Business Account ID</span><strong>${escapeHtml(row.whatsapp_business_account_id || "Not assigned")}</strong></div>
+        <div><span>Meta business ID</span><strong>${escapeHtml(metaBusinessId || "Not available")}</strong></div>
+        <div><span>Last status check</span><strong>${escapeHtml(lastSync)}</strong></div>
+      </section>
+      <footer class="wp-number-modal-actions"><button class="wp-secondary" type="button" data-refresh-business-number data-business-number-id="${escapeHtml(row.id)}">Refresh status</button>${isBillingBlocked ? `<a class="wp-account-unlock wp-button-link" href="${workspacePath("billing-addons")}">Restore access</a>` : ""}${needsRegistration && canManageNumbers ? `<button class="wp-primary" type="button" data-register-business-number="${escapeHtml(row.id)}">Complete registration</button>` : ""}${canManageNumbers && !isTest && row.whatsapp_business_account_id ? `<button class="wp-secondary wp-meta-billing" type="button" data-meta-billing-waba="${escapeHtml(row.whatsapp_business_account_id)}" data-meta-billing-business="${escapeHtml(metaBusinessId)}">Manage Meta payment</button>` : ""}${canManageNumbers ? `<button class="wp-danger-button wp-account-remove" type="button" data-remove-business-number="${escapeHtml(row.id)}" data-business-number-label="${escapeHtml(label)}">Remove number</button>` : ""}</footer>
+    </form>
+  </dialog>`;
 }
 
 function accountsView(connections, setupReady) {
@@ -1490,7 +1958,8 @@ function accountsView(connections, setupReady) {
   const testDialog = canManageNumbers ? `<dialog class="wp-contact-dialog wp-test-number-dialog" id="wpTestNumberDialog"><form id="wpTestNumberForm" autocomplete="off"><header><div><span class="wp-card-eyebrow">Meta developer testing</span><h2>Connect a test number</h2><p>Developer-created test WABAs do not appear in Embedded Signup. Connect the number securely using its Meta credentials.</p></div><button type="button" data-close-test-number aria-label="Close">×</button></header><div class="wp-policy-note"><strong>Use a token that can manage the profile</strong><p>In Meta Business Settings, assign the WABA to a System User and generate an access token for your app with <code>whatsapp_business_management</code> and <code>whatsapp_business_messaging</code>. Temporary API Setup tokens are accepted only when they include both permissions.</p></div><label><span>WhatsApp Business Account ID</span><input name="wabaId" inputmode="numeric" pattern="[0-9]{5,40}" maxlength="40" required placeholder="1794119041601235" /></label><label><span>Phone Number ID <small>Optional for a single-number WABA</small></span><input name="phoneNumberId" inputmode="numeric" pattern="[0-9]{5,40}" maxlength="40" placeholder="Meta Phone Number ID" /></label><label><span>Meta access token</span><textarea name="accessToken" minlength="20" maxlength="4096" rows="5" required spellcheck="false" autocomplete="off" placeholder="Paste a System User or API Setup access token"></textarea><small>The token is validated for both required permissions, encrypted immediately, and never returned to the browser.</small></label><footer><button class="wp-secondary" type="button" data-close-test-number>Cancel</button><button class="wp-primary" type="submit">Connect test number</button></footer></form></dialog>` : "";
   const capacityDialog = canManageNumbers ? `<dialog class="wp-contact-dialog wp-number-capacity-dialog" id="wpNumberCapacityDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Paid number capacity</span><h2>Additional number access required</h2><p>Your current package and paid add-ons have no unused production-number slots.</p></div><button type="submit" value="close" aria-label="Close">×</button></header><div class="wp-number-capacity-summary"><div><span>Production slots available</span><strong>${allowedLimit == null ? "Unlimited" : `${activeCount} / ${allowedLimit} in use`}</strong></div>${blockedCount ? `<div><span>Additional numbers blocked</span><strong>${blockedCount}</strong></div>` : ""}</div><div class="wp-policy-note"><strong>Your primary number remains active</strong><p>Purchase the Extra WhatsApp number add-on before starting Meta onboarding. If that add-on is later cancelled, only the excess add-on number is blocked; the primary number remains intact.</p></div><footer><button class="wp-secondary" type="submit" value="close">Not now</button><a class="wp-primary wp-button-link" href="${workspacePath("billing-addons")}">View number add-on</a></footer></form></dialog>` : "";
   const capacityNotice = allowedLimit == null ? "" : `<div class="wp-number-capacity-bar ${blockedCount ? "has-blocked" : ""}"><div><span class="wp-card-eyebrow">Production number allowance</span><strong>${activeCount} of ${allowedLimit} paid slot${allowedLimit === 1 ? "" : "s"} in use</strong><small>Developer test numbers do not use this allowance.</small></div>${blockedCount ? `<a href="${workspacePath("billing-addons")}">${blockedCount} number${blockedCount === 1 ? "" : "s"} blocked · Restore add-on</a>` : capacityBlocked ? `<a href="${workspacePath("billing-addons")}">Purchase another number slot</a>` : `<em>${Math.max(allowedLimit - activeCount, 0)} available</em>`}</div>`;
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div><div class="wp-number-heading-actions">${testButton}${addButton}</div></div>${capacityNotice}<article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2></div><strong>${connections.length}</strong></div><p>Each number is connected securely through your company’s Meta Business account.</p>${connections.length ? connections.map((row) => { const label = row.display_phone_number || row.verified_name || "Number setup pending"; const isTest = row.onboarding_metadata?.test_number === true; const isPrimary = row.onboarding_metadata?.billing_primary === true && !isTest; const isBillingBlocked = row.onboarding_metadata?.billing_restricted === true; const metaStatus = isBillingBlocked ? "Add-on payment required" : String(row.onboarding_metadata?.phone_status || row.status || "").replaceAll("_", " ").toLowerCase(); return `<div class="wp-account-row ${isBillingBlocked ? "billing-blocked" : ""}"><span class="wp-account-icon">WA</span><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(row.verified_name || (row.phone_number_id ? "WhatsApp Business number" : "Complete Meta setup to select a number"))}${isPrimary ? ` <span class="wp-primary-number-badge">Primary</span>` : ""}${isTest ? ` <span class="wp-test-number-badge">Developer test</span>` : ""}${isBillingBlocked ? ` <span class="wp-billing-blocked-badge">Blocked</span>` : ""}</small></div><div class="wp-account-actions"><em>${escapeHtml(metaStatus)}</em>${isBillingBlocked ? `<a class="wp-account-unlock" href="${workspacePath("billing-addons")}">Restore access</a>` : ""}${canManageNumbers ? `<button class="wp-account-remove" type="button" data-remove-business-number="${escapeHtml(row.id)}" data-business-number-label="${escapeHtml(label)}">Remove</button>` : ""}</div></div>`; }).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta${capacityAttribute}>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</article>${testDialog}${capacityDialog}</section>`;
+  const removeDialog = canManageNumbers ? `<dialog class="wp-contact-dialog wp-remove-number-dialog" id="wpRemoveNumberDialog"><form method="dialog" id="wpRemoveNumberForm"><header><div><span class="wp-card-eyebrow">Disconnect WhatsApp number</span><h2>Remove and deregister number</h2><p>This stops WhatsApp messaging at Meta and removes this workspace’s authorization. Your Meta Business Portfolio and WhatsApp Business Account are not deleted.</p></div><button type="button" data-close-remove-number aria-label="Close">×</button></header><div class="wp-remove-number-body"><div class="wp-remove-number-target"><span>Number</span><strong data-remove-number-name>—</strong></div><ul><li>The phone is deregistered from WhatsApp Cloud API first.</li><li>If Meta rejects deregistration, the local connection stays intact.</li><li>Existing conversation and audit records are retained.</li></ul><label><span>Type <strong>REMOVE</strong> to confirm</span><input name="confirmation" autocomplete="off" required pattern="REMOVE" /></label></div><footer><button class="wp-secondary" type="button" data-close-remove-number>Keep number</button><button class="wp-danger-button" type="submit" value="remove">Remove number</button></footer></form></dialog>` : "";
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">WhatsApp numbers</span><h1>Business phone numbers</h1><p>Add and manage the verified WhatsApp Business numbers owned by your company.</p></div><div class="wp-number-heading-actions">${testButton}${addButton}</div></div>${capacityNotice}<article class="wp-card wp-route-card wp-business-numbers-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Connected numbers</span><h2>Your business numbers</h2><p>Live registration and quality status for every connected number.</p></div><div class="wp-business-number-card-tools"><span><i></i>Live</span><button class="wp-secondary" id="wpRefreshBusinessNumbersBtn" type="button">Refresh</button><strong>${connections.length}</strong></div></div><div class="wp-account-list">${connections.length ? connections.map((row) => accountConnectionCard(row, canManageNumbers)).join("") : `<div class="wp-empty-state"><span>＋</span><strong>No business number connected</strong><p>${setupReady ? "Add a number securely through your company’s Meta Business account." : "The secure Meta connection is being configured. Your workspace will remain ready."}</p>${canManageNumbers ? `<button class="wp-secondary" type="button" data-connect-meta${capacityAttribute}>${setupReady ? "Add business number" : "Check connection status"}</button>` : ""}</div>`}</div></article>${testDialog}${capacityDialog}${removeDialog}</section>`;
 }
 
 const WHATSAPP_BUSINESS_VERTICALS = {
@@ -1531,7 +2000,7 @@ function businessProfileView(connections) {
         <label><span>Business address</span><input name="address" maxlength="256" value="${escapeHtml(profile.address || "")}" placeholder="Street, city, state and postal code" /><small><span data-count-for="address">${String(profile.address || "").length}</span>/256 characters</small></label>
         <div class="wp-form-row"><label><span>Business email</span><input name="email" type="email" maxlength="128" value="${escapeHtml(profile.email || "")}" placeholder="support@company.com" /></label><label><span>Primary website</span><input name="website1" type="text" inputmode="url" maxlength="256" value="${escapeHtml(websites[0] || "")}" placeholder="www.example.com" /><small>You can enter a domain directly; HTTPS is added automatically.</small></label></div>
         <label><span>Additional website</span><input name="website2" type="text" inputmode="url" maxlength="256" value="${escapeHtml(websites[1] || "")}" placeholder="shop.example.com" /><small>WhatsApp supports up to two public website links. HTTPS is added automatically.</small></label>
-        <footer><p>Updates are published through Meta. New profile pictures are also archived in this number’s dedicated Google Drive folder.</p><button class="wp-primary" type="submit" ${metaPhoneReady ? "" : "disabled"}>${metaPhoneReady ? "Save WhatsApp profile" : "Waiting for Meta registration"}</button></footer>
+        <footer><p>Updates are securely published through Meta.</p><button class="wp-primary" type="submit" ${metaPhoneReady ? "" : "disabled"}>${metaPhoneReady ? "Save WhatsApp profile" : "Waiting for Meta registration"}</button></footer>
       </section>
       <aside class="wp-card wp-business-profile-preview"><span class="wp-card-eyebrow">Live customer preview</span><h2>WhatsApp profile preview</h2><div class="wp-phone-profile"><header><div class="wp-business-profile-avatar" data-business-profile-preview>${picture}</div><strong data-profile-preview-name>${escapeHtml(connection.verified_name || "WhatsApp Business")}</strong><small>${escapeHtml(connection.display_phone_number || "Business number")}</small></header><div class="wp-phone-profile-about" data-profile-preview-about>${escapeHtml(profile.about || "Your profile about will appear here.")}</div><dl><div><dt>Description</dt><dd data-profile-preview-description>${escapeHtml(profile.description || "Add a business description.")}</dd></div><div><dt>Category</dt><dd data-profile-preview-category>${escapeHtml(WHATSAPP_BUSINESS_VERTICALS[profile.vertical] || "Not specified")}</dd></div><div><dt>Address</dt><dd data-profile-preview-address>${escapeHtml(profile.address || "Not provided")}</dd></div><div><dt>Email</dt><dd data-profile-preview-email>${escapeHtml(profile.email || "Not provided")}</dd></div><div><dt>Website</dt><dd data-profile-preview-website>${escapeHtml(websites[0] || "Not provided")}</dd></div></dl></div><div class="wp-profile-guidance"><strong>Profile quality checklist</strong><ul><li>Use a recognizable square brand image.</li><li>Keep “about” direct and customer-friendly.</li><li>Use a monitored support email and secure HTTPS websites.</li><li>Keep the business description factual and policy-compliant.</li></ul></div></aside>
     </form>
@@ -1549,10 +2018,18 @@ function profileView(profile) {
 
 function settingsView(profile) {
   const canManageBranding = ["owner", "admin"].includes(session.roleCode);
+  const canDeleteWorkspace = ["owner", "admin"].includes(session.roleCode);
+  const canManageMessagingPreferences = ["owner", "admin"].includes(session.roleCode);
   const logo = profile?.logoDataUrl
     ? `<img src="${escapeHtml(profile.logoDataUrl)}" alt="${escapeHtml(session.companyName)} logo" />`
     : `<span aria-hidden="true">${escapeHtml((session.companyName || "B").charAt(0).toUpperCase())}</span>`;
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("profile")}">View full profile</a></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button>${profile?.logoDataUrl ? `<button class="wp-remove-logo" id="wpRemoveLogoBtn" type="button">Remove logo</button>` : ""}</form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(profile?.companyName || session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(profile?.displayName || session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(profile?.email || session.email)}</dd></div><div><dt>Plan</dt><dd>${escapeHtml(planName(profile?.planCode))}</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div></article></section></section>`;
+  const deletionControl = canDeleteWorkspace
+    ? `<div class="wp-danger-zone"><div><strong>Delete this workspace</strong><p>Download a copy of your account data, then submit a protected deletion request. The request can be reversed for 24 hours.</p></div><button class="wp-danger-button" id="wpRequestDeletionBtn" type="button" ${workspaceDeletion?.pending ? "disabled" : ""}>${workspaceDeletion?.pending ? "Deletion pending" : "Request deletion"}</button></div>`
+    : `<p class="wp-settings-permission">Only a workspace owner or administrator can export or delete this account.</p>`;
+  const stopOptOutEnabled = workspaceMessagingPreferences?.stopMarketingOptOutEnabled !== false;
+  const messagingPreferenceControl = `<article class="wp-card wp-route-card wp-messaging-preferences"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Marketing consent</span><h2>Automatic STOP opt-out</h2></div><span class="wp-automation-status ${stopOptOutEnabled ? "active" : "paused"}">${stopOptOutEnabled ? "On" : "Off"}</span></div><p>When enabled, <strong>STOP</strong> excludes a customer from marketing campaigns immediately and <strong>START</strong> records a new opt-in. Service conversations remain available.</p><label class="wp-automation-switch"><input id="wpStopOptOutToggle" type="checkbox" ${stopOptOutEnabled ? "checked" : ""} ${canManageMessagingPreferences ? "" : "disabled"} /><span aria-hidden="true"></span><em>${stopOptOutEnabled ? "Automatic opt-out enabled" : "Automatic opt-out disabled"}</em></label>${workspaceMessagingPreferences?.error ? `<small class="wp-settings-permission">${escapeHtml(workspaceMessagingPreferences.error)}</small>` : ""}${canManageMessagingPreferences ? "" : '<small class="wp-settings-permission">Only a workspace owner or administrator can change this preference.</small>'}</article>`;
+  const deletionDialog = canDeleteWorkspace ? `<dialog class="wp-account-deletion-dialog" id="wpAccountDeletionDialog"><form id="wpAccountDeletionForm"><header><div><span>Protected account action</span><h2>Request workspace deletion</h2><p>This removes the workspace, users, messages, contacts and other operational platform data after a 24-hour reversal window. Stored Meta connections will be unlinked; the customer’s Meta Business Portfolio is not deleted. Statutory invoices, credit notes and audit evidence are retained where legally required.</p></div><button type="button" data-close-deletion-dialog aria-label="Close">×</button></header><section class="wp-deletion-export-step"><div><strong>1. Download your data</strong><p>The export excludes passwords, login sessions and encrypted provider credentials.</p></div><button class="wp-secondary" id="wpExportAccountDataBtn" type="button">Download account data</button></section><div class="wp-deletion-form-grid"><label class="wp-field"><span>Who requested this deletion</span><input name="requestedBy" maxlength="200" value="${escapeHtml(profile?.displayName || session.displayName)}" required /></label><label class="wp-field"><span>Internal note</span><textarea name="internalNote" minlength="10" maxlength="2000" placeholder="Reason, approval reference, and any internal context" required></textarea></label><section class="wp-deletion-camera" aria-labelledby="wpDeletionCameraTitle"><div><strong id="wpDeletionCameraTitle">Requester camera evidence</strong><p>Use this device’s camera. Uploading an existing image is not permitted. The captured photo is stamped with its timestamp and location.</p></div><div class="wp-deletion-camera-stage"><video id="wpDeletionCameraVideo" playsinline muted hidden></video><canvas id="wpDeletionCameraCanvas" hidden></canvas><img id="wpDeletionCameraPreview" alt="Captured requester evidence with timestamp and location" hidden /><div id="wpDeletionCameraPlaceholder">Camera evidence has not been captured.</div></div><div class="wp-deletion-camera-actions"><button class="wp-secondary" id="wpStartDeletionCameraBtn" type="button">Start camera</button><button class="wp-primary" id="wpCaptureDeletionEvidenceBtn" type="button" hidden>Capture photo &amp; location</button><button class="wp-secondary" id="wpRetakeDeletionEvidenceBtn" type="button" hidden>Retake</button></div><small id="wpDeletionLocationStatus">Timestamp and location will be captured with the photo.</small><input name="latitude" type="hidden" /><input name="longitude" type="hidden" /><input name="locationAccuracy" type="hidden" /><input name="locationCapturedAt" type="hidden" /></section><label class="wp-field wp-confirm-company"><span>Type <strong>${escapeHtml(profile?.companyName || session.companyName)}</strong> to confirm</span><input name="exactCompanyName" autocomplete="off" required /></label><label class="wp-check wp-deletion-consent"><input name="evidenceConsent" type="checkbox" required /><span>I confirm that the requester consented to capturing the photo and device location as evidence for this deletion request.</span></label></div><footer><button class="wp-secondary" type="button" data-close-deletion-dialog>Keep workspace</button><button class="wp-danger-button" type="submit">Schedule deletion</button></footer><p class="wp-form-message" id="wpAccountDeletionMessage" role="alert"></p></form></dialog>` : "";
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("profile")}">View full profile</a></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button>${profile?.logoDataUrl ? `<button class="wp-remove-logo" id="wpRemoveLogoBtn" type="button">Remove logo</button>` : ""}</form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(profile?.companyName || session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(profile?.displayName || session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(profile?.email || session.email)}</dd></div><div><dt>Plan</dt><dd>${escapeHtml(planName(profile?.planCode))}</dd></div></dl></article>${messagingPreferenceControl}<article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div>${deletionControl}</article></section>${deletionDialog}</section>`;
 }
 
 function verifiedVerificationView(data) {
@@ -1604,8 +2081,8 @@ function verificationView(verification, connections = []) {
     const activeConnections = connections.filter((row) => ["connected", "pending"].includes(row.status));
     const metaConnected = activeConnections.length > 0;
     const phoneConnected = activeConnections.some((row) => row.phone_number_id);
-    const nextHref = phoneConnected ? workspacePath("team") : metaConnected ? workspacePath("accounts") : workspacePath("onboarding");
-    const nextLabel = phoneConnected ? "Invite your team →" : metaConnected ? "Confirm your WhatsApp number →" : "Continue to Meta authorisation →";
+    const nextHref = phoneConnected ? workspacePath("onboarding") : metaConnected ? workspacePath("accounts") : workspacePath("onboarding");
+    const nextLabel = phoneConnected ? "View completed onboarding →" : metaConnected ? "Confirm your WhatsApp number →" : "Continue to Meta authorisation →";
     const stageTwoClass = metaConnected ? "complete" : "active";
     const stageThreeClass = phoneConnected ? "complete" : metaConnected ? "active" : "";
     return `<section class="wp-route-page wp-verification-page wp-verification-complete"><div class="wp-route-heading"><div><span class="wp-kicker">Provider onboarding</span><h1>Business verified</h1><p>Your provider pre-check is complete. Continue with the next unfinished workspace setup step.</p></div><span class="wp-verification-status verified">Verified</span></div><ol class="wp-provider-flow" aria-label="WhatsApp onboarding stages"><li class="complete"><span>✓</span><div><strong>Business details</strong><small>Approved by Varada Nexus</small></div></li><li class="${stageTwoClass}"><span>${metaConnected ? "✓" : "2"}</span><div><strong>Meta authorisation</strong><small>${metaConnected ? "Business Portfolio connected" : "Next: Business Portfolio access"}</small></div></li><li class="${stageThreeClass}"><span>${phoneConnected ? "✓" : "3"}</span><div><strong>Phone verification</strong><small>${phoneConnected ? "WhatsApp number connected" : "SMS or voice OTP"}</small></div></li><li><span>4</span><div><strong>Display-name review</strong><small>Completed by Meta</small></div></li></ol><article class="wp-verification-complete-hero"><span class="wp-verification-complete-icon" aria-hidden="true">✓</span><div><span class="wp-card-eyebrow">Verification complete</span><h2>Your organisation is approved</h2><p>The legal-business information and supporting evidence for <strong>${escapeHtml(session.companyName)}</strong> passed the Varada Nexus provider pre-check. Meta authorisation is a separate step controlled by Meta.</p><div class="wp-verification-complete-actions"><a class="wp-primary wp-button-link" href="${nextHref}">${nextLabel}</a><a class="wp-secondary wp-button-link" href="${workspacePath("overview")}">Return to overview</a></div></div></article><div class="wp-verification-complete-layout"><article class="wp-card wp-route-card wp-verification-summary-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Verified business</span><h2>Official record summary</h2></div>${reviewedOn ? `<small>Approved ${escapeHtml(formatProfileDate(reviewedOn))}</small>` : ""}</div><dl class="wp-verification-summary"><div><dt>Organisation</dt><dd>${escapeHtml(session.companyName)}</dd></div><div><dt>Entity type</dt><dd>${escapeHtml(entityLabel)}</dd></div><div><dt>Registration / licence</dt><dd>${escapeHtml(data.registrationNumber || "Not provided")}</dd></div><div><dt>GSTIN</dt><dd>${escapeHtml(data.gstin || "Not provided")}</dd></div><div><dt>Authorised representative</dt><dd>${escapeHtml(data.representativeName || session.displayName || "Not provided")}${data.representativeTitle ? ` · ${escapeHtml(data.representativeTitle)}` : ""}</dd></div><div class="wide"><dt>Registered address</dt><dd>${escapeHtml(data.registeredAddress || "Not provided")}</dd></div></dl></article><article class="wp-card wp-route-card wp-verification-evidence-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Protected evidence</span><h2>Approved documents</h2></div><strong>${approvedDocuments}/${(data.requirements || []).length}</strong></div><p>Your approved evidence remains available here as a read-only record.</p><div class="wp-verification-documents">${requirementRows}</div></article></div></section>`;
@@ -1633,17 +2110,105 @@ function inboxContactName(contact) {
   return contact?.display_name || contact?.profile_name || contact?.phone_e164 || "WhatsApp customer";
 }
 
+function csvRows(text) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '"') {
+      if (quoted && source[index + 1] === '"') { field += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (character === "," && !quoted) { row.push(field); field = ""; }
+    else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && source[index + 1] === "\n") index += 1;
+      row.push(field); field = "";
+      if (row.some((value) => String(value).trim())) rows.push(row);
+      row = [];
+    } else field += character;
+  }
+  row.push(field);
+  if (row.some((value) => String(value).trim())) rows.push(row);
+  return rows;
+}
+
+function normalizeImportedPhone(value, defaultDialCode = "+91") {
+  const entered = String(value || "").trim();
+  let digits = entered.replace(/\D/g, "");
+  if (!entered.startsWith("+")) {
+    digits = digits.replace(/^0+/, "");
+    if (digits.length <= 10) digits = `${String(defaultDialCode).replace(/\D/g, "")}${digits}`;
+  }
+  return /^[1-9][0-9]{6,14}$/.test(digits) ? `+${digits}` : "";
+}
+
+function parseVCardContacts(text, defaultDialCode) {
+  const cards = String(text || "").replace(/\r?\n[ \t]/g, "").split(/END:VCARD/i).filter((card) => /BEGIN:VCARD/i.test(card));
+  const contacts = [], errors = [];
+  cards.forEach((card, cardIndex) => {
+    const lines = card.split(/\r?\n/);
+    const fullNameLine = lines.find((line) => /^FN(?:;[^:]*)?:/i.test(line));
+    const structuredNameLine = lines.find((line) => /^N(?:;[^:]*)?:/i.test(line));
+    const rawName = (fullNameLine || structuredNameLine || "").replace(/^[^:]*:/, "").replace(/\\([,;])/g, "$1");
+    const displayName = rawName.split(";").filter(Boolean).reverse().join(" ").trim() || `Imported contact ${cardIndex + 1}`;
+    const phones = lines.filter((line) => /^TEL(?:;[^:]*)?:/i.test(line)).map((line) => line.replace(/^[^:]*:/, ""));
+    if (!phones.length) errors.push(`vCard ${cardIndex + 1} has no phone number.`);
+    phones.forEach((phone) => {
+      const normalized = normalizeImportedPhone(phone, defaultDialCode);
+      if (normalized) contacts.push({ displayName, phone: normalized });
+      else errors.push(`${displayName}: invalid phone number.`);
+    });
+  });
+  return { contacts, errors };
+}
+
+function parseDelimitedContacts(text, defaultDialCode, pasteMode = false) {
+  const rows = pasteMode
+    ? String(text || "").split(/\r?\n/).filter((line) => line.trim()).map((line) => line.split(line.includes("\t") ? "\t" : /[,;]/))
+    : csvRows(text);
+  if (!rows.length) return { contacts: [], errors: ["No contact rows were found."] };
+  const headers = rows[0].map((value) => String(value).trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " "));
+  const findHeader = (aliases) => headers.findIndex((header) => aliases.includes(header));
+  let phoneIndex = findHeader(["phone", "phone number", "mobile", "mobile number", "mobile phone", "whatsapp", "whatsapp number", "phone 1 value", "primary phone"]);
+  let nameIndex = findHeader(["name", "full name", "display name", "contact name", "formatted name"]);
+  const firstIndex = findHeader(["first name", "given name"]);
+  const lastIndex = findHeader(["last name", "family name", "surname"]);
+  const hasHeader = !pasteMode && (phoneIndex >= 0 || nameIndex >= 0 || firstIndex >= 0);
+  const contacts = [], errors = [];
+  (hasHeader ? rows.slice(1) : rows).forEach((columns, rowIndex) => {
+    const values = columns.map((value) => String(value || "").trim());
+    if (!hasHeader) {
+      phoneIndex = values.findIndex((value) => value.replace(/\D/g, "").length >= 7);
+      nameIndex = values.findIndex((_, index) => index !== phoneIndex);
+    }
+    const displayName = (nameIndex >= 0 ? values[nameIndex] : "") || [firstIndex >= 0 ? values[firstIndex] : "", lastIndex >= 0 ? values[lastIndex] : ""].filter(Boolean).join(" ") || `Imported contact ${rowIndex + 1}`;
+    const phone = normalizeImportedPhone(phoneIndex >= 0 ? values[phoneIndex] : "", defaultDialCode);
+    if (!phone) errors.push(`Row ${rowIndex + 1 + Number(hasHeader)}: invalid or missing phone number.`);
+    else contacts.push({ displayName: displayName.slice(0, 200), phone });
+  });
+  return { contacts, errors };
+}
+
+function parseContactImport(text, fileName, defaultDialCode, pasteMode = false) {
+  const vcard = !pasteMode && (/\.vcf$/i.test(fileName || "") || /BEGIN:VCARD/i.test(text || ""));
+  return vcard ? parseVCardContacts(text, defaultDialCode) : parseDelimitedContacts(text, defaultDialCode, pasteMode);
+}
+
+const CONTACT_CATEGORY_LABELS = { uncategorized: "Uncategorized", lead: "Lead", prospect: "Prospect", customer: "Customer", partner: "Partner", vendor: "Vendor", other: "Other" };
+function contactCategoryLabel(value) { return CONTACT_CATEGORY_LABELS[String(value || "uncategorized")] || CONTACT_CATEGORY_LABELS.uncategorized; }
+
 function contactsView() {
   const contacts = workspaceContacts?.contacts || [];
   const status = new URLSearchParams(location.search).get("status") || "all";
   const statusCounts = contacts.reduce((counts, contact) => ({ ...counts, [contact.status]: Number(counts[contact.status] || 0) + 1 }), {});
+  statusCounts.opted_out = contacts.filter((contact) => Boolean(contact.marketing_opt_out_at)).length;
   const rows = contacts.map((contact) => {
     const name = inboxContactName(contact);
     const conversationUrl = contact.conversation?.id ? `${workspacePath("inbox")}?conversation=${encodeURIComponent(contact.conversation.id)}` : "";
     const consentLabel = contact.marketing_opt_in_at && !contact.marketing_opt_out_at ? "Marketing opt-in recorded" : contact.marketing_opt_out_at ? "Marketing opted out" : "Marketing consent not recorded";
-    return `<article class="wp-contact-row" data-contact-row><div class="wp-inbox-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</div><div class="wp-contact-identity"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(contact.phone_e164 || "")}</small></div><div class="wp-contact-activity"><span>${contact.last_inbound_at ? `Last message ${escapeHtml(inboxTime(contact.last_inbound_at))}` : "No inbound message"}</span><small>${escapeHtml(consentLabel)}</small></div><span class="wp-contact-status ${escapeHtml(contact.status)}">${escapeHtml(contact.status.replaceAll("_", " "))}</span><div class="wp-contact-actions">${conversationUrl ? `<a href="${escapeHtml(conversationUrl)}">Open conversation</a>` : ""}<button type="button" data-edit-contact="${escapeHtml(contact.id)}" data-contact-name="${escapeHtml(contact.display_name || "")}" data-contact-status="${escapeHtml(contact.status)}">Edit</button></div></article>`;
+    return `<article class="wp-contact-row" data-contact-row><div class="wp-inbox-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</div><div class="wp-contact-identity"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(contact.phone_e164 || "")}</small><em class="wp-contact-category is-${escapeHtml(contact.contact_category || "uncategorized")}">${escapeHtml(contactCategoryLabel(contact.contact_category))}</em></div><div class="wp-contact-activity"><span>${contact.last_inbound_at ? `Last message ${escapeHtml(inboxTime(contact.last_inbound_at))}` : "No inbound message"}</span><small>${escapeHtml(consentLabel)}</small></div><span class="wp-contact-status ${escapeHtml(contact.status)}">${escapeHtml(contact.status.replaceAll("_", " "))}</span><div class="wp-contact-actions">${conversationUrl ? `<a href="${escapeHtml(conversationUrl)}">Open conversation</a>` : ""}<button type="button" data-edit-contact="${escapeHtml(contact.id)}" data-contact-name="${escapeHtml(contact.display_name || "")}" data-contact-status="${escapeHtml(contact.status)}">Edit</button></div></article>`;
   }).join("");
-  return `<section class="wp-route-page wp-contacts-page"><div class="wp-route-heading"><div><span class="wp-kicker">Customer records</span><h1>Contacts</h1><p>Manage customer identity, messaging eligibility and linked conversation history.</p></div><div class="wp-contact-summary"><strong>${contacts.length}</strong><span>total contacts</span></div></div>${workspaceContacts?.error ? `<div class="wp-verification-notice"><strong>Contacts unavailable</strong><p>${escapeHtml(workspaceContacts.error)}</p></div>` : ""}<section class="wp-contact-stats"><article><span>Active</span><strong>${Number(statusCounts.active || 0)}</strong></article><article><span>Blocked</span><strong>${Number(statusCounts.blocked || 0)}</strong></article><article><span>Opted out</span><strong>${Number(statusCounts.opted_out || 0)}</strong></article></section><section class="wp-card wp-contact-directory"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>WhatsApp contacts</h2></div><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search name or number" data-contact-search /></label></header><nav class="wp-inbox-filters" aria-label="Contact filters">${["all","active","blocked","opted_out"].map((filter) => { const url = new URL(workspacePath("contacts"), location.origin); if (filter !== "all") url.searchParams.set("status", filter); return `<a class="${status === filter ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}">${escapeHtml(filter.replaceAll("_", " "))}</a>`; }).join("")}</nav><div class="wp-contact-list">${rows || '<div class="wp-inbox-empty"><span>◎</span><strong>No contacts yet</strong><p>Contacts are created automatically when a customer messages a connected WhatsApp number.</p></div>'}</div></section><dialog class="wp-contact-dialog" id="wpContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Contact controls</span><h2>Edit customer</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><input type="hidden" name="contactId" /><label><span>Display name</span><input name="displayName" maxlength="200" autocomplete="off" /></label><label><span>Messaging status</span><select name="status"><option value="active">Active</option><option value="blocked">Blocked</option><option value="opted_out">Opted out</option></select><small>Blocked and opted-out contacts cannot receive messages from this workspace.</small></label><label><span>WhatsApp marketing consent</span><select name="marketingConsent"><option value="unknown">Not recorded</option><option value="opted_in">Explicit opt-in recorded</option><option value="opted_out">Opted out</option></select><small>Campaigns include only contacts with explicit, auditable marketing consent.</small></label><label data-marketing-consent-source hidden><span>Consent source</span><select name="marketingOptInSource"><option value="manual_record">Manual record</option><option value="website">Website</option><option value="form">Form</option><option value="qr_code">QR code</option><option value="keyword">Keyword</option><option value="inbound_request">Inbound request</option><option value="imported_proof">Imported proof</option><option value="api">API</option></select></label><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="save">Save contact</button></footer></form></dialog></section>`;
+  return `<section class="wp-route-page wp-contacts-page"><div class="wp-route-heading"><div><span class="wp-kicker">Customer records</span><h1>Contacts</h1><p>Manage customer identity, categories, messaging eligibility and linked conversation history.</p></div></div>${workspaceContacts?.error ? `<div class="wp-verification-notice"><strong>Contacts unavailable</strong><p>${escapeHtml(workspaceContacts.error)}</p></div>` : ""}<section class="wp-contact-stats"><article><span>Active <small>${contacts.length.toLocaleString("en-IN")} total contacts</small></span><strong>${Number(statusCounts.active || 0)}</strong></article><article><span>Blocked</span><strong>${Number(statusCounts.blocked || 0)}</strong></article><article><span>Opted out</span><strong>${Number(statusCounts.opted_out || 0)}</strong></article></section><section class="wp-card wp-contact-directory"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>WhatsApp contacts</h2></div><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search name, number or category" data-contact-search /></label></header><nav class="wp-inbox-filters" aria-label="Contact filters">${["all","active","blocked","opted_out"].map((filter) => { const url = new URL(workspacePath("contacts"), location.origin); if (filter !== "all") url.searchParams.set("status", filter); return `<a class="${status === filter ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}">${escapeHtml(filter.replaceAll("_", " "))}</a>`; }).join("")}</nav><div class="wp-contact-list">${rows || '<div class="wp-inbox-empty"><span>◎</span><strong>No contacts yet</strong><p>Contacts are created automatically when a customer messages a connected WhatsApp number.</p></div>'}</div></section><dialog class="wp-contact-dialog" id="wpContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Contact controls</span><h2>Edit contact</h2></div><button type="button" data-close-contact-dialog aria-label="Close">×</button></header><input type="hidden" name="contactId" /><label><span>Display name</span><input name="displayName" maxlength="200" autocomplete="off" /></label><label><span>Contact category</span><select name="contactCategory"><option value="uncategorized">Uncategorized</option><option value="lead">Lead</option><option value="prospect">Prospect</option><option value="customer">Customer</option><option value="partner">Partner</option><option value="vendor">Vendor</option><option value="other">Other</option></select><small>Use categories to organise the directory without affecting messaging access.</small></label><label><span>Messaging status</span><select name="status"><option value="active">Active</option><option value="blocked">Blocked</option></select><small>Blocked contacts cannot receive workspace messages. Marketing opt-out affects campaigns only; service conversations remain available.</small></label><label><span>Marketing opt-in / opt-out</span><select name="marketingConsent"><option value="unknown">Not opted in</option><option value="opted_in">Opted in — allow marketing</option><option value="opted_out">Opted out — stop marketing</option></select><small>Choose this manually for the selected contact. Every opt-in or opt-out is timestamped in the consent history.</small></label><label data-marketing-consent-source hidden><span>How consent was received</span><select name="marketingOptInSource"><option value="manual_record">Recorded manually</option><option value="website">Website</option><option value="form">Form</option><option value="qr_code">QR code</option><option value="keyword">Keyword</option><option value="inbound_request">Inbound request</option><option value="imported_proof">Imported proof</option><option value="api">API</option></select></label><footer><button class="wp-secondary" type="button" data-close-contact-dialog>Cancel</button><button class="wp-primary" type="submit" value="save">Save contact</button></footer></form></dialog></section>`;
 }
 
 function inboxView() {
@@ -1961,6 +2526,39 @@ function billingMoney(value, currency = "INR") {
   try { return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: amount % 1 ? 2 : 0 }).format(amount); }
   catch { return `${currency} ${amount.toLocaleString("en-IN")}`; }
 }
+function syncQuantityStepper(stepper) {
+  const input = stepper?.querySelector('input[type="number"]');
+  if (!input) return;
+  const value = Number(input.value);
+  const minimum = input.min === "" ? Number.NEGATIVE_INFINITY : Number(input.min);
+  const maximum = input.max === "" ? Number.POSITIVE_INFINITY : Number(input.max);
+  stepper.querySelectorAll("[data-quantity-step]").forEach((button) => {
+    const direction = Number(button.dataset.quantityStep);
+    button.disabled = input.disabled
+      || (direction < 0 && value <= minimum)
+      || (direction > 0 && value >= maximum);
+  });
+}
+function bindQuantitySteppers(root) {
+  root.querySelectorAll("[data-quantity-stepper]").forEach((stepper) => {
+    const input = stepper.querySelector('input[type="number"]');
+    if (!input) return;
+    stepper.querySelectorAll("[data-quantity-step]").forEach((button) => button.addEventListener("click", () => {
+      if (input.disabled) return;
+      const direction = Number(button.dataset.quantityStep);
+      const step = Math.max(1, Number(input.step || 1));
+      const minimum = input.min === "" ? Number.NEGATIVE_INFINITY : Number(input.min);
+      const maximum = input.max === "" ? Number.POSITIVE_INFINITY : Number(input.max);
+      const fallback = Number.isFinite(minimum) ? minimum : step;
+      const current = Number.isFinite(input.valueAsNumber) ? input.valueAsNumber : fallback;
+      input.value = String(Math.min(maximum, Math.max(minimum, current + (direction * step))));
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      syncQuantityStepper(stepper);
+    }));
+    syncQuantityStepper(stepper);
+  });
+}
 function confirmBillingUpgrade(preview) {
   let dialog = document.querySelector("#wpBillingUpgradeDialog");
   if (!dialog) {
@@ -1986,14 +2584,51 @@ function confirmBillingCancellation(subscription) {
     dialog.className = "wp-contact-dialog wp-billing-cancellation-dialog";
     document.body.append(dialog);
   }
-  const periodEnd = subscription?.current_end ? formatProfileDate(subscription.current_end) : "the end of the current billed cycle";
-  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Subscription cancellation</span><h2>Cancel at the end of this billing cycle?</h2><p>This does not stop your workspace immediately. Please review what will happen before confirming.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Current plan</span><strong>${escapeHtml(planName(subscription?.package_code || workspacePackageMaster?.package?.code))}</strong></div><div><span>Access remains active until</span><strong>${escapeHtml(periodEnd)}</strong></div></section><ul class="wp-cancellation-effects"><li>Your current package and paid features remain available through ${escapeHtml(periodEnd)}.</li><li>The subscription will not renew and no new package charge will be raised for the next cycle.</li><li>Invoices and payment records remain available in Billing &amp; usage.</li></ul><div class="wp-policy-note"><strong>Period-end cancellation</strong><p>Only the future renewal is cancelled. This action does not create an immediate refund or remove access already paid for.</p></div><footer><button class="wp-secondary" type="submit" value="keep">Keep subscription</button><button class="wp-confirm-cancel" type="submit" value="confirm">Confirm cancellation</button></footer></form>`;
+  const attachedNumbers = workspaceConnections.filter((connection) => connection.status !== "disconnected").length;
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Subscription cancellation</span><h2>Cancel subscription and disconnect numbers?</h2><p>This is a voluntary cancellation. Plan access, add-ons and Meta connections will end immediately.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Current plan</span><strong>${escapeHtml(planName(subscription?.package_code || workspacePackageMaster?.package?.code))}</strong></div><div><span>Numbers to disconnect</span><strong>${attachedNumbers}</strong></div></section><ul class="wp-cancellation-effects"><li>Every attached number will be deregistered from WhatsApp Cloud API and its stored authorization removed.</li><li>Existing conversations, invoices, payment records and audit history remain available.</li><li>A payment failure does not perform this removal; it blocks access and preserves all number connections.</li></ul><label><span>Type <strong>CANCEL</strong> to confirm</span><input name="confirmation" autocomplete="off" required pattern="CANCEL" /></label><footer><button class="wp-secondary" type="submit" value="keep">Keep subscription</button><button class="wp-confirm-cancel" type="submit" value="confirm">Cancel and disconnect</button></footer></form>`;
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
     dialog.showModal();
   });
 }
-function confirmAddonChange(preview) {
+function confirmAddonSubscriptionCancellation(subscription) {
+  let dialog = document.querySelector("#wpAddonSubscriptionCancellationDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpAddonSubscriptionCancellationDialog";
+    dialog.className = "wp-contact-dialog wp-billing-cancellation-dialog";
+    document.body.append(dialog);
+  }
+  const addonName = subscription?.addon_name || subscription?.addon_code || "Add-on";
+  const hasActiveCycle = Boolean(subscription?.current_end) && Number(subscription?.paid_count || 0) > 0 && String(subscription?.status) === "active";
+  const periodEnd = hasActiveCycle ? formatProfileDate(subscription.current_end) : "Immediately after confirmation";
+  const timingCopy = hasActiveCycle
+    ? `${escapeHtml(addonName)} remains available through ${escapeHtml(periodEnd)}.`
+    : `${escapeHtml(addonName)} has not entered a paid billing cycle, so its capacity will be removed immediately.`;
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on cancellation</span><h2>Cancel ${escapeHtml(addonName)}?</h2><p>Review when access ends before confirming.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Add-on</span><strong>${escapeHtml(addonName)}</strong></div><div><span>${hasActiveCycle ? "Access remains active until" : "Cancellation timing"}</span><strong>${escapeHtml(periodEnd)}</strong></div></section><ul class="wp-cancellation-effects"><li>${timingCopy}</li><li>Your plan and other add-ons remain active.</li></ul><footer><button class="wp-secondary" type="submit" value="keep">Keep add-on</button><button class="wp-confirm-cancel" type="submit" value="confirm">${hasActiveCycle ? "Cancel at period end" : "Cancel now"}</button></footer></form>`;
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm" ? { confirmed: true, cancelAtCycleEnd: hasActiveCycle } : { confirmed: false, cancelAtCycleEnd: hasActiveCycle }), { once: true });
+    dialog.showModal();
+  });
+}
+function choosePaymentMethodUpdate(result) {
+  let dialog = document.querySelector("#wpPaymentMethodUpdateDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpPaymentMethodUpdateDialog";
+    dialog.className = "wp-contact-dialog wp-billing-upgrade-dialog";
+    document.body.append(dialog);
+  }
+  const paymentMethod = String(result?.paymentMethod || "").toLowerCase();
+  const cardSubscription = paymentMethod === "card";
+  const methodLabel = paymentMethod === "emandate" ? "bank eMandate" : paymentMethod === "upi" ? "UPI AutoPay" : paymentMethod === "card" ? "card" : "payment mandate";
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Secure payment settings</span><h2>Update payment method</h2><p>Your current subscription is authorized using ${escapeHtml(methodLabel)}.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header>${cardSubscription ? `<div class="wp-policy-note"><strong>Change the subscription card</strong><p>Secure checkout will open to validate the replacement card. A refundable ₹5 authorization may be used.</p></div>` : `<div class="wp-policy-note"><strong>Manage ${escapeHtml(methodLabel)} securely</strong><p>Your bank requires mandate changes through the secure payment manager.</p></div>`}<footer><button class="wp-secondary" type="submit" value="cancel">Keep current method</button><button class="wp-primary" type="submit" value="${cardSubscription ? "card" : "hosted"}">${cardSubscription ? "Change card" : "Continue securely"}</button></footer></form>`;
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue || "cancel"), { once: true });
+    dialog.showModal();
+  });
+}
+function confirmAddonChange(preview, enteredCouponCode = "") {
   let dialog = document.querySelector("#wpBillingAddonDialog");
   if (!dialog) {
     dialog = document.createElement("dialog");
@@ -2004,11 +2639,106 @@ function confirmAddonChange(preview) {
   const quote = preview.quote || {};
   const money = (paise) => escapeHtml(billingMoney(Number(paise || 0) / 100, quote.currency));
   const remainingDays = Number(quote.billableRemainingDays || 0).toFixed(2).replace(/\.00$/, "");
-  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Prorated add-on increase</span><h2>${escapeHtml(preview.addon?.name || "Add-on capacity")}</h2><p>Review the immediate prorated amount and the recurring total before authorizing payment.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>Quantity</dt><dd>${Number(quote.currentQuantity || 0)} → ${Number(quote.targetQuantity || 0)}</dd></div>`}<div><dt>Remaining service</dt><dd>${escapeHtml(remainingDays)} days</dd></div><div><dt>Prorated add-on base</dt><dd>${money(quote.proratedBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>New recurring base</dt><dd>${money(quote.targetRecurringBasePaise)} + GST</dd></div></dl><div class="wp-policy-note"><strong>Capacity after verified payment</strong><p>The increased capacity activates only after Razorpay confirms authorization. The current subscription is then scheduled to close automatically, and the replacement recurring total starts ${escapeHtml(formatProfileDate(quote.recurringStartsAt))}.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Keep current capacity</button><button class="wp-primary" type="submit" value="authorize">Authorize add-on</button></footer></form>`;
+  const isNewSubscription = quote.isNewSubscription === true;
+  const addonIdentity = `${preview.addon?.code || ""} ${preview.addon?.name || ""} ${preview.addon?.unitName || ""}`.toLowerCase();
+  const packageLimit = addonIdentity.includes("seat")
+    ? Number(workspacePackageMaster?.package?.team_member_limit || 0)
+    : addonIdentity.includes("whatsapp") && addonIdentity.includes("number")
+      ? Number(workspacePackageMaster?.package?.whatsapp_number_limit || 0)
+      : 0;
+  const quantityLabel = addonIdentity.includes("seat")
+    ? "Team seats"
+    : addonIdentity.includes("whatsapp") && addonIdentity.includes("number")
+      ? "WhatsApp numbers"
+      : "Quantity";
+  const currentCapacity = packageLimit + Number(quote.currentQuantity || 0);
+  const targetCapacity = packageLimit + Number(quote.targetQuantity || 0);
+  const serviceRow = isNewSubscription ? "" : `<div><dt>Remaining service</dt><dd>${escapeHtml(remainingDays)} days</dd></div>`;
+  const baseLabel = isNewSubscription ? "Add-on price" : "Prorated price";
+  const discountRow = Number(quote.discountPaise || 0) > 0 ? `<div class="is-credit"><dt>Coupon ${escapeHtml(quote.couponCode || "")}</dt><dd>−${money(quote.discountPaise)}</dd></div>` : "";
+  const recurringBase = Number(quote.discountedRecurringBasePaise ?? quote.targetRecurringBasePaise);
+  const couponValue = String(quote.couponCode || enteredCouponCode || "").trim().toUpperCase();
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on</span><h2>${escapeHtml(preview.addon?.name || "Add-on")}</h2><p>Review the price and confirm.</p></div><button type="submit" value="cancel" aria-label="Close">×</button></header><dl class="wp-upgrade-quote">${preview.addon?.quantityEnabled === false ? "" : `<div><dt>${quantityLabel}</dt><dd>${currentCapacity} → ${targetCapacity}</dd></div>`}${serviceRow}<div><dt>${baseLabel}</dt><dd>${money(quote.proratedBasePaise)}</dd></div>${discountRow}<div><dt>GST (18%)</dt><dd>${money(quote.gstPaise)}</dd></div><div><dt>Gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>Pay now</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div><div><dt>Renewal price</dt><dd>${money(recurringBase)} + GST</dd></div></dl><section class="wp-addon-coupon"><label><span>Coupon code <small>optional</small></span><input name="couponCode" autocomplete="off" maxlength="40" value="${escapeHtml(couponValue)}" placeholder="Enter coupon code"></label><div class="wp-addon-coupon-actions"><button class="wp-secondary" type="submit" value="apply">${quote.couponCode ? "Recalculate" : "Apply coupon"}</button>${quote.couponCode ? `<button class="wp-secondary" type="submit" value="remove">Remove coupon</button>` : ""}</div></section><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="authorize">Confirm &amp; pay</button></footer></form>`;
   return new Promise((resolve) => {
-    dialog.addEventListener("close", () => resolve(dialog.returnValue === "authorize"), { once: true });
+    dialog.addEventListener("close", () => resolve({
+      action: dialog.returnValue || "cancel",
+      couponCode: String(dialog.querySelector('[name="couponCode"]')?.value || "").trim().toUpperCase(),
+    }), { once: true });
     dialog.showModal();
   });
+}
+
+function explainAddonAvailability({ addonName, reason }) {
+  let dialog = document.querySelector("#wpBillingAddonAvailabilityDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpBillingAddonAvailabilityDialog";
+    dialog.className = "wp-contact-dialog wp-billing-upgrade-dialog";
+    document.body.append(dialog);
+  }
+  const trialEndsAt = workspaceBilling?.subscription?.trial_ends_at || workspaceBilling?.subscription?.charge_at || null;
+  const messages = {
+    trial: {
+      title: "Available after the free trial",
+      body: `${addonName} is a paid add-on. Add-on checkout becomes available when the trial ends${trialEndsAt ? ` on ${formatProfileDate(trialEndsAt)}` : ""}.`,
+      note: "No add-on capacity is granted before its payment is verified.",
+    },
+    payment_setup: {
+      title: "Payment setup required",
+      body: `Authorize the workspace subscription before adding ${addonName}.`,
+      note: "The add-on becomes available after payment is confirmed.",
+    },
+    subscription_ending: {
+      title: "Subscription scheduled to end",
+      body: `Restore or replace the current subscription before adding ${addonName}.`,
+      note: "A new recurring add-on cannot be attached to a subscription that is scheduled for cancellation.",
+    },
+    subscription_inactive: {
+      title: "Active subscription required",
+      body: `Activate a paid subscription before adding ${addonName}.`,
+      note: "Add-on capacity is enabled only after secure payment verification.",
+    },
+    billing_support: {
+      title: "Billing review required",
+      body: `${addonName} is already linked to a billing record that cannot be changed through self-service checkout.`,
+      note: "Contact billing support to reconcile the existing add-on before increasing it.",
+    },
+  };
+  const copy = messages[reason] || messages.subscription_inactive;
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on availability</span><h2>${escapeHtml(copy.title)}</h2><p>${escapeHtml(copy.body)}</p></div><button type="submit" value="close" aria-label="Close">×</button></header><div class="wp-policy-note"><strong>Protected billing control</strong><p>${escapeHtml(copy.note)}</p></div><footer><button class="wp-secondary" type="submit" value="close">Close</button><a class="wp-primary wp-button-link" href="${workspacePath("billing-plans")}">Review subscription</a></footer></form>`;
+  dialog.showModal();
+}
+
+function showBillingPriceBreakdown(selectedAddonCode = "") {
+  const breakdown = workspaceBilling?.subscription?.pricing_breakdown;
+  if (!breakdown) {
+    showToast("The secured recurring-price breakdown is not available for this subscription yet.", "error");
+    return;
+  }
+  const money = (paise) => billingMoney(Number(paise || 0) / 100, breakdown.currency || "INR");
+  const serverLines = Array.isArray(breakdown.line_items) ? breakdown.line_items : [];
+  const lines = serverLines.map((line) => ({
+    code: line.code,
+    name: line.name || line.code,
+    quantity: Number(line.quantity || 1),
+    basePaise: Number(line.base_paise || 0),
+    discountPaise: Number(line.discount_paise || 0),
+    taxablePaise: Number(line.taxable_paise ?? (Number(line.base_paise || 0) - Number(line.discount_paise || 0))),
+  }));
+  if (!lines.length) {
+    showToast("Refresh the page to load the secured itemized price breakdown.", "error");
+    return;
+  }
+  const lineRows = lines.map((line) => `<div class="wp-price-breakdown-line ${line.code === selectedAddonCode ? "is-selected" : ""}"><div><strong>${escapeHtml(line.name)}</strong><small>${line.code === "package" ? "Package master" : `${line.quantity.toLocaleString("en-IN")} selected`}</small></div><span>${escapeHtml(money(line.basePaise))}</span><span>${line.discountPaise ? `−${escapeHtml(money(line.discountPaise))}` : "—"}</span><strong>${escapeHtml(money(line.taxablePaise))}</strong></div>`).join("");
+  let dialog = document.querySelector("#wpBillingPriceBreakdownDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpBillingPriceBreakdownDialog";
+    dialog.className = "wp-contact-dialog wp-billing-price-breakdown-dialog";
+    document.body.append(dialog);
+  }
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Recurring billing</span><h2>Detailed price breakdown</h2><p>See how the package, selected add-ons and deductions produce your next billing amount.</p></div><button type="submit" value="close" aria-label="Close">×</button></header><div class="wp-price-breakdown-table"><div class="wp-price-breakdown-head"><span>Item</span><span>Listed</span><span>Deduction</span><span>Taxable</span></div>${lineRows}</div><dl class="wp-upgrade-quote"><div><dt>Subtotal before deductions</dt><dd>${escapeHtml(money(breakdown.base_subtotal_paise))}</dd></div>${Number(breakdown.discount_paise || 0) ? `<div class="is-credit"><dt>Coupon ${escapeHtml(breakdown.coupon_code || "discount")}</dt><dd>−${escapeHtml(money(breakdown.discount_paise))}</dd></div>` : ""}<div><dt>Taxable base</dt><dd>${escapeHtml(money(breakdown.taxable_base_paise))}</dd></div><div><dt>GST</dt><dd>${escapeHtml(money(breakdown.gst_paise))}</dd></div><div><dt>Gateway adjustment</dt><dd>${escapeHtml(money(breakdown.gateway_adjustment_paise))}</dd></div><div class="is-total"><dt>Next billing amount</dt><dd>${escapeHtml(money(breakdown.total_paise))}</dd></div></dl><div class="wp-policy-note"><strong>Server-verified recurring price</strong><p>Deductions are allocated proportionally across coupon-eligible package and add-on lines. The final total matches the protected Razorpay recurring plan.</p></div><footer><button class="wp-primary" type="submit" value="close">Done</button></footer></form>`;
+  dialog.showModal();
 }
 
 async function decideRenewalPriceChange(changeId, accepting) {
@@ -2020,7 +2750,7 @@ async function decideRenewalPriceChange(changeId, accepting) {
       if (authorizationWindow) authorizationWindow.location.href = result.replacement.short_url;
       else window.open(result.replacement.short_url, "_blank", "noopener,noreferrer");
     } else authorizationWindow?.close();
-    showToast(accepting ? "Consent recorded. Complete Razorpay authorization to schedule the new renewal price." : "Cancellation scheduled for the end of the current paid period.");
+    showToast(accepting ? "Consent recorded. Complete payment authorization to schedule the new renewal price." : "Cancellation scheduled for the end of the current paid period.");
     await renderDashboard();
   } catch (error) {
     authorizationWindow?.close();
@@ -2035,7 +2765,7 @@ function renewalConsentModal(view) {
   if (!change || !subscription) return "";
   const annual = subscription.billing_interval === "year";
   const amount = (version) => Number(version?.[annual ? "annual_base_paise" : "monthly_base_paise"] || 0) / 100;
-  return `<dialog class="wp-contact-dialog wp-renewal-consent-dialog" id="wpRenewalConsentDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Billing consent required</span><h2>Review your next renewal price</h2><p>Your existing paid period is unchanged. Choose whether to authorize the revised price for the next billing date.</p></div><button type="submit" value="later" aria-label="Review later">×</button></header><dl class="wp-upgrade-quote"><div><dt>Package</dt><dd>${escapeHtml(change.target?.package?.name || subscription.package_code)}</dd></div><div><dt>Current base price</dt><dd>${escapeHtml(billingMoney(amount(change.from), change.from?.currency || "INR"))}</dd></div><div><dt>New base price</dt><dd>${escapeHtml(billingMoney(amount(change.target), change.target?.currency || "INR"))} + GST</dd></div><div><dt>Effective from</dt><dd>${escapeHtml(formatProfileDate(change.effective_at))}</dd></div></dl><div class="wp-policy-note"><strong>Explicit renewal authorization</strong><p>Accepting opens Razorpay to authorize a replacement subscription. Rejecting schedules the current subscription to end after this paid period.</p></div><footer><button class="wp-secondary" type="button" data-signin-renewal-decision="reject" data-price-change-id="${escapeHtml(change.id)}">End after current period</button><button class="wp-primary" type="button" data-signin-renewal-decision="accept" data-price-change-id="${escapeHtml(change.id)}">Accept &amp; authorize</button></footer></form></dialog>`;
+  return `<dialog class="wp-contact-dialog wp-renewal-consent-dialog" id="wpRenewalConsentDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Billing consent required</span><h2>Review your next renewal price</h2><p>Your existing paid period is unchanged. Choose whether to authorize the revised price for the next billing date.</p></div><button type="submit" value="later" aria-label="Review later">×</button></header><dl class="wp-upgrade-quote"><div><dt>Package</dt><dd>${escapeHtml(change.target?.package?.name || subscription.package_code)}</dd></div><div><dt>Current base price</dt><dd>${escapeHtml(billingMoney(amount(change.from), change.from?.currency || "INR"))}</dd></div><div><dt>New base price</dt><dd>${escapeHtml(billingMoney(amount(change.target), change.target?.currency || "INR"))} + GST</dd></div><div><dt>Effective from</dt><dd>${escapeHtml(formatProfileDate(change.effective_at))}</dd></div></dl><div class="wp-policy-note"><strong>Renewal authorization</strong><p>Accept to authorize the revised subscription. Reject to end the current subscription after this paid period.</p></div><footer><button class="wp-secondary" type="button" data-signin-renewal-decision="reject" data-price-change-id="${escapeHtml(change.id)}">End after current period</button><button class="wp-primary" type="button" data-signin-renewal-decision="accept" data-price-change-id="${escapeHtml(change.id)}">Accept &amp; authorize</button></footer></form></dialog>`;
 }
 
 function openBillingDocumentLegacy(documentRecord, kind = "invoice") {
@@ -2058,7 +2788,7 @@ function openBillingDocumentLegacy(documentRecord, kind = "invoice") {
   const printWindow = window.open("", "_blank");
   if (!printWindow) throw new Error("Allow pop-ups to view and save this billing document.");
   printWindow.opener = null;
-  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(number)}</title><style>body{margin:0;background:#eef2ef;color:#17201a;font:14px Arial,sans-serif}.sheet{max-width:900px;margin:32px auto;padding:44px;background:#fff;box-shadow:0 8px 32px #0002}.head{display:flex;justify-content:space-between;gap:30px;border-bottom:3px solid #073b26;padding-bottom:22px}.brand h1{margin:0;color:#073b26;font-size:25px}.brand p,.meta p{margin:5px 0;color:#566159}.meta{text-align:right}.title{margin:30px 0 18px;font-size:30px;color:#073b26}.test{display:inline-block;margin-left:10px;padding:5px 8px;border-radius:5px;background:#fff0c9;color:#7b5600;font-size:11px}.parties{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin:25px 0}.parties h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;color:#68736b}.parties p{margin:4px 0}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{padding:12px;border-bottom:1px solid #dfe5e1;text-align:left}th{background:#f3f6f4;color:#3a463e;font-size:12px}.totals{width:min(420px,100%);margin:25px 0 0 auto}.totals div{display:flex;justify-content:space-between;padding:8px}.totals .grand{border-top:2px solid #073b26;font-size:18px;font-weight:800}.refs{margin-top:30px;padding:16px;background:#f3f6f4;border-left:4px solid #16a267}.refs p{margin:5px 0;word-break:break-all}.actions{max-width:900px;margin:20px auto;text-align:right}.actions button{padding:11px 18px;border:0;border-radius:7px;background:#073b26;color:#fff;font-weight:700;cursor:pointer}@media print{body{background:#fff}.sheet{margin:0;box-shadow:none}.actions{display:none}}@media(max-width:650px){.sheet{margin:0;padding:22px}.head,.parties{display:block}.meta{text-align:left;margin-top:18px}.parties>div+div{margin-top:20px}}</style></head><body><div class="actions"><button onclick="window.print()">Print / Save PDF</button></div><main class="sheet"><div class="head"><div class="brand"><h1>${escapeHtml(issuer.legalName || issuer.tradeName || "Varada Nexus Private Limited")}</h1><p>${escapeHtml(issuer.registeredAddress || "")}</p><p>${escapeHtml([issuer.city, issuer.pincode].filter(Boolean).join(" · "))}</p><p>${issuer.gstin ? `GSTIN: ${escapeHtml(issuer.gstin)}` : ""}</p></div><div class="meta"><strong>${isCredit ? "CREDIT NOTE" : "TAX INVOICE"}</strong><p>${escapeHtml(number)}</p><p>${escapeHtml(formatProfileDate(date))}</p>${documentRecord.document_environment === "test" || invoice.document_environment === "test" ? '<span class="test">TEST · NOT A STATUTORY DOCUMENT</span>' : ""}</div></div><h2 class="title">${isCredit ? "Credit note" : "Invoice"}</h2><section class="parties"><div><h3>Bill to</h3><p><strong>${escapeHtml(invoice.billing_name || session.companyName || "Customer")}</strong></p><p>${escapeHtml(invoice.billing_address || "")}</p><p>${escapeHtml(invoice.billing_email || "")}</p><p>${invoice.billing_gstin ? `GSTIN: ${escapeHtml(invoice.billing_gstin)}` : ""}</p></div><div><h3>Subscription</h3><p>${escapeHtml(invoice.package_code || "WhatsApp Solutions")}</p><p>${escapeHtml(invoice.billing_interval || "")}</p>${isCredit && documentRecord.reason ? `<p>Reason: ${escapeHtml(documentRecord.reason)}</p>` : ""}</div></section><table><thead><tr><th>Description</th><th>Qty</th><th>Taxable amount</th></tr></thead><tbody>${lines}</tbody></table><div class="totals"><div><span>Taxable value</span><strong>${amount(taxable)}</strong></div><div><span>GST</span><strong>${amount(gst)}</strong></div><div><span>Additional gateway adjustment</span><strong>${amount(gateway)}</strong></div><div class="grand"><span>${isCredit ? "Credit total" : "Invoice total"}</span><strong>${amount(total)}</strong></div></div><section class="refs"><strong>Payment gateway references</strong><p>Razorpay invoice: ${escapeHtml(documentRecord.provider_invoice_id || invoice.provider_invoice_id || "—")}</p><p>Transaction ID: ${escapeHtml(documentRecord.provider_payment_id || invoice.provider_payment_id || "—")}</p>${isCredit ? `<p>Refund ID: ${escapeHtml(documentRecord.provider_refund_id || "—")}</p><p>Against EMS invoice: ${escapeHtml(invoice.invoice_number || "—")}</p>` : ""}</section></main></body></html>`);
+  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(number)}</title><style>body{margin:0;background:#eef2ef;color:#17201a;font:14px Arial,sans-serif}.sheet{max-width:900px;margin:32px auto;padding:44px;background:#fff;box-shadow:0 8px 32px #0002}.head{display:flex;justify-content:space-between;gap:30px;border-bottom:3px solid #073b26;padding-bottom:22px}.brand h1{margin:0;color:#073b26;font-size:25px}.brand p,.meta p{margin:5px 0;color:#566159}.meta{text-align:right}.title{margin:30px 0 18px;font-size:30px;color:#073b26}.test{display:inline-block;margin-left:10px;padding:5px 8px;border-radius:5px;background:#fff0c9;color:#7b5600;font-size:11px}.parties{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin:25px 0}.parties h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;color:#68736b}.parties p{margin:4px 0}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{padding:12px;border-bottom:1px solid #dfe5e1;text-align:left}th{background:#f3f6f4;color:#3a463e;font-size:12px}.totals{width:min(420px,100%);margin:25px 0 0 auto}.totals div{display:flex;justify-content:space-between;padding:8px}.totals .grand{border-top:2px solid #073b26;font-size:18px;font-weight:800}.refs{margin-top:30px;padding:16px;background:#f3f6f4;border-left:4px solid #16a267}.refs p{margin:5px 0;word-break:break-all}.actions{max-width:900px;margin:20px auto;text-align:right}.actions button{padding:11px 18px;border:0;border-radius:7px;background:#073b26;color:#fff;font-weight:700;cursor:pointer}@media print{body{background:#fff}.sheet{margin:0;box-shadow:none}.actions{display:none}}@media(max-width:650px){.sheet{margin:0;padding:22px}.head,.parties{display:block}.meta{text-align:left;margin-top:18px}.parties>div+div{margin-top:20px}}</style></head><body><div class="actions"><button onclick="window.print()">Print / Save PDF</button></div><main class="sheet"><div class="head"><div class="brand"><h1>${escapeHtml(issuer.legalName || issuer.tradeName || "Varada Nexus Private Limited")}</h1><p>${escapeHtml(issuer.registeredAddress || "")}</p><p>${escapeHtml([issuer.city, issuer.pincode].filter(Boolean).join(" · "))}</p><p>${issuer.gstin ? `GSTIN: ${escapeHtml(issuer.gstin)}` : ""}</p></div><div class="meta"><strong>${isCredit ? "CREDIT NOTE" : "TAX INVOICE"}</strong><p>${escapeHtml(number)}</p><p>${escapeHtml(formatProfileDate(date))}</p>${documentRecord.document_environment === "test" || invoice.document_environment === "test" ? '<span class="test">TEST · NOT A STATUTORY DOCUMENT</span>' : ""}</div></div><h2 class="title">${isCredit ? "Credit note" : "Invoice"}</h2><section class="parties"><div><h3>Bill to</h3><p><strong>${escapeHtml(invoice.billing_name || session.companyName || "Customer")}</strong></p><p>${escapeHtml(invoice.billing_address || "")}</p><p>${escapeHtml(invoice.billing_email || "")}</p><p>${invoice.billing_gstin ? `GSTIN: ${escapeHtml(invoice.billing_gstin)}` : ""}</p></div><div><h3>Subscription</h3><p>${escapeHtml(invoice.package_code || "WhatsApp Solutions")}</p><p>${escapeHtml(invoice.billing_interval || "")}</p>${isCredit && documentRecord.reason ? `<p>Reason: ${escapeHtml(documentRecord.reason)}</p>` : ""}</div></section><table><thead><tr><th>Description</th><th>Qty</th><th>Taxable amount</th></tr></thead><tbody>${lines}</tbody></table><div class="totals"><div><span>Taxable value</span><strong>${amount(taxable)}</strong></div><div><span>GST</span><strong>${amount(gst)}</strong></div><div><span>Additional gateway adjustment</span><strong>${amount(gateway)}</strong></div><div class="grand"><span>${isCredit ? "Credit total" : "Invoice total"}</span><strong>${amount(total)}</strong></div></div><section class="refs"><strong>Payment gateway references</strong><p>Gateway invoice: ${escapeHtml(documentRecord.provider_invoice_id || invoice.provider_invoice_id || "—")}</p><p>Transaction ID: ${escapeHtml(documentRecord.provider_payment_id || invoice.provider_payment_id || "—")}</p>${isCredit ? `<p>Refund ID: ${escapeHtml(documentRecord.provider_refund_id || "—")}</p><p>Against EMS invoice: ${escapeHtml(invoice.invoice_number || "—")}</p>` : ""}</section></main></body></html>`);
   printWindow.document.close();
 }
 
@@ -2072,7 +2802,7 @@ async function openBillingDocument(documentRecord, kind = "invoice") {
   const dialog = document.createElement("dialog");
   dialog.className = "wp-billing-document-modal";
   const previewUrl = `${pdfUrl}#toolbar=0&navpanes=0&statusbar=0&view=FitH`;
-  dialog.innerHTML = `<section><header><div><span>FINANCIAL DOCUMENT</span><h2>${escapeHtml(result.documentNumber || "Billing document")}</h2><p>Official customer copy</p></div><div><a class="wp-secondary wp-button-link" href="${pdfUrl}" download="${escapeHtml(result.fileName || "billing-document.pdf")}">Download PDF</a><button class="wp-primary" type="button" data-billing-pdf-print>Print</button><button class="wp-billing-document-close" type="button" aria-label="Close PDF preview">×</button></div></header><main><iframe title="${escapeHtml(result.documentNumber || "Billing document")} PDF preview" src="${previewUrl}"></iframe></main><footer><span>Computer-generated customer copy</span><span>Centralized EMS number · Razorpay references preserved</span></footer></section>`;
+  dialog.innerHTML = `<section><header><div><span>FINANCIAL DOCUMENT</span><h2>${escapeHtml(result.documentNumber || "Billing document")}</h2><p>Official customer copy</p></div><div><a class="wp-secondary wp-button-link" href="${pdfUrl}" download="${escapeHtml(result.fileName || "billing-document.pdf")}">Download PDF</a><button class="wp-primary" type="button" data-billing-pdf-print>Print</button><button class="wp-billing-document-close" type="button" aria-label="Close PDF preview">×</button></div></header><main><iframe title="${escapeHtml(result.documentNumber || "Billing document")} PDF preview" src="${previewUrl}"></iframe></main><footer><span>Computer-generated customer copy</span><span>Centralized invoice number · Payment references preserved</span></footer></section>`;
   const cleanup = () => { URL.revokeObjectURL(pdfUrl); dialog.remove(); };
   dialog.addEventListener("close", cleanup, { once: true });
   dialog.querySelector("[data-billing-pdf-print]")?.addEventListener("click", () => dialog.querySelector("iframe")?.contentWindow?.print());
@@ -2085,14 +2815,18 @@ async function openBillingDocument(documentRecord, kind = "invoice") {
 function billingView(view = "billing") {
   const pkg = workspacePackageMaster?.package;
   const canManage = ["owner", "admin"].includes(session.roleCode);
-  const subscription = workspaceBilling?.subscription;
+  const returnedSubscription = workspaceBilling?.subscription;
+  const subscription = returnedSubscription && !["cancelled", "completed", "expired"].includes(String(returnedSubscription.status).toLowerCase())
+    ? returnedSubscription
+    : null;
+  const addonSubscriptions = workspaceBilling?.addonSubscriptions || [];
   const renewalChange = (workspaceBilling?.renewalPriceChanges || []).find((change) => ["pending_consent", "accepted", "processing", "failed"].includes(change.status));
   const billingError = workspaceBilling?.error || workspacePackageMaster?.error || "";
   const pageCopy = {
     billing: ["Billing overview", "Monitor your subscription, financial documents, payments, add-ons and refunds from one corporate billing centre."],
     "billing-plans": ["Plans & subscription", "Review your current subscription, compare packages and authorize a plan change securely."],
     "billing-addons": ["Add-ons", "Extend your package with approved recurring capacity and service add-ons."],
-    "billing-invoices": ["Invoices", "View and download statutory invoices issued after verified Razorpay payments."],
+    "billing-invoices": ["Invoices", "View and download invoices issued after verified payments."],
     "billing-ledger": ["Payment ledger", "Review verified payment transactions and their current gateway status."],
     "billing-refunds": ["Refunds & credit notes", "Track refunded amounts and the corresponding centralized EMS credit notes."],
   };
@@ -2102,61 +2836,129 @@ function billingView(view = "billing") {
   const limits = [["Team seats",pkg.team_member_limit],["WhatsApp numbers",pkg.whatsapp_number_limit],["Contacts",pkg.contact_limit],["Messages / month",pkg.monthly_message_limit],["Templates",pkg.template_limit],["Flows",pkg.flow_limit],["Campaigns",pkg.campaign_limit],["Automations",pkg.automation_limit],["Integrations",pkg.integration_limit],["Storage",pkg.storage_limit_mb == null ? null : `${Number(pkg.storage_limit_mb).toLocaleString("en-IN")} MB`]];
   const labels = { team_inbox:"Team inbox",contacts:"Contacts",templates:"Message templates",campaigns:"Campaigns",flows:"Flows",automations:"Automations",api_access:"API access",priority_support:"Priority support",analytics:"Analytics" };
   const features = Object.entries(pkg.entitlements || {}).map(([key,value]) => `<li class="${value === false ? "off" : "on"}"><span>${value === false ? "×" : "✓"}</span><strong>${escapeHtml(labels[key] || key.replaceAll("_", " "))}</strong><small>${typeof value === "string" ? escapeHtml(value) : value === false ? "Not included" : "Included"}</small></li>`).join("");
-  const assignedCodes = new Set((workspacePackageMaster.addons || []).map((addon) => addon.code));
-  const addonManageReady = Boolean(canManage && workspaceBilling?.configured && subscription?.status === "active" && !subscription?.cancel_at_cycle_end);
+  const assignedAddonMap = new Map((workspacePackageMaster.addons || []).map((addon) => [addon.code, addon]));
+  const managedSubscription = Boolean(subscription && ["authenticated", "active"].includes(String(subscription.status)));
+  const addonManageReady = Boolean(canManage && workspaceBilling?.configured && ["authenticated", "active"].includes(String(subscription?.status)) && !subscription?.cancel_at_cycle_end);
   const addonControl = (addon, currentQuantity = 0) => {
-    const selfService = addon.is_self_service && addon.billing_model === "recurring" && addon.billing_interval === subscription?.billing_interval;
-    if (!addonManageReady || !selfService || (currentQuantity > 0 && addon.billingManaged !== true)) return `<a href="/contact.html?subject=${encodeURIComponent(`WhatsApp add-on: ${addon.name}`)}">${canManage ? "Request add-on" : "Contact workspace owner"} →</a>`;
+    const intervalCompatible = addon.billing_interval === subscription?.billing_interval || (subscription?.billing_interval === "year" && addon.billing_interval === "month");
+    const selfService = addon.is_self_service && addon.billing_model === "recurring" && intervalCompatible;
+    if (!selfService) return `<a href="/contact.html?subject=${encodeURIComponent(`WhatsApp add-on: ${addon.name}`)}">Contact sales →</a>`;
+    if (!canManage) return '<span class="wp-billing-current-action">Owner or admin required</span>';
+    const unavailableReason = !workspaceBilling?.configured
+      ? "payment_setup"
+      : subscription?.cancel_at_cycle_end
+        ? "subscription_ending"
+        : !["authenticated", "active"].includes(String(subscription?.status))
+            ? "subscription_inactive"
+            : currentQuantity > 0 && addon.billingManaged !== true
+              ? "billing_support"
+              : "";
+    if (!addonManageReady || unavailableReason) return `<button class="wp-secondary" type="button" data-billing-addon-unavailable="${escapeHtml(unavailableReason || "subscription_inactive")}" data-billing-addon-name="${escapeHtml(addon.name)}">${unavailableReason === "billing_support" ? "Billing review required" : "Review requirements"}</button>`;
     const quantityEnabled = addon.quantity_enabled !== false;
     if (!quantityEnabled && currentQuantity > 0) return `<span class="wp-billing-current-action">Active</span>`;
     const step = Math.max(1, Number(addon.quantity_step || 1));
     const minimum = currentQuantity ? currentQuantity + step : Math.max(1, Number(addon.minimum_quantity || 1));
-    return `<div class="wp-billing-addon-control">${quantityEnabled ? `<input type="number" data-billing-addon-quantity="${escapeHtml(addon.code)}" min="${minimum}" ${addon.maximum_quantity == null ? "" : `max="${Number(addon.maximum_quantity)}"`} step="${step}" value="${minimum}" aria-label="${escapeHtml(addon.name)} target quantity"/>` : ""}<button class="wp-secondary" type="button" data-billing-addon-change="${escapeHtml(addon.code)}" data-billing-addon-current="${Number(currentQuantity)}">${currentQuantity ? "Increase capacity" : "Add to subscription"}</button></div>`;
+    return `<div class="wp-billing-addon-control">${quantityEnabled ? `<div class="wp-quantity-stepper" data-quantity-stepper><button type="button" data-quantity-step="-1" aria-label="Decrease ${escapeHtml(addon.name)} quantity">−</button><input type="number" data-billing-addon-quantity="${escapeHtml(addon.code)}" min="${minimum}" ${addon.maximum_quantity == null ? "" : `max="${Number(addon.maximum_quantity)}"`} step="${step}" value="${minimum}" aria-label="${escapeHtml(addon.name)} quantity" readonly/><button type="button" data-quantity-step="1" aria-label="Increase ${escapeHtml(addon.name)} quantity">+</button></div>` : ""}<button class="wp-secondary" type="button" data-billing-addon-change="${escapeHtml(addon.code)}" data-billing-addon-current="${Number(currentQuantity)}">${currentQuantity ? "Increase" : "Add"}</button></div>`;
   };
-  const assigned = (workspacePackageMaster.addons || []).map((addon) => `<article class="wp-billing-addon"><div><span class="wp-card-eyebrow">Active add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${addon.quantity_enabled === false ? billingMoney(addon.unit_amount, addon.currency) : `${Number(addon.quantity || 1)} × ${billingMoney(addon.unit_amount, addon.currency)}`}</strong><small>${escapeHtml(addon.billing_interval || "month")} · base price + GST</small>${addonControl(addon, Number(addon.quantity || 0))}</div></article>`).join("");
-  const available = (workspacePackageMaster.availableAddons || []).filter((addon) => !assignedCodes.has(addon.code)).map((addon) => `<article class="wp-billing-addon available"><div><span class="wp-card-eyebrow">Available add-on</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p></div><div><strong>${addon.billing_model === "contact_sales" ? "Custom quote" : billingMoney(addon.unit_amount, addon.currency)}</strong><small>${addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval)} · base price + GST` : "Contact billing for terms"}</small>${addonControl(addon, 0)}</div></article>`).join("");
+  const available = (workspacePackageMaster.availableAddons || []).map((addon) => {
+    const assignment = assignedAddonMap.get(addon.code);
+    const currentQuantity = assignment?.assignmentStatus === "active" ? Math.max(0, Number(assignment.quantity || 0)) : 0;
+    const quantityEnabled = addon.quantity_enabled !== false;
+    if (currentQuantity > 0 && !quantityEnabled) return "";
+    const managedAddon = { ...addon, billingManaged: assignment?.billingManaged === true };
+    const recurrence = addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval)} · recurring base price + GST` : "Contact billing for terms";
+    const current = currentQuantity > 0
+      ? `<small class="wp-billing-addon-current">Current recurring quantity: <strong>${currentQuantity.toLocaleString("en-IN")} ${escapeHtml(addon.unit_name || "unit")}${currentQuantity === 1 ? "" : "s"}</strong></small>`
+      : "";
+    return `<article class="wp-billing-addon available ${currentQuantity ? "is-active-recurring" : ""}"><div><span class="wp-card-eyebrow">${currentQuantity ? "Active recurring add-on" : "Available add-on"}</span><h3>${escapeHtml(addon.name)}</h3><p>${escapeHtml(addon.description || "")}</p>${current}</div><div><strong>${addon.billing_model === "contact_sales" ? "Custom quote" : billingMoney(addon.unit_amount, addon.currency)}</strong><small>${recurrence}</small>${addon.billing_model === "recurring" || !currentQuantity ? addonControl(managedAddon, quantityEnabled ? currentQuantity : 0) : '<span class="wp-billing-current-action">Active</span>'}</div></article>`;
+  }).join("");
   const model = pkg.billing_model === "contact_sales" ? "Custom agreement" : pkg.billing_model === "free" ? "Free" : "Subscription";
   const statusLabel = String(subscription?.status || "No paid subscription").replaceAll("_", " ");
   const subscriptionOpen = subscription && !["cancelled", "completed", "expired"].includes(subscription.status);
-  const statusActions = subscription ? `<div class="wp-billing-subscription-actions">${canManage && subscriptionOpen && !subscription.cancel_at_cycle_end ? `<a class="wp-primary wp-button-link wp-billing-upgrade-action" href="${workspacePath("billing-plans")}#available-plans">Upgrade plan</a><button class="wp-billing-cancel-subtle" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel</button>` : subscription.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">Cancellation scheduled for ${escapeHtml(formatProfileDate(subscription.current_end))}</span>` : ""}</div>` : "";
-  const subscriptionCard = `<section class="wp-billing-subscription"><div><span class="wp-card-eyebrow">Razorpay subscription</span><h2>${escapeHtml(subscription ? `${subscription.package_code} · ${subscription.billing_interval}ly` : "No active paid subscription")}</h2><p>${subscription ? `Status: ${escapeHtml(statusLabel)}${subscription.current_end ? ` · Current period ends ${escapeHtml(formatProfileDate(subscription.current_end))}` : ""}` : "Select a self-service package below to start secure checkout."}</p></div><div><span class="wp-billing-status ${escapeHtml(subscription?.status || "none")}">${escapeHtml(statusLabel)}</span>${statusActions}</div></section>`;
+  const trialEndsAt = subscription?.trial_ends_at || subscription?.charge_at || null;
+  const trialActive = Boolean(subscription?.status === "authenticated" && Number(subscription?.trial_days || 0) > 0 && trialEndsAt && new Date(trialEndsAt).getTime() > Date.now());
+  const trialDaysLeft = trialActive ? Math.max(1, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86_400_000)) : 0;
+  const trialCountdown = trialActive ? `${trialDaysLeft} trial day${trialDaysLeft === 1 ? "" : "s"} left · Trial ends ${formatProfileDate(trialEndsAt)}` : "";
+  const statusActions = subscription ? `<div class="wp-billing-subscription-actions">${canManage && managedSubscription ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(subscription.id)}">Update payment method</button>` : ""}${canManage && subscriptionOpen && !subscription.cancel_at_cycle_end ? `<a class="wp-primary wp-button-link wp-billing-upgrade-action" href="${workspacePath("billing-plans")}#available-plans">Upgrade plan</a><button class="wp-billing-cancel-subtle" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel</button>` : subscription.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">Cancellation scheduled for ${escapeHtml(formatProfileDate(subscription.current_end))}</span>` : ""}</div>` : "";
+  const subscriptionCard = `<section class="wp-billing-subscription"><div><span class="wp-card-eyebrow">Subscription</span><h2>${escapeHtml(subscription ? `${subscription.package_code} · ${subscription.billing_interval}ly` : "No active subscription")}</h2><p>${subscription ? `Status: ${escapeHtml(statusLabel)}${trialActive ? ` · ${escapeHtml(trialCountdown)}` : subscription.current_end ? ` · Current period ends ${escapeHtml(formatProfileDate(subscription.current_end))}` : ""}` : "Choose a plan to continue."}</p></div><div><span class="wp-billing-status ${escapeHtml(subscription?.status || "none")}">${escapeHtml(statusLabel)}</span>${trialActive ? `<span class="wp-billing-cancellation-scheduled">${escapeHtml(`${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} remaining`)}</span>` : ""}${statusActions}</div></section>`;
+  const activeAddonSubscriptions = addonSubscriptions.filter((item) => !["cancelled", "completed", "expired"].includes(String(item.status || "").toLowerCase()));
+  const overviewAddonMap = new Map();
+  for (const item of workspacePackageMaster.addons || []) overviewAddonMap.set(item.code, item);
+  for (const item of activeAddonSubscriptions) if (!overviewAddonMap.has(item.addon_code)) overviewAddonMap.set(item.addon_code, item);
+  const overviewActiveAddons = [...overviewAddonMap.values()];
+  const overviewPlanBase = Number(subscription?.recurring_base_paise || 0) > 0
+    ? Number(subscription.recurring_base_paise) / 100
+    : subscription?.billing_interval === "year"
+      ? Number(pkg.annual_amount || 0)
+      : Number(pkg.monthly_amount || 0);
+  const overviewPlanPrice = pkg.billing_model === "contact_sales"
+    ? "Custom quote"
+    : `${billingMoney(overviewPlanBase, pkg.currency)} + GST`;
+  const overviewNextBillingAmount = Number(subscription?.next_billing_amount_paise || 0) > 0
+    ? billingMoney(Number(subscription.next_billing_amount_paise) / 100, pkg.currency)
+    : "Pending confirmation";
+  const overviewNextBillingDate = subscription?.current_end ? formatProfileDate(subscription.current_end) : "Date not scheduled";
+  const overviewNextBilling = subscription?.cancel_at_cycle_end
+    ? `<div><span>Next billing amount</span><strong>No further charge</strong><small>Subscription ends ${escapeHtml(overviewNextBillingDate)}</small></div>`
+    : `<div><span>${trialActive ? "First billing amount" : "Next billing amount"}</span><strong>${escapeHtml(overviewNextBillingAmount)}</strong><small>${escapeHtml(overviewNextBillingDate)} · Includes GST and gateway adjustment</small></div>`;
+  const overviewPlanDetails = subscription
+    ? `<section class="wp-card wp-billing-overview-plan"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Current plan</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-plans")}">View plan</a></div><div class="wp-billing-overview-plan-grid"><div><span>Billing</span><strong>${escapeHtml(subscription.billing_interval === "year" ? "Annual" : "Monthly")}</strong></div><div><span>Base price</span><strong>${escapeHtml(overviewPlanPrice)}</strong></div><div><span>Status</span><strong>${escapeHtml(statusLabel)}</strong></div>${overviewNextBilling}</div></section>`
+    : `<section class="wp-card wp-billing-overview-plan"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Subscription</span><h2>No plan selected</h2><p>Choose a package to start with a fresh subscription.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("billing-plans")}">Choose a plan</a></div></section>`;
+  const overviewAddonRows = overviewActiveAddons.map((item) => {
+    const quantity = Math.max(1, Number(item.addon_quantity || item.quantity || 1));
+    return `<button type="button" data-billing-price-breakdown="${escapeHtml(item.code || item.addon_code || "")}"><div><strong>${escapeHtml(item.name || item.addon_name || item.addon_code || "Add-on")}</strong><small>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"} · ${escapeHtml(item.billing_interval === "year" ? "Annual" : "Monthly")}</small></div><span>View price breakdown →</span></button>`;
+  }).join("");
+  const overviewAddons = `<section class="wp-card wp-billing-overview-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Add-ons</span><h2>${overviewActiveAddons.length ? `${overviewActiveAddons.length} active` : "No active add-ons"}</h2><p>${overviewActiveAddons.length ? "Extra services currently included in your workspace." : "Add capacity or services whenever you need them."}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-addons")}">${overviewActiveAddons.length ? "Manage add-ons" : "Select add-on"}</a></div>${overviewAddonRows ? `<div class="wp-billing-overview-addon-list">${overviewAddonRows}</div>` : ""}</section>`;
+  const addonSubscriptionCards = activeAddonSubscriptions.map((item) => {
+    const addonStatus = String(item.status || "created").replaceAll("_", " ");
+    const addonOpen = !["cancelled", "completed", "expired"].includes(String(item.status));
+    const addonManaged = ["authenticated", "active"].includes(String(item.status));
+    const quantity = Math.max(1, Number(item.addon_quantity || 1));
+    const renewalCopy = item.cancel_at_cycle_end
+      ? `Cancellation scheduled for ${formatProfileDate(item.current_end)}`
+      : item.current_end
+        ? `Renews ${formatProfileDate(item.current_end)}`
+        : item.charge_at
+          ? `First charge ${formatProfileDate(item.charge_at)}`
+          : "Schedule pending";
+    return `<article class="wp-billing-addon-subscription"><div><span class="wp-card-eyebrow">Add-on</span><h3>${escapeHtml(item.addon_name || item.addon_code || "Add-on")}</h3><p>${escapeHtml(item.addon_description || "")}</p><div class="wp-billing-addon-subscription-meta"><span>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"}</span><span>${escapeHtml(item.billing_interval || "month")}ly billing</span><span>${escapeHtml(renewalCopy)}</span></div></div><div class="wp-billing-addon-subscription-actions"><span class="wp-billing-status ${escapeHtml(item.status || "none")}">${escapeHtml(addonStatus)}</span>${canManage && addonManaged ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(item.id)}">Update payment method</button>` : ""}${canManage && addonOpen && !item.cancel_at_cycle_end ? `<button class="wp-billing-cancel-subtle" type="button" data-billing-cancel-addon="${escapeHtml(item.id)}">Cancel add-on</button>` : item.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">${escapeHtml(renewalCopy)}</span>` : ""}</div></article>`;
+  }).join("");
+  const addonSubscriptionsSection = activeAddonSubscriptions.length ? `<section class="wp-card wp-billing-addon-subscriptions"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Add-ons</span><h2>Your add-ons</h2><p>View renewals, update payment details or cancel an add-on.</p></div><span class="wp-billing-addon-count">${activeAddonSubscriptions.length} active</span></div><div class="wp-billing-addon-subscription-list">${addonSubscriptionCards}</div></section>` : "";
   const renewalInterval = subscription?.billing_interval === "year" ? "annual" : "monthly";
   const renewalAmount = (version) => Number(version?.[subscription?.billing_interval === "year" ? "annual_base_paise" : "monthly_base_paise"] || 0) / 100;
-  const renewalNotice = renewalChange ? `<section class="wp-billing-price-change ${escapeHtml(renewalChange.status)}"><div><span class="wp-card-eyebrow">Renewal price notice</span><h2>${escapeHtml(renewalChange.target?.package?.name || subscription?.package_code || "Package")} ${escapeHtml(renewalInterval)} price update</h2><p>Your current billing period keeps its existing price. The revised tax-exclusive base price applies from ${escapeHtml(formatProfileDate(renewalChange.effective_at))} only after the required payment authorization.</p><dl><div><dt>Current base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.from), renewalChange.from?.currency || "INR"))}</dd></div><div><dt>New base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.target), renewalChange.target?.currency || "INR"))} + GST</dd></div></dl></div>${["pending_consent", "failed"].includes(renewalChange.status) && canManage ? `<div class="wp-billing-price-consent"><button class="wp-secondary" type="button" data-renewal-price-decision="reject" data-price-change-id="${escapeHtml(renewalChange.id)}">End at current period</button><button class="wp-primary" type="button" data-renewal-price-decision="accept" data-price-change-id="${escapeHtml(renewalChange.id)}">Accept &amp; authorize renewal</button></div>` : renewalChange.status === "accepted" && renewalChange.authorizationUrl ? `<div class="wp-billing-price-consent"><strong>Consent recorded</strong><small>Complete the replacement mandate before the renewal date.</small><a class="wp-primary wp-button-link" href="${escapeHtml(renewalChange.authorizationUrl)}" target="_blank" rel="noopener noreferrer">Continue Razorpay authorization</a></div>` : `<div class="wp-billing-price-consent"><strong>${renewalChange.status === "accepted" ? "Consent recorded" : renewalChange.status === "failed" ? "Authorization needs attention" : "Renewal update processing"}</strong><small>No revised charge occurs until Razorpay authorization is completed.</small></div>`}</section>` : "";
-  const managedSubscription = Boolean(subscription && ["authenticated", "active"].includes(String(subscription.status)));
+  const companyTrialEligible = workspaceBilling?.trialEligibility?.eligible === true;
+  const renewalNotice = renewalChange ? `<section class="wp-billing-price-change ${escapeHtml(renewalChange.status)}"><div><span class="wp-card-eyebrow">Renewal price notice</span><h2>${escapeHtml(renewalChange.target?.package?.name || subscription?.package_code || "Package")} ${escapeHtml(renewalInterval)} price update</h2><p>Your current billing period keeps its existing price. The revised tax-exclusive base price applies from ${escapeHtml(formatProfileDate(renewalChange.effective_at))} only after the required payment authorization.</p><dl><div><dt>Current base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.from), renewalChange.from?.currency || "INR"))}</dd></div><div><dt>New base price</dt><dd>${escapeHtml(billingMoney(renewalAmount(renewalChange.target), renewalChange.target?.currency || "INR"))} + GST</dd></div></dl></div>${["pending_consent", "failed"].includes(renewalChange.status) && canManage ? `<div class="wp-billing-price-consent"><button class="wp-secondary" type="button" data-renewal-price-decision="reject" data-price-change-id="${escapeHtml(renewalChange.id)}">End at current period</button><button class="wp-primary" type="button" data-renewal-price-decision="accept" data-price-change-id="${escapeHtml(renewalChange.id)}">Accept &amp; authorize renewal</button></div>` : renewalChange.status === "accepted" && renewalChange.authorizationUrl ? `<div class="wp-billing-price-consent"><strong>Consent recorded</strong><small>Complete the replacement mandate before the renewal date.</small><a class="wp-primary wp-button-link" href="${escapeHtml(renewalChange.authorizationUrl)}" target="_blank" rel="noopener noreferrer">Continue authorization</a></div>` : `<div class="wp-billing-price-consent"><strong>${renewalChange.status === "accepted" ? "Consent recorded" : renewalChange.status === "failed" ? "Authorization needs attention" : "Renewal update processing"}</strong><small>No revised charge occurs until payment authorization is completed.</small></div>`}</section>` : "";
   const packageCards = (workspaceBilling?.packages || []).map((plan) => {
     const selfService = plan.billing_model === "subscription";
-    const active = plan.code === pkg.code;
+    const planTrialDays = companyTrialEligible ? Number(plan.trial_days || 0) : 0;
+    const active = Boolean(subscription && !["cancelled", "completed", "expired"].includes(subscription.status) && plan.code === subscription.package_code);
     const locked = Boolean(subscription && !["cancelled", "completed", "expired"].includes(subscription.status) && subscription.package_code !== plan.code);
     const upgrade = Boolean(managedSubscription && locked && Number(plan.sort_order || 0) > Number(pkg.sort_order || 0));
-    return `<article class="wp-billing-plan ${active ? "is-current" : ""}" data-billing-plan="${escapeHtml(plan.code)}"><header><div><span class="wp-card-eyebrow">${active ? "Current package" : selfService ? "Self-service package" : "Tailored package"}</span><h3>${escapeHtml(plan.name)}</h3></div>${active ? '<span class="wp-billing-current">Current</span>' : ""}</header><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${selfService ? billingMoney(plan.monthly_amount, plan.currency) : "Custom"}</strong><span>${selfService ? "/ month + GST extra" : "quote"}</span></div>${selfService ? `<small>Additional gateway fee added at checkout</small><label><span>Billing interval</span><select data-billing-interval><option value="month">Monthly · ${escapeHtml(billingMoney(plan.monthly_amount, plan.currency))} + GST</option><option value="year">Annual · ${escapeHtml(billingMoney(plan.annual_amount, plan.currency))} + GST</option></select></label>${Number(plan.trial_days || 0) ? `<small>${Number(plan.trial_days)}-day free trial. The package charge starts after the trial; Razorpay may authorize the payment method today.</small>` : ""}${active && managedSubscription ? '<span class="wp-billing-current-action">Current plan active</span>' : `<button class="wp-primary" type="button" data-billing-subscribe="${escapeHtml(plan.code)}" ${!canManage || !workspaceBilling?.configured || (locked && !upgrade) ? "disabled" : ""}>${!canManage ? "Owner or admin required" : !workspaceBilling?.configured ? "Payment setup pending" : upgrade ? `Upgrade to ${escapeHtml(plan.name)}` : locked ? "Current plan active" : `Choose ${escapeHtml(plan.name)}`}</button>`}` : `<a class="wp-secondary wp-button-link" href="/contact.html?subject=${encodeURIComponent(`Enterprise billing: ${plan.name}`)}">Contact sales</a>`}</article>`;
+    return `<article class="wp-billing-plan ${active ? "is-current" : ""}" data-billing-plan="${escapeHtml(plan.code)}"><header><div><span class="wp-card-eyebrow">${active ? "Current package" : selfService ? "Self-service package" : "Tailored package"}</span><h3>${escapeHtml(plan.name)}</h3></div>${active ? '<span class="wp-billing-current">Current</span>' : ""}</header><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${selfService ? billingMoney(plan.monthly_amount, plan.currency) : "Custom"}</strong><span>${selfService ? "/ month + GST extra" : "quote"}</span></div>${selfService ? `<small>Additional gateway fee added at checkout</small><label><span>Billing interval</span><select data-billing-interval><option value="month">Monthly · ${escapeHtml(billingMoney(plan.monthly_amount, plan.currency))} + GST</option><option value="year">Annual · ${escapeHtml(billingMoney(plan.annual_amount, plan.currency))} + GST</option></select></label>${planTrialDays ? `<small>${planTrialDays}-day free trial starts after payment authorization. The first charge occurs after the trial. You can cancel at any time.</small>` : ""}${active && managedSubscription ? '<span class="wp-billing-current-action">Current plan active</span>' : `<button class="wp-primary" type="button" data-billing-subscribe="${escapeHtml(plan.code)}" ${!canManage || !workspaceBilling?.configured || (locked && !upgrade) ? "disabled" : ""}>${!canManage ? "Owner or admin required" : !workspaceBilling?.configured ? "Payment setup pending" : upgrade ? `Upgrade to ${escapeHtml(plan.name)}` : locked ? "Current plan active" : `Choose ${escapeHtml(plan.name)}`}</button>`}` : `<a class="wp-secondary wp-button-link" href="/contact.html?subject=${encodeURIComponent(`Enterprise billing: ${plan.name}`)}">Contact sales</a>`}</article>`;
   }).join("");
   const payments = (workspaceBilling?.payments || []).map((payment) => `<tr><td><strong>${escapeHtml(String(payment.provider_payment_id || "Payment"))}</strong><small>${escapeHtml(formatProfileDate(payment.paid_at || payment.created_at))}</small></td><td>${escapeHtml(payment.payment_method || "—")}</td><td><span class="wp-billing-payment-status ${escapeHtml(payment.status)}">${escapeHtml(payment.status)}</span></td><td>${escapeHtml(billingMoney(Number(payment.amount_paise || 0) / 100, payment.currency))}</td></tr>`).join("");
-  const invoices = (workspaceBilling?.invoices || []).map((invoice) => `<tr><td><strong>${escapeHtml(invoice.invoice_number)}</strong><small>${escapeHtml(formatProfileDate(invoice.invoice_date))}${invoice.document_environment === "test" ? " · Test document" : ""}</small></td><td><span class="wp-billing-payment-status ${escapeHtml(invoice.status)}">${escapeHtml(invoice.status)}</span></td><td><small>Razorpay invoice</small>${escapeHtml(invoice.provider_invoice_id)}<small>Transaction</small>${escapeHtml(invoice.provider_payment_id)}</td><td>${escapeHtml(billingMoney(Number(invoice.total_paise || 0) / 100, invoice.currency))}</td><td><button class="wp-secondary" type="button" data-billing-document="invoice:${escapeHtml(invoice.id)}">View PDF</button></td></tr>`).join("");
-  const creditNotes = (workspaceBilling?.creditNotes || []).map((note) => `<tr><td><strong>${escapeHtml(note.credit_note_number)}</strong><small>${escapeHtml(formatProfileDate(note.credit_note_date))}${note.document_environment === "test" ? " · Test document" : ""}</small></td><td>${escapeHtml(note.reason || "Razorpay refund")}</td><td>${escapeHtml(note.provider_refund_id)}</td><td>${escapeHtml(billingMoney(Number(note.total_paise || 0) / 100, note.currency))}</td><td><button class="wp-secondary" type="button" data-billing-document="credit_note:${escapeHtml(note.id)}">View PDF</button></td></tr>`).join("");
-  const setupNotice = workspaceBilling?.configured ? "" : `<div class="wp-verification-notice"><strong>Razorpay setup is waiting for API keys</strong><p>Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in Supabase Edge Function Secrets. Checkout buttons will become available automatically.</p></div>`;
-  const billingNav = `<nav class="wp-billing-section-nav" aria-label="Billing pages">
-    <a class="${view === "billing" ? "active" : ""}" href="${workspacePath("billing")}"><span>${WORKSPACE_NAV_ICONS.billing}</span><strong>Overview</strong><small>Billing health</small></a>
-    <a class="${view === "billing-plans" ? "active" : ""}" href="${workspacePath("billing-plans")}"><span>${WORKSPACE_NAV_ICONS["billing-plans"]}</span><strong>Plans</strong><small>${escapeHtml(pkg.name)}</small></a>
-    <a class="${view === "billing-addons" ? "active" : ""}" href="${workspacePath("billing-addons")}"><span>${WORKSPACE_NAV_ICONS["billing-addons"]}</span><strong>Add-ons</strong><small>${Number((workspacePackageMaster.addons || []).length)} active</small></a>
-    <a class="${view === "billing-invoices" ? "active" : ""}" href="${workspacePath("billing-invoices")}"><span>${WORKSPACE_NAV_ICONS["billing-invoices"]}</span><strong>Invoices</strong><small>${Number((workspaceBilling.invoices || []).length)} issued</small></a>
-    <a class="${view === "billing-ledger" ? "active" : ""}" href="${workspacePath("billing-ledger")}"><span>${WORKSPACE_NAV_ICONS["billing-ledger"]}</span><strong>Ledger</strong><small>${Number((workspaceBilling.payments || []).length)} payments</small></a>
-    <a class="${view === "billing-refunds" ? "active" : ""}" href="${workspacePath("billing-refunds")}"><span>${WORKSPACE_NAV_ICONS["billing-refunds"]}</span><strong>Refunds</strong><small>${Number((workspaceBilling.creditNotes || []).length)} credit notes</small></a>
-  </nav>`;
-  const notices = `${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}`;
-  const packageDetails = `<section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section>`;
-  const invoicesSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Financial documents</span><h2>Invoices</h2><p>EMS invoice numbers continue the company-wide sequence. Razorpay invoice and transaction references are preserved on every document.</p></div></div>${invoices ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Invoice</th><th>Status</th><th>Gateway references</th><th>Total</th><th></th></tr></thead><tbody>${invoices}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No invoices yet</strong><p>A tax invoice is issued after Razorpay captures a subscription payment.</p></div>'}</section>`;
-  const ledgerSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Payment ledger</span><h2>Recent payments</h2><p>Verified Razorpay payments for this workspace.</p></div></div>${payments ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Payment</th><th>Method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${payments}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No payments yet</strong><p>Completed payments will appear here.</p></div>'}</section>`;
-  const addonsSection = `<section class="wp-card wp-billing-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Capacity extensions</span><h2>Add-ons</h2><p>Assigned add-ons extend the operational package independently of the public catalog.</p></div></div><div class="wp-billing-addon-list">${assigned || '<div class="wp-inbox-empty"><strong>No active add-ons</strong><p>Your package currently has no assigned extensions.</p></div>'}${available}</div></section>`;
-  const refundsSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Refund documents</span><h2>Refunds &amp; credit notes</h2><p>Every verified Razorpay refund is matched to its centralized EMS credit note and original payment reference.</p></div></div>${creditNotes ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Credit note</th><th>Reason</th><th>Refund ID</th><th>Total</th><th></th></tr></thead><tbody>${creditNotes}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No refunds or credit notes</strong><p>Verified refunds and their financial documents will appear here.</p></div>'}</section>`;
-  const page = (content) => `<section class="wp-route-page wp-billing-page">${heading}${notices}${billingNav}${content}</section>`;
-  if (view === "billing") return page(`<section class="wp-billing-overview-metrics"><article><span>Subscription</span><strong>${escapeHtml(statusLabel)}</strong><small>${subscription?.current_end ? `Renews ${escapeHtml(formatProfileDate(subscription.current_end))}` : "No renewal scheduled"}</small></article><article><span>Invoices</span><strong>${Number((workspaceBilling.invoices || []).length)}</strong><small>Issued documents</small></article><article><span>Payments</span><strong>${Number((workspaceBilling.payments || []).length)}</strong><small>Ledger entries</small></article><article><span>Refunds</span><strong>${Number((workspaceBilling.creditNotes || []).length)}</strong><small>Credit notes</small></article></section>${renewalNotice}${subscriptionCard}`);
-  if (view === "billing-plans") return page(`${renewalNotice}${subscriptionCard}<section id="available-plans"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section>${packageDetails}`);
-  if (view === "billing-addons") return page(`${subscriptionCard}${addonsSection}`);
+  const invoices = (workspaceBilling?.invoices || []).map((invoice) => `<tr><td><strong>${escapeHtml(invoice.invoice_number)}</strong><small>${escapeHtml(formatProfileDate(invoice.invoice_date))}${invoice.document_environment === "test" ? " · Test document" : ""}</small></td><td><span class="wp-billing-payment-status ${escapeHtml(invoice.status)}">${escapeHtml(invoice.status)}</span></td><td><small>Gateway invoice</small>${escapeHtml(invoice.provider_invoice_id)}<small>Transaction</small>${escapeHtml(invoice.provider_payment_id)}</td><td>${escapeHtml(billingMoney(Number(invoice.total_paise || 0) / 100, invoice.currency))}</td><td><button class="wp-secondary" type="button" data-billing-document="invoice:${escapeHtml(invoice.id)}">View PDF</button></td></tr>`).join("");
+  const creditNotes = (workspaceBilling?.creditNotes || []).map((note) => `<tr><td><strong>${escapeHtml(note.credit_note_number)}</strong><small>${escapeHtml(formatProfileDate(note.credit_note_date))}${note.document_environment === "test" ? " · Test document" : ""}</small></td><td>${escapeHtml(note.reason || "Payment refund")}</td><td>${escapeHtml(note.provider_refund_id)}</td><td>${escapeHtml(billingMoney(Number(note.total_paise || 0) / 100, note.currency))}</td><td><button class="wp-secondary" type="button" data-billing-document="credit_note:${escapeHtml(note.id)}">View PDF</button></td></tr>`).join("");
+  const setupNotice = workspaceBilling?.configured ? "" : `<div class="wp-verification-notice"><strong>Payment setup is in progress</strong><p>Checkout will become available when configuration is complete.</p></div>`;
+  const checkoutSuccessful = new URLSearchParams(location.search).get("checkout") === "success";
+  const checkoutNotice = checkoutSuccessful ? `<div class="wp-verification-notice success" role="status"><strong>Subscription activated successfully</strong><p>Your payment authorization is confirmed. Your ${escapeHtml(pkg.name)} subscription is active and workspace access has been updated.</p></div>` : "";
+  const trialEligibilityNotice = !subscription && workspaceBilling?.trialEligibility?.eligible === false
+    ? `<div class="wp-verification-notice"><strong>${workspaceBilling.trialEligibility.alreadyUsedByWorkspace ? "Trial completed" : "Not eligible for free trial"}</strong><p>${workspaceBilling.trialEligibility.alreadyUsedByWorkspace ? "Not eligible for another trial. This company has completed its one-time trial, so payment is due immediately after authorization." : "A matching company name, email, GSTIN or registration/CIN has already received the one-time trial. Payment is due immediately after authorization."}</p></div>`
+    : "";
+  const notices = `${checkoutNotice}${trialEligibilityNotice}${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}`;
+  const packageDetails = `<section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${companyTrialEligible && Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section>`;
+  const invoicesSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Financial documents</span><h2>Invoices</h2><p>Invoice numbers follow the company-wide sequence, with gateway and transaction references preserved.</p></div></div>${invoices ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Invoice</th><th>Status</th><th>Gateway references</th><th>Total</th><th></th></tr></thead><tbody>${invoices}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No invoices yet</strong><p>A tax invoice is issued after a subscription payment is confirmed.</p></div>'}</section>`;
+  const ledgerSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Payment ledger</span><h2>Recent payments</h2><p>Verified payments for this workspace.</p></div></div>${payments ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Payment</th><th>Method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${payments}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No payments yet</strong><p>Completed payments will appear here.</p></div>'}</section>`;
+  const addonsSection = `<section class="wp-card wp-billing-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available add-ons</span><h2>Add-ons</h2><p>Add capacity or services to your workspace.</p></div></div><div class="wp-billing-addon-list">${available || '<div class="wp-inbox-empty"><strong>No add-ons available</strong><p>New add-ons will appear here when available.</p></div>'}</div></section>`;
+  const refundsSection = `<section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Refund documents</span><h2>Refunds &amp; credit notes</h2><p>Every verified refund is matched to its credit note and original payment reference.</p></div></div>${creditNotes ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Credit note</th><th>Reason</th><th>Refund ID</th><th>Total</th><th></th></tr></thead><tbody>${creditNotes}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No refunds or credit notes</strong><p>Verified refunds and their financial documents will appear here.</p></div>'}</section>`;
+  const page = (content) => `<section class="wp-route-page wp-billing-page">${heading}${notices}${content}</section>`;
+  if (view === "billing") return page(`<section class="wp-billing-overview-metrics"><article><span>Subscription</span><strong>${escapeHtml(statusLabel)}</strong><small>${trialActive ? escapeHtml(trialCountdown) : subscription?.current_end ? `Renews ${escapeHtml(formatProfileDate(subscription.current_end))}` : "No renewal scheduled"}</small></article><article><span>Invoices</span><strong>${Number((workspaceBilling.invoices || []).length)}</strong><small>Issued documents</small></article><article><span>Payments</span><strong>${Number((workspaceBilling.payments || []).length)}</strong><small>Ledger entries</small></article><article><span>Refunds</span><strong>${Number((workspaceBilling.creditNotes || []).length)}</strong><small>Credit notes</small></article></section><div class="wp-billing-overview-details">${overviewPlanDetails}${overviewAddons}</div>${renewalNotice}`);
+  if (view === "billing-plans") return page(`${renewalNotice}${subscriptionCard}<section id="available-plans"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price. Add-ons selected at checkout are included in the plan total.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section>${packageDetails}`);
+  if (view === "billing-addons") return page(`${addonSubscriptionsSection}${addonsSection}`);
   if (view === "billing-invoices") return page(invoicesSection);
   if (view === "billing-ledger") return page(ledgerSection);
   if (view === "billing-refunds") return page(refundsSection);
-  return `<section class="wp-route-page wp-billing-page">${heading}${billingError ? `<div class="wp-verification-notice"><strong>Billing notice</strong><p>${escapeHtml(billingError)}</p></div>` : ""}${setupNotice}${renewalNotice}${subscriptionCard}<section><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section><section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Current operational package</span><h2>${escapeHtml(pkg.name)}</h2><p>${escapeHtml(pkg.description || "")}</p><div class="wp-billing-pills"><span>${escapeHtml(model)}</span><span>${escapeHtml(pkg.status)}</span>${Number(pkg.trial_days || 0) ? `<span>${Number(pkg.trial_days)}-day trial</span>` : ""}</div></div><div class="wp-billing-price"><strong>${pkg.billing_model === "contact_sales" ? "Custom" : billingMoney(pkg.monthly_amount, pkg.currency)}</strong><span>${pkg.billing_model === "subscription" ? "/ month" : ""}</span>${Number(pkg.annual_amount || 0) ? `<small>${billingMoney(pkg.annual_amount, pkg.currency)} annually</small>` : ""}</div></section><section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Package allowances</span><h2>Operational limits</h2><div class="wp-billing-limits">${limits.map(([label,value]) => `<div><span>${escapeHtml(label)}</span><strong>${value == null ? "Unlimited" : typeof value === "number" ? Number(value).toLocaleString("en-IN") : escapeHtml(value)}</strong></div>`).join("")}</div></article><article class="wp-card"><span class="wp-card-eyebrow">Access controls</span><h2>Included capabilities</h2><ul class="wp-billing-features">${features}</ul></article></section><section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Financial documents</span><h2>Invoices</h2><p>EMS invoice numbers continue the company-wide sequence. Razorpay invoice and transaction references are preserved on every document.</p></div></div>${invoices ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Invoice</th><th>Status</th><th>Gateway references</th><th>Total</th><th></th></tr></thead><tbody>${invoices}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No invoices yet</strong><p>A tax invoice is issued after Razorpay captures a subscription payment.</p></div>'}${creditNotes ? `<div class="wp-card-heading wp-billing-subheading"><div><span class="wp-card-eyebrow">Refund documents</span><h2>Credit notes</h2></div></div><div class="wp-billing-table-wrap"><table><thead><tr><th>Credit note</th><th>Reason</th><th>Refund ID</th><th>Total</th><th></th></tr></thead><tbody>${creditNotes}</tbody></table></div>` : ""}</section><section class="wp-card wp-billing-history"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Payment ledger</span><h2>Recent payments</h2><p>Verified Razorpay payments for this workspace.</p></div></div>${payments ? `<div class="wp-billing-table-wrap"><table><thead><tr><th>Payment</th><th>Method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${payments}</tbody></table></div>` : '<div class="wp-inbox-empty"><strong>No payments yet</strong><p>Completed payments will appear here.</p></div>'}</section><section class="wp-card wp-billing-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Capacity extensions</span><h2>Add-ons</h2><p>Assigned add-ons extend the operational package independently of the public catalog.</p></div></div><div class="wp-billing-addon-list">${assigned || '<div class="wp-inbox-empty"><strong>No active add-ons</strong><p>Your package currently has no assigned extensions.</p></div>'}${available}</div></section></section>`;
+  return page(`${renewalNotice}<section><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Available subscriptions</span><h2>Choose the right package</h2><p>Annual billing includes the discounted Package Master price.</p></div></div><div class="wp-billing-plans">${packageCards}</div></section>${packageDetails}${invoicesSection}${ledgerSection}${available ? addonsSection : ""}`);
 }
 
 function checkoutView() {
@@ -2166,16 +2968,27 @@ function checkoutView() {
   const plan = (workspaceBilling?.packages || []).find((item) => item.code === packageCode && item.status === "active");
   if (!plan) return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Secure checkout</span><h1>Package unavailable</h1><p>Select an active self-service package from Billing &amp; usage.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div></section>`;
   const quote = workspaceCheckout?.quote?.packageCode === packageCode && workspaceCheckout?.quote?.billingInterval === interval ? workspaceCheckout.quote : null;
+  const checkoutTrialEligible = (workspaceCheckout?.trialEligibility || workspaceBilling?.trialEligibility)?.eligible === true;
+  const checkoutTrialDays = checkoutTrialEligible
+    ? quote && workspaceCheckout?.package ? Number(workspaceCheckout.package.trialDays || 0) : Number(plan.trial_days || 0)
+    : 0;
   const money = (paise) => billingMoney(Number(paise || 0) / 100, quote?.currency || plan.currency || "INR");
   const baseAmount = interval === "year" ? plan.annual_amount : plan.monthly_amount;
-  const assignedCodes = new Set((workspacePackageMaster.addons || []).map((addon) => addon.code));
-  const selectedAddonMap = new Map((quote?.addons || []).map((addon) => [addon.code, Number(addon.quantity || 1)]));
-  const eligibleAddons = (workspacePackageMaster.availableAddons || []).filter((addon) => addon.status === "active" && addon.is_self_service && addon.billing_model === "recurring" && addon.billing_interval === interval && !assignedCodes.has(addon.code) && (!Array.isArray(addon.eligible_plan_codes) || !addon.eligible_plan_codes.length || addon.eligible_plan_codes.includes(plan.code)));
-  const addonPicker = eligibleAddons.length ? `<fieldset class="wp-checkout-addons"><legend>Optional recurring add-ons</legend><p>Selected add-ons use their current tax-exclusive Package Master price and activate only after authorization.</p>${eligibleAddons.map((addon) => `<label><input type="checkbox" data-checkout-addon="${escapeHtml(addon.code)}" ${selectedAddonMap.has(addon.code) ? "checked" : ""}/><span><strong>${escapeHtml(addon.name)}</strong><small>${escapeHtml(addon.description || "")}</small><em>${escapeHtml(billingMoney(addon.unit_amount, addon.currency))} / ${escapeHtml(addon.unit_name)} / ${escapeHtml(interval)} + GST</em></span>${addon.quantity_enabled === false ? "" : `<input type="number" data-checkout-addon-quantity="${escapeHtml(addon.code)}" min="${Number(addon.minimum_quantity || 1)}" ${addon.maximum_quantity == null ? "" : `max="${Number(addon.maximum_quantity)}"`} step="${Number(addon.quantity_step || 1)}" value="${selectedAddonMap.get(addon.code) || Number(addon.minimum_quantity || 1)}" aria-label="${escapeHtml(addon.name)} quantity"/>`}</label>`).join("")}</fieldset>` : "";
   const quoteAddonLines = (quote?.addons || []).map((addon) => `<div><dt>${escapeHtml(addon.name)}${addon.quantityEnabled === false ? "" : ` × ${Number(addon.quantity)}`}</dt><dd>${money(addon.baseSubtotalPaise)}</dd></div>`).join("");
   const packageQuotedBase = Math.max(0, Number(quote?.baseSubtotalPaise || 0) - (quote?.addons || []).reduce((total, addon) => total + Number(addon.baseSubtotalPaise || 0), 0));
-  const quotePanel = quote ? `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Server-verified quote</span><h2>Amount summary</h2><dl class="wp-upgrade-quote"><div><dt>Package base price</dt><dd>${money(packageQuotedBase)}</dd></div>${quoteAddonLines}${quote.discountPaise ? `<div class="is-credit"><dt>Coupon ${escapeHtml(quote.couponCode || "discount")}</dt><dd>−${money(quote.discountPaise)}</dd></div>` : ""}<div><dt>Taxable base</dt><dd>${money(quote.taxableBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.packageGstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>${Number(plan.trial_days || 0) ? "Recurring amount after trial" : "Recurring payment"}</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div></dl><div class="wp-policy-note"><strong>Quote protected until ${escapeHtml(new Date(quote.expiresAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }))}</strong><p>The payment request uses this exact server-calculated amount. Changing the package price or letting the quote expire requires a new review.</p></div><button class="wp-primary" type="button" data-checkout-authorize="${escapeHtml(quote.id)}">Authorize securely with Razorpay</button></article>` : `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Amount summary</span><h2>Review required</h2><p>Select optional add-ons, apply a coupon if eligible, and request a protected quote to see GST, the gateway adjustment, and the exact recurring amount.</p></article>`;
-  return `<section class="wp-route-page wp-checkout-page"><div class="wp-route-heading"><div><span class="wp-kicker">Dedicated subscription checkout</span><h1>Review and authorize</h1><p>Prices are loaded from the authoritative Package Master. No browser-entered amount is accepted.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div>${workspaceCheckout?.error ? `<div class="wp-verification-notice"><strong>Checkout notice</strong><p>${escapeHtml(workspaceCheckout.error)}</p></div>` : ""}<section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Selected package</span><h2>${escapeHtml(plan.name)}</h2><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${escapeHtml(billingMoney(baseAmount, plan.currency))}</strong><span>/ ${interval === "year" ? "year" : "month"} + GST</span></div>${Number(plan.trial_days || 0) ? `<div class="wp-policy-note"><strong>${Number(plan.trial_days)}-day free trial</strong><p>Authorization is collected now. The recurring package and selected add-on charge starts only after the trial ends.</p></div>` : ""}<form data-checkout-quote-form><input type="hidden" name="packageCode" value="${escapeHtml(plan.code)}"/><input type="hidden" name="billingInterval" value="${escapeHtml(interval)}"/>${addonPicker}<label><span>Coupon code <small>optional</small></span><input name="couponCode" maxlength="40" autocomplete="off" value="${escapeHtml(quote?.couponCode || "")}" placeholder="Enter coupon code"/></label><button class="wp-secondary" type="submit">${quote ? "Recalculate total" : "Calculate final total"}</button></form><small>Coupon eligibility, dates and redemption limits are validated by the billing server. Coupons discount the package base price; add-ons remain at their Package Master price.</small></article>${quotePanel}</section></section>`;
+  const selectedCheckoutAddons = new Map((quote?.addons || []).map((addon) => [addon.code, Number(addon.quantity || 1)]));
+  const checkoutAddons = (workspaceBilling?.checkoutAddons || []).filter((addon) => (addon.billing_interval === interval || (interval === "year" && addon.billing_interval === "month")) && (!Array.isArray(addon.eligible_plan_codes) || !addon.eligible_plan_codes.length || addon.eligible_plan_codes.includes(plan.code)));
+  const checkoutAddonFields = checkoutAddons.length ? `<fieldset class="wp-checkout-addons"><legend>Add-ons</legend><p>Selected add-ons are included in the plan total.</p>${checkoutAddons.map((addon) => {
+    const selectedQuantity = selectedCheckoutAddons.get(addon.code);
+    const checked = selectedQuantity != null;
+    const quantityEnabled = addon.quantity_enabled !== false;
+    const minimum = Math.max(1, Number(addon.minimum_quantity || 1));
+    const quantity = checked ? selectedQuantity : minimum;
+    const checkoutUnitAmount = Number(addon.unit_amount || 0) * (interval === "year" && addon.billing_interval === "month" ? 12 : 1);
+    return `<label><input type="checkbox" name="checkoutAddon" value="${escapeHtml(addon.code)}" data-checkout-addon ${checked ? "checked" : ""}/><span><strong>${escapeHtml(addon.name)}</strong><small>${escapeHtml(addon.description || "Recurring capacity add-on")}</small><em>${escapeHtml(billingMoney(checkoutUnitAmount, addon.currency))} / ${escapeHtml(interval)} + GST${interval === "year" && addon.billing_interval === "month" ? " · annualized from monthly price" : ""}</em></span>${quantityEnabled ? `<div class="wp-quantity-stepper" data-quantity-stepper><button type="button" data-quantity-step="-1" aria-label="Decrease ${escapeHtml(addon.name)} quantity" ${checked ? "" : "disabled"}>−</button><input type="number" value="${Number(quantity)}" min="${minimum}" ${addon.maximum_quantity == null ? "" : `max="${Number(addon.maximum_quantity)}"`} step="${Math.max(1, Number(addon.quantity_step || 1))}" data-checkout-addon-quantity="${escapeHtml(addon.code)}" aria-label="${escapeHtml(addon.name)} quantity" readonly ${checked ? "" : "disabled"}/><button type="button" data-quantity-step="1" aria-label="Increase ${escapeHtml(addon.name)} quantity" ${checked ? "" : "disabled"}>+</button></div>` : ""}</label>`;
+  }).join("")}</fieldset>` : "";
+  const quotePanel = quote ? `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Verified quote</span><h2>Amount summary</h2><dl class="wp-upgrade-quote"><div><dt>Package base price</dt><dd>${money(packageQuotedBase)}</dd></div>${quoteAddonLines}${quote.discountPaise ? `<div class="is-credit"><dt>Coupon ${escapeHtml(quote.couponCode || "discount")}</dt><dd>−${money(quote.discountPaise)}</dd></div>` : ""}<div><dt>Taxable base</dt><dd>${money(quote.taxableBasePaise)}</dd></div><div><dt>GST (18%)</dt><dd>${money(quote.packageGstPaise)}</dd></div><div><dt>Additional gateway adjustment</dt><dd>${money(quote.gatewayAdjustmentPaise)}</dd></div><div class="is-total"><dt>${checkoutTrialDays ? "Recurring amount after trial" : "Payment due immediately"}</dt><dd>${money(quote.checkoutAmountPaise)}</dd></div></dl><div class="wp-policy-note"><strong>${checkoutTrialDays ? `Quote protected until ${escapeHtml(new Date(quote.expiresAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }))}` : "Not eligible for free trial"}</strong><p>${checkoutTrialDays ? `This company is eligible for one ${checkoutTrialDays}-day trial. The first charge starts after the trial.` : "A matching company identity has already received the one-time trial. Payment starts immediately after authorization."}</p></div><button class="wp-primary" type="button" data-checkout-authorize="${escapeHtml(quote.id)}">Authorize securely</button></article>` : `<article class="wp-card wp-checkout-total"><span class="wp-card-eyebrow">Amount summary</span><h2>Review required</h2><p>Apply a coupon if eligible and calculate the final total.</p></article>`;
+  return `<section class="wp-route-page wp-checkout-page"><div class="wp-route-heading"><div><span class="wp-kicker">Subscription checkout</span><h1>Review and authorize</h1><p>Confirm your plan, add-ons and final total.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing")}">← Back to billing</a></div>${workspaceCheckout?.error ? `<div class="wp-verification-notice"><strong>Checkout notice</strong><p>${escapeHtml(workspaceCheckout.error)}</p></div>` : ""}<section class="wp-billing-grid"><article class="wp-card"><span class="wp-card-eyebrow">Selected plan</span><h2>${escapeHtml(plan.name)}</h2><p>${escapeHtml(plan.description || "")}</p><div class="wp-billing-plan-price"><strong>${escapeHtml(billingMoney(baseAmount, plan.currency))}</strong><span>/ ${interval === "year" ? "year" : "month"} + GST</span></div>${Number(plan.trial_days || 0) ? checkoutTrialDays ? `<div class="wp-policy-note"><strong>${checkoutTrialDays}-day free trial</strong><p>Set up payment now. Your first plan charge starts after the trial.</p></div>` : '<div class="wp-policy-note"><strong>Not eligible for free trial</strong><p>A matching company name, email, GSTIN or registration/CIN has already received the one-time trial. Payment is due immediately.</p></div>' : ""}<form data-checkout-quote-form><input type="hidden" name="packageCode" value="${escapeHtml(plan.code)}"/><input type="hidden" name="billingInterval" value="${escapeHtml(interval)}"/><div class="wp-checkout-interval"><span class="wp-checkout-interval-label">Billing interval</span><div class="wp-checkout-interval-toggle" role="group" aria-label="Billing interval"><button type="button" data-checkout-interval="month" class="${interval === "month" ? "is-active" : ""}" aria-pressed="${String(interval === "month")}"><span>Monthly</span><small>${escapeHtml(billingMoney(plan.monthly_amount, plan.currency))} + GST</small></button><button type="button" data-checkout-interval="year" class="${interval === "year" ? "is-active" : ""}" aria-pressed="${String(interval === "year")}"><span>Annual</span><small>${escapeHtml(billingMoney(plan.annual_amount, plan.currency))} + GST</small></button></div></div>${checkoutAddonFields}<label><span>Coupon code <small>optional</small></span><input name="couponCode" maxlength="40" autocomplete="off" value="${escapeHtml(quote?.couponCode || "")}" placeholder="Enter coupon code"/></label><button class="wp-secondary" type="submit">${quote ? "Recalculate total" : "Calculate final total"}</button></form><small>Coupons apply to the Package Master base price and selected add-ons enabled for that coupon. Prices and eligibility are verified securely.</small></article>${quotePanel}</section></section>`;
 }
 
 function billingAccessRequiredView() {
@@ -2237,16 +3050,33 @@ function verificationAttentionModal() {
   return `<section class="wp-verification-attention" data-verification-attention role="dialog" aria-modal="true" aria-labelledby="wpVerificationAttentionTitle"><div class="wp-verification-attention-card"><header><div><span class="wp-kicker">Action required</span><h2 id="wpVerificationAttentionTitle">Verification documents need your attention</h2><p>Resolve every request below to continue the business verification review.</p></div><button type="button" data-verification-attention-close aria-label="Close notification">×</button></header><div class="wp-attention-documents">${requestRows}${rejectedRows}</div><footer><small>This notice will appear again on your next sign-in until replacement evidence is submitted.</small><a class="wp-secondary wp-button-link" href="${workspacePath("verification")}">Open verification centre</a></footer></div></section>`;
 }
 
-async function renderDashboard() {
+async function renderDashboard({ refresh = true, preserveScroll = false, navigationSequence = workspaceNavigationSequence } = {}) {
+  if (businessNumberRefreshTimer) {
+    window.clearTimeout(businessNumberRefreshTimer);
+    businessNumberRefreshTimer = null;
+  }
+  const renderLocation = workspaceLocationKey();
+  const previousScrollTop = preserveScroll ? window.scrollY : 0;
   const view = currentWorkspaceView();
   const agentWorkspace = isAgentWorkspaceRole();
-  let connections = [];
-  if (!agentWorkspace) {
-    try {
-      metaOnboardingStatus = await onboardingRequest("status");
-      if (Array.isArray(metaOnboardingStatus.connections)) connections = metaOnboardingStatus.connections;
-    } catch {
-      metaOnboardingStatus = {
+  if (refresh) await refreshWorkspaceNotifications();
+  let connections = workspaceConnections;
+  if (!agentWorkspace && refresh) {
+    const billingAction = isBillingWorkspaceView(view) || ["owner", "admin"].includes(session.roleCode) ? "summary" : "entitlement";
+    const [onboardingResult, profileResult, deletionResult, verificationResult, packageResult, billingResult, messagingPreferencesResult] = await Promise.allSettled([
+      onboardingRequest("status"),
+      storageRequest("profile"),
+      storageRequest("account_deletion_status"),
+      storageRequest("verification_status"),
+      messagingRequest("package_master"),
+      billingRequest(billingAction),
+      view === "settings" ? messagingRequest("workspace_messaging_preferences") : Promise.resolve(workspaceMessagingPreferences),
+    ]);
+    if (onboardingResult.status === "fulfilled") {
+      metaOnboardingStatus = onboardingResult.value;
+      if (Array.isArray(metaOnboardingStatus.connections)) workspaceConnections = metaOnboardingStatus.connections;
+    } else {
+      metaOnboardingStatus = metaOnboardingStatus || {
         configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
         publicAppId: runtime.metaAppId || null,
         publicConfigurationId: runtime.embeddedSignupConfigId || null,
@@ -2254,48 +3084,58 @@ async function renderDashboard() {
         environment: "testing",
       };
     }
-    try {
-      const storage = await storageRequest("profile");
-      workspaceProfile = storage?.profile || workspaceProfile;
-    } catch {
-      workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
-    }
-    try {
-      const result = await storageRequest("verification_status");
-      workspaceVerification = result?.verification || workspaceVerification;
-    } catch {
-      workspaceVerification = workspaceVerification || { status: "not_started", entityType: workspaceProfile?.businessType || "other", requirements: [], documents: [], canEdit: true };
-    }
-    try {
-      const result = await messagingRequest("package_master");
+    connections = workspaceConnections;
+    if (profileResult.status === "fulfilled") workspaceProfile = profileResult.value?.profile || workspaceProfile;
+    else workspaceProfile = workspaceProfile || { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+    workspaceDeletion = deletionResult.status === "fulfilled" ? (deletionResult.value?.deletion || { pending: false }) : (workspaceDeletion || { pending: false });
+    if (verificationResult.status === "fulfilled") workspaceVerification = verificationResult.value?.verification || workspaceVerification;
+    else workspaceVerification = workspaceVerification || { status: "not_started", entityType: workspaceProfile?.businessType || "other", requirements: [], documents: [], canEdit: true };
+    if (packageResult.status === "fulfilled") {
+      const result = packageResult.value;
       workspacePackageMaster = { package: result?.package || null, addons: result?.addons || [], availableAddons: result?.availableAddons || [], error: "" };
-    } catch (error) {
-      workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: error?.message || "Package Master could not be loaded." };
-    }
-    if (isBillingWorkspaceView(view) || ["owner", "admin"].includes(session.roleCode)) {
-      try { workspaceBilling = { ...(await billingRequest("summary")), error: "" }; }
-      catch (error) { workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: error?.message || "Billing could not be loaded." }; }
     } else {
-      try { workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, ...(await billingRequest("entitlement")), error: "" }; }
-      catch (error) { workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: error?.message || "Billing access could not be verified." }; }
+      workspacePackageMaster = { ...workspacePackageMaster, error: packageResult.reason?.message || "Package Master could not be loaded." };
+    }
+    if (billingResult.status === "fulfilled") {
+      workspaceBilling = billingAction === "summary"
+        ? { ...billingResult.value, error: "" }
+        : { ...workspaceBilling, ...billingResult.value, error: "" };
+    } else {
+      workspaceBilling = { ...workspaceBilling, error: billingResult.reason?.message || (billingAction === "summary" ? "Billing could not be loaded." : "Billing access could not be verified.") };
+    }
+    if (view === "settings") {
+      workspaceMessagingPreferences = messagingPreferencesResult.status === "fulfilled"
+        ? { ...messagingPreferencesResult.value, error: "" }
+        : { ...workspaceMessagingPreferences, error: messagingPreferencesResult.reason?.message || "Messaging preferences could not be loaded." };
     }
   } else {
-    metaOnboardingStatus = {
+    metaOnboardingStatus = metaOnboardingStatus || {
       configured: Boolean(runtime.metaAppId && runtime.embeddedSignupConfigId),
       publicAppId: runtime.metaAppId || null,
       publicConfigurationId: runtime.embeddedSignupConfigId || null,
       publicGraphVersion: runtime.metaGraphVersion || null,
       environment: "testing",
     };
-    workspaceProfile = { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
-    workspaceVerification = null;
-    workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
-    workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
+    if (agentWorkspace) {
+      workspaceConnections = [];
+      connections = [];
+      workspaceProfile = { planCode: "launch", logoDataUrl: "", logoFileName: "", logoUpdatedAt: null };
+      workspaceVerification = null;
+      workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
+      workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
+    }
+  }
+  const checkoutSubscriptionStatus = String(workspaceBilling?.subscription?.status || "").toLowerCase();
+  if (view === "checkout" && ["authenticated", "active"].includes(checkoutSubscriptionStatus)) {
+    const returnUrl = new URL(workspacePath("billing"), location.origin);
+    returnUrl.searchParams.set("checkout", "success");
+    window.history.replaceState(null, "", returnUrl.pathname + returnUrl.search);
+    return renderDashboard({ refresh: false, preserveScroll: false, navigationSequence });
   }
   const connected = connections.filter((row) => ["connected", "pending"].includes(row.status));
   const selectedConnection = resolveSelectedConnection(connections);
   const setupReady = Boolean(metaOnboardingStatus.configured && metaOnboardingStatus.publicAppId && metaOnboardingStatus.publicConfigurationId);
-  if (view === "business-profile") {
+  if (refresh && view === "business-profile") {
     if (workspaceSelectedConnectionId) {
       try {
         const result = await messagingRequest("get_business_profile", { connectionId: workspaceSelectedConnectionId });
@@ -2311,7 +3151,7 @@ async function renderDashboard() {
       workspaceBusinessProfile = { profile: null, connection: null, error: "Connect a WhatsApp business number first." };
     }
   }
-  if (["inbox", "analytics"].includes(view)) {
+  if (refresh && ["inbox", "analytics"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
       const listed = await messagingRequest("list", { status, connectionId: workspaceSelectedConnectionId });
@@ -2325,7 +3165,7 @@ async function renderDashboard() {
       workspaceInbox = { conversations: [], thread: null, error: error?.message || "The Team Inbox could not be loaded." };
     }
   }
-  if (["contacts","campaigns"].includes(view)) {
+  if (refresh && ["contacts","campaigns"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
       const listed = await messagingRequest("list_contacts", { status, connectionId: workspaceSelectedConnectionId });
@@ -2334,7 +3174,7 @@ async function renderDashboard() {
       workspaceContacts = { contacts: [], error: error?.message || "The contact directory could not be loaded." };
     }
   }
-  if (["templates","inbox","campaigns","analytics"].includes(view)) {
+  if (refresh && ["templates","inbox","campaigns","analytics"].includes(view)) {
     const templateConnections = connected.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId));
     const connectionId = templateConnections.some((connection) => connection.id === workspaceSelectedConnectionId) ? workspaceSelectedConnectionId : "";
     if (connectionId) {
@@ -2360,7 +3200,7 @@ async function renderDashboard() {
       workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
     }
   }
-  if (view === "flows") {
+  if (refresh && view === "flows") {
     try {
       const result = workspaceSelectedConnectionId ? await messagingRequest("list_flows", { connectionId: workspaceSelectedConnectionId }) : { flows: [] };
       workspaceFlows = { flows: result?.flows || [], error: "" };
@@ -2368,7 +3208,7 @@ async function renderDashboard() {
       workspaceFlows = { flows: [], error: error?.message || "Flows could not be loaded." };
     }
   }
-  if (view === "campaigns") {
+  if (refresh && view === "campaigns") {
     try {
       if (!workspaceSelectedConnectionId) {
         workspaceCampaigns = { drafts: [], segments: [], error: "Connect a WhatsApp business number first." };
@@ -2383,7 +3223,7 @@ async function renderDashboard() {
       workspaceCampaigns = { drafts: [], segments: [], error: error?.message || "Campaign workspace could not be loaded." };
     }
   }
-  if (view === "team") {
+  if (refresh && view === "team") {
     try {
       const result = await messagingRequest("list_team");
       workspaceTeam = { members: result?.members || [], currentUserId: result?.currentUserId || "", currentRole: result?.currentRole || session.roleCode || "", capacity: result?.capacity || {}, error: "" };
@@ -2391,6 +3231,7 @@ async function renderDashboard() {
       workspaceTeam = { members: [], currentUserId: "", currentRole: session.roleCode || "", error: error?.message || "The member directory could not be loaded." };
     }
   }
+  if (renderLocation !== workspaceLocationKey() || navigationSequence !== workspaceNavigationSequence) return;
   document.body.classList.add("wp-workspace-mode");
   document.title = `${WORKSPACE_VIEW_LABELS[view]} | Varada Nexus WhatsApp Solutions`;
   const sidebarLogo = workspaceProfile?.logoDataUrl
@@ -2410,6 +3251,7 @@ async function renderDashboard() {
   // and inspect billing recovery/history without gaining product access.
   const billingLocked = workspaceBilling?.entitlement?.allowed === false
     && !isBillingWorkspaceView(view)
+    && !isPreBillingWorkspaceView(view)
     && view !== "checkout";
   const featureByView = { inbox: "team_inbox", contacts: "contacts", campaigns: "campaigns", templates: "templates", flows: "flows", analytics: "analytics" };
   const requiredFeature = featureByView[view];
@@ -2421,19 +3263,52 @@ async function renderDashboard() {
     ? `<div class="wp-profile-workspace-card" aria-label="${escapeHtml(session.companyName)} agent workspace"><span class="wp-profile-workspace-logo">${sidebarLogo}</span><span><em>Current workspace</em><strong>${escapeHtml(session.companyName)}</strong><small>Agent workspace</small></span></div>`
     : `<a class="wp-profile-workspace-card" href="${workspacePath("profile")}" role="menuitem" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-profile-workspace-logo">${sidebarLogo}</span><span><em>Business account</em><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)} plan</small></span><span class="wp-profile-workspace-chevron" aria-hidden="true">›</span></a>`;
   const profileMenu = `<div class="wp-profile-control"><button class="wp-profile-trigger" id="wpProfileMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="wpProfileMenu"><span class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></span><span class="wp-user-avatar" aria-hidden="true">${userInitial}</span><span class="wp-profile-chevron" aria-hidden="true">${workspaceIcon('<path d="m7 10 5 5 5-5"/>')}</span></button><div class="wp-profile-menu" id="wpProfileMenu" role="menu" hidden><header><span class="wp-profile-menu-avatar" aria-hidden="true">${userInitial}</span><div><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small><em>${escapeHtml(session.companyName)} · ${escapeHtml(roleLabel)}</em></div></header>${workspaceMenuCard}<nav aria-label="Account menu"><a href="${workspacePath("settings")}" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.37.38.7.66.98.3.27.68.42 1.08.42H21v4h-.1A1.7 1.7 0 0 0 19.4 15Z"/>')}</span><span><strong>Workspace settings</strong><small>Profile and preferences</small></span></a><a href="/contact.html" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.12c-.9.55-1.5 1.05-1.5 2.38M12 17h.01"/>')}</span><span><strong>Help &amp; support</strong><small>Contact the Varada Nexus team</small></span></a></nav><button class="wp-profile-logout" id="wpProfileLogoutBtn" type="button" role="menuitem"><span aria-hidden="true">${workspaceIcon('<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>')}</span><span><strong>Sign out</strong><small>End this secure session</small></span></button></div></div>`;
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header><div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  const deletionBanner = workspaceDeletion?.pending ? `<section class="wp-deletion-pending" role="alert"><div><span>Account deletion pending</span><strong>This workspace is scheduled for deletion on ${escapeHtml(new Date(workspaceDeletion.scheduledFor).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }))}.</strong><small>An owner or administrator can reverse this request during the 24-hour protection window.</small></div>${workspaceDeletion.canReverse ? `<button type="button" data-reverse-account-deletion>Keep this account</button>` : ""}</section>` : "";
+  const existingShell = app.querySelector(".wp-workspace-shell");
+  const preserveSidebar = Boolean(existingShell)
+    && !isFlowBuilderRoute
+    && !existingShell.classList.contains("wp-flow-builder-workspace")
+    && (preserveScroll || !refresh);
+  const persistentSidebar = preserveSidebar ? existingShell.querySelector(".wp-workspace-sidebar") : null;
+  const sidebarWasCollapsed = Boolean(existingShell?.classList.contains("sidebar-collapsed"));
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions">${notificationCentreMarkup()}<button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  bindOnboardingWalkthrough(app);
+  bindNotificationCentre(app);
+  scheduleNotificationRefresh();
+  const nextShell = app.querySelector(".wp-workspace-shell");
+  if (persistentSidebar) {
+    nextShell?.querySelector(".wp-workspace-sidebar")?.replaceWith(persistentSidebar);
+    nextShell?.classList.toggle("sidebar-collapsed", sidebarWasCollapsed);
+    persistentSidebar.querySelectorAll(".wp-workspace-nav a[href]").forEach((link) => {
+      const linkUrl = new URL(link.href, location.href);
+      const active = linkUrl.pathname === location.pathname;
+      link.classList.toggle("active", active);
+      if (active) link.setAttribute("aria-current", "page");
+      else link.removeAttribute("aria-current");
+    });
+  }
+  bindQuantitySteppers(app);
   if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
   const workspaceSidebarState = readWorkspaceSidebarState();
-  enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
-  app.querySelector("#wpBusinessNumberSelector")?.addEventListener("change", async (event) => {
-    selectWorkspaceConnection(event.currentTarget.value);
-    const url = new URL(location.href);
-    url.searchParams.delete("conversation");
-    url.searchParams.delete("connection");
-    history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-    await renderDashboard();
-    showToast("Business number changed.");
+  if (!persistentSidebar) enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
+  app.querySelector("[data-reverse-account-deletion]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget; const reason = window.prompt("Optional: why are you keeping this account?", "Deletion request withdrawn by workspace staff") || "";
+    try { button.disabled = true; button.textContent = "Reversing…"; await storageRequest("reverse_account_deletion", { reason }); showToast("Account deletion has been reversed."); await renderDashboard(); }
+    catch (error) { button.disabled = false; button.textContent = "Keep this account"; showToast(error?.message || "Deletion could not be reversed.", "error"); }
   });
+  const businessNumberSelectorElement = app.querySelector("#wpBusinessNumberSelector");
+  if (businessNumberSelectorElement && !businessNumberSelectorElement.dataset.workspaceNumberBound) {
+    businessNumberSelectorElement.dataset.workspaceNumberBound = "true";
+    businessNumberSelectorElement.addEventListener("change", async (event) => {
+      selectWorkspaceConnection(event.currentTarget.value);
+      const url = new URL(location.href);
+      url.searchParams.delete("conversation");
+      url.searchParams.delete("connection");
+      history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      await renderDashboard();
+      showToast("Business number changed.");
+    });
+  }
   app.querySelector("[data-verification-attention-close]")?.addEventListener("click", () => {
     verificationAttentionDismissed = true;
     app.querySelector("[data-verification-attention]")?.remove();
@@ -2454,6 +3329,7 @@ async function renderDashboard() {
     }));
   }
   if (isBillingWorkspaceView(view)) {
+    app.querySelectorAll("[data-billing-price-breakdown]").forEach((button) => button.addEventListener("click", () => showBillingPriceBreakdown(button.dataset.billingPriceBreakdown || "")));
     app.querySelectorAll("[data-billing-document]").forEach((button) => button.addEventListener("click", async () => {
       const original = button.textContent;
       try {
@@ -2469,7 +3345,7 @@ async function renderDashboard() {
     app.querySelectorAll("[data-renewal-price-decision]").forEach((button) => button.addEventListener("click", async () => {
       const accepting = button.dataset.renewalPriceDecision === "accept";
       const message = accepting
-        ? "Accept this revised base price and open Razorpay to authorize the replacement subscription for the next billing period?"
+        ? "Accept this revised base price and authorize the replacement subscription for the next billing period?"
         : "End this subscription after the current paid period instead of accepting the revised renewal price?";
       if (!window.confirm(message)) return;
       const original = button.textContent;
@@ -2505,7 +3381,7 @@ async function renderDashboard() {
           }
           button.textContent = "Preparing upgrade checkout…";
           const upgrade = await billingRequest("upgrade_subscription", request);
-          if (!upgrade.shortUrl) throw new Error("Razorpay did not return an upgrade authorization link.");
+          if (!upgrade.shortUrl) throw new Error("The payment gateway did not return an upgrade authorization link.");
           window.location.assign(upgrade.shortUrl);
           showToast(`Upgrade checkout opened. Pay ${money(upgrade.quote?.checkoutAmountPaise)} to activate ${upgrade.package?.name || "the new package"}; the old subscription will then close automatically.`);
           button.disabled = false; button.textContent = original;
@@ -2514,7 +3390,7 @@ async function renderDashboard() {
         const checkoutUrl = new URL(workspacePath("checkout"), location.origin);
         checkoutUrl.searchParams.set("package", button.dataset.billingSubscribe);
         checkoutUrl.searchParams.set("interval", billingInterval);
-        location.assign(checkoutUrl.pathname + checkoutUrl.search);
+        await navigateWorkspace(checkoutUrl);
         return;
       } catch (error) {
         showToast(error?.message || "Secure checkout could not be opened.", "error");
@@ -2527,39 +3403,208 @@ async function renderDashboard() {
       const original = button.textContent;
       try {
         const request = { subscriptionId: workspaceBilling?.subscription?.id, addonCode: button.dataset.billingAddonChange, quantity: quantityInput ? Number(quantityInput.value) : 1 };
-        button.disabled = true; button.textContent = "Calculating proration…";
-        const preview = await billingRequest("preview_addon_change", request);
-        const approved = await confirmAddonChange(preview);
-        if (!approved) {
-          button.disabled = false; button.textContent = original; return;
+        request.couponCode = "";
+        button.disabled = true; button.textContent = "Adding…";
+        let preview = await billingRequest("preview_addon_change", request);
+        while (true) {
+          const decision = await confirmAddonChange(preview, request.couponCode);
+          if (decision.action === "cancel") {
+            button.disabled = false; button.textContent = original; return;
+          }
+          if (decision.action === "apply" || decision.action === "remove") {
+            request.couponCode = decision.action === "remove" ? "" : decision.couponCode;
+            button.textContent = request.couponCode ? "Applying…" : "Updating…";
+            try {
+              preview = await billingRequest("preview_addon_change", request);
+              showToast(preview.quote?.couponCode ? `Coupon ${preview.quote.couponCode} applied securely.` : "Add-on total recalculated.");
+            } catch (error) {
+              request.couponCode = "";
+              preview = await billingRequest("preview_addon_change", request);
+              showToast(error?.message || "This coupon could not be applied.", "error");
+            }
+            button.textContent = "Adding…";
+            continue;
+          }
+          if (decision.action === "authorize") break;
         }
-        button.textContent = "Preparing add-on checkout…";
+        button.textContent = "Opening payment…";
         const change = await billingRequest("change_addons", request);
-        if (!change.shortUrl) throw new Error("Razorpay did not return an add-on authorization link.");
-        window.location.assign(change.shortUrl);
-        showToast(`Add-on authorization opened. Pay ${billingMoney(Number(change.quote?.checkoutAmountPaise || 0) / 100, change.quote?.currency || "INR")} to activate the increased capacity.`);
-        button.disabled = false; button.textContent = original;
+        if (!change.razorpaySubscriptionId || !change.keyId) throw new Error("The payment gateway did not return a secure add-on authorization session.");
+        await loadRazorpayCheckout();
+        const instance = new window.Razorpay({
+          key: change.keyId,
+          subscription_id: change.razorpaySubscriptionId,
+          name: "Varada Nexus",
+          image: "https://www.varadanexus.com/images/logo.png",
+          description: `${change.addon?.name || "WhatsApp add-on"} authorization`,
+          prefill: { name: workspaceBilling?.customer?.name || "", email: workspaceBilling?.customer?.email || "" },
+          notes: { workspace: workspaceBilling?.customer?.companyName || session.companyName || "", addon_code: request.addonCode },
+          theme: { color: "#0b6b45" },
+          handler: async (checkout) => {
+            try {
+              showToast("Add-on payment received. Verifying securely…");
+              await billingRequest("verify_checkout", {
+                subscriptionId: change.subscriptionId,
+                razorpayPaymentId: checkout.razorpay_payment_id,
+                razorpaySubscriptionId: checkout.razorpay_subscription_id,
+                razorpaySignature: checkout.razorpay_signature,
+              });
+              showToast(`${change.addon?.name || "Add-on"} activated successfully.`);
+              await renderDashboard();
+            } catch (error) {
+              showToast(error?.message || "Add-on payment verification failed.", "error");
+              button.disabled = false; button.textContent = original;
+            }
+          },
+          modal: {
+            confirm_close: true,
+            escape: true,
+            handleback: true,
+            ondismiss: () => { button.disabled = false; button.textContent = original; },
+          },
+        });
+        instance.on("payment.failed", (checkout) => {
+          showToast(checkout?.error?.description || "The add-on could not be authorized.", "error");
+          button.disabled = false; button.textContent = original;
+        });
+        instance.open();
       } catch (error) {
         showToast(error?.message || "Add-on checkout could not be opened.", "error");
         button.disabled = false; button.textContent = original;
       }
     }));
+    app.querySelectorAll("[data-billing-addon-unavailable]").forEach((button) => button.addEventListener("click", () => {
+      explainAddonAvailability({ addonName: button.dataset.billingAddonName || "This add-on", reason: button.dataset.billingAddonUnavailable });
+    }));
     app.querySelectorAll("[data-billing-sync]").forEach((button) => button.addEventListener("click", async () => {
       const original = button.textContent;
-      try { button.disabled = true; button.textContent = "Refreshing…"; await billingRequest("sync_subscription", { subscriptionId: button.dataset.billingSync }); showToast("Subscription status refreshed from Razorpay."); await renderDashboard(); }
+      try { button.disabled = true; button.textContent = "Refreshing…"; await billingRequest("sync_subscription", { subscriptionId: button.dataset.billingSync }); showToast("Subscription status refreshed."); await renderDashboard(); }
       catch (error) { showToast(error?.message || "Subscription status could not be refreshed.", "error"); button.disabled = false; button.textContent = original; }
+    }));
+    app.querySelectorAll("[data-billing-update-payment]").forEach((button) => button.addEventListener("click", async () => {
+      const original = button.textContent;
+      try {
+        button.disabled = true; button.textContent = "Preparing secure update…";
+        const result = await billingRequest("payment_method_portal", { subscriptionId: button.dataset.billingUpdatePayment });
+        const updateChoice = await choosePaymentMethodUpdate(result);
+        if (updateChoice === "cancel") {
+          button.disabled = false; button.textContent = original;
+          return;
+        }
+        if (updateChoice === "hosted") {
+          window.location.assign(result.portalUrl);
+          return;
+        }
+        await loadRazorpayCheckout();
+        const instance = new window.Razorpay({
+          key: result.keyId,
+          subscription_id: result.subscription?.razorpaySubscriptionId,
+          subscription_card_change: true,
+          name: "Varada Nexus",
+          image: "https://www.varadanexus.com/images/logo.png",
+          description: "Update subscription payment method",
+          prefill: { name: result.customer?.name || "", email: result.customer?.email || "" },
+          notes: { workspace: result.customer?.companyName || session.companyName || "", action: "payment_method_update" },
+          theme: { color: "#0b6b45" },
+          handler: async (checkout) => {
+            try {
+              showToast("Payment method received. Verifying securely…");
+              await billingRequest("verify_checkout", {
+                subscriptionId: result.subscription.id,
+                razorpayPaymentId: checkout.razorpay_payment_id,
+                razorpaySubscriptionId: checkout.razorpay_subscription_id,
+                razorpaySignature: checkout.razorpay_signature,
+              });
+              showToast("Payment method updated successfully.");
+              await renderDashboard();
+            } catch (error) {
+              showToast(error?.message || "Payment-method verification failed.", "error");
+              button.disabled = false; button.textContent = original;
+            }
+          },
+          modal: {
+            confirm_close: true,
+            escape: true,
+            handleback: true,
+            ondismiss: () => { button.disabled = false; button.textContent = original; },
+          },
+        });
+        instance.on("payment.failed", (checkout) => {
+          showToast(checkout?.error?.description || "The payment method could not be updated.", "error");
+          button.disabled = false; button.textContent = original;
+        });
+        instance.open();
+      } catch (error) {
+        showToast(error?.message || "Payment-method management could not be opened.", "error");
+        button.disabled = false; button.textContent = original;
+      }
     }));
     app.querySelectorAll("[data-billing-cancel]").forEach((button) => button.addEventListener("click", async () => {
       const confirmed = await confirmBillingCancellation(workspaceBilling?.subscription);
       if (!confirmed) return;
       const original = button.textContent;
-      try { button.disabled = true; button.textContent = "Scheduling…"; await billingRequest("cancel_subscription", { subscriptionId: button.dataset.billingCancel, cancelAtCycleEnd: true }); showToast(`Cancellation scheduled. Access remains active until ${formatProfileDate(workspaceBilling?.subscription?.current_end)}.`); await renderDashboard(); }
+      try {
+        button.disabled = true;
+        button.textContent = "Cancelling and disconnecting…";
+        await billingRequest("cancel_subscription", { subscriptionId: button.dataset.billingCancel, cancelAtCycleEnd: false, cancellationReason: "customer_requested", disconnectConnections: true });
+        const connections = workspaceConnections.filter((connection) => connection.status !== "disconnected");
+        const failures = [];
+        for (const connection of connections) {
+          try { await onboardingRequest("remove_connection", { connectionId: connection.id }); }
+          catch (error) { failures.push(`${connection.display_phone_number || connection.verified_name || "Number"}: ${error?.message || "disconnection failed"}`); }
+        }
+        if (failures.length) throw new Error(`Subscription cancelled, but ${failures.length} number connection${failures.length === 1 ? "" : "s"} still require removal. ${failures.join(" ")}`);
+        showToast(`Subscription cancelled. ${connections.length} number connection${connections.length === 1 ? "" : "s"} removed from Meta.`);
+        await renderDashboard();
+      }
       catch (error) { showToast(error?.message || "Subscription could not be cancelled.", "error"); button.disabled = false; button.textContent = original; }
+    }));
+    app.querySelectorAll("[data-billing-cancel-addon]").forEach((button) => button.addEventListener("click", async () => {
+      const addonSubscription = (workspaceBilling?.addonSubscriptions || []).find((item) => item.id === button.dataset.billingCancelAddon);
+      if (!addonSubscription) { showToast("Add-on subscription could not be found.", "error"); return; }
+      const cancellation = await confirmAddonSubscriptionCancellation(addonSubscription);
+      if (!cancellation.confirmed) return;
+      const original = button.textContent;
+      try {
+        button.disabled = true;
+        button.textContent = cancellation.cancelAtCycleEnd ? "Scheduling…" : "Cancelling…";
+        const result = await billingRequest("cancel_subscription", { subscriptionId: addonSubscription.id, cancelAtCycleEnd: cancellation.cancelAtCycleEnd });
+        showToast(result.cancellationMode === "immediate"
+          ? `${addonSubscription.addon_name || "Add-on"} cancelled. Its capacity has been removed; your plan remains active.`
+          : `${addonSubscription.addon_name || "Add-on"} cancellation scheduled for its period end. Your plan remains active.`);
+        await renderDashboard();
+      } catch (error) {
+        showToast(error?.message || "Add-on subscription could not be cancelled.", "error");
+        button.disabled = false;
+        button.textContent = original;
+      }
     }));
   }
   if (view === "checkout") {
     const quoteForm = app.querySelector("[data-checkout-quote-form]");
-    quoteForm?.addEventListener("input", () => {
+    quoteForm?.querySelectorAll("[data-checkout-interval]").forEach((button) => button.addEventListener("click", async () => {
+      const nextInterval = button.dataset.checkoutInterval === "year" ? "year" : "month";
+      if (nextInterval === new FormData(quoteForm).get("billingInterval")) return;
+      quoteForm.querySelectorAll("[data-checkout-interval]").forEach((item) => {
+        const active = item === button;
+        item.classList.toggle("is-active", active);
+        item.setAttribute("aria-pressed", String(active));
+        item.disabled = true;
+      });
+      const checkoutUrl = new URL(workspacePath("checkout"), location.origin);
+      checkoutUrl.searchParams.set("package", new FormData(quoteForm).get("packageCode"));
+      checkoutUrl.searchParams.set("interval", nextInterval);
+      workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: "" };
+      await navigateWorkspace(checkoutUrl);
+    }));
+    quoteForm?.addEventListener("input", (event) => {
+      if (event.target?.matches?.("[data-checkout-addon]")) {
+        const quantityInput = [...quoteForm.querySelectorAll("[data-checkout-addon-quantity]")].find((input) => input.dataset.checkoutAddonQuantity === event.target.value);
+        if (quantityInput) {
+          quantityInput.disabled = !event.target.checked;
+          syncQuantityStepper(quantityInput.closest("[data-quantity-stepper]"));
+        }
+      }
       const authorize = app.querySelector("[data-checkout-authorize]");
       if (!authorize) return;
       authorize.disabled = true;
@@ -2571,21 +3616,21 @@ async function renderDashboard() {
       if (!form.reportValidity()) return;
       const button = form.querySelector('button[type="submit"]');
       const values = new FormData(form);
-      const addons = [...form.querySelectorAll("[data-checkout-addon]:checked")].map((input) => ({
-        code: input.dataset.checkoutAddon,
-        quantity: Number(form.querySelector(`[data-checkout-addon-quantity="${CSS.escape(input.dataset.checkoutAddon)}"]`)?.value || 1),
-      }));
+      const addons = [...form.querySelectorAll("[data-checkout-addon]:checked")].map((checkbox) => {
+        const quantityInput = [...form.querySelectorAll("[data-checkout-addon-quantity]")].find((input) => input.dataset.checkoutAddonQuantity === checkbox.value);
+        return { code: checkbox.value, quantity: quantityInput ? Number(quantityInput.value) : 1 };
+      });
       const original = button.textContent;
       try {
         button.disabled = true; button.textContent = "Validating price…";
         const result = await billingRequest("quote_subscription_checkout", {
           packageCode: values.get("packageCode"), billingInterval: values.get("billingInterval"), couponCode: values.get("couponCode"), addons,
         });
-        workspaceCheckout = { quote: result.quote, package: result.package, error: "" };
+        workspaceCheckout = { quote: result.quote, package: result.package, trialEligibility: result.trialEligibility, error: "" };
         showToast(result.quote?.couponCode ? `Coupon ${result.quote.couponCode} applied securely.` : "Final checkout total calculated securely.");
         await renderDashboard();
       } catch (error) {
-        workspaceCheckout = { quote: null, package: null, error: error?.message || "Checkout quote could not be calculated." };
+        workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: error?.message || "Checkout quote could not be calculated." };
         showToast(workspaceCheckout.error, "error");
         await renderDashboard();
         button.disabled = false; button.textContent = original;
@@ -2594,40 +3639,98 @@ async function renderDashboard() {
     app.querySelector("[data-checkout-authorize]")?.addEventListener("click", async (event) => {
       const button = event.currentTarget;
       const original = button.textContent;
-      let checkoutWindow = window.open("about:blank", "_blank");
-      if (checkoutWindow) checkoutWindow.opener = null;
       try {
-        button.disabled = true; button.textContent = "Preparing Razorpay authorization…";
+        button.disabled = true; button.textContent = "Preparing secure authorization…";
         const checkout = await billingRequest("create_subscription", { quoteId: button.dataset.checkoutAuthorize });
-        const trialMessage = checkout.trialEndsAt ? ` The first recurring charge is scheduled after the trial on ${new Date(checkout.trialEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.` : "";
-        if (checkout.shortUrl) {
-          if (checkoutWindow) checkoutWindow.location.replace(checkout.shortUrl); else window.location.assign(checkout.shortUrl);
-          showToast(`Razorpay authorization opened.${trialMessage}`);
-          button.disabled = false; button.textContent = original;
-          return;
-        }
-        checkoutWindow?.close(); checkoutWindow = null;
         await loadRazorpayCheckout();
+        let checkoutFinalized = false;
+        let callbackInFlight = false;
+        let statusPollAttempts = 0;
+        const successfulStatuses = new Set(["authenticated", "active"]);
+        const terminalStatuses = new Set(["cancelled", "completed", "expired"]);
+        const finishSuccessfulCheckout = async () => {
+          if (checkoutFinalized) return;
+          checkoutFinalized = true;
+          showToast("Subscription verified and billing activated.");
+          const returnUrl = new URL(workspacePath("billing"), location.origin);
+          returnUrl.searchParams.set("checkout", "success");
+          await navigateWorkspace(returnUrl);
+        };
+        const pollSubscriptionStatus = async () => {
+          if (checkoutFinalized) return;
+          if (callbackInFlight) {
+            window.setTimeout(pollSubscriptionStatus, 2500);
+            return;
+          }
+          statusPollAttempts += 1;
+          try {
+            const synced = await billingRequest("sync_subscription", { subscriptionId: checkout.subscriptionId });
+            const status = String(synced?.subscription?.status || "").toLowerCase();
+            if (successfulStatuses.has(status)) {
+              await finishSuccessfulCheckout();
+              return;
+            }
+            if (terminalStatuses.has(status)) {
+              button.disabled = false; button.textContent = original;
+              showToast("The payment authorization did not complete. Please review the subscription status.", "error");
+              return;
+            }
+          } catch (error) {
+            if (statusPollAttempts >= 48) {
+              button.disabled = false; button.textContent = "Check payment status";
+              showToast(error?.message || "Payment was submitted, but confirmation is taking longer than expected. Check billing status before retrying.", "error");
+              return;
+            }
+          }
+          if (statusPollAttempts < 48) window.setTimeout(pollSubscriptionStatus, 2500);
+        };
         const instance = new window.Razorpay({
           key: checkout.keyId, subscription_id: checkout.razorpaySubscriptionId, name: "Varada Nexus",
+          image: "https://www.varadanexus.com/images/logo.png",
           description: `${checkout.package?.name || "WhatsApp Solutions"} subscription`,
           prefill: { name: checkout.customer?.name || "", email: checkout.customer?.email || "" },
           notes: { workspace: checkout.customer?.companyName || session.companyName || "", checkout_quote_id: checkout.quote?.id || "" },
-          theme: { color: "#25d887" },
+          theme: { color: "#0b6b45" },
           handler: async (result) => {
+            callbackInFlight = true;
             try {
               showToast("Payment received. Verifying securely…");
               await billingRequest("verify_checkout", { subscriptionId: checkout.subscriptionId, razorpayPaymentId: result.razorpay_payment_id, razorpaySubscriptionId: result.razorpay_subscription_id, razorpaySignature: result.razorpay_signature });
-              showToast("Subscription verified and billing activated.");
-              location.assign(workspacePath("billing"));
-            } catch (error) { showToast(error?.message || "Payment verification failed.", "error"); }
+              await finishSuccessfulCheckout();
+            } catch (error) {
+              showToast(error?.message || "Payment verification is still processing. Checking its status…", "error");
+            } finally {
+              callbackInFlight = false;
+              if (!checkoutFinalized) window.setTimeout(pollSubscriptionStatus, 1000);
+            }
           },
-          modal: { ondismiss: () => { button.disabled = false; button.textContent = original; } },
+          modal: {
+            confirm_close: true,
+            escape: true,
+            handleback: true,
+            ondismiss: async () => {
+              button.disabled = false; button.textContent = original;
+              if (!checkoutFinalized && checkout.subscriptionId) {
+                try {
+                  const synced = await billingRequest("sync_subscription", { subscriptionId: checkout.subscriptionId });
+                  const status = String(synced?.subscription?.status || "").toLowerCase();
+                  if (successfulStatuses.has(status)) {
+                    await finishSuccessfulCheckout();
+                    return;
+                  }
+                  const abandoned = await billingRequest("abandon_checkout", { subscriptionId: checkout.subscriptionId });
+                  if (abandoned?.abandoned) showToast("Unpaid checkout closed. Reserved plan and add-ons were released.");
+                } catch (error) {
+                  showToast(error?.message || "Payment confirmation is still processing. Use Check payment status before retrying.", "error");
+                }
+              }
+            },
+          },
         });
-        instance.on("payment.failed", (result) => showToast(result?.error?.description || "Razorpay could not complete the payment.", "error"));
+        instance.on("payment.failed", (result) => showToast(result?.error?.description || "The payment could not be completed.", "error"));
         instance.open();
+        window.setTimeout(pollSubscriptionStatus, 2500);
       } catch (error) {
-        checkoutWindow?.close();
         showToast(error?.message || "Secure authorization could not be opened.", "error");
         button.disabled = false; button.textContent = original;
       }
@@ -2689,15 +3792,10 @@ async function renderDashboard() {
       if (!form.reportValidity()) return;
       const submit = form.querySelector('button[type="submit"]');
       try {
-        submit.disabled = true; submit.textContent = "Publishing to Meta…";
+        submit.disabled = true; submit.textContent = "Saving profile…";
         const file = photoInput?.files?.[0] || null;
         let photo = null;
         if (file) photo = { fileName: file.name, mimeType: file.type, base64: await readFileBase64(file) };
-        if (photo) {
-          submit.textContent = "Archiving to Google Drive…";
-          await storageRequest("upload_business_profile_picture", { connectionId: workspaceSelectedConnectionId, ...photo });
-          submit.textContent = "Publishing to Meta…";
-        }
         const result = await messagingRequest("update_business_profile", {
           connectionId: workspaceSelectedConnectionId,
           about: form.elements.about.value.trim(), description: form.elements.description.value.trim(),
@@ -2707,6 +3805,10 @@ async function renderDashboard() {
           photo,
         });
         workspaceBusinessProfile = { profile: result?.profile || {}, connection: result?.connection || workspaceBusinessProfile.connection, error: "" };
+        if (photo) {
+          storageRequest("upload_business_profile_picture", { connectionId: workspaceSelectedConnectionId, ...photo })
+            .catch((archiveError) => console.warn("WhatsApp profile photo archive failed", archiveError));
+        }
         showToast("WhatsApp profile published successfully.");
         await renderDashboard();
       } catch (error) {
@@ -2770,8 +3872,11 @@ async function renderDashboard() {
     linkDialog?.addEventListener("close", () => renderDashboard());
   }
   if (view === "contacts") {
-    app.querySelector(".wp-route-heading")?.insertAdjacentHTML("beforeend", '<button class="wp-primary" id="wpAddContactBtn" type="button">＋ Add contact</button>');
-    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog" id="wpAddContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Add contact</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Contact name</span><input name="displayName" maxlength="200" autocomplete="name" required /></label><label><span>WhatsApp number</span><input name="phone" type="tel" inputmode="tel" maxlength="24" placeholder="+91 98765 43210" autocomplete="tel" required /><small>Include the country code. We will store the number in international format.</small></label><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="save">Add contact</button></footer></form></dialog>`);
+    app.querySelector(".wp-route-heading")?.insertAdjacentHTML("beforeend", '<div class="wp-contact-heading-actions"><button class="wp-primary wp-import-contact-button" id="wpImportContactsBtn" type="button">⇧ Import contacts</button><button class="wp-primary" id="wpAddContactBtn" type="button">＋ Add contact</button></div>');
+    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog" id="wpAddContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Add contact</h2></div><button type="button" data-close-add-contact aria-label="Close">×</button></header><label><span>Contact name</span><input name="displayName" maxlength="200" autocomplete="name" required /></label><label><span>WhatsApp number</span><input name="phone" type="tel" inputmode="tel" maxlength="24" placeholder="+91 98765 43210" autocomplete="tel" required /><small>Include the country code. We will store the number in international format.</small></label><footer><button class="wp-secondary" type="button" data-close-add-contact>Cancel</button><button class="wp-primary" type="submit" value="save">Add contact</button></footer></form></dialog>`);
+    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-contact-duplicate-dialog" id="wpDuplicateContactDialog"><section><header><div><span class="wp-card-eyebrow">Duplicate contact found</span><h2>Choose which contact details to keep</h2><p>The WhatsApp number already belongs to a contact. No duplicate will be created.</p></div><button type="button" data-close-contact-duplicate aria-label="Close">×</button></header><div class="wp-duplicate-contact-choices"><button type="button" data-manual-duplicate-choice="existing"><span>Existing contact</span><strong data-duplicate-existing-name>—</strong><small data-duplicate-existing-phone>—</small><b>Keep existing</b></button><button type="button" data-manual-duplicate-choice="incoming"><span>New contact details</span><strong data-duplicate-incoming-name>—</strong><small data-duplicate-incoming-phone>—</small><b>Use new details</b></button></div><p class="wp-duplicate-guidance">Choosing new details updates the existing contact name; message history and consent records remain attached to the same number.</p></section></dialog>`);
+    const importCountryOptions = countryDialEntries().map((country) => `<option value="${country.dial}" ${country.code === "IN" ? "selected" : ""}>${countryFlag(country.code)} ${escapeHtml(country.name)} (${country.dial})</option>`).join("");
+    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-contact-import-dialog" id="wpImportContactsDialog"><form id="wpImportContactsForm"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Import contacts</h2><p>Bring contacts from Google, another phone, CRM or spreadsheet. Large imports are processed securely in batches.</p></div><button type="button" data-close-contact-import aria-label="Close">×</button></header><button class="wp-google-contact-import" type="button" data-google-contact-import><span aria-hidden="true"><b>G</b></span><span><strong>Import from Google Contacts</strong><small>Sign in to Google and grant one-time, read-only access. You review every contact before importing.</small></span><em>Continue with Google&nbsp; →</em></button><section class="wp-import-methods"><article><strong>Upload a file</strong><span>CSV, Google export, Outlook or vCard</span><label class="wp-import-file"><input name="contactFile" type="file" accept=".csv,.txt,.vcf,text/csv,text/plain,text/vcard" /><b>Choose CSV or VCF</b><small data-import-file-name>No file selected</small></label></article><article><strong>Paste a list</strong><span>One contact per line: Name, +number</span><textarea name="pastedContacts" rows="6" placeholder="Ananya Rao, +91 98765 43210&#10;Rohan Mehta, +44 7700 900123"></textarea></article></section><div class="wp-import-options"><label><span>Default country for local numbers</span><select name="defaultDialCode">${importCountryOptions}</select></label><div><span>Duplicate protection</span><strong>Every duplicate must be reviewed before import</strong></div></div><div class="wp-policy-note"><strong>Marketing consent is not imported automatically</strong><p>Imported contacts are eligible for service conversations only. Record explicit, auditable consent before including them in marketing campaigns.</p></div><section class="wp-import-preview" data-import-preview><div><strong>Ready to review</strong><span>Connect Google, choose a file or paste contacts to see a validated preview.</span></div></section><footer><button class="wp-secondary" type="button" data-download-contact-template>Download CSV template</button><button class="wp-secondary" type="button" data-close-contact-import>Cancel</button><button class="wp-primary" type="submit" disabled>Review contacts</button></footer></form></dialog>`);
   }
   if (view === "inbox") {
     const activeContacts = (workspaceContacts?.contacts || []).filter((contact) => contact.status === "active");
@@ -3165,7 +4270,8 @@ async function renderDashboard() {
     setProfileMenuOpen(false);
     profileMenuButton.focus();
   });
-  const collapseButton = app.querySelector("#wpSidebarCollapseBtn");
+  const sidebarElement = app.querySelector(".wp-workspace-sidebar");
+  const collapseButton = sidebarElement?.querySelector("#wpSidebarCollapseBtn");
   const syncSidebarCollapseButton = () => {
     const collapsed = Boolean(shell?.classList.contains("sidebar-collapsed"));
     collapseButton?.setAttribute("aria-expanded", String(!collapsed));
@@ -3174,38 +4280,66 @@ async function renderDashboard() {
     collapseButton?.classList.toggle("is-collapsed", collapsed);
   };
   syncSidebarCollapseButton();
-  const setSidebarCollapsed = (collapsed) => {
-    shell?.classList.toggle("sidebar-collapsed", collapsed);
-    workspaceSidebarState.collapsed = collapsed;
-    writeWorkspaceSidebarState(workspaceSidebarState);
-    syncSidebarCollapseButton();
-  };
-  collapseButton?.addEventListener("click", () => {
-    setSidebarCollapsed(!shell?.classList.contains("sidebar-collapsed"));
-  });
-  app.querySelector(".wp-workspace-sidebar")?.addEventListener("click", (event) => {
-    if (!shell?.classList.contains("sidebar-collapsed")) return;
-    if (event.target.closest("#wpSidebarCollapseBtn, .wp-workspace-nav a")) return;
-    event.preventDefault();
-    setSidebarCollapsed(false);
-  });
-  app.querySelectorAll("[data-workspace-section-toggle]").forEach((button) => button.addEventListener("click", () => {
-    const section = button.closest("[data-workspace-nav-section]");
-    const sectionId = button.dataset.workspaceSectionToggle;
-    if (!section || !sectionId) return;
-    const collapsed = !section.classList.contains("is-collapsed");
-    section.classList.toggle("is-collapsed", collapsed);
-    button.setAttribute("aria-expanded", String(!collapsed));
-    button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${button.querySelector(".wp-nav-label")?.textContent?.trim() || "navigation section"}`);
-    workspaceSidebarState.sections[sectionId] = !collapsed;
-    writeWorkspaceSidebarState(workspaceSidebarState);
-  }));
+  if (sidebarElement && !sidebarElement.dataset.workspaceInteractionsBound) {
+    sidebarElement.dataset.workspaceInteractionsBound = "true";
+    collapseButton?.addEventListener("click", () => {
+      const activeShell = sidebarElement.closest(".wp-workspace-shell");
+      const collapsed = !activeShell?.classList.contains("sidebar-collapsed");
+      activeShell?.classList.toggle("sidebar-collapsed", collapsed);
+      workspaceSidebarState.collapsed = collapsed;
+      writeWorkspaceSidebarState(workspaceSidebarState);
+      collapseButton.setAttribute("aria-expanded", String(!collapsed));
+      collapseButton.setAttribute("aria-label", collapsed ? "Expand workspace navigation" : "Collapse workspace navigation");
+      collapseButton.setAttribute("title", collapsed ? "Expand navigation" : "Collapse navigation");
+      collapseButton.classList.toggle("is-collapsed", collapsed);
+    });
+    sidebarElement.addEventListener("click", (event) => {
+      const activeShell = sidebarElement.closest(".wp-workspace-shell");
+      if (!activeShell?.classList.contains("sidebar-collapsed")) return;
+      if (event.target.closest("#wpSidebarCollapseBtn, .wp-workspace-nav a")) return;
+      event.preventDefault();
+      activeShell.classList.remove("sidebar-collapsed");
+      workspaceSidebarState.collapsed = false;
+      writeWorkspaceSidebarState(workspaceSidebarState);
+      collapseButton?.classList.remove("is-collapsed");
+      collapseButton?.setAttribute("aria-expanded", "true");
+      collapseButton?.setAttribute("aria-label", "Collapse workspace navigation");
+      collapseButton?.setAttribute("title", "Collapse navigation");
+    });
+    sidebarElement.querySelectorAll("[data-workspace-section-toggle]").forEach((button) => button.addEventListener("click", () => {
+      const section = button.closest("[data-workspace-nav-section]");
+      const sectionId = button.dataset.workspaceSectionToggle;
+      if (!section || !sectionId) return;
+      const collapsed = !section.classList.contains("is-collapsed");
+      section.classList.toggle("is-collapsed", collapsed);
+      button.setAttribute("aria-expanded", String(!collapsed));
+      button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${button.querySelector(".wp-nav-label")?.textContent?.trim() || "navigation section"}`);
+      workspaceSidebarState.sections[sectionId] = !collapsed;
+      writeWorkspaceSidebarState(workspaceSidebarState);
+    }));
+  }
   const toggleSidebar = (open) => {
     shell?.classList.toggle("sidebar-open", open);
     app.querySelector("#wpSidebarToggle")?.setAttribute("aria-expanded", String(open));
   };
   app.querySelector("#wpSidebarToggle")?.addEventListener("click", () => toggleSidebar(!shell?.classList.contains("sidebar-open")));
   app.querySelector("#wpSidebarScrim")?.addEventListener("click", () => toggleSidebar(false));
+  app.querySelector("#wpStopOptOutToggle")?.addEventListener("change", async (event) => {
+    const toggle = event.currentTarget;
+    const previousValue = workspaceMessagingPreferences?.stopMarketingOptOutEnabled !== false;
+    const nextValue = toggle.checked;
+    try {
+      toggle.disabled = true;
+      const result = await messagingRequest("update_workspace_messaging_preferences", { stopMarketingOptOutEnabled: nextValue });
+      workspaceMessagingPreferences = { ...result, error: "" };
+      showToast(`Automatic STOP opt-out ${nextValue ? "enabled" : "disabled"}.`);
+      await renderDashboard({ refresh: false, preserveScroll: true });
+    } catch (error) {
+      toggle.checked = previousValue;
+      toggle.disabled = false;
+      showToast(error?.message || "The messaging preference could not be updated.", "error");
+    }
+  });
   app.querySelector("#wpLogoFile")?.addEventListener("change", (event) => {
     const fileName = event.currentTarget.files?.[0]?.name || "Choose logo";
     const label = event.currentTarget.closest("label")?.querySelector("span");
@@ -3247,6 +4381,172 @@ async function renderDashboard() {
       showToast(error?.message || "The logo could not be removed.", "error");
       button.disabled = false;
       button.textContent = originalText;
+    }
+  });
+  const deletionDialog = app.querySelector("#wpAccountDeletionDialog");
+  let deletionCameraStream = null;
+  let deletionEvidence = null;
+  const stopDeletionCamera = () => {
+    deletionCameraStream?.getTracks?.().forEach((track) => track.stop());
+    deletionCameraStream = null;
+    const video = app.querySelector("#wpDeletionCameraVideo");
+    if (video) video.srcObject = null;
+  };
+  const closeDeletionDialog = () => {
+    stopDeletionCamera();
+    if (!deletionEvidence) {
+      const video = app.querySelector("#wpDeletionCameraVideo");
+      const placeholder = app.querySelector("#wpDeletionCameraPlaceholder");
+      const start = app.querySelector("#wpStartDeletionCameraBtn");
+      const capture = app.querySelector("#wpCaptureDeletionEvidenceBtn");
+      if (video) video.hidden = true;
+      if (placeholder) placeholder.hidden = false;
+      if (start) { start.hidden = false; start.disabled = false; start.textContent = "Start camera"; }
+      if (capture) capture.hidden = true;
+    }
+    deletionDialog?.close();
+  };
+  app.querySelector("#wpRequestDeletionBtn")?.addEventListener("click", () => deletionDialog?.showModal());
+  app.querySelectorAll("[data-close-deletion-dialog]").forEach((button) => button.addEventListener("click", closeDeletionDialog));
+  deletionDialog?.addEventListener("click", (event) => {
+    if (event.target === deletionDialog) closeDeletionDialog();
+  });
+  deletionDialog?.addEventListener("cancel", stopDeletionCamera);
+  app.querySelector("#wpExportAccountDataBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const original = button.textContent;
+    try {
+      button.disabled = true; button.textContent = "Preparing export…";
+      const result = await storageRequest("export_account_data");
+      const blob = new Blob([JSON.stringify(result.export, null, 2)], { type: "application/json" });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href; anchor.download = result.fileName || "workspace-account-export.json";
+      document.body.append(anchor); anchor.click(); anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+      button.textContent = "Data downloaded";
+      showToast("Account data export downloaded.");
+    } catch (error) {
+      button.disabled = false; button.textContent = original;
+      showToast(error?.message || "Account data could not be exported.", "error");
+    }
+  });
+  const currentDeletionLocation = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) return reject(new Error("Location capture is not supported by this browser."));
+    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+  });
+  app.querySelector("#wpStartDeletionCameraBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const video = app.querySelector("#wpDeletionCameraVideo");
+    const placeholder = app.querySelector("#wpDeletionCameraPlaceholder");
+    const captureButton = app.querySelector("#wpCaptureDeletionEvidenceBtn");
+    const status = app.querySelector("#wpDeletionLocationStatus");
+    if (!navigator.mediaDevices?.getUserMedia) return showToast("Camera capture is not supported by this browser.", "error");
+    try {
+      button.disabled = true; button.textContent = "Starting camera…";
+      deletionCameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      video.srcObject = deletionCameraStream;
+      await video.play();
+      video.hidden = false;
+      if (placeholder) placeholder.hidden = true;
+      button.hidden = true;
+      captureButton.hidden = false; captureButton.disabled = false; captureButton.textContent = "Capture photo & location";
+      if (status) status.textContent = "Camera ready. Capture the photo to record a fresh timestamp and location.";
+    } catch (error) {
+      button.disabled = false; button.textContent = "Start camera";
+      showToast(error?.message || "Camera access could not be started.", "error");
+    }
+  });
+  app.querySelector("#wpCaptureDeletionEvidenceBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const form = button.closest("form");
+    const video = app.querySelector("#wpDeletionCameraVideo");
+    const canvas = app.querySelector("#wpDeletionCameraCanvas");
+    const preview = app.querySelector("#wpDeletionCameraPreview");
+    const status = app.querySelector("#wpDeletionLocationStatus");
+    const retake = app.querySelector("#wpRetakeDeletionEvidenceBtn");
+    if (!video?.videoWidth || !canvas) return showToast("Wait for the camera preview, then try again.", "error");
+    try {
+      button.disabled = true; button.textContent = "Capturing location…";
+      const position = await currentDeletionLocation();
+      const capturedAt = new Date();
+      const maxWidth = 1280;
+      const scale = Math.min(1, maxWidth / video.videoWidth);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      const context = canvas.getContext("2d");
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const stampHeight = Math.max(104, Math.round(canvas.height * .17));
+      context.fillStyle = "rgba(0,0,0,.76)";
+      context.fillRect(0, canvas.height - stampHeight, canvas.width, stampHeight);
+      const pad = Math.max(18, Math.round(canvas.width * .018));
+      const headingSize = Math.max(20, Math.round(canvas.width * .022));
+      const detailSize = Math.max(15, Math.round(canvas.width * .016));
+      context.fillStyle = "#ffffff";
+      context.font = `700 ${headingSize}px Arial, sans-serif`;
+      context.fillText("Varada Nexus · Account deletion evidence", pad, canvas.height - stampHeight + headingSize + 12);
+      context.fillStyle = "#d8e7df";
+      context.font = `500 ${detailSize}px Arial, sans-serif`;
+      const coordinates = `${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)} · accuracy ±${Math.round(position.coords.accuracy || 0)} m`;
+      context.fillText(capturedAt.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "medium" }), pad, canvas.height - detailSize - 28);
+      context.fillText(coordinates, pad, canvas.height - 12);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", .82));
+      if (!blob || blob.size > 2 * 1024 * 1024) throw new Error("The captured image is too large. Retake it at a lower camera resolution.");
+      deletionEvidence = { mimeType: "image/jpeg", base64: await readFileBase64(blob) };
+      form.elements.latitude.value = String(position.coords.latitude);
+      form.elements.longitude.value = String(position.coords.longitude);
+      form.elements.locationAccuracy.value = String(position.coords.accuracy || "");
+      form.elements.locationCapturedAt.value = capturedAt.toISOString();
+      preview.src = `data:${deletionEvidence.mimeType};base64,${deletionEvidence.base64}`;
+      preview.hidden = false;
+      video.hidden = true;
+      button.hidden = true;
+      retake.hidden = false;
+      stopDeletionCamera();
+      if (status) status.textContent = `Captured ${capturedAt.toLocaleString("en-IN")} at ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)} (±${Math.round(position.coords.accuracy || 0)} m).`;
+    } catch (error) {
+      button.disabled = false; button.textContent = "Capture photo & location";
+      if (status) status.textContent = "Capture failed. Allow camera and precise location access, then try again.";
+      showToast(error?.message || "Camera evidence could not be captured.", "error");
+    }
+  });
+  app.querySelector("#wpRetakeDeletionEvidenceBtn")?.addEventListener("click", async () => {
+    deletionEvidence = null;
+    const preview = app.querySelector("#wpDeletionCameraPreview");
+    const start = app.querySelector("#wpStartDeletionCameraBtn");
+    const retake = app.querySelector("#wpRetakeDeletionEvidenceBtn");
+    const status = app.querySelector("#wpDeletionLocationStatus");
+    if (preview) { preview.removeAttribute("src"); preview.hidden = true; }
+    retake.hidden = true;
+    start.hidden = false; start.disabled = false; start.textContent = "Start camera";
+    if (status) status.textContent = "Previous capture cleared. Start the camera to take fresh evidence.";
+  });
+  app.querySelector("#wpAccountDeletionForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = event.submitter;
+    const message = form.querySelector("#wpAccountDeletionMessage");
+    if (!deletionEvidence?.base64) return showToast("Capture a fresh requester photo with timestamp and location before submitting.", "error");
+    if (!form.elements.locationCapturedAt.value) return showToast("Capture the current device location before submitting.", "error");
+    if (form.elements.exactCompanyName.value.trim() !== (workspaceProfile?.companyName || session.companyName)) return showToast("The company name confirmation does not match.", "error");
+    const original = button?.textContent || "Schedule deletion";
+    try {
+      if (button) { button.disabled = true; button.textContent = "Securing request…"; }
+      const result = await storageRequest("schedule_account_deletion", {
+        requestedBy: form.elements.requestedBy.value.trim(), internalNote: form.elements.internalNote.value.trim(),
+        exactCompanyName: form.elements.exactCompanyName.value.trim(), evidenceConsent: form.elements.evidenceConsent.checked,
+        evidenceMimeType: deletionEvidence.mimeType, evidenceBase64: deletionEvidence.base64,
+        latitude: Number(form.elements.latitude.value), longitude: Number(form.elements.longitude.value),
+        locationAccuracy: form.elements.locationAccuracy.value ? Number(form.elements.locationAccuracy.value) : null,
+        locationCapturedAt: form.elements.locationCapturedAt.value,
+      });
+      deletionDialog?.close();
+      showToast(`Deletion scheduled. It can be reversed until ${new Date(result.reversibleUntil).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}.`);
+      await renderDashboard();
+    } catch (error) {
+      if (message) message.textContent = error?.message || "Deletion could not be scheduled.";
+      if (button) { button.disabled = false; button.textContent = original; }
+      showToast(error?.message || "Deletion could not be scheduled.", "error");
     }
   });
   const verificationForm = app.querySelector("#wpVerificationForm");
@@ -3561,6 +4861,8 @@ async function renderDashboard() {
     } catch (error) { showToast(error?.message || "Template could not be submitted.", "error"); submitter.disabled = false; submitter.textContent = "Submit to Meta"; }
   });
   const addContactDialog = app.querySelector("#wpAddContactDialog");
+  const duplicateContactDialog = app.querySelector("#wpDuplicateContactDialog");
+  let pendingManualDuplicate = null;
   const addContactPhoneLabel = addContactDialog?.querySelector("input[name='phone']")?.closest("label");
   if (addContactPhoneLabel) {
     const countries = countryDialEntries();
@@ -3598,6 +4900,7 @@ async function renderDashboard() {
     picker?.addEventListener("focusout", () => setTimeout(() => { if (!picker.contains(document.activeElement)) closePicker(); }, 0));
   }
   app.querySelector("#wpAddContactBtn")?.addEventListener("click", () => addContactDialog?.showModal());
+  addContactDialog?.querySelectorAll("[data-close-add-contact]").forEach((button) => button.addEventListener("click", () => addContactDialog.close()));
   addContactDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
     const submitter = event.submitter;
     if (submitter?.value !== "save") return;
@@ -3608,12 +4911,208 @@ async function renderDashboard() {
       const nationalNumber = form.elements.nationalNumber.value.replace(/\D/g, "").replace(/^0+/, "");
       const phone = `${form.elements.countryDialCode.value}${nationalNumber}`;
       const result = await messagingRequest("create_contact", { displayName: form.elements.displayName.value.trim(), phone });
+      if (result?.duplicate) {
+        pendingManualDuplicate = result;
+        duplicateContactDialog.querySelector("[data-duplicate-existing-name]").textContent = result.existingContact?.display_name || result.existingContact?.profile_name || "Existing contact";
+        duplicateContactDialog.querySelector("[data-duplicate-existing-phone]").textContent = result.existingContact?.phone_e164 || phone;
+        duplicateContactDialog.querySelector("[data-duplicate-incoming-name]").textContent = result.incomingContact?.display_name || form.elements.displayName.value.trim();
+        duplicateContactDialog.querySelector("[data-duplicate-incoming-phone]").textContent = result.incomingContact?.phone_e164 || phone;
+        addContactDialog.close(); duplicateContactDialog.showModal();
+        submitter.disabled = false; submitter.textContent = "Add contact";
+        return;
+      }
       addContactDialog.close();
-      showToast(result?.existing ? "Existing contact updated." : "Contact added.");
+      showToast("Contact added.");
       await renderDashboard();
     } catch (error) {
       showToast(error?.message || "Contact could not be added.", "error");
       submitter.disabled = false; submitter.textContent = "Add contact";
+    }
+  });
+  duplicateContactDialog?.querySelectorAll("[data-close-contact-duplicate]").forEach((button) => button.addEventListener("click", () => duplicateContactDialog.close()));
+  duplicateContactDialog?.querySelector('[data-manual-duplicate-choice="existing"]')?.addEventListener("click", async () => {
+    duplicateContactDialog.close(); pendingManualDuplicate = null;
+    showToast("Existing contact kept. No duplicate was created.");
+    await renderDashboard();
+  });
+  duplicateContactDialog?.querySelector('[data-manual-duplicate-choice="incoming"]')?.addEventListener("click", async (event) => {
+    if (!pendingManualDuplicate) return;
+    const button = event.currentTarget;
+    try {
+      button.disabled = true;
+      const result = await messagingRequest("create_contact", { displayName: pendingManualDuplicate.incomingContact.display_name, phone: pendingManualDuplicate.incomingContact.phone_e164, duplicateResolution: "replace" });
+      if (!result?.contact) throw new Error("The duplicate could not be resolved.");
+      duplicateContactDialog.close(); pendingManualDuplicate = null;
+      showToast("New contact details kept. No duplicate was created.");
+      await renderDashboard();
+    } catch (error) { showToast(error?.message || "The duplicate could not be resolved.", "error"); button.disabled = false; }
+  });
+  const importContactsDialog = app.querySelector("#wpImportContactsDialog");
+  const importContactsForm = importContactsDialog?.querySelector("form");
+  const importFileInput = importContactsForm?.elements.contactFile;
+  const importPasteInput = importContactsForm?.elements.pastedContacts;
+  const importPreview = importContactsForm?.querySelector("[data-import-preview]");
+  let importFileText = "";
+  let importFileName = "";
+  let importProviderContacts = [];
+  let importProviderLabel = "";
+  let importReadyContacts = [];
+  let importLocalChoices = new Map();
+  let importExistingDuplicates = new Map();
+  let importExistingChoices = new Map();
+  let importDuplicatesReviewed = false;
+  const importBatchSize = 400;
+  const resetImportDuplicateReview = () => {
+    importExistingDuplicates = new Map(); importExistingChoices = new Map(); importDuplicatesReviewed = false;
+  };
+  const refreshContactImportPreview = () => {
+    if (!importContactsForm || !importPreview) return;
+    const pasteMode = Boolean(importPasteInput?.value.trim());
+    const source = pasteMode ? importPasteInput.value : importFileText;
+    const defaultDialCode = importContactsForm.elements.defaultDialCode.value;
+    const providerParsed = importProviderContacts.length ? importProviderContacts.reduce((result, contact, index) => {
+      const phone = normalizeImportedPhone(contact?.phone, defaultDialCode);
+      const displayName = String(contact?.displayName || `Google contact ${index + 1}`).trim().replace(/\s+/g, " ").slice(0, 200) || `Google contact ${index + 1}`;
+      if (phone) result.contacts.push({ displayName, phone });
+      else result.errors.push(`${displayName}: invalid phone number.`);
+      return result;
+    }, { contacts: [], errors: [] }) : null;
+    const parsed = providerParsed || (source ? parseContactImport(source, importFileName, defaultDialCode, pasteMode) : { contacts: [], errors: [] });
+    const hasSource = Boolean(importProviderContacts.length || source);
+    const groups = new Map();
+    parsed.contacts.forEach((contact) => groups.set(contact.phone, [...(groups.get(contact.phone) || []), contact]));
+    [...importLocalChoices.keys()].forEach((phone) => { if (!groups.has(phone)) importLocalChoices.delete(phone); });
+    importReadyContacts = [...groups.entries()].map(([phone, options]) => options[Math.min(Number(importLocalChoices.get(phone) || 0), options.length - 1)] || options[0]);
+    const duplicateGroups = [...groups.entries()].filter(([, options]) => options.length > 1);
+    const submitter = importContactsForm.querySelector('button[type="submit"]');
+    submitter.disabled = !importReadyContacts.length;
+    submitter.textContent = importReadyContacts.length ? `${importDuplicatesReviewed ? "Import" : "Review"} ${importReadyContacts.length.toLocaleString("en-IN")} contact${importReadyContacts.length === 1 ? "" : "s"}` : "Review contacts";
+    if (!hasSource) {
+      importPreview.innerHTML = "<div><strong>Ready to review</strong><span>Connect Google, choose a file or paste contacts to see a validated preview.</span></div>";
+      return;
+    }
+    const rows = importReadyContacts.slice(0, 8).map((contact) => `<li><span>${escapeHtml(contact.displayName)}</span><strong>${escapeHtml(contact.phone)}</strong></li>`).join("");
+    const localDuplicates = duplicateGroups.length ? `<section class="wp-import-duplicates"><header><div><strong>${duplicateGroups.length.toLocaleString("en-IN")} duplicate number${duplicateGroups.length === 1 ? "" : "s"} inside this import</strong><span>Select the contact name to keep for each number.</span></div></header><div>${duplicateGroups.map(([phone, options]) => `<article><strong>${escapeHtml(phone)}</strong><div>${options.map((contact, index) => `<label><input type="radio" name="local_duplicate_${escapeHtml(phone.replace(/\D/g, ""))}" value="${index}" data-local-duplicate-phone="${escapeHtml(phone)}" ${Number(importLocalChoices.get(phone) || 0) === index ? "checked" : ""} /><span>${escapeHtml(contact.displayName)}</span></label>`).join("")}</div></article>`).join("")}</div></section>` : "";
+    const workspaceDuplicateRows = importDuplicatesReviewed ? [...importExistingDuplicates.entries()].map(([phone, existing]) => {
+      const incoming = importReadyContacts.find((contact) => contact.phone.replace(/\D/g, "") === phone);
+      if (!incoming) return "";
+      const choice = importExistingChoices.get(phone) || "existing";
+      return `<article><strong>${escapeHtml(existing.phone_e164 || incoming.phone)}</strong><div class="wp-import-duplicate-pair"><label><input type="radio" name="existing_duplicate_${escapeHtml(phone)}" value="existing" data-existing-duplicate-phone="${escapeHtml(phone)}" ${choice === "existing" ? "checked" : ""} /><span><b>Existing</b>${escapeHtml(existing.display_name || existing.profile_name || "Existing contact")}</span></label><label><input type="radio" name="existing_duplicate_${escapeHtml(phone)}" value="incoming" data-existing-duplicate-phone="${escapeHtml(phone)}" ${choice === "incoming" ? "checked" : ""} /><span><b>Imported</b>${escapeHtml(incoming.displayName)}</span></label></div></article>`;
+    }).join("") : "";
+    const workspaceDuplicates = importDuplicatesReviewed ? `<section class="wp-import-duplicates wp-workspace-import-duplicates"><header><div><strong>${importExistingDuplicates.size.toLocaleString("en-IN")} duplicate${importExistingDuplicates.size === 1 ? "" : "s"} already in the workspace</strong><span>${importExistingDuplicates.size ? "Choose the details to keep for every matching number." : "No existing workspace duplicates were found."}</span></div><b>${importExistingDuplicates.size ? "Selection required" : "Clear"}</b></header>${workspaceDuplicateRows ? `<div>${workspaceDuplicateRows}</div>` : ""}</section>` : "";
+    const issueCopy = [duplicateGroups.length ? `${duplicateGroups.length} duplicate number${duplicateGroups.length === 1 ? "" : "s"} in file` : "", parsed.errors.length ? `${parsed.errors.length} invalid row${parsed.errors.length === 1 ? "" : "s"} skipped` : ""].filter(Boolean).join(" · ");
+    importPreview.innerHTML = `<header><div><strong>${importReadyContacts.length.toLocaleString("en-IN")} unique valid contact${importReadyContacts.length === 1 ? "" : "s"}</strong><span>${importProviderLabel ? `${escapeHtml(importProviderLabel)} · ` : ""}${issueCopy || "All rows passed validation"}</span></div><b>${importDuplicatesReviewed ? "Reviewed" : "Review required"}</b></header>${rows ? `<ol>${rows}</ol>` : ""}${importReadyContacts.length > 8 ? `<small>Plus ${(importReadyContacts.length - 8).toLocaleString("en-IN")} more contacts</small>` : ""}${localDuplicates}${workspaceDuplicates}${parsed.errors.length ? `<details><summary>View skipped rows</summary><p>${parsed.errors.slice(0, 100).map(escapeHtml).join("<br>")}${parsed.errors.length > 100 ? `<br>Plus ${(parsed.errors.length - 100).toLocaleString("en-IN")} more invalid rows` : ""}</p></details>` : ""}`;
+    importPreview.querySelectorAll("[data-local-duplicate-phone]").forEach((input) => input.addEventListener("change", () => {
+      importLocalChoices.set(input.dataset.localDuplicatePhone, Number(input.value)); resetImportDuplicateReview(); refreshContactImportPreview();
+    }));
+    importPreview.querySelectorAll("[data-existing-duplicate-phone]").forEach((input) => input.addEventListener("change", () => importExistingChoices.set(input.dataset.existingDuplicatePhone, input.value)));
+  };
+  app.querySelector("#wpImportContactsBtn")?.addEventListener("click", () => importContactsDialog?.showModal());
+  importContactsDialog?.querySelectorAll("[data-close-contact-import]").forEach((button) => button.addEventListener("click", () => importContactsDialog.close()));
+  importContactsForm?.querySelector("[data-google-contact-import]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    try {
+      button.disabled = true;
+      const original = button.querySelector("em")?.textContent || "Continue with Google →";
+      if (button.querySelector("em")) button.querySelector("em").textContent = "Opening Google…";
+      const result = await messagingRequest("start_google_contacts_import", { returnUrl: `${location.origin}${workspacePath("contacts")}` });
+      if (!result?.authorizationUrl) throw new Error("Google Contacts sign-in could not be started.");
+      location.assign(result.authorizationUrl);
+      setTimeout(() => { button.disabled = false; if (button.querySelector("em")) button.querySelector("em").textContent = original; }, 2500);
+    } catch (error) {
+      showToast(error?.message || "Google Contacts sign-in could not be started.", "error");
+      button.disabled = false;
+      if (button.querySelector("em")) button.querySelector("em").textContent = "Continue with Google →";
+    }
+  });
+  importFileInput?.addEventListener("change", async () => {
+    const file = importFileInput.files?.[0];
+    importFileText = ""; importFileName = file?.name || ""; importProviderContacts = []; importProviderLabel = "";
+    const fileNameLabel = importContactsForm.querySelector("[data-import-file-name]");
+    if (fileNameLabel) fileNameLabel.textContent = file?.name || "No file selected";
+    if (!file) { refreshContactImportPreview(); return; }
+    importPasteInput.value = "";
+    importFileText = await file.text();
+    importLocalChoices = new Map(); resetImportDuplicateReview();
+    refreshContactImportPreview();
+  });
+  importPasteInput?.addEventListener("input", () => {
+    importProviderContacts = []; importProviderLabel = "";
+    if (importPasteInput.value.trim() && importFileInput) {
+      importFileInput.value = ""; importFileText = ""; importFileName = "";
+      const fileNameLabel = importContactsForm.querySelector("[data-import-file-name]");
+      if (fileNameLabel) fileNameLabel.textContent = "No file selected";
+    }
+    importLocalChoices = new Map(); resetImportDuplicateReview();
+    refreshContactImportPreview();
+  });
+  importContactsForm?.elements.defaultDialCode?.addEventListener("change", () => { importLocalChoices = new Map(); resetImportDuplicateReview(); refreshContactImportPreview(); });
+  const googleImportParams = new URLSearchParams(location.search);
+  const googleImportError = googleImportParams.get("google_contacts_error") || "";
+  const googleImportToken = googleImportParams.get("google_contacts_import") || "";
+  if (googleImportError || googleImportToken) {
+    googleImportParams.delete("google_contacts_error"); googleImportParams.delete("google_contacts_import");
+    history.replaceState({}, "", `${location.pathname}${googleImportParams.toString() ? `?${googleImportParams}` : ""}${location.hash}`);
+    if (googleImportError) showToast(googleImportError, "error");
+    if (googleImportToken) {
+      messagingRequest("consume_google_contacts_import", { importToken: googleImportToken }).then((result) => {
+        importFileText = ""; importFileName = ""; importProviderContacts = Array.isArray(result?.contacts) ? result.contacts : [];
+        importProviderLabel = result?.providerEmail ? `Google account ${result.providerEmail}` : "Google Contacts";
+        if (importFileInput) importFileInput.value = "";
+        if (importPasteInput) importPasteInput.value = "";
+        importLocalChoices = new Map(); resetImportDuplicateReview(); refreshContactImportPreview();
+        importContactsDialog?.showModal();
+        showToast(`${importProviderContacts.length.toLocaleString("en-IN")} Google contact record${importProviderContacts.length === 1 ? "" : "s"} ready to review.`);
+      }).catch((error) => showToast(error?.message || "Google Contacts could not be opened for review.", "error"));
+    }
+  }
+  importContactsForm?.querySelector("[data-download-contact-template]")?.addEventListener("click", () => {
+    const blob = new Blob(["Name,Phone Number\r\nAnanya Rao,+919876543210\r\nRohan Mehta,+447700900123\r\n"], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = "varada-nexus-contact-import-template.csv"; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  });
+  importContactsForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submitter = event.submitter;
+    if (!submitter || !importReadyContacts.length) return;
+    try {
+      submitter.disabled = true;
+      if (!importDuplicatesReviewed) {
+        submitter.textContent = "Checking workspace duplicates…";
+        const duplicates = [];
+        for (let offset = 0; offset < importReadyContacts.length; offset += importBatchSize) {
+          const result = await messagingRequest("preview_contact_import", { contacts: importReadyContacts.slice(offset, offset + importBatchSize) });
+          duplicates.push(...(result.duplicates || []));
+        }
+        importExistingDuplicates = new Map(duplicates.map((contact) => [String(contact.wa_id), contact]));
+        importExistingChoices = new Map(duplicates.map((contact) => [String(contact.wa_id), "existing"]));
+        importDuplicatesReviewed = true;
+        refreshContactImportPreview();
+        submitter.disabled = false;
+        importPreview.querySelector(".wp-workspace-import-duplicates")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return;
+      }
+      const totals = { imported: 0, updated: 0, skipped: 0 };
+      for (let offset = 0; offset < importReadyContacts.length; offset += importBatchSize) {
+        const batch = importReadyContacts.slice(offset, offset + importBatchSize).map((contact) => {
+          const waId = contact.phone.replace(/\D/g, "");
+          return { ...contact, duplicateResolution: importExistingDuplicates.has(waId) && importExistingChoices.get(waId) === "incoming" ? "replace" : "skip" };
+        });
+        submitter.textContent = importReadyContacts.length > importBatchSize ? `Importing ${Math.min(offset + importBatchSize, importReadyContacts.length).toLocaleString("en-IN")} of ${importReadyContacts.length.toLocaleString("en-IN")}…` : "Importing…";
+        const result = await messagingRequest("import_contacts", { contacts: batch });
+        totals.imported += Number(result.imported || 0); totals.updated += Number(result.updated || 0); totals.skipped += Number(result.skipped || 0);
+      }
+      importContactsDialog.close();
+      const parts = [`${totals.imported.toLocaleString("en-IN")} added`];
+      if (totals.updated) parts.push(`${totals.updated.toLocaleString("en-IN")} replaced`);
+      if (totals.skipped) parts.push(`${totals.skipped.toLocaleString("en-IN")} existing kept`);
+      showToast(`Contact import complete: ${parts.join(", ")}.`);
+      await renderDashboard();
+    } catch (error) {
+      showToast(error?.message || "Contacts could not be imported.", "error");
+      submitter.disabled = false; submitter.textContent = `${importDuplicatesReviewed ? "Import" : "Review"} ${importReadyContacts.length.toLocaleString("en-IN")} contact${importReadyContacts.length === 1 ? "" : "s"}`;
     }
   });
   const newChatDialog = app.querySelector("#wpNewChatDialog");
@@ -3644,13 +5143,14 @@ async function renderDashboard() {
       });
       newChatDialog.close();
       showToast("Template sent. Conversation opened.");
-      location.href = `${workspacePath("inbox")}?conversation=${encodeURIComponent(result.conversationId)}`;
+      await navigateWorkspace(`${workspacePath("inbox")}?conversation=${encodeURIComponent(result.conversationId)}`);
     } catch (error) {
       showToast(error?.message || "The new conversation could not be started.", "error");
       submitter.disabled = false; submitter.textContent = "Send template";
     }
   });
   const contactDialog = app.querySelector("#wpContactDialog");
+  contactDialog?.querySelectorAll("[data-close-contact-dialog]").forEach((button) => button.addEventListener("click", () => contactDialog.close()));
   const canManageContactStatus = ["owner", "admin"].includes(session.roleCode);
   const contactStatusField = contactDialog?.querySelector("select[name='status']");
   const contactConsentField = contactDialog?.querySelector("select[name='marketingConsent']");
@@ -3658,22 +5158,37 @@ async function renderDashboard() {
   const syncContactConsentSource = () => contactConsentSource?.toggleAttribute("hidden", contactConsentField?.value !== "opted_in");
   if (contactStatusField && !canManageContactStatus) {
     contactStatusField.disabled = true;
-    if (contactConsentField) contactConsentField.disabled = true;
     const guidance = contactStatusField.closest("label")?.querySelector("small");
     if (guidance) guidance.textContent = "Only workspace owners and administrators can change messaging status.";
   }
   contactConsentField?.addEventListener("change", syncContactConsentSource);
-  app.querySelectorAll("[data-edit-contact]").forEach((button) => button.addEventListener("click", () => {
+  app.querySelectorAll("[data-edit-contact]").forEach((button) => button.addEventListener("click", async () => {
     const form = contactDialog?.querySelector("form");
     if (!form) return;
     const contact = (workspaceContacts?.contacts || []).find((item) => item.id === button.dataset.editContact);
     form.elements.contactId.value = button.dataset.editContact || "";
     form.elements.displayName.value = button.dataset.contactName || "";
-    form.elements.status.value = button.dataset.contactStatus || "active";
+    form.elements.contactCategory.value = contact?.contact_category || "uncategorized";
+    form.elements.status.value = button.dataset.contactStatus === "blocked" ? "blocked" : "active";
     if (form.elements.marketingConsent) form.elements.marketingConsent.value = contact?.marketing_opt_in_at && !contact?.marketing_opt_out_at ? "opted_in" : contact?.marketing_opt_out_at ? "opted_out" : "unknown";
     if (form.elements.marketingOptInSource) form.elements.marketingOptInSource.value = contact?.marketing_opt_in_source || "manual_record";
     syncContactConsentSource();
+    let consentAudit = form.querySelector("[data-marketing-consent-audit]");
+    if (!consentAudit) {
+      consentAudit = document.createElement("section");
+      consentAudit.className = "wp-marketing-consent-audit";
+      consentAudit.dataset.marketingConsentAudit = "";
+      form.querySelector("footer")?.before(consentAudit);
+    }
+    consentAudit.innerHTML = '<div><strong>Consent history</strong><small>Loading audited keyword events…</small></div>';
     contactDialog.showModal();
+    try {
+      const result = await messagingRequest("list_marketing_consent_events", { contactId: contact?.id });
+      const events = result?.events || [];
+      consentAudit.innerHTML = `<header><strong>Consent history</strong><small>Timestamped STOP and START events</small></header>${events.length ? `<ol>${events.map((item) => `<li><span class="${item.event_type === "opt_in" ? "active" : "paused"}">${item.event_type === "opt_in" ? "Subscribed" : "Unsubscribed"}</span><div><strong>${escapeHtml(item.keyword || item.source || "Consent update")}</strong><small>${escapeHtml(formatProfileDate(item.occurred_at))} · Confirmation ${escapeHtml(item.confirmation_status || "recorded")}</small></div></li>`).join("")}</ol>` : "<p>No keyword consent events have been recorded yet.</p>"}`;
+    } catch (error) {
+      consentAudit.innerHTML = `<header><strong>Consent history</strong></header><p>${escapeHtml(error?.message || "Consent history could not be loaded.")}</p>`;
+    }
   }));
   contactDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
     const submitter = event.submitter;
@@ -3682,11 +5197,9 @@ async function renderDashboard() {
     const form = event.currentTarget;
     try {
       submitter.disabled = true; submitter.textContent = "Saving…";
-      const payload = { contactId: form.elements.contactId.value, displayName: form.elements.displayName.value.trim() };
+      const payload = { contactId: form.elements.contactId.value, displayName: form.elements.displayName.value.trim(), contactCategory: form.elements.contactCategory.value, marketingConsent: form.elements.marketingConsent.value, marketingOptInSource: form.elements.marketingOptInSource.value };
       if (canManageContactStatus) {
         payload.status = form.elements.status.value;
-        payload.marketingConsent = form.elements.marketingConsent.value;
-        payload.marketingOptInSource = form.elements.marketingOptInSource.value;
       }
       await messagingRequest("update_contact", payload);
       contactDialog.close(); showToast("Contact updated."); await renderDashboard();
@@ -3786,23 +5299,127 @@ async function renderDashboard() {
       submit.disabled = false; submit.textContent = original;
     }
   });
-  app.querySelectorAll("[data-remove-business-number]").forEach((button) => button.addEventListener("click", async () => {
-    const connectionId = button.dataset.removeBusinessNumber || "";
-    const label = button.dataset.businessNumberLabel || "this number";
-    if (!window.confirm(`Remove ${label} from this workspace?\n\nSending will stop immediately. Existing conversations, messages and Drive archives will be retained.`)) return;
-    const original = button.textContent || "Remove";
+  app.querySelectorAll("[data-register-business-number]").forEach((button) => button.addEventListener("click", async () => {
+    const connectionId = button.dataset.registerBusinessNumber || "";
+    const original = button.textContent || "Complete registration";
     try {
-      button.disabled = true; button.textContent = "Removing…";
+      button.disabled = true;
+      button.textContent = "Registering…";
+      const result = await onboardingRequest("register_phone", { connectionId });
+      selectWorkspaceConnection(result?.connection?.id || connectionId);
+      showToast("Phone registration completed. This number is ready for WhatsApp messaging.");
+      await renderDashboard();
+    } catch (error) {
+      showToast(error?.message || "Phone registration could not be completed.", "error");
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }));
+  app.querySelector("#wpRefreshBusinessNumbersBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    try {
+      button.disabled = true;
+      button.textContent = "Refreshing…";
+      await refreshBusinessNumberStatuses();
+    } catch (error) {
+      showToast(error?.message || "Business number status could not be refreshed.", "error");
+      button.disabled = false;
+      button.textContent = "Refresh";
+    }
+  });
+  app.querySelectorAll("[data-open-business-number]").forEach((button) => button.addEventListener("click", async () => {
+    const dialog = document.getElementById(button.dataset.openBusinessNumber || "");
+    dialog?.showModal();
+    if (!dialog || button.dataset.metaBillingStatus !== "unchecked" || button.dataset.billingCheckStarted === "true") return;
+    button.dataset.billingCheckStarted = "true";
+    try {
+      const updated = await refreshBusinessNumberStatus(button.dataset.businessNumberId || "", dialog);
+      button.dataset.metaBillingStatus = String(updated?.onboarding_metadata?.meta_billing_status || "unavailable");
+      updateBusinessNumberBillingStatus(button.closest(".wp-account-entry"), updated?.onboarding_metadata || {});
+    } catch (error) {
+      button.dataset.metaBillingStatus = "unavailable";
+      showToast(error?.message || "Meta payment status could not be verified.", "error");
+    }
+  }));
+  app.querySelectorAll(".wp-business-number-dialog").forEach((dialog) => dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  }));
+  app.querySelectorAll("[data-refresh-business-number]").forEach((button) => button.addEventListener("click", async () => {
+    const original = button.textContent;
+    try {
+      button.disabled = true;
+      button.textContent = "Refreshing…";
+      const dialog = button.closest("dialog");
+      const updated = await refreshBusinessNumberStatus(button.dataset.businessNumberId || "", dialog);
+      const trigger = app.querySelector(`[data-business-number-id="${CSS.escape(String(button.dataset.businessNumberId || ""))}"][data-open-business-number]`);
+      if (trigger) {
+        trigger.dataset.metaBillingStatus = String(updated?.onboarding_metadata?.meta_billing_status || "unavailable");
+        trigger.dataset.billingCheckStarted = "true";
+        updateBusinessNumberBillingStatus(trigger.closest(".wp-account-entry"), updated?.onboarding_metadata || {});
+      }
+      showToast("Business number status refreshed.");
+      button.disabled = false;
+      button.textContent = original;
+    } catch (error) {
+      showToast(error?.message || "Business number status could not be refreshed.", "error");
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }));
+  app.querySelectorAll("[data-meta-billing-waba]").forEach((button) => button.addEventListener("click", () => {
+    const wabaId = String(button.dataset.metaBillingWaba || "").replace(/\D/g, "");
+    const businessId = String(button.dataset.metaBillingBusiness || "").replace(/\D/g, "");
+    if (!wabaId || !businessId) {
+      showToast("Meta billing details are not available for this connection. Refresh or reconnect the number.", "error");
+      return;
+    }
+    const query = new URLSearchParams({ business_id: businessId, asset_id: wabaId, placement: "whatsapp_ads" });
+    const url = `https://business.facebook.com/latest/billing_hub/payment_methods/?${query}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }));
+  const removeNumberDialog = app.querySelector("#wpRemoveNumberDialog");
+  const removeNumberForm = app.querySelector("#wpRemoveNumberForm");
+  app.querySelectorAll("[data-remove-business-number]").forEach((button) => button.addEventListener("click", () => {
+    if (!removeNumberDialog || !removeNumberForm) return;
+    button.closest("dialog")?.close();
+    removeNumberForm.dataset.connectionId = button.dataset.removeBusinessNumber || "";
+    removeNumberForm.dataset.numberLabel = button.dataset.businessNumberLabel || "this number";
+    removeNumberForm.reset();
+    const target = removeNumberForm.querySelector("[data-remove-number-name]");
+    if (target) target.textContent = removeNumberForm.dataset.numberLabel;
+    removeNumberDialog.showModal();
+  }));
+  removeNumberDialog?.querySelectorAll("[data-close-remove-number]").forEach((button) => button.addEventListener("click", () => removeNumberDialog.close()));
+  removeNumberDialog?.addEventListener("click", (event) => { if (event.target === removeNumberDialog) removeNumberDialog.close(); });
+  removeNumberForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!removeNumberForm.reportValidity()) return;
+    const connectionId = removeNumberForm.dataset.connectionId || "";
+    const label = removeNumberForm.dataset.numberLabel || "This number";
+    const submit = event.submitter || removeNumberForm.querySelector('[type="submit"]');
+    try {
+      submit.disabled = true;
+      submit.textContent = "Removing…";
       await onboardingRequest("remove_connection", { connectionId });
       if (workspaceSelectedConnectionId === connectionId) selectWorkspaceConnection("");
-      showToast(`${label} was removed from this workspace. Message history was retained.`);
+      removeNumberDialog?.close();
+      showToast(`${label} was deregistered from WhatsApp and removed from this workspace. Message history was retained.`);
       await renderDashboard();
     } catch (error) {
       showToast(error?.message || "The business number could not be removed.", "error");
-      button.disabled = false; button.textContent = original;
+      submit.disabled = false;
+      submit.textContent = "Remove number";
     }
-  }));
+  });
+  if (preserveScroll) window.scrollTo({ top: previousScrollTop, left: 0, behavior: "auto" });
   if (setupReady && ["onboarding", "accounts"].includes(view)) loadFacebookSdk().catch(() => {});
+  if (view === "accounts" && workspaceConnections.some((connection) => connection.status !== "disconnected" && connection.phone_number_id)) {
+    businessNumberRefreshTimer = window.setTimeout(() => {
+      if (currentWorkspaceView() === "accounts" && document.visibilityState === "visible") {
+        refreshBusinessNumberStatuses({ silent: true }).catch(() => {});
+      }
+    }, 30000);
+  }
 }
 
 async function init() {
@@ -3816,7 +5433,8 @@ async function init() {
       location.replace(`${ACCESS_PATH}#signin`);
       return;
     }
-    app.innerHTML = `<div class="wp-loading">Opening your business workspace…</div>`;
+    bindWorkspaceNavigation();
+    app.innerHTML = `<div class="wp-loading wp-branded-loading" role="status" aria-live="polite"><div class="wp-loading-brand"><span class="wp-loading-logo"><img src="/images/logo.png" alt="" /></span><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></div><div class="wp-loading-progress" aria-hidden="true"><i></i><i></i><i></i></div><p>Opening your workspace</p></div>`;
     try { await restoreSession(); }
     catch { clearSession(); location.replace(`${ACCESS_PATH}#signin`); }
     return;

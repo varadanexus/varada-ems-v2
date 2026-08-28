@@ -132,7 +132,7 @@ function render() {
 
     <section class="card" id="billingCreditNotes" style="margin-top:1rem;${visible("credit-notes")}">
       <h3>Credit Notes (${state.creditNotes.length})</h3>
-      <p class="muted">Issue a credit note against an invoice or standalone. Numbered on the shared central register (CR/${new Date().getFullYear() % 100}-${(new Date().getFullYear() % 100) + 1}/NNN).</p>
+      <p class="muted">Issue a credit note against an invoice or standalone. Numbered on the shared company register (CN/001, CN/002, ...).</p>
       <form id="dsCnForm">
         <div class="ds-head4">
           <div class="ds-field"><label>Client *</label><select name="client_id" required><option value="">Select…</option>${cnCliOpt}</select></div>

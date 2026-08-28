@@ -4,6 +4,7 @@ import { Image } from "https://deno.land/x/imagescript@1.3.0/mod.ts";
 
 const GRAPH_VERSION = Deno.env.get("META_GRAPH_VERSION") || "v25.0";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const INSTAGRAM_GRAPH_BASE = `https://graph.instagram.com/${GRAPH_VERSION}`;
 const FACEBOOK_BASE = `https://www.facebook.com/${GRAPH_VERSION}`;
 const CALLBACK_URL =
   Deno.env.get("META_CALLBACK_URL") ||
@@ -257,6 +258,15 @@ function validReturnUrl(input: unknown) {
   try {
     const url = new URL(String(input || DEFAULT_RETURN_URL));
     if (!ALLOWED_ORIGINS.has(url.origin)) return DEFAULT_RETURN_URL;
+    const localDevelopment = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if (!localDevelopment) {
+      if (!url.pathname.includes("/new-ems/modules/social-media-manager/")) {
+        return DEFAULT_RETURN_URL;
+      }
+      url.pathname = "/new-ems/modules/social-media-manager/index.html";
+      url.search = "view=accounts";
+      url.hash = "";
+    }
     return url.href;
   } catch {
     return DEFAULT_RETURN_URL;
@@ -543,6 +553,7 @@ async function graph(
     method: init.method || "GET",
     headers: init.headers,
     body: init.body,
+    signal: init.signal,
   });
   const payload = await response.json();
   if (!response.ok || payload?.error) {
@@ -553,6 +564,39 @@ async function graph(
     );
   }
   return payload;
+}
+
+async function inspectTokenPermissions(accessToken: string, returnedScopes: string[] = []) {
+  const appAccessToken = `${env("META_APP_ID")}|${env("META_APP_SECRET")}`;
+  const [permissionsResult, debugResult] = await Promise.allSettled([
+    graph("me/permissions", accessToken),
+    graph("debug_token", appAccessToken, {
+      query: { input_token: accessToken },
+    }),
+  ]);
+  const permissionStatus = new Map<string, string>();
+  if (permissionsResult.status === "fulfilled") {
+    for (const item of permissionsResult.value.data || []) {
+      if (item?.permission) permissionStatus.set(item.permission, item.status || "declined");
+    }
+  }
+  const debugData = debugResult.status === "fulfilled" ? debugResult.value?.data : null;
+  const debugScopes = [
+    ...(Array.isArray(debugData?.scopes) ? debugData.scopes : []),
+    ...(Array.isArray(debugData?.granular_scopes)
+      ? debugData.granular_scopes.map((item: any) => item?.scope).filter(Boolean)
+      : []),
+    ...returnedScopes,
+  ];
+  for (const scope of debugScopes) permissionStatus.set(String(scope), "granted");
+  return {
+    grantedScopes: [...permissionStatus.entries()]
+      .filter(([, status]) => status === "granted")
+      .map(([permission]) => permission),
+    declinedScopes: [...permissionStatus.entries()]
+      .filter(([, status]) => status !== "granted")
+      .map(([permission]) => permission),
+  };
 }
 
 async function defaultBrand(db: any) {
@@ -570,8 +614,9 @@ async function defaultBrand(db: any) {
 async function handleConnectUrl(req: Request, payload: any) {
   const { db, appUser } = await authenticatedCaller(req, "edit");
   const brandId = payload.brandId || (await defaultBrand(db));
-  const connectionMode = payload.connectionMode === "ads_mcp"
-    ? "ads_mcp"
+  const requestedMode = String(payload.connectionMode || "standard");
+  const connectionMode = ["ads_mcp", "ads_review"].includes(requestedMode)
+    ? requestedMode
     : "standard";
   const state = await createState({
     appUserId: appUser.id,
@@ -583,14 +628,29 @@ async function handleConnectUrl(req: Request, payload: any) {
   url.searchParams.set("client_id", env("META_APP_ID"));
   url.searchParams.set("redirect_uri", CALLBACK_URL);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("override_default_response_type", "true");
-  const configurationId = connectionMode === "ads_mcp"
-    ? Deno.env.get("META_ADS_MCP_LOGIN_CONFIG_ID")
-    : Deno.env.get("META_LOGIN_CONFIG_ID");
-  if (configurationId) url.searchParams.set("config_id", configurationId);
-  url.searchParams.set(
-    "scope",
-    [
+  // Meta does not prompt again for a permission that was previously skipped
+  // or declined unless the login dialog is explicitly marked as a re-request.
+  url.searchParams.set("auth_type", "rerequest");
+  url.searchParams.set("return_scopes", "true");
+  const configurationId = connectionMode === "ads_review"
+    ? null
+    : connectionMode === "ads_mcp"
+      ? Deno.env.get("META_ADS_MCP_LOGIN_CONFIG_ID")
+      : Deno.env.get("META_LOGIN_CONFIG_ID");
+  if (configurationId) {
+    url.searchParams.set("override_default_response_type", "true");
+    url.searchParams.set("config_id", configurationId);
+  }
+  const requestedScopes = connectionMode === "ads_review"
+    ? [
+      "ads_management",
+      "ads_read",
+      "business_management",
+      "pages_manage_ads",
+      "pages_read_engagement",
+      "pages_show_list",
+    ]
+    : [
       "pages_show_list",
       "pages_read_engagement",
       "pages_manage_metadata",
@@ -604,7 +664,10 @@ async function handleConnectUrl(req: Request, payload: any) {
       "leads_retrieval",
       "business_management",
       "ads_mcp_management",
-    ].join(","),
+    ];
+  url.searchParams.set(
+    "scope",
+    requestedScopes.join(","),
   );
   url.searchParams.set("state", state);
   return { url: url.href, callbackUrl: CALLBACK_URL };
@@ -643,11 +706,15 @@ async function handleCallback(req: Request, requestUrl: URL) {
     const expiresIn =
       Number(longPayload.expires_in || shortPayload.expires_in || 5184000);
 
-    const [identity, permissions] = await Promise.all([
+    const returnedScopes = String(requestUrl.searchParams.get("granted_scopes") || "")
+      .split(",")
+      .map((scope) => scope.trim())
+      .filter(Boolean);
+    const [identity, permissionSnapshot] = await Promise.all([
       graph("me", userToken, { query: { fields: "id,name" } }),
-      graph("me/permissions", userToken),
+      inspectTokenPermissions(userToken, returnedScopes),
     ]);
-    const pages = state.connectionMode === "ads_mcp"
+    const pages = ["ads_mcp", "ads_review"].includes(state.connectionMode)
       ? { data: [] }
       : await graph("me/accounts", userToken, {
         query: {
@@ -656,9 +723,7 @@ async function handleCallback(req: Request, requestUrl: URL) {
           limit: "100",
         },
       });
-    const grantedScopes = (permissions.data || [])
-      .filter((item: any) => item.status === "granted")
-      .map((item: any) => item.permission);
+    const grantedScopes = permissionSnapshot.grantedScopes;
     const db = adminClient();
     const credentialExpiresAt = new Date(
       Date.now() + expiresIn * 1000,
@@ -789,6 +854,37 @@ async function activeConnection(db: any, brandId?: string) {
   return { row: data, accessToken: credentials.accessToken };
 }
 
+async function activeAdsConnection(db: any, brandId?: string) {
+  const connections = await activeAdsConnections(db, brandId);
+  return connections[0];
+}
+
+async function activeAdsConnections(db: any, brandId?: string) {
+  let query = db
+    .from("social_meta_connections")
+    .select("*")
+    .eq("status", "active")
+    .order("updated_at", { ascending: false })
+    .limit(20);
+  if (brandId) query = query.eq("brand_id", brandId);
+  const { data, error } = await query;
+  if (error || !data?.length) throw new Error("Connect Meta before using this feature");
+  const selected = data.filter((row: any) => {
+    const scopes = new Set(Array.isArray(row.granted_scopes) ? row.granted_scopes : []);
+    return scopes.has("ads_read") && scopes.has("ads_management");
+  });
+  if (!selected.length) {
+    throw new Error("Reconnect Meta with both ads_read and ads_management before using Ads Campaigns");
+  }
+  const connections = [];
+  for (const row of selected) {
+    const credentials = JSON.parse(await decryptSecret(row.credential_ciphertext));
+    if (credentials.accessToken) connections.push({ row, accessToken: credentials.accessToken });
+  }
+  if (!connections.length) throw new Error("Stored Meta token is invalid");
+  return connections;
+}
+
 async function activeConnectionWithScope(
   db: any,
   scope: string,
@@ -836,24 +932,14 @@ async function handleMetaConnectionStatus(req: Request) {
   const connections = [];
   for (const row of rows || []) {
     const credentials = JSON.parse(await decryptSecret(row.credential_ciphertext));
-    const permissions = await graph("me/permissions", credentials.accessToken);
-    const permissionStatus = Object.fromEntries(
-      (permissions.data || []).map((item: any) => [
-        item.permission,
-        item.status,
-      ]),
-    );
+    const permissionSnapshot = await inspectTokenPermissions(credentials.accessToken);
     connections.push({
       id: row.id,
       external_user_id: row.external_user_id,
       display_name: row.display_name,
       credential_expires_at: row.credential_expires_at,
-      granted_scopes: Object.entries(permissionStatus)
-        .filter(([, status]) => status === "granted")
-        .map(([permission]) => permission),
-      declined_scopes: Object.entries(permissionStatus)
-        .filter(([, status]) => status !== "granted")
-        .map(([permission]) => permission),
+      granted_scopes: permissionSnapshot.grantedScopes,
+      declined_scopes: permissionSnapshot.declinedScopes,
       updated_at: row.updated_at,
     });
   }
@@ -1560,6 +1646,7 @@ function normalizeConversation(conversation: any, ownInstagramId: string) {
   return {
     id: conversation.id,
     updated_time: conversation.updated_time || latest.created_time || null,
+    unread_count: Math.max(0, Number(conversation.unread_count || 0)),
     contact: {
       id: contact.id || null,
       name: contact.name || contact.username || "Instagram user",
@@ -1577,43 +1664,82 @@ async function handleInstagramInbox(req: Request, payload: any) {
   const query = {
     platform: "instagram",
     fields:
-      "id,updated_time,participants{id,name,username},messages.limit(30){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
+      "id,updated_time,unread_count,participants{id,name,username},messages.limit(1){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
     limit: String(Math.max(1, Math.min(Number(payload.limit || 50), 100))),
   };
-  let result: any;
-  let ownerObjectId = resolved.pageId;
-  try {
-    result = await graph(`${resolved.pageId}/conversations`, resolved.accessToken, {
-      query,
-    });
-  } catch (pageError) {
+  const candidates = [
+    {
+      source: "instagram_account",
+      ownerObjectId: resolved.account.external_account_id,
+      path: `${resolved.account.external_account_id}/conversations`,
+    },
+    {
+      source: "instagram_graph",
+      ownerObjectId: resolved.account.external_account_id,
+      path:
+        `${INSTAGRAM_GRAPH_BASE}/${resolved.account.external_account_id}/conversations`,
+    },
+    {
+      source: "facebook_page",
+      ownerObjectId: resolved.pageId,
+      path: `${resolved.pageId}/conversations`,
+    },
+  ];
+  const controllers = candidates.map(() => new AbortController());
+  const attempts = candidates.map(async (candidate, index) => {
     try {
-      ownerObjectId = resolved.account.external_account_id;
-      result = await graph(
-        `${resolved.account.external_account_id}/conversations`,
-        resolved.accessToken,
-        { query },
-      );
-    } catch (instagramError) {
-      const pageMessage = String(pageError?.message || pageError);
-      const instagramMessage = String(
-        instagramError?.message || instagramError,
-      );
-      const capabilityPending = [pageMessage, instagramMessage].some(
-        (message) =>
-          message.includes("(#3)") ||
-          message.toLowerCase().includes("does not have the capability") ||
-          message.toLowerCase().includes("instagram_manage_messages"),
-      );
-      if (capabilityPending) {
-        throw new Error(
-          "Instagram Inbox is awaiting Meta approval for instagram_manage_messages. Connected Tools and Page access are configured; reconnect Meta after Advanced Access is approved.",
-        );
-      }
+      const candidateResult = await graph(candidate.path, resolved.accessToken, {
+        query,
+        signal: controllers[index].signal,
+      });
+      return { candidate, candidateResult, error: "", index };
+    } catch (reason) {
+      return {
+        candidate,
+        candidateResult: null,
+        error: String(reason?.message || reason),
+        index,
+      };
+    }
+  });
+  let winner: Awaited<(typeof attempts)[number]> | null = null;
+  try {
+    winner = await Promise.any(
+      attempts.map((attempt) => attempt.then((value) => {
+        if (value.candidateResult?.data?.length) return value;
+        throw new Error(value.error || "No conversations returned");
+      })),
+    );
+    controllers.forEach((controller, index) => {
+      if (index !== winner?.index) controller.abort();
+    });
+  } catch {
+    // When every endpoint is empty or unavailable, retain the first valid empty result.
+  }
+  const settled = winner ? [winner] : await Promise.all(attempts);
+  const fallback = settled.find((value) => value.candidateResult) || null;
+  const selected = winner || fallback;
+  const result: any = selected?.candidateResult || null;
+  const ownerObjectId = selected?.candidate.ownerObjectId || resolved.pageId;
+  const messagingSource = selected?.candidate.source || "facebook_page";
+  const errors = settled
+    .filter((value) => value.error && value.error !== "The operation was aborted")
+    .map((value) => `${value.candidate.source}: ${value.error}`);
+  if (!result) {
+    const capabilityPending = errors.some(
+      (message) =>
+        message.includes("(#3)") ||
+        message.toLowerCase().includes("does not have the capability") ||
+        message.toLowerCase().includes("instagram_manage_messages"),
+    );
+    if (capabilityPending) {
       throw new Error(
-        `Instagram Inbox could not be synchronized. Page API: ${pageMessage}. Instagram API: ${instagramMessage}.`,
+        "Instagram Inbox is awaiting Meta approval for instagram_manage_messages. Reconnect Meta after Advanced Access is approved, or use an app-role account for review testing.",
       );
     }
+    throw new Error(
+      `Instagram Inbox could not be synchronized. ${errors.join(" | ")}`,
+    );
   }
   return {
     account: {
@@ -1623,6 +1749,7 @@ async function handleInstagramInbox(req: Request, payload: any) {
       username: resolved.account.username,
       profile_picture_url: resolved.account.metadata?.profilePictureUrl || null,
       messaging_owner_id: ownerObjectId,
+      messaging_source: messagingSource,
     },
     conversations: (result.data || []).map((item: any) =>
       normalizeConversation(item, resolved.account.external_account_id),
@@ -1640,7 +1767,7 @@ async function handleInstagramConversation(req: Request, payload: any) {
   const conversation = await graph(conversationId, resolved.accessToken, {
     query: {
       fields:
-        "id,updated_time,participants{id,name,username},messages.limit(100){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
+        "id,updated_time,unread_count,participants{id,name,username},messages.limit(100){id,created_time,from{id,name,username},to{id,name,username},message,attachments{id,mime_type,name,size,image_data,video_data,file_url},shares}",
     },
   });
   return normalizeConversation(conversation, resolved.account.external_account_id);
@@ -1688,6 +1815,46 @@ async function handleInstagramSendMessage(req: Request, payload: any) {
   return { messageId: result.message_id || null, recipientId };
 }
 
+async function handleInstagramMarkRead(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "post");
+  const resolved = await instagramInboxAccount(db, String(payload.accountId || "") || undefined);
+  const recipientId = cleanText(payload.recipientId, 160);
+  if (!recipientId) throw new Error("Instagram conversation recipient is required");
+  const request = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      sender_action: "mark_seen",
+    }),
+  };
+  let result: any;
+  try {
+    result = await graph(`${resolved.pageId}/messages`, resolved.accessToken, request);
+  } catch (pageError) {
+    try {
+      result = await graph(
+        `${resolved.account.external_account_id}/messages`,
+        resolved.accessToken,
+        request,
+      );
+    } catch {
+      throw pageError;
+    }
+  }
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "instagram.conversation.read",
+    resource_type: "instagram_conversation",
+    resource_id: cleanText(payload.conversationId, 500) || recipientId,
+    after_data: {
+      accountId: resolved.account.id,
+      recipientId,
+    },
+  });
+  return { recipientId: result.recipient_id || recipientId, read: true };
+}
+
 async function handleDashboard(req: Request) {
   const { db, appUser } = await authenticatedCaller(req, "view");
   const now = new Date();
@@ -1731,6 +1898,33 @@ async function handleDashboard(req: Request) {
   if (metricsResult.error) throw new Error(metricsResult.error.message);
   if (trendsResult.error) throw new Error(trendsResult.error.message);
   if (accountsResult.error) throw new Error(accountsResult.error.message);
+
+  const accountsConnected = accountsResult.count || 0;
+  if (accountsConnected === 0) {
+    return {
+      userName:
+        String(appUser.display_name || appUser.email || "Admin").split(/\s+/)[0],
+      metrics: {
+        today: 0,
+        scheduled: 0,
+        published: 0,
+        drafts: 0,
+        pendingApprovals: 0,
+        reach: 0,
+        impressions: 0,
+        interactions: 0,
+        engagementRate: 0,
+        followerGrowth: 0,
+      },
+      pipeline: {},
+      engagementSeries: [],
+      upcoming: [],
+      trends: [],
+      recommendation: "Connect Meta to activate live content operations for Nexus Social.",
+      accountsConnected: 0,
+      hasAnalytics: false,
+    };
+  }
 
   const content = contentResult.data || [];
   const metrics = metricsResult.data || [];
@@ -1817,7 +2011,7 @@ async function handleDashboard(req: Request) {
     recommendation: metrics.length
       ? "Recommendations will improve as additional live posts and analytics are synchronized."
       : null,
-    accountsConnected: accountsResult.count || 0,
+    accountsConnected,
     hasAnalytics: metrics.length > 0,
   };
 }
@@ -2312,8 +2506,8 @@ async function handleContentAction(req: Request, payload: any) {
     if (content.status !== "approved") {
       throw new Error("Only approved content can be published");
     }
-    if (content.generation_fingerprint && content.safety_status !== "passed") {
-      throw new Error("Content safety and brand validation must pass before publishing");
+    if (content.safety_status === "blocked") {
+      throw new Error("Blocked content cannot be published");
     }
     if (
       !Array.isArray(content.platforms) ||
@@ -2437,8 +2631,14 @@ async function handleContentAction(req: Request, payload: any) {
       action === "reject" ? String(payload.comment || "Rejected") : null,
     archived_at: action === "archive" ? new Date().toISOString() : null,
   };
+  if (action === "approve" && nextStatus === "approved" && content.safety_status !== "blocked") {
+    update.safety_status = "passed";
+  }
   if (action === "schedule") update.scheduled_for = payload.scheduledFor;
-  if (publication) update.published_at = new Date().toISOString();
+  if (publication) {
+    update.published_at = new Date().toISOString();
+    if (content.safety_status !== "blocked") update.safety_status = "passed";
+  }
   const { data: updated, error: updateError } = await db
     .from("social_content_items")
     .update(update)
@@ -2540,15 +2740,71 @@ async function handleAddAccount(req: Request, payload: any) {
 
 async function handleListAdAccounts(req: Request, payload: any) {
   const { db } = await authenticatedCaller(req, "view");
-  const connection = await activeConnection(db, payload.brandId);
-  const result = await graph("me/adaccounts", connection.accessToken, {
-    query: {
-      fields:
-        "id,account_id,name,currency,timezone_name,account_status,business{id,name},amount_spent,balance,disable_reason",
-      limit: "200",
-    },
-  });
-  const rows = (result.data || []).map((account: any) => ({
+  const connections = await activeAdsConnections(db, payload.brandId);
+  const fields =
+    "id,account_id,name,currency,timezone_name,account_status,business{id,name},amount_spent,balance,disable_reason";
+  const errors: string[] = [];
+  let rows: any[] = [];
+
+  for (const connection of connections) {
+    try {
+      const result = await graph("me/adaccounts", connection.accessToken, {
+        query: { fields, limit: "200" },
+      });
+      rows = adAccountRows(result.data || [], connection);
+      if (rows.length) break;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+
+    try {
+      const businessResult = await graph("me/businesses", connection.accessToken, {
+        query: {
+          fields:
+            `id,name,owned_ad_accounts.limit(100){${fields}},client_ad_accounts.limit(100){${fields}}`,
+          limit: "100",
+        },
+      });
+      const accounts: any[] = [];
+      for (const business of businessResult.data || []) {
+        for (const account of business.owned_ad_accounts?.data || []) {
+          accounts.push({
+            ...account,
+            business: account.business || { id: business.id, name: business.name },
+          });
+        }
+        for (const account of business.client_ad_accounts?.data || []) {
+          accounts.push({
+            ...account,
+            business: account.business || { id: business.id, name: business.name },
+          });
+        }
+      }
+      rows = adAccountRows(accounts, connection);
+      if (rows.length) break;
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  const uniqueRows = [...new Map(rows.map((row) => [row.external_account_id, row])).values()];
+  if (uniqueRows.length) {
+    const { error } = await db
+      .from("social_ad_accounts")
+      .upsert(uniqueRows, { onConflict: "external_account_id" });
+    if (error) throw new Error(error.message);
+  }
+  if (!uniqueRows.length && errors.length) {
+    throw new Error(
+      "Meta accepted the ads scopes, but no usable ad account was returned. Confirm the Meta user is assigned to the ad account in Business Settings with ads_read/ads_management access, then reconnect Meta and sync again. Last Meta response: " +
+        errors[errors.length - 1],
+    );
+  }
+  return uniqueRows;
+}
+
+function adAccountRows(accounts: any[], connection: any) {
+  return accounts.map((account: any) => ({
     connection_id: connection.row.id,
     brand_id: connection.row.brand_id,
     external_account_id: account.id,
@@ -2566,13 +2822,6 @@ async function handleListAdAccounts(req: Request, payload: any) {
     },
     last_synced_at: new Date().toISOString(),
   }));
-  if (rows.length) {
-    const { error } = await db
-      .from("social_ad_accounts")
-      .upsert(rows, { onConflict: "external_account_id" });
-    if (error) throw new Error(error.message);
-  }
-  return rows;
 }
 
 async function resolveAdAccount(db: any, externalId: string) {
@@ -2601,6 +2850,16 @@ function moneyFromMinorUnits(value: unknown) {
 
 async function syncCampaignRows(db: any, adAccountId: string, campaigns: any[]) {
   const now = new Date().toISOString();
+  const externalIds = campaigns.map((campaign) => campaign.id).filter(Boolean);
+  const { data: existingRows } = externalIds.length
+    ? await db
+      .from("social_ad_campaigns")
+      .select("external_campaign_id,metadata")
+      .in("external_campaign_id", externalIds)
+    : { data: [] };
+  const existingMetadata = new Map(
+    (existingRows || []).map((item: any) => [item.external_campaign_id, item.metadata || {}]),
+  );
   const rows = campaigns.map((campaign) => ({
     ad_account_id: adAccountId,
     external_campaign_id: campaign.id,
@@ -2613,8 +2872,15 @@ async function syncCampaignRows(db: any, adAccountId: string, campaigns: any[]) 
     start_time: campaign.start_time || null,
     stop_time: campaign.stop_time || null,
     metadata: {
+      ...(existingMetadata.get(campaign.id) || {}),
       buyingType: campaign.buying_type || null,
+      bidStrategy: campaign.bid_strategy || null,
       specialAdCategories: campaign.special_ad_categories || [],
+      configuredStatus: campaign.configured_status || campaign.status || null,
+      budgetRemaining: moneyFromMinorUnits(campaign.budget_remaining),
+      spendCap: moneyFromMinorUnits(campaign.spend_cap),
+      createdTime: campaign.created_time || null,
+      updatedTime: campaign.updated_time || null,
     },
     last_synced_at: now,
   }));
@@ -2639,7 +2905,7 @@ async function handleListCampaigns(req: Request, payload: any) {
     {
       query: {
         fields:
-          "id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time,buying_type,special_ad_categories,created_time,updated_time",
+          "id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,start_time,stop_time,buying_type,bid_strategy,special_ad_categories,created_time,updated_time",
         limit: String(Math.min(Number(payload.limit || 100), 200)),
       },
     },
@@ -2660,10 +2926,21 @@ async function handleCreateCampaign(req: Request, payload: any) {
     name,
     objective,
     status: payload.status === "ACTIVE" ? "ACTIVE" : "PAUSED",
+    buying_type: ["AUCTION", "RESERVED"].includes(String(payload.buyingType))
+      ? String(payload.buyingType)
+      : "AUCTION",
     special_ad_categories: Array.isArray(payload.specialAdCategories)
       ? payload.specialAdCategories
       : [],
   };
+  const allowedBidStrategies = new Set([
+    "LOWEST_COST_WITHOUT_CAP",
+    "LOWEST_COST_WITH_BID_CAP",
+    "COST_CAP",
+  ]);
+  if (allowedBidStrategies.has(String(payload.bidStrategy || ""))) {
+    params.bid_strategy = String(payload.bidStrategy);
+  }
   if (payload.dailyBudget) {
     params.daily_budget = Math.round(Number(payload.dailyBudget) * 100);
   }
@@ -2682,16 +2959,48 @@ async function handleCreateCampaign(req: Request, payload: any) {
   const campaign = await graph(result.id, resolved.accessToken, {
     query: {
       fields:
-        "id,name,objective,status,effective_status,daily_budget,lifetime_budget,start_time,stop_time,buying_type,special_ad_categories",
+        "id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,start_time,stop_time,buying_type,bid_strategy,special_ad_categories,created_time,updated_time",
     },
   });
   const [row] = await syncCampaignRows(db, resolved.account.id, [campaign]);
+  const advancedPlan = payload.advancedPlan && typeof payload.advancedPlan === "object"
+    ? payload.advancedPlan
+    : null;
+  if (advancedPlan) {
+    const { error: planError } = await db
+      .from("social_ad_campaigns")
+      .update({
+        metadata: {
+          ...(row.metadata || {}),
+          advancedPlan,
+          setupState: "campaign_created",
+          adSetCreated: false,
+          adCreated: false,
+        },
+      })
+      .eq("external_campaign_id", result.id);
+    if (planError) throw new Error(planError.message);
+    row.metadata = {
+      ...(row.metadata || {}),
+      advancedPlan,
+      setupState: "campaign_created",
+      adSetCreated: false,
+      adCreated: false,
+    };
+  }
   await db.from("social_audit_logs").insert({
     actor_id: appUser.id,
     action: "meta.campaign.created",
     resource_type: "social_ad_campaign",
     resource_id: result.id,
-    after_data: { name, objective, status: params.status },
+    after_data: {
+      name,
+      objective,
+      status: params.status,
+      buyingType: params.buying_type,
+      bidStrategy: params.bid_strategy || null,
+      hasAdvancedPlan: Boolean(advancedPlan),
+    },
   });
   return row;
 }
@@ -2713,15 +3022,33 @@ async function handleUpdateCampaign(req: Request, payload: any) {
     ),
   );
   const allowed: Record<string, unknown> = {};
-  if (payload.name) allowed.name = String(payload.name).trim();
+  if (payload.name !== undefined) {
+    const name = String(payload.name).trim();
+    if (!name) throw new Error("Campaign name is required");
+    allowed.name = name;
+  }
   if (["ACTIVE", "PAUSED", "ARCHIVED"].includes(payload.status)) {
     allowed.status = payload.status;
   }
   if (payload.dailyBudget !== undefined) {
-    allowed.daily_budget = Math.round(Number(payload.dailyBudget) * 100);
+    const amount = Number(payload.dailyBudget);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Daily budget must be greater than zero");
+    allowed.daily_budget = Math.round(amount * 100);
   }
   if (payload.lifetimeBudget !== undefined) {
-    allowed.lifetime_budget = Math.round(Number(payload.lifetimeBudget) * 100);
+    const amount = Number(payload.lifetimeBudget);
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Lifetime budget must be greater than zero");
+    allowed.lifetime_budget = Math.round(amount * 100);
+  }
+  const allowedBidStrategies = new Set([
+    "LOWEST_COST_WITHOUT_CAP",
+    "LOWEST_COST_WITH_BID_CAP",
+    "COST_CAP",
+  ]);
+  if (payload.bidStrategy !== undefined) {
+    const bidStrategy = String(payload.bidStrategy || "");
+    if (!allowedBidStrategies.has(bidStrategy)) throw new Error("Unsupported bid strategy");
+    allowed.bid_strategy = bidStrategy;
   }
   if (!Object.keys(allowed).length) throw new Error("No supported campaign changes supplied");
   const body = new URLSearchParams();
@@ -2740,7 +3067,57 @@ async function handleUpdateCampaign(req: Request, payload: any) {
     },
     after_data: allowed,
   });
-  return { id: campaignId, updated: true };
+  const campaign = await graph(campaignId, credentials.accessToken, {
+    query: {
+      fields:
+        "id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,spend_cap,start_time,stop_time,buying_type,bid_strategy,special_ad_categories,created_time,updated_time",
+    },
+  });
+  const [row] = await syncCampaignRows(
+    db,
+    localCampaign.ad_account_id,
+    [campaign],
+  );
+  return row;
+}
+
+async function handleDeleteCampaign(req: Request, payload: any) {
+  const { db, appUser } = await authenticatedCaller(req, "edit");
+  const campaignId = String(payload.campaignId || "").trim();
+  const confirmationName = String(payload.confirmationName || "").trim();
+  if (!campaignId || !confirmationName) {
+    throw new Error("Campaign ID and confirmation name are required");
+  }
+  const { data: localCampaign, error: campaignError } = await db
+    .from("social_ad_campaigns")
+    .select("*,social_ad_accounts(*,social_meta_connections(*))")
+    .eq("external_campaign_id", campaignId)
+    .maybeSingle();
+  if (campaignError || !localCampaign) throw new Error("Synchronize the campaign before deleting it");
+  if (confirmationName !== localCampaign.name) throw new Error("Campaign confirmation did not match");
+  const credentials = JSON.parse(
+    await decryptSecret(localCampaign.social_ad_accounts.social_meta_connections.credential_ciphertext),
+  );
+  await graph(campaignId, credentials.accessToken, { method: "DELETE" });
+  const { error: deleteError } = await db
+    .from("social_ad_campaigns")
+    .delete()
+    .eq("external_campaign_id", campaignId);
+  if (deleteError) throw new Error(deleteError.message);
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "meta.campaign.deleted",
+    resource_type: "social_ad_campaign",
+    resource_id: campaignId,
+    before_data: {
+      name: localCampaign.name,
+      objective: localCampaign.objective,
+      status: localCampaign.status,
+      effectiveStatus: localCampaign.effective_status,
+    },
+    after_data: { deleted: true },
+  });
+  return { id: campaignId, deleted: true };
 }
 
 async function handleSettings(req: Request) {
@@ -3262,6 +3639,11 @@ function vertexImageModels() {
   ].map((item) => item.trim()).filter(Boolean);
   return [...new Set([
     ...configured,
+    // Current Model Garden image model for this Google Cloud project.
+    // The older Imagen 3 publisher IDs are not available in every project,
+    // while Agent Studio exposes Gemini 2.5 Flash Image through Imagen 4.
+    "imagen-4.0-generate-001",
+    "imagen-4.0-fast-generate-001",
     "gemini-2.5-flash-image",
     "imagen-3.0-generate-002",
     "imagen-3.0-fast-generate-001",
@@ -3270,6 +3652,15 @@ function vertexImageModels() {
 
 function isImagenModel(model: string) {
   return /^imagen-|^imagegeneration@/i.test(model);
+}
+
+function imageBase64FromGenerateContent(response: any) {
+  const parts = response?.candidates?.flatMap((candidate: any) => candidate?.content?.parts || []) || [];
+  const imagePart = parts.find((part: any) =>
+    (part?.inlineData?.data || part?.inline_data?.data) &&
+    String(part.inlineData?.mimeType || part.inline_data?.mime_type || "").startsWith("image/")
+  );
+  return imagePart?.inlineData?.data || imagePart?.inline_data?.data || "";
 }
 
 async function generateVertexBaseArtwork(options: {
@@ -3317,10 +3708,30 @@ async function generateVertexBaseArtwork(options: {
       }),
     },
   );
-  const imagePart = response.candidates?.[0]?.content?.parts?.find((part: any) =>
-    part.inlineData?.data && String(part.inlineData?.mimeType || "").startsWith("image/")
+  return imageBase64FromGenerateContent(response);
+}
+
+async function generateGeminiApiBaseArtwork(options: {
+  key: string;
+  model: string;
+  prompt: string;
+  aspectRatio: string;
+}) {
+  const response = await providerJson(
+    `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(options.model)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": options.key },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: options.prompt }] }],
+        generationConfig: {
+          responseModalities: ["IMAGE"],
+          responseFormat: { image: { aspectRatio: options.aspectRatio } },
+        },
+      }),
+    },
   );
-  return imagePart?.inlineData?.data || "";
+  return imageBase64FromGenerateContent(response);
 }
 
 async function generateBrandedImage(
@@ -3348,6 +3759,7 @@ async function generateBrandedImage(
 Create original premium corporate artwork for a diversified Indian enterprise.
 Brand palette: ${JSON.stringify(brand.visual_identity)}.
 Visual style: ${cleanText(payload.style, 300) || "premium black and gold corporate editorial"}.
+ABSOLUTELY NO TEXT: no letters, numbers, captions, labels, posters, banners, signs, UI panels, lower-thirds, watermark text, brand names, slogans, or readable/garbled typography anywhere in the image.
 Keep the top-right area visually calm but continue the underlying photograph or illustration naturally through it.
 Do not create a blank area, white square, rectangle, card, badge, plaque, border, glow, gradient tile, or backing panel in any corner.
 Do not draw or imitate any logo, wordmark, watermark, monogram, initials, company name, readable text, signage, signature, trademark, or logo-like symbol anywhere in the artwork.
@@ -3369,9 +3781,9 @@ The official transparent logo will be composited later by the secure backend dir
         : `https://${imageLocation}-aiplatform.googleapis.com`;
       artworkQa = null;
       try {
-        for (let attempt = 1; attempt <= 2; attempt += 1) {
+        for (let attempt = 1; attempt <= 4; attempt += 1) {
           const retryInstruction = artworkQa && !artworkQa.approved
-            ? `\nPrevious attempt was rejected by brand QA: ${artworkQa.reason}. Correct that problem completely.`
+            ? `\nPrevious attempt was rejected by brand QA: ${artworkQa.reason}. Correct that problem completely. If text was present, create a clean photographic/editorial background with objects only and no written material of any kind.`
             : "";
           base64 = await generateVertexBaseArtwork({
             endpoint: imageEndpoint,
@@ -3401,12 +3813,65 @@ The official transparent logo will be composited later by the secure backend dir
       }
     }
     if (!base64 && failures.length) {
-      throw new Error(`Vertex image generation failed for project ${vertex.projectId}. Tried ${failures.join(" | ")}`);
+      const geminiKey = await storedSecret(db, "gemini", "api_key", ["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"]);
+      if (geminiKey) {
+        provider = "gemini";
+        const geminiFailures: string[] = [];
+        for (const candidateModel of [
+          Deno.env.get("GEMINI_IMAGE_MODEL") || "",
+          "gemini-2.5-flash-image",
+        ].map((item) => item.trim()).filter(Boolean)) {
+          model = candidateModel;
+          try {
+            base64 = await generateGeminiApiBaseArtwork({
+              key: geminiKey,
+              model,
+              prompt: brandedPrompt,
+              aspectRatio: ratios[String(payload.aspectRatio)] || "4:5",
+            });
+            if (base64) break;
+            geminiFailures.push(`${model}: provider returned no image`);
+          } catch (error) {
+            geminiFailures.push(`${model}: ${cleanText(error?.message || error, 220)}`);
+            base64 = "";
+          }
+        }
+        if (!base64) {
+          throw new Error(`Vertex image generation failed for project ${vertex.projectId}. Tried ${failures.join(" | ")}. Gemini API fallback also failed: ${geminiFailures.join(" | ")}`);
+        }
+      } else {
+        throw new Error(`Vertex image generation failed for project ${vertex.projectId}. Tried ${failures.join(" | ")}. Configure a valid Vertex image model or GOOGLE_GENERATIVE_AI_API_KEY/GEMINI_API_KEY fallback.`);
+      }
     }
   } else {
-    provider = "openai";
+    const geminiKey = await storedSecret(db, "gemini", "api_key", ["GOOGLE_GENERATIVE_AI_API_KEY", "GEMINI_API_KEY"]);
+    if (geminiKey) {
+      provider = "gemini";
+      const failures: string[] = [];
+      for (const candidateModel of [
+        Deno.env.get("GEMINI_IMAGE_MODEL") || "",
+        "gemini-2.5-flash-image",
+      ].map((item) => item.trim()).filter(Boolean)) {
+        model = candidateModel;
+        try {
+          base64 = await generateGeminiApiBaseArtwork({
+            key: geminiKey,
+            model,
+            prompt: brandedPrompt,
+            aspectRatio: ratios[String(payload.aspectRatio)] || "4:5",
+          });
+          if (base64) break;
+          failures.push(`${model}: provider returned no image`);
+        } catch (error) {
+          failures.push(`${model}: ${cleanText(error?.message || error, 220)}`);
+          base64 = "";
+        }
+      }
+      if (!base64) throw new Error(`Gemini API image generation failed. Tried ${failures.join(" | ")}`);
+    } else {
+      provider = "openai";
     const key = await storedSecret(db, "openai", "api_key", ["OPENAI_API_KEY"]);
-    if (!key) throw new Error("Configure Vertex AI for branded image generation");
+    if (!key) throw new Error("Configure Vertex AI service account JSON or GOOGLE_GENERATIVE_AI_API_KEY/GEMINI_API_KEY for branded image generation");
     model = Deno.env.get("OPENAI_IMAGE_MODEL") || "gpt-image-2";
     const response = await providerJson("https://api.openai.com/v1/images/generations", {
       method: "POST",
@@ -3420,6 +3885,7 @@ The official transparent logo will be composited later by the secure backend dir
       }),
     });
     base64 = response.data?.[0]?.b64_json || "";
+    }
   }
   if (!base64) throw new Error("The image provider returned no image");
   const generatedBinary = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
@@ -4530,21 +4996,185 @@ async function handleDisconnect(req: Request, payload: any) {
     .eq("id", connectionId)
     .maybeSingle();
   if (!connection) throw new Error("Meta connection was not found");
+
+  const { data: linkedAccounts } = await db
+    .from("social_accounts")
+    .select("id")
+    .contains("metadata", { metaConnectionId: connectionId });
+  const linkedAccountIds = (linkedAccounts || []).map((account: any) => account.id);
+  let deletedContentCount = 0;
+  let deletedAdAccountCount = 0;
+
+  if (linkedAccountIds.length) {
+    const { data: linkedChannels } = await db
+      .from("social_content_channels")
+      .select("content_id")
+      .in("account_id", linkedAccountIds);
+    const contentIds = Array.from(
+      new Set((linkedChannels || []).map((channel: any) => channel.content_id).filter(Boolean)),
+    );
+    if (contentIds.length) {
+      const { count } = await db
+        .from("social_content_items")
+        .delete({ count: "exact" })
+        .in("id", contentIds)
+        .in("status", [
+          "draft",
+          "manager_review",
+          "admin_review",
+          "approved",
+          "scheduled",
+          "publishing",
+          "rejected",
+          "failed",
+        ]);
+      deletedContentCount = count || 0;
+    }
+  }
+
+  const { count: deletedAds } = await db
+    .from("social_ad_accounts")
+    .delete({ count: "exact" })
+    .eq("connection_id", connectionId);
+  deletedAdAccountCount = deletedAds || 0;
+
   await db
     .from("social_meta_connections")
     .update({ status: "revoked", credential_expires_at: new Date().toISOString() })
     .eq("id", connectionId);
-  await db
-    .from("social_accounts")
-    .update({ status: "disconnected" })
-    .contains("metadata", { metaConnectionId: connectionId });
+  if (linkedAccountIds.length) {
+    await db
+      .from("social_accounts")
+      .delete()
+      .in("id", linkedAccountIds);
+  }
   await db.from("social_audit_logs").insert({
     actor_id: appUser.id,
     action: "meta.disconnected",
     resource_type: "social_meta_connection",
     resource_id: connectionId,
+    after_data: {
+      disconnectedAccountCount: linkedAccountIds.length,
+      deletedContentCount,
+      deletedAdAccountCount,
+    },
   });
-  return { disconnected: true };
+  return {
+    disconnected: true,
+    disconnectedAccountCount: linkedAccountIds.length,
+    deletedContentCount,
+    deletedAdAccountCount,
+  };
+}
+
+async function handleCleanupDisconnectedWorkspace(req: Request) {
+  const { db, appUser } = await authenticatedCaller(req, "edit");
+  const { data: disconnectedAccounts } = await db
+    .from("social_accounts")
+    .select("id")
+    .eq("status", "disconnected");
+  const disconnectedAccountIds = (disconnectedAccounts || []).map((account: any) => account.id);
+
+  let deletedContentCount = 0;
+  if (disconnectedAccountIds.length) {
+    const { data: channels } = await db
+      .from("social_content_channels")
+      .select("content_id")
+      .in("account_id", disconnectedAccountIds);
+    const contentIds = Array.from(
+      new Set((channels || []).map((channel: any) => channel.content_id).filter(Boolean)),
+    );
+    if (contentIds.length) {
+      const { count } = await db
+        .from("social_content_items")
+        .delete({ count: "exact" })
+        .in("id", contentIds)
+        .in("status", [
+          "draft",
+          "manager_review",
+          "admin_review",
+          "approved",
+          "scheduled",
+          "publishing",
+          "rejected",
+          "failed",
+        ]);
+      deletedContentCount = count || 0;
+    }
+    await db
+      .from("social_accounts")
+      .delete()
+      .in("id", disconnectedAccountIds);
+  }
+
+  const { data: inactiveConnections } = await db
+    .from("social_meta_connections")
+    .select("id")
+    .neq("status", "active");
+  const inactiveConnectionIds = (inactiveConnections || []).map((connection: any) => connection.id);
+  let deletedAdAccountCount = 0;
+  if (inactiveConnectionIds.length) {
+    const { count } = await db
+      .from("social_ad_accounts")
+      .delete({ count: "exact" })
+      .in("connection_id", inactiveConnectionIds);
+    deletedAdAccountCount = count || 0;
+  }
+
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "meta.disconnected_workspace_cleaned",
+    resource_type: "social_account",
+    after_data: {
+      deletedAccountCount: disconnectedAccountIds.length,
+      deletedContentCount,
+      deletedAdAccountCount,
+    },
+  });
+
+  return {
+    cleaned: true,
+    deletedAccountCount: disconnectedAccountIds.length,
+    deletedContentCount,
+    deletedAdAccountCount,
+  };
+}
+
+async function handleResetReviewWorkspace(req: Request) {
+  const { db, appUser } = await authenticatedCaller(req, "edit");
+  const { data: removableContent } = await db
+    .from("social_content_items")
+    .select("id");
+  const contentIds = (removableContent || []).map((item: any) => item.id);
+
+  let deletedContentCount = 0;
+  let cancelledJobCount = 0;
+  if (contentIds.length) {
+    const { count: jobCount } = await db
+      .from("social_publish_jobs")
+      .update({ status: "cancelled", last_error: "Cleared before Meta App Review recording" }, { count: "exact" })
+      .in("content_id", contentIds)
+      .in("status", ["queued", "retrying", "scheduled", "processing", "failed"]);
+    cancelledJobCount = jobCount || 0;
+    const { count } = await db
+      .from("social_content_items")
+      .delete({ count: "exact" })
+      .in("id", contentIds);
+    deletedContentCount = count || 0;
+  }
+
+  await db.from("social_audit_logs").insert({
+    actor_id: appUser.id,
+    action: "review.workspace_reset",
+    resource_type: "social_content",
+    after_data: {
+      deletedContentCount,
+      cancelledJobCount,
+      preserved: ["meta_connections", "social_accounts", "audit_logs", "live_instagram_media"],
+    },
+  });
+
+  return { reset: true, deletedContentCount, cancelledJobCount };
 }
 
 async function verifyWebhook(req: Request, url: URL) {
@@ -4692,6 +5322,9 @@ Deno.serve(async (req) => {
       case "instagram_send_message":
         data = await handleInstagramSendMessage(req, payload);
         break;
+      case "instagram_mark_read":
+        data = await handleInstagramMarkRead(req, payload);
+        break;
       case "dashboard":
         data = await handleDashboard(req);
         break;
@@ -4773,11 +5406,20 @@ Deno.serve(async (req) => {
       case "update_campaign":
         data = await handleUpdateCampaign(req, payload);
         break;
+      case "delete_campaign":
+        data = await handleDeleteCampaign(req, payload);
+        break;
       case "publish_instagram":
         data = await handlePublishInstagram(req, payload);
         break;
       case "disconnect":
         data = await handleDisconnect(req, payload);
+        break;
+      case "cleanup_disconnected_workspace":
+        data = await handleCleanupDisconnectedWorkspace(req);
+        break;
+      case "reset_review_workspace":
+        data = await handleResetReviewWorkspace(req);
         break;
       default:
         return json(req, { error: "Unknown action" }, 400);
