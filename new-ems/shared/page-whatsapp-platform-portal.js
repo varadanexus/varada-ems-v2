@@ -1572,6 +1572,7 @@ function onboardingWalkthroughs() {
       title: "Team inbox",
       description: "Handle customer conversations together with ownership, status and a complete message history.",
       href: workspacePath("inbox"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/team-inbox.mp4",
       action: "Take me to the inbox",
       points: ["See every customer conversation in one shared queue", "Assign ownership and keep follow-ups organised", "Reply with complete customer and message context"],
       visual: `<div class="wp-tour-inbox"><span class="wp-tour-avatar">A</span><div><i></i><i></i><i></i></div><b>2</b></div>`
@@ -1580,6 +1581,7 @@ function onboardingWalkthroughs() {
       title: "Contacts",
       description: "Keep customer identity, consent and conversation activity organised in one directory.",
       href: workspacePath("contacts"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/contacts.mp4",
       action: "Explore contacts",
       points: ["Search customer records by identity and number", "Review consent and messaging eligibility", "Open linked conversations without losing context"],
       visual: `<div class="wp-tour-contacts"><span>A</span><span>R</span><span>S</span><div><i></i><i></i></div></div>`
@@ -1588,6 +1590,7 @@ function onboardingWalkthroughs() {
       title: "Campaigns",
       description: "Build targeted WhatsApp campaigns using approved templates and consent-aware audiences.",
       href: workspacePath("campaigns"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/campaigns.mp4",
       action: "Explore campaigns",
       points: ["Choose an eligible customer audience", "Use approved templates for compliant outreach", "Review delivery progress and campaign performance"],
       visual: `<div class="wp-tour-campaign"><span>◎</span><div><i></i><i></i><i></i></div><b>74%</b></div>`
@@ -1596,6 +1599,7 @@ function onboardingWalkthroughs() {
       title: "Message templates",
       description: "Create and manage reusable Meta-approved messages for customer-initiated outreach.",
       href: workspacePath("templates"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/templates.mp4",
       action: "Explore templates",
       points: ["Build utility, marketing and authentication messages", "Track Meta review and approval status", "Reuse approved content across campaigns and conversations"],
       visual: `<div class="wp-tour-template"><span>Hi {{1}}</span><i></i><i></i><b>Approved</b></div>`
@@ -1604,6 +1608,7 @@ function onboardingWalkthroughs() {
       title: "Flows & automation",
       description: "Design guided customer journeys and connect repeatable actions without manual work.",
       href: workspacePath("flows"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/flows.mp4",
       action: "Explore flows",
       points: ["Build connected steps on a visual canvas", "Route customers using buttons and conditions", "Reduce repetitive work with reusable journeys"],
       visual: `<div class="wp-tour-flow"><span>Start</span><i></i><span>Message</span><i></i><span>Done</span></div>`
@@ -1612,6 +1617,7 @@ function onboardingWalkthroughs() {
       title: "Analytics",
       description: "Track messaging activity, service performance and operational trends across your workspace.",
       href: workspacePath("analytics"),
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/analytics.mp4",
       action: "Explore analytics",
       points: ["Understand message and conversation volume", "Monitor response and resolution performance", "Use workspace trends to improve operations"],
       visual: `<div class="wp-tour-analytics"><i style="height:34%"></i><i style="height:58%"></i><i style="height:46%"></i><i style="height:82%"></i><i style="height:68%"></i></div>`
@@ -1623,7 +1629,7 @@ function onboardingWalkthroughDialog() {
   return `<dialog class="wp-onboarding-tour-dialog" id="wpOnboardingTourDialog">
     <div class="wp-onboarding-tour-dialog-shell">
       <header><div><span class="wp-card-eyebrow">Interactive portal walkthrough</span><h2 data-tour-title>Feature walkthrough</h2></div><button type="button" data-close-onboarding-tour aria-label="Close walkthrough">×</button></header>
-      <div class="wp-onboarding-tour-player" data-tour-player aria-label="Animated feature preview"></div>
+      <div class="wp-onboarding-tour-player" data-tour-player aria-label="Feature how-to video"></div>
       <section class="wp-onboarding-tour-details"><p data-tour-description></p><ul data-tour-points></ul></section>
       <footer><a class="wp-primary wp-button-link" data-tour-destination href="${workspacePath("overview")}">Take me there <span aria-hidden="true">→</span></a></footer>
     </div>
@@ -1646,11 +1652,8 @@ function bindOnboardingWalkthrough(root) {
     title.textContent = item.title;
     description.textContent = item.description;
     points.innerHTML = item.points.map((point) => `<li><span aria-hidden="true">✓</span>${escapeHtml(point)}</li>`).join("");
-    const previewUrl = new URL(item.href, location.origin);
-    previewUrl.searchParams.set("walkthrough-preview", "1");
-    player.className = `wp-onboarding-tour-player is-${index + 1} is-loading`;
-    player.innerHTML = `<div class="wp-tour-live-label"><i></i>Live portal preview</div><div class="wp-tour-browser-frame"><div class="wp-tour-browser-bar"><span></span><span></span><span></span><em>${escapeHtml(item.title)}</em></div><div class="wp-tour-frame-loading"><i></i><span>Loading live workspace…</span></div><iframe src="${escapeHtml(previewUrl.pathname + previewUrl.search)}" title="Live ${escapeHtml(item.title)} portal preview" loading="eager" tabindex="-1"></iframe><div class="wp-tour-frame-shield" aria-hidden="true"></div></div>`;
-    player.querySelector("iframe")?.addEventListener("load", () => player.classList.remove("is-loading"), { once: true });
+    player.className = `wp-onboarding-tour-player is-${index + 1}`;
+    player.innerHTML = `<div class="wp-tour-live-label"><i></i>How-to video</div><div class="wp-tour-video-frame"><video src="${escapeHtml(item.video)}" title="How to use ${escapeHtml(item.title)}" autoplay muted loop playsinline controls preload="auto"></video></div>`;
     destination.href = item.href;
     destination.innerHTML = `${escapeHtml(item.action)} <span aria-hidden="true">→</span>`;
     dialog.showModal();
@@ -3017,7 +3020,6 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     : `<a class="wp-profile-workspace-card" href="${workspacePath("profile")}" role="menuitem" aria-label="View ${escapeHtml(session.companyName)} business profile"><span class="wp-profile-workspace-logo">${sidebarLogo}</span><span><em>Business account</em><strong>${escapeHtml(session.companyName)}</strong><small>${escapeHtml(operationalPackageName)} plan</small></span><span class="wp-profile-workspace-chevron" aria-hidden="true">›</span></a>`;
   const profileMenu = `<div class="wp-profile-control"><button class="wp-profile-trigger" id="wpProfileMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="wpProfileMenu"><span class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></span><span class="wp-user-avatar" aria-hidden="true">${userInitial}</span><span class="wp-profile-chevron" aria-hidden="true">${workspaceIcon('<path d="m7 10 5 5 5-5"/>')}</span></button><div class="wp-profile-menu" id="wpProfileMenu" role="menu" hidden><header><span class="wp-profile-menu-avatar" aria-hidden="true">${userInitial}</span><div><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small><em>${escapeHtml(session.companyName)} · ${escapeHtml(roleLabel)}</em></div></header>${workspaceMenuCard}<nav aria-label="Account menu"><a href="${workspacePath("settings")}" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.37.38.7.66.98.3.27.68.42 1.08.42H21v4h-.1A1.7 1.7 0 0 0 19.4 15Z"/>')}</span><span><strong>Workspace settings</strong><small>Profile and preferences</small></span></a><a href="/contact.html" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.12c-.9.55-1.5 1.05-1.5 2.38M12 17h.01"/>')}</span><span><strong>Help &amp; support</strong><small>Contact the Varada Nexus team</small></span></a></nav><button class="wp-profile-logout" id="wpProfileLogoutBtn" type="button" role="menuitem"><span aria-hidden="true">${workspaceIcon('<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>')}</span><span><strong>Sign out</strong><small>End this secure session</small></span></button></div></div>`;
   const deletionBanner = workspaceDeletion?.pending ? `<section class="wp-deletion-pending" role="alert"><div><span>Account deletion pending</span><strong>This workspace is scheduled for deletion on ${escapeHtml(new Date(workspaceDeletion.scheduledFor).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }))}.</strong><small>An owner or administrator can reverse this request during the 24-hour protection window.</small></div>${workspaceDeletion.canReverse ? `<button type="button" data-reverse-account-deletion>Keep this account</button>` : ""}</section>` : "";
-  const walkthroughPreview = new URLSearchParams(location.search).get("walkthrough-preview") === "1";
   const existingShell = app.querySelector(".wp-workspace-shell");
   const preserveSidebar = Boolean(existingShell)
     && !isFlowBuilderRoute
@@ -3025,7 +3027,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     && (preserveScroll || !refresh);
   const persistentSidebar = preserveSidebar ? existingShell.querySelector(".wp-workspace-sidebar") : null;
   const sidebarWasCollapsed = Boolean(existingShell?.classList.contains("sidebar-collapsed"));
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""} ${walkthroughPreview ? "wp-walkthrough-preview-mode" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked || walkthroughPreview ? "" : verificationAttentionModal()}${billingLocked || walkthroughPreview ? "" : renewalConsentModal(view)}`;
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
   bindOnboardingWalkthrough(app);
   const nextShell = app.querySelector(".wp-workspace-shell");
   if (persistentSidebar) {
