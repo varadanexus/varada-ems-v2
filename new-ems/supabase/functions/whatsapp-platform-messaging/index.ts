@@ -317,14 +317,18 @@ async function listContacts(admin: any, customer: any, body: any) {
   const requestedCategory = String(body.category || "");
   const category = ["uncategorized","lead","prospect","customer","partner","vendor","other"].includes(requestedCategory) ? requestedCategory : null;
   const marketingOptedOut = requestedStatus === "opted_out";
+  const page = Math.max(1, Number.parseInt(String(body.page || "1"), 10) || 1);
+  const pageSize = Math.min(5000, Math.max(10, Number.parseInt(String(body.pageSize || "50"), 10) || 50));
+  const search = String(body.search || "").trim();
   const connection = body.connectionId ? await ownedBusinessNumber(admin, customer, body.connectionId) : null;
   let query = admin.from("whatsapp_platform_contacts")
-    .select("id,wa_id,phone_e164,profile_name,display_name,status,contact_category,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,last_inbound_at,last_outbound_at,created_at,updated_at")
-    .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).limit(5000);
+    .select("id,wa_id,phone_e164,profile_name,display_name,status,contact_category,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,last_inbound_at,last_outbound_at,created_at,updated_at", { count: "exact" })
+    .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).range((page - 1) * pageSize, page * pageSize - 1);
   if (status) query = query.eq("status", status);
   if (category) query = query.eq("contact_category", category);
   if (marketingOptedOut) query = query.not("marketing_opt_out_at", "is", null);
-  const { data: contacts, error } = await query;
+  if (search) query = query.or(`display_name.ilike.%${search.replace(/[,()]/g, " ") }%,profile_name.ilike.%${search.replace(/[,()]/g, " ") }%,phone_e164.ilike.%${search.replace(/[,()]/g, " ") }%,contact_category.ilike.%${search.replace(/[,()]/g, " ") }%`);
+  const { data: contacts, error, count } = await query;
   if (error) throw error;
   const contactIds = (contacts || []).map((row: any) => row.id);
   let conversationQuery = contactIds.length
@@ -336,7 +340,7 @@ async function listContacts(admin: any, customer: any, body: any) {
   const { data: conversations, error: conversationError } = conversationQuery ? await conversationQuery : { data: [], error: null };
   if (conversationError) console.warn("Contact conversation enrichment failed", conversationError);
   const conversationMap = new Map((conversations || []).map((row: any) => [row.contact_id, row]));
-  return { contacts: (contacts || []).map((row: any) => ({ ...row, conversation: conversationMap.get(row.id) || null })) };
+  return { contacts: (contacts || []).map((row: any) => ({ ...row, conversation: conversationMap.get(row.id) || null })), pagination: { page, pageSize, total: Number(count || 0), totalPages: Math.max(1, Math.ceil(Number(count || 0) / pageSize)), search } };
 }
 async function listMarketingConsentEvents(admin: any, customer: any, body: any) {
   const contactId = cleanUuid(body.contactId, "contact");

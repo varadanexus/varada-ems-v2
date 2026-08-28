@@ -1752,6 +1752,10 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-contact-directory.is-selecting .wp-contact-row { position:relative; grid-template-columns: 40px minmax(180px,1.3fr) minmax(160px,1fr) auto minmax(150px,auto); padding-right:3.2rem; }
 .wp-contact-directory.is-selecting .wp-contact-select { position:absolute; right:1rem; top:50%; transform:translateY(-50%); }
 .wp-contact-directory.is-selecting .wp-contact-actions { grid-column:auto; justify-content:flex-end; }
+.wp-contact-pagination { display:flex; align-items:center; justify-content:space-between; gap:.8rem; padding:.8rem 1rem; border-top:1px solid var(--wp-workspace-line); color:var(--wp-workspace-muted); font-size:.65rem; }
+.wp-contact-pagination label { display:flex; align-items:center; gap:.35rem; }
+.wp-contact-pagination select { min-width:58px; padding:.35rem; border:1px solid var(--wp-workspace-line); border-radius:7px; background:var(--wp-workspace-surface-soft); color:var(--wp-workspace-text); }
+.wp-contact-pagination > div { display:flex; gap:.35rem; }
 .wp-contact-select input, .wp-contact-directory-tools input { accent-color:var(--wp-workspace-accent); }
 .wp-danger { padding:.45rem .6rem; border:1px solid rgba(255,100,112,.55); border-radius:8px; background:rgba(111,24,34,.24); color:#ff9b9b; font:inherit; font-size:.62rem; font-weight:800; cursor:pointer; }
 .wp-danger:hover:not(:disabled) { background:rgba(152,33,45,.34); }

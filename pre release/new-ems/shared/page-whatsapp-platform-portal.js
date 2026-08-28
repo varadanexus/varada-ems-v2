@@ -3168,8 +3168,12 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   if (refresh && ["contacts","campaigns"].includes(view)) {
     try {
       const status = new URLSearchParams(location.search).get("status") || "all";
-      const listed = await messagingRequest("list_contacts", { status, connectionId: workspaceSelectedConnectionId });
-      workspaceContacts = { contacts: listed?.contacts || [], error: "" };
+      const params = new URLSearchParams(location.search);
+      const page = Math.max(1, Number.parseInt(params.get("contactPage") || "1", 10) || 1);
+      const pageSize = Math.min(500, Math.max(10, Number.parseInt(params.get("contactPageSize") || "50", 10) || 50));
+      const search = params.get("contactSearch") || "";
+      const listed = await messagingRequest("list_contacts", { status, search, page, pageSize, connectionId: workspaceSelectedConnectionId });
+      workspaceContacts = { contacts: listed?.contacts || [], pagination: listed?.pagination || { page, pageSize, total: 0, totalPages: 1, search }, error: "" };
     } catch (error) {
       workspaceContacts = { contacts: [], error: error?.message || "The contact directory could not be loaded." };
     }
@@ -4658,7 +4662,8 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   });
   app.querySelector("[data-contact-search]")?.addEventListener("input", (event) => {
     const query = String(event.currentTarget.value || "").trim().toLowerCase();
-    app.querySelectorAll("[data-contact-row]").forEach((row) => { row.hidden = Boolean(query && !row.textContent.toLowerCase().includes(query)); });
+    clearTimeout(window.__contactSearchTimer);
+    window.__contactSearchTimer = setTimeout(() => { const url = new URL(location.href); if (query) url.searchParams.set("contactSearch", query); else url.searchParams.delete("contactSearch"); url.searchParams.set("contactPage", "1"); navigateWorkspace(`${url.pathname}${url.search}`); }, 250);
   });
   app.querySelector("[data-template-search]")?.addEventListener("input", (event) => {
     const query = String(event.currentTarget.value || "").trim().toLowerCase();
@@ -5013,6 +5018,24 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const deleteSelectedButton = app.querySelector("[data-delete-selected-contacts]");
   const selectAllContacts = app.querySelector("[data-select-all-contacts]");
   const contactDirectory = app.querySelector(".wp-contact-directory");
+  const contactPageInfo = workspaceContacts.pagination || { page: 1, pageSize: 50, total: workspaceContacts.contacts?.length || 0, totalPages: 1, search: "" };
+  const contactSearchInput = app.querySelector("[data-contact-search]");
+  if (contactSearchInput) contactSearchInput.value = contactPageInfo.search || "";
+  const contactPagination = document.createElement("footer");
+  contactPagination.className = "wp-contact-pagination";
+  contactPagination.innerHTML = `<label>Show <select data-contact-page-size><option value="25">25</option><option value="50">50</option><option value="100">100</option><option value="250">250</option><option value="500">500</option></select> contacts</label><span data-contact-page-summary></span><div><button type="button" class="wp-secondary" data-contact-prev>Previous</button><button type="button" class="wp-secondary" data-contact-next>Next</button></div>`;
+  contactDirectory?.append(contactPagination);
+  const contactPageSizeSelect = contactPagination.querySelector("[data-contact-page-size]");
+  if (contactPageSizeSelect) contactPageSizeSelect.value = String(contactPageInfo.pageSize);
+  const pageStart = contactPageInfo.total ? ((contactPageInfo.page - 1) * contactPageInfo.pageSize) + 1 : 0;
+  const pageEnd = Math.min(contactPageInfo.page * contactPageInfo.pageSize, contactPageInfo.total);
+  contactPagination.querySelector("[data-contact-page-summary]").textContent = `${pageStart.toLocaleString("en-IN")}–${pageEnd.toLocaleString("en-IN")} of ${Number(contactPageInfo.total || 0).toLocaleString("en-IN")}`;
+  const goContactPage = (page, pageSize = contactPageInfo.pageSize) => { const url = new URL(location.href); url.searchParams.set("contactPage", String(Math.max(1, page))); url.searchParams.set("contactPageSize", String(pageSize)); navigateWorkspace(`${url.pathname}${url.search}`); };
+  contactPagination.querySelector("[data-contact-prev]").disabled = contactPageInfo.page <= 1;
+  contactPagination.querySelector("[data-contact-next]").disabled = contactPageInfo.page >= contactPageInfo.totalPages;
+  contactPagination.querySelector("[data-contact-prev]").addEventListener("click", () => goContactPage(contactPageInfo.page - 1));
+  contactPagination.querySelector("[data-contact-next]").addEventListener("click", () => goContactPage(contactPageInfo.page + 1));
+  contactPageSizeSelect?.addEventListener("change", () => goContactPage(1, Number(contactPageSizeSelect.value)));
   const selectionTools = [selectAllContacts?.closest("label"), deleteSelectedButton].filter(Boolean);
   const doneSelectionButton = document.createElement("button");
   doneSelectionButton.type = "button"; doneSelectionButton.className = "wp-secondary"; doneSelectionButton.textContent = "Done"; doneSelectionButton.hidden = true;
