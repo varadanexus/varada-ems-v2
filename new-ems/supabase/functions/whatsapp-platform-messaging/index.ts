@@ -10,6 +10,10 @@ const AGENT_ACTIONS = new Set([
   "list_contacts", "list_marketing_consent_events", "create_contact", "start_chat", "update_contact",
   "list_templates", "list_template_library", "list_flows",
   "list_campaigns", "list_campaign_segments", "save_campaign",
+  "list_notifications", "mark_notification_read", "mark_all_notifications_read", "dismiss_notification",
+]);
+const NOTIFICATION_ACTIONS = new Set([
+  "list_notifications", "mark_notification_read", "mark_all_notifications_read", "dismiss_notification",
 ]);
 
 function env(name: string) { return Deno.env.get(name) || ""; }
@@ -1356,6 +1360,58 @@ async function deleteCampaign(admin: any, customer: any, body: any) {
   return { deleted: true, campaignId };
 }
 
+async function listNotifications(admin: any, customer: any, body: any) {
+  const requestedLimit = Number(body.limit || 30);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 60) : 30;
+  const now = new Date().toISOString();
+  const { data, error } = await admin.from("whatsapp_platform_notifications")
+    .select("id,category,event_code,title,message,severity,action_label,action_url,entity_type,entity_id,context,read_at,dismissed_at,created_at")
+    .eq("tenant_id", customer.tenant_id)
+    .eq("recipient_user_id", customer.user_id)
+    .is("dismissed_at", null)
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  const notifications = (data || []).map((row: any) => ({
+    id: row.id, category: row.category, eventCode: row.event_code, title: row.title,
+    message: row.message, severity: row.severity, actionLabel: row.action_label,
+    actionUrl: row.action_url, entityType: row.entity_type, entityId: row.entity_id,
+    context: row.context || {}, readAt: row.read_at, createdAt: row.created_at,
+  }));
+  return { notifications, unreadCount: notifications.filter((item: any) => !item.readAt).length };
+}
+
+async function markNotificationRead(admin: any, customer: any, body: any) {
+  const notificationId = cleanUuid(body.notificationId, "notification");
+  const { data, error } = await admin.from("whatsapp_platform_notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", notificationId).eq("tenant_id", customer.tenant_id).eq("recipient_user_id", customer.user_id)
+    .is("read_at", null).select("id").maybeSingle();
+  if (error) throw error;
+  return { updated: Boolean(data), notificationId };
+}
+
+async function markAllNotificationsRead(admin: any, customer: any) {
+  const { data, error } = await admin.from("whatsapp_platform_notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("tenant_id", customer.tenant_id).eq("recipient_user_id", customer.user_id)
+    .is("read_at", null).is("dismissed_at", null).select("id");
+  if (error) throw error;
+  return { updatedCount: (data || []).length };
+}
+
+async function dismissNotification(admin: any, customer: any, body: any) {
+  const notificationId = cleanUuid(body.notificationId, "notification");
+  const timestamp = new Date().toISOString();
+  const { data, error } = await admin.from("whatsapp_platform_notifications")
+    .update({ dismissed_at: timestamp, read_at: timestamp })
+    .eq("id", notificationId).eq("tenant_id", customer.tenant_id).eq("recipient_user_id", customer.user_id)
+    .is("dismissed_at", null).select("id").maybeSingle();
+  if (error) throw error;
+  return { dismissed: Boolean(data), notificationId };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     if (!allowedOrigin(req)) return json(req, { error: "Origin not allowed" }, 403);
@@ -1372,7 +1428,7 @@ Deno.serve(async (req) => {
     const body = raw ? JSON.parse(raw) : {};
     const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "list");
-    if (action !== "package_master") {
+    if (action !== "package_master" && !NOTIFICATION_ACTIONS.has(action)) {
       const entitlement = await billingEntitlement(admin, customer);
       if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
     }
@@ -1392,6 +1448,10 @@ Deno.serve(async (req) => {
     if (featureByAction[action] && action !== "save_campaign") await requirePackageFeature(admin, customer, featureByAction[action]);
     if (action === "list") return json(req, await listConversations(admin, customer, body));
     if (action === "list_team") return json(req, await listTeam(admin, customer));
+    if (action === "list_notifications") return json(req, await listNotifications(admin, customer, body));
+    if (action === "mark_notification_read") return json(req, await markNotificationRead(admin, customer, body));
+    if (action === "mark_all_notifications_read") return json(req, await markAllNotificationsRead(admin, customer));
+    if (action === "dismiss_notification") return json(req, await dismissNotification(admin, customer, body));
     if (action === "package_master") return json(req, await packageMaster(admin, customer));
     if (action === "workspace_messaging_preferences") return json(req, await workspaceMessagingPreferences(admin, customer));
     if (action === "update_workspace_messaging_preferences") return json(req, await updateWorkspaceMessagingPreferences(admin, customer, body));

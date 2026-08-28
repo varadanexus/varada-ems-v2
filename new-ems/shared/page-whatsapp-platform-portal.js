@@ -81,11 +81,14 @@ let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
 let workspaceMessagingPreferences = { stopMarketingOptOutEnabled: true, error: "" };
+let workspaceNotifications = { notifications: [], unreadCount: 0, error: "" };
 let workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], invoices: [], creditNotes: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
 let workspaceDeletion = { pending: false };
 let workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: "" };
 let razorpayCheckoutPromise = null;
 let profileMenuClickAwayHandler = null;
+let notificationClickAwayHandler = null;
+let workspaceNotificationRefreshTimer = null;
 let workspaceNavigationBound = false;
 let workspaceNavigationSequence = 0;
 let businessNumberRefreshTimer = null;
@@ -603,6 +606,140 @@ function showToast(message, type = "info") {
   showToast.timer = setTimeout(() => { toast.hidden = true; }, 5000);
 }
 
+function notificationActionUrl(value) {
+  const path = String(value || "");
+  return /^\/whatsapp-platform\/workspace(?:\/|$)/.test(path) ? path : "";
+}
+
+function notificationTime(value) {
+  const timestamp = new Date(value || "").getTime();
+  if (!Number.isFinite(timestamp)) return "Recently";
+  const elapsed = Math.max(0, Date.now() - timestamp);
+  if (elapsed < 60_000) return "Just now";
+  if (elapsed < 3_600_000) return `${Math.floor(elapsed / 60_000)}m ago`;
+  if (elapsed < 86_400_000) return `${Math.floor(elapsed / 3_600_000)}h ago`;
+  if (elapsed < 604_800_000) return `${Math.floor(elapsed / 86_400_000)}d ago`;
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(timestamp));
+}
+
+function notificationCentreMarkup() {
+  const notifications = workspaceNotifications.notifications || [];
+  const unreadCount = Number(workspaceNotifications.unreadCount || 0);
+  const rows = notifications.map((item) => {
+    const actionUrl = notificationActionUrl(item.actionUrl);
+    const action = actionUrl ? `<a href="${escapeHtml(actionUrl)}" data-notification-open="${escapeHtml(item.id)}">${escapeHtml(item.actionLabel || "Open")}</a>` : "";
+    return `<article class="wp-notification-item ${item.readAt ? "" : "is-unread"} severity-${escapeHtml(item.severity || "info")}" data-notification-id="${escapeHtml(item.id)}"><span class="wp-notification-status" aria-hidden="true"></span><div><header><strong>${escapeHtml(item.title)}</strong><time datetime="${escapeHtml(item.createdAt || "")}">${escapeHtml(notificationTime(item.createdAt))}</time></header><p>${escapeHtml(item.message)}</p><footer>${action}<button type="button" data-notification-dismiss="${escapeHtml(item.id)}" aria-label="Dismiss ${escapeHtml(item.title)}">Dismiss</button></footer></div></article>`;
+  }).join("");
+  const content = rows || `<div class="wp-notification-empty"><span aria-hidden="true">✓</span><strong>You’re all caught up</strong><p>Important workspace updates will appear here.</p></div>`;
+  return `<div class="wp-notification-control"><button class="wp-notification-trigger" id="wpNotificationBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="wpNotificationPanel" aria-label="Notifications${unreadCount ? `, ${unreadCount} unread` : ""}">${workspaceIcon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>')}<span class="wp-notification-badge" ${unreadCount ? "" : "hidden"}>${unreadCount > 99 ? "99+" : unreadCount}</span></button><section class="wp-notification-panel" id="wpNotificationPanel" role="dialog" aria-modal="false" aria-labelledby="wpNotificationTitle" hidden><header><div><span>Workspace updates</span><h2 id="wpNotificationTitle">Notifications</h2></div>${unreadCount ? `<button type="button" data-notifications-read-all>Mark all as read</button>` : ""}</header><div class="wp-notification-feed">${content}</div><footer><small>${workspaceNotifications.error ? escapeHtml(workspaceNotifications.error) : "Updates are created securely from verified workspace events."}</small></footer></section></div>`;
+}
+
+async function refreshWorkspaceNotifications({ updateDom = false } = {}) {
+  if (!session?.sessionToken) return;
+  try {
+    const result = await messagingRequest("list_notifications", { limit: 40 });
+    workspaceNotifications = { notifications: result?.notifications || [], unreadCount: Number(result?.unreadCount || 0), error: "" };
+  } catch (error) {
+    workspaceNotifications = { ...workspaceNotifications, error: error?.message || "Notifications could not be loaded." };
+  }
+  if (!updateDom) return;
+  const existing = app.querySelector(".wp-notification-control");
+  if (existing) {
+    const holder = document.createElement("div");
+    holder.innerHTML = notificationCentreMarkup();
+    existing.replaceWith(holder.firstElementChild);
+    bindNotificationCentre(app);
+  }
+}
+
+function scheduleNotificationRefresh() {
+  if (workspaceNotificationRefreshTimer) window.clearTimeout(workspaceNotificationRefreshTimer);
+  workspaceNotificationRefreshTimer = window.setTimeout(async () => {
+    await refreshWorkspaceNotifications({ updateDom: true });
+    scheduleNotificationRefresh();
+  }, 60_000);
+}
+
+function bindNotificationCentre(root) {
+  const control = root.querySelector(".wp-notification-control");
+  const button = control?.querySelector("#wpNotificationBtn");
+  const panel = control?.querySelector("#wpNotificationPanel");
+  if (!control || !button || !panel || control.dataset.notificationBound) return;
+  control.dataset.notificationBound = "true";
+  const setOpen = (open) => {
+    panel.hidden = !open;
+    button.setAttribute("aria-expanded", String(open));
+    control.classList.toggle("is-open", open);
+  };
+  const syncBadge = () => {
+    const count = Number(workspaceNotifications.unreadCount || 0);
+    const badge = control.querySelector(".wp-notification-badge");
+    if (badge) { badge.hidden = count === 0; badge.textContent = count > 99 ? "99+" : String(count); }
+    button.setAttribute("aria-label", `Notifications${count ? `, ${count} unread` : ""}`);
+  };
+  const markLocalRead = (id) => {
+    const item = workspaceNotifications.notifications.find((entry) => entry.id === id);
+    if (!item || item.readAt) return;
+    item.readAt = new Date().toISOString();
+    workspaceNotifications.unreadCount = Math.max(0, Number(workspaceNotifications.unreadCount || 0) - 1);
+    control.querySelector(`[data-notification-id="${CSS.escape(id)}"]`)?.classList.remove("is-unread");
+    syncBadge();
+  };
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setOpen(button.getAttribute("aria-expanded") !== "true");
+  });
+  panel.querySelector("[data-notifications-read-all]")?.addEventListener("click", async (event) => {
+    const target = event.currentTarget;
+    try {
+      target.disabled = true;
+      await messagingRequest("mark_all_notifications_read");
+      const timestamp = new Date().toISOString();
+      workspaceNotifications.notifications.forEach((item) => { if (!item.readAt) item.readAt = timestamp; });
+      workspaceNotifications.unreadCount = 0;
+      panel.querySelectorAll(".wp-notification-item.is-unread").forEach((row) => row.classList.remove("is-unread"));
+      target.remove();
+      syncBadge();
+    } catch (error) { target.disabled = false; showToast(error?.message || "Notifications could not be updated.", "error"); }
+  });
+  panel.querySelectorAll("[data-notification-dismiss]").forEach((dismissButton) => dismissButton.addEventListener("click", async (event) => {
+    event.preventDefault(); event.stopPropagation();
+    const id = dismissButton.dataset.notificationDismiss;
+    try {
+      dismissButton.disabled = true;
+      await messagingRequest("dismiss_notification", { notificationId: id });
+      const item = workspaceNotifications.notifications.find((entry) => entry.id === id);
+      if (item && !item.readAt) workspaceNotifications.unreadCount = Math.max(0, workspaceNotifications.unreadCount - 1);
+      workspaceNotifications.notifications = workspaceNotifications.notifications.filter((entry) => entry.id !== id);
+      dismissButton.closest(".wp-notification-item")?.remove();
+      if (!workspaceNotifications.notifications.length) panel.querySelector(".wp-notification-feed").innerHTML = `<div class="wp-notification-empty"><span aria-hidden="true">✓</span><strong>You’re all caught up</strong><p>Important workspace updates will appear here.</p></div>`;
+      syncBadge();
+    } catch (error) { dismissButton.disabled = false; showToast(error?.message || "Notification could not be dismissed.", "error"); }
+  }));
+  panel.querySelectorAll("[data-notification-open]").forEach((link) => link.addEventListener("click", async (event) => {
+    event.preventDefault();
+    const id = link.dataset.notificationOpen;
+    const url = notificationActionUrl(link.getAttribute("href"));
+    try { await messagingRequest("mark_notification_read", { notificationId: id }); markLocalRead(id); } catch { /* The destination remains available. */ }
+    if (url) location.href = url;
+  }));
+  panel.querySelectorAll(".wp-notification-item.is-unread").forEach((row) => row.addEventListener("click", async (event) => {
+    if (event.target.closest("a,button")) return;
+    const id = row.dataset.notificationId;
+    try { await messagingRequest("mark_notification_read", { notificationId: id }); markLocalRead(id); }
+    catch (error) { showToast(error?.message || "Notification could not be updated.", "error"); }
+  }));
+  if (notificationClickAwayHandler) document.removeEventListener("pointerdown", notificationClickAwayHandler, true);
+  notificationClickAwayHandler = (event) => {
+    if (button.getAttribute("aria-expanded") === "true" && !control.contains(event.target)) setOpen(false);
+  };
+  document.addEventListener("pointerdown", notificationClickAwayHandler, true);
+  control.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || button.getAttribute("aria-expanded") !== "true") return;
+    setOpen(false); button.focus();
+  });
+}
+
 function readSession() {
   try {
     const parsed = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
@@ -986,6 +1123,9 @@ async function restoreSession() {
 
 async function signOut(callServer = true) {
   const token = session?.sessionToken;
+  if (workspaceNotificationRefreshTimer) window.clearTimeout(workspaceNotificationRefreshTimer);
+  workspaceNotificationRefreshTimer = null;
+  workspaceNotifications = { notifications: [], unreadCount: 0, error: "" };
   clearSession();
   if (callServer && token) authRequest("logout", { sessionToken: token }).catch(() => {});
   if (isWorkspacePage()) {
@@ -2832,6 +2972,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const previousScrollTop = preserveScroll ? window.scrollY : 0;
   const view = currentWorkspaceView();
   const agentWorkspace = isAgentWorkspaceRole();
+  if (refresh) await refreshWorkspaceNotifications();
   let connections = workspaceConnections;
   if (!agentWorkspace && refresh) {
     const billingAction = isBillingWorkspaceView(view) || ["owner", "admin"].includes(session.roleCode) ? "summary" : "entitlement";
@@ -3043,8 +3184,10 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     && (preserveScroll || !refresh);
   const persistentSidebar = preserveSidebar ? existingShell.querySelector(".wp-workspace-sidebar") : null;
   const sidebarWasCollapsed = Boolean(existingShell?.classList.contains("sidebar-collapsed"));
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions"><button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions">${notificationCentreMarkup()}<button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
   bindOnboardingWalkthrough(app);
+  bindNotificationCentre(app);
+  scheduleNotificationRefresh();
   const nextShell = app.querySelector(".wp-workspace-shell");
   if (persistentSidebar) {
     nextShell?.querySelector(".wp-workspace-sidebar")?.replaceWith(persistentSidebar);

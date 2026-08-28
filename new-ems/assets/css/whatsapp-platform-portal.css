@@ -335,6 +335,44 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .wp-dashboard { min-height: 100vh; background: radial-gradient(circle at 90% 0, rgba(43, 223, 131, .11), transparent 28%), var(--wp-bg); }
 .wp-topbar { min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0 clamp(1rem, 4vw, 3.5rem); border-bottom: 1px solid var(--wp-line); background: rgba(6, 16, 12, .9); position: sticky; top: 0; backdrop-filter: blur(16px); z-index: 5; }
 .wp-topbar-actions { display: flex; align-items: center; gap: .8rem; }
+.wp-notification-control { position: relative; }
+.wp-notification-trigger {
+  position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0;
+  border: 1px solid var(--wp-workspace-line,rgba(139,226,180,.14)); border-radius: 999px;
+  background: var(--wp-workspace-surface-soft,rgba(255,255,255,.035)); color: var(--wp-workspace-muted,#a4b2ab);
+  cursor: pointer; transition: border-color .18s ease,background .18s ease,color .18s ease,transform .18s ease;
+}
+.wp-notification-trigger svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.wp-notification-trigger:hover,.wp-notification-trigger:focus-visible,.wp-notification-control.is-open .wp-notification-trigger { border-color: var(--wp-workspace-accent,#2bdd90); background: rgba(43,221,144,.1); color: var(--wp-workspace-accent,#2bdd90); outline: none; transform: translateY(-1px); }
+.wp-notification-badge { position: absolute; top: -5px; right: -5px; display: grid; min-width: 19px; height: 19px; padding: 0 5px; place-items: center; border: 2px solid var(--wp-workspace-bg,#08100d); border-radius: 999px; background: #f35f67; color: #fff; font-size: 9px; font-weight: 900; line-height: 1; }
+.wp-notification-panel { position: absolute; z-index: 100; top: calc(100% + 12px); right: 0; width: min(410px,calc(100vw - 28px)); overflow: hidden; border: 1px solid var(--wp-workspace-line-strong,rgba(139,226,180,.24)); border-radius: 18px; background: var(--wp-workspace-panel,#111815); color: var(--wp-workspace-text,#eff7f3); box-shadow: 0 28px 70px rgba(0,0,0,.48); }
+.wp-notification-panel[hidden] { display: none; }
+.wp-notification-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 19px 15px; border-bottom: 1px solid var(--wp-workspace-line,rgba(139,226,180,.12)); }
+.wp-notification-panel > header span { display: block; margin-bottom: 3px; color: var(--wp-workspace-accent,#2bdd90); font-size: 9px; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+.wp-notification-panel > header h2 { margin: 0; font-family: var(--wp-display); font-size: 20px; }
+.wp-notification-panel > header button,.wp-notification-item footer button { padding: 0; border: 0; background: transparent; color: var(--wp-workspace-accent,#2bdd90); font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.wp-notification-panel > header button:disabled,.wp-notification-item footer button:disabled { opacity: .5; cursor: wait; }
+.wp-notification-feed { max-height: min(520px,calc(100vh - 190px)); overflow-y: auto; overscroll-behavior: contain; }
+.wp-notification-item { position: relative; display: grid; grid-template-columns: 10px 1fr; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--wp-workspace-line,rgba(139,226,180,.1)); background: transparent; transition: background .18s ease; }
+.wp-notification-item:hover { background: rgba(139,226,180,.035); }
+.wp-notification-item.is-unread { background: rgba(43,221,144,.065); }
+.wp-notification-status { width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: #708079; box-shadow: 0 0 0 4px rgba(112,128,121,.1); }
+.wp-notification-item.is-unread .wp-notification-status { background: var(--wp-workspace-accent,#2bdd90); box-shadow: 0 0 0 4px rgba(43,221,144,.12); }
+.wp-notification-item.severity-warning .wp-notification-status { background: #e6bd53; box-shadow: 0 0 0 4px rgba(230,189,83,.12); }
+.wp-notification-item.severity-error .wp-notification-status { background: #ef6b73; box-shadow: 0 0 0 4px rgba(239,107,115,.12); }
+.wp-notification-item header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.wp-notification-item header strong { color: var(--wp-workspace-text,#eff7f3); font-size: 13px; line-height: 1.35; }
+.wp-notification-item header time { flex: 0 0 auto; color: var(--wp-workspace-subtle,#74867d); font-size: 9px; white-space: nowrap; }
+.wp-notification-item p { margin: 6px 0 9px; color: var(--wp-workspace-muted,#9caea5); font-size: 11px; line-height: 1.5; }
+.wp-notification-item footer { display: flex; align-items: center; gap: 14px; }
+.wp-notification-item footer a { color: var(--wp-workspace-accent,#2bdd90); font-size: 11px; font-weight: 850; text-decoration: none; }
+.wp-notification-item footer button { color: var(--wp-workspace-subtle,#74867d); font-weight: 700; }
+.wp-notification-panel > footer { padding: 11px 18px 13px; background: rgba(0,0,0,.08); }
+.wp-notification-panel > footer small { color: var(--wp-workspace-subtle,#74867d); font-size: 9px; line-height: 1.4; }
+.wp-notification-empty { display: grid; justify-items: center; gap: 5px; padding: 42px 24px; text-align: center; }
+.wp-notification-empty span { display: grid; width: 38px; height: 38px; margin-bottom: 6px; place-items: center; border: 1px solid rgba(43,221,144,.25); border-radius: 50%; background: rgba(43,221,144,.08); color: var(--wp-workspace-accent,#2bdd90); font-weight: 900; }
+.wp-notification-empty strong { font-size: 13px; }
+.wp-notification-empty p { margin: 0; color: var(--wp-workspace-muted,#9caea5); font-size: 10px; }
 .wp-user { text-align: right; }
 .wp-user strong, .wp-user small { display: block; }
 .wp-user small { color: var(--wp-muted); }
@@ -4103,6 +4141,9 @@ body.wp-verification-viewer-open { overflow: hidden; }
   .wp-invite-assurance span { grid-row: auto; margin-bottom: 8px; }
 }
 @media (max-width: 640px) {
+  .wp-notification-trigger { width: 40px; height: 40px; }
+  .wp-notification-panel { position: fixed; top: 72px; right: 12px; left: 12px; width: auto; max-height: calc(100dvh - 84px); }
+  .wp-notification-feed { max-height: calc(100dvh - 215px); }
   .wp-invite-page { min-height: calc(100dvh - 72px); padding: 24px 16px; }
   .wp-invite-intro { display: none; }
   .wp-invite-shell { display: block; }
