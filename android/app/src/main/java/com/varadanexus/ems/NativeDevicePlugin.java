@@ -54,7 +54,18 @@ public class NativeDevicePlugin extends Plugin {
     private final AtomicBoolean updateDownloadActive = new AtomicBoolean(false);
 
     @PluginMethod
+    public void getDistributionInfo(PluginCall call) {
+        JSObject response = new JSObject();
+        response.put("playStoreBuild", BuildConfig.PLAY_STORE_BUILD);
+        call.resolve(response);
+    }
+
+    @PluginMethod
     public void downloadAndInstallUpdate(PluginCall call) {
+        if (BuildConfig.PLAY_STORE_BUILD) {
+            call.reject("Updates for this installation are managed by Google Play.", "PLAY_STORE_MANAGED");
+            return;
+        }
         String url = call.getString("url", "");
         if (!isTrustedUpdateUrl(url, true)) {
             call.reject("Only the official signed Varada Nexus update can be downloaded.", "UNTRUSTED_URL");

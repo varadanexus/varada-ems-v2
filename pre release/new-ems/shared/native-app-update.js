@@ -191,8 +191,19 @@ async function latestReleaseVersion({ force = false } = {}) {
 
 let activeCheck = null;
 
+async function isPlayStoreBuild() {
+  const nativeDevice = window.Capacitor?.Plugins?.NativeDevice;
+  if (!nativeDevice?.getDistributionInfo) return false;
+  const distribution = await nativeDevice.getDistributionInfo();
+  return distribution?.playStoreBuild === true;
+}
+
 export async function enforceNativeAppUpdate(options = {}) {
   if (!isNativeAndroid()) return true;
+  if (await isPlayStoreBuild()) {
+    clearGate();
+    return true;
+  }
   if (activeCheck && !options.force) return activeCheck;
 
   activeCheck = (async () => {

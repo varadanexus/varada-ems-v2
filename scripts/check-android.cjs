@@ -10,6 +10,7 @@ const assert = (condition, message) => {
 
 const config = JSON.parse(read("capacitor.config.json"));
 const manifest = read("android/app/src/main/AndroidManifest.xml");
+const directManifest = read("android/app/src/direct/AndroidManifest.xml");
 const activity = read("android/app/src/main/java/com/varadanexus/ems/MainActivity.java");
 const nativeDevice = read("android/app/src/main/java/com/varadanexus/ems/NativeDevicePlugin.java");
 const smsOtp = read("android/app/src/main/java/com/varadanexus/ems/SmsOtpPlugin.java");
@@ -36,7 +37,8 @@ assert(manifest.includes("android:allowBackup=\"false\""), "Android backups must
 assert(manifest.includes("android:usesCleartextTraffic=\"false\""), "Cleartext network traffic must be disabled.");
 assert(manifest.includes("android.permission.USE_BIOMETRIC"), "Biometric permission is missing.");
 assert(manifest.includes("android.permission.POST_NOTIFICATIONS"), "Android notification permission is missing.");
-assert(manifest.includes("android.permission.REQUEST_INSTALL_PACKAGES"), "Android in-app update installation permission is missing.");
+assert(!manifest.includes("android.permission.REQUEST_INSTALL_PACKAGES"), "Play builds must not request package installation permission.");
+assert(directManifest.includes("android.permission.REQUEST_INSTALL_PACKAGES"), "Direct APK builds must retain package installation permission.");
 assert(androidStrings.includes('<string name="app_name">Varada Nexus</string>'), "Android launcher name must be Varada Nexus.");
 assert(activity.includes("registerPlugin(NativeDevicePlugin.class)"), "Native device bridge is not registered.");
 assert(activity.includes("registerPlugin(SmsOtpPlugin.class)"), "Native SMS OTP bridge is not registered.");
@@ -47,6 +49,7 @@ assert(nativeDevice.includes("BiometricPrompt"), "Native biometric prompt implem
 assert(nativeDevice.includes('.setTitle("Varada Nexus")'), "Native biometric prompts must use the Varada Nexus brand.");
 assert(nativeDevice.includes("requestPermissionForAlias(\"notifications\""), "Native notification permission request is missing.");
 assert(nativeDevice.includes("public void downloadAndInstallUpdate"), "Native signed-update download bridge is missing.");
+assert(nativeDevice.includes("BuildConfig.PLAY_STORE_BUILD"), "Play builds must delegate updates to Google Play.");
 assert(nativeDevice.includes("verifyDownloadedApk"), "Native updater must verify the downloaded APK before installation.");
 assert(nativeDevice.includes("getApkContentsSigners"), "Native updater must compare APK signing certificates.");
 assert(nativeDevice.includes("ACTION_MANAGE_UNKNOWN_APP_SOURCES"), "Native updater must handle Android install-source permission.");
@@ -75,6 +78,7 @@ assert(dashboard.includes('.cc-admin-grid{grid-template-columns:1fr;'), "Mobile 
 assert(dashboard.includes('.cc-user{width:100%;max-width:100%;min-width:0;'), "Mobile command-center identity cards must not exceed their parent card.");
 assert(dashboard.includes('.cc-actions{display:grid;width:100%;max-width:100%;min-width:0;'), "Mobile command-center actions must use a bounded grid.");
 assert(nativeUpdate.includes("releases/latest"), "Native app must check the latest signed Android release.");
+assert(nativeUpdate.includes("getDistributionInfo"), "Play builds must bypass the direct APK updater.");
 assert(nativeUpdate.includes('title: "Update available"'), "Native app must show a mandatory update prompt.");
 assert(nativeUpdate.includes('downloadAndInstallUpdate'), "Mandatory update prompt must use the native in-app installer.");
 assert(nativeUpdate.includes('updateDownloadProgress'), "Mandatory update prompt must show native download progress.");
@@ -85,7 +89,8 @@ assert(login.includes("await enforceNativeAppUpdate()"), "Native login must enfo
 assert(login.includes('autocomplete="one-time-code"'), "OTP login must enable safe operating-system code autofill.");
 assert(login.includes('Plugins?.SmsOtp'), "OTP login is not connected to the native SMS Retriever bridge.");
 assert(login.includes("releases/latest/download/Varada-EMS.apk"), "Public login must link to the latest signed Android APK.");
-assert(releaseWorkflow.includes("assembleRelease"), "Signed release workflow must build the release APK.");
+assert(releaseWorkflow.includes("assembleDirectRelease"), "Signed release workflow must build the direct release APK.");
+assert(releaseWorkflow.includes("bundlePlayRelease"), "Signed release workflow must build the Play App Bundle.");
 assert(releaseWorkflow.includes("FIREBASE_GOOGLE_SERVICES_JSON_BASE64") && releaseWorkflow.includes("android/app/google-services.json"), "Signed release workflow must restore the protected Firebase Android configuration.");
 assert(releaseWorkflow.includes("build-tools/36.0.0/apksigner") && releaseWorkflow.includes("verify --verbose --print-certs"), "Signed release workflow must verify the APK signature.");
 assert(releaseWorkflow.includes("softprops/action-gh-release"), "Signed APK must be published to a permanent GitHub Release.");
