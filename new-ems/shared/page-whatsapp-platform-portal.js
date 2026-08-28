@@ -5012,6 +5012,23 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const deleteContactsCopy = deleteContactsDialog?.querySelector("[data-delete-contacts-copy]");
   const deleteSelectedButton = app.querySelector("[data-delete-selected-contacts]");
   const selectAllContacts = app.querySelector("[data-select-all-contacts]");
+  const contactDirectory = app.querySelector(".wp-contact-directory");
+  const selectionTools = [selectAllContacts?.closest("label"), deleteSelectedButton].filter(Boolean);
+  const doneSelectionButton = document.createElement("button");
+  doneSelectionButton.type = "button"; doneSelectionButton.className = "wp-secondary"; doneSelectionButton.textContent = "Done"; doneSelectionButton.hidden = true;
+  deleteSelectedButton?.closest(".wp-contact-directory-tools")?.append(doneSelectionButton);
+  const selectModeButton = document.createElement("button");
+  selectModeButton.type = "button"; selectModeButton.className = "wp-secondary"; selectModeButton.textContent = "Select contacts";
+  deleteSelectedButton?.closest(".wp-contact-directory-tools")?.prepend(selectModeButton);
+  const setContactSelectionMode = (enabled) => {
+    contactDirectory?.classList.toggle("is-selecting", enabled);
+    selectionTools.forEach((control) => { control.hidden = !enabled; });
+    selectModeButton.hidden = enabled;
+    doneSelectionButton.hidden = !enabled;
+    if (!enabled) { app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = false; }); if (selectAllContacts) selectAllContacts.checked = false; syncContactSelection(); }
+  };
+  selectModeButton.addEventListener("click", () => setContactSelectionMode(true));
+  doneSelectionButton.addEventListener("click", () => setContactSelectionMode(false));
   const selectedContactIds = () => [...app.querySelectorAll("[data-contact-select]:checked")].map((input) => input.dataset.contactSelect).filter(Boolean);
   const syncContactSelection = () => {
     const checkboxes = [...app.querySelectorAll("[data-contact-select]")];
@@ -5019,6 +5036,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     if (deleteSelectedButton) { deleteSelectedButton.disabled = !selected.length || !["owner", "admin"].includes(session.roleCode); deleteSelectedButton.textContent = selected.length ? `Delete selected (${selected.length})` : "Delete selected"; }
     if (selectAllContacts) { selectAllContacts.checked = Boolean(checkboxes.length && selected.length === checkboxes.length); selectAllContacts.indeterminate = Boolean(selected.length && selected.length < checkboxes.length); }
   };
+  setContactSelectionMode(false);
   app.querySelectorAll("[data-contact-select]").forEach((input) => input.addEventListener("change", syncContactSelection));
   selectAllContacts?.addEventListener("change", () => { app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = selectAllContacts.checked; }); syncContactSelection(); });
   const openDeleteContacts = (ids, names = []) => {
