@@ -1572,7 +1572,7 @@ function onboardingWalkthroughs() {
       title: "Team inbox",
       description: "Handle customer conversations together with ownership, status and a complete message history.",
       href: workspacePath("inbox"),
-      video: "/new-ems/assets/video/whatsapp-walkthroughs/team-inbox.mp4",
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/team-inbox.mp4?v=2",
       action: "Take me to the inbox",
       points: ["See every customer conversation in one shared queue", "Assign ownership and keep follow-ups organised", "Reply with complete customer and message context"],
       visual: `<div class="wp-tour-inbox"><span class="wp-tour-avatar">A</span><div><i></i><i></i><i></i></div><b>2</b></div>`
@@ -1581,7 +1581,7 @@ function onboardingWalkthroughs() {
       title: "Contacts",
       description: "Keep customer identity, consent and conversation activity organised in one directory.",
       href: workspacePath("contacts"),
-      video: "/new-ems/assets/video/whatsapp-walkthroughs/contacts.mp4",
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/contacts.mp4?v=2",
       action: "Explore contacts",
       points: ["Search customer records by identity and number", "Review consent and messaging eligibility", "Open linked conversations without losing context"],
       visual: `<div class="wp-tour-contacts"><span>A</span><span>R</span><span>S</span><div><i></i><i></i></div></div>`
@@ -1590,7 +1590,7 @@ function onboardingWalkthroughs() {
       title: "Campaigns",
       description: "Build targeted WhatsApp campaigns using approved templates and consent-aware audiences.",
       href: workspacePath("campaigns"),
-      video: "/new-ems/assets/video/whatsapp-walkthroughs/campaigns.mp4",
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/campaigns.mp4?v=2",
       action: "Explore campaigns",
       points: ["Choose an eligible customer audience", "Use approved templates for compliant outreach", "Review delivery progress and campaign performance"],
       visual: `<div class="wp-tour-campaign"><span>◎</span><div><i></i><i></i><i></i></div><b>74%</b></div>`
@@ -1599,7 +1599,7 @@ function onboardingWalkthroughs() {
       title: "Message templates",
       description: "Create and manage reusable Meta-approved messages for customer-initiated outreach.",
       href: workspacePath("templates"),
-      video: "/new-ems/assets/video/whatsapp-walkthroughs/templates.mp4",
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/templates.mp4?v=2",
       action: "Explore templates",
       points: ["Build utility, marketing and authentication messages", "Track Meta review and approval status", "Reuse approved content across campaigns and conversations"],
       visual: `<div class="wp-tour-template"><span>Hi {{1}}</span><i></i><i></i><b>Approved</b></div>`
@@ -1608,7 +1608,7 @@ function onboardingWalkthroughs() {
       title: "Flows & automation",
       description: "Design guided customer journeys and connect repeatable actions without manual work.",
       href: workspacePath("flows"),
-      video: "/new-ems/assets/video/whatsapp-walkthroughs/flows.mp4",
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/flows.mp4?v=2",
       action: "Explore flows",
       points: ["Build connected steps on a visual canvas", "Route customers using buttons and conditions", "Reduce repetitive work with reusable journeys"],
       visual: `<div class="wp-tour-flow"><span>Start</span><i></i><span>Message</span><i></i><span>Done</span></div>`
@@ -1617,7 +1617,7 @@ function onboardingWalkthroughs() {
       title: "Analytics",
       description: "Track messaging activity, service performance and operational trends across your workspace.",
       href: workspacePath("analytics"),
-      video: "/new-ems/assets/video/whatsapp-walkthroughs/analytics.mp4",
+      video: "/new-ems/assets/video/whatsapp-walkthroughs/analytics.mp4?v=2",
       action: "Explore analytics",
       points: ["Understand message and conversation volume", "Monitor response and resolution performance", "Use workspace trends to improve operations"],
       visual: `<div class="wp-tour-analytics"><i style="height:34%"></i><i style="height:58%"></i><i style="height:46%"></i><i style="height:82%"></i><i style="height:68%"></i></div>`
@@ -1653,10 +1653,15 @@ function bindOnboardingWalkthrough(root) {
     description.textContent = item.description;
     points.innerHTML = item.points.map((point) => `<li><span aria-hidden="true">✓</span>${escapeHtml(point)}</li>`).join("");
     player.className = `wp-onboarding-tour-player is-${index + 1}`;
-    player.innerHTML = `<div class="wp-tour-live-label"><i></i>How-to video</div><div class="wp-tour-video-frame"><video src="${escapeHtml(item.video)}" title="How to use ${escapeHtml(item.title)}" autoplay muted loop playsinline controls preload="auto"></video></div>`;
+    player.innerHTML = `<div class="wp-tour-live-label"><i></i>How-to video</div><div class="wp-tour-video-frame"><video src="${escapeHtml(item.video)}" title="How to use ${escapeHtml(item.title)}" autoplay muted loop playsinline preload="auto" disablepictureinpicture controlslist="nodownload noplaybackrate nofullscreen"></video></div>`;
     destination.href = item.href;
     destination.innerHTML = `${escapeHtml(item.action)} <span aria-hidden="true">→</span>`;
     dialog.showModal();
+    const video = player.querySelector("video");
+    if (video) {
+      video.muted = true;
+      video.play().catch(() => {});
+    }
   }));
   dialog.querySelector("[data-close-onboarding-tour]")?.addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });

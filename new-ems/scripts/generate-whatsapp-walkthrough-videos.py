@@ -22,7 +22,10 @@ TEXT = "#f1f7f3"
 MUTED = "#98aaa2"
 GREEN = "#2dd78a"
 GREEN_DARK = "#0f6c49"
+GREEN_SOFT = "#103426"
+GREEN_SOFT_DEEP = "#0c281e"
 GOLD = "#d8ad4f"
+GOLD_SOFT = "#382f1c"
 RED = "#e36b70"
 
 FONT_REG = "C:/Windows/Fonts/segoeui.ttf"
@@ -33,8 +36,8 @@ def font(size: int, bold: bool = False):
     return ImageFont.truetype(FONT_BOLD if bold else FONT_REG, size)
 
 
-F10, F11, F12, F13, F14 = (font(v) for v in (10, 11, 12, 13, 14))
-F11B, F12B, F13B, F14B, F16B, F20B, F24B = (font(v, True) for v in (11, 12, 13, 14, 16, 20, 24))
+F10, F11, F12, F13, F14 = (font(v) for v in (11, 13, 14, 15, 17))
+F11B, F12B, F13B, F14B, F16B, F20B, F24B = (font(v, True) for v in (13, 14, 15, 17, 19, 22, 26))
 
 
 def rounded(draw, box, radius=12, fill=PANEL, outline=None, width=1):
@@ -51,7 +54,8 @@ def line(draw, box, fill=LINE, radius=4):
 
 def badge(draw, x, y, label, color=GREEN, width=None):
     w = width or int(draw.textlength(label, font=F10) + 22)
-    rounded(draw, (x, y, x + w, y + 24), 12, color + "22", color, 1)
+    fill = GREEN_SOFT if color == GREEN else GOLD_SOFT if color == GOLD else PANEL_2
+    rounded(draw, (x, y, x + w, y + 24), 12, fill, color, 1)
     text(draw, (x + w / 2, y + 12), label, color, F10, "mm")
 
 
@@ -68,7 +72,7 @@ def avatar(draw, x, y, label, color=GREEN):
 def cursor(draw, x, y, pulse=0.0):
     if pulse > 0:
         r = 13 + 5 * pulse
-        draw.ellipse((x - r, y - r, x + r, y + r), outline=GREEN + "88", width=2)
+        draw.ellipse((x - r, y - r, x + r, y + r), outline=GREEN, width=2)
     draw.polygon([(x, y), (x + 5, y + 20), (x + 10, y + 13), (x + 18, y + 12)], fill="#ffffff", outline="#07110d")
 
 
@@ -82,7 +86,7 @@ def shell(draw, title, nav_active):
     for idx, label in enumerate(nav):
         y = 112 + idx * 43
         if label == nav_active:
-            rounded(draw, (46, y - 8, 176, y + 24), 8, GREEN + "20")
+            rounded(draw, (46, y - 8, 176, y + 24), 8, GREEN_SOFT_DEEP, GREEN_DARK, 1)
             draw.rectangle((46, y - 5, 49, y + 21), fill=GREEN)
         draw.ellipse((58, y, 66, y + 8), fill=GREEN if label == nav_active else MUTED)
         text(draw, (76, y + 4), label, TEXT if label == nav_active else MUTED, F11, "lm")
@@ -99,7 +103,8 @@ def inbox(draw, phase, p):
     names = [("A", "Ananya Rao", "Need help with my order"), ("M", "Meera Stores", "Thank you!"), ("R", "Rohan", "Can I change the date?")]
     for i, (initial, name, preview) in enumerate(names):
         y = 199 + i * 72
-        rounded(draw, (220, y - 6, 440, y + 58), 9, GREEN + "12" if i == phase % 3 else PANEL)
+        is_active = i == phase % 3
+        rounded(draw, (220, y - 6, 440, y + 58), 9, GREEN_SOFT_DEEP if is_active else PANEL, GREEN if is_active else LINE, 2 if is_active else 1)
         avatar(draw, 230, y + 6, initial)
         text(draw, (278, y + 9), name, TEXT, F11)
         text(draw, (278, y + 30), preview, MUTED, F10)
@@ -113,7 +118,7 @@ def inbox(draw, phase, p):
     ]
     for value, x, y, own in bubbles[: phase + 1]:
         w = min(270, int(draw.textlength(value, font=F11) + 28))
-        rounded(draw, (x, y, x + w, y + 38), 11, GREEN + "25" if own else PANEL_2, GREEN + "55" if own else LINE, 1)
+        rounded(draw, (x, y, x + w, y + 38), 11, GREEN_SOFT if own else PANEL_2, GREEN if own else LINE, 1)
         text(draw, (x + 14, y + 19), value, TEXT, F11, "lm")
     rounded(draw, (486, 411, 788, 450), 10, PANEL_2, LINE, 1)
     text(draw, (503, 430), "Type a reply…", MUTED, F11, "lm")
@@ -134,7 +139,8 @@ def contacts(draw, phase, p):
     rows = [("A", "Ananya Rao", "+91 98••• 2401", "Opted in", "Active", "2m ago"), ("M", "Meera Stores", "+91 97••• 8810", "Opted in", "Active", "1h ago"), ("R", "Rohan Mehta", "+91 99••• 1172", "Unknown", "Pending", "Yesterday")]
     for i, row in enumerate(rows):
         y = 198 + i * 70
-        rounded(draw, (220, y - 8, 912, y + 53), 9, GREEN + "10" if i == min(phase, 2) else PANEL_2, LINE, 1)
+        is_active = i == min(phase, 2)
+        rounded(draw, (220, y - 8, 912, y + 53), 9, GREEN_SOFT_DEEP if is_active else PANEL_2, GREEN if is_active else LINE, 2 if is_active else 1)
         avatar(draw, 232, y + 4, row[0])
         text(draw, (278, y + 8), row[1], TEXT, F11)
         text(draw, (278, y + 29), row[2], MUTED, F10)
@@ -163,7 +169,7 @@ def campaigns(draw, phase, p):
         cards = [("Recent customers", "1,248 contacts"), ("Opted-in prospects", "682 contacts"), ("VIP customers", "94 contacts")]
         for i, (label, count) in enumerate(cards):
             x = 235 + i * 216
-            rounded(draw, (x, 205, x + 192, 325), 12, GREEN + "15" if i == 1 else PANEL_2, GREEN if i == 1 else LINE, 1)
+            rounded(draw, (x, 205, x + 192, 325), 12, GREEN_SOFT_DEEP if i == 1 else PANEL_2, GREEN if i == 1 else LINE, 2 if i == 1 else 1)
             text(draw, (x + 16, 229), label, TEXT, F12B)
             text(draw, (x + 16, 257), count, MUTED, F11)
             badge(draw, x + 16, 283, "Eligible", GREEN, 68)
@@ -175,7 +181,7 @@ def campaigns(draw, phase, p):
         rounded(draw, (235, 174, 610, 418), 12, PANEL_2, LINE, 1)
         text(draw, (255, 200), "order_update_en", TEXT, F14B)
         badge(draw, 486, 190, "Approved", GREEN, 88)
-        rounded(draw, (255, 240, 585, 324), 10, GREEN + "18", LINE, 1)
+        rounded(draw, (255, 240, 585, 324), 10, GREEN_SOFT_DEEP, GREEN_DARK, 1)
         text(draw, (272, 260), "Hi {{1}}, your order {{2}} is ready.", TEXT, F11)
         button(draw, (255, 350, 405, 392), "Use template")
         rounded(draw, (635, 174, 895, 418), 12, "#0a1511", LINE, 1)
@@ -285,9 +291,9 @@ def render_frame(renderer, captions, frame_index):
     img = Image.new("RGB", (WIDTH, HEIGHT), BG)
     draw = ImageDraw.Draw(img)
     renderer(draw, phase, local)
-    rounded(draw, (210, 482, 922, 525), 12, "#08120e", GREEN + "55", 1)
+    rounded(draw, (210, 478, 922, 526), 12, "#08120e", GREEN_DARK, 1)
     badge(draw, 226, 492, f"STEP {phase + 1} OF 3", GREEN, 84)
-    text(draw, (326, 503), captions[phase], TEXT, F13B, "lm")
+    text(draw, (326, 504), captions[phase], TEXT, F16B, "lm")
     progress = max(0.02, min(1, (frame_index + 1) / (FPS * SECONDS)))
     line(draw, (210, 532, 922, 536), LINE, 2)
     line(draw, (210, 532, 210 + int(712 * progress), 536), GREEN, 2)
