@@ -886,9 +886,8 @@ async function updateContact(admin: any, customer: any, body: any) {
   if (body.status !== undefined) {
     if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can change contact messaging status.");
     const status = String(body.status);
-    if (!["active","blocked","opted_out"].includes(status)) throw new Error("Invalid contact status.");
+    if (!["active","blocked"].includes(status)) throw new Error("Invalid contact status.");
     updates.status = status;
-    if (status === "opted_out") updates.marketing_opt_out_at = new Date().toISOString();
   }
   if (body.marketingConsent !== undefined) {
     if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can record marketing consent.");
@@ -901,10 +900,8 @@ async function updateContact(admin: any, customer: any, body: any) {
       updates.marketing_opt_in_at = new Date().toISOString();
       updates.marketing_opt_in_source = source;
       updates.marketing_opt_out_at = null;
-      updates.status = "active";
     } else if (consent === "opted_out") {
       updates.marketing_opt_out_at = new Date().toISOString();
-      updates.status = "opted_out";
     } else {
       updates.marketing_opt_in_at = null;
       updates.marketing_opt_in_source = null;

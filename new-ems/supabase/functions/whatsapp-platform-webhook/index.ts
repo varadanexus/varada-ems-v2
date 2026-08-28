@@ -384,7 +384,7 @@ async function processInbound(admin: any, connection: any, value: any, message: 
     const consentAt = conversation.receivedAt;
     const contactUpdates = eventType === "opt_out"
       ? { marketing_opt_out_at: consentAt, updated_at: new Date().toISOString() }
-      : { marketing_opt_in_at: consentAt, marketing_opt_in_source: "keyword", marketing_opt_out_at: null, updated_at: new Date().toISOString() };
+      : { marketing_opt_in_at: consentAt, marketing_opt_in_source: "keyword", marketing_opt_out_at: null, ...(contact.status === "opted_out" ? { status: "active" } : {}), updated_at: new Date().toISOString() };
     const { error: consentError } = await admin.from("whatsapp_platform_contacts").update(contactUpdates)
       .eq("id", contact.id).eq("tenant_id", connection.tenant_id);
     if (consentError) throw consentError;
