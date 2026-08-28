@@ -7,7 +7,7 @@ const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
 const AGENT_ACTIONS = new Set([
   "list", "thread", "send_text", "update_conversation", "add_note",
-  "list_contacts", "list_marketing_consent_events", "create_contact", "import_contacts", "start_chat", "update_contact",
+  "list_contacts", "list_marketing_consent_events", "create_contact", "preview_contact_import", "import_contacts", "start_chat", "update_contact",
   "list_templates", "list_template_library", "list_flows",
   "list_campaigns", "list_campaign_segments", "save_campaign",
   "list_notifications", "mark_notification_read", "mark_all_notifications_read", "dismiss_notification",
@@ -760,6 +760,13 @@ async function createContact(admin: any, customer: any, body: any) {
     .eq("tenant_id", customer.tenant_id).eq("wa_id", digits).maybeSingle();
   if (existingError) throw existingError;
   if (existing) {
+    if (body.duplicateResolution !== "replace") {
+      return {
+        duplicate: true,
+        existingContact: existing,
+        incomingContact: { wa_id: digits, phone_e164: `+${digits}`, display_name: displayName },
+      };
+    }
     const { data, error } = await admin.from("whatsapp_platform_contacts")
       .update({ display_name: displayName, updated_at: new Date().toISOString() })
       .eq("id", existing.id).eq("tenant_id", customer.tenant_id)
@@ -772,24 +779,42 @@ async function createContact(admin: any, customer: any, body: any) {
   const { data, error } = await admin.from("whatsapp_platform_contacts").insert({
     tenant_id: customer.tenant_id, wa_id: digits, phone_e164: `+${digits}`, display_name: displayName, status: "active",
   }).select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at,created_at,updated_at").single();
+  if (error?.code === "23505") {
+    const { data: racedDuplicate } = await admin.from("whatsapp_platform_contacts")
+      .select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at,created_at,updated_at")
+      .eq("tenant_id", customer.tenant_id).eq("wa_id", digits).maybeSingle();
+    if (racedDuplicate) return { duplicate: true, existingContact: racedDuplicate, incomingContact: { wa_id: digits, phone_e164: `+${digits}`, display_name: displayName } };
+  }
   if (error || !data) throw new Error("Contact could not be created.");
   return { contact: data, existing: false };
 }
-async function importContacts(admin: any, customer: any, body: any) {
-  if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot import contacts.");
-  const submitted = Array.isArray(body.contacts) ? body.contacts : [];
+function validatedImportRows(submitted: any[]) {
   if (!submitted.length) throw new Error("Add at least one valid contact to import.");
-  if (submitted.length > 500) throw new Error("Import a maximum of 500 contacts at a time.");
-  const duplicateMode = body.duplicateMode === "update" ? "update" : "skip";
-  const unique = new Map<string, { wa_id: string; phone_e164: string; display_name: string }>();
+  if (submitted.length > 1000) throw new Error("This protected import batch is too large. Submit the import in smaller batches.");
+  const unique = new Map<string, { wa_id: string; phone_e164: string; display_name: string; duplicate_resolution: string }>();
   submitted.forEach((item: any, index: number) => {
     const digits = String(item?.phone || "").replace(/\D/g, "");
     const displayName = String(item?.displayName || "").trim().replace(/\s+/g, " ");
     if (!/^[1-9][0-9]{6,14}$/.test(digits)) throw new Error(`Row ${index + 1} has an invalid international phone number.`);
     if (!displayName || displayName.length > 200) throw new Error(`Row ${index + 1} needs a contact name of up to 200 characters.`);
-    unique.set(digits, { wa_id: digits, phone_e164: `+${digits}`, display_name: displayName });
+    unique.set(digits, { wa_id: digits, phone_e164: `+${digits}`, display_name: displayName, duplicate_resolution: item?.duplicateResolution === "replace" ? "replace" : "skip" });
   });
-  const rows = [...unique.values()];
+  return [...unique.values()];
+}
+async function previewContactImport(admin: any, customer: any, body: any) {
+  if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot import contacts.");
+  const submitted = Array.isArray(body.contacts) ? body.contacts : [];
+  const rows = validatedImportRows(submitted);
+  const { data: existing, error } = await admin.from("whatsapp_platform_contacts")
+    .select("id,wa_id,phone_e164,profile_name,display_name,status,created_at,updated_at")
+    .eq("tenant_id", customer.tenant_id).in("wa_id", rows.map((row) => row.wa_id));
+  if (error) throw error;
+  return { duplicates: existing || [] };
+}
+async function importContacts(admin: any, customer: any, body: any) {
+  if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot import contacts.");
+  const submitted = Array.isArray(body.contacts) ? body.contacts : [];
+  const rows = validatedImportRows(submitted);
   const waIds = rows.map((row) => row.wa_id);
   const { data: existing, error: existingError } = await admin.from("whatsapp_platform_contacts")
     .select("id,wa_id,display_name").eq("tenant_id", customer.tenant_id).in("wa_id", waIds);
@@ -805,17 +830,19 @@ async function importContacts(admin: any, customer: any, body: any) {
     const available = Math.max(0, limit - Number(count || 0));
     if (newRows.length > available) throw new Error(`This import would exceed the active package limit of ${limit.toLocaleString("en-IN")} contacts. ${available.toLocaleString("en-IN")} new contact${available === 1 ? "" : "s"} can still be added.`);
   }
+  let imported = 0;
   if (newRows.length) {
-    const { error } = await admin.from("whatsapp_platform_contacts").insert(newRows.map((row) => ({
-      tenant_id: customer.tenant_id, ...row, status: "active",
-    })));
+    const { data: inserted, error } = await admin.from("whatsapp_platform_contacts").upsert(newRows.map((row) => ({
+      tenant_id: customer.tenant_id, wa_id: row.wa_id, phone_e164: row.phone_e164, display_name: row.display_name, status: "active",
+    })), { onConflict: "tenant_id,wa_id", ignoreDuplicates: true }).select("id");
     if (error) throw error;
+    imported = (inserted || []).length;
   }
   let updated = 0;
-  if (duplicateMode === "update") {
+  {
     const updateRows = rows.filter((row) => {
       const current = existingByWaId.get(row.wa_id);
-      return current && current.display_name !== row.display_name;
+      return current && row.duplicate_resolution === "replace" && current.display_name !== row.display_name;
     });
     for (let offset = 0; offset < updateRows.length; offset += 25) {
       const batch = updateRows.slice(offset, offset + 25);
@@ -828,9 +855,9 @@ async function importContacts(admin: any, customer: any, body: any) {
     }
   }
   return {
-    imported: newRows.length,
+    imported,
     updated,
-    skipped: (existing || []).length - updated,
+    skipped: Math.max(0, rows.length - imported - updated),
     duplicatesInFile: submitted.length - rows.length,
     totalProcessed: submitted.length,
   };
@@ -1498,7 +1525,7 @@ Deno.serve(async (req) => {
     const featureByAction: Record<string, string> = {
       list: "team_inbox", thread: "team_inbox", send_text: "team_inbox", start_chat: "team_inbox",
       update_conversation: "team_inbox", add_note: "team_inbox",
-      list_contacts: "contacts", create_contact: "contacts", import_contacts: "contacts", update_contact: "contacts",
+      list_contacts: "contacts", create_contact: "contacts", preview_contact_import: "contacts", import_contacts: "contacts", update_contact: "contacts",
       list_marketing_consent_events: "contacts",
       list_templates: "templates", list_template_library: "templates", create_template: "templates",
       list_flows: "flows", save_flow: "flows", set_flow_status: "flows", delete_flow: "flows",
@@ -1539,6 +1566,7 @@ Deno.serve(async (req) => {
     if (action === "thread") return json(req, await thread(admin, customer, body));
     if (action === "send_text") return json(req, await sendText(admin, customer, body));
     if (action === "create_contact") return json(req, await createContact(admin, customer, body));
+    if (action === "preview_contact_import") return json(req, await previewContactImport(admin, customer, body));
     if (action === "import_contacts") return json(req, await importContacts(admin, customer, body));
     if (action === "start_chat") return json(req, await startChat(admin, customer, body));
     if (action === "update_conversation") return json(req, await updateConversation(admin, customer, body));

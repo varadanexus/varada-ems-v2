@@ -2205,7 +2205,7 @@ function contactsView() {
     const consentLabel = contact.marketing_opt_in_at && !contact.marketing_opt_out_at ? "Marketing opt-in recorded" : contact.marketing_opt_out_at ? "Marketing opted out" : "Marketing consent not recorded";
     return `<article class="wp-contact-row" data-contact-row><div class="wp-inbox-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</div><div class="wp-contact-identity"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(contact.phone_e164 || "")}</small></div><div class="wp-contact-activity"><span>${contact.last_inbound_at ? `Last message ${escapeHtml(inboxTime(contact.last_inbound_at))}` : "No inbound message"}</span><small>${escapeHtml(consentLabel)}</small></div><span class="wp-contact-status ${escapeHtml(contact.status)}">${escapeHtml(contact.status.replaceAll("_", " "))}</span><div class="wp-contact-actions">${conversationUrl ? `<a href="${escapeHtml(conversationUrl)}">Open conversation</a>` : ""}<button type="button" data-edit-contact="${escapeHtml(contact.id)}" data-contact-name="${escapeHtml(contact.display_name || "")}" data-contact-status="${escapeHtml(contact.status)}">Edit</button></div></article>`;
   }).join("");
-  return `<section class="wp-route-page wp-contacts-page"><div class="wp-route-heading"><div><span class="wp-kicker">Customer records</span><h1>Contacts</h1><p>Manage customer identity, messaging eligibility and linked conversation history.</p></div><div class="wp-contact-summary"><strong>${contacts.length}</strong><span>total contacts</span></div></div>${workspaceContacts?.error ? `<div class="wp-verification-notice"><strong>Contacts unavailable</strong><p>${escapeHtml(workspaceContacts.error)}</p></div>` : ""}<section class="wp-contact-stats"><article><span>Active</span><strong>${Number(statusCounts.active || 0)}</strong></article><article><span>Blocked</span><strong>${Number(statusCounts.blocked || 0)}</strong></article><article><span>Opted out</span><strong>${Number(statusCounts.opted_out || 0)}</strong></article></section><section class="wp-card wp-contact-directory"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>WhatsApp contacts</h2></div><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search name or number" data-contact-search /></label></header><nav class="wp-inbox-filters" aria-label="Contact filters">${["all","active","blocked","opted_out"].map((filter) => { const url = new URL(workspacePath("contacts"), location.origin); if (filter !== "all") url.searchParams.set("status", filter); return `<a class="${status === filter ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}">${escapeHtml(filter.replaceAll("_", " "))}</a>`; }).join("")}</nav><div class="wp-contact-list">${rows || '<div class="wp-inbox-empty"><span>◎</span><strong>No contacts yet</strong><p>Contacts are created automatically when a customer messages a connected WhatsApp number.</p></div>'}</div></section><dialog class="wp-contact-dialog" id="wpContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Contact controls</span><h2>Edit customer</h2></div><button type="button" data-close-contact-dialog aria-label="Close">×</button></header><input type="hidden" name="contactId" /><label><span>Display name</span><input name="displayName" maxlength="200" autocomplete="off" /></label><label><span>Messaging status</span><select name="status"><option value="active">Active</option><option value="blocked">Blocked</option></select><small>Blocked contacts cannot receive workspace messages. Marketing opt-out affects campaigns only; service conversations remain available.</small></label><label><span>WhatsApp marketing consent</span><select name="marketingConsent"><option value="unknown">Not recorded</option><option value="opted_in">Explicit opt-in recorded</option><option value="opted_out">Opted out</option></select><small>Campaigns include only contacts with explicit, auditable marketing consent.</small></label><label data-marketing-consent-source hidden><span>Consent source</span><select name="marketingOptInSource"><option value="manual_record">Manual record</option><option value="website">Website</option><option value="form">Form</option><option value="qr_code">QR code</option><option value="keyword">Keyword</option><option value="inbound_request">Inbound request</option><option value="imported_proof">Imported proof</option><option value="api">API</option></select></label><footer><button class="wp-secondary" type="button" data-close-contact-dialog>Cancel</button><button class="wp-primary" type="submit" value="save">Save contact</button></footer></form></dialog></section>`;
+  return `<section class="wp-route-page wp-contacts-page"><div class="wp-route-heading"><div><span class="wp-kicker">Customer records</span><h1>Contacts</h1><p>Manage customer identity, messaging eligibility and linked conversation history.</p></div></div>${workspaceContacts?.error ? `<div class="wp-verification-notice"><strong>Contacts unavailable</strong><p>${escapeHtml(workspaceContacts.error)}</p></div>` : ""}<section class="wp-contact-stats"><article><span>Active <small>${contacts.length.toLocaleString("en-IN")} total contacts</small></span><strong>${Number(statusCounts.active || 0)}</strong></article><article><span>Blocked</span><strong>${Number(statusCounts.blocked || 0)}</strong></article><article><span>Opted out</span><strong>${Number(statusCounts.opted_out || 0)}</strong></article></section><section class="wp-card wp-contact-directory"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>WhatsApp contacts</h2></div><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search name or number" data-contact-search /></label></header><nav class="wp-inbox-filters" aria-label="Contact filters">${["all","active","blocked","opted_out"].map((filter) => { const url = new URL(workspacePath("contacts"), location.origin); if (filter !== "all") url.searchParams.set("status", filter); return `<a class="${status === filter ? "active" : ""}" href="${escapeHtml(url.pathname + url.search)}">${escapeHtml(filter.replaceAll("_", " "))}</a>`; }).join("")}</nav><div class="wp-contact-list">${rows || '<div class="wp-inbox-empty"><span>◎</span><strong>No contacts yet</strong><p>Contacts are created automatically when a customer messages a connected WhatsApp number.</p></div>'}</div></section><dialog class="wp-contact-dialog" id="wpContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Contact controls</span><h2>Edit customer</h2></div><button type="button" data-close-contact-dialog aria-label="Close">×</button></header><input type="hidden" name="contactId" /><label><span>Display name</span><input name="displayName" maxlength="200" autocomplete="off" /></label><label><span>Messaging status</span><select name="status"><option value="active">Active</option><option value="blocked">Blocked</option></select><small>Blocked contacts cannot receive workspace messages. Marketing opt-out affects campaigns only; service conversations remain available.</small></label><label><span>WhatsApp marketing consent</span><select name="marketingConsent"><option value="unknown">Not recorded</option><option value="opted_in">Explicit opt-in recorded</option><option value="opted_out">Opted out</option></select><small>Campaigns include only contacts with explicit, auditable marketing consent.</small></label><label data-marketing-consent-source hidden><span>Consent source</span><select name="marketingOptInSource"><option value="manual_record">Manual record</option><option value="website">Website</option><option value="form">Form</option><option value="qr_code">QR code</option><option value="keyword">Keyword</option><option value="inbound_request">Inbound request</option><option value="imported_proof">Imported proof</option><option value="api">API</option></select></label><footer><button class="wp-secondary" type="button" data-close-contact-dialog>Cancel</button><button class="wp-primary" type="submit" value="save">Save contact</button></footer></form></dialog></section>`;
 }
 
 function inboxView() {
@@ -3869,10 +3869,11 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     linkDialog?.addEventListener("close", () => renderDashboard());
   }
   if (view === "contacts") {
-    app.querySelector(".wp-route-heading")?.insertAdjacentHTML("beforeend", '<div class="wp-contact-heading-actions"><button class="wp-secondary" id="wpImportContactsBtn" type="button">⇧ Import contacts</button><button class="wp-primary" id="wpAddContactBtn" type="button">＋ Add contact</button></div>');
+    app.querySelector(".wp-route-heading")?.insertAdjacentHTML("beforeend", '<div class="wp-contact-heading-actions"><button class="wp-primary wp-import-contact-button" id="wpImportContactsBtn" type="button">⇧ Import contacts</button><button class="wp-primary" id="wpAddContactBtn" type="button">＋ Add contact</button></div>');
     app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog" id="wpAddContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Add contact</h2></div><button type="button" data-close-add-contact aria-label="Close">×</button></header><label><span>Contact name</span><input name="displayName" maxlength="200" autocomplete="name" required /></label><label><span>WhatsApp number</span><input name="phone" type="tel" inputmode="tel" maxlength="24" placeholder="+91 98765 43210" autocomplete="tel" required /><small>Include the country code. We will store the number in international format.</small></label><footer><button class="wp-secondary" type="button" data-close-add-contact>Cancel</button><button class="wp-primary" type="submit" value="save">Add contact</button></footer></form></dialog>`);
+    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-contact-duplicate-dialog" id="wpDuplicateContactDialog"><section><header><div><span class="wp-card-eyebrow">Duplicate contact found</span><h2>Choose which contact details to keep</h2><p>The WhatsApp number already belongs to a contact. No duplicate will be created.</p></div><button type="button" data-close-contact-duplicate aria-label="Close">×</button></header><div class="wp-duplicate-contact-choices"><button type="button" data-manual-duplicate-choice="existing"><span>Existing contact</span><strong data-duplicate-existing-name>—</strong><small data-duplicate-existing-phone>—</small><b>Keep existing</b></button><button type="button" data-manual-duplicate-choice="incoming"><span>New contact details</span><strong data-duplicate-incoming-name>—</strong><small data-duplicate-incoming-phone>—</small><b>Use new details</b></button></div><p class="wp-duplicate-guidance">Choosing new details updates the existing contact name; message history and consent records remain attached to the same number.</p></section></dialog>`);
     const importCountryOptions = countryDialEntries().map((country) => `<option value="${country.dial}" ${country.code === "IN" ? "selected" : ""}>${countryFlag(country.code)} ${escapeHtml(country.name)} (${country.dial})</option>`).join("");
-    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-contact-import-dialog" id="wpImportContactsDialog"><form id="wpImportContactsForm"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Import contacts</h2><p>Bring contacts from another phone, CRM or spreadsheet.</p></div><button type="button" data-close-contact-import aria-label="Close">×</button></header><section class="wp-import-methods"><article><strong>Upload a file</strong><span>CSV, Google Contacts, Outlook or vCard</span><label class="wp-import-file"><input name="contactFile" type="file" accept=".csv,.txt,.vcf,text/csv,text/plain,text/vcard" /><b>Choose CSV or VCF</b><small data-import-file-name>No file selected</small></label></article><article><strong>Paste a list</strong><span>One contact per line: Name, +number</span><textarea name="pastedContacts" rows="6" placeholder="Ananya Rao, +91 98765 43210&#10;Rohan Mehta, +44 7700 900123"></textarea></article></section><div class="wp-import-options"><label><span>Default country for local numbers</span><select name="defaultDialCode">${importCountryOptions}</select></label><label><span>Existing contacts</span><select name="duplicateMode"><option value="skip">Keep existing contact unchanged</option><option value="update">Update its display name</option></select></label></div><div class="wp-policy-note"><strong>Marketing consent is not imported automatically</strong><p>Imported contacts are eligible for service conversations only. Record explicit, auditable consent before including them in marketing campaigns.</p></div><section class="wp-import-preview" data-import-preview><div><strong>Ready to review</strong><span>Choose a file or paste contacts to see a validated preview.</span></div></section><footer><button class="wp-secondary" type="button" data-download-contact-template>Download CSV template</button><button class="wp-secondary" type="button" data-close-contact-import>Cancel</button><button class="wp-primary" type="submit" disabled>Import contacts</button></footer></form></dialog>`);
+    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-contact-import-dialog" id="wpImportContactsDialog"><form id="wpImportContactsForm"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Import contacts</h2><p>Bring contacts from another phone, CRM or spreadsheet. Large imports are processed securely in batches.</p></div><button type="button" data-close-contact-import aria-label="Close">×</button></header><section class="wp-import-methods"><article><strong>Upload a file</strong><span>CSV, Google Contacts, Outlook or vCard</span><label class="wp-import-file"><input name="contactFile" type="file" accept=".csv,.txt,.vcf,text/csv,text/plain,text/vcard" /><b>Choose CSV or VCF</b><small data-import-file-name>No file selected</small></label></article><article><strong>Paste a list</strong><span>One contact per line: Name, +number</span><textarea name="pastedContacts" rows="6" placeholder="Ananya Rao, +91 98765 43210&#10;Rohan Mehta, +44 7700 900123"></textarea></article></section><div class="wp-import-options"><label><span>Default country for local numbers</span><select name="defaultDialCode">${importCountryOptions}</select></label><div><span>Duplicate protection</span><strong>Every duplicate must be reviewed before import</strong></div></div><div class="wp-policy-note"><strong>Marketing consent is not imported automatically</strong><p>Imported contacts are eligible for service conversations only. Record explicit, auditable consent before including them in marketing campaigns.</p></div><section class="wp-import-preview" data-import-preview><div><strong>Ready to review</strong><span>Choose a file or paste contacts to see a validated preview.</span></div></section><footer><button class="wp-secondary" type="button" data-download-contact-template>Download CSV template</button><button class="wp-secondary" type="button" data-close-contact-import>Cancel</button><button class="wp-primary" type="submit" disabled>Review contacts</button></footer></form></dialog>`);
   }
   if (view === "inbox") {
     const activeContacts = (workspaceContacts?.contacts || []).filter((contact) => contact.status === "active");
@@ -4857,6 +4858,8 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     } catch (error) { showToast(error?.message || "Template could not be submitted.", "error"); submitter.disabled = false; submitter.textContent = "Submit to Meta"; }
   });
   const addContactDialog = app.querySelector("#wpAddContactDialog");
+  const duplicateContactDialog = app.querySelector("#wpDuplicateContactDialog");
+  let pendingManualDuplicate = null;
   const addContactPhoneLabel = addContactDialog?.querySelector("input[name='phone']")?.closest("label");
   if (addContactPhoneLabel) {
     const countries = countryDialEntries();
@@ -4905,13 +4908,41 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       const nationalNumber = form.elements.nationalNumber.value.replace(/\D/g, "").replace(/^0+/, "");
       const phone = `${form.elements.countryDialCode.value}${nationalNumber}`;
       const result = await messagingRequest("create_contact", { displayName: form.elements.displayName.value.trim(), phone });
+      if (result?.duplicate) {
+        pendingManualDuplicate = result;
+        duplicateContactDialog.querySelector("[data-duplicate-existing-name]").textContent = result.existingContact?.display_name || result.existingContact?.profile_name || "Existing contact";
+        duplicateContactDialog.querySelector("[data-duplicate-existing-phone]").textContent = result.existingContact?.phone_e164 || phone;
+        duplicateContactDialog.querySelector("[data-duplicate-incoming-name]").textContent = result.incomingContact?.display_name || form.elements.displayName.value.trim();
+        duplicateContactDialog.querySelector("[data-duplicate-incoming-phone]").textContent = result.incomingContact?.phone_e164 || phone;
+        addContactDialog.close(); duplicateContactDialog.showModal();
+        submitter.disabled = false; submitter.textContent = "Add contact";
+        return;
+      }
       addContactDialog.close();
-      showToast(result?.existing ? "Existing contact updated." : "Contact added.");
+      showToast("Contact added.");
       await renderDashboard();
     } catch (error) {
       showToast(error?.message || "Contact could not be added.", "error");
       submitter.disabled = false; submitter.textContent = "Add contact";
     }
+  });
+  duplicateContactDialog?.querySelectorAll("[data-close-contact-duplicate]").forEach((button) => button.addEventListener("click", () => duplicateContactDialog.close()));
+  duplicateContactDialog?.querySelector('[data-manual-duplicate-choice="existing"]')?.addEventListener("click", async () => {
+    duplicateContactDialog.close(); pendingManualDuplicate = null;
+    showToast("Existing contact kept. No duplicate was created.");
+    await renderDashboard();
+  });
+  duplicateContactDialog?.querySelector('[data-manual-duplicate-choice="incoming"]')?.addEventListener("click", async (event) => {
+    if (!pendingManualDuplicate) return;
+    const button = event.currentTarget;
+    try {
+      button.disabled = true;
+      const result = await messagingRequest("create_contact", { displayName: pendingManualDuplicate.incomingContact.display_name, phone: pendingManualDuplicate.incomingContact.phone_e164, duplicateResolution: "replace" });
+      if (!result?.contact) throw new Error("The duplicate could not be resolved.");
+      duplicateContactDialog.close(); pendingManualDuplicate = null;
+      showToast("New contact details kept. No duplicate was created.");
+      await renderDashboard();
+    } catch (error) { showToast(error?.message || "The duplicate could not be resolved.", "error"); button.disabled = false; }
   });
   const importContactsDialog = app.querySelector("#wpImportContactsDialog");
   const importContactsForm = importContactsDialog?.querySelector("form");
@@ -4921,26 +4952,46 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   let importFileText = "";
   let importFileName = "";
   let importReadyContacts = [];
+  let importLocalChoices = new Map();
+  let importExistingDuplicates = new Map();
+  let importExistingChoices = new Map();
+  let importDuplicatesReviewed = false;
+  const importBatchSize = 400;
+  const resetImportDuplicateReview = () => {
+    importExistingDuplicates = new Map(); importExistingChoices = new Map(); importDuplicatesReviewed = false;
+  };
   const refreshContactImportPreview = () => {
     if (!importContactsForm || !importPreview) return;
     const pasteMode = Boolean(importPasteInput?.value.trim());
     const source = pasteMode ? importPasteInput.value : importFileText;
     const parsed = source ? parseContactImport(source, importFileName, importContactsForm.elements.defaultDialCode.value, pasteMode) : { contacts: [], errors: [] };
-    const unique = new Map();
-    parsed.contacts.forEach((contact) => unique.set(contact.phone, contact));
-    importReadyContacts = [...unique.values()];
-    const duplicates = parsed.contacts.length - importReadyContacts.length;
-    const tooMany = importReadyContacts.length > 500;
+    const groups = new Map();
+    parsed.contacts.forEach((contact) => groups.set(contact.phone, [...(groups.get(contact.phone) || []), contact]));
+    [...importLocalChoices.keys()].forEach((phone) => { if (!groups.has(phone)) importLocalChoices.delete(phone); });
+    importReadyContacts = [...groups.entries()].map(([phone, options]) => options[Math.min(Number(importLocalChoices.get(phone) || 0), options.length - 1)] || options[0]);
+    const duplicateGroups = [...groups.entries()].filter(([, options]) => options.length > 1);
     const submitter = importContactsForm.querySelector('button[type="submit"]');
-    submitter.disabled = !importReadyContacts.length || tooMany;
-    submitter.textContent = importReadyContacts.length ? `Import ${Math.min(importReadyContacts.length, 500).toLocaleString("en-IN")} contact${importReadyContacts.length === 1 ? "" : "s"}` : "Import contacts";
+    submitter.disabled = !importReadyContacts.length;
+    submitter.textContent = importReadyContacts.length ? `${importDuplicatesReviewed ? "Import" : "Review"} ${importReadyContacts.length.toLocaleString("en-IN")} contact${importReadyContacts.length === 1 ? "" : "s"}` : "Review contacts";
     if (!source) {
       importPreview.innerHTML = "<div><strong>Ready to review</strong><span>Choose a file or paste contacts to see a validated preview.</span></div>";
       return;
     }
     const rows = importReadyContacts.slice(0, 8).map((contact) => `<li><span>${escapeHtml(contact.displayName)}</span><strong>${escapeHtml(contact.phone)}</strong></li>`).join("");
-    const issueCopy = [duplicates ? `${duplicates} duplicate${duplicates === 1 ? "" : "s"} merged` : "", parsed.errors.length ? `${parsed.errors.length} invalid row${parsed.errors.length === 1 ? "" : "s"} skipped` : "", tooMany ? "Maximum 500 contacts per import" : ""].filter(Boolean).join(" · ");
-    importPreview.innerHTML = `<header><div><strong>${importReadyContacts.length.toLocaleString("en-IN")} valid contact${importReadyContacts.length === 1 ? "" : "s"}</strong><span>${issueCopy || "All rows passed validation"}</span></div><b>${tooMany ? "Split this import" : "Ready"}</b></header>${rows ? `<ol>${rows}</ol>` : ""}${importReadyContacts.length > 8 ? `<small>Plus ${(importReadyContacts.length - 8).toLocaleString("en-IN")} more contacts</small>` : ""}${parsed.errors.length ? `<details><summary>View skipped rows</summary><p>${parsed.errors.slice(0, 12).map(escapeHtml).join("<br>")}${parsed.errors.length > 12 ? "<br>…" : ""}</p></details>` : ""}`;
+    const localDuplicates = duplicateGroups.length ? `<section class="wp-import-duplicates"><header><div><strong>${duplicateGroups.length.toLocaleString("en-IN")} duplicate number${duplicateGroups.length === 1 ? "" : "s"} inside this import</strong><span>Select the contact name to keep for each number.</span></div></header><div>${duplicateGroups.map(([phone, options]) => `<article><strong>${escapeHtml(phone)}</strong><div>${options.map((contact, index) => `<label><input type="radio" name="local_duplicate_${escapeHtml(phone.replace(/\D/g, ""))}" value="${index}" data-local-duplicate-phone="${escapeHtml(phone)}" ${Number(importLocalChoices.get(phone) || 0) === index ? "checked" : ""} /><span>${escapeHtml(contact.displayName)}</span></label>`).join("")}</div></article>`).join("")}</div></section>` : "";
+    const workspaceDuplicateRows = importDuplicatesReviewed ? [...importExistingDuplicates.entries()].map(([phone, existing]) => {
+      const incoming = importReadyContacts.find((contact) => contact.phone.replace(/\D/g, "") === phone);
+      if (!incoming) return "";
+      const choice = importExistingChoices.get(phone) || "existing";
+      return `<article><strong>${escapeHtml(existing.phone_e164 || incoming.phone)}</strong><div class="wp-import-duplicate-pair"><label><input type="radio" name="existing_duplicate_${escapeHtml(phone)}" value="existing" data-existing-duplicate-phone="${escapeHtml(phone)}" ${choice === "existing" ? "checked" : ""} /><span><b>Existing</b>${escapeHtml(existing.display_name || existing.profile_name || "Existing contact")}</span></label><label><input type="radio" name="existing_duplicate_${escapeHtml(phone)}" value="incoming" data-existing-duplicate-phone="${escapeHtml(phone)}" ${choice === "incoming" ? "checked" : ""} /><span><b>Imported</b>${escapeHtml(incoming.displayName)}</span></label></div></article>`;
+    }).join("") : "";
+    const workspaceDuplicates = importDuplicatesReviewed ? `<section class="wp-import-duplicates wp-workspace-import-duplicates"><header><div><strong>${importExistingDuplicates.size.toLocaleString("en-IN")} duplicate${importExistingDuplicates.size === 1 ? "" : "s"} already in the workspace</strong><span>${importExistingDuplicates.size ? "Choose the details to keep for every matching number." : "No existing workspace duplicates were found."}</span></div><b>${importExistingDuplicates.size ? "Selection required" : "Clear"}</b></header>${workspaceDuplicateRows ? `<div>${workspaceDuplicateRows}</div>` : ""}</section>` : "";
+    const issueCopy = [duplicateGroups.length ? `${duplicateGroups.length} duplicate number${duplicateGroups.length === 1 ? "" : "s"} in file` : "", parsed.errors.length ? `${parsed.errors.length} invalid row${parsed.errors.length === 1 ? "" : "s"} skipped` : ""].filter(Boolean).join(" · ");
+    importPreview.innerHTML = `<header><div><strong>${importReadyContacts.length.toLocaleString("en-IN")} unique valid contact${importReadyContacts.length === 1 ? "" : "s"}</strong><span>${issueCopy || "All local rows passed validation"}</span></div><b>${importDuplicatesReviewed ? "Reviewed" : "Review required"}</b></header>${rows ? `<ol>${rows}</ol>` : ""}${importReadyContacts.length > 8 ? `<small>Plus ${(importReadyContacts.length - 8).toLocaleString("en-IN")} more contacts</small>` : ""}${localDuplicates}${workspaceDuplicates}${parsed.errors.length ? `<details><summary>View skipped rows</summary><p>${parsed.errors.slice(0, 100).map(escapeHtml).join("<br>")}${parsed.errors.length > 100 ? `<br>Plus ${(parsed.errors.length - 100).toLocaleString("en-IN")} more invalid rows` : ""}</p></details>` : ""}`;
+    importPreview.querySelectorAll("[data-local-duplicate-phone]").forEach((input) => input.addEventListener("change", () => {
+      importLocalChoices.set(input.dataset.localDuplicatePhone, Number(input.value)); resetImportDuplicateReview(); refreshContactImportPreview();
+    }));
+    importPreview.querySelectorAll("[data-existing-duplicate-phone]").forEach((input) => input.addEventListener("change", () => importExistingChoices.set(input.dataset.existingDuplicatePhone, input.value)));
   };
   app.querySelector("#wpImportContactsBtn")?.addEventListener("click", () => importContactsDialog?.showModal());
   importContactsDialog?.querySelectorAll("[data-close-contact-import]").forEach((button) => button.addEventListener("click", () => importContactsDialog.close()));
@@ -4950,9 +5001,9 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     const fileNameLabel = importContactsForm.querySelector("[data-import-file-name]");
     if (fileNameLabel) fileNameLabel.textContent = file?.name || "No file selected";
     if (!file) { refreshContactImportPreview(); return; }
-    if (file.size > 2 * 1024 * 1024) { showToast("Choose a contact file smaller than 2 MB.", "error"); importFileInput.value = ""; refreshContactImportPreview(); return; }
     importPasteInput.value = "";
     importFileText = await file.text();
+    importLocalChoices = new Map(); resetImportDuplicateReview();
     refreshContactImportPreview();
   });
   importPasteInput?.addEventListener("input", () => {
@@ -4961,9 +5012,10 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       const fileNameLabel = importContactsForm.querySelector("[data-import-file-name]");
       if (fileNameLabel) fileNameLabel.textContent = "No file selected";
     }
+    importLocalChoices = new Map(); resetImportDuplicateReview();
     refreshContactImportPreview();
   });
-  importContactsForm?.elements.defaultDialCode?.addEventListener("change", refreshContactImportPreview);
+  importContactsForm?.elements.defaultDialCode?.addEventListener("change", () => { importLocalChoices = new Map(); resetImportDuplicateReview(); refreshContactImportPreview(); });
   importContactsForm?.querySelector("[data-download-contact-template]")?.addEventListener("click", () => {
     const blob = new Blob(["Name,Phone Number\r\nAnanya Rao,+919876543210\r\nRohan Mehta,+447700900123\r\n"], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -4974,19 +5026,43 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   importContactsForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const submitter = event.submitter;
-    if (!submitter || !importReadyContacts.length || importReadyContacts.length > 500) return;
+    if (!submitter || !importReadyContacts.length) return;
     try {
-      submitter.disabled = true; submitter.textContent = "Importing…";
-      const result = await messagingRequest("import_contacts", { contacts: importReadyContacts, duplicateMode: importContactsForm.elements.duplicateMode.value });
+      submitter.disabled = true;
+      if (!importDuplicatesReviewed) {
+        submitter.textContent = "Checking workspace duplicates…";
+        const duplicates = [];
+        for (let offset = 0; offset < importReadyContacts.length; offset += importBatchSize) {
+          const result = await messagingRequest("preview_contact_import", { contacts: importReadyContacts.slice(offset, offset + importBatchSize) });
+          duplicates.push(...(result.duplicates || []));
+        }
+        importExistingDuplicates = new Map(duplicates.map((contact) => [String(contact.wa_id), contact]));
+        importExistingChoices = new Map(duplicates.map((contact) => [String(contact.wa_id), "existing"]));
+        importDuplicatesReviewed = true;
+        refreshContactImportPreview();
+        submitter.disabled = false;
+        importPreview.querySelector(".wp-workspace-import-duplicates")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return;
+      }
+      const totals = { imported: 0, updated: 0, skipped: 0 };
+      for (let offset = 0; offset < importReadyContacts.length; offset += importBatchSize) {
+        const batch = importReadyContacts.slice(offset, offset + importBatchSize).map((contact) => {
+          const waId = contact.phone.replace(/\D/g, "");
+          return { ...contact, duplicateResolution: importExistingDuplicates.has(waId) && importExistingChoices.get(waId) === "incoming" ? "replace" : "skip" };
+        });
+        submitter.textContent = importReadyContacts.length > importBatchSize ? `Importing ${Math.min(offset + importBatchSize, importReadyContacts.length).toLocaleString("en-IN")} of ${importReadyContacts.length.toLocaleString("en-IN")}…` : "Importing…";
+        const result = await messagingRequest("import_contacts", { contacts: batch });
+        totals.imported += Number(result.imported || 0); totals.updated += Number(result.updated || 0); totals.skipped += Number(result.skipped || 0);
+      }
       importContactsDialog.close();
-      const parts = [`${Number(result.imported || 0).toLocaleString("en-IN")} added`];
-      if (result.updated) parts.push(`${Number(result.updated).toLocaleString("en-IN")} updated`);
-      if (result.skipped) parts.push(`${Number(result.skipped).toLocaleString("en-IN")} existing skipped`);
+      const parts = [`${totals.imported.toLocaleString("en-IN")} added`];
+      if (totals.updated) parts.push(`${totals.updated.toLocaleString("en-IN")} replaced`);
+      if (totals.skipped) parts.push(`${totals.skipped.toLocaleString("en-IN")} existing kept`);
       showToast(`Contact import complete: ${parts.join(", ")}.`);
       await renderDashboard();
     } catch (error) {
       showToast(error?.message || "Contacts could not be imported.", "error");
-      submitter.disabled = false; submitter.textContent = `Import ${importReadyContacts.length.toLocaleString("en-IN")} contact${importReadyContacts.length === 1 ? "" : "s"}`;
+      submitter.disabled = false; submitter.textContent = `${importDuplicatesReviewed ? "Import" : "Review"} ${importReadyContacts.length.toLocaleString("en-IN")} contact${importReadyContacts.length === 1 ? "" : "s"}`;
     }
   });
   const newChatDialog = app.querySelector("#wpNewChatDialog");
