@@ -7,7 +7,7 @@ const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
 const AGENT_ACTIONS = new Set([
   "list", "thread", "send_text", "update_conversation", "add_note",
-  "list_contacts", "list_marketing_consent_events", "create_contact", "preview_contact_import", "import_contacts", "start_google_contacts_import", "consume_google_contacts_import", "start_chat", "update_contact",
+  "list_contacts", "list_marketing_consent_events", "create_contact", "preview_contact_import", "import_contacts", "start_google_contacts_import", "consume_google_contacts_import", "start_chat", "update_contact", "delete_contacts",
   "list_templates", "list_template_library", "list_flows",
   "list_campaigns", "list_campaign_segments", "save_campaign",
   "list_notifications", "mark_notification_read", "mark_all_notifications_read", "dismiss_notification",
@@ -1028,6 +1028,17 @@ async function updateContact(admin: any, customer: any, body: any) {
   }
   return { contact: data };
 }
+async function deleteContacts(admin: any, customer: any, body: any) {
+  if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can delete contacts.");
+  const requested = Array.isArray(body.contactIds) ? body.contactIds : body.contactId ? [body.contactId] : [];
+  const ids = [...new Set(requested.map((id: unknown) => cleanUuid(id, "contact")))];
+  if (!ids.length) throw new Error("Select at least one contact to delete.");
+  if (ids.length > 500) throw new Error("Delete up to 500 contacts at a time.");
+  const { data, error } = await admin.from("whatsapp_platform_contacts")
+    .delete().eq("tenant_id", customer.tenant_id).in("id", ids).select("id");
+  if (error) throw error;
+  return { deletedCount: (data || []).length };
+}
 
 async function listFlows(admin: any, customer: any, body: any) {
   const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
@@ -1695,7 +1706,7 @@ Deno.serve(async (req) => {
     const featureByAction: Record<string, string> = {
       list: "team_inbox", thread: "team_inbox", send_text: "team_inbox", start_chat: "team_inbox",
       update_conversation: "team_inbox", add_note: "team_inbox",
-      list_contacts: "contacts", create_contact: "contacts", preview_contact_import: "contacts", import_contacts: "contacts", start_google_contacts_import: "contacts", consume_google_contacts_import: "contacts", update_contact: "contacts",
+      list_contacts: "contacts", create_contact: "contacts", preview_contact_import: "contacts", import_contacts: "contacts", start_google_contacts_import: "contacts", consume_google_contacts_import: "contacts", update_contact: "contacts", delete_contacts: "contacts",
       list_marketing_consent_events: "contacts",
       list_templates: "templates", list_template_library: "templates", create_template: "templates",
       list_flows: "flows", save_flow: "flows", set_flow_status: "flows", delete_flow: "flows",
@@ -1744,6 +1755,8 @@ Deno.serve(async (req) => {
     if (action === "update_conversation") return json(req, await updateConversation(admin, customer, body));
     if (action === "add_note") return json(req, await addNote(admin, customer, body));
     if (action === "update_contact") return json(req, await updateContact(admin, customer, body));
+    if (action === "delete_contacts") return json(req, await deleteContacts(admin, customer, body));
+    if (action === "delete_contacts") return json(req, await deleteContacts(admin, customer, body));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";
