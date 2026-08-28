@@ -1860,7 +1860,7 @@ function businessProfileView(connections) {
         <label><span>Business address</span><input name="address" maxlength="256" value="${escapeHtml(profile.address || "")}" placeholder="Street, city, state and postal code" /><small><span data-count-for="address">${String(profile.address || "").length}</span>/256 characters</small></label>
         <div class="wp-form-row"><label><span>Business email</span><input name="email" type="email" maxlength="128" value="${escapeHtml(profile.email || "")}" placeholder="support@company.com" /></label><label><span>Primary website</span><input name="website1" type="text" inputmode="url" maxlength="256" value="${escapeHtml(websites[0] || "")}" placeholder="www.example.com" /><small>You can enter a domain directly; HTTPS is added automatically.</small></label></div>
         <label><span>Additional website</span><input name="website2" type="text" inputmode="url" maxlength="256" value="${escapeHtml(websites[1] || "")}" placeholder="shop.example.com" /><small>WhatsApp supports up to two public website links. HTTPS is added automatically.</small></label>
-        <footer><p>Updates are published through Meta. New profile pictures are also archived in this number’s dedicated Google Drive folder.</p><button class="wp-primary" type="submit" ${metaPhoneReady ? "" : "disabled"}>${metaPhoneReady ? "Save WhatsApp profile" : "Waiting for Meta registration"}</button></footer>
+        <footer><p>Updates are securely published through Meta.</p><button class="wp-primary" type="submit" ${metaPhoneReady ? "" : "disabled"}>${metaPhoneReady ? "Save WhatsApp profile" : "Waiting for Meta registration"}</button></footer>
       </section>
       <aside class="wp-card wp-business-profile-preview"><span class="wp-card-eyebrow">Live customer preview</span><h2>WhatsApp profile preview</h2><div class="wp-phone-profile"><header><div class="wp-business-profile-avatar" data-business-profile-preview>${picture}</div><strong data-profile-preview-name>${escapeHtml(connection.verified_name || "WhatsApp Business")}</strong><small>${escapeHtml(connection.display_phone_number || "Business number")}</small></header><div class="wp-phone-profile-about" data-profile-preview-about>${escapeHtml(profile.about || "Your profile about will appear here.")}</div><dl><div><dt>Description</dt><dd data-profile-preview-description>${escapeHtml(profile.description || "Add a business description.")}</dd></div><div><dt>Category</dt><dd data-profile-preview-category>${escapeHtml(WHATSAPP_BUSINESS_VERTICALS[profile.vertical] || "Not specified")}</dd></div><div><dt>Address</dt><dd data-profile-preview-address>${escapeHtml(profile.address || "Not provided")}</dd></div><div><dt>Email</dt><dd data-profile-preview-email>${escapeHtml(profile.email || "Not provided")}</dd></div><div><dt>Website</dt><dd data-profile-preview-website>${escapeHtml(websites[0] || "Not provided")}</dd></div></dl></div><div class="wp-profile-guidance"><strong>Profile quality checklist</strong><ul><li>Use a recognizable square brand image.</li><li>Keep “about” direct and customer-friendly.</li><li>Use a monitored support email and secure HTTPS websites.</li><li>Keep the business description factual and policy-compliant.</li></ul></div></aside>
     </form>
@@ -3562,15 +3562,10 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       if (!form.reportValidity()) return;
       const submit = form.querySelector('button[type="submit"]');
       try {
-        submit.disabled = true; submit.textContent = "Publishing to Meta…";
+        submit.disabled = true; submit.textContent = "Saving profile…";
         const file = photoInput?.files?.[0] || null;
         let photo = null;
         if (file) photo = { fileName: file.name, mimeType: file.type, base64: await readFileBase64(file) };
-        if (photo) {
-          submit.textContent = "Archiving to Google Drive…";
-          await storageRequest("upload_business_profile_picture", { connectionId: workspaceSelectedConnectionId, ...photo });
-          submit.textContent = "Publishing to Meta…";
-        }
         const result = await messagingRequest("update_business_profile", {
           connectionId: workspaceSelectedConnectionId,
           about: form.elements.about.value.trim(), description: form.elements.description.value.trim(),
@@ -3580,6 +3575,10 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
           photo,
         });
         workspaceBusinessProfile = { profile: result?.profile || {}, connection: result?.connection || workspaceBusinessProfile.connection, error: "" };
+        if (photo) {
+          storageRequest("upload_business_profile_picture", { connectionId: workspaceSelectedConnectionId, ...photo })
+            .catch((archiveError) => console.warn("WhatsApp profile photo archive failed", archiveError));
+        }
         showToast("WhatsApp profile published successfully.");
         await renderDashboard();
       } catch (error) {
