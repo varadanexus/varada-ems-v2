@@ -1573,19 +1573,80 @@ function onboardingView(setupReady, connections) {
   const gatePaused = workspaceVerification?.gateRequired === false;
   const mayOnboard = businessVerified || gatePaused;
   const completed = 1 + Number(businessVerified) + Number(metaConnected) + Number(phoneConnected);
-  const progress = completed * 20;
+  const progress = completed * 25;
   const stages = [
     { title: "Create your business workspace", description: `Workspace created for ${session.email}.`, complete: true },
     { title: "Verify your business", description: businessVerified ? "Your organisation passed the provider business pre-check." : `Verification is ${String(workspaceVerification?.status || "not started").replaceAll("_", " ")}.`, complete: businessVerified, href: workspacePath("verification") },
     { title: "Connect Meta Business", description: metaConnected ? "Your WhatsApp Business Account is securely connected." : mayOnboard && setupReady ? "Connect the Meta business assets owned by your organisation." : "Available after business verification.", complete: metaConnected, metaAction: mayOnboard },
-    { title: "Confirm your WhatsApp number", description: phoneConnected ? "Your business number is registered and ready." : "Select or register a WhatsApp number owned by your business.", complete: phoneConnected, href: workspacePath("accounts") },
-    { title: "Invite your team", description: "Add colleagues, assign roles and prepare the shared workspace.", complete: false, href: workspacePath("team") }
+    { title: "Confirm your WhatsApp number", description: phoneConnected ? "Your business number is registered and ready." : "Select or register a WhatsApp number owned by your business.", complete: phoneConnected, href: workspacePath("accounts") }
   ];
+  const onboardingComplete = stages.every((stage) => stage.complete);
+
+  if (onboardingComplete) {
+    const walkthroughs = [
+      {
+        title: "Team inbox",
+        description: "Handle customer conversations together with ownership, status and a complete message history.",
+        href: workspacePath("inbox"),
+        action: "Open team inbox",
+        visual: `<div class="wp-tour-inbox"><span class="wp-tour-avatar">A</span><div><i></i><i></i><i></i></div><b>2</b></div>`
+      },
+      {
+        title: "Contacts",
+        description: "Keep customer identity, consent and conversation activity organised in one directory.",
+        href: workspacePath("contacts"),
+        action: "View contacts",
+        visual: `<div class="wp-tour-contacts"><span>A</span><span>R</span><span>S</span><div><i></i><i></i></div></div>`
+      },
+      {
+        title: "Campaigns",
+        description: "Build targeted WhatsApp campaigns using approved templates and consent-aware audiences.",
+        href: workspacePath("campaigns"),
+        action: "Explore campaigns",
+        visual: `<div class="wp-tour-campaign"><span>◎</span><div><i></i><i></i><i></i></div><b>74%</b></div>`
+      },
+      {
+        title: "Message templates",
+        description: "Create and manage reusable Meta-approved messages for customer-initiated outreach.",
+        href: workspacePath("templates"),
+        action: "Manage templates",
+        visual: `<div class="wp-tour-template"><span>Hi {{1}}</span><i></i><i></i><b>Approved</b></div>`
+      },
+      {
+        title: "Flows & automation",
+        description: "Design guided customer journeys and connect repeatable actions without manual work.",
+        href: workspacePath("flows"),
+        action: "Open flows",
+        visual: `<div class="wp-tour-flow"><span>Start</span><i></i><span>Message</span><i></i><span>Done</span></div>`
+      },
+      {
+        title: "Analytics",
+        description: "Track messaging activity, service performance and operational trends across your workspace.",
+        href: workspacePath("analytics"),
+        action: "View analytics",
+        visual: `<div class="wp-tour-analytics"><i style="height:34%"></i><i style="height:58%"></i><i style="height:46%"></i><i style="height:82%"></i><i style="height:68%"></i></div>`
+      }
+    ];
+    const walkthroughCards = walkthroughs.map((item, index) => `<a class="wp-onboarding-tour-card" href="${item.href}" aria-label="${escapeHtml(item.action)}">
+      <div class="wp-onboarding-tour-visual is-${index + 1}" aria-hidden="true">${item.visual}</div>
+      <div class="wp-onboarding-tour-copy"><span>0${index + 1}</span><h2>${escapeHtml(item.title)}</h2><p>${escapeHtml(item.description)}</p><strong>${escapeHtml(item.action)} <b aria-hidden="true">→</b></strong></div>
+    </a>`).join("");
+    return `<section class="wp-route-page wp-onboarding-page wp-onboarding-complete-page">
+      <section class="wp-onboarding-complete-hero">
+        <div class="wp-onboarding-complete-copy"><span class="wp-kicker">Premium onboarding completed</span><h1>Your WhatsApp workspace is ready</h1><p><strong>${escapeHtml(session.companyName || "Your business")}</strong> is verified, connected to Meta and ready to serve customers. Use this guided walkthrough to explore the portal.</p><div class="wp-onboarding-complete-actions"><a class="wp-primary wp-button-link" href="${workspacePath("overview")}">Go to workspace overview <span aria-hidden="true">→</span></a><a class="wp-secondary wp-button-link" href="${workspacePath("inbox")}">Start with the inbox</a></div></div>
+        <div class="wp-onboarding-complete-art" aria-hidden="true"><div class="wp-complete-orbit"><span>✓</span><i></i><i></i><i></i></div><div class="wp-complete-company"><small>Workspace live</small><strong>${escapeHtml(session.companyName || "Business workspace")}</strong><span>${escapeHtml(planName(workspaceProfile?.planCode))} package</span></div></div>
+      </section>
+      <section class="wp-onboarding-tour-intro"><div><span class="wp-card-eyebrow">Portal walkthrough</span><h2>Everything you need to operate WhatsApp</h2><p>Select any feature to open it directly. You can return to this walkthrough from Onboarding at any time.</p></div><span class="wp-onboarding-complete-badge">4 of 4 setup steps complete</span></section>
+      <div class="wp-onboarding-tour-grid">${walkthroughCards}</div>
+      <section class="wp-onboarding-next-steps wp-card"><div><span class="wp-card-eyebrow">Optional next step</span><h2>Bring your team into the workspace</h2><p>Team invitation is not required for onboarding. Add colleagues only when you are ready to share conversations and assign roles.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("team")}">Manage team &amp; roles <span aria-hidden="true">→</span></a></section>
+    </section>`;
+  }
+
   const nextStageIndex = stages.findIndex((stage) => !stage.complete);
   const nextStage = stages[nextStageIndex] || stages[stages.length - 1];
   const nextAction = nextStage.metaAction && !metaConnected
     ? `<button class="wp-primary" type="button" data-connect-meta>${setupReady ? "Connect Meta Business" : "Check connection status"}</button>`
-    : `<a class="wp-primary wp-button-link" href="${nextStage.href || workspacePath("overview")}">${nextStageIndex === 4 ? "Invite team members" : "Continue setup"}<span aria-hidden="true">→</span></a>`;
+    : `<a class="wp-primary wp-button-link" href="${nextStage.href || workspacePath("overview")}">Continue setup<span aria-hidden="true">→</span></a>`;
   const stageRows = stages.map((stage, index) => {
     const current = index === nextStageIndex;
     const state = stage.complete ? "complete" : current ? "current" : "pending";
@@ -1599,12 +1660,12 @@ function onboardingView(setupReady, connections) {
   return `<section class="wp-route-page wp-onboarding-page">
     <div class="wp-route-heading wp-onboarding-heading">
       <div><span class="wp-kicker">Workspace setup</span><h1>Launch your workspace</h1><p>Follow one guided path from company verification to a team-ready WhatsApp operation.</p></div>
-      <div class="wp-onboarding-progress" role="img" aria-label="${completed} of 5 onboarding stages complete">
+      <div class="wp-onboarding-progress" role="img" aria-label="${completed} of 4 onboarding stages complete">
         <svg viewBox="0 0 44 44" aria-hidden="true" focusable="false">
           <circle class="wp-onboarding-progress-track" cx="22" cy="22" r="18"></circle>
           <circle class="wp-onboarding-progress-value" cx="22" cy="22" r="18" pathLength="100" stroke-dasharray="${progress} ${100 - progress}"></circle>
         </svg>
-        <span><strong>${completed}</strong><small>of 5 complete</small></span>
+        <span><strong>${completed}</strong><small>of 4 complete</small></span>
       </div>
     </div>
     <section class="wp-onboarding-hero wp-card">
@@ -1616,8 +1677,8 @@ function onboardingView(setupReady, connections) {
       </div>
       <div class="wp-onboarding-meter" aria-hidden="true"><span style="width:${progress}%"></span></div>
       <dl class="wp-onboarding-summary">
-        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 12.5 3.4 3.4 7.6-8" /></svg></span><div><dt>Completed</dt><dd><strong>${completed}</strong> of 5 milestones</dd><small>Setup tasks finished</small></div></div>
-        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg></span><div><dt>Remaining</dt><dd><strong>${5 - completed}</strong> ${5 - completed === 1 ? "milestone" : "milestones"}</dd><small>${escapeHtml(nextStage.title)}</small></div></div>
+        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 12.5 3.4 3.4 7.6-8" /></svg></span><div><dt>Completed</dt><dd><strong>${completed}</strong> of 4 milestones</dd><small>Setup tasks finished</small></div></div>
+        <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg></span><div><dt>Remaining</dt><dd><strong>${4 - completed}</strong> ${4 - completed === 1 ? "milestone" : "milestones"}</dd><small>${escapeHtml(nextStage.title)}</small></div></div>
         <div><span class="wp-onboarding-summary-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M6 20V8l6-4 6 4v12M9 12h1m4 0h1M9 16h1m4 0h1"/></svg></span><div><dt>Workspace</dt><dd>${escapeHtml(session.companyName || "Business workspace")}</dd><small>${escapeHtml(planName(workspaceProfile?.planCode))} package</small></div></div>
       </dl>
     </section>
@@ -1627,7 +1688,7 @@ function onboardingView(setupReady, connections) {
       ${!mayOnboard ? `<a class="wp-secondary wp-button-link" href="${workspacePath("verification")}">Review verification</a>` : ""}
     </div>
     <article class="wp-card wp-route-card wp-onboarding-roadmap">
-      <header><div><span class="wp-card-eyebrow">Setup roadmap</span><h2>Five milestones to go live</h2></div><span>${completed}/5</span></header>
+      <header><div><span class="wp-card-eyebrow">Setup roadmap</span><h2>Four milestones to go live</h2></div><span>${completed}/4</span></header>
       <ol class="wp-steps wp-route-steps">${stageRows}</ol>
     </article>
   </section>`;
@@ -1818,8 +1879,8 @@ function verificationView(verification, connections = []) {
     const activeConnections = connections.filter((row) => ["connected", "pending"].includes(row.status));
     const metaConnected = activeConnections.length > 0;
     const phoneConnected = activeConnections.some((row) => row.phone_number_id);
-    const nextHref = phoneConnected ? workspacePath("team") : metaConnected ? workspacePath("accounts") : workspacePath("onboarding");
-    const nextLabel = phoneConnected ? "Invite your team →" : metaConnected ? "Confirm your WhatsApp number →" : "Continue to Meta authorisation →";
+    const nextHref = phoneConnected ? workspacePath("onboarding") : metaConnected ? workspacePath("accounts") : workspacePath("onboarding");
+    const nextLabel = phoneConnected ? "View completed onboarding →" : metaConnected ? "Confirm your WhatsApp number →" : "Continue to Meta authorisation →";
     const stageTwoClass = metaConnected ? "complete" : "active";
     const stageThreeClass = phoneConnected ? "complete" : metaConnected ? "active" : "";
     return `<section class="wp-route-page wp-verification-page wp-verification-complete"><div class="wp-route-heading"><div><span class="wp-kicker">Provider onboarding</span><h1>Business verified</h1><p>Your provider pre-check is complete. Continue with the next unfinished workspace setup step.</p></div><span class="wp-verification-status verified">Verified</span></div><ol class="wp-provider-flow" aria-label="WhatsApp onboarding stages"><li class="complete"><span>✓</span><div><strong>Business details</strong><small>Approved by Varada Nexus</small></div></li><li class="${stageTwoClass}"><span>${metaConnected ? "✓" : "2"}</span><div><strong>Meta authorisation</strong><small>${metaConnected ? "Business Portfolio connected" : "Next: Business Portfolio access"}</small></div></li><li class="${stageThreeClass}"><span>${phoneConnected ? "✓" : "3"}</span><div><strong>Phone verification</strong><small>${phoneConnected ? "WhatsApp number connected" : "SMS or voice OTP"}</small></div></li><li><span>4</span><div><strong>Display-name review</strong><small>Completed by Meta</small></div></li></ol><article class="wp-verification-complete-hero"><span class="wp-verification-complete-icon" aria-hidden="true">✓</span><div><span class="wp-card-eyebrow">Verification complete</span><h2>Your organisation is approved</h2><p>The legal-business information and supporting evidence for <strong>${escapeHtml(session.companyName)}</strong> passed the Varada Nexus provider pre-check. Meta authorisation is a separate step controlled by Meta.</p><div class="wp-verification-complete-actions"><a class="wp-primary wp-button-link" href="${nextHref}">${nextLabel}</a><a class="wp-secondary wp-button-link" href="${workspacePath("overview")}">Return to overview</a></div></div></article><div class="wp-verification-complete-layout"><article class="wp-card wp-route-card wp-verification-summary-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Verified business</span><h2>Official record summary</h2></div>${reviewedOn ? `<small>Approved ${escapeHtml(formatProfileDate(reviewedOn))}</small>` : ""}</div><dl class="wp-verification-summary"><div><dt>Organisation</dt><dd>${escapeHtml(session.companyName)}</dd></div><div><dt>Entity type</dt><dd>${escapeHtml(entityLabel)}</dd></div><div><dt>Registration / licence</dt><dd>${escapeHtml(data.registrationNumber || "Not provided")}</dd></div><div><dt>GSTIN</dt><dd>${escapeHtml(data.gstin || "Not provided")}</dd></div><div><dt>Authorised representative</dt><dd>${escapeHtml(data.representativeName || session.displayName || "Not provided")}${data.representativeTitle ? ` · ${escapeHtml(data.representativeTitle)}` : ""}</dd></div><div class="wide"><dt>Registered address</dt><dd>${escapeHtml(data.registeredAddress || "Not provided")}</dd></div></dl></article><article class="wp-card wp-route-card wp-verification-evidence-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Protected evidence</span><h2>Approved documents</h2></div><strong>${approvedDocuments}/${(data.requirements || []).length}</strong></div><p>Your approved evidence remains available here as a read-only record.</p><div class="wp-verification-documents">${requirementRows}</div></article></div></section>`;
