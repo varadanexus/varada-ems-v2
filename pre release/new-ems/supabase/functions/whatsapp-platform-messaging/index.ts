@@ -331,8 +331,10 @@ async function listContacts(admin: any, customer: any, body: any) {
     ? admin.from("whatsapp_platform_conversations").select("id,connection_id,contact_id,status,last_message_at,unread_count").eq("tenant_id", customer.tenant_id).in("contact_id", contactIds)
     : null;
   if (conversationQuery && connection) conversationQuery = conversationQuery.eq("connection_id", connection.id);
+  // Contact records are the primary directory data. Conversation enrichment is
+  // optional; a stale/malformed conversation row must never hide every contact.
   const { data: conversations, error: conversationError } = conversationQuery ? await conversationQuery : { data: [], error: null };
-  if (conversationError) throw conversationError;
+  if (conversationError) console.warn("Contact conversation enrichment failed", conversationError);
   const conversationMap = new Map((conversations || []).map((row: any) => [row.contact_id, row]));
   return { contacts: (contacts || []).map((row: any) => ({ ...row, conversation: conversationMap.get(row.id) || null })) };
 }
