@@ -2200,8 +2200,8 @@ function contactCategoryLabel(value) { return CONTACT_CATEGORY_LABELS[String(val
 function contactsView() {
   const contacts = workspaceContacts?.contacts || [];
   const status = new URLSearchParams(location.search).get("status") || "all";
-  const statusCounts = contacts.reduce((counts, contact) => ({ ...counts, [contact.status]: Number(counts[contact.status] || 0) + 1 }), {});
-  statusCounts.opted_out = contacts.filter((contact) => Boolean(contact.marketing_opt_out_at)).length;
+  const statusCounts = workspaceContacts?.statistics || contacts.reduce((counts, contact) => ({ ...counts, [contact.status]: Number(counts[contact.status] || 0) + 1 }), {});
+  statusCounts.opted_out = Number(statusCounts.optedOut ?? statusCounts.opted_out ?? contacts.filter((contact) => Boolean(contact.marketing_opt_out_at)).length);
   const rows = contacts.map((contact) => {
     const name = inboxContactName(contact);
     const conversationUrl = contact.conversation?.id ? `${workspacePath("inbox")}?conversation=${encodeURIComponent(contact.conversation.id)}` : "";
@@ -3173,7 +3173,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       const pageSize = Math.min(500, Math.max(10, Number.parseInt(params.get("contactPageSize") || "50", 10) || 50));
       const search = params.get("contactSearch") || "";
       const listed = await messagingRequest("list_contacts", { status, search, page, pageSize, connectionId: workspaceSelectedConnectionId });
-      workspaceContacts = { contacts: listed?.contacts || [], pagination: listed?.pagination || { page, pageSize, total: 0, totalPages: 1, search }, error: "" };
+      workspaceContacts = { contacts: listed?.contacts || [], pagination: listed?.pagination || { page, pageSize, total: 0, totalPages: 1, search }, statistics: listed?.statistics || {}, error: "" };
     } catch (error) {
       workspaceContacts = { contacts: [], error: error?.message || "The contact directory could not be loaded." };
     }
@@ -5019,6 +5019,11 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const selectAllContacts = app.querySelector("[data-select-all-contacts]");
   const contactDirectory = app.querySelector(".wp-contact-directory");
   const contactPageInfo = workspaceContacts.pagination || { page: 1, pageSize: 50, total: workspaceContacts.contacts?.length || 0, totalPages: 1, search: "" };
+  const contactStatistics = workspaceContacts.statistics || {};
+  const contactStatCards = [...app.querySelectorAll(".wp-contact-stats > article")];
+  if (contactStatCards[0]) { contactStatCards[0].querySelector("strong").textContent = Number(contactStatistics.active || 0).toLocaleString("en-IN"); const totalLabel = contactStatCards[0].querySelector("small"); if (totalLabel) totalLabel.textContent = `${Number(contactStatistics.total || 0).toLocaleString("en-IN")} total contacts`; }
+  if (contactStatCards[1]) contactStatCards[1].querySelector("strong").textContent = Number(contactStatistics.blocked || 0).toLocaleString("en-IN");
+  if (contactStatCards[2]) contactStatCards[2].querySelector("strong").textContent = Number(contactStatistics.optedOut || 0).toLocaleString("en-IN");
   const contactSearchInput = app.querySelector("[data-contact-search]");
   if (contactSearchInput) contactSearchInput.value = contactPageInfo.search || "";
   const contactPagination = document.createElement("footer");
@@ -5037,6 +5042,12 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   contactPagination.querySelector("[data-contact-next]").addEventListener("click", () => goContactPage(contactPageInfo.page + 1));
   contactPageSizeSelect?.addEventListener("change", () => goContactPage(1, Number(contactPageSizeSelect.value)));
   const selectionTools = [selectAllContacts?.closest("label"), deleteSelectedButton].filter(Boolean);
+  let allMatchingContactsSelected = false;
+  if (selectAllContacts?.nextSibling) selectAllContacts.nextSibling.textContent = ` Select all ${Number(contactPageInfo.total || 0).toLocaleString("en-IN")} matching contacts`;
+  const selectionScopeDialog = document.createElement("dialog");
+  selectionScopeDialog.className = "wp-contact-dialog wp-contact-selection-scope-dialog";
+  selectionScopeDialog.innerHTML = `<section><header><div><span class="wp-card-eyebrow">Select contacts</span><h2>Choose selection range</h2><p>Select only the contacts shown on this page, or every contact matching the current search and filter.</p></div><button type="button" data-close-selection-scope aria-label="Close">×</button></header><div class="wp-contact-selection-scope-options"><button type="button" data-select-current-page><strong>This page</strong><span>${Number(workspaceContacts.contacts?.length || 0).toLocaleString("en-IN")} displayed contact${Number(workspaceContacts.contacts?.length || 0) === 1 ? "" : "s"}</span></button><button type="button" data-select-all-matching><strong>All matching contacts</strong><span>${Number(contactPageInfo.total || 0).toLocaleString("en-IN")} contact${Number(contactPageInfo.total || 0) === 1 ? "" : "s"} across all pages</span></button></div><footer><button class="wp-secondary" type="button" data-close-selection-scope>Cancel</button></footer></section>`;
+  app.querySelector(".wp-contacts-page")?.append(selectionScopeDialog);
   const doneSelectionButton = document.createElement("button");
   doneSelectionButton.type = "button"; doneSelectionButton.className = "wp-secondary"; doneSelectionButton.textContent = "Done"; doneSelectionButton.hidden = true;
   deleteSelectedButton?.closest(".wp-contact-directory-tools")?.append(doneSelectionButton);
@@ -5048,7 +5059,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     selectionTools.forEach((control) => { control.hidden = !enabled; });
     selectModeButton.hidden = enabled;
     doneSelectionButton.hidden = !enabled;
-    if (!enabled) { app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = false; }); if (selectAllContacts) selectAllContacts.checked = false; syncContactSelection(); }
+    if (!enabled) { allMatchingContactsSelected = false; app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = false; }); if (selectAllContacts) selectAllContacts.checked = false; syncContactSelection(); }
   };
   selectModeButton.addEventListener("click", () => setContactSelectionMode(true));
   doneSelectionButton.addEventListener("click", () => setContactSelectionMode(false));
@@ -5056,19 +5067,29 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const syncContactSelection = () => {
     const checkboxes = [...app.querySelectorAll("[data-contact-select]")];
     const selected = selectedContactIds();
-    if (deleteSelectedButton) { deleteSelectedButton.disabled = !selected.length || !["owner", "admin"].includes(session.roleCode); deleteSelectedButton.textContent = selected.length ? `Delete selected (${selected.length})` : "Delete selected"; }
-    if (selectAllContacts) { selectAllContacts.checked = Boolean(checkboxes.length && selected.length === checkboxes.length); selectAllContacts.indeterminate = Boolean(selected.length && selected.length < checkboxes.length); }
+    const selectedCount = allMatchingContactsSelected ? Number(contactPageInfo.total || 0) : selected.length;
+    if (deleteSelectedButton) { deleteSelectedButton.disabled = !selectedCount || !["owner", "admin"].includes(session.roleCode); deleteSelectedButton.textContent = selectedCount ? `Delete selected (${selectedCount.toLocaleString("en-IN")})` : "Delete selected"; }
+    if (selectAllContacts) { selectAllContacts.checked = allMatchingContactsSelected || Boolean(checkboxes.length && selected.length === checkboxes.length); selectAllContacts.indeterminate = !allMatchingContactsSelected && Boolean(selected.length && selected.length < checkboxes.length); }
   };
   setContactSelectionMode(false);
-  app.querySelectorAll("[data-contact-select]").forEach((input) => input.addEventListener("change", syncContactSelection));
-  selectAllContacts?.addEventListener("change", () => { app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = selectAllContacts.checked; }); syncContactSelection(); });
-  const openDeleteContacts = (ids, names = []) => {
+  app.querySelectorAll("[data-contact-select]").forEach((input) => input.addEventListener("change", () => { allMatchingContactsSelected = false; syncContactSelection(); }));
+  selectAllContacts?.addEventListener("change", () => {
+    if (!selectAllContacts.checked) { allMatchingContactsSelected = false; app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = false; }); syncContactSelection(); return; }
+    selectAllContacts.checked = false;
+    selectionScopeDialog.showModal();
+  });
+  selectionScopeDialog.querySelectorAll("[data-close-selection-scope]").forEach((button) => button.addEventListener("click", () => selectionScopeDialog.close()));
+  selectionScopeDialog.querySelector("[data-select-current-page]")?.addEventListener("click", () => { allMatchingContactsSelected = false; app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = true; }); selectionScopeDialog.close(); syncContactSelection(); });
+  selectionScopeDialog.querySelector("[data-select-all-matching]")?.addEventListener("click", () => { allMatchingContactsSelected = true; app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = true; }); selectionScopeDialog.close(); syncContactSelection(); });
+  const openDeleteContacts = (ids, names = [], allMatching = false) => {
     if (!ids.length || !deleteContactsDialog) return;
     deleteContactsDialog.dataset.contactIds = JSON.stringify(ids);
-    if (deleteContactsCopy) deleteContactsCopy.textContent = `You are about to permanently delete ${ids.length} contact${ids.length === 1 ? "" : "s"}${names.length ? ` (${names.slice(0, 3).join(", ")}${names.length > 3 ? ", …" : ""})` : ""}. Conversation history, consent records and campaign links for these contacts will also be removed.`;
+    deleteContactsDialog.dataset.allMatching = String(allMatching);
+    const deletionCount = allMatching ? Number(contactPageInfo.total || 0) : ids.length;
+    if (deleteContactsCopy) deleteContactsCopy.textContent = `You are about to permanently delete ${deletionCount.toLocaleString("en-IN")} contact${deletionCount === 1 ? "" : "s"}${names.length ? ` (${names.slice(0, 3).join(", ")}${names.length > 3 ? ", …" : ""})` : ""}. Conversation history, consent records and campaign links for these contacts will also be removed.`;
     deleteContactsDialog.showModal();
   };
-  deleteSelectedButton?.addEventListener("click", () => openDeleteContacts(selectedContactIds()));
+  deleteSelectedButton?.addEventListener("click", () => openDeleteContacts(selectedContactIds(), [], allMatchingContactsSelected));
   app.querySelectorAll("[data-delete-contact]").forEach((button) => button.addEventListener("click", () => openDeleteContacts([button.dataset.deleteContact], [button.dataset.contactDisplayName || "contact"])));
   deleteContactsDialog?.querySelectorAll("[data-close-delete-contacts]").forEach((button) => button.addEventListener("click", () => deleteContactsDialog.close()));
   deleteContactsDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
@@ -5076,13 +5097,16 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     event.preventDefault();
     const submitter = event.submitter;
     const ids = JSON.parse(deleteContactsDialog.dataset.contactIds || "[]");
+    const allMatching = deleteContactsDialog.dataset.allMatching === "true";
+    const deletionCount = allMatching ? Number(contactPageInfo.total || 0) : ids.length;
     try {
       submitter.disabled = true; submitter.textContent = "Deleting in progress…";
-      if (deleteContactsCopy) deleteContactsCopy.textContent = `Deleting ${ids.length.toLocaleString("en-IN")} contact${ids.length === 1 ? "" : "s"}… Please keep this window open until the operation completes.`;
+      if (deleteContactsCopy) deleteContactsCopy.textContent = `Deleting ${deletionCount.toLocaleString("en-IN")} contact${deletionCount === 1 ? "" : "s"}… Please keep this window open until the operation completes.`;
       deleteContactsDialog.querySelectorAll("button").forEach((button) => { if (button !== submitter) button.disabled = true; });
-      const result = await messagingRequest("delete_contacts", { contactIds: ids });
+      const status = new URLSearchParams(location.search).get("status") || "all";
+      const result = await messagingRequest("delete_contacts", allMatching ? { allMatching: true, status, search: contactPageInfo.search || "" } : { contactIds: ids });
       deleteContactsDialog.close();
-      showToast(`${Number(result.deletedCount || ids.length).toLocaleString("en-IN")} contact${ids.length === 1 ? "" : "s"} deleted.`);
+      showToast(`${Number(result.deletedCount ?? deletionCount).toLocaleString("en-IN")} contact${deletionCount === 1 ? "" : "s"} deleted.`);
       await renderDashboard();
     } catch (error) { if (deleteContactsCopy) deleteContactsCopy.textContent = error?.message || "Contacts could not be deleted. Try again."; showToast(error?.message || "Contacts could not be deleted.", "error"); }
     finally { submitter.disabled = false; submitter.textContent = "Delete permanently"; deleteContactsDialog.querySelectorAll("button").forEach((button) => { button.disabled = false; }); }

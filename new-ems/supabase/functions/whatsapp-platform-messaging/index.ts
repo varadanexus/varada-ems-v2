@@ -321,6 +321,14 @@ async function listContacts(admin: any, customer: any, body: any) {
   const pageSize = Math.min(5000, Math.max(10, Number.parseInt(String(body.pageSize || "50"), 10) || 50));
   const search = String(body.search || "").trim();
   const connection = body.connectionId ? await ownedBusinessNumber(admin, customer, body.connectionId) : null;
+  const [totalResult, activeResult, blockedResult, optedOutResult] = await Promise.all([
+    admin.from("whatsapp_platform_contacts").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id),
+    admin.from("whatsapp_platform_contacts").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("status", "active"),
+    admin.from("whatsapp_platform_contacts").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("status", "blocked"),
+    admin.from("whatsapp_platform_contacts").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).not("marketing_opt_out_at", "is", null),
+  ]);
+  const statisticsError = totalResult.error || activeResult.error || blockedResult.error || optedOutResult.error;
+  if (statisticsError) throw statisticsError;
   let query = admin.from("whatsapp_platform_contacts")
     .select("id,wa_id,phone_e164,profile_name,display_name,status,contact_category,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,last_inbound_at,last_outbound_at,created_at,updated_at", { count: "exact" })
     .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).range((page - 1) * pageSize, page * pageSize - 1);
@@ -340,7 +348,11 @@ async function listContacts(admin: any, customer: any, body: any) {
   const { data: conversations, error: conversationError } = conversationQuery ? await conversationQuery : { data: [], error: null };
   if (conversationError) console.warn("Contact conversation enrichment failed", conversationError);
   const conversationMap = new Map((conversations || []).map((row: any) => [row.contact_id, row]));
-  return { contacts: (contacts || []).map((row: any) => ({ ...row, conversation: conversationMap.get(row.id) || null })), pagination: { page, pageSize, total: Number(count || 0), totalPages: Math.max(1, Math.ceil(Number(count || 0) / pageSize)), search } };
+  return {
+    contacts: (contacts || []).map((row: any) => ({ ...row, conversation: conversationMap.get(row.id) || null })),
+    pagination: { page, pageSize, total: Number(count || 0), totalPages: Math.max(1, Math.ceil(Number(count || 0) / pageSize)), search },
+    statistics: { total: Number(totalResult.count || 0), active: Number(activeResult.count || 0), blocked: Number(blockedResult.count || 0), optedOut: Number(optedOutResult.count || 0) },
+  };
 }
 async function listMarketingConsentEvents(admin: any, customer: any, body: any) {
   const contactId = cleanUuid(body.contactId, "contact");
@@ -1034,6 +1046,20 @@ async function updateContact(admin: any, customer: any, body: any) {
 }
 async function deleteContacts(admin: any, customer: any, body: any) {
   if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can delete contacts.");
+  if (body.allMatching === true) {
+    const requestedStatus = String(body.status || "all");
+    const search = String(body.search || "").trim();
+    let query = admin.from("whatsapp_platform_contacts").delete().eq("tenant_id", customer.tenant_id);
+    if (["active", "blocked"].includes(requestedStatus)) query = query.eq("status", requestedStatus);
+    if (requestedStatus === "opted_out") query = query.not("marketing_opt_out_at", "is", null);
+    if (search) {
+      const safeSearch = search.replace(/[,()]/g, " ");
+      query = query.or(`display_name.ilike.%${safeSearch}%,profile_name.ilike.%${safeSearch}%,phone_e164.ilike.%${safeSearch}%,contact_category.ilike.%${safeSearch}%`);
+    }
+    const { data, error } = await query.select("id");
+    if (error) throw error;
+    return { deletedCount: (data || []).length };
+  }
   const requested = Array.isArray(body.contactIds) ? body.contactIds : body.contactId ? [body.contactId] : [];
   const ids = [...new Set(requested.map((id: unknown) => cleanUuid(id, "contact")))];
   if (!ids.length) throw new Error("Select at least one contact to delete.");
