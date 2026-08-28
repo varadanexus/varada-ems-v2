@@ -2110,6 +2110,90 @@ function inboxContactName(contact) {
   return contact?.display_name || contact?.profile_name || contact?.phone_e164 || "WhatsApp customer";
 }
 
+function csvRows(text) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '"') {
+      if (quoted && source[index + 1] === '"') { field += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (character === "," && !quoted) { row.push(field); field = ""; }
+    else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && source[index + 1] === "\n") index += 1;
+      row.push(field); field = "";
+      if (row.some((value) => String(value).trim())) rows.push(row);
+      row = [];
+    } else field += character;
+  }
+  row.push(field);
+  if (row.some((value) => String(value).trim())) rows.push(row);
+  return rows;
+}
+
+function normalizeImportedPhone(value, defaultDialCode = "+91") {
+  const entered = String(value || "").trim();
+  let digits = entered.replace(/\D/g, "");
+  if (!entered.startsWith("+")) {
+    digits = digits.replace(/^0+/, "");
+    if (digits.length <= 10) digits = `${String(defaultDialCode).replace(/\D/g, "")}${digits}`;
+  }
+  return /^[1-9][0-9]{6,14}$/.test(digits) ? `+${digits}` : "";
+}
+
+function parseVCardContacts(text, defaultDialCode) {
+  const cards = String(text || "").replace(/\r?\n[ \t]/g, "").split(/END:VCARD/i).filter((card) => /BEGIN:VCARD/i.test(card));
+  const contacts = [], errors = [];
+  cards.forEach((card, cardIndex) => {
+    const lines = card.split(/\r?\n/);
+    const fullNameLine = lines.find((line) => /^FN(?:;[^:]*)?:/i.test(line));
+    const structuredNameLine = lines.find((line) => /^N(?:;[^:]*)?:/i.test(line));
+    const rawName = (fullNameLine || structuredNameLine || "").replace(/^[^:]*:/, "").replace(/\\([,;])/g, "$1");
+    const displayName = rawName.split(";").filter(Boolean).reverse().join(" ").trim() || `Imported contact ${cardIndex + 1}`;
+    const phones = lines.filter((line) => /^TEL(?:;[^:]*)?:/i.test(line)).map((line) => line.replace(/^[^:]*:/, ""));
+    if (!phones.length) errors.push(`vCard ${cardIndex + 1} has no phone number.`);
+    phones.forEach((phone) => {
+      const normalized = normalizeImportedPhone(phone, defaultDialCode);
+      if (normalized) contacts.push({ displayName, phone: normalized });
+      else errors.push(`${displayName}: invalid phone number.`);
+    });
+  });
+  return { contacts, errors };
+}
+
+function parseDelimitedContacts(text, defaultDialCode, pasteMode = false) {
+  const rows = pasteMode
+    ? String(text || "").split(/\r?\n/).filter((line) => line.trim()).map((line) => line.split(line.includes("\t") ? "\t" : /[,;]/))
+    : csvRows(text);
+  if (!rows.length) return { contacts: [], errors: ["No contact rows were found."] };
+  const headers = rows[0].map((value) => String(value).trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " "));
+  const findHeader = (aliases) => headers.findIndex((header) => aliases.includes(header));
+  let phoneIndex = findHeader(["phone", "phone number", "mobile", "mobile number", "mobile phone", "whatsapp", "whatsapp number", "phone 1 value", "primary phone"]);
+  let nameIndex = findHeader(["name", "full name", "display name", "contact name", "formatted name"]);
+  const firstIndex = findHeader(["first name", "given name"]);
+  const lastIndex = findHeader(["last name", "family name", "surname"]);
+  const hasHeader = !pasteMode && (phoneIndex >= 0 || nameIndex >= 0 || firstIndex >= 0);
+  const contacts = [], errors = [];
+  (hasHeader ? rows.slice(1) : rows).forEach((columns, rowIndex) => {
+    const values = columns.map((value) => String(value || "").trim());
+    if (!hasHeader) {
+      phoneIndex = values.findIndex((value) => value.replace(/\D/g, "").length >= 7);
+      nameIndex = values.findIndex((_, index) => index !== phoneIndex);
+    }
+    const displayName = (nameIndex >= 0 ? values[nameIndex] : "") || [firstIndex >= 0 ? values[firstIndex] : "", lastIndex >= 0 ? values[lastIndex] : ""].filter(Boolean).join(" ") || `Imported contact ${rowIndex + 1}`;
+    const phone = normalizeImportedPhone(phoneIndex >= 0 ? values[phoneIndex] : "", defaultDialCode);
+    if (!phone) errors.push(`Row ${rowIndex + 1 + Number(hasHeader)}: invalid or missing phone number.`);
+    else contacts.push({ displayName: displayName.slice(0, 200), phone });
+  });
+  return { contacts, errors };
+}
+
+function parseContactImport(text, fileName, defaultDialCode, pasteMode = false) {
+  const vcard = !pasteMode && (/\.vcf$/i.test(fileName || "") || /BEGIN:VCARD/i.test(text || ""));
+  return vcard ? parseVCardContacts(text, defaultDialCode) : parseDelimitedContacts(text, defaultDialCode, pasteMode);
+}
+
 function contactsView() {
   const contacts = workspaceContacts?.contacts || [];
   const status = new URLSearchParams(location.search).get("status") || "all";
@@ -3785,8 +3869,10 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     linkDialog?.addEventListener("close", () => renderDashboard());
   }
   if (view === "contacts") {
-    app.querySelector(".wp-route-heading")?.insertAdjacentHTML("beforeend", '<button class="wp-primary" id="wpAddContactBtn" type="button">＋ Add contact</button>');
+    app.querySelector(".wp-route-heading")?.insertAdjacentHTML("beforeend", '<div class="wp-contact-heading-actions"><button class="wp-secondary" id="wpImportContactsBtn" type="button">⇧ Import contacts</button><button class="wp-primary" id="wpAddContactBtn" type="button">＋ Add contact</button></div>');
     app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog" id="wpAddContactDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Add contact</h2></div><button type="button" data-close-add-contact aria-label="Close">×</button></header><label><span>Contact name</span><input name="displayName" maxlength="200" autocomplete="name" required /></label><label><span>WhatsApp number</span><input name="phone" type="tel" inputmode="tel" maxlength="24" placeholder="+91 98765 43210" autocomplete="tel" required /><small>Include the country code. We will store the number in international format.</small></label><footer><button class="wp-secondary" type="button" data-close-add-contact>Cancel</button><button class="wp-primary" type="submit" value="save">Add contact</button></footer></form></dialog>`);
+    const importCountryOptions = countryDialEntries().map((country) => `<option value="${country.dial}" ${country.code === "IN" ? "selected" : ""}>${countryFlag(country.code)} ${escapeHtml(country.name)} (${country.dial})</option>`).join("");
+    app.querySelector(".wp-contacts-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-contact-import-dialog" id="wpImportContactsDialog"><form id="wpImportContactsForm"><header><div><span class="wp-card-eyebrow">Customer directory</span><h2>Import contacts</h2><p>Bring contacts from another phone, CRM or spreadsheet.</p></div><button type="button" data-close-contact-import aria-label="Close">×</button></header><section class="wp-import-methods"><article><strong>Upload a file</strong><span>CSV, Google Contacts, Outlook or vCard</span><label class="wp-import-file"><input name="contactFile" type="file" accept=".csv,.txt,.vcf,text/csv,text/plain,text/vcard" /><b>Choose CSV or VCF</b><small data-import-file-name>No file selected</small></label></article><article><strong>Paste a list</strong><span>One contact per line: Name, +number</span><textarea name="pastedContacts" rows="6" placeholder="Ananya Rao, +91 98765 43210&#10;Rohan Mehta, +44 7700 900123"></textarea></article></section><div class="wp-import-options"><label><span>Default country for local numbers</span><select name="defaultDialCode">${importCountryOptions}</select></label><label><span>Existing contacts</span><select name="duplicateMode"><option value="skip">Keep existing contact unchanged</option><option value="update">Update its display name</option></select></label></div><div class="wp-policy-note"><strong>Marketing consent is not imported automatically</strong><p>Imported contacts are eligible for service conversations only. Record explicit, auditable consent before including them in marketing campaigns.</p></div><section class="wp-import-preview" data-import-preview><div><strong>Ready to review</strong><span>Choose a file or paste contacts to see a validated preview.</span></div></section><footer><button class="wp-secondary" type="button" data-download-contact-template>Download CSV template</button><button class="wp-secondary" type="button" data-close-contact-import>Cancel</button><button class="wp-primary" type="submit" disabled>Import contacts</button></footer></form></dialog>`);
   }
   if (view === "inbox") {
     const activeContacts = (workspaceContacts?.contacts || []).filter((contact) => contact.status === "active");
@@ -4825,6 +4911,82 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     } catch (error) {
       showToast(error?.message || "Contact could not be added.", "error");
       submitter.disabled = false; submitter.textContent = "Add contact";
+    }
+  });
+  const importContactsDialog = app.querySelector("#wpImportContactsDialog");
+  const importContactsForm = importContactsDialog?.querySelector("form");
+  const importFileInput = importContactsForm?.elements.contactFile;
+  const importPasteInput = importContactsForm?.elements.pastedContacts;
+  const importPreview = importContactsForm?.querySelector("[data-import-preview]");
+  let importFileText = "";
+  let importFileName = "";
+  let importReadyContacts = [];
+  const refreshContactImportPreview = () => {
+    if (!importContactsForm || !importPreview) return;
+    const pasteMode = Boolean(importPasteInput?.value.trim());
+    const source = pasteMode ? importPasteInput.value : importFileText;
+    const parsed = source ? parseContactImport(source, importFileName, importContactsForm.elements.defaultDialCode.value, pasteMode) : { contacts: [], errors: [] };
+    const unique = new Map();
+    parsed.contacts.forEach((contact) => unique.set(contact.phone, contact));
+    importReadyContacts = [...unique.values()];
+    const duplicates = parsed.contacts.length - importReadyContacts.length;
+    const tooMany = importReadyContacts.length > 500;
+    const submitter = importContactsForm.querySelector('button[type="submit"]');
+    submitter.disabled = !importReadyContacts.length || tooMany;
+    submitter.textContent = importReadyContacts.length ? `Import ${Math.min(importReadyContacts.length, 500).toLocaleString("en-IN")} contact${importReadyContacts.length === 1 ? "" : "s"}` : "Import contacts";
+    if (!source) {
+      importPreview.innerHTML = "<div><strong>Ready to review</strong><span>Choose a file or paste contacts to see a validated preview.</span></div>";
+      return;
+    }
+    const rows = importReadyContacts.slice(0, 8).map((contact) => `<li><span>${escapeHtml(contact.displayName)}</span><strong>${escapeHtml(contact.phone)}</strong></li>`).join("");
+    const issueCopy = [duplicates ? `${duplicates} duplicate${duplicates === 1 ? "" : "s"} merged` : "", parsed.errors.length ? `${parsed.errors.length} invalid row${parsed.errors.length === 1 ? "" : "s"} skipped` : "", tooMany ? "Maximum 500 contacts per import" : ""].filter(Boolean).join(" · ");
+    importPreview.innerHTML = `<header><div><strong>${importReadyContacts.length.toLocaleString("en-IN")} valid contact${importReadyContacts.length === 1 ? "" : "s"}</strong><span>${issueCopy || "All rows passed validation"}</span></div><b>${tooMany ? "Split this import" : "Ready"}</b></header>${rows ? `<ol>${rows}</ol>` : ""}${importReadyContacts.length > 8 ? `<small>Plus ${(importReadyContacts.length - 8).toLocaleString("en-IN")} more contacts</small>` : ""}${parsed.errors.length ? `<details><summary>View skipped rows</summary><p>${parsed.errors.slice(0, 12).map(escapeHtml).join("<br>")}${parsed.errors.length > 12 ? "<br>…" : ""}</p></details>` : ""}`;
+  };
+  app.querySelector("#wpImportContactsBtn")?.addEventListener("click", () => importContactsDialog?.showModal());
+  importContactsDialog?.querySelectorAll("[data-close-contact-import]").forEach((button) => button.addEventListener("click", () => importContactsDialog.close()));
+  importFileInput?.addEventListener("change", async () => {
+    const file = importFileInput.files?.[0];
+    importFileText = ""; importFileName = file?.name || "";
+    const fileNameLabel = importContactsForm.querySelector("[data-import-file-name]");
+    if (fileNameLabel) fileNameLabel.textContent = file?.name || "No file selected";
+    if (!file) { refreshContactImportPreview(); return; }
+    if (file.size > 2 * 1024 * 1024) { showToast("Choose a contact file smaller than 2 MB.", "error"); importFileInput.value = ""; refreshContactImportPreview(); return; }
+    importPasteInput.value = "";
+    importFileText = await file.text();
+    refreshContactImportPreview();
+  });
+  importPasteInput?.addEventListener("input", () => {
+    if (importPasteInput.value.trim() && importFileInput) {
+      importFileInput.value = ""; importFileText = ""; importFileName = "";
+      const fileNameLabel = importContactsForm.querySelector("[data-import-file-name]");
+      if (fileNameLabel) fileNameLabel.textContent = "No file selected";
+    }
+    refreshContactImportPreview();
+  });
+  importContactsForm?.elements.defaultDialCode?.addEventListener("change", refreshContactImportPreview);
+  importContactsForm?.querySelector("[data-download-contact-template]")?.addEventListener("click", () => {
+    const blob = new Blob(["Name,Phone Number\r\nAnanya Rao,+919876543210\r\nRohan Mehta,+447700900123\r\n"], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = "varada-nexus-contact-import-template.csv"; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  });
+  importContactsForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submitter = event.submitter;
+    if (!submitter || !importReadyContacts.length || importReadyContacts.length > 500) return;
+    try {
+      submitter.disabled = true; submitter.textContent = "Importing…";
+      const result = await messagingRequest("import_contacts", { contacts: importReadyContacts, duplicateMode: importContactsForm.elements.duplicateMode.value });
+      importContactsDialog.close();
+      const parts = [`${Number(result.imported || 0).toLocaleString("en-IN")} added`];
+      if (result.updated) parts.push(`${Number(result.updated).toLocaleString("en-IN")} updated`);
+      if (result.skipped) parts.push(`${Number(result.skipped).toLocaleString("en-IN")} existing skipped`);
+      showToast(`Contact import complete: ${parts.join(", ")}.`);
+      await renderDashboard();
+    } catch (error) {
+      showToast(error?.message || "Contacts could not be imported.", "error");
+      submitter.disabled = false; submitter.textContent = `Import ${importReadyContacts.length.toLocaleString("en-IN")} contact${importReadyContacts.length === 1 ? "" : "s"}`;
     }
   });
   const newChatDialog = app.querySelector("#wpNewChatDialog");
