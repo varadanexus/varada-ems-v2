@@ -80,6 +80,7 @@ let workspaceSelectedConnectionId = "";
 let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
+let workspaceMessagingPreferences = { stopMarketingOptOutEnabled: true, error: "" };
 let workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], invoices: [], creditNotes: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
 let workspaceDeletion = { pending: false };
 let workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: "" };
@@ -1690,7 +1691,7 @@ function onboardingView(setupReady, connections) {
     </button>`).join("");
     return `<section class="wp-route-page wp-onboarding-page wp-onboarding-complete-page">
       <section class="wp-onboarding-complete-hero">
-        <div class="wp-onboarding-complete-copy"><span class="wp-kicker">Premium onboarding completed</span><h1>Your WhatsApp workspace is ready</h1><p><strong>${escapeHtml(session.companyName || "Your business")}</strong> is verified, connected to Meta and ready to serve customers. Use this guided walkthrough to explore the portal.</p><div class="wp-onboarding-complete-actions"><a class="wp-primary wp-button-link" href="${workspacePath("overview")}">Go to workspace overview <span aria-hidden="true">→</span></a><a class="wp-secondary wp-button-link" href="${workspacePath("inbox")}">Start with the inbox</a></div></div>
+        <div class="wp-onboarding-complete-copy"><span class="wp-kicker">Onboarding completed</span><h1>Your WhatsApp workspace is ready</h1><p><strong>${escapeHtml(session.companyName || "Your business")}</strong> is verified, connected to Meta and ready to serve customers. Use this guided walkthrough to explore the portal.</p><div class="wp-onboarding-complete-actions"><a class="wp-primary wp-button-link" href="${workspacePath("overview")}">Go to workspace overview <span aria-hidden="true">→</span></a><a class="wp-secondary wp-button-link" href="${workspacePath("inbox")}">Start with the inbox</a></div></div>
         <div class="wp-onboarding-complete-art" aria-hidden="true"><div class="wp-complete-orbit"><span>✓</span><i></i><i></i><i></i></div><div class="wp-complete-company"><small>Workspace live</small><strong>${escapeHtml(session.companyName || "Business workspace")}</strong><span>${escapeHtml(planName(workspaceProfile?.planCode))} package</span></div></div>
       </section>
       <section class="wp-onboarding-tour-intro"><div><span class="wp-card-eyebrow">Portal walkthrough</span><h2>Everything you need to operate WhatsApp</h2><p>Select any feature to open it directly. You can return to this walkthrough from Onboarding at any time.</p></div><span class="wp-onboarding-complete-badge">4 of 4 setup steps complete</span></section>
@@ -1878,14 +1879,17 @@ function profileView(profile) {
 function settingsView(profile) {
   const canManageBranding = ["owner", "admin"].includes(session.roleCode);
   const canDeleteWorkspace = ["owner", "admin"].includes(session.roleCode);
+  const canManageMessagingPreferences = ["owner", "admin"].includes(session.roleCode);
   const logo = profile?.logoDataUrl
     ? `<img src="${escapeHtml(profile.logoDataUrl)}" alt="${escapeHtml(session.companyName)} logo" />`
     : `<span aria-hidden="true">${escapeHtml((session.companyName || "B").charAt(0).toUpperCase())}</span>`;
   const deletionControl = canDeleteWorkspace
     ? `<div class="wp-danger-zone"><div><strong>Delete this workspace</strong><p>Download a copy of your account data, then submit a protected deletion request. The request can be reversed for 24 hours.</p></div><button class="wp-danger-button" id="wpRequestDeletionBtn" type="button" ${workspaceDeletion?.pending ? "disabled" : ""}>${workspaceDeletion?.pending ? "Deletion pending" : "Request deletion"}</button></div>`
     : `<p class="wp-settings-permission">Only a workspace owner or administrator can export or delete this account.</p>`;
+  const stopOptOutEnabled = workspaceMessagingPreferences?.stopMarketingOptOutEnabled !== false;
+  const messagingPreferenceControl = `<article class="wp-card wp-route-card wp-messaging-preferences"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Marketing consent</span><h2>Automatic STOP opt-out</h2></div><span class="wp-automation-status ${stopOptOutEnabled ? "active" : "paused"}">${stopOptOutEnabled ? "On" : "Off"}</span></div><p>When enabled, a customer who sends <strong>STOP</strong> is excluded from marketing campaigns immediately. Service conversations remain available.</p><label class="wp-automation-switch"><input id="wpStopOptOutToggle" type="checkbox" ${stopOptOutEnabled ? "checked" : ""} ${canManageMessagingPreferences ? "" : "disabled"} /><span aria-hidden="true"></span><em>${stopOptOutEnabled ? "Automatic opt-out enabled" : "Automatic opt-out disabled"}</em></label>${workspaceMessagingPreferences?.error ? `<small class="wp-settings-permission">${escapeHtml(workspaceMessagingPreferences.error)}</small>` : ""}${canManageMessagingPreferences ? "" : '<small class="wp-settings-permission">Only a workspace owner or administrator can change this preference.</small>'}</article>`;
   const deletionDialog = canDeleteWorkspace ? `<dialog class="wp-account-deletion-dialog" id="wpAccountDeletionDialog"><form id="wpAccountDeletionForm"><header><div><span>Protected account action</span><h2>Request workspace deletion</h2><p>This removes the workspace, users, messages, contacts and other operational platform data after a 24-hour reversal window. Stored Meta connections will be unlinked; the customer’s Meta Business Portfolio is not deleted. Statutory invoices, credit notes and audit evidence are retained where legally required.</p></div><button type="button" data-close-deletion-dialog aria-label="Close">×</button></header><section class="wp-deletion-export-step"><div><strong>1. Download your data</strong><p>The export excludes passwords, login sessions and encrypted provider credentials.</p></div><button class="wp-secondary" id="wpExportAccountDataBtn" type="button">Download account data</button></section><div class="wp-deletion-form-grid"><label class="wp-field"><span>Who requested this deletion</span><input name="requestedBy" maxlength="200" value="${escapeHtml(profile?.displayName || session.displayName)}" required /></label><label class="wp-field"><span>Internal note</span><textarea name="internalNote" minlength="10" maxlength="2000" placeholder="Reason, approval reference, and any internal context" required></textarea></label><section class="wp-deletion-camera" aria-labelledby="wpDeletionCameraTitle"><div><strong id="wpDeletionCameraTitle">Requester camera evidence</strong><p>Use this device’s camera. Uploading an existing image is not permitted. The captured photo is stamped with its timestamp and location.</p></div><div class="wp-deletion-camera-stage"><video id="wpDeletionCameraVideo" playsinline muted hidden></video><canvas id="wpDeletionCameraCanvas" hidden></canvas><img id="wpDeletionCameraPreview" alt="Captured requester evidence with timestamp and location" hidden /><div id="wpDeletionCameraPlaceholder">Camera evidence has not been captured.</div></div><div class="wp-deletion-camera-actions"><button class="wp-secondary" id="wpStartDeletionCameraBtn" type="button">Start camera</button><button class="wp-primary" id="wpCaptureDeletionEvidenceBtn" type="button" hidden>Capture photo &amp; location</button><button class="wp-secondary" id="wpRetakeDeletionEvidenceBtn" type="button" hidden>Retake</button></div><small id="wpDeletionLocationStatus">Timestamp and location will be captured with the photo.</small><input name="latitude" type="hidden" /><input name="longitude" type="hidden" /><input name="locationAccuracy" type="hidden" /><input name="locationCapturedAt" type="hidden" /></section><label class="wp-field wp-confirm-company"><span>Type <strong>${escapeHtml(profile?.companyName || session.companyName)}</strong> to confirm</span><input name="exactCompanyName" autocomplete="off" required /></label><label class="wp-check wp-deletion-consent"><input name="evidenceConsent" type="checkbox" required /><span>I confirm that the requester consented to capturing the photo and device location as evidence for this deletion request.</span></label></div><footer><button class="wp-secondary" type="button" data-close-deletion-dialog>Keep workspace</button><button class="wp-danger-button" type="submit">Schedule deletion</button></footer><p class="wp-form-message" id="wpAccountDeletionMessage" role="alert"></p></form></dialog>` : "";
-  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("profile")}">View full profile</a></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button>${profile?.logoDataUrl ? `<button class="wp-remove-logo" id="wpRemoveLogoBtn" type="button">Remove logo</button>` : ""}</form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(profile?.companyName || session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(profile?.displayName || session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(profile?.email || session.email)}</dd></div><div><dt>Plan</dt><dd>${escapeHtml(planName(profile?.planCode))}</dd></div></dl></article><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div>${deletionControl}</article></section>${deletionDialog}</section>`;
+  return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Administration</span><h1>Workspace settings</h1><p>Manage your company identity and workspace-level preferences.</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("profile")}">View full profile</a></div><section class="wp-settings-grid"><article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Company profile</span><h2>Workspace details</h2></div></div><div class="wp-branding-editor"><div class="wp-branding-preview">${logo}</div><div class="wp-branding-copy"><strong>Business logo</strong><p>Displayed in your workspace profile and sidebar. Use a square PNG, JPG or WebP image.</p>${canManageBranding ? `<form id="wpLogoUploadForm" class="wp-logo-upload-form"><label class="wp-file-picker"><input id="wpLogoFile" name="logo" type="file" accept="image/png,image/jpeg,image/webp" required /><span>Choose logo</span></label><button class="wp-secondary" type="submit">Upload logo</button>${profile?.logoDataUrl ? `<button class="wp-remove-logo" id="wpRemoveLogoBtn" type="button">Remove logo</button>` : ""}</form><small>Maximum 2 MB. A new upload replaces the previous logo.</small>` : `<small>Ask a workspace owner or administrator to change the logo.</small>`}</div></div><dl class="wp-details"><div><dt>Company</dt><dd>${escapeHtml(profile?.companyName || session.companyName)}</dd></div><div><dt>Workspace owner</dt><dd>${escapeHtml(profile?.displayName || session.displayName)}</dd></div><div><dt>Owner email</dt><dd>${escapeHtml(profile?.email || session.email)}</dd></div><div><dt>Plan</dt><dd>${escapeHtml(planName(profile?.planCode))}</dd></div></dl></article>${messagingPreferenceControl}<article class="wp-card wp-route-card"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Data &amp; access</span><h2>Workspace protection</h2></div></div><p>This customer workspace is separated from other organisations and is accessible only through an active session.</p><div class="wp-settings-links"><a href="/privacy-policy.html" target="_blank" rel="noopener">Privacy Policy</a><a href="/terms-of-service.html" target="_blank" rel="noopener">Terms of Service</a></div>${deletionControl}</article></section>${deletionDialog}</section>`;
 }
 
 function verifiedVerificationView(data) {
@@ -1970,6 +1974,7 @@ function contactsView() {
   const contacts = workspaceContacts?.contacts || [];
   const status = new URLSearchParams(location.search).get("status") || "all";
   const statusCounts = contacts.reduce((counts, contact) => ({ ...counts, [contact.status]: Number(counts[contact.status] || 0) + 1 }), {});
+  statusCounts.opted_out = contacts.filter((contact) => Boolean(contact.marketing_opt_out_at)).length;
   const rows = contacts.map((contact) => {
     const name = inboxContactName(contact);
     const conversationUrl = contact.conversation?.id ? `${workspacePath("inbox")}?conversation=${encodeURIComponent(contact.conversation.id)}` : "";
@@ -2830,13 +2835,14 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   let connections = workspaceConnections;
   if (!agentWorkspace && refresh) {
     const billingAction = isBillingWorkspaceView(view) || ["owner", "admin"].includes(session.roleCode) ? "summary" : "entitlement";
-    const [onboardingResult, profileResult, deletionResult, verificationResult, packageResult, billingResult] = await Promise.allSettled([
+    const [onboardingResult, profileResult, deletionResult, verificationResult, packageResult, billingResult, messagingPreferencesResult] = await Promise.allSettled([
       onboardingRequest("status"),
       storageRequest("profile"),
       storageRequest("account_deletion_status"),
       storageRequest("verification_status"),
       messagingRequest("package_master"),
       billingRequest(billingAction),
+      view === "settings" ? messagingRequest("workspace_messaging_preferences") : Promise.resolve(workspaceMessagingPreferences),
     ]);
     if (onboardingResult.status === "fulfilled") {
       metaOnboardingStatus = onboardingResult.value;
@@ -2868,6 +2874,11 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
         : { ...workspaceBilling, ...billingResult.value, error: "" };
     } else {
       workspaceBilling = { ...workspaceBilling, error: billingResult.reason?.message || (billingAction === "summary" ? "Billing could not be loaded." : "Billing access could not be verified.") };
+    }
+    if (view === "settings") {
+      workspaceMessagingPreferences = messagingPreferencesResult.status === "fulfilled"
+        ? { ...messagingPreferencesResult.value, error: "" }
+        : { ...workspaceMessagingPreferences, error: messagingPreferencesResult.reason?.message || "Messaging preferences could not be loaded." };
     }
   } else {
     metaOnboardingStatus = metaOnboardingStatus || {
@@ -4081,6 +4092,22 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   };
   app.querySelector("#wpSidebarToggle")?.addEventListener("click", () => toggleSidebar(!shell?.classList.contains("sidebar-open")));
   app.querySelector("#wpSidebarScrim")?.addEventListener("click", () => toggleSidebar(false));
+  app.querySelector("#wpStopOptOutToggle")?.addEventListener("change", async (event) => {
+    const toggle = event.currentTarget;
+    const previousValue = workspaceMessagingPreferences?.stopMarketingOptOutEnabled !== false;
+    const nextValue = toggle.checked;
+    try {
+      toggle.disabled = true;
+      const result = await messagingRequest("update_workspace_messaging_preferences", { stopMarketingOptOutEnabled: nextValue });
+      workspaceMessagingPreferences = { ...result, error: "" };
+      showToast(`Automatic STOP opt-out ${nextValue ? "enabled" : "disabled"}.`);
+      await renderDashboard({ refresh: false, preserveScroll: true });
+    } catch (error) {
+      toggle.checked = previousValue;
+      toggle.disabled = false;
+      showToast(error?.message || "The messaging preference could not be updated.", "error");
+    }
+  });
   app.querySelector("#wpLogoFile")?.addEventListener("change", (event) => {
     const fileName = event.currentTarget.files?.[0]?.name || "Choose logo";
     const label = event.currentTarget.closest("label")?.querySelector("span");

@@ -9,6 +9,7 @@ const AGENT_ACTIONS = new Set([
   "list", "thread", "send_text", "update_conversation", "add_note",
   "list_contacts", "create_contact", "start_chat", "update_contact",
   "list_templates", "list_template_library", "list_flows",
+  "list_campaigns", "list_campaign_segments", "save_campaign",
 ]);
 
 function env(name: string) { return Deno.env.get(name) || ""; }
@@ -179,6 +180,70 @@ async function packageMaster(admin: any, customer: any) {
   if (error) throw error;
   return data || { package: null, addons: [], availableAddons: [] };
 }
+async function workspaceMessagingPreferences(admin: any, customer: any) {
+  const { data, error } = await admin.from("whatsapp_platform_tenants")
+    .select("stop_marketing_opt_out_enabled")
+    .eq("id", customer.tenant_id).single();
+  if (error) throw error;
+  return { stopMarketingOptOutEnabled: data?.stop_marketing_opt_out_enabled !== false };
+}
+async function updateWorkspaceMessagingPreferences(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can change messaging preferences.");
+  if (typeof body.stopMarketingOptOutEnabled !== "boolean") throw new Error("Choose whether STOP marketing opt-out is enabled.");
+  const { data, error } = await admin.from("whatsapp_platform_tenants").update({
+    stop_marketing_opt_out_enabled: body.stopMarketingOptOutEnabled,
+    updated_at: new Date().toISOString(),
+  }).eq("id", customer.tenant_id).select("stop_marketing_opt_out_enabled").single();
+  if (error) throw error;
+  return { stopMarketingOptOutEnabled: data?.stop_marketing_opt_out_enabled !== false };
+}
+async function requirePackageFeature(admin: any, customer: any, feature: string) {
+  const master = await packageMaster(admin, customer);
+  const enabled = master?.package?.entitlements?.[feature];
+  if (enabled === false || enabled === 0 || enabled === "none") {
+    const label = feature.replaceAll("_", " ");
+    throw new Error(`${label.charAt(0).toUpperCase()}${label.slice(1)} is not included in the active package. Upgrade the subscription or add the required entitlement.`);
+  }
+  return master;
+}
+function packageLimit(master: any, key: string) {
+  const included = master?.package?.[key];
+  if (included === null || included === undefined) return null;
+  const additional = (master?.addons || []).reduce((total: number, addon: any) => total + Number(addon?.entitlement_effects?.[key] || 0) * Number(addon?.quantity || 0), 0);
+  return Math.max(0, Number(included || 0) + additional);
+}
+async function assertTableCapacity(admin: any, customer: any, master: any, key: string, table: string, filters: Record<string, unknown> = {}) {
+  const limit = packageLimit(master, key);
+  if (limit === null) return;
+  let query = admin.from(table).select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id);
+  Object.entries(filters).forEach(([column, value]) => { query = query.eq(column, value); });
+  const { count, error } = await query;
+  if (error) throw error;
+  if (Number(count || 0) >= limit) throw new Error(`The active package limit of ${limit.toLocaleString("en-IN")} has been reached. Upgrade the package or add capacity before creating another record.`);
+}
+async function assertOutboundMessageCapacity(admin: any, customer: any, requested = 1) {
+  const master = await packageMaster(admin, customer);
+  const limit = packageLimit(master, "monthly_message_limit");
+  if (limit === null) return;
+  const start = new Date(); start.setUTCDate(1); start.setUTCHours(0, 0, 0, 0);
+  const { count, error } = await admin.from("whatsapp_platform_messages").select("id", { count: "exact", head: true })
+    .eq("tenant_id", customer.tenant_id).eq("direction", "outbound").gte("created_at", start.toISOString());
+  if (error) throw error;
+  if (Number(count || 0) + requested > limit) throw new Error(`The active package limit of ${limit.toLocaleString("en-IN")} outbound messages per month has been reached. Upgrade or add message capacity before sending.`);
+}
+async function assertMetaTemplateCapacity(admin: any, customer: any, connection: any, accessToken: string) {
+  const master = await packageMaster(admin, customer);
+  const limit = packageLimit(master, "template_limit");
+  if (limit === null) return;
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`);
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("summary", "true");
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const graph = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Message template capacity could not be verified.");
+  const used = Number(graph?.summary?.total_count ?? (Array.isArray(graph?.data) ? graph.data.length : 0));
+  if (used >= limit) throw new Error(`The active package limit of ${limit.toLocaleString("en-IN")} message template${limit === 1 ? "" : "s"} has been reached. Upgrade or add template capacity before creating another template.`);
+}
 async function inviteTeamMember(admin: any, customer: any, body: any) {
   if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can invite members.");
   const displayName = cleanText(body.displayName, 100);
@@ -242,12 +307,15 @@ async function updateTeamMember(admin: any, customer: any, body: any) {
   return { member: data };
 }
 async function listContacts(admin: any, customer: any, body: any) {
-  const status = ["active","blocked","opted_out"].includes(String(body.status || "")) ? String(body.status) : null;
+  const requestedStatus = String(body.status || "");
+  const status = ["active","blocked"].includes(requestedStatus) ? requestedStatus : null;
+  const marketingOptedOut = requestedStatus === "opted_out";
   const connection = body.connectionId ? await ownedBusinessNumber(admin, customer, body.connectionId) : null;
   let query = admin.from("whatsapp_platform_contacts")
-    .select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at,created_at,updated_at")
+    .select("id,wa_id,phone_e164,profile_name,display_name,status,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,last_inbound_at,last_outbound_at,created_at,updated_at")
     .eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }).limit(500);
   if (status) query = query.eq("status", status);
+  if (marketingOptedOut) query = query.not("marketing_opt_out_at", "is", null);
   const { data: contacts, error } = await query;
   if (error) throw error;
   const contactIds = (contacts || []).map((row: any) => row.id);
@@ -512,6 +580,7 @@ async function createTemplate(admin: any, customer: any, body: any) {
       throw new Error("Select a supported library button input.");
     }) : [];
     const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
+    await assertMetaTemplateCapacity(admin, customer, connection, secret.accessToken);
     const requestBody: any = { name, language, category, library_template_name: libraryTemplateName };
     if (libraryButtonInputs.length) requestBody.library_template_button_inputs = libraryButtonInputs;
     const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`, {
@@ -574,6 +643,7 @@ async function createTemplate(admin: any, customer: any, body: any) {
     else if (graphButtons.length) components.push({ type: "BUTTONS", buttons: graphButtons });
   }
   const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
+  await assertMetaTemplateCapacity(admin, customer, connection, secret.accessToken);
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`, {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ name, language, category, components }),
@@ -642,6 +712,7 @@ async function sendText(admin: any, customer: any, body: any) {
   if (connectionError || connection?.status !== "connected" || !connection?.phone_number_id) throw new Error("The WhatsApp connection is not ready.");
   if (credentialError || !credential) throw new Error("The WhatsApp connection credential is unavailable.");
   if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
+  await assertOutboundMessageCapacity(admin, customer, 1);
   const secret = await decryptCredential(credential.credential_ciphertext);
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
@@ -680,6 +751,8 @@ async function createContact(admin: any, customer: any, body: any) {
     if (error || !data) throw new Error("Contact could not be updated.");
     return { contact: data, existing: true };
   }
+  const master = await requirePackageFeature(admin, customer, "contacts");
+  await assertTableCapacity(admin, customer, master, "contact_limit", "whatsapp_platform_contacts");
   const { data, error } = await admin.from("whatsapp_platform_contacts").insert({
     tenant_id: customer.tenant_id, wa_id: digits, phone_e164: `+${digits}`, display_name: displayName, status: "active",
   }).select("id,wa_id,phone_e164,profile_name,display_name,status,last_inbound_at,last_outbound_at,created_at,updated_at").single();
@@ -704,6 +777,7 @@ async function startChat(admin: any, customer: any, body: any) {
   if (connectionError || connection?.status !== "connected" || !connection?.phone_number_id) throw new Error("Select a connected WhatsApp business number.");
   if (credentialError || !credential) throw new Error("The WhatsApp connection credential is unavailable.");
   if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
+  await assertOutboundMessageCapacity(admin, customer, 1);
   let { data: conversation, error: conversationError } = await admin.from("whatsapp_platform_conversations")
     .select("id,connection_id,contact_id").eq("tenant_id", customer.tenant_id).eq("connection_id", connectionId).eq("contact_id", contactId).maybeSingle();
   if (conversationError) throw conversationError;
@@ -802,8 +876,30 @@ async function updateContact(admin: any, customer: any, body: any) {
     const status = String(body.status);
     if (!["active","blocked","opted_out"].includes(status)) throw new Error("Invalid contact status.");
     updates.status = status;
+    if (status === "opted_out") updates.marketing_opt_out_at = new Date().toISOString();
   }
-  const { data, error } = await admin.from("whatsapp_platform_contacts").update(updates).eq("id", contactId).eq("tenant_id", customer.tenant_id).select("id,display_name,status,updated_at").single();
+  if (body.marketingConsent !== undefined) {
+    if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can record marketing consent.");
+    const consent = String(body.marketingConsent || "unknown");
+    const sources = new Set(["website","form","qr_code","keyword","inbound_request","imported_proof","manual_record","api"]);
+    if (!['unknown','opted_in','opted_out'].includes(consent)) throw new Error("Select a valid marketing consent state.");
+    if (consent === "opted_in") {
+      const source = String(body.marketingOptInSource || "manual_record");
+      if (!sources.has(source)) throw new Error("Select a valid marketing consent source.");
+      updates.marketing_opt_in_at = new Date().toISOString();
+      updates.marketing_opt_in_source = source;
+      updates.marketing_opt_out_at = null;
+      updates.status = "active";
+    } else if (consent === "opted_out") {
+      updates.marketing_opt_out_at = new Date().toISOString();
+      updates.status = "opted_out";
+    } else {
+      updates.marketing_opt_in_at = null;
+      updates.marketing_opt_in_source = null;
+      updates.marketing_opt_out_at = null;
+    }
+  }
+  const { data, error } = await admin.from("whatsapp_platform_contacts").update(updates).eq("id", contactId).eq("tenant_id", customer.tenant_id).select("id,display_name,status,marketing_opt_in_at,marketing_opt_in_source,marketing_opt_out_at,updated_at").single();
   if (error || !data) throw new Error("Contact could not be updated.");
   return { contact: data };
 }
@@ -865,6 +961,8 @@ async function saveFlow(admin: any, customer: any, body: any) {
     if (error || !data) throw new Error(error?.code === "23505" ? "A flow with this name already exists." : "Flow could not be updated.");
     return { flow: data };
   }
+  const master = await requirePackageFeature(admin, customer, "flows");
+  await assertTableCapacity(admin, customer, master, "flow_limit", "whatsapp_platform_flows", { connection_id: connection.id });
   const { data, error } = await admin.from("whatsapp_platform_flows").insert({ ...values, tenant_id: customer.tenant_id, connection_id: connection.id, created_by_user_id: customer.user_id, updated_by_user_id: customer.user_id })
     .select("id,connection_id,name,description,status,trigger_type,trigger_config,nodes,edges,version,created_at,updated_at").single();
   if (error || !data) throw new Error(error?.code === "23505" ? "A flow with this name already exists." : "Flow could not be created.");
@@ -893,6 +991,362 @@ async function deleteFlow(admin: any, customer: any, body: any) {
   return { deleted: true, flowId };
 }
 
+const CAMPAIGN_STATUSES = new Set(["draft","review","approved","rejected","paused"]);
+const CAMPAIGN_TYPES = new Set(["announcement","reminder","follow_up","offer","reactivation"]);
+const CAMPAIGN_AUDIENCES = new Set(["marketing_opt_in","recent_contact","recent_message","country_code","name_contains","manual","custom_segment"]);
+const CAMPAIGN_SEGMENT_RULES = new Set(["marketing_opt_in","recent_contact","recent_message","country_code","name_contains","manual"]);
+
+function campaignRow(row: any) {
+  return {
+    id: row.id,
+    connectionId: row.connection_id,
+    name: row.name,
+    type: row.campaign_type,
+    objective: row.objective || "",
+    owner: row.owner_name || "",
+    audience: row.audience_type === "custom_segment" ? row.audience_segment_id : row.audience_type,
+    audienceType: row.audience_type,
+    audienceSegmentId: row.audience_segment_id || "",
+    audienceLabel: row.audience_label || "Campaign audience",
+    estimatedAudience: Number(row.estimated_audience || 0),
+    templateKey: `${row.template_name}|${row.template_language}`,
+    templateName: row.template_name,
+    templateLanguage: row.template_language,
+    previewBody: row.preview_body || "",
+    status: row.status,
+    scheduledAt: row.scheduled_at || "",
+    timezone: row.timezone,
+    sendWindowStart: String(row.send_window_start || "09:00").slice(0, 5),
+    sendWindowEnd: String(row.send_window_end || "18:00").slice(0, 5),
+    optInConfirmed: Boolean(row.opt_in_confirmed),
+    policyConfirmed: Boolean(row.policy_confirmed),
+    approvalLog: Array.isArray(row.approval_log) ? row.approval_log : [],
+    recipientCount: Number(row.recipient_count || 0),
+    acceptedCount: Number(row.accepted_count || 0),
+    deliveredCount: Number(row.delivered_count || 0),
+    readCount: Number(row.read_count || 0),
+    failedCount: Number(row.failed_count || 0),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function campaignSegmentRow(row: any) {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description || "Custom campaign audience.",
+    rule: row.rule_type,
+    ruleValue: row.rule_value || "",
+    count: Number(row.manual_count || 0),
+    system: false,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function countCampaignAudience(admin: any, customer: any, rule: string, ruleValue = "", manualCount = 0) {
+  if (rule === "manual") return Math.max(0, Math.min(1000000, Number(manualCount) || 0));
+  let query = admin.from("whatsapp_platform_contacts").select("id", { count: "exact", head: true })
+    .eq("tenant_id", customer.tenant_id).eq("status", "active")
+    .not("marketing_opt_in_at", "is", null).is("marketing_opt_out_at", null);
+  const recentCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  if (rule === "recent_contact") query = query.gte("created_at", recentCutoff);
+  if (rule === "recent_message") query = query.gte("last_inbound_at", recentCutoff);
+  if (rule === "country_code") query = query.like("phone_e164", `${String(ruleValue).replace(/[^+0-9]/g, "")}%`);
+  if (rule === "name_contains") query = query.or(`display_name.ilike.%${String(ruleValue).replace(/[%_,()]/g, "")}%,profile_name.ilike.%${String(ruleValue).replace(/[%_,()]/g, "")}%`);
+  const { count, error } = await query;
+  if (error) throw error;
+  return Number(count || 0);
+}
+
+async function listCampaignSegments(admin: any, customer: any, body: any) {
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
+  const { data, error } = await admin.from("whatsapp_platform_campaign_segments")
+    .select("id,name,description,rule_type,rule_value,manual_count,created_at,updated_at")
+    .eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id)
+    .order("updated_at", { ascending: false }).limit(200);
+  if (error) throw error;
+  const segments = await Promise.all((data || []).map(async (row: any) => ({
+    ...campaignSegmentRow(row),
+    count: await countCampaignAudience(admin, customer, row.rule_type, row.rule_value, row.manual_count),
+  })));
+  return { segments };
+}
+
+async function saveCampaignSegment(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can manage campaign segments.");
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
+  const name = cleanText(body.name, 120);
+  const description = cleanText(body.description, 500);
+  const rule = String(body.rule || "marketing_opt_in");
+  const ruleValue = cleanText(body.ruleValue, 200);
+  const manualCount = Math.max(0, Math.min(1000000, Number(body.count) || 0));
+  if (!name) throw new Error("Enter a segment name.");
+  if (!CAMPAIGN_SEGMENT_RULES.has(rule)) throw new Error("Select a valid segment rule.");
+  if (["country_code","name_contains"].includes(rule) && !ruleValue) throw new Error("Enter the value used by this segment rule.");
+  const values = { name, description: description || null, rule_type: rule, rule_value: ruleValue || null, manual_count: manualCount, updated_at: new Date().toISOString() };
+  let result: any;
+  if (body.segmentId) {
+    const segmentId = cleanUuid(body.segmentId, "campaign segment");
+    result = await admin.from("whatsapp_platform_campaign_segments").update(values)
+      .eq("id", segmentId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id)
+      .select("id,name,description,rule_type,rule_value,manual_count,created_at,updated_at").single();
+  } else {
+    result = await admin.from("whatsapp_platform_campaign_segments").insert({ ...values, tenant_id: customer.tenant_id, connection_id: connection.id, created_by_user_id: customer.user_id })
+      .select("id,name,description,rule_type,rule_value,manual_count,created_at,updated_at").single();
+  }
+  if (result.error || !result.data) throw new Error(result.error?.code === "23505" ? "A segment with this name already exists." : "Campaign segment could not be saved.");
+  return { segment: { ...campaignSegmentRow(result.data), count: await countCampaignAudience(admin, customer, rule, ruleValue, manualCount) } };
+}
+
+async function deleteCampaignSegment(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can delete campaign segments.");
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
+  const segmentId = cleanUuid(body.segmentId, "campaign segment");
+  const { data, error } = await admin.from("whatsapp_platform_campaign_segments").delete()
+    .eq("id", segmentId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).select("id").single();
+  if (error || !data) throw new Error(error?.code === "23503" ? "This segment is used by a campaign and cannot be deleted." : "Campaign segment not found.");
+  return { deleted: true, segmentId };
+}
+
+async function listCampaigns(admin: any, customer: any, body: any) {
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
+  const { data, error } = await admin.from("whatsapp_platform_campaigns")
+    .select("id,connection_id,name,campaign_type,objective,owner_name,audience_type,audience_segment_id,audience_label,estimated_audience,template_name,template_language,preview_body,status,scheduled_at,timezone,send_window_start,send_window_end,opt_in_confirmed,policy_confirmed,approval_log,recipient_count,accepted_count,delivered_count,read_count,failed_count,created_at,updated_at")
+    .eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id)
+    .order("updated_at", { ascending: false }).limit(200);
+  if (error) throw error;
+  return { campaigns: (data || []).map(campaignRow) };
+}
+
+async function campaignAudienceContacts(admin: any, customer: any, campaign: any) {
+  let rule = campaign.audience_type;
+  let ruleValue = "";
+  if (rule === "custom_segment") {
+    const { data: segment, error } = await admin.from("whatsapp_platform_campaign_segments")
+      .select("rule_type,rule_value").eq("id", campaign.audience_segment_id)
+      .eq("tenant_id", customer.tenant_id).eq("connection_id", campaign.connection_id).single();
+    if (error || !segment) throw new Error("Campaign segment not found.");
+    rule = segment.rule_type;
+    ruleValue = segment.rule_value || "";
+  }
+  if (rule === "manual") throw new Error("Manual-count segments cannot be delivered because they do not identify recipients. Choose a consent-backed contact segment.");
+  let query = admin.from("whatsapp_platform_contacts").select("id,wa_id,status")
+    .eq("tenant_id", customer.tenant_id).eq("status", "active")
+    .not("marketing_opt_in_at", "is", null).is("marketing_opt_out_at", null).limit(10000);
+  const recentCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  if (rule === "recent_contact") query = query.gte("created_at", recentCutoff);
+  if (rule === "recent_message") query = query.gte("last_inbound_at", recentCutoff);
+  if (rule === "country_code") query = query.like("phone_e164", `${String(ruleValue).replace(/[^+0-9]/g, "")}%`);
+  if (rule === "name_contains") {
+    const safe = String(ruleValue).replace(/[%_,()]/g, "");
+    query = query.or(`display_name.ilike.%${safe}%,profile_name.ilike.%${safe}%`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}
+
+async function dispatchCampaign(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can deliver campaigns.");
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
+  const campaignId = cleanUuid(body.campaignId, "campaign");
+  const { data: campaign, error: campaignError } = await admin.from("whatsapp_platform_campaigns").select("*")
+    .eq("id", campaignId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).single();
+  if (campaignError || !campaign) throw new Error("Campaign not found.");
+  if (!["approved","scheduled","sending"].includes(campaign.status)) throw new Error("Approve the campaign before starting delivery.");
+  if (campaign.scheduled_at && new Date(campaign.scheduled_at).getTime() > Date.now()) {
+    await admin.from("whatsapp_platform_campaigns").update({ status: "scheduled", updated_at: new Date().toISOString() }).eq("id", campaign.id);
+    throw new Error(`This campaign is scheduled for ${new Date(campaign.scheduled_at).toLocaleString("en-IN")}. Delivery cannot start early.`);
+  }
+  if (!campaign.opt_in_confirmed || !campaign.policy_confirmed) throw new Error("Campaign consent and policy confirmations are required.");
+  const contacts = await campaignAudienceContacts(admin, customer, campaign);
+  if (!contacts.length) throw new Error("No explicitly opted-in contacts currently match this campaign audience.");
+  const rows = contacts.map((contact: any) => ({ tenant_id: customer.tenant_id, campaign_id: campaign.id, connection_id: connection.id, contact_id: contact.id, status: "queued" }));
+  const queued = await admin.from("whatsapp_platform_campaign_deliveries").upsert(rows, { onConflict: "campaign_id,contact_id", ignoreDuplicates: true });
+  if (queued.error) throw queued.error;
+  const { data: pending, error: pendingError } = await admin.from("whatsapp_platform_campaign_deliveries")
+    .select("id,contact_id,attempt_count").eq("campaign_id", campaign.id).in("status", ["queued","failed"]).lt("attempt_count", 3).order("queued_at").limit(20);
+  if (pendingError) throw pendingError;
+  await assertOutboundMessageCapacity(admin, customer, (pending || []).length);
+  const credentialResult = await admin.from("whatsapp_platform_provider_credentials").select("credential_ciphertext,expires_at")
+    .eq("connection_id", connection.id).eq("tenant_id", customer.tenant_id).single();
+  if (credentialResult.error || !credentialResult.data) throw new Error("The WhatsApp connection credential is unavailable.");
+  if (credentialResult.data.expires_at && new Date(credentialResult.data.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
+  const secret = await decryptCredential(credentialResult.data.credential_ciphertext);
+  const contactMap = new Map(contacts.map((contact: any) => [contact.id, contact]));
+  await admin.from("whatsapp_platform_campaigns").update({ status: "sending", started_at: campaign.started_at || new Date().toISOString(), recipient_count: contacts.length, updated_at: new Date().toISOString() }).eq("id", campaign.id);
+  await Promise.all((pending || []).map(async (delivery: any) => {
+    const contact: any = contactMap.get(delivery.contact_id);
+    if (!contact) {
+      await admin.from("whatsapp_platform_campaign_deliveries").update({ status: "skipped", last_error_code: "marketing_ineligible", last_error_message: "Contact is no longer eligible for marketing messages.", updated_at: new Date().toISOString() }).eq("id", delivery.id).in("status", ["queued", "failed"]);
+      return;
+    }
+    const claim = await admin.from("whatsapp_platform_campaign_deliveries").update({ status: "processing", attempt_count: Number(delivery.attempt_count || 0) + 1, updated_at: new Date().toISOString() }).eq("id", delivery.id).in("status", ["queued", "failed"]).select("id").maybeSingle();
+    if (claim.error) throw claim.error;
+    if (!claim.data) return;
+    try {
+      let { data: conversation } = await admin.from("whatsapp_platform_conversations").select("id").eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).eq("contact_id", contact.id).maybeSingle();
+      if (!conversation) {
+        const created = await admin.from("whatsapp_platform_conversations").insert({ tenant_id: customer.tenant_id, connection_id: connection.id, contact_id: contact.id, status: "open" }).select("id").single();
+        if (created.error || !created.data) throw created.error || new Error("Conversation could not be created.");
+        conversation = created.data;
+      }
+      const { data: eligibleContact, error: eligibilityError } = await admin.from("whatsapp_platform_contacts")
+        .select("id").eq("id", contact.id).eq("tenant_id", customer.tenant_id).eq("status", "active")
+        .not("marketing_opt_in_at", "is", null).is("marketing_opt_out_at", null).maybeSingle();
+      if (eligibilityError) throw eligibilityError;
+      if (!eligibleContact) {
+        await admin.from("whatsapp_platform_campaign_deliveries").update({ status: "skipped", last_error_code: "marketing_opt_out", last_error_message: "Customer opted out before campaign delivery.", updated_at: new Date().toISOString() }).eq("id", delivery.id);
+        return;
+      }
+      const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+        method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: { name: campaign.template_name, language: { code: campaign.template_language } } }),
+      });
+      const graph = await graphResponse.json().catch(() => ({}));
+      if (!graphResponse.ok || !graph?.messages?.[0]?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Meta rejected the campaign message.");
+      const now = new Date().toISOString();
+      const messageResult = await admin.from("whatsapp_platform_messages").insert({
+        tenant_id: customer.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
+        meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: "template", body: campaign.preview_body || `Template: ${campaign.template_name}`,
+        status: "accepted", provider_timestamp: now, created_by_user_id: customer.user_id,
+        safe_metadata: { template_name: campaign.template_name, language_code: campaign.template_language, campaign_id: campaign.id },
+      }).select("id").single();
+      if (messageResult.error || !messageResult.data) throw messageResult.error || new Error("Campaign message audit failed.");
+      await Promise.all([
+        admin.from("whatsapp_platform_campaign_deliveries").update({ conversation_id: conversation.id, message_id: messageResult.data.id, meta_message_id: String(graph.messages[0].id), status: "accepted", accepted_at: now, last_error_code: null, last_error_message: null, updated_at: now }).eq("id", delivery.id),
+        admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: String(campaign.preview_body || `Template: ${campaign.template_name}`).replace(/\s+/g, " ").slice(0, 300), last_outbound_at: now, updated_at: now }).eq("id", conversation.id),
+        admin.from("whatsapp_platform_contacts").update({ last_outbound_at: now, updated_at: now }).eq("id", contact.id),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Campaign message failed.";
+      await admin.from("whatsapp_platform_campaign_deliveries").update({ status: "failed", failed_at: new Date().toISOString(), last_error_code: "send_failed", last_error_message: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", delivery.id);
+    }
+  }));
+  const [{ count: remaining }, { count: accepted }, { count: failed }] = await Promise.all([
+    admin.from("whatsapp_platform_campaign_deliveries").select("id", { count: "exact", head: true }).eq("campaign_id", campaign.id).in("status", ["queued","processing"]),
+    admin.from("whatsapp_platform_campaign_deliveries").select("id", { count: "exact", head: true }).eq("campaign_id", campaign.id).in("status", ["accepted","sent","delivered","read"]),
+    admin.from("whatsapp_platform_campaign_deliveries").select("id", { count: "exact", head: true }).eq("campaign_id", campaign.id).eq("status", "failed"),
+  ]);
+  const status = Number(remaining || 0) > 0 || Number(accepted || 0) > 0 ? "sending" : "failed";
+  const result = await admin.from("whatsapp_platform_campaigns").update({ status, accepted_count: Number(accepted || 0), failed_count: Number(failed || 0), completed_at: status === "failed" ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq("id", campaign.id).select("*").single();
+  if (result.error || !result.data) throw new Error("Campaign delivery state could not be updated.");
+  return { campaign: campaignRow(result.data), batch: { attempted: (pending || []).length, remaining: Number(remaining || 0), accepted: Number(accepted || 0), failed: Number(failed || 0) } };
+}
+
+async function saveCampaign(admin: any, customer: any, body: any) {
+  if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot save campaign drafts.");
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
+  const master = await requirePackageFeature(admin, customer, "campaigns");
+  const name = cleanText(body.name, 160);
+  const type = String(body.type || "announcement");
+  const objective = String(body.objective || "").trim().slice(0, 1000);
+  const owner = cleanText(body.owner, 200);
+  const status = String(body.status || "draft");
+  const templateName = String(body.templateName || "").trim();
+  const templateLanguage = String(body.templateLanguage || "").trim();
+  const previewBody = String(body.previewBody || "").trim().slice(0, 10000);
+  const timezone = cleanText(body.timezone || "Asia/Kolkata", 80);
+  const sendWindowStart = String(body.sendWindowStart || "09:00").slice(0, 5);
+  const sendWindowEnd = String(body.sendWindowEnd || "18:00").slice(0, 5);
+  if (!name) throw new Error("Enter a campaign name.");
+  if (!CAMPAIGN_TYPES.has(type)) throw new Error("Select a valid campaign type.");
+  if (!CAMPAIGN_STATUSES.has(status)) throw new Error("Select a valid campaign status.");
+  if (customer.role_code === "agent" && !["draft","review"].includes(status)) throw new Error("Agents can prepare drafts and submit them for review, but cannot approve campaigns.");
+  if (!/^[a-z0-9_]{1,512}$/.test(templateName) || !/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(templateLanguage)) throw new Error("Choose an approved message template.");
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(sendWindowStart) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(sendWindowEnd) || sendWindowStart >= sendWindowEnd) throw new Error("Choose a valid campaign delivery window.");
+  let audienceType = String(body.audienceType || body.audience || "marketing_opt_in");
+  let audienceSegmentId: string | null = null;
+  let rule = audienceType;
+  let ruleValue = cleanText(body.ruleValue, 200);
+  let manualCount = Math.max(0, Number(body.manualCount) || 0);
+  if (!CAMPAIGN_AUDIENCES.has(audienceType)) {
+    audienceSegmentId = cleanUuid(body.audienceSegmentId || body.audience, "campaign segment");
+    audienceType = "custom_segment";
+  }
+  if (audienceType === "custom_segment") {
+    audienceSegmentId = cleanUuid(body.audienceSegmentId || body.audience, "campaign segment");
+    const { data: segment, error: segmentError } = await admin.from("whatsapp_platform_campaign_segments")
+      .select("id,name,rule_type,rule_value,manual_count").eq("id", audienceSegmentId)
+      .eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).single();
+    if (segmentError || !segment) throw new Error("Campaign segment not found.");
+    rule = segment.rule_type; ruleValue = segment.rule_value || ""; manualCount = Number(segment.manual_count || 0);
+  }
+  const estimatedAudience = await countCampaignAudience(admin, customer, rule, ruleValue, manualCount);
+  const scheduledAt = body.scheduledAt ? new Date(String(body.scheduledAt)).toISOString() : null;
+  if (scheduledAt && new Date(scheduledAt).getTime() <= Date.now()) throw new Error("Choose a campaign schedule in the future.");
+  const now = new Date().toISOString();
+  const values: any = {
+    name, campaign_type: type, objective: objective || null, owner_name: owner || null,
+    audience_type: audienceType, audience_segment_id: audienceSegmentId,
+    audience_label: cleanText(body.audienceLabel || "Campaign audience", 160), estimated_audience: estimatedAudience,
+    template_name: templateName, template_language: templateLanguage, preview_body: previewBody || null,
+    status, scheduled_at: scheduledAt, timezone, send_window_start: sendWindowStart, send_window_end: sendWindowEnd,
+    opt_in_confirmed: body.confirmOptIn === true, policy_confirmed: body.confirmPolicy === true,
+    approval_log: Array.isArray(body.approvalLog) ? body.approvalLog.slice(0, 200) : [],
+    updated_by_user_id: customer.user_id, updated_at: now,
+  };
+  let result: any;
+  if (body.campaignId) {
+    const campaignId = cleanUuid(body.campaignId, "campaign");
+    result = await admin.from("whatsapp_platform_campaigns").update(values)
+      .eq("id", campaignId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id)
+      .select("*").single();
+  } else {
+    const includedLimit = master?.package?.campaign_limit;
+    const additionalLimit = (master?.addons || []).reduce((total: number, addon: any) => total + Number(addon?.entitlement_effects?.campaign_limit || 0) * Number(addon?.quantity || 0), 0);
+    const campaignLimit = includedLimit === null || includedLimit === undefined ? null : Number(includedLimit || 0) + additionalLimit;
+    if (campaignLimit !== null) {
+      const { count, error: countError } = await admin.from("whatsapp_platform_campaigns").select("id", { count: "exact", head: true })
+        .eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).not("status", "in", '(completed,cancelled)');
+      if (countError) throw countError;
+      if (Number(count || 0) >= campaignLimit) throw new Error(`This package allows ${campaignLimit} active campaign${campaignLimit === 1 ? "" : "s"}. Upgrade the package or complete an existing campaign first.`);
+    }
+    result = await admin.from("whatsapp_platform_campaigns").insert({ ...values, tenant_id: customer.tenant_id, connection_id: connection.id, created_by_user_id: customer.user_id })
+      .select("*").single();
+  }
+  if (result.error || !result.data) throw new Error("Campaign could not be saved.");
+  return { campaign: campaignRow(result.data) };
+}
+
+async function decideCampaign(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can approve or reject campaigns.");
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
+  const campaignId = cleanUuid(body.campaignId, "campaign");
+  const decision = String(body.decision || "");
+  const note = cleanText(body.note, 500);
+  if (!['approved','rejected','paused'].includes(decision)) throw new Error("Select a valid campaign decision.");
+  if (decision === "rejected" && !note) throw new Error("Add a rejection reason.");
+  const { data: current, error: currentError } = await admin.from("whatsapp_platform_campaigns")
+    .select("id,status,objective,estimated_audience,scheduled_at,opt_in_confirmed,policy_confirmed,approval_log")
+    .eq("id", campaignId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).single();
+  if (currentError || !current) throw new Error("Campaign not found.");
+  if (decision === "approved" && (!current.objective || !current.estimated_audience || !current.scheduled_at || !current.opt_in_confirmed || !current.policy_confirmed)) {
+    throw new Error("Complete the objective, consent confirmations, eligible audience and future schedule before approval.");
+  }
+  const entry = { id: crypto.randomUUID(), status: decision, note, actorName: customer.display_name || customer.email || "Workspace administrator", actorEmail: customer.email || "", at: new Date().toISOString() };
+  const approvalLog = [entry, ...(Array.isArray(current.approval_log) ? current.approval_log : [])].slice(0, 200);
+  const updates: any = { status: decision, approval_log: approvalLog, updated_by_user_id: customer.user_id, updated_at: entry.at };
+  if (decision === "approved") { updates.approved_by_user_id = customer.user_id; updates.approved_at = entry.at; }
+  const { data, error } = await admin.from("whatsapp_platform_campaigns").update(updates)
+    .eq("id", campaignId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).select("*").single();
+  if (error || !data) throw new Error("Campaign decision could not be recorded.");
+  return { campaign: campaignRow(data) };
+}
+
+async function deleteCampaign(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can delete campaigns.");
+  const connection = await ownedBusinessNumber(admin, customer, body.connectionId);
+  const campaignId = cleanUuid(body.campaignId, "campaign");
+  const { data, error } = await admin.from("whatsapp_platform_campaigns").delete()
+    .eq("id", campaignId).eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id)
+    .in("status", ["draft","rejected"]).select("id").single();
+  if (error || !data) throw new Error("Only draft or rejected campaigns can be deleted.");
+  return { deleted: true, campaignId };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     if (!allowedOrigin(req)) return json(req, { error: "Origin not allowed" }, 403);
@@ -916,9 +1370,21 @@ Deno.serve(async (req) => {
     if (customer.role_code === "agent" && !AGENT_ACTIONS.has(action)) {
       return json(req, { error: "Your agent role cannot access this workspace area." }, 403);
     }
+    const featureByAction: Record<string, string> = {
+      list: "team_inbox", thread: "team_inbox", send_text: "team_inbox", start_chat: "team_inbox",
+      update_conversation: "team_inbox", add_note: "team_inbox",
+      list_contacts: "contacts", create_contact: "contacts", update_contact: "contacts",
+      list_templates: "templates", list_template_library: "templates", create_template: "templates",
+      list_flows: "flows", save_flow: "flows", set_flow_status: "flows", delete_flow: "flows",
+      list_campaigns: "campaigns", list_campaign_segments: "campaigns", save_campaign_segment: "campaigns",
+      delete_campaign_segment: "campaigns", save_campaign: "campaigns", decide_campaign: "campaigns", delete_campaign: "campaigns", dispatch_campaign: "campaigns",
+    };
+    if (featureByAction[action] && action !== "save_campaign") await requirePackageFeature(admin, customer, featureByAction[action]);
     if (action === "list") return json(req, await listConversations(admin, customer, body));
     if (action === "list_team") return json(req, await listTeam(admin, customer));
     if (action === "package_master") return json(req, await packageMaster(admin, customer));
+    if (action === "workspace_messaging_preferences") return json(req, await workspaceMessagingPreferences(admin, customer));
+    if (action === "update_workspace_messaging_preferences") return json(req, await updateWorkspaceMessagingPreferences(admin, customer, body));
     if (action === "invite_team_member") return json(req, await inviteTeamMember(admin, customer, body));
     if (action === "update_team_member") return json(req, await updateTeamMember(admin, customer, body));
     if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));
@@ -931,6 +1397,14 @@ Deno.serve(async (req) => {
     if (action === "save_flow") return json(req, await saveFlow(admin, customer, body));
     if (action === "set_flow_status") return json(req, await setFlowStatus(admin, customer, body));
     if (action === "delete_flow") return json(req, await deleteFlow(admin, customer, body));
+    if (action === "list_campaigns") return json(req, await listCampaigns(admin, customer, body));
+    if (action === "list_campaign_segments") return json(req, await listCampaignSegments(admin, customer, body));
+    if (action === "save_campaign_segment") return json(req, await saveCampaignSegment(admin, customer, body));
+    if (action === "delete_campaign_segment") return json(req, await deleteCampaignSegment(admin, customer, body));
+    if (action === "save_campaign") return json(req, await saveCampaign(admin, customer, body));
+    if (action === "decide_campaign") return json(req, await decideCampaign(admin, customer, body));
+    if (action === "dispatch_campaign") return json(req, await dispatchCampaign(admin, customer, body));
+    if (action === "delete_campaign") return json(req, await deleteCampaign(admin, customer, body));
     if (action === "thread") return json(req, await thread(admin, customer, body));
     if (action === "send_text") return json(req, await sendText(admin, customer, body));
     if (action === "create_contact") return json(req, await createContact(admin, customer, body));

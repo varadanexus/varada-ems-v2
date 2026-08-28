@@ -582,6 +582,9 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-planned-card li { position: relative; padding-left: 1.25rem; color: #c8ded1; font-size: .82rem; }
 .wp-planned-card li::before { content: ""; position: absolute; left: 0; top: .45rem; width: 6px; height: 6px; border-radius: 50%; background: var(--wp-green); }
 .wp-settings-grid { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(320px,.9fr); gap: 1rem; }
+.wp-messaging-preferences p { color: var(--wp-muted); font-size: .8rem; line-height: 1.6; }
+.wp-messaging-preferences .wp-automation-switch { width: fit-content; margin-top: 1.15rem; }
+.wp-messaging-preferences .wp-settings-permission { display: block; margin-top: 1rem; padding-top: 1rem; color: var(--wp-muted); }
 .wp-details { margin: 1rem 0 0; }
 .wp-details > div { display: grid; grid-template-columns: minmax(120px,.38fr) 1fr; gap: 1rem; padding: .85rem 0; border-bottom: 1px solid rgba(139,226,180,.1); }
 .wp-details dt { color: var(--wp-muted); font-size: .76rem; }
@@ -1173,13 +1176,13 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-onboarding-complete-page { display: grid; gap: 1.15rem; }
 .wp-onboarding-complete-hero {
   position: relative;
-  min-height: 390px;
+  min-height: 340px;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(330px, .85fr);
   align-items: center;
-  gap: clamp(2rem, 5vw, 5rem);
+  gap: clamp(1.5rem, 3.5vw, 3rem);
   overflow: hidden;
-  padding: clamp(2rem, 5vw, 4.4rem);
+  padding: clamp(1.6rem, 3.5vw, 3rem);
   border: 1px solid color-mix(in srgb, var(--wp-workspace-accent) 38%, var(--wp-workspace-line));
   border-radius: 26px;
   background:
@@ -1189,13 +1192,13 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 }
 .wp-onboarding-complete-hero::before { content: ""; position: absolute; inset: auto -8% -65% 38%; height: 350px; border: 1px solid color-mix(in srgb, var(--wp-workspace-accent) 12%, transparent); border-radius: 50%; }
 .wp-onboarding-complete-copy { position: relative; z-index: 1; }
-.wp-onboarding-complete-copy h1 { max-width: 720px; margin: .6rem 0 .8rem; color: var(--wp-workspace-text); font-size: clamp(2.25rem, 5vw, 4.35rem); line-height: .98; letter-spacing: -.06em; }
+.wp-onboarding-complete-copy h1 { max-width: 720px; margin: .5rem 0 .7rem; color: var(--wp-workspace-text); font-size: clamp(2.2rem, 4.4vw, 3.7rem); line-height: .98; letter-spacing: -.06em; }
 .wp-onboarding-complete-copy > p { max-width: 690px; margin: 0; color: var(--wp-workspace-muted); font-size: .95rem; line-height: 1.7; }
 .wp-onboarding-complete-copy > p strong { color: var(--wp-workspace-text); }
-.wp-onboarding-complete-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }
+.wp-onboarding-complete-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.15rem; }
 .wp-onboarding-complete-actions a { min-height: 46px; display: inline-flex; align-items: center; gap: .65rem; }
-.wp-onboarding-complete-art { position: relative; z-index: 1; min-height: 270px; display: grid; place-items: center; }
-.wp-complete-orbit { width: 210px; height: 210px; display: grid; place-items: center; position: relative; border: 1px solid color-mix(in srgb, var(--wp-workspace-accent) 25%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--wp-workspace-surface-solid) 70%, transparent); box-shadow: 0 30px 70px rgba(0,0,0,.18), inset 0 0 70px color-mix(in srgb, var(--wp-workspace-accent) 8%, transparent); }
+.wp-onboarding-complete-art { position: relative; z-index: 1; min-height: 230px; display: grid; place-items: center; }
+.wp-complete-orbit { width: 180px; height: 180px; display: grid; place-items: center; position: relative; border: 1px solid color-mix(in srgb, var(--wp-workspace-accent) 25%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--wp-workspace-surface-solid) 70%, transparent); box-shadow: 0 30px 70px rgba(0,0,0,.18), inset 0 0 70px color-mix(in srgb, var(--wp-workspace-accent) 8%, transparent); }
 .wp-complete-orbit::before, .wp-complete-orbit::after { content: ""; position: absolute; border: 1px solid color-mix(in srgb, var(--wp-workspace-accent) 16%, transparent); border-radius: 50%; }
 .wp-complete-orbit::before { inset: -24px; }
 .wp-complete-orbit::after { inset: 28px; }
