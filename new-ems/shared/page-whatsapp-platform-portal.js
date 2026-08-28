@@ -4661,9 +4661,16 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     app.querySelectorAll(".wp-inbox-conversation").forEach((row) => { row.hidden = Boolean(query && !row.textContent.toLowerCase().includes(query)); });
   });
   app.querySelector("[data-contact-search]")?.addEventListener("input", (event) => {
-    const query = String(event.currentTarget.value || "").trim().toLowerCase();
+    const query = String(event.currentTarget.value || "").trim();
     clearTimeout(window.__contactSearchTimer);
-    window.__contactSearchTimer = setTimeout(() => { const url = new URL(location.href); if (query) url.searchParams.set("contactSearch", query); else url.searchParams.delete("contactSearch"); url.searchParams.set("contactPage", "1"); navigateWorkspace(`${url.pathname}${url.search}`); }, 250);
+    window.__contactSearchTimer = setTimeout(async () => {
+      const url = new URL(location.href);
+      if (query) url.searchParams.set("contactSearch", query); else url.searchParams.delete("contactSearch");
+      url.searchParams.set("contactPage", "1");
+      await navigateWorkspace(`${url.pathname}${url.search}`, { replace: true });
+      const nextSearchInput = app.querySelector("[data-contact-search]");
+      if (nextSearchInput) { nextSearchInput.focus(); nextSearchInput.setSelectionRange(nextSearchInput.value.length, nextSearchInput.value.length); }
+    }, 650);
   });
   app.querySelector("[data-template-search]")?.addEventListener("input", (event) => {
     const query = String(event.currentTarget.value || "").trim().toLowerCase();
@@ -5043,10 +5050,10 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   contactPageSizeSelect?.addEventListener("change", () => goContactPage(1, Number(contactPageSizeSelect.value)));
   const selectionTools = [selectAllContacts?.closest("label"), deleteSelectedButton].filter(Boolean);
   let allMatchingContactsSelected = false;
-  if (selectAllContacts?.nextSibling) selectAllContacts.nextSibling.textContent = ` Select all ${Number(contactPageInfo.total || 0).toLocaleString("en-IN")} matching contacts`;
+  if (selectAllContacts?.nextSibling) selectAllContacts.nextSibling.textContent = ` Select all ${Number(contactStatistics.total || 0).toLocaleString("en-IN")} contacts`;
   const selectionScopeDialog = document.createElement("dialog");
   selectionScopeDialog.className = "wp-contact-dialog wp-contact-selection-scope-dialog";
-  selectionScopeDialog.innerHTML = `<section><header><div><span class="wp-card-eyebrow">Select contacts</span><h2>Choose selection range</h2><p>Select only the contacts shown on this page, or every contact matching the current search and filter.</p></div><button type="button" data-close-selection-scope aria-label="Close">×</button></header><div class="wp-contact-selection-scope-options"><button type="button" data-select-current-page><strong>This page</strong><span>${Number(workspaceContacts.contacts?.length || 0).toLocaleString("en-IN")} displayed contact${Number(workspaceContacts.contacts?.length || 0) === 1 ? "" : "s"}</span></button><button type="button" data-select-all-matching><strong>All matching contacts</strong><span>${Number(contactPageInfo.total || 0).toLocaleString("en-IN")} contact${Number(contactPageInfo.total || 0) === 1 ? "" : "s"} across all pages</span></button></div><footer><button class="wp-secondary" type="button" data-close-selection-scope>Cancel</button></footer></section>`;
+  selectionScopeDialog.innerHTML = `<section><header><div><span class="wp-card-eyebrow">Select contacts</span><h2>Choose selection range</h2><p>Select only the contacts shown on this page, or every contact in the workspace regardless of search and filters.</p></div><button type="button" data-close-selection-scope aria-label="Close">×</button></header><div class="wp-contact-selection-scope-options"><button type="button" data-select-current-page><strong>This page</strong><span>${Number(workspaceContacts.contacts?.length || 0).toLocaleString("en-IN")} displayed contact${Number(workspaceContacts.contacts?.length || 0) === 1 ? "" : "s"}</span></button><button type="button" data-select-all-matching><strong>All contacts</strong><span>${Number(contactStatistics.total || 0).toLocaleString("en-IN")} contact${Number(contactStatistics.total || 0) === 1 ? "" : "s"} across the workspace</span></button></div><footer><button class="wp-secondary" type="button" data-close-selection-scope>Cancel</button></footer></section>`;
   app.querySelector(".wp-contacts-page")?.append(selectionScopeDialog);
   const doneSelectionButton = document.createElement("button");
   doneSelectionButton.type = "button"; doneSelectionButton.className = "wp-secondary"; doneSelectionButton.textContent = "Done"; doneSelectionButton.hidden = true;
@@ -5067,7 +5074,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const syncContactSelection = () => {
     const checkboxes = [...app.querySelectorAll("[data-contact-select]")];
     const selected = selectedContactIds();
-    const selectedCount = allMatchingContactsSelected ? Number(contactPageInfo.total || 0) : selected.length;
+    const selectedCount = allMatchingContactsSelected ? Number(contactStatistics.total || 0) : selected.length;
     if (deleteSelectedButton) { deleteSelectedButton.disabled = !selectedCount || !["owner", "admin"].includes(session.roleCode); deleteSelectedButton.textContent = selectedCount ? `Delete selected (${selectedCount.toLocaleString("en-IN")})` : "Delete selected"; }
     if (selectAllContacts) { selectAllContacts.checked = allMatchingContactsSelected || Boolean(checkboxes.length && selected.length === checkboxes.length); selectAllContacts.indeterminate = !allMatchingContactsSelected && Boolean(selected.length && selected.length < checkboxes.length); }
   };
@@ -5082,10 +5089,10 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   selectionScopeDialog.querySelector("[data-select-current-page]")?.addEventListener("click", () => { allMatchingContactsSelected = false; app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = true; }); selectionScopeDialog.close(); syncContactSelection(); });
   selectionScopeDialog.querySelector("[data-select-all-matching]")?.addEventListener("click", () => { allMatchingContactsSelected = true; app.querySelectorAll("[data-contact-select]").forEach((input) => { input.checked = true; }); selectionScopeDialog.close(); syncContactSelection(); });
   const openDeleteContacts = (ids, names = [], allMatching = false) => {
-    if (!ids.length || !deleteContactsDialog) return;
+    if ((!ids.length && !allMatching) || !deleteContactsDialog) return;
     deleteContactsDialog.dataset.contactIds = JSON.stringify(ids);
     deleteContactsDialog.dataset.allMatching = String(allMatching);
-    const deletionCount = allMatching ? Number(contactPageInfo.total || 0) : ids.length;
+    const deletionCount = allMatching ? Number(contactStatistics.total || 0) : ids.length;
     if (deleteContactsCopy) deleteContactsCopy.textContent = `You are about to permanently delete ${deletionCount.toLocaleString("en-IN")} contact${deletionCount === 1 ? "" : "s"}${names.length ? ` (${names.slice(0, 3).join(", ")}${names.length > 3 ? ", …" : ""})` : ""}. Conversation history, consent records and campaign links for these contacts will also be removed.`;
     deleteContactsDialog.showModal();
   };
@@ -5098,13 +5105,12 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     const submitter = event.submitter;
     const ids = JSON.parse(deleteContactsDialog.dataset.contactIds || "[]");
     const allMatching = deleteContactsDialog.dataset.allMatching === "true";
-    const deletionCount = allMatching ? Number(contactPageInfo.total || 0) : ids.length;
+    const deletionCount = allMatching ? Number(contactStatistics.total || 0) : ids.length;
     try {
       submitter.disabled = true; submitter.textContent = "Deleting in progress…";
       if (deleteContactsCopy) deleteContactsCopy.textContent = `Deleting ${deletionCount.toLocaleString("en-IN")} contact${deletionCount === 1 ? "" : "s"}… Please keep this window open until the operation completes.`;
       deleteContactsDialog.querySelectorAll("button").forEach((button) => { if (button !== submitter) button.disabled = true; });
-      const status = new URLSearchParams(location.search).get("status") || "all";
-      const result = await messagingRequest("delete_contacts", allMatching ? { allMatching: true, status, search: contactPageInfo.search || "" } : { contactIds: ids });
+      const result = await messagingRequest("delete_contacts", allMatching ? { allMatching: true } : { contactIds: ids });
       deleteContactsDialog.close();
       showToast(`${Number(result.deletedCount ?? deletionCount).toLocaleString("en-IN")} contact${deletionCount === 1 ? "" : "s"} deleted.`);
       await renderDashboard();

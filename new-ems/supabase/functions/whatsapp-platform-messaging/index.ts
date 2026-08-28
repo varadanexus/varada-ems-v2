@@ -1047,16 +1047,7 @@ async function updateContact(admin: any, customer: any, body: any) {
 async function deleteContacts(admin: any, customer: any, body: any) {
   if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can delete contacts.");
   if (body.allMatching === true) {
-    const requestedStatus = String(body.status || "all");
-    const search = String(body.search || "").trim();
-    let query = admin.from("whatsapp_platform_contacts").delete().eq("tenant_id", customer.tenant_id);
-    if (["active", "blocked"].includes(requestedStatus)) query = query.eq("status", requestedStatus);
-    if (requestedStatus === "opted_out") query = query.not("marketing_opt_out_at", "is", null);
-    if (search) {
-      const safeSearch = search.replace(/[,()]/g, " ");
-      query = query.or(`display_name.ilike.%${safeSearch}%,profile_name.ilike.%${safeSearch}%,phone_e164.ilike.%${safeSearch}%,contact_category.ilike.%${safeSearch}%`);
-    }
-    const { data, error } = await query.select("id");
+    const { data, error } = await admin.from("whatsapp_platform_contacts").delete().eq("tenant_id", customer.tenant_id).select("id");
     if (error) throw error;
     return { deletedCount: (data || []).length };
   }
