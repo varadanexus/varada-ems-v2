@@ -7,7 +7,7 @@ const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
 const AGENT_ACTIONS = new Set([
   "list", "thread", "send_text", "update_conversation", "add_note",
-  "list_contacts", "create_contact", "start_chat", "update_contact",
+  "list_contacts", "list_marketing_consent_events", "create_contact", "start_chat", "update_contact",
   "list_templates", "list_template_library", "list_flows",
   "list_campaigns", "list_campaign_segments", "save_campaign",
 ]);
@@ -327,6 +327,18 @@ async function listContacts(admin: any, customer: any, body: any) {
   if (conversationError) throw conversationError;
   const conversationMap = new Map((conversations || []).map((row: any) => [row.contact_id, row]));
   return { contacts: (contacts || []).map((row: any) => ({ ...row, conversation: conversationMap.get(row.id) || null })) };
+}
+async function listMarketingConsentEvents(admin: any, customer: any, body: any) {
+  const contactId = cleanUuid(body.contactId, "contact");
+  const { data: contact, error: contactError } = await admin.from("whatsapp_platform_contacts")
+    .select("id").eq("id", contactId).eq("tenant_id", customer.tenant_id).maybeSingle();
+  if (contactError || !contact) throw new Error("Contact not found.");
+  const { data, error } = await admin.from("whatsapp_platform_marketing_consent_events")
+    .select("id,event_type,source,keyword,confirmation_status,confirmation_error,occurred_at,created_at")
+    .eq("tenant_id", customer.tenant_id).eq("contact_id", contactId)
+    .order("occurred_at", { ascending: false }).limit(100);
+  if (error) throw error;
+  return { events: data || [] };
 }
 async function templateConnection(admin: any, customer: any, connectionId: unknown) {
   const id = cleanUuid(connectionId, "connection");
@@ -1374,6 +1386,7 @@ Deno.serve(async (req) => {
       list: "team_inbox", thread: "team_inbox", send_text: "team_inbox", start_chat: "team_inbox",
       update_conversation: "team_inbox", add_note: "team_inbox",
       list_contacts: "contacts", create_contact: "contacts", update_contact: "contacts",
+      list_marketing_consent_events: "contacts",
       list_templates: "templates", list_template_library: "templates", create_template: "templates",
       list_flows: "flows", save_flow: "flows", set_flow_status: "flows", delete_flow: "flows",
       list_campaigns: "campaigns", list_campaign_segments: "campaigns", save_campaign_segment: "campaigns",
@@ -1388,6 +1401,7 @@ Deno.serve(async (req) => {
     if (action === "invite_team_member") return json(req, await inviteTeamMember(admin, customer, body));
     if (action === "update_team_member") return json(req, await updateTeamMember(admin, customer, body));
     if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));
+    if (action === "list_marketing_consent_events") return json(req, await listMarketingConsentEvents(admin, customer, body));
     if (action === "get_business_profile") return json(req, await getBusinessProfile(admin, customer, body));
     if (action === "update_business_profile") return json(req, await updateBusinessProfile(admin, customer, body));
     if (action === "list_templates") return json(req, await listTemplates(admin, customer, body));

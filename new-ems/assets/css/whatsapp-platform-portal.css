@@ -585,6 +585,17 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-messaging-preferences p { color: var(--wp-muted); font-size: .8rem; line-height: 1.6; }
 .wp-messaging-preferences .wp-automation-switch { width: fit-content; margin-top: 1.15rem; }
 .wp-messaging-preferences .wp-settings-permission { display: block; margin-top: 1rem; padding-top: 1rem; color: var(--wp-muted); }
+.wp-marketing-consent-audit { display: grid; gap: .7rem; padding: .9rem; border: 1px solid var(--wp-workspace-line); border-radius: 12px; background: var(--wp-workspace-surface-soft); }
+.wp-marketing-consent-audit header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.wp-marketing-consent-audit header strong,.wp-marketing-consent-audit header small { display: block; }
+.wp-marketing-consent-audit header small,.wp-marketing-consent-audit p { margin: 0; color: var(--wp-muted); font-size: .66rem; }
+.wp-marketing-consent-audit ol { display: grid; gap: .5rem; max-height: 190px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.wp-marketing-consent-audit li { display: grid; grid-template-columns: 88px minmax(0,1fr); gap: .7rem; align-items: center; padding: .65rem; border: 1px solid var(--wp-workspace-line); border-radius: 10px; background: var(--wp-workspace-surface); }
+.wp-marketing-consent-audit li > span { padding: .35rem .45rem; border-radius: 999px; text-align: center; color: var(--wp-gold); background: color-mix(in srgb,var(--wp-gold) 12%,transparent); font-size: .6rem; font-weight: 850; }
+.wp-marketing-consent-audit li > span.active { color: var(--wp-accent); background: color-mix(in srgb,var(--wp-accent) 12%,transparent); }
+.wp-marketing-consent-audit li div strong,.wp-marketing-consent-audit li div small { display: block; }
+.wp-marketing-consent-audit li div strong { font-size: .68rem; }
+.wp-marketing-consent-audit li div small { margin-top: .2rem; color: var(--wp-muted); font-size: .6rem; }
 .wp-details { margin: 1rem 0 0; }
 .wp-details > div { display: grid; grid-template-columns: minmax(120px,.38fr) 1fr; gap: 1rem; padding: .85rem 0; border-bottom: 1px solid rgba(139,226,180,.1); }
 .wp-details dt { color: var(--wp-muted); font-size: .76rem; }

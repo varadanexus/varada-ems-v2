@@ -112,10 +112,10 @@ function messageBody(message: any) {
   const media = message?.[message?.type] || {};
   return String(media.caption || media.filename || `[${message?.type || "unsupported"} message]`).slice(0, 10000);
 }
-function marketingOptOutKeyword(message: any) {
+function marketingConsentKeyword(message: any) {
   if (!["text", "button", "interactive"].includes(String(message?.type || ""))) return "";
   const normalized = messageBody(message).normalize("NFKC").trim().replace(/\s+/g, " ").replace(/[.!]+$/g, "").toLocaleUpperCase();
-  return normalized === "STOP" ? "STOP" : "";
+  return ["STOP", "START"].includes(normalized) ? normalized : "";
 }
 async function automaticMarketingOptOutEnabled(admin: any, tenantId: string) {
   const { data, error } = await admin.from("whatsapp_platform_tenants")
@@ -214,6 +214,37 @@ async function sendFlowText(admin: any, connection: any, contact: any, conversat
   if (error || !outbound) throw error || new Error("flow_message_audit_failed");
   await Promise.all([
     admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: text.replace(/\s+/g, " ").slice(0, 300), last_outbound_at: now, updated_at: now }).eq("id", conversation.id).eq("tenant_id", connection.tenant_id),
+    admin.from("whatsapp_platform_contacts").update({ last_outbound_at: now, updated_at: now }).eq("id", contact.id).eq("tenant_id", connection.tenant_id),
+  ]);
+  return outbound.id;
+}
+
+async function sendConsentConfirmation(admin: any, connection: any, contact: any, conversation: any, eventType: "opt_out" | "opt_in") {
+  const text = eventType === "opt_out"
+    ? "You have been unsubscribed from marketing messages. You can still contact us for service and support. Reply START to subscribe again."
+    : "You are subscribed to marketing messages again. Reply STOP at any time to unsubscribe.";
+  const { data: credential, error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+    .select("credential_ciphertext,expires_at").eq("connection_id", connection.id).eq("tenant_id", connection.tenant_id).single();
+  if (credentialError || !credential) throw new Error("consent_confirmation_credential_unavailable");
+  if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("consent_confirmation_credential_expired");
+  const { accessToken } = await decryptCredential(credential.credential_ciphertext);
+  const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } }),
+  });
+  const graph = await graphResponse.json().catch(() => ({}));
+  if (!graphResponse.ok || !graph?.messages?.[0]?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "consent_confirmation_rejected");
+  const now = new Date().toISOString();
+  const { data: outbound, error } = await admin.from("whatsapp_platform_messages").insert({
+    tenant_id: connection.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
+    meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: "text", body: text,
+    status: "accepted", provider_timestamp: now,
+    safe_metadata: { automation: true, consent_confirmation: true, consent_event_type: eventType },
+  }).select("id").single();
+  if (error || !outbound) throw error || new Error("consent_confirmation_audit_failed");
+  await Promise.all([
+    admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: text.slice(0, 300), last_outbound_at: now, updated_at: now }).eq("id", conversation.id).eq("tenant_id", connection.tenant_id),
     admin.from("whatsapp_platform_contacts").update({ last_outbound_at: now, updated_at: now }).eq("id", contact.id).eq("tenant_id", connection.tenant_id),
   ]);
   return outbound.id;
@@ -325,9 +356,9 @@ async function processInbound(admin: any, connection: any, value: any, message: 
   const conversation = await conversationForContact(admin, connection, contact, message);
   const type = safeMessageType(message?.type);
   const body = messageBody(message);
-  const detectedOptOutKeyword = marketingOptOutKeyword(message);
-  const optOutKeyword = detectedOptOutKeyword && await automaticMarketingOptOutEnabled(admin, connection.tenant_id)
-    ? detectedOptOutKeyword
+  const detectedConsentKeyword = marketingConsentKeyword(message);
+  const consentKeyword = detectedConsentKeyword && await automaticMarketingOptOutEnabled(admin, connection.tenant_id)
+    ? detectedConsentKeyword
     : "";
   const media = message?.[message?.type] || {};
   const { data: inboundMessage, error } = await admin.from("whatsapp_platform_messages").insert({
@@ -337,7 +368,8 @@ async function processInbound(admin: any, connection: any, value: any, message: 
     reply_to_meta_message_id: message?.context?.id || null, status: "received", provider_timestamp: conversation.receivedAt,
     safe_metadata: {
       ...(type === "interactive" ? { interactive_type: message.interactive?.type || null } : {}),
-      ...(optOutKeyword ? { marketing_opt_out: true, marketing_opt_out_keyword: optOutKeyword } : {}),
+      ...(consentKeyword === "STOP" ? { marketing_opt_out: true, marketing_consent_keyword: consentKeyword } : {}),
+      ...(consentKeyword === "START" ? { marketing_opt_in: true, marketing_consent_keyword: consentKeyword } : {}),
     },
   }).select("id,body").single();
   if (error) throw error;
@@ -347,22 +379,43 @@ async function processInbound(admin: any, connection: any, value: any, message: 
     last_message_preview: conversation.preview, last_inbound_at: conversation.receivedAt,
     service_window_expires_at: new Date(new Date(conversation.receivedAt).getTime() + 24 * 60 * 60 * 1000).toISOString(), updated_at: new Date().toISOString(),
   }).eq("id", conversation.id).eq("tenant_id", connection.tenant_id);
-  if (optOutKeyword) {
-    const optedOutAt = conversation.receivedAt;
-    const { error: optOutError } = await admin.from("whatsapp_platform_contacts").update({
-      marketing_opt_out_at: optedOutAt,
-      updated_at: new Date().toISOString(),
-    }).eq("id", contact.id).eq("tenant_id", connection.tenant_id);
-    if (optOutError) throw optOutError;
-    const { error: queuedError } = await admin.from("whatsapp_platform_campaign_deliveries").update({
-      status: "skipped",
-      last_error_code: "marketing_opt_out",
-      last_error_message: "Customer opted out by sending STOP before campaign delivery.",
-      updated_at: new Date().toISOString(),
-    }).eq("tenant_id", connection.tenant_id).eq("contact_id", contact.id).in("status", ["queued", "failed"]);
-    if (queuedError) throw queuedError;
+  if (consentKeyword && inboundMessage?.id) {
+    const eventType = consentKeyword === "STOP" ? "opt_out" : "opt_in";
+    const consentAt = conversation.receivedAt;
+    const contactUpdates = eventType === "opt_out"
+      ? { marketing_opt_out_at: consentAt, updated_at: new Date().toISOString() }
+      : { marketing_opt_in_at: consentAt, marketing_opt_in_source: "keyword", marketing_opt_out_at: null, updated_at: new Date().toISOString() };
+    const { error: consentError } = await admin.from("whatsapp_platform_contacts").update(contactUpdates)
+      .eq("id", contact.id).eq("tenant_id", connection.tenant_id);
+    if (consentError) throw consentError;
+    if (eventType === "opt_out") {
+      const { error: queuedError } = await admin.from("whatsapp_platform_campaign_deliveries").update({
+        status: "skipped",
+        last_error_code: "marketing_opt_out",
+        last_error_message: "Customer opted out by sending STOP before campaign delivery.",
+        updated_at: new Date().toISOString(),
+      }).eq("tenant_id", connection.tenant_id).eq("contact_id", contact.id).in("status", ["queued", "failed"]);
+      if (queuedError) throw queuedError;
+    }
+    let confirmationMessageId: string | null = null;
+    let confirmationStatus = "sent";
+    let confirmationError: string | null = null;
+    try {
+      confirmationMessageId = await sendConsentConfirmation(admin, connection, contact, conversation, eventType);
+    } catch (confirmationFailure) {
+      confirmationStatus = "failed";
+      confirmationError = (confirmationFailure instanceof Error ? confirmationFailure.message : "consent_confirmation_failed").slice(0, 1000);
+      console.error("WhatsApp consent confirmation failed", connection.id, contact.id, confirmationError);
+    }
+    const { error: auditError } = await admin.from("whatsapp_platform_marketing_consent_events").insert({
+      tenant_id: connection.tenant_id, connection_id: connection.id, contact_id: contact.id,
+      inbound_message_id: inboundMessage.id, confirmation_message_id: confirmationMessageId,
+      event_type: eventType, source: "keyword", keyword: consentKeyword,
+      confirmation_status: confirmationStatus, confirmation_error: confirmationError, occurred_at: consentAt,
+    });
+    if (auditError) throw auditError;
   }
-  if (inboundMessage?.id && !optOutKeyword) await executeMatchingFlow(admin, connection, contact, conversation, inboundMessage);
+  if (inboundMessage?.id && !consentKeyword) await executeMatchingFlow(admin, connection, contact, conversation, inboundMessage);
 }
 const STATUS_RANK: Record<string, number> = { queued: 0, accepted: 1, sent: 2, delivered: 3, read: 4, failed: 5, deleted: 6 };
 async function refreshCampaignCounts(admin: any, campaignId: string) {
