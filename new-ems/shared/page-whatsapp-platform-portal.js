@@ -5054,13 +5054,15 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     const submitter = event.submitter;
     const ids = JSON.parse(deleteContactsDialog.dataset.contactIds || "[]");
     try {
-      submitter.disabled = true; submitter.textContent = "Deleting…";
+      submitter.disabled = true; submitter.textContent = "Deleting in progress…";
+      if (deleteContactsCopy) deleteContactsCopy.textContent = `Deleting ${ids.length.toLocaleString("en-IN")} contact${ids.length === 1 ? "" : "s"}… Please keep this window open until the operation completes.`;
+      deleteContactsDialog.querySelectorAll("button").forEach((button) => { if (button !== submitter) button.disabled = true; });
       const result = await messagingRequest("delete_contacts", { contactIds: ids });
       deleteContactsDialog.close();
       showToast(`${Number(result.deletedCount || ids.length).toLocaleString("en-IN")} contact${ids.length === 1 ? "" : "s"} deleted.`);
       await renderDashboard();
-    } catch (error) { showToast(error?.message || "Contacts could not be deleted.", "error"); }
-    finally { submitter.disabled = false; submitter.textContent = "Delete permanently"; }
+    } catch (error) { if (deleteContactsCopy) deleteContactsCopy.textContent = error?.message || "Contacts could not be deleted. Try again."; showToast(error?.message || "Contacts could not be deleted.", "error"); }
+    finally { submitter.disabled = false; submitter.textContent = "Delete permanently"; deleteContactsDialog.querySelectorAll("button").forEach((button) => { button.disabled = false; }); }
   });
   importContactsDialog?.querySelectorAll("[data-close-contact-import]").forEach((button) => button.addEventListener("click", () => importContactsDialog.close()));
   importContactsForm?.querySelector("[data-google-contact-import]")?.addEventListener("click", async (event) => {
