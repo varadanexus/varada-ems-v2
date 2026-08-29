@@ -610,11 +610,74 @@ function formatTemplateMessage(components: any[]) {
   }
   return sections.join("\n\n").trim();
 }
+function templateRecordView(row: any) {
+  return {
+    id: String(row.meta_template_id || row.id || ""), recordId: row.id,
+    name: String(row.name || ""), status: String(row.status || "UNKNOWN").toUpperCase(),
+    category: String(row.category || "UNKNOWN").toUpperCase(), language: String(row.language || ""),
+    components: Array.isArray(row.components) ? row.components : [], source: row.source || "custom",
+    contentType: row.content_type || "TEXT", libraryTemplateName: row.library_template_name || null,
+    rejectionReason: row.rejection_reason || null, createdAt: row.created_at, updatedAt: row.updated_at,
+  };
+}
+async function upsertTemplateRecord(admin: any, customer: any, connectionId: string, template: any, values: any = {}) {
+  const now = new Date().toISOString();
+  const payload = {
+    tenant_id: customer.tenant_id, connection_id: connectionId,
+    meta_template_id: template.id || null, name: template.name, language: template.language,
+    category: template.category, status: String(template.status || "UNKNOWN").toUpperCase(),
+    source: values.source || "custom", content_type: values.contentType || "TEXT",
+    components: Array.isArray(template.components) ? template.components : [],
+    library_template_name: values.libraryTemplateName || null,
+    rejection_reason: template.rejectionReason || null, created_by: customer.user_id,
+    submitted_at: template.id ? (values.submittedAt || now) : null,
+    status_synced_at: template.id ? now : null, updated_at: now,
+  };
+  const { data, error } = await admin.from("whatsapp_platform_template_records").upsert(payload, { onConflict: "connection_id,name,language" }).select("*").single();
+  if (error) throw error;
+  return templateRecordView(data);
+}
 async function listTemplates(admin: any, customer: any, body: any) {
   const connectionId = cleanUuid(body.connectionId, "connection");
   const { connection, secret } = await templateConnection(admin, customer, connectionId);
-  const templates = await fetchMetaTemplates(connection.whatsapp_business_account_id, secret.accessToken);
-  return { connection: { id: connection.id, displayPhoneNumber: connection.display_phone_number, verifiedName: connection.verified_name }, templates };
+  const metaTemplates = await fetchMetaTemplates(connection.whatsapp_business_account_id, secret.accessToken);
+  if (metaTemplates.length) {
+    const now = new Date().toISOString();
+    const rows = metaTemplates.map((template: any) => ({
+      tenant_id: customer.tenant_id, connection_id: connection.id, meta_template_id: template.id || null,
+      name: template.name, language: template.language, category: template.category,
+      status: template.status, source: "meta", content_type: "TEXT", components: template.components,
+      created_by: customer.user_id, submitted_at: now, status_synced_at: now, updated_at: now,
+    }));
+    const synced = await admin.from("whatsapp_platform_template_records").upsert(rows, { onConflict: "connection_id,name,language" });
+    if (synced.error) throw synced.error;
+  }
+  // Recover submissions created before the workspace registry existed. Meta can
+  // temporarily omit a newly provisioned library template, but the immutable
+  // developer log still contains its ID, name, language and submission status.
+  const { data: historicalLogs } = await admin.from("whatsapp_platform_developer_logs")
+    .select("resource_id,status,summary,metadata,created_at").eq("tenant_id", customer.tenant_id)
+    .eq("connection_id", connection.id).eq("event_type", "template.created").order("created_at", { ascending: true }).limit(500);
+  const recovered = (historicalLogs || []).map((entry: any) => {
+    const match = String(entry.summary || "").match(/^Template\s+([a-z0-9_]+)\s+submitted to Meta$/i);
+    if (!match) return null;
+    return {
+      tenant_id: customer.tenant_id, connection_id: connection.id, meta_template_id: entry.resource_id || null,
+      name: match[1].toLowerCase(), language: String(entry.metadata?.language || "en_US"),
+      category: String(entry.metadata?.category || "UTILITY").toUpperCase(),
+      status: String(entry.status || "PENDING").toUpperCase(), source: entry.metadata?.source === "meta_library" ? "meta_library" : "custom",
+      content_type: String(entry.metadata?.contentType || "TEXT"), components: [], created_by: customer.user_id,
+      submitted_at: entry.created_at, status_synced_at: entry.created_at, created_at: entry.created_at, updated_at: entry.created_at,
+    };
+  }).filter(Boolean);
+  if (recovered.length) {
+    const backfill = await admin.from("whatsapp_platform_template_records").upsert(recovered, { onConflict: "connection_id,name,language", ignoreDuplicates: true });
+    if (backfill.error) throw backfill.error;
+  }
+  const { data: records, error } = await admin.from("whatsapp_platform_template_records").select("*")
+    .eq("tenant_id", customer.tenant_id).eq("connection_id", connection.id).order("updated_at", { ascending: false });
+  if (error) throw error;
+  return { connection: { id: connection.id, displayPhoneNumber: connection.display_phone_number, verifiedName: connection.verified_name }, templates: (records || []).map(templateRecordView) };
 }
 // Meta's own pre-approved utility and authentication template catalogue.
 async function listTemplateLibrary(admin: any, customer: any, body: any) {
@@ -656,6 +719,18 @@ async function createTemplate(admin: any, customer: any, body: any) {
   if (!/^[a-z0-9_]{1,512}$/.test(name)) throw new Error("Template names can contain only lowercase letters, numbers and underscores.");
   if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(language)) throw new Error("Enter a valid language code, such as en_US.");
   if (!["MARKETING","UTILITY","AUTHENTICATION"].includes(category)) throw new Error("Select a valid template category.");
+  if (body.saveAsDraft === true) {
+    const { connection } = await templateConnection(admin, customer, body.connectionId);
+    const draftComponents: any[] = [];
+    if (headerText) draftComponents.push({ type: "HEADER", format: "TEXT", text: headerText });
+    if (bodyText) draftComponents.push({ type: "BODY", text: bodyText });
+    if (footerText) draftComponents.push({ type: "FOOTER", text: footerText });
+    const template = await upsertTemplateRecord(admin, customer, connection.id, {
+      name, language, category, status: "DRAFT", components: draftComponents,
+    }, { source: libraryTemplateName ? "meta_library" : "custom", contentType, libraryTemplateName });
+    await recordDeveloperLog(admin, customer, { connectionId: connection.id, category: "template", eventType: "template.draft_saved", status: "draft", summary: `Template ${name} saved as draft`, resourceId: template.recordId, metadata: { contentType, language, category } });
+    return { template };
+  }
   if (libraryTemplateName) {
     if (!/^[a-z0-9_]{1,512}$/.test(libraryTemplateName)) throw new Error("Select a valid Meta library template.");
     if (!["UTILITY", "AUTHENTICATION"].includes(category)) throw new Error("Meta library templates must use their Utility or Authentication category.");
@@ -683,7 +758,8 @@ async function createTemplate(admin: any, customer: any, body: any) {
     });
     const graph = await graphResponse.json().catch(() => ({}));
     if (!graphResponse.ok || !graph?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "The library template could not be added to this account.");
-    const template = { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), libraryTemplateName };
+    const template = { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), libraryTemplateName, components: bodyText ? [{ type: "BODY", text: bodyText }] : [] };
+    await upsertTemplateRecord(admin, customer, connection.id, template, { source: "meta_library", contentType: "TEXT", libraryTemplateName });
     await recordDeveloperLog(admin, customer, { connectionId: connection.id, category: "template", eventType: "template.created", status: template.status.toLowerCase(), summary: `Template ${name} submitted to Meta`, resourceId: template.id, metadata: { source: "meta_library", language, category } });
     return { template };
   }
@@ -748,6 +824,7 @@ async function createTemplate(admin: any, customer: any, body: any) {
   const graph = await graphResponse.json().catch(() => ({}));
   if (!graphResponse.ok || !graph?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Template could not be submitted to Meta.");
   const template = { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), components };
+  await upsertTemplateRecord(admin, customer, connection.id, template, { source: "custom", contentType });
   await recordDeveloperLog(admin, customer, { connectionId: connection.id, category: "template", eventType: "template.created", status: template.status.toLowerCase(), summary: `Template ${name} submitted to Meta`, resourceId: template.id, metadata: { contentType, language, category } });
   return { template };
 }
