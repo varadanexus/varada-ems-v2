@@ -706,15 +706,40 @@ async function recordRefund(admin: any, entity: any) {
   }
   return data;
 }
+async function settleTerminalAddonEntitlement(admin: any, subscription: any, inactiveStatus = "paused") {
+  const { data: assignment, error: assignmentError } = await admin.from("whatsapp_platform_tenant_addons").select("*")
+    .eq("tenant_id", subscription.tenant_id).eq("addon_code", subscription.addon_code)
+    .eq("source_subscription_id", subscription.id).maybeSingle();
+  if (assignmentError) throw assignmentError;
+  if (!assignment) return { restoredQuantity: 0, addonCode: subscription.addon_code || null };
+  const includedQuantity = Math.max(0, Number(subscription.safe_metadata?.plan_included_quantity || 0));
+  const parentSubscriptionId = subscription.parent_subscription_id || subscription.safe_metadata?.parent_subscription_id || null;
+  let parentSubscription: any = null;
+  if (includedQuantity > 0 && parentSubscriptionId) {
+    const { data, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("id,status")
+      .eq("id", parentSubscriptionId).eq("tenant_id", subscription.tenant_id).maybeSingle();
+    if (error) throw error;
+    parentSubscription = data;
+  }
+  const restoreIncluded = Boolean(parentSubscription && ["authenticated", "active"].includes(String(parentSubscription.status || "").toLowerCase()));
+  const settledAt = new Date().toISOString();
+  const updates = restoreIncluded
+    ? { quantity: includedQuantity, status: "active", source_subscription_id: parentSubscription.id, billing_ends_at: null, updated_at: settledAt }
+    : { quantity: 0, status: inactiveStatus, billing_ends_at: subscription.current_end || settledAt, updated_at: settledAt };
+  const { error: updateError } = await admin.from("whatsapp_platform_tenant_addons").update(updates).eq("id", assignment.id).eq("source_subscription_id", subscription.id);
+  if (updateError) throw updateError;
+  if (assignment.addon_code === "extra_agent_seat") {
+    const { error: seatError } = await admin.from("whatsapp_platform_tenants")
+      .update({ additional_team_seats: restoreIncluded ? includedQuantity : 0, updated_at: settledAt }).eq("id", subscription.tenant_id);
+    if (seatError) throw seatError;
+  }
+  return { restoredQuantity: restoreIncluded ? includedQuantity : 0, addonCode: assignment.addon_code };
+}
 async function applyPackageForSubscription(admin: any, subscription: any, status: string) {
   const subscriptionKind = String(subscription.subscription_kind || subscription.safe_metadata?.subscription_kind || "package");
   if (subscriptionKind === "addon") {
     if (TERMINAL_SUBSCRIPTION_STATUSES.has(status)) {
-      const endedAt = subscription.current_end || new Date().toISOString();
-      const { error: addonError } = await admin.from("whatsapp_platform_tenant_addons")
-        .update({ status: "paused", billing_ends_at: endedAt, updated_at: new Date().toISOString() })
-        .eq("source_subscription_id", subscription.id).in("status", ["pending", "active"]);
-      if (addonError) throw addonError;
+      await settleTerminalAddonEntitlement(admin, subscription);
     }
     return;
   }
@@ -911,6 +936,8 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
       addon_description: addon.description || "",
       unit_name: addon.unit_name || "unit",
       currency: addon.currency || "INR",
+      plan_included_quantity: Math.max(0, Number(row.safe_metadata?.plan_included_quantity || 0)),
+      subscription_quantity: Math.max(0, Number(row.safe_metadata?.subscription_quantity ?? row.addon_quantity ?? 0)),
       payment_incomplete: paymentIncomplete,
       authorization_url: paymentIncomplete ? trustedRazorpayUrl(row.short_url) : null,
     };
@@ -1742,18 +1769,27 @@ async function addonChangeContext(admin: any, customer: any, body: any, credenti
   const activeAssignments = assignments || [];
   const currentAssignment = activeAssignments.find((item: any) => item.addon_code === addonCode) || null;
   let currentAddonSubscription: any = null;
+  let planIncludedQuantity = 0;
   if (currentAssignment?.source_subscription_id) {
     const { data, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("*")
       .eq("id", currentAssignment.source_subscription_id).eq("tenant_id", customer.tenant_id).maybeSingle();
     if (error) throw error;
-    currentAddonSubscription = data;
-    if (!currentAddonSubscription || String(currentAddonSubscription.subscription_kind || currentAddonSubscription.safe_metadata?.subscription_kind || "package") !== "addon" || currentAddonSubscription.addon_code !== addonCode) {
+    const sourceSubscription = data;
+    const sourceKind = String(sourceSubscription?.subscription_kind || sourceSubscription?.safe_metadata?.subscription_kind || "package");
+    if (sourceKind === "package" && sourceSubscription?.id === subscription.id && ["extra_agent_seat", "extra_whatsapp_number"].includes(addonCode)) {
+      planIncludedQuantity = Number(currentAssignment.quantity || 0);
+    } else if (sourceKind === "addon" && sourceSubscription?.addon_code === addonCode) {
+      currentAddonSubscription = sourceSubscription;
+      planIncludedQuantity = Math.max(0, Number(currentAddonSubscription.safe_metadata?.plan_included_quantity || 0));
+    } else {
       throw new Error("This add-on is managed by billing support and cannot be changed through self-service checkout.");
     }
-    if (currentAddonSubscription.cancel_at_cycle_end) throw new Error("This add-on is already scheduled to end. Wait for the cancellation to complete before purchasing it again.");
-    const addonProviderEntity = await razorpayRequest(`/subscriptions/${encodeURIComponent(currentAddonSubscription.provider_subscription_id)}`, {}, credentials);
-    currentAddonSubscription = await syncSubscriptionEntity(admin, currentAddonSubscription, addonProviderEntity);
-    if (!["authenticated", "active"].includes(String(currentAddonSubscription.status))) throw new Error("The existing add-on subscription is not active. Refresh billing before increasing it.");
+    if (currentAddonSubscription) {
+      if (currentAddonSubscription.cancel_at_cycle_end) throw new Error("This add-on is already scheduled to end. Wait for the cancellation to complete before purchasing it again.");
+      const addonProviderEntity = await razorpayRequest(`/subscriptions/${encodeURIComponent(currentAddonSubscription.provider_subscription_id)}`, {}, credentials);
+      currentAddonSubscription = await syncSubscriptionEntity(admin, currentAddonSubscription, addonProviderEntity);
+      if (!["authenticated", "active"].includes(String(currentAddonSubscription.status))) throw new Error("The existing add-on subscription is not active. Refresh billing before increasing it.");
+    }
   }
   const currentQuantity = Number(currentAssignment?.quantity || 0);
   if (targetQuantity <= currentQuantity) throw new Error("Immediate self-service changes must increase add-on capacity. Reductions are scheduled through billing support until automated credits are enabled.");
@@ -1761,21 +1797,26 @@ async function addonChangeContext(admin: any, customer: any, body: any, credenti
     throw new Error("This add-on has a pending renewal price change. Approve the new renewal price before increasing its quantity.");
   }
 
+  const currentSubscriptionQuantity = currentAddonSubscription
+    ? Math.max(0, Number(currentAddonSubscription.safe_metadata?.subscription_quantity ?? (currentQuantity - planIncludedQuantity)))
+    : 0;
+  const targetSubscriptionQuantity = targetQuantity - planIncludedQuantity;
+  if (targetSubscriptionQuantity <= currentSubscriptionQuantity) throw new Error("The selected quantity does not add billable capacity.");
   const beforeSelections: any[] = [];
   const targetUnitBasePaise = Number(currentAssignment?.unit_base_paise ?? Math.round(Number(addon.unit_amount) * 100));
   if (!Number.isSafeInteger(targetUnitBasePaise) || targetUnitBasePaise < 1) throw new Error("This add-on does not have a valid self-service price.");
   if (currentQuantity > 0) beforeSelections.push({
-    code: addon.code, name: addon.name, unitName: addon.unit_name, quantity: currentQuantity,
+    code: addon.code, name: addon.name, unitName: addon.unit_name, quantity: currentQuantity, planIncludedQuantity, subscriptionQuantity: currentSubscriptionQuantity,
     addonPriceVersionId: currentAssignment?.addon_price_version_id || addon.current_price_version_id,
     unitBasePaise: targetUnitBasePaise, gstRateBps: Number(currentAssignment?.gst_rate_bps || 1800), baseSubtotalPaise: targetUnitBasePaise * currentQuantity,
   });
   const targetSelections = [{
-    code: addon.code, name: addon.name, unitName: addon.unit_name, quantity: targetQuantity,
+    code: addon.code, name: addon.name, unitName: addon.unit_name, quantity: targetQuantity, planIncludedQuantity, subscriptionQuantity: targetSubscriptionQuantity,
     addonPriceVersionId: cleanUuid(currentAssignment?.addon_price_version_id || addon.current_price_version_id, "add-on price version"),
     unitBasePaise: targetUnitBasePaise, gstRateBps: Number(currentAssignment?.gst_rate_bps || 1800), baseSubtotalPaise: targetUnitBasePaise * targetQuantity,
   }];
-  const currentAddonBasePaise = beforeSelections.reduce((total: number, item: any) => total + Number(item.baseSubtotalPaise), 0);
-  const targetAddonBasePaise = targetSelections.reduce((total: number, item: any) => total + Number(item.baseSubtotalPaise), 0);
+  const currentAddonBasePaise = targetUnitBasePaise * currentSubscriptionQuantity;
+  const targetAddonBasePaise = targetUnitBasePaise * targetSubscriptionQuantity;
   const incrementalRecurringBasePaise = targetAddonBasePaise - currentAddonBasePaise;
   if (incrementalRecurringBasePaise < 1) throw new Error("The selected add-on change does not increase recurring capacity.");
   const currentRecurringBasePaise = currentAddonBasePaise;
@@ -1823,7 +1864,7 @@ async function addonChangeContext(admin: any, customer: any, body: any, credenti
     subscription: syncedSubscription, currentAddonSubscription, addon, beforeSelections, targetSelections, cycleEndMs, coupon, redemption,
     quote: {
       currency: String(addon.currency || "INR").toUpperCase(), billableRemainingDays: Number(billableRemainingDays.toFixed(4)), isNewSubscription, masterTrialActive,
-      currentQuantity, targetQuantity, currentRecurringBasePaise, targetRecurringBasePaise, incrementalRecurringBasePaise,
+      currentQuantity, targetQuantity, planIncludedQuantity, currentSubscriptionQuantity, targetSubscriptionQuantity, currentRecurringBasePaise, targetRecurringBasePaise, incrementalRecurringBasePaise,
       proratedBasePaise, discountPaise, discountedProratedBasePaise, recurringDiscountPaise,
       discountedRecurringBasePaise: coupon?.first_payment_only ? targetRecurringBasePaise : discountedRecurringBasePaise,
       couponCode: redemption?.coupon_code || null, couponFirstPaymentOnly: Boolean(coupon?.first_payment_only),
@@ -1916,7 +1957,7 @@ async function changeAddons(admin: any, customer: any, body: any, credentials: a
       short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
       package_price_version_id: context.subscription.package_price_version_id, recurring_base_paise: context.quote.targetRecurringBasePaise,
       gst_rate_bps: Number(context.subscription.gst_rate_bps || 1800),
-      safe_metadata: { subscription_kind: "addon", addon_code: context.addon.code, addon_change_intent_id: intentId, parent_subscription_id: context.subscription.id, replaces_addon_subscription_id: context.currentAddonSubscription?.id || null, target_addon_selections: context.targetSelections, recurring_starts_at: context.quote.recurringStartsAt, coupon_code: context.quote.couponCode, coupon_redemption_id: context.redemption?.id || null, coupon_first_payment_only: context.quote.couponFirstPaymentOnly, provider_offer_id: context.coupon?.provider_offer_id || null, proration: context.quote, mode: billingMode(credentials) },
+      safe_metadata: { subscription_kind: "addon", addon_code: context.addon.code, addon_change_intent_id: intentId, parent_subscription_id: context.subscription.id, replaces_addon_subscription_id: context.currentAddonSubscription?.id || null, plan_included_quantity: context.quote.planIncludedQuantity, subscription_quantity: context.quote.targetSubscriptionQuantity, target_addon_selections: context.targetSelections, recurring_starts_at: context.quote.recurringStartsAt, coupon_code: context.quote.couponCode, coupon_redemption_id: context.redemption?.id || null, coupon_first_payment_only: context.quote.couponFirstPaymentOnly, provider_offer_id: context.coupon?.provider_offer_id || null, proration: context.quote, mode: billingMode(credentials) },
     }).select("*").single();
     if (error || !data) throw error || new Error("Add-on replacement subscription could not be recorded.");
     replacement = data;
@@ -2043,18 +2084,7 @@ async function cancelSubscription(admin: any, customer: any, body: any, credenti
   const { error: updateError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: cancelAtCycleEnd, safe_metadata: cancellationMetadata, updated_at: new Date().toISOString() }).eq("id", subscription.id);
   if (updateError) throw updateError;
   const revokeAddonEntitlement = async (addonSubscription: any) => {
-    const endedAt = new Date().toISOString();
-    const { data: assignment, error: assignmentReadError } = await admin.from("whatsapp_platform_tenant_addons").select("addon_code")
-      .eq("tenant_id", customer.tenant_id).eq("source_subscription_id", addonSubscription.id).maybeSingle();
-    if (assignmentReadError) throw assignmentReadError;
-    const { error: assignmentError } = await admin.from("whatsapp_platform_tenant_addons")
-      .update({ status: "cancelled", quantity: 0, billing_ends_at: endedAt, updated_at: endedAt })
-      .eq("tenant_id", customer.tenant_id).eq("source_subscription_id", addonSubscription.id);
-    if (assignmentError) throw assignmentError;
-    if (assignment?.addon_code === "extra_agent_seat") {
-      const { error: seatError } = await admin.from("whatsapp_platform_tenants").update({ additional_team_seats: 0, updated_at: endedAt }).eq("id", customer.tenant_id);
-      if (seatError) throw seatError;
-    }
+    await settleTerminalAddonEntitlement(admin, addonSubscription, "cancelled");
   };
   if (isAddonSubscription && !cancelAtCycleEnd) {
     await revokeAddonEntitlement(subscription);

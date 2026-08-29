@@ -2601,12 +2601,17 @@ function confirmAddonSubscriptionCancellation(subscription) {
     document.body.append(dialog);
   }
   const addonName = subscription?.addon_name || subscription?.addon_code || "Add-on";
+  const includedQuantity = Math.max(0, Number(subscription?.plan_included_quantity || 0));
+  const paidExtraQuantity = Math.max(0, Number(subscription?.subscription_quantity ?? subscription?.addon_quantity ?? 0));
+  const protectedPlanCopy = includedQuantity > 0
+    ? `<li>${includedQuantity.toLocaleString("en-IN")} ${escapeHtml(subscription?.unit_name || "unit")}${includedQuantity === 1 ? "" : "s"} included with your master plan will remain active.</li>`
+    : "";
   const hasActiveCycle = Boolean(subscription?.current_end) && Number(subscription?.paid_count || 0) > 0 && String(subscription?.status) === "active";
   const periodEnd = hasActiveCycle ? formatProfileDate(subscription.current_end) : "Immediately after confirmation";
   const timingCopy = hasActiveCycle
     ? `${escapeHtml(addonName)} remains available through ${escapeHtml(periodEnd)}.`
     : `${escapeHtml(addonName)} has not entered a paid billing cycle, so its capacity will be removed immediately.`;
-  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on cancellation</span><h2>Cancel ${escapeHtml(addonName)}?</h2><p>Review when access ends before confirming.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>Add-on</span><strong>${escapeHtml(addonName)}</strong></div><div><span>${hasActiveCycle ? "Access remains active until" : "Cancellation timing"}</span><strong>${escapeHtml(periodEnd)}</strong></div></section><ul class="wp-cancellation-effects"><li>${timingCopy}</li><li>Your plan and other add-ons remain active.</li></ul><footer><button class="wp-secondary" type="submit" value="keep">Keep add-on</button><button class="wp-confirm-cancel" type="submit" value="confirm">${hasActiveCycle ? "Cancel at period end" : "Cancel now"}</button></footer></form>`;
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Add-on cancellation</span><h2>${includedQuantity > 0 ? "Cancel paid extras" : `Cancel ${escapeHtml(addonName)}`}?</h2><p>Review when access ends before confirming.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><section class="wp-cancellation-summary"><div><span>${includedQuantity > 0 ? "Paid extra capacity" : "Add-on"}</span><strong>${includedQuantity > 0 ? `${paidExtraQuantity.toLocaleString("en-IN")} ${escapeHtml(subscription?.unit_name || "unit")}${paidExtraQuantity === 1 ? "" : "s"}` : escapeHtml(addonName)}</strong></div><div><span>${hasActiveCycle ? "Access remains active until" : "Cancellation timing"}</span><strong>${escapeHtml(periodEnd)}</strong></div></section><ul class="wp-cancellation-effects"><li>${timingCopy}</li>${protectedPlanCopy}<li>Your plan and other add-ons remain active.</li></ul><footer><button class="wp-secondary" type="submit" value="keep">Keep add-on</button><button class="wp-confirm-cancel" type="submit" value="confirm">${hasActiveCycle ? "Cancel at period end" : "Cancel now"}</button></footer></form>`;
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm" ? { confirmed: true, cancelAtCycleEnd: hasActiveCycle } : { confirmed: false, cancelAtCycleEnd: hasActiveCycle }), { once: true });
     dialog.showModal();
@@ -2921,6 +2926,16 @@ function billingView(view = "billing") {
     const addonOpen = !["cancelled", "completed", "expired"].includes(String(item.status));
     const addonManaged = ["authenticated", "active"].includes(String(item.status));
     const quantity = Math.max(1, Number(item.addon_quantity || 1));
+    const planIncludedQuantity = Math.max(0, Number(item.plan_included_quantity || 0));
+    const paidExtraQuantity = Math.max(0, Number(item.subscription_quantity ?? (quantity - planIncludedQuantity)));
+    const quantityBreakdown = planIncludedQuantity > 0
+      ? `<span>${planIncludedQuantity.toLocaleString("en-IN")} plan + ${paidExtraQuantity.toLocaleString("en-IN")} paid extra</span>`
+      : `<span>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"}</span>`;
+    const assignedAddon = assignedAddonMap.get(item.addon_code);
+    const supportsCapacityTopUp = ["extra_agent_seat", "extra_whatsapp_number"].includes(item.addon_code);
+    const increaseControl = !isPaymentIncomplete && addonManaged && supportsCapacityTopUp && assignedAddon
+      ? addonControl({ ...assignedAddon, billingManaged: true }, Math.max(quantity, Number(assignedAddon.quantity || 0)))
+      : "";
     const renewalCopy = item.cancel_at_cycle_end
       ? `Cancellation scheduled for ${formatProfileDate(item.current_end)}`
       : item.current_end
@@ -2931,13 +2946,14 @@ function billingView(view = "billing") {
     const retryPayment = canManage && isPaymentIncomplete && item.authorization_url
       ? `<button class="wp-primary" type="button" data-billing-retry-addon="${escapeHtml(item.id)}" data-billing-retry-url="${escapeHtml(item.authorization_url)}">Retry payment</button>`
       : "";
-    return `<article class="wp-billing-addon-subscription ${isPaymentIncomplete ? "is-payment-incomplete" : "is-active"}"><div><span class="wp-card-eyebrow">${isPaymentIncomplete ? "Pending add-on" : "Add-on"}</span><h3>${escapeHtml(item.addon_name || item.addon_code || "Add-on")}</h3><p>${isPaymentIncomplete ? "Payment was not completed. This add-on has not been activated." : escapeHtml(item.addon_description || "")}</p><div class="wp-billing-addon-subscription-meta"><span>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"}</span><span>${escapeHtml(item.billing_interval || "month")}ly billing</span><span>${escapeHtml(renewalCopy)}</span></div></div><div class="wp-billing-addon-subscription-actions"><span class="wp-billing-status ${isPaymentIncomplete ? "payment-incomplete" : escapeHtml(item.status || "none")}">${escapeHtml(addonStatus)}</span>${retryPayment}${canManage && addonManaged ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(item.id)}">Update payment method</button>` : ""}${canManage && addonOpen && !item.cancel_at_cycle_end ? `<button class="wp-billing-cancel-subtle" type="button" data-billing-cancel-addon="${escapeHtml(item.id)}">${isPaymentIncomplete ? "Cancel request" : "Cancel add-on"}</button>` : item.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">${escapeHtml(renewalCopy)}</span>` : ""}</div></article>`;
+    return `<article class="wp-billing-addon-subscription ${isPaymentIncomplete ? "is-payment-incomplete" : "is-active"}"><div><span class="wp-card-eyebrow">${isPaymentIncomplete ? "Pending add-on" : "Add-on"}</span><h3>${escapeHtml(item.addon_name || item.addon_code || "Add-on")}</h3><p>${isPaymentIncomplete ? "Payment was not completed. This add-on has not been activated." : escapeHtml(item.addon_description || "")}</p><div class="wp-billing-addon-subscription-meta">${quantityBreakdown}<span>${escapeHtml(item.billing_interval || "month")}ly billing</span><span>${escapeHtml(renewalCopy)}</span></div></div><div class="wp-billing-addon-subscription-actions"><span class="wp-billing-status ${isPaymentIncomplete ? "payment-incomplete" : escapeHtml(item.status || "none")}">${escapeHtml(addonStatus)}</span>${retryPayment}${increaseControl}${canManage && addonManaged ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(item.id)}">Update payment method</button>` : ""}${canManage && addonOpen && !item.cancel_at_cycle_end ? `<button class="wp-billing-cancel-subtle" type="button" data-billing-cancel-addon="${escapeHtml(item.id)}">${isPaymentIncomplete ? "Cancel request" : planIncludedQuantity > 0 ? "Cancel paid extras" : "Cancel add-on"}</button>` : item.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">${escapeHtml(renewalCopy)}</span>` : ""}</div></article>`;
   }).join("");
   const planManagedAddonCards = planManagedAddonAssignments.map((addon) => {
     const quantity = Math.max(1, Number(addon.quantity || 1));
     const quantityCopy = addon.quantity_enabled !== false ? `<span>${quantity.toLocaleString("en-IN")} ${escapeHtml(addon.unit_name || "unit")}${quantity === 1 ? "" : "s"}</span>` : "";
     const billingCopy = addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval || "month")}ly billing` : addon.billing_model === "one_time" ? "One-time purchase" : "Plan add-on";
-    const changeControl = addon.billing_model === "recurring" && addon.quantity_enabled !== false ? addonControl({ ...addon, billingManaged: false }, quantity) : "";
+    const selfServicePlanTopUp = ["extra_agent_seat", "extra_whatsapp_number"].includes(addon.code);
+    const changeControl = addon.billing_model === "recurring" && addon.quantity_enabled !== false ? addonControl({ ...addon, billingManaged: selfServicePlanTopUp }, quantity) : "";
     return `<article class="wp-billing-addon-subscription is-active"><div><span class="wp-card-eyebrow">Add-on</span><h3>${escapeHtml(addon.name || addon.code || "Add-on")}</h3><p>${escapeHtml(addon.description || "")}</p><div class="wp-billing-addon-subscription-meta">${quantityCopy}<span>${billingCopy}</span><span>Purchased with current plan</span></div></div><div class="wp-billing-addon-subscription-actions"><span class="wp-billing-status active">Active</span>${changeControl}</div></article>`;
   }).join("");
   const addonSubscriptionCards = `${subscriptionAddonCards}${planManagedAddonCards}`;
