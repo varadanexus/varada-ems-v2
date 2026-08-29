@@ -461,7 +461,7 @@ function workspaceNavigationMarkup({ inboxUnread = 0, contactCount = 0, campaign
   if (isAgentWorkspaceRole()) return `${customers}${engage}${insights}`;
   const profileItem = ["owner", "admin"].includes(session?.roleCode) ? workspaceNavItem("business-profile", "◎") : "";
   const billing = `<span class="wp-nav-label">Billing &amp; usage</span>${workspaceNavItem("billing", "₹")}${workspaceNavItem("billing-plans", "▤", packageName)}${workspaceNavItem("billing-addons", "+")}${workspaceNavItem("billing-invoices", "▧", String(workspaceBilling?.invoices?.length || ""))}${workspaceNavItem("billing-ledger", "≡")}${workspaceNavItem("billing-refunds", "↶", String(workspaceBilling?.creditNotes?.length || ""))}`;
-  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${billing}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${profileItem}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("integrations", "◇", "Planned")}${workspaceNavItem("settings", "⚙")}`;
+  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${billing}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${profileItem}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("settings", "⚙")}<span class="wp-nav-label">Developer</span>${workspaceNavItem("integrations", "◇")}`;
 }
 
 function packageFeatureLockedView(feature) {
@@ -513,7 +513,7 @@ function enhanceWorkspaceSidebar(root, sidebarState, isFlowBuilderRoute) {
     brandRow.appendChild(collapseButton);
   }
 
-  const sectionIds = { Workspace: "workspace", Customers: "customers", Engage: "engage", Insights: "insights", Administration: "administration" };
+  const sectionIds = { Workspace: "workspace", Customers: "customers", Engage: "engage", Insights: "insights", Administration: "administration", Developer: "developer" };
   [...nav.querySelectorAll(":scope > .wp-nav-label")].forEach((label, index) => {
     const sectionId = sectionIds[label.textContent.trim()] || `section-${index + 1}`;
     const section = document.createElement("section");
