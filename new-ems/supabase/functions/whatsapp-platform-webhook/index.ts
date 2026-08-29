@@ -17,6 +17,18 @@ function response(body: string, status = 200, contentType = "text/plain") {
   return new Response(body, { status, headers: { "Content-Type": contentType, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 }
 function json(body: unknown, status = 200) { return response(JSON.stringify(body), status, "application/json"); }
+function kickDeveloperWebhookDispatcher() {
+  const base = env("SUPABASE_URL").replace(/\/+$/, "");
+  const roleKey = env("SUPABASE_SERVICE_ROLE_KEY");
+  if (!base || !roleKey) return;
+  const task = fetch(`${base}/functions/v1/whatsapp-platform-webhook-dispatcher`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${roleKey}`, "Content-Type": "application/json" },
+    body: "{}",
+  }).catch((error) => console.warn("Developer webhook dispatcher could not be started", error instanceof Error ? error.message : "unknown_error"));
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(task);
+}
 function base64UrlDecode(value: string) {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
   const binary = atob(base64);
@@ -519,6 +531,7 @@ Deno.serve(async (req) => {
     eventId = event.id;
     const result = await processPayload(admin, payload);
     await admin.from("whatsapp_platform_webhook_events").update({ processing_status: result.status, processed_at: new Date().toISOString() }).eq("id", eventId);
+    kickDeveloperWebhookDispatcher();
     return json({ received: true });
   } catch (error) {
     console.error("WhatsApp platform webhook failed", error);
