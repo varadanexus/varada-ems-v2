@@ -2265,8 +2265,10 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-billing-addon-subscriptions { display:grid; gap:18px; }
 .wp-billing-addon-subscriptions .wp-card-heading { align-items:flex-start; }
 .wp-billing-addon-count { padding:7px 11px; border:1px solid color-mix(in srgb,#25d887 42%,var(--wp-border)); border-radius:999px; background:color-mix(in srgb,#25d887 10%,var(--wp-panel)); color:#25d887; font-size:.72rem; font-weight:850; white-space:nowrap; }
+.wp-billing-addon-count.is-pending { border-color:color-mix(in srgb,#e5bd57 48%,var(--wp-border)); background:color-mix(in srgb,#e5bd57 10%,var(--wp-panel)); color:#e5bd57; }
 .wp-billing-addon-subscription-list { display:grid; gap:12px; }
 .wp-billing-addon-subscription { display:flex; align-items:center; justify-content:space-between; gap:22px; padding:19px; border:1px solid var(--wp-border); border-radius:15px; background:color-mix(in srgb,var(--wp-panel) 88%,#082f22); }
+.wp-billing-addon-subscription.is-payment-incomplete { border-color:color-mix(in srgb,#e5bd57 38%,var(--wp-border)); background:color-mix(in srgb,#e5bd57 5%,var(--wp-panel)); }
 .wp-billing-addon-subscription h3 { margin:5px 0; color:var(--wp-text); }
 .wp-billing-addon-subscription p { margin:0; color:var(--wp-muted); }
 .wp-billing-addon-subscription-meta { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
@@ -2310,6 +2312,7 @@ a.wp-profile-workspace-card:hover,a.wp-profile-workspace-card:focus-visible { bo
 .wp-billing-cancellation-scheduled { max-width:250px; color:#d9bd67; font-size:.73rem; font-weight:800; line-height:1.45; text-align:right; }
 .wp-billing-mode,.wp-billing-status,.wp-billing-current,.wp-billing-payment-status { display:inline-flex; align-items:center; justify-content:center; width:max-content; padding:7px 10px; border:1px solid color-mix(in srgb,#e5bd57 48%,var(--wp-border)); border-radius:999px; background:color-mix(in srgb,#e5bd57 12%,var(--wp-panel)); color:#e5bd57; font-size:.7rem; font-weight:850; text-transform:capitalize; }
 .wp-billing-mode.is-live,.wp-billing-status.active,.wp-billing-payment-status.captured { border-color:color-mix(in srgb,var(--wp-accent) 48%,var(--wp-border)); background:color-mix(in srgb,var(--wp-accent) 12%,var(--wp-panel)); color:var(--wp-accent); }
+.wp-billing-status.payment-incomplete { border-color:color-mix(in srgb,#e5bd57 48%,var(--wp-border)); background:color-mix(in srgb,#e5bd57 12%,var(--wp-panel)); color:#e5bd57; }
 .wp-billing-subscription { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:24px; border:1px solid var(--wp-border); border-radius:18px; background:var(--wp-panel); box-shadow:var(--wp-shadow); }
 .wp-billing-subscription h2 { margin:6px 0; color:var(--wp-text); text-transform:capitalize; }
 .wp-billing-subscription p { margin:0; color:var(--wp-muted); }

@@ -621,6 +621,17 @@ function assertSubscriptionMode(subscription: any, credentials: any) {
   const activeMode = billingMode(credentials);
   if (subscriptionMode !== activeMode) throw new Error(`This ${subscriptionMode}-mode subscription cannot be managed while billing is in ${activeMode} mode.`);
 }
+function trustedRazorpayUrl(value: unknown) {
+  const candidate = String(value || "").trim();
+  if (!candidate) return null;
+  try {
+    const parsedUrl = new URL(candidate);
+    const razorpayHost = parsedUrl.hostname === "razorpay.com" || parsedUrl.hostname.endsWith(".razorpay.com") || parsedUrl.hostname === "rzp.io" || parsedUrl.hostname.endsWith(".rzp.io");
+    return parsedUrl.protocol === "https:" && razorpayHost ? parsedUrl.toString() : null;
+  } catch {
+    return null;
+  }
+}
 function safeSubscriptionUpdate(entity: any) {
   return {
     status: String(entity?.status || "created").toLowerCase(),
@@ -892,7 +903,17 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
   const publicAddonSubscriptions = addonRows.map((row: any) => {
     const addon: any = addonMasterMap.get(row.addon_code) || {};
     const publicRow = Object.fromEntries(Object.entries(row).filter(([key]) => !["safe_metadata", "short_url"].includes(key)));
-    return { ...publicRow, addon_name: addon.name || row.addon_code, addon_description: addon.description || "", unit_name: addon.unit_name || "unit", currency: addon.currency || "INR" };
+    const status = String(row.status || "created").toLowerCase();
+    const paymentIncomplete = ["created", "pending", "halted"].includes(status) && !row.checkout_verified_at;
+    return {
+      ...publicRow,
+      addon_name: addon.name || row.addon_code,
+      addon_description: addon.description || "",
+      unit_name: addon.unit_name || "unit",
+      currency: addon.currency || "INR",
+      payment_incomplete: paymentIncomplete,
+      authorization_url: paymentIncomplete ? trustedRazorpayUrl(row.short_url) : null,
+    };
   });
   const priceVersionIds = [...new Set(currentRenewalChanges.flatMap((change: any) => [change.from_price_version_id, change.target_price_version_id]).filter(Boolean))];
   let priceVersions: any[] = [];
@@ -1371,10 +1392,7 @@ async function paymentMethodPortal(admin: any, customer: any, body: any, credent
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
   const portalUrl = String(providerSubscription?.short_url || synced?.short_url || subscription.short_url || '').trim();
   if (!portalUrl) throw new Error("The payment gateway did not return a payment-method management link for this subscription.");
-  let parsedUrl: URL;
-  try { parsedUrl = new URL(portalUrl); } catch { throw new Error("The payment gateway returned an invalid payment-method management link."); }
-  const razorpayHost = parsedUrl.hostname === "razorpay.com" || parsedUrl.hostname.endsWith(".razorpay.com") || parsedUrl.hostname === "rzp.io" || parsedUrl.hostname.endsWith(".rzp.io");
-  if (parsedUrl.protocol !== "https:" || !razorpayHost) throw new Error("The payment gateway returned an untrusted payment-method management link.");
+  if (!trustedRazorpayUrl(portalUrl)) throw new Error("The payment gateway returned an untrusted payment-method management link.");
   return {
     keyId: credentials.keyId,
     portalUrl,
