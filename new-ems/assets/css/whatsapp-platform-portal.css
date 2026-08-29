@@ -4319,7 +4319,7 @@ body.wp-verification-viewer-open { overflow: hidden; }
 .wp-log-tabs{display:flex;max-width:100%;gap:7px;overflow-x:auto;border-bottom:1px solid var(--wp-border);padding-bottom:10px;scrollbar-width:thin}
 .wp-log-tabs a{white-space:nowrap;border-radius:999px;color:var(--wp-muted);font-size:13px;font-weight:700;padding:8px 12px;text-decoration:none}
 .wp-log-tabs a:hover,.wp-log-tabs a.active{background:rgba(36,211,142,.12);color:var(--wp-green)}
-.wp-log-filters{display:grid;min-width:0;grid-template-columns:minmax(260px,1fr) minmax(150px,220px) auto;align-items:end;gap:10px}
+.wp-log-filters{display:grid;min-width:0;grid-template-columns:minmax(230px,1fr) minmax(145px,190px) minmax(145px,190px) auto;align-items:end;gap:10px}
 .wp-log-filters label{display:grid;gap:7px;color:var(--wp-muted);font-size:12px}
 .wp-log-filters label,.wp-log-filters input,.wp-log-filters select{min-width:0;max-width:100%}
 .wp-log-filters input,.wp-log-filters select,.wp-log-pagination select{min-height:42px;border:1px solid var(--wp-border);border-radius:10px;background:var(--wp-surface);color:var(--wp-text);padding:0 12px}
@@ -4346,6 +4346,6 @@ body.wp-verification-viewer-open { overflow: hidden; }
 .wp-log-pagination select{min-height:36px}
 .wp-log-pagination .wp-button-link{min-height:36px;padding:7px 11px}
 .wp-log-pagination .disabled{pointer-events:none;opacity:.45}
-@media(max-width:1180px){.wp-log-filters{grid-template-columns:minmax(220px,1fr) minmax(140px,200px) auto}}
+@media(max-width:1180px){.wp-log-filters{grid-template-columns:minmax(210px,1fr) repeat(2,minmax(135px,175px)) auto}}
 @media(max-width:900px){.wp-log-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.wp-log-console>header{align-items:stretch;flex-direction:column}.wp-channel-availability{max-width:none;justify-content:flex-start}}
 @media(max-width:720px){.wp-developer-logs .wp-route-heading-actions{width:100%;flex-direction:column}.wp-log-overview{grid-template-columns:1fr}.wp-log-console{padding:18px}.wp-log-pagination{align-items:stretch;flex-direction:column}.wp-log-filters{grid-template-columns:1fr}.wp-log-filters label:first-child{grid-column:auto}.wp-log-filters button{width:100%}.wp-log-pagination>div{justify-content:space-between}}

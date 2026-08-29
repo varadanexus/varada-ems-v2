@@ -1724,6 +1724,17 @@ async function developerLogs(admin: any, customer: any, body: any) {
   const product = products.has(String(body.product || "all")) ? String(body.product || "all") : "all";
   const channel = channels.has(String(body.channel || "all")) ? String(body.channel || "all") : "all";
   const status = cleanText(body.status || "all", 80).toLowerCase();
+  const timeframes: Record<string, { milliseconds: number | null; label: string }> = {
+    all: { milliseconds: null, label: "All time" },
+    "1h": { milliseconds: 60 * 60 * 1000, label: "Last hour" },
+    "24h": { milliseconds: 24 * 60 * 60 * 1000, label: "Last 24 hours" },
+    "7d": { milliseconds: 7 * 24 * 60 * 60 * 1000, label: "Last 7 days" },
+    "30d": { milliseconds: 30 * 24 * 60 * 60 * 1000, label: "Last 30 days" },
+    "90d": { milliseconds: 90 * 24 * 60 * 60 * 1000, label: "Last 90 days" },
+  };
+  const timeframe = Object.hasOwn(timeframes, String(body.timeframe || "all")) ? String(body.timeframe || "all") : "all";
+  const timeframeConfig = timeframes[timeframe];
+  const timeframeStart = timeframeConfig.milliseconds === null ? null : new Date(Date.now() - timeframeConfig.milliseconds).toISOString();
   const search = cleanText(body.search, 120).replace(/[%,()]/g, "");
   const page = Math.max(1, Math.trunc(Number(body.page) || 1));
   const pageSize = [25, 50, 100].includes(Number(body.pageSize)) ? Number(body.pageSize) : 25;
@@ -1733,6 +1744,7 @@ async function developerLogs(admin: any, customer: any, body: any) {
     if (product !== "all") next = next.eq("product", product);
     if (channel !== "all") next = next.eq("channel", channel);
     if (status !== "all") next = next.eq("status", status);
+    if (timeframeStart) next = next.gte("created_at", timeframeStart);
     if (includeSearch && search) next = next.or(`summary.ilike.%${search}%,event_type.ilike.%${search}%,resource_id.ilike.%${search}%`);
     return next;
   };
@@ -1743,20 +1755,25 @@ async function developerLogs(admin: any, customer: any, body: any) {
   const countFor = (field?: string, value?: string, since?: string) => {
     let query = admin.from("whatsapp_platform_developer_logs").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id);
     if (field && value) query = query.eq(field, value);
-    if (since) query = query.gte("created_at", since);
+    const effectiveSince = since || timeframeStart;
+    if (effectiveSince) query = query.gte("created_at", effectiveSince);
     return query;
   };
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const [listResult, totalResult, apiResult, webhookResult, platformResult, templateResult, recentResult, failedResult] = await Promise.all([
     listQuery,
     countFor(), countFor("category", "api"), countFor("category", "webhook"), countFor("category", "platform"), countFor("category", "template"), countFor(undefined, undefined, dayAgo),
-    admin.from("whatsapp_platform_developer_logs").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).in("status", ["failed", "dead_letter", "error", "rejected"]),
+    (() => {
+      let query = admin.from("whatsapp_platform_developer_logs").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).in("status", ["failed", "dead_letter", "error", "rejected"]);
+      if (timeframeStart) query = query.gte("created_at", timeframeStart);
+      return query;
+    })(),
   ]);
   if (listResult.error) throw listResult.error;
   return {
     logs: listResult.data || [],
     overview: { total: Number(totalResult.count || 0), api: Number(apiResult.count || 0), webhook: Number(webhookResult.count || 0), platform: Number(platformResult.count || 0), template: Number(templateResult.count || 0), last24Hours: Number(recentResult.count || 0), failures: Number(failedResult.count || 0) },
-    filters: { category, product, channel, status, search },
+    filters: { category, product, channel, status, timeframe, timeframeLabel: timeframeConfig.label, search },
     pagination: { page, pageSize, total: Number(listResult.count || 0), pages: Math.max(1, Math.ceil(Number(listResult.count || 0) / pageSize)) },
     availableChannels: [{ product: "messaging", channels: ["whatsapp"], active: true }, { product: "messaging", channels: ["sms", "rcs"], active: false }, { product: "email", channels: ["email"], active: false }, { product: "voice", channels: ["voice"], active: false }],
   };
