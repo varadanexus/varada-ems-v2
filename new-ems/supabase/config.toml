@@ -402,6 +402,9 @@ verify_jwt = false
 [functions.whatsapp-platform-messaging]
 verify_jwt = false
 
+[functions.whatsapp-platform-integration-lab]
+verify_jwt = false
+
 # Browser requests use the protected WhatsApp workspace session. Razorpay
 # webhooks use their own raw-body HMAC signature validation in the function.
 [functions.whatsapp-platform-billing]

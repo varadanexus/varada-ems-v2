@@ -1636,12 +1636,16 @@ function developerKeyView(row: any) {
   };
 }
 function developerWebhookView(row: any, connection: any = null) {
+  const isManagedIntegrationLab = row.software_name === "EMS Integration Lab"
+    || String(row.endpoint_url || "").includes("/whatsapp-platform-integration-lab?receiver=");
   return {
     id: row.id, name: row.name, softwareName: row.software_name || row.name,
     connectionId: row.connection_id || null,
     phoneNumber: connection?.display_phone_number || null,
     connectionName: connection?.verified_name || null,
-    endpointUrl: row.endpoint_url, fallbackUrl: row.fallback_url || null,
+    endpointUrl: isManagedIntegrationLab ? "Managed by Varada Nexus Connect" : row.endpoint_url,
+    fallbackUrl: isManagedIntegrationLab ? null : (row.fallback_url || null),
+    managed: isManagedIntegrationLab,
     maxAttempts: Number(row.max_attempts || 1), fallbackMaxAttempts: Number(row.fallback_max_attempts || 0),
     timeoutMs: Number(row.timeout_ms || 10000), retryOn: row.retry_on || [],
     events: row.events || [], status: row.status,

@@ -102,9 +102,16 @@ Deno.serve(async (req) => {
       result = error || !data ? { status: 404, payload: { error: "Message not found." } } : { status: 200, payload: { message: data } };
     } else if (req.method === "GET" && path === "/v1/numbers") {
       action = "list_numbers"; requireScope(session, "messages:write");
-      const { data, error } = await admin.from("whatsapp_platform_connections").select("id,display_phone_number,verified_name,status,quality_rating,updated_at").eq("tenant_id", session.tenant_id).order("updated_at", { ascending: false });
+      const { data, error } = await admin.from("whatsapp_platform_connections").select("id,display_phone_number,verified_name,status,onboarding_metadata,updated_at").eq("tenant_id", session.tenant_id).order("updated_at", { ascending: false });
       if (error) throw error;
-      result = { status: 200, payload: { numbers: data || [] } };
+      result = { status: 200, payload: { numbers: (data || []).map((item: any) => ({
+        id: item.id,
+        displayPhoneNumber: item.display_phone_number,
+        verifiedName: item.verified_name,
+        status: item.status,
+        qualityRating: item.onboarding_metadata?.quality_rating || null,
+        updatedAt: item.updated_at,
+      })) } };
     } else if (req.method === "GET" && path === "/v1/requests") {
       action = "list_requests";
       const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "25", 10) || 25));
