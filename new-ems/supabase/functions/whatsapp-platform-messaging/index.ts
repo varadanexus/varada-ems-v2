@@ -15,6 +15,16 @@ const AGENT_ACTIONS = new Set([
 const NOTIFICATION_ACTIONS = new Set([
   "list_notifications", "mark_notification_read", "mark_all_notifications_read", "dismiss_notification",
 ]);
+const DEVELOPER_API_ACTION_SCOPES: Record<string, string> = {
+  list_contacts: "contacts:read",
+  create_contact: "contacts:write",
+  start_chat: "messages:write",
+  send_text: "messages:write",
+};
+const DEVELOPER_WEBHOOK_EVENTS = new Set([
+  "contact.created", "contact.updated", "message.sent", "message.status",
+  "conversation.created", "conversation.updated", "campaign.completed",
+]);
 
 function env(name: string) { return Deno.env.get(name) || ""; }
 function isLoopback(origin: string) {
@@ -42,6 +52,21 @@ async function customerSession(admin: any, tokenValue: unknown) {
   if (!row?.tenant_id || !row?.user_id) throw new Error("Unauthorized");
   return row;
 }
+async function developerApiSession(admin: any, req: Request, action: string) {
+  const authorization = String(req.headers.get("authorization") || "");
+  const match = authorization.match(/^Bearer\s+(vn_(?:test|live)_[a-f0-9]{8}_[a-f0-9]{48})$/i);
+  if (!match) throw new Error("Unauthorized");
+  const requiredScope = DEVELOPER_API_ACTION_SCOPES[action];
+  if (!requiredScope) throw new Error("This action is not available through the Developer API.");
+  const tokenHash = await sha256(match[1]);
+  const { data: key, error } = await admin.from("whatsapp_platform_api_keys")
+    .select("id,tenant_id,created_by,scopes,status,expires_at")
+    .eq("token_hash", tokenHash).eq("status", "active").maybeSingle();
+  if (error || !key || (key.expires_at && new Date(key.expires_at).getTime() <= Date.now())) throw new Error("Unauthorized");
+  if (!Array.isArray(key.scopes) || !key.scopes.includes(requiredScope)) throw new Error(`This API key does not include the ${requiredScope} scope.`);
+  await admin.from("whatsapp_platform_api_keys").update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", key.id);
+  return { tenant_id: key.tenant_id, user_id: key.created_by, role_code: "agent", api_key_id: key.id, auth_kind: "api_key" };
+}
 async function billingEntitlement(admin: any, customer: any) {
   const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
   if (error) throw error;
@@ -65,6 +90,11 @@ function randomHex(byteLength = 32) {
 async function sha256(value: string) {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(bytes)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function encodeBase64Url(bytes: Uint8Array) {
+  let binary = "";
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 function htmlEscape(value: unknown) {
   return String(value || "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character] || character));
@@ -116,6 +146,23 @@ async function decryptCredential(ciphertext: string) {
   const payload = JSON.parse(new TextDecoder().decode(decrypted));
   if (!payload?.accessToken) throw new Error("Messaging connection is invalid.");
   return payload;
+}
+async function developerSecretKey() {
+  const material = env("WHATSAPP_PLATFORM_TOKEN_ENCRYPTION_KEY");
+  if (material.length < 32) throw new Error("Developer integrations are not configured.");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`developer-integrations:${material}`));
+  return crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+async function encryptDeveloperSecret(value: string) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await developerSecretKey(), new TextEncoder().encode(value));
+  return `v1.${encodeBase64Url(iv)}.${encodeBase64Url(new Uint8Array(encrypted))}`;
+}
+async function decryptDeveloperSecret(ciphertext: string) {
+  const [version, ivValue, encryptedValue] = String(ciphertext || "").split(".");
+  if (version !== "v1" || !ivValue || !encryptedValue) throw new Error("The webhook signing secret is invalid.");
+  const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: decodeBase64Url(ivValue) }, await developerSecretKey(), decodeBase64Url(encryptedValue));
+  return new TextDecoder().decode(decrypted);
 }
 function graphVersion() {
   const value = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
@@ -1560,6 +1607,156 @@ async function dismissNotification(admin: any, customer: any, body: any) {
   return { dismissed: Boolean(data), notificationId };
 }
 
+function requireDeveloperAdmin(customer: any) {
+  if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage developer integrations.");
+}
+function developerKeyView(row: any) {
+  return {
+    id: row.id, name: row.name, keyPrefix: row.key_prefix, scopes: row.scopes || [], status: row.status,
+    createdAt: row.created_at, lastUsedAt: row.last_used_at, expiresAt: row.expires_at, revokedAt: row.revoked_at,
+  };
+}
+function developerWebhookView(row: any) {
+  return {
+    id: row.id, name: row.name, endpointUrl: row.endpoint_url, events: row.events || [], status: row.status,
+    createdAt: row.created_at, lastDeliveryAt: row.last_delivery_at, lastSuccessAt: row.last_success_at, lastFailureAt: row.last_failure_at,
+  };
+}
+function cleanWebhookUrl(value: unknown) {
+  let url: URL;
+  try { url = new URL(String(value || "").trim()); }
+  catch { throw new Error("Enter a valid HTTPS webhook URL."); }
+  const host = url.hostname.toLowerCase();
+  const privateIpv4 = /^(?:127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/.test(host);
+  const privateName = host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:");
+  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443") || privateIpv4 || privateName) {
+    throw new Error("Webhook endpoints must use public HTTPS on port 443.");
+  }
+  url.hash = "";
+  return url.toString();
+}
+function cleanWebhookEvents(value: unknown) {
+  const events = [...new Set((Array.isArray(value) ? value : []).map((item) => cleanText(item, 80)).filter((item) => DEVELOPER_WEBHOOK_EVENTS.has(item)))];
+  if (!events.length) throw new Error("Select at least one supported webhook event.");
+  return events;
+}
+async function assertIntegrationCapacity(admin: any, customer: any, master: any) {
+  const limit = packageLimit(master, "integration_limit");
+  if (limit === null) return;
+  const [{ count: keyCount, error: keyError }, { count: webhookCount, error: webhookError }] = await Promise.all([
+    admin.from("whatsapp_platform_api_keys").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("status", "active"),
+    admin.from("whatsapp_platform_webhook_endpoints").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("status", "active"),
+  ]);
+  if (keyError) throw keyError; if (webhookError) throw webhookError;
+  if (Number(keyCount || 0) + Number(webhookCount || 0) >= limit) throw new Error(`The active package limit of ${limit.toLocaleString("en-IN")} integration${limit === 1 ? "" : "s"} has been reached. Add integration capacity before creating another active connection.`);
+}
+async function developerIntegrationSummary(admin: any, customer: any) {
+  requireDeveloperAdmin(customer);
+  const master = await packageMaster(admin, customer);
+  const [{ data: keys, error: keyError }, { data: webhooks, error: webhookError }, { data: deliveries, error: deliveryError }, { data: connections, error: connectionError }] = await Promise.all([
+    admin.from("whatsapp_platform_api_keys").select("id,name,key_prefix,scopes,status,created_at,last_used_at,expires_at,revoked_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_webhook_endpoints").select("id,name,endpoint_url,events,status,created_at,last_delivery_at,last_success_at,last_failure_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_webhook_deliveries").select("id,webhook_endpoint_id,event_id,event_type,attempt_number,status,http_status,duration_ms,error_message,created_at,completed_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_connections").select("id,provider,status,display_phone_number,verified_name,updated_at").eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }),
+  ]);
+  if (keyError) throw keyError; if (webhookError) throw webhookError; if (deliveryError) throw deliveryError; if (connectionError) throw connectionError;
+  return {
+    apiAccess: master?.package?.entitlements?.api_access === true,
+    capacity: { limit: packageLimit(master, "integration_limit"), used: (keys || []).filter((row: any) => row.status === "active").length + (webhooks || []).filter((row: any) => row.status === "active").length },
+    apiBaseUrl: `${env("SUPABASE_URL").replace(/\/+$/, "")}/functions/v1/whatsapp-platform-messaging`,
+    metaWebhookUrl: `${env("SUPABASE_URL").replace(/\/+$/, "")}/functions/v1/whatsapp-platform-webhook`,
+    supportedEvents: [...DEVELOPER_WEBHOOK_EVENTS],
+    apiKeys: (keys || []).map(developerKeyView), webhooks: (webhooks || []).map(developerWebhookView), deliveries: deliveries || [], connections: connections || [],
+  };
+}
+async function createDeveloperApiKey(admin: any, customer: any, body: any) {
+  requireDeveloperAdmin(customer);
+  const master = await packageMaster(admin, customer);
+  if (master?.package?.entitlements?.api_access !== true) throw new Error("Developer API access is not included in the active package.");
+  await assertIntegrationCapacity(admin, customer, master);
+  const name = cleanText(body.name, 80);
+  if (name.length < 2) throw new Error("Enter a name for this API key.");
+  const allowedScopes = new Set(["contacts:read", "contacts:write", "messages:write"]);
+  const scopes = [...new Set((Array.isArray(body.scopes) ? body.scopes : []).map((item: unknown) => cleanText(item, 40)).filter((item: string) => allowedScopes.has(item)))];
+  if (!scopes.length) throw new Error("Select at least one API scope.");
+  const mode = env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase() === "live" ? "live" : "test";
+  const prefixPart = randomHex(4);
+  const token = `vn_${mode}_${prefixPart}_${randomHex(24)}`;
+  const row = { tenant_id: customer.tenant_id, name, key_prefix: `vn_${mode}_${prefixPart}`, token_hash: await sha256(token), scopes, status: "active", created_by: customer.user_id };
+  const { data, error } = await admin.from("whatsapp_platform_api_keys").insert(row).select("id,name,key_prefix,scopes,status,created_at,last_used_at,expires_at,revoked_at").single();
+  if (error) throw error;
+  return { apiKey: developerKeyView(data), token };
+}
+async function revokeDeveloperApiKey(admin: any, customer: any, body: any) {
+  requireDeveloperAdmin(customer);
+  const id = cleanUuid(body.apiKeyId, "API key");
+  const now = new Date().toISOString();
+  const { data, error } = await admin.from("whatsapp_platform_api_keys").update({ status: "revoked", revoked_at: now, updated_at: now }).eq("id", id).eq("tenant_id", customer.tenant_id).eq("status", "active").select("id").maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("The API key was not found or is already revoked.");
+  return { revoked: true, apiKeyId: id };
+}
+async function createDeveloperWebhook(admin: any, customer: any, body: any) {
+  requireDeveloperAdmin(customer);
+  const master = await packageMaster(admin, customer);
+  await assertIntegrationCapacity(admin, customer, master);
+  const name = cleanText(body.name, 80);
+  if (name.length < 2) throw new Error("Enter a name for this webhook.");
+  const endpointUrl = cleanWebhookUrl(body.endpointUrl);
+  const events = cleanWebhookEvents(body.events);
+  const signingSecret = `whsec_${randomHex(32)}`;
+  const { data, error } = await admin.from("whatsapp_platform_webhook_endpoints").insert({ tenant_id: customer.tenant_id, name, endpoint_url: endpointUrl, signing_secret_ciphertext: await encryptDeveloperSecret(signingSecret), events, status: "active", created_by: customer.user_id }).select("id,name,endpoint_url,events,status,created_at,last_delivery_at,last_success_at,last_failure_at").single();
+  if (error?.code === "23505") throw new Error("This webhook endpoint is already connected.");
+  if (error) throw error;
+  return { webhook: developerWebhookView(data), signingSecret };
+}
+async function updateDeveloperWebhook(admin: any, customer: any, body: any) {
+  requireDeveloperAdmin(customer);
+  const id = cleanUuid(body.webhookId, "webhook");
+  const status = String(body.status || "");
+  if (!["active", "paused"].includes(status)) throw new Error("Choose an active or paused webhook status.");
+  if (status === "active") {
+    const master = await packageMaster(admin, customer);
+    const { data: current } = await admin.from("whatsapp_platform_webhook_endpoints").select("status").eq("id", id).eq("tenant_id", customer.tenant_id).maybeSingle();
+    if (!current) throw new Error("Webhook not found.");
+    if (current.status !== "active") await assertIntegrationCapacity(admin, customer, master);
+  }
+  const { data, error } = await admin.from("whatsapp_platform_webhook_endpoints").update({ status, updated_at: new Date().toISOString() }).eq("id", id).eq("tenant_id", customer.tenant_id).select("id").maybeSingle();
+  if (error) throw error; if (!data) throw new Error("Webhook not found.");
+  return { updated: true, webhookId: id, status };
+}
+async function deleteDeveloperWebhook(admin: any, customer: any, body: any) {
+  requireDeveloperAdmin(customer);
+  const id = cleanUuid(body.webhookId, "webhook");
+  const { data, error } = await admin.from("whatsapp_platform_webhook_endpoints").delete().eq("id", id).eq("tenant_id", customer.tenant_id).select("id").maybeSingle();
+  if (error) throw error; if (!data) throw new Error("Webhook not found.");
+  return { deleted: true, webhookId: id };
+}
+async function testDeveloperWebhook(admin: any, customer: any, body: any) {
+  requireDeveloperAdmin(customer);
+  const id = cleanUuid(body.webhookId, "webhook");
+  const { data: webhook, error } = await admin.from("whatsapp_platform_webhook_endpoints").select("id,endpoint_url,signing_secret_ciphertext,status").eq("id", id).eq("tenant_id", customer.tenant_id).single();
+  if (error || !webhook) throw new Error("Webhook not found.");
+  if (webhook.status !== "active") throw new Error("Activate the webhook before sending a test event.");
+  const eventId = crypto.randomUUID();
+  const payload = JSON.stringify({ id: eventId, type: "developer.test", createdAt: new Date().toISOString(), data: { workspaceId: customer.tenant_id, message: "Varada Nexus webhook connection test" } });
+  const secret = await decryptDeveloperSecret(webhook.signing_secret_ciphertext);
+  const signatureBytes = await crypto.subtle.sign("HMAC", await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]), new TextEncoder().encode(payload));
+  const signature = Array.from(new Uint8Array(signatureBytes)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const started = Date.now();
+  let status = "failed", httpStatus: number | null = null, responseExcerpt = "", errorMessage = "";
+  try {
+    const response = await fetch(webhook.endpoint_url, { method: "POST", redirect: "error", signal: AbortSignal.timeout(10000), headers: { "Content-Type": "application/json", "User-Agent": "Varada-Nexus-Webhooks/1.0", "X-Varada-Event": "developer.test", "X-Varada-Event-Id": eventId, "X-Varada-Signature": `sha256=${signature}` }, body: payload });
+    httpStatus = response.status; responseExcerpt = (await response.text()).slice(0, 500); status = response.ok ? "delivered" : "failed";
+    if (!response.ok) errorMessage = `Endpoint returned HTTP ${response.status}.`;
+  } catch (deliveryError) { errorMessage = deliveryError instanceof Error ? cleanText(deliveryError.message, 500) : "Webhook delivery failed."; }
+  const completedAt = new Date().toISOString();
+  const durationMs = Date.now() - started;
+  await admin.from("whatsapp_platform_webhook_deliveries").insert({ tenant_id: customer.tenant_id, webhook_endpoint_id: id, event_id: eventId, event_type: "developer.test", status, http_status: httpStatus, duration_ms: durationMs, response_excerpt: responseExcerpt || null, error_message: errorMessage || null, completed_at: completedAt });
+  await admin.from("whatsapp_platform_webhook_endpoints").update({ last_delivery_at: completedAt, ...(status === "delivered" ? { last_success_at: completedAt } : { last_failure_at: completedAt }), updated_at: completedAt }).eq("id", id);
+  return { delivered: status === "delivered", status, httpStatus, durationMs, error: errorMessage || null };
+}
+
 const GOOGLE_CONTACTS_SCOPE = "openid email https://www.googleapis.com/auth/contacts.readonly";
 function googleContactsCredentials() {
   const clientId = env("GOOGLE_CONTACTS_OAUTH_CLIENT_ID").trim();
@@ -1719,8 +1916,13 @@ Deno.serve(async (req) => {
     const raw = await req.text();
     if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) return json(req, { error: "Request too large" }, 413);
     const body = raw ? JSON.parse(raw) : {};
-    const customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "list");
+    const customer = body.sessionToken
+      ? await customerSession(admin, body.sessionToken)
+      : await developerApiSession(admin, req, action);
+    if (customer.auth_kind === "api_key" && !DEVELOPER_API_ACTION_SCOPES[action]) {
+      return json(req, { error: "This action is not available through the Developer API." }, 403);
+    }
     if (action !== "package_master" && !NOTIFICATION_ACTIONS.has(action)) {
       const entitlement = await billingEntitlement(admin, customer);
       if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
@@ -1737,6 +1939,8 @@ Deno.serve(async (req) => {
       list_flows: "flows", save_flow: "flows", set_flow_status: "flows", delete_flow: "flows",
       list_campaigns: "campaigns", list_campaign_segments: "campaigns", save_campaign_segment: "campaigns",
       delete_campaign_segment: "campaigns", save_campaign: "campaigns", decide_campaign: "campaigns", delete_campaign: "campaigns", dispatch_campaign: "campaigns",
+      developer_integration_summary: "integrations", create_developer_api_key: "integrations", revoke_developer_api_key: "integrations",
+      create_developer_webhook: "integrations", update_developer_webhook: "integrations", delete_developer_webhook: "integrations", test_developer_webhook: "integrations",
     };
     if (featureByAction[action] && action !== "save_campaign") await requirePackageFeature(admin, customer, featureByAction[action]);
     if (action === "list") return json(req, await listConversations(admin, customer, body));
@@ -1748,6 +1952,13 @@ Deno.serve(async (req) => {
     if (action === "package_master") return json(req, await packageMaster(admin, customer));
     if (action === "workspace_messaging_preferences") return json(req, await workspaceMessagingPreferences(admin, customer));
     if (action === "update_workspace_messaging_preferences") return json(req, await updateWorkspaceMessagingPreferences(admin, customer, body));
+    if (action === "developer_integration_summary") return json(req, await developerIntegrationSummary(admin, customer));
+    if (action === "create_developer_api_key") return json(req, await createDeveloperApiKey(admin, customer, body));
+    if (action === "revoke_developer_api_key") return json(req, await revokeDeveloperApiKey(admin, customer, body));
+    if (action === "create_developer_webhook") return json(req, await createDeveloperWebhook(admin, customer, body));
+    if (action === "update_developer_webhook") return json(req, await updateDeveloperWebhook(admin, customer, body));
+    if (action === "delete_developer_webhook") return json(req, await deleteDeveloperWebhook(admin, customer, body));
+    if (action === "test_developer_webhook") return json(req, await testDeveloperWebhook(admin, customer, body));
     if (action === "invite_team_member") return json(req, await inviteTeamMember(admin, customer, body));
     if (action === "update_team_member") return json(req, await updateTeamMember(admin, customer, body));
     if (action === "list_contacts") return json(req, await listContacts(admin, customer, body));

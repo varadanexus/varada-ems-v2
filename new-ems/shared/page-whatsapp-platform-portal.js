@@ -80,6 +80,7 @@ let workspaceConnections = [];
 let workspaceSelectedConnectionId = "";
 let workspaceBusinessProfile = { profile: null, connection: null, error: "" };
 let workspaceTeam = { members: [], currentUserId: "", currentRole: "", error: "" };
+let workspaceIntegrations = { apiAccess: false, capacity: { limit: 0, used: 0 }, apiKeys: [], webhooks: [], deliveries: [], connections: [], supportedEvents: [], error: "" };
 let workspacePackageMaster = { package: null, addons: [], availableAddons: [], error: "" };
 let workspaceMessagingPreferences = { stopMarketingOptOutEnabled: true, error: "" };
 let workspaceNotifications = { notifications: [], unreadCount: 0, error: "" };
@@ -2094,7 +2095,6 @@ function verificationView(verification, connections = []) {
 
 const PLANNED_WORKSPACE_VIEWS = {
   templates: ["Message templates", "Create, submit and manage approved WhatsApp message templates from your workspace.", ["Template library", "Approval status", "Language variants"]],
-  integrations: ["Business integrations", "Connect approved business systems and route events into WhatsApp workflows.", ["Webhooks", "CRM and ERP connectors", "Integration health"]],
 };
 
 function inboxTime(value) {
@@ -2999,6 +2999,29 @@ function billingAccessRequiredView() {
   return `<section class="wp-route-page wp-billing-locked"><div class="wp-billing-lock-card"><span class="wp-billing-lock-icon" aria-hidden="true">₹</span><span class="wp-card-eyebrow">${escapeHtml(stateLabel)}</span><h1>Billing access is required</h1><p>${escapeHtml(entitlement.reason || "A valid authorized trial or active paid subscription is required to use this workspace.")}</p>${canManage ? `<div class="wp-billing-lock-actions"><a class="wp-primary wp-button-link" href="${workspacePath("billing")}">Review billing &amp; activate</a><a class="wp-secondary wp-button-link" href="/contact.html">Contact billing support</a></div>` : `<div class="wp-policy-note"><strong>Ask your workspace owner to restore access</strong><p>Only the owner or a billing administrator can authorize or renew the subscription.</p></div>`}</div></section>`;
 }
 
+function integrationsView() {
+  const data = workspaceIntegrations || {};
+  const keys = Array.isArray(data.apiKeys) ? data.apiKeys : [];
+  const webhooks = Array.isArray(data.webhooks) ? data.webhooks : [];
+  const deliveries = Array.isArray(data.deliveries) ? data.deliveries : [];
+  const connections = Array.isArray(data.connections) ? data.connections : [];
+  const supportedEvents = Array.isArray(data.supportedEvents) ? data.supportedEvents : [];
+  const activeKeys = keys.filter((item) => item.status === "active").length;
+  const activeWebhooks = webhooks.filter((item) => item.status === "active").length;
+  const connectedProviders = connections.filter((item) => item.status === "connected").length;
+  const failedDeliveries = deliveries.filter((item) => item.status === "failed").length;
+  const limit = data.capacity?.limit;
+  const capacityText = limit == null ? `${Number(data.capacity?.used || 0)} active · custom limit` : `${Number(data.capacity?.used || 0)} of ${Number(limit || 0)} active integrations`;
+  const capacityReached = limit != null && Number(data.capacity?.used || 0) >= Number(limit || 0);
+  const eventOptions = supportedEvents.map((eventName) => `<label><input type="checkbox" name="events" value="${escapeHtml(eventName)}" ${["contact.created", "message.sent", "message.status"].includes(eventName) ? "checked" : ""} /><span>${escapeHtml(eventName)}</span></label>`).join("");
+  const connectionRows = connections.length ? connections.map((item) => `<article class="wp-developer-row"><span class="wp-developer-provider-icon">M</span><div><strong>${escapeHtml(item.verified_name || item.display_phone_number || "Meta WhatsApp")}</strong><small>${escapeHtml(item.display_phone_number || "Business connection")} · Meta Cloud API</small></div><em class="wp-developer-status ${escapeHtml(item.status)}">${escapeHtml(String(item.status || "unknown").replaceAll("_", " "))}</em></article>`).join("") : `<div class="wp-developer-empty"><strong>No Meta number connected</strong><p>Connect a WhatsApp business number before sending messages through the API.</p><a href="${workspacePath("accounts")}">Open business numbers →</a></div>`;
+  const keyRows = keys.length ? keys.map((item) => `<article class="wp-developer-record"><div><span class="wp-developer-record-title"><strong>${escapeHtml(item.name)}</strong><em class="wp-developer-status ${escapeHtml(item.status)}">${escapeHtml(item.status)}</em></span><code>${escapeHtml(item.keyPrefix)}••••••••••••</code><small>${escapeHtml((item.scopes || []).join(" · "))}</small></div><div class="wp-developer-record-meta"><small>Created ${escapeHtml(formatProfileDate(item.createdAt))}</small><small>${item.lastUsedAt ? `Last used ${escapeHtml(formatProfileDate(item.lastUsedAt))}` : "Never used"}</small>${item.status === "active" ? `<button class="wp-danger-quiet" type="button" data-revoke-developer-key="${escapeHtml(item.id)}">Revoke</button>` : ""}</div></article>`).join("") : `<div class="wp-developer-empty compact"><strong>No API keys</strong><p>Create a scoped credential when an external system needs server-to-server access.</p></div>`;
+  const webhookRows = webhooks.length ? webhooks.map((item) => `<article class="wp-developer-record"><div><span class="wp-developer-record-title"><strong>${escapeHtml(item.name)}</strong><em class="wp-developer-status ${escapeHtml(item.status)}">${escapeHtml(item.status)}</em></span><code>${escapeHtml(item.endpointUrl)}</code><small>${escapeHtml((item.events || []).join(" · "))}</small></div><div class="wp-developer-record-actions"><button class="wp-secondary" type="button" data-test-developer-webhook="${escapeHtml(item.id)}">Send test</button><button class="wp-secondary" type="button" data-toggle-developer-webhook="${escapeHtml(item.id)}" data-next-status="${item.status === "active" ? "paused" : "active"}">${item.status === "active" ? "Pause" : "Activate"}</button><button class="wp-danger-quiet" type="button" data-delete-developer-webhook="${escapeHtml(item.id)}">Remove</button></div></article>`).join("") : `<div class="wp-developer-empty compact"><strong>No outbound webhook</strong><p>Add an HTTPS endpoint to receive signed workspace events.</p></div>`;
+  const deliveryRows = deliveries.length ? deliveries.map((item) => `<tr><td><span class="wp-developer-event-name">${escapeHtml(item.event_type)}</span><small>${escapeHtml(String(item.event_id || "").slice(0, 8))}</small></td><td><em class="wp-developer-status ${escapeHtml(item.status)}">${escapeHtml(item.status)}</em></td><td>${item.http_status || "—"}</td><td>${item.duration_ms == null ? "—" : `${Number(item.duration_ms).toLocaleString("en-IN")} ms`}</td><td>${escapeHtml(formatProfileDate(item.created_at))}</td></tr>`).join("") : `<tr><td colspan="5"><div class="wp-developer-empty compact"><strong>No delivery attempts yet</strong><p>Send a test event after adding a webhook endpoint.</p></div></td></tr>`;
+  const secret = data.revealedSecret || null;
+  return `<section class="wp-route-page wp-developer-page"><div class="wp-route-heading"><div><span class="wp-kicker">Developer</span><h1>Integrations</h1><p>Connect business systems, issue scoped API credentials and monitor signed webhook delivery.</p></div><span class="wp-developer-capacity">${escapeHtml(capacityText)}</span></div>${data.error ? `<div class="wp-inline-error"><strong>Developer integrations unavailable</strong><p>${escapeHtml(data.error)}</p></div>` : ""}<section class="wp-status-grid wp-developer-stats"><article class="wp-stat"><span>Meta connections</span><strong>${connectedProviders}</strong><small>${connections.length ? "Cloud API assets" : "Not connected"}</small></article><article class="wp-stat"><span>Active API keys</span><strong>${activeKeys}</strong><small>${data.apiAccess ? "Developer API enabled" : "Package upgrade required"}</small></article><article class="wp-stat"><span>Active webhooks</span><strong>${activeWebhooks}</strong><small>HMAC signed delivery</small></article><article class="wp-stat"><span>Recent failures</span><strong>${failedDeliveries}</strong><small>Last 50 deliveries</small></article></section><section class="wp-developer-grid"><article class="wp-card wp-developer-card wp-developer-native"><header><div><span class="wp-card-eyebrow">Native connection</span><h2>WhatsApp Cloud API</h2></div><a class="wp-secondary wp-button-link" href="${workspacePath("accounts")}">Manage numbers</a></header><p>Business-owned Meta assets connected through the protected onboarding flow.</p><div class="wp-developer-list">${connectionRows}</div><dl class="wp-developer-endpoints"><div><dt>Meta webhook callback</dt><dd><code>${escapeHtml(data.metaWebhookUrl || "Not configured")}</code><button type="button" data-copy-developer-value="${escapeHtml(data.metaWebhookUrl || "")}">Copy</button></dd></div><div><dt>Developer API base URL</dt><dd><code>${escapeHtml(data.apiBaseUrl || "Not configured")}</code><button type="button" data-copy-developer-value="${escapeHtml(data.apiBaseUrl || "")}">Copy</button></dd></div></dl></article><article class="wp-card wp-developer-card"><header><div><span class="wp-card-eyebrow">Server-to-server</span><h2>API credentials</h2></div><button class="wp-primary" id="wpCreateDeveloperKeyBtn" type="button" ${!data.apiAccess || capacityReached ? "disabled" : ""}>Create API key</button></header><p>Credentials are hashed at rest. The full token is shown only once and cannot be recovered later.</p>${!data.apiAccess ? `<div class="wp-policy-note"><strong>Developer API is not included in this package</strong><p>Upgrade to Growth or Enterprise to issue server-to-server credentials.</p><a href="${workspacePath("billing-plans")}">Compare plans →</a></div>` : capacityReached ? `<div class="wp-policy-note"><strong>Integration capacity reached</strong><p>Pause an existing webhook, revoke a key, or add integration capacity.</p><a href="${workspacePath("billing-addons")}">Manage add-ons →</a></div>` : ""}<div class="wp-developer-list">${keyRows}</div></article><article class="wp-card wp-developer-card wp-developer-webhooks"><header><div><span class="wp-card-eyebrow">Outbound events</span><h2>Webhook endpoints</h2></div><button class="wp-primary" id="wpCreateDeveloperWebhookBtn" type="button" ${capacityReached ? "disabled" : ""}>Add endpoint</button></header><p>Each request includes an event ID and a SHA-256 HMAC signature. Redirects and private-network destinations are blocked.</p><div class="wp-developer-list">${webhookRows}</div></article><article class="wp-card wp-developer-card wp-developer-events"><header><div><span class="wp-card-eyebrow">Observability</span><h2>Webhook delivery log</h2></div><button class="wp-secondary" id="wpRefreshDeveloperBtn" type="button">Refresh</button></header><div class="wp-table-wrap"><table><thead><tr><th>Event</th><th>Status</th><th>HTTP</th><th>Duration</th><th>Attempted</th></tr></thead><tbody>${deliveryRows}</tbody></table></div></article></section><dialog class="wp-contact-dialog wp-developer-dialog" id="wpDeveloperKeyDialog"><form id="wpDeveloperKeyForm"><header><div><span class="wp-card-eyebrow">Developer API</span><h2>Create API key</h2><p>Name the system and grant only the access it needs.</p></div><button type="button" data-close-developer-dialog aria-label="Close">×</button></header><label><span>Credential name</span><input name="name" maxlength="80" required placeholder="Production CRM" /></label><fieldset><legend>Scopes</legend><label><input type="checkbox" name="scopes" value="contacts:read" checked /><span>Read contacts</span></label><label><input type="checkbox" name="scopes" value="contacts:write" checked /><span>Create contacts</span></label><label><input type="checkbox" name="scopes" value="messages:write" checked /><span>Start and send conversations</span></label></fieldset><footer><button class="wp-secondary" type="button" data-close-developer-dialog>Cancel</button><button class="wp-primary" type="submit">Create key</button></footer></form></dialog><dialog class="wp-contact-dialog wp-developer-dialog" id="wpDeveloperWebhookDialog"><form id="wpDeveloperWebhookForm"><header><div><span class="wp-card-eyebrow">Signed events</span><h2>Add webhook endpoint</h2><p>Use a public HTTPS endpoint. The signing secret is displayed once.</p></div><button type="button" data-close-developer-dialog aria-label="Close">×</button></header><label><span>Endpoint name</span><input name="name" maxlength="80" required placeholder="ERP production" /></label><label><span>HTTPS endpoint URL</span><input name="endpointUrl" type="url" maxlength="1000" required placeholder="https://api.example.com/webhooks/varada" /></label><fieldset><legend>Events</legend>${eventOptions}</fieldset><footer><button class="wp-secondary" type="button" data-close-developer-dialog>Cancel</button><button class="wp-primary" type="submit">Add endpoint</button></footer></form></dialog>${secret ? `<dialog class="wp-contact-dialog wp-developer-secret-dialog" id="wpDeveloperSecretDialog"><div><header><div><span class="wp-card-eyebrow">Copy now</span><h2>${escapeHtml(secret.label || "New secret")}</h2><p>This value is shown once. Store it in your server-side secret manager.</p></div><button type="button" data-close-developer-secret aria-label="Close">×</button></header><div class="wp-developer-secret"><code>${escapeHtml(secret.value)}</code><button class="wp-primary" type="button" data-copy-developer-value="${escapeHtml(secret.value)}">Copy secret</button></div><div class="wp-policy-note"><strong>Do not place this value in browser code</strong><p>Anyone with this credential may authenticate requests or validate webhook signatures.</p></div><footer><button class="wp-primary" type="button" data-close-developer-secret>Done</button></footer></div></dialog>` : ""}</section>`;
+}
+
 function plannedView(view) {
   const [title, description, capabilities] = PLANNED_WORKSPACE_VIEWS[view];
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Product preview</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p></div><span class="wp-planned-badge">Coming soon</span></div><article class="wp-card wp-planned-card"><div class="wp-planned-visual" aria-hidden="true"><span>${escapeHtml(WORKSPACE_VIEW_LABELS[view].charAt(0))}</span></div><div><span class="wp-card-eyebrow">Designed for focused work</span><h2>Everything your team needs, in one clear workspace</h2><p>This module is being prepared as a dedicated experience with fast navigation, clear ownership and the same protected company context across your workspace.</p><ul>${capabilities.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></article></section>`;
@@ -3025,6 +3048,7 @@ function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "campaigns") return campaignsView();
   if (view === "analytics") return analyticsView();
   if (view === "team") return teamView();
+  if (view === "integrations") return integrationsView();
   if (isBillingWorkspaceView(view)) return billingView(view);
   if (view === "checkout") return checkoutView();
   if (view === "templates") return templatesViewV2(connections);
@@ -3234,6 +3258,14 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       workspaceTeam = { members: result?.members || [], currentUserId: result?.currentUserId || "", currentRole: result?.currentRole || session.roleCode || "", capacity: result?.capacity || {}, error: "" };
     } catch (error) {
       workspaceTeam = { members: [], currentUserId: "", currentRole: session.roleCode || "", error: error?.message || "The member directory could not be loaded." };
+    }
+  }
+  if (refresh && view === "integrations") {
+    try {
+      const result = await messagingRequest("developer_integration_summary");
+      workspaceIntegrations = { ...result, revealedSecret: workspaceIntegrations?.revealedSecret || null, error: "" };
+    } catch (error) {
+      workspaceIntegrations = { ...workspaceIntegrations, error: error?.message || "Developer integrations could not be loaded." };
     }
   }
   if (renderLocation !== workspaceLocationKey() || navigationSequence !== workspaceNavigationSequence) return;
@@ -5522,6 +5554,85 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       submit.disabled = false;
       submit.textContent = "Remove number";
     }
+  });
+  const developerKeyDialog = app.querySelector("#wpDeveloperKeyDialog");
+  const developerWebhookDialog = app.querySelector("#wpDeveloperWebhookDialog");
+  app.querySelector("#wpCreateDeveloperKeyBtn")?.addEventListener("click", () => developerKeyDialog?.showModal());
+  app.querySelector("#wpCreateDeveloperWebhookBtn")?.addEventListener("click", () => developerWebhookDialog?.showModal());
+  app.querySelectorAll("[data-close-developer-dialog]").forEach((button) => button.addEventListener("click", () => button.closest("dialog")?.close()));
+  [developerKeyDialog, developerWebhookDialog].forEach((dialog) => dialog?.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); }));
+  app.querySelector("#wpDeveloperKeyForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const submit = event.submitter || form.querySelector('[type="submit"]');
+    const original = submit.textContent;
+    try {
+      submit.disabled = true; submit.textContent = "Creating…";
+      const result = await messagingRequest("create_developer_api_key", { name: form.elements.name.value, scopes: [...form.querySelectorAll('input[name="scopes"]:checked')].map((input) => input.value) });
+      workspaceIntegrations.revealedSecret = { label: `${result.apiKey?.name || "API"} credential`, value: result.token };
+      developerKeyDialog?.close();
+      await renderDashboard();
+      app.querySelector("#wpDeveloperSecretDialog")?.showModal();
+    } catch (error) {
+      showToast(error?.message || "The API key could not be created.", "error");
+      submit.disabled = false; submit.textContent = original;
+    }
+  });
+  app.querySelector("#wpDeveloperWebhookForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!form.reportValidity()) return;
+    const submit = event.submitter || form.querySelector('[type="submit"]');
+    const original = submit.textContent;
+    try {
+      submit.disabled = true; submit.textContent = "Connecting…";
+      const result = await messagingRequest("create_developer_webhook", { name: form.elements.name.value, endpointUrl: form.elements.endpointUrl.value, events: [...form.querySelectorAll('input[name="events"]:checked')].map((input) => input.value) });
+      workspaceIntegrations.revealedSecret = { label: `${result.webhook?.name || "Webhook"} signing secret`, value: result.signingSecret };
+      developerWebhookDialog?.close();
+      await renderDashboard();
+      app.querySelector("#wpDeveloperSecretDialog")?.showModal();
+    } catch (error) {
+      showToast(error?.message || "The webhook endpoint could not be added.", "error");
+      submit.disabled = false; submit.textContent = original;
+    }
+  });
+  app.querySelectorAll("[data-close-developer-secret]").forEach((button) => button.addEventListener("click", () => {
+    workspaceIntegrations.revealedSecret = null;
+    button.closest("dialog")?.close();
+  }));
+  app.querySelectorAll("[data-copy-developer-value]").forEach((button) => button.addEventListener("click", async () => {
+    const value = button.dataset.copyDeveloperValue || "";
+    if (!value) return;
+    try { await navigator.clipboard.writeText(value); showToast("Copied to clipboard."); }
+    catch { showToast("Copy was blocked by the browser. Select and copy the value manually.", "error"); }
+  }));
+  app.querySelectorAll("[data-revoke-developer-key]").forEach((button) => button.addEventListener("click", async () => {
+    if (!window.confirm("Revoke this API key? Requests using it will stop working immediately.")) return;
+    const original = button.textContent;
+    try { button.disabled = true; button.textContent = "Revoking…"; await messagingRequest("revoke_developer_api_key", { apiKeyId: button.dataset.revokeDeveloperKey }); showToast("API key revoked."); await renderDashboard(); }
+    catch (error) { showToast(error?.message || "The API key could not be revoked.", "error"); button.disabled = false; button.textContent = original; }
+  }));
+  app.querySelectorAll("[data-toggle-developer-webhook]").forEach((button) => button.addEventListener("click", async () => {
+    const original = button.textContent;
+    try { button.disabled = true; button.textContent = "Updating…"; await messagingRequest("update_developer_webhook", { webhookId: button.dataset.toggleDeveloperWebhook, status: button.dataset.nextStatus }); showToast(`Webhook ${button.dataset.nextStatus}.`); await renderDashboard(); }
+    catch (error) { showToast(error?.message || "The webhook could not be updated.", "error"); button.disabled = false; button.textContent = original; }
+  }));
+  app.querySelectorAll("[data-delete-developer-webhook]").forEach((button) => button.addEventListener("click", async () => {
+    if (!window.confirm("Remove this webhook endpoint and stop future deliveries? Delivery history will be retained.")) return;
+    const original = button.textContent;
+    try { button.disabled = true; button.textContent = "Removing…"; await messagingRequest("delete_developer_webhook", { webhookId: button.dataset.deleteDeveloperWebhook }); showToast("Webhook endpoint removed."); await renderDashboard(); }
+    catch (error) { showToast(error?.message || "The webhook could not be removed.", "error"); button.disabled = false; button.textContent = original; }
+  }));
+  app.querySelectorAll("[data-test-developer-webhook]").forEach((button) => button.addEventListener("click", async () => {
+    const original = button.textContent;
+    try { button.disabled = true; button.textContent = "Sending…"; const result = await messagingRequest("test_developer_webhook", { webhookId: button.dataset.testDeveloperWebhook }); showToast(result.delivered ? `Test delivered in ${result.durationMs} ms.` : (result.error || "The endpoint rejected the test event."), result.delivered ? "success" : "error"); await renderDashboard(); }
+    catch (error) { showToast(error?.message || "The test event could not be sent.", "error"); button.disabled = false; button.textContent = original; }
+  }));
+  app.querySelector("#wpRefreshDeveloperBtn")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    try { button.disabled = true; button.textContent = "Refreshing…"; await renderDashboard(); }
+    catch { button.disabled = false; button.textContent = "Refresh"; }
   });
   if (preserveScroll) window.scrollTo({ top: previousScrollTop, left: 0, behavior: "auto" });
   if (setupReady && ["onboarding", "accounts"].includes(view)) loadFacebookSdk().catch(() => {});
