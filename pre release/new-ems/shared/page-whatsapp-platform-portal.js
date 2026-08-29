@@ -2926,7 +2926,7 @@ function billingView(view = "billing") {
           ? `First charge ${formatProfileDate(item.charge_at)}`
           : isPaymentIncomplete ? "Authorization not completed" : "Schedule pending";
     const retryPayment = canManage && isPaymentIncomplete && item.authorization_url
-      ? `<a class="wp-primary wp-button-link" href="${escapeHtml(item.authorization_url)}" rel="noopener noreferrer">Retry payment</a>`
+      ? `<button class="wp-primary" type="button" data-billing-retry-addon="${escapeHtml(item.id)}" data-billing-retry-url="${escapeHtml(item.authorization_url)}">Retry payment</button>`
       : "";
     return `<article class="wp-billing-addon-subscription ${isPaymentIncomplete ? "is-payment-incomplete" : "is-active"}"><div><span class="wp-card-eyebrow">${isPaymentIncomplete ? "Pending add-on" : "Add-on"}</span><h3>${escapeHtml(item.addon_name || item.addon_code || "Add-on")}</h3><p>${isPaymentIncomplete ? "Payment was not completed. This add-on has not been activated." : escapeHtml(item.addon_description || "")}</p><div class="wp-billing-addon-subscription-meta"><span>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"}</span><span>${escapeHtml(item.billing_interval || "month")}ly billing</span><span>${escapeHtml(renewalCopy)}</span></div></div><div class="wp-billing-addon-subscription-actions"><span class="wp-billing-status ${isPaymentIncomplete ? "payment-incomplete" : escapeHtml(item.status || "none")}">${escapeHtml(addonStatus)}</span>${retryPayment}${canManage && addonManaged ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(item.id)}">Update payment method</button>` : ""}${canManage && addonOpen && !item.cancel_at_cycle_end ? `<button class="wp-billing-cancel-subtle" type="button" data-billing-cancel-addon="${escapeHtml(item.id)}">${isPaymentIncomplete ? "Cancel request" : "Cancel add-on"}</button>` : item.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">${escapeHtml(renewalCopy)}</span>` : ""}</div></article>`;
   }).join("");
@@ -3622,6 +3622,29 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
         button.disabled = false;
         button.textContent = original;
       }
+    }));
+    app.querySelectorAll("[data-billing-retry-addon]").forEach((button) => button.addEventListener("click", () => {
+      const subscriptionId = button.dataset.billingRetryAddon;
+      const authorizationUrl = button.dataset.billingRetryUrl;
+      if (!subscriptionId || !authorizationUrl) { showToast("Payment authorization link is unavailable.", "error"); return; }
+      const paymentWindow = window.open(authorizationUrl, "_blank", "noopener,noreferrer");
+      if (!paymentWindow) { showToast("Allow pop-ups to retry payment in a separate tab.", "error"); return; }
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = "Waiting for payment…";
+      showToast("Complete payment in the Razorpay tab, then return here.");
+      window.addEventListener("focus", async () => {
+        try {
+          button.textContent = "Checking payment…";
+          await billingRequest("sync_subscription", { subscriptionId });
+          await renderDashboard();
+          showToast("Payment status refreshed.");
+        } catch (error) {
+          showToast(error?.message || "Payment status could not be refreshed.", "error");
+          button.disabled = false;
+          button.textContent = original;
+        }
+      }, { once: true });
     }));
   }
   if (view === "checkout") {

@@ -1994,12 +1994,12 @@ async function finalizeAddonChange(admin: any, replacementSubscription: any, cre
     const metadata = { ...(replacementSubscription.safe_metadata || {}), addon_change_activated_at: appliedAt, addon_change_status: "completed", authorization_payment_id: effectivePaymentId };
     const { error: replacementError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: metadata, checkout_verified_at: appliedAt, updated_at: appliedAt }).eq("id", replacementSubscription.id);
     if (replacementError) throw replacementError;
-    const { error: completeError } = await admin.from("whatsapp_platform_billing_addon_change_intents").update({ status: "completed", provider_payment_id: effectivePaymentId, processing_error: null, completed_at: appliedAt, updated_at: appliedAt }).eq("id", claimed.id).eq("status", "processing");
-    if (completeError) throw completeError;
     if (claimed.coupon_redemption_id) {
-      const { error: couponError } = await admin.from("whatsapp_platform_billing_coupon_redemptions").update({ status: "applied", applied_at: appliedAt, provider_payment_id: effectivePaymentId, updated_at: appliedAt }).eq("id", claimed.coupon_redemption_id).eq("status", "reserved");
+      const { error: couponError } = await admin.from("whatsapp_platform_billing_coupon_redemptions").update({ status: "applied", applied_at: appliedAt, updated_at: appliedAt }).eq("id", claimed.coupon_redemption_id).eq("status", "reserved");
       if (couponError) throw couponError;
     }
+    const { error: completeError } = await admin.from("whatsapp_platform_billing_addon_change_intents").update({ status: "completed", provider_payment_id: effectivePaymentId, processing_error: null, completed_at: appliedAt, updated_at: appliedAt }).eq("id", claimed.id).eq("status", "processing");
+    if (completeError) throw completeError;
     return { completed: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Add-on change finalization failed";
