@@ -816,6 +816,7 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
   const addonRows = rows.filter((row: any) => String(row.subscription_kind || row.safe_metadata?.subscription_kind || "package") === "addon");
   const subscription = packageRows.find((row: any) => row.safe_metadata?.upgrade_activated_at && !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || packageRows.find((row: any) => row.status === "active" && !row.safe_metadata?.upgrade_intent_id)
+    || packageRows.find((row: any) => !row.safe_metadata?.plan_addon_removal_from_subscription_id && !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || packageRows.find((row: any) => !TERMINAL_SUBSCRIPTION_STATUSES.has(row.status))
     || null;
   let checkoutPricing: any = null;
@@ -971,11 +972,27 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     const { from_price_version_id: _fromId, target_price_version_id: _targetId, replacement_subscription_id: _replacementId, ...publicChange } = change;
     return { ...publicChange, authorizationUrl: replacement?.short_url || null, replacementStatus: replacement?.status || null, from: publicVersion(from), target: publicVersion(target) };
   });
+  const planAddonRemovalRow = subscription ? packageRows.find((row: any) =>
+    row.id !== subscription.id
+    && row.safe_metadata?.plan_addon_removal_from_subscription_id === subscription.id
+    && !TERMINAL_SUBSCRIPTION_STATUSES.has(String(row.status || "").toLowerCase())
+  ) : null;
+  const planAddonRemoval = planAddonRemovalRow ? {
+    replacementSubscriptionId: planAddonRemovalRow.id,
+    addonCode: planAddonRemovalRow.safe_metadata?.plan_addon_removal_code || "",
+    addonName: planAddonRemovalRow.safe_metadata?.removed_addon_selection?.name || planAddonRemovalRow.safe_metadata?.plan_addon_removal_code || "Add-on",
+    status: planAddonRemovalRow.safe_metadata?.plan_addon_removal_status === "authorized" ? "scheduled" : "authorization_pending",
+    replacementStatus: planAddonRemovalRow.status,
+    effectiveAt: planAddonRemovalRow.safe_metadata?.recurring_starts_at || planAddonRemovalRow.charge_at || null,
+    targetRecurringBasePaise: Number(planAddonRemovalRow.recurring_base_paise || 0),
+    targetRecurringAmountPaise: Number(planAddonRemovalRow.safe_metadata?.plan_addon_removal_quote?.targetRecurringAmountPaise || 0),
+    authorizationUrl: planAddonRemovalRow.safe_metadata?.plan_addon_removal_status === "authorized" ? null : trustedRazorpayUrl(planAddonRemovalRow.short_url),
+  } : null;
   return {
     configured: razorpayConfigured(credentials), keyId: razorpayConfigured(credentials) ? credentials.keyId : "",
     mode,
     webhookUrl: `${env("SUPABASE_URL")}/functions/v1/whatsapp-platform-billing?webhook=razorpay`,
-    packages: publicPackages, checkoutAddons: checkoutAddons || [], subscription: publicSubscription, addonSubscriptions: publicAddonSubscriptions, payments: payments || [], invoices: invoices || [], creditNotes: creditNotes || [], renewalPriceChanges: publicRenewalChanges, entitlement, trialEligibility,
+    packages: publicPackages, checkoutAddons: checkoutAddons || [], subscription: publicSubscription, addonSubscriptions: publicAddonSubscriptions, planAddonRemoval, payments: payments || [], invoices: invoices || [], creditNotes: creditNotes || [], renewalPriceChanges: publicRenewalChanges, entitlement, trialEligibility,
     customer: { name: customer.display_name || customer.company_name || "", email: customer.email || "", companyName: customer.company_name || "" },
   };
 }
@@ -1393,7 +1410,8 @@ async function verifyCheckout(admin: any, customer: any, body: any, credentials:
   const upgrade = await finalizeProratedUpgrade(admin, synced, credentials, paymentId);
   const renewal = await finalizeRenewalPriceChange(admin, synced, credentials, paymentId);
   const addonChange = await finalizeAddonChange(admin, synced, credentials, paymentId);
-  return { verified: true, status: synced.status, paymentStatus: String(payment.status || "unknown"), captured: Boolean(payment.captured), upgradeCompleted: Boolean(upgrade.completed), renewalPriceApplied: Boolean(renewal.completed), addonChangeCompleted: Boolean(addonChange.completed) };
+  const planAddonRemoval = await finalizePlanAddonRemoval(admin, synced, credentials);
+  return { verified: true, status: synced.status, paymentStatus: String(payment.status || "unknown"), captured: Boolean(payment.captured), upgradeCompleted: Boolean(upgrade.completed), renewalPriceApplied: Boolean(renewal.completed), addonChangeCompleted: Boolean(addonChange.completed), planAddonRemovalCompleted: Boolean(planAddonRemoval.completed) };
 }
 async function syncSubscription(admin: any, customer: any, body: any, credentials: any) {
   const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
@@ -1406,6 +1424,7 @@ async function syncSubscription(admin: any, customer: any, body: any, credential
   await finalizeProratedUpgrade(admin, synced, credentials);
   await finalizeRenewalPriceChange(admin, synced, credentials);
   await finalizeAddonChange(admin, synced, credentials);
+  await finalizePlanAddonRemoval(admin, synced, credentials);
   return { subscription: synced };
 }
 async function paymentMethodPortal(admin: any, customer: any, body: any, credentials: any) {
@@ -1703,6 +1722,185 @@ async function finalizeProratedUpgrade(admin: any, replacementSubscription: any,
     await admin.from("whatsapp_platform_billing_upgrade_intents").update({ status: "failed", processing_error: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", intent.id);
     throw error;
   }
+}
+async function planAddonRemovalContext(admin: any, customer: any, body: any, credentials: any) {
+  if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
+  const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
+  const addonCode = cleanCode(body.addonCode, "add-on");
+  const { data: subscription, error: subscriptionError } = await admin.from("whatsapp_platform_billing_subscriptions").select("*")
+    .eq("id", subscriptionId).eq("tenant_id", customer.tenant_id).single();
+  if (subscriptionError || !subscription) throw new Error("Billing subscription not found.");
+  assertSubscriptionMode(subscription, credentials);
+  const subscriptionKind = String(subscription.subscription_kind || subscription.safe_metadata?.subscription_kind || "package");
+  if (subscriptionKind !== "package") throw new Error("Select the active master-plan subscription.");
+  if (!['authenticated', 'active'].includes(String(subscription.status || '').toLowerCase())) throw new Error("Only an authorized master plan can be repriced.");
+  if (subscription.cancel_at_cycle_end) throw new Error("The current master plan is already scheduled to end.");
+
+  const providerEntity = await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials);
+  const syncedSubscription = await syncSubscriptionEntity(admin, subscription, providerEntity);
+  if (!['authenticated', 'active'].includes(String(syncedSubscription.status || '').toLowerCase())) throw new Error("The master plan is not active. Refresh billing before changing it.");
+  const cycleEndMs = new Date(syncedSubscription.current_end || 0).getTime();
+  if (!Number.isFinite(cycleEndMs) || cycleEndMs <= Date.now() + 60_000) throw new Error("The current billing period has ended. Refresh billing before removing an add-on.");
+
+  const [{ data: pkg, error: packageError }, { data: assignments, error: assignmentError }, { data: overlappingTopUps, error: topUpError }] = await Promise.all([
+    admin.from("whatsapp_platform_package_master").select("*").eq("code", syncedSubscription.package_code).eq("status", "active").single(),
+    admin.from("whatsapp_platform_tenant_addons").select("*").eq("tenant_id", customer.tenant_id).eq("source_subscription_id", syncedSubscription.id).in("status", ["pending", "active"]),
+    admin.from("whatsapp_platform_billing_subscriptions").select("id,addon_code,status,safe_metadata").eq("tenant_id", customer.tenant_id).eq("subscription_kind", "addon")
+      .in("status", ["created", "pending", "authenticated", "active", "halted"]),
+  ]);
+  if (packageError || !pkg) throw new Error("The current master package is unavailable.");
+  if (assignmentError) throw assignmentError;
+  if (topUpError) throw topUpError;
+  if ((overlappingTopUps || []).some((item: any) => Number(item.safe_metadata?.plan_included_quantity || 0) > 0)) {
+    throw new Error("Cancel paid seat or number extras first. After their current period ends, you can remove a master-plan add-on without changing separately billed capacity.");
+  }
+  const assignment = (assignments || []).find((item: any) => item.addon_code === addonCode);
+  if (!assignment) throw new Error("This add-on is not billed with the current master plan.");
+  const addonCodes = [...new Set((assignments || []).map((item: any) => item.addon_code).filter(Boolean))];
+  const { data: addonMasters, error: addonError } = addonCodes.length
+    ? await admin.from("whatsapp_platform_addon_master").select("code,name,description,unit_name,currency,billing_interval").in("code", addonCodes)
+    : { data: [], error: null };
+  if (addonError) throw addonError;
+  const addonMap = new Map((addonMasters || []).map((item: any) => [item.code, item]));
+  const snapshotSelections = Array.isArray(syncedSubscription.safe_metadata?.target_addon_selections)
+    ? syncedSubscription.safe_metadata.target_addon_selections
+    : Array.isArray(syncedSubscription.safe_metadata?.addon_selections) ? syncedSubscription.safe_metadata.addon_selections : [];
+  const selections = (assignments || []).map((item: any) => {
+    const snapshot = snapshotSelections.find((selection: any) => selection.code === item.addon_code) || {};
+    const master: any = addonMap.get(item.addon_code) || {};
+    const quantity = Math.max(1, Number(item.quantity || snapshot.quantity || 1));
+    const unitBasePaise = Math.max(1, Number(item.unit_base_paise || snapshot.unitBasePaise || 0));
+    return {
+      code: item.addon_code, name: snapshot.name || master.name || item.addon_code, unitName: snapshot.unitName || master.unit_name || "unit",
+      quantity, addonPriceVersionId: item.addon_price_version_id || snapshot.addonPriceVersionId || null,
+      unitBasePaise, gstRateBps: Number(item.gst_rate_bps || snapshot.gstRateBps || 1800), baseSubtotalPaise: unitBasePaise * quantity,
+    };
+  });
+  const removedSelection = selections.find((item: any) => item.code === addonCode);
+  if (!removedSelection || Number(removedSelection.baseSubtotalPaise || 0) < 1) throw new Error("The add-on billing snapshot is incomplete. Contact billing support before changing this subscription.");
+  const targetSelections = selections.filter((item: any) => item.code !== addonCode);
+  const currentRecurringBasePaise = Number(syncedSubscription.recurring_base_paise || 0);
+  const targetRecurringBasePaise = currentRecurringBasePaise - Number(removedSelection.baseSubtotalPaise || 0);
+  if (!Number.isSafeInteger(targetRecurringBasePaise) || targetRecurringBasePaise < 100) throw new Error("The revised subscription amount is invalid. Contact billing support.");
+  const currentGross = checkoutGrossPaise(currentRecurringBasePaise);
+  const targetGross = checkoutGrossPaise(targetRecurringBasePaise);
+  const quote = {
+    currency: String(pkg.currency || "INR").toUpperCase(), currentRecurringBasePaise, targetRecurringBasePaise,
+    currentRecurringAmountPaise: currentGross.checkoutAmountPaise, targetRecurringAmountPaise: targetGross.checkoutAmountPaise,
+    recurringSavingsPaise: currentGross.checkoutAmountPaise - targetGross.checkoutAmountPaise,
+    targetGstPaise: targetGross.packageGstPaise, targetGatewayAdjustmentPaise: targetGross.gatewayAdjustmentPaise,
+    effectiveAt: new Date(cycleEndMs).toISOString(), removedSelection, targetSelections,
+  };
+  return { subscription: syncedSubscription, pkg, assignment, addon: addonMap.get(addonCode) || { code: addonCode, name: removedSelection.name }, selections, targetSelections, removedSelection, cycleEndMs, quote };
+}
+async function previewPlanAddonRemoval(admin: any, customer: any, body: any, credentials: any) {
+  const context = await planAddonRemovalContext(admin, customer, body, credentials);
+  return { addon: { code: context.removedSelection.code, name: context.removedSelection.name }, package: { code: context.pkg.code, name: context.pkg.name }, quote: context.quote };
+}
+async function schedulePlanAddonRemoval(admin: any, customer: any, body: any, credentials: any) {
+  const context = await planAddonRemovalContext(admin, customer, body, credentials);
+  const { data: pendingRows, error: pendingError } = await admin.from("whatsapp_platform_billing_subscriptions").select("*")
+    .eq("tenant_id", customer.tenant_id).eq("subscription_kind", "package")
+    .eq("safe_metadata->>plan_addon_removal_from_subscription_id", context.subscription.id)
+    .in("status", ["created", "pending", "authenticated", "active", "halted"]).order("created_at", { ascending: false }).limit(2);
+  if (pendingError) throw pendingError;
+  const existing = (pendingRows || [])[0];
+  if (existing) {
+    if (existing.safe_metadata?.plan_addon_removal_code !== context.removedSelection.code) throw new Error("Complete the existing master-plan add-on change before scheduling another one.");
+    return {
+      keyId: credentials.keyId, subscriptionId: existing.id, razorpaySubscriptionId: existing.provider_subscription_id,
+      shortUrl: existing.short_url, addon: { code: context.removedSelection.code, name: context.removedSelection.name }, package: { code: context.pkg.code, name: context.pkg.name }, quote: context.quote, reused: true,
+    };
+  }
+  const interval = context.subscription.billing_interval as "month" | "year";
+  const planId = await ensureRazorpayPlanForRecurringBase(admin, context.pkg, interval, context.quote.targetRecurringBasePaise, context.targetSelections, credentials, "plan_addon_removal");
+  const totalCount = interval === "month" ? 120 : 10;
+  const requestBody = {
+    plan_id: planId, total_count: totalCount, quantity: 1, customer_notify: true, start_at: Math.floor(context.cycleEndMs / 1000),
+    notes: { tenant_id: customer.tenant_id, package_code: context.pkg.code, billing_interval: interval, change_type: "plan_addon_removal", removed_addon_code: context.removedSelection.code, replaces_subscription_id: context.subscription.id },
+  };
+  const created = await razorpayRequest("/subscriptions", { method: "POST", body: JSON.stringify(requestBody) }, credentials);
+  const providerSubscriptionId = providerId(created.id, "sub");
+  let replacement: any = null;
+  try {
+    const { data, error } = await admin.from("whatsapp_platform_billing_subscriptions").insert({
+      tenant_id: customer.tenant_id, package_code: context.pkg.code, billing_interval: interval, subscription_kind: "package",
+      provider_plan_id: planId, provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(), quantity: 1,
+      total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
+      short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
+      package_price_version_id: context.subscription.package_price_version_id, recurring_base_paise: context.quote.targetRecurringBasePaise, gst_rate_bps: Number(context.subscription.gst_rate_bps || 1800),
+      safe_metadata: {
+        subscription_kind: "package", mode: billingMode(credentials), plan_addon_removal_status: "authorization_pending",
+        plan_addon_removal_from_subscription_id: context.subscription.id, plan_addon_removal_code: context.removedSelection.code,
+        removed_addon_selection: context.removedSelection, target_addon_selections: context.targetSelections,
+        package_recurring_base_paise: Number(context.subscription.safe_metadata?.package_recurring_base_paise || packageBasePaise(context.pkg, interval)),
+        recurring_starts_at: context.quote.effectiveAt, plan_addon_removal_quote: context.quote,
+      },
+    }).select("*").single();
+    if (error || !data) throw error || new Error("Replacement subscription could not be recorded.");
+    replacement = data;
+  } catch (error) {
+    await razorpayRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }) }, credentials).catch(() => null);
+    if (replacement?.id) await admin.from("whatsapp_platform_billing_subscriptions").delete().eq("id", replacement.id);
+    throw error;
+  }
+  return {
+    keyId: credentials.keyId, subscriptionId: replacement.id, razorpaySubscriptionId: providerSubscriptionId, shortUrl: created.short_url,
+    addon: { code: context.removedSelection.code, name: context.removedSelection.name }, package: { code: context.pkg.code, name: context.pkg.name },
+    customer: { name: customer.display_name, email: customer.email, companyName: customer.company_name }, quote: context.quote, reused: false,
+  };
+}
+async function finalizePlanAddonRemoval(admin: any, replacementSubscription: any, credentials: any) {
+  const fromSubscriptionId = replacementSubscription?.safe_metadata?.plan_addon_removal_from_subscription_id;
+  const addonCode = replacementSubscription?.safe_metadata?.plan_addon_removal_code;
+  const replacementStatus = String(replacementSubscription.status || '').toLowerCase();
+  if (!fromSubscriptionId || !addonCode || !['authenticated', 'active'].includes(replacementStatus)) return { completed: false };
+  const removalStatus = replacementSubscription.safe_metadata?.plan_addon_removal_status;
+  if (removalStatus === "applied") return { completed: true, applied: true };
+  if (removalStatus === "authorized" && replacementStatus !== "active") return { completed: true, scheduled: true };
+  if (removalStatus === "authorized" && replacementStatus === "active") {
+    const appliedAt = new Date().toISOString();
+    const { data: removedAssignment, error: removedReadError } = await admin.from("whatsapp_platform_tenant_addons").select("id,addon_code")
+      .eq("tenant_id", replacementSubscription.tenant_id).eq("addon_code", addonCode).eq("source_subscription_id", fromSubscriptionId).maybeSingle();
+    if (removedReadError) throw removedReadError;
+    if (removedAssignment) {
+      const { error: removalError } = await admin.from("whatsapp_platform_tenant_addons").update({ status: "cancelled", quantity: 0, billing_ends_at: appliedAt, updated_at: appliedAt })
+        .eq("id", removedAssignment.id).eq("source_subscription_id", fromSubscriptionId);
+      if (removalError) throw removalError;
+      if (removedAssignment.addon_code === "extra_agent_seat") {
+        const { error: seatError } = await admin.from("whatsapp_platform_tenants").update({ additional_team_seats: 0, updated_at: appliedAt }).eq("id", replacementSubscription.tenant_id);
+        if (seatError) throw seatError;
+      }
+    }
+    const appliedMetadata = { ...(replacementSubscription.safe_metadata || {}), plan_addon_removal_status: "applied", plan_addon_removal_applied_at: appliedAt };
+    const { error: appliedError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: appliedMetadata, updated_at: appliedAt }).eq("id", replacementSubscription.id);
+    if (appliedError) throw appliedError;
+    return { completed: true, applied: true, removedAddonCode: addonCode };
+  }
+  const { data: oldSubscription, error: oldError } = await admin.from("whatsapp_platform_billing_subscriptions").select("*")
+    .eq("id", fromSubscriptionId).eq("tenant_id", replacementSubscription.tenant_id).single();
+  if (oldError || !oldSubscription) throw oldError || new Error("Previous master subscription not found.");
+  if (!TERMINAL_SUBSCRIPTION_STATUSES.has(oldSubscription.status) && !oldSubscription.cancel_at_cycle_end) {
+    const cancelled = await razorpayRequest(`/subscriptions/${encodeURIComponent(oldSubscription.provider_subscription_id)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 1 }) }, credentials);
+    await syncSubscriptionEntity(admin, oldSubscription, cancelled);
+    const { error: cancelError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ cancel_at_cycle_end: true, updated_at: new Date().toISOString() }).eq("id", oldSubscription.id);
+    if (cancelError) throw cancelError;
+  }
+  const targetCodes = new Set((replacementSubscription.safe_metadata?.target_addon_selections || []).map((item: any) => item.code));
+  const { data: oldAssignments, error: assignmentReadError } = await admin.from("whatsapp_platform_tenant_addons").select("id,addon_code")
+    .eq("tenant_id", replacementSubscription.tenant_id).eq("source_subscription_id", oldSubscription.id).in("status", ["pending", "active"]);
+  if (assignmentReadError) throw assignmentReadError;
+  const effectiveAt = replacementSubscription.safe_metadata?.recurring_starts_at || replacementSubscription.charge_at || new Date().toISOString();
+  for (const assignment of oldAssignments || []) {
+    if (!targetCodes.has(assignment.addon_code)) continue;
+    const { error } = await admin.from("whatsapp_platform_tenant_addons").update({ source_subscription_id: replacementSubscription.id, source_checkout_quote_id: null, billing_starts_at: effectiveAt, updated_at: new Date().toISOString() }).eq("id", assignment.id).eq("source_subscription_id", oldSubscription.id);
+    if (error) throw error;
+  }
+  const authorizedAt = new Date().toISOString();
+  const metadata = { ...(replacementSubscription.safe_metadata || {}), plan_addon_removal_status: "authorized", plan_addon_removal_authorized_at: authorizedAt };
+  const { error: replacementError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ safe_metadata: metadata, checkout_verified_at: authorizedAt, updated_at: authorizedAt }).eq("id", replacementSubscription.id);
+  if (replacementError) throw replacementError;
+  return { completed: true, effectiveAt, removedAddonCode: addonCode };
 }
 async function finalizeRenewalPriceChange(admin: any, replacementSubscription: any, credentials: any, paymentId: string | null = null) {
   const changeId = replacementSubscription?.safe_metadata?.renewal_price_change_id;
@@ -2167,6 +2365,7 @@ async function processWebhook(admin: any, eventRecordId: string, payload: any, c
         await finalizeProratedUpgrade(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
         await finalizeRenewalPriceChange(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
         await finalizeAddonChange(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
+        await finalizePlanAddonRemoval(admin, synced, credentials);
       }
     }
     if (refundEntity?.id) await recordRefund(admin, refundEntity);
@@ -2272,6 +2471,8 @@ Deno.serve(async (req) => {
       else if (action === "upgrade_subscription") result = await upgradeSubscription(admin, customer, body, credentials);
       else if (action === "preview_addon_change") result = await previewAddonChange(admin, customer, body, credentials);
       else if (action === "change_addons") result = await changeAddons(admin, customer, body, credentials);
+      else if (action === "preview_plan_addon_removal") result = await previewPlanAddonRemoval(admin, customer, body, credentials);
+      else if (action === "schedule_plan_addon_removal") result = await schedulePlanAddonRemoval(admin, customer, body, credentials);
       else if (action === "cancel_subscription") result = await cancelSubscription(admin, customer, body, credentials);
       else throw new Error("Unsupported billing action.");
     }

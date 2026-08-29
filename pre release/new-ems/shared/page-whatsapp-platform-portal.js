@@ -2617,6 +2617,22 @@ function confirmAddonSubscriptionCancellation(subscription) {
     dialog.showModal();
   });
 }
+function confirmPlanAddonRemoval(preview) {
+  let dialog = document.querySelector("#wpPlanAddonRemovalDialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "wpPlanAddonRemovalDialog";
+    dialog.className = "wp-contact-dialog wp-billing-upgrade-dialog";
+    document.body.append(dialog);
+  }
+  const quote = preview?.quote || {};
+  const money = (paise) => escapeHtml(billingMoney(Number(paise || 0) / 100, quote.currency || "INR"));
+  dialog.innerHTML = `<form method="dialog"><header><div><span class="wp-card-eyebrow">Master-plan add-on removal</span><h2>Remove ${escapeHtml(preview?.addon?.name || "add-on")} at renewal?</h2><p>The current paid period stays unchanged. A lower-priced replacement mandate must be authorized before the removal is scheduled.</p></div><button type="submit" value="keep" aria-label="Close">×</button></header><dl class="wp-upgrade-quote"><div><dt>Current renewal</dt><dd>${money(quote.currentRecurringAmountPaise)}</dd></div><div><dt>New renewal</dt><dd>${money(quote.targetRecurringAmountPaise)}</dd></div><div class="is-credit"><dt>Recurring saving</dt><dd>−${money(quote.recurringSavingsPaise)}</dd></div><div><dt>Effective date</dt><dd>${escapeHtml(formatProfileDate(quote.effectiveAt))}</dd></div></dl><div class="wp-policy-note"><strong>No charge for the removed add-on after renewal</strong><p>${escapeHtml(preview?.addon?.name || "The add-on")} remains active through the current paid period. After the replacement mandate is authorized, the next renewal excludes its price while the master plan and remaining add-ons continue.</p></div><footer><button class="wp-secondary" type="submit" value="keep">Keep add-on</button><button class="wp-primary" type="submit" value="authorize">Authorize lower renewal</button></footer></form>`;
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "authorize"), { once: true });
+    dialog.showModal();
+  });
+}
 function choosePaymentMethodUpdate(result) {
   let dialog = document.querySelector("#wpPaymentMethodUpdateDialog");
   if (!dialog) {
@@ -2826,6 +2842,7 @@ function billingView(view = "billing") {
     ? returnedSubscription
     : null;
   const addonSubscriptions = workspaceBilling?.addonSubscriptions || [];
+  const planAddonRemoval = workspaceBilling?.planAddonRemoval || null;
   const renewalChange = (workspaceBilling?.renewalPriceChanges || []).find((change) => ["pending_consent", "accepted", "processing", "failed"].includes(change.status));
   const billingError = workspaceBilling?.error || workspacePackageMaster?.error || "";
   const pageCopy = {
@@ -2891,7 +2908,7 @@ function billingView(view = "billing") {
   const trialActive = Boolean(subscription?.status === "authenticated" && Number(subscription?.trial_days || 0) > 0 && trialEndsAt && new Date(trialEndsAt).getTime() > Date.now());
   const trialDaysLeft = trialActive ? Math.max(1, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86_400_000)) : 0;
   const trialCountdown = trialActive ? `${trialDaysLeft} trial day${trialDaysLeft === 1 ? "" : "s"} left · Trial ends ${formatProfileDate(trialEndsAt)}` : "";
-  const statusActions = subscription ? `<div class="wp-billing-subscription-actions">${canManage && managedSubscription ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(subscription.id)}">Update payment method</button>` : ""}${canManage && subscriptionOpen && !subscription.cancel_at_cycle_end ? `<a class="wp-primary wp-button-link wp-billing-upgrade-action" href="${workspacePath("billing-plans")}#available-plans">Upgrade plan</a><button class="wp-billing-cancel-subtle" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel</button>` : subscription.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">Cancellation scheduled for ${escapeHtml(formatProfileDate(subscription.current_end))}</span>` : ""}</div>` : "";
+  const statusActions = subscription ? `<div class="wp-billing-subscription-actions">${canManage && managedSubscription ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(subscription.id)}">Update payment method</button>` : ""}${canManage && subscriptionOpen && !subscription.cancel_at_cycle_end ? `<a class="wp-primary wp-button-link wp-billing-upgrade-action" href="${workspacePath("billing-plans")}#available-plans">Upgrade plan</a><button class="wp-billing-cancel-subtle" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel</button>` : subscription.cancel_at_cycle_end && planAddonRemoval?.status === "scheduled" ? `<span class="wp-billing-cancellation-scheduled">Lower-priced renewal scheduled for ${escapeHtml(formatProfileDate(planAddonRemoval.effectiveAt))}</span>` : subscription.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">Cancellation scheduled for ${escapeHtml(formatProfileDate(subscription.current_end))}</span>` : ""}</div>` : "";
   const subscriptionCard = `<section class="wp-billing-subscription"><div><span class="wp-card-eyebrow">Subscription</span><h2>${escapeHtml(subscription ? `${subscription.package_code} · ${subscription.billing_interval}ly` : "No active subscription")}</h2><p>${subscription ? `Status: ${escapeHtml(statusLabel)}${trialActive ? ` · ${escapeHtml(trialCountdown)}` : subscription.current_end ? ` · Current period ends ${escapeHtml(formatProfileDate(subscription.current_end))}` : ""}` : "Choose a plan to continue."}</p></div><div><span class="wp-billing-status ${escapeHtml(subscription?.status || "none")}">${escapeHtml(statusLabel)}</span>${trialActive ? `<span class="wp-billing-cancellation-scheduled">${escapeHtml(`${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} remaining`)}</span>` : ""}${statusActions}</div></section>`;
   const overviewAddonMap = new Map();
   for (const item of workspacePackageMaster.addons || []) overviewAddonMap.set(item.code, item);
@@ -2909,7 +2926,9 @@ function billingView(view = "billing") {
     ? billingMoney(Number(subscription.next_billing_amount_paise) / 100, pkg.currency)
     : "Pending confirmation";
   const overviewNextBillingDate = subscription?.current_end ? formatProfileDate(subscription.current_end) : "Date not scheduled";
-  const overviewNextBilling = subscription?.cancel_at_cycle_end
+  const overviewNextBilling = planAddonRemoval?.status === "scheduled"
+    ? `<div><span>Next billing amount</span><strong>${escapeHtml(billingMoney(Number(planAddonRemoval.targetRecurringAmountPaise || 0) / 100, pkg.currency))}</strong><small>${escapeHtml(formatProfileDate(planAddonRemoval.effectiveAt))} · Removed add-on excluded</small></div>`
+    : subscription?.cancel_at_cycle_end
     ? `<div><span>Next billing amount</span><strong>No further charge</strong><small>Subscription ends ${escapeHtml(overviewNextBillingDate)}</small></div>`
     : `<div><span>${trialActive ? "First billing amount" : "Next billing amount"}</span><strong>${escapeHtml(overviewNextBillingAmount)}</strong><small>${escapeHtml(overviewNextBillingDate)} · Includes GST and gateway adjustment</small></div>`;
   const overviewPlanDetails = subscription
@@ -2953,8 +2972,16 @@ function billingView(view = "billing") {
     const quantityCopy = addon.quantity_enabled !== false ? `<span>${quantity.toLocaleString("en-IN")} ${escapeHtml(addon.unit_name || "unit")}${quantity === 1 ? "" : "s"}</span>` : "";
     const billingCopy = addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval || "month")}ly billing` : addon.billing_model === "one_time" ? "One-time purchase" : "Plan add-on";
     const selfServicePlanTopUp = ["extra_agent_seat", "extra_whatsapp_number"].includes(addon.code);
-    const changeControl = addon.billing_model === "recurring" && addon.quantity_enabled !== false ? addonControl({ ...addon, billingManaged: selfServicePlanTopUp }, quantity) : "";
-    return `<article class="wp-billing-addon-subscription is-active"><div><span class="wp-card-eyebrow">Add-on</span><h3>${escapeHtml(addon.name || addon.code || "Add-on")}</h3><p>${escapeHtml(addon.description || "")}</p><div class="wp-billing-addon-subscription-meta">${quantityCopy}<span>${billingCopy}</span><span>Purchased with current plan</span></div></div><div class="wp-billing-addon-subscription-actions"><span class="wp-billing-status active">Active</span>${changeControl}</div></article>`;
+    const removalForAddon = planAddonRemoval?.addonCode === addon.code ? planAddonRemoval : null;
+    const changeControl = !removalForAddon && addon.billing_model === "recurring" && addon.quantity_enabled !== false ? addonControl({ ...addon, billingManaged: selfServicePlanTopUp }, quantity) : "";
+    const removalControl = removalForAddon
+      ? removalForAddon.status === "scheduled"
+        ? `<span class="wp-billing-cancellation-scheduled">Removal scheduled ${escapeHtml(formatProfileDate(removalForAddon.effectiveAt))}</span>`
+        : `<button class="wp-primary" type="button" data-billing-remove-plan-addon="${escapeHtml(addon.code)}">Authorize lower renewal</button>`
+      : canManage && addonManageReady
+        ? `<button class="wp-billing-cancel-subtle" type="button" data-billing-remove-plan-addon="${escapeHtml(addon.code)}">Cancel at renewal</button>`
+        : "";
+    return `<article class="wp-billing-addon-subscription is-active"><div><span class="wp-card-eyebrow">Add-on</span><h3>${escapeHtml(addon.name || addon.code || "Add-on")}</h3><p>${escapeHtml(addon.description || "")}</p><div class="wp-billing-addon-subscription-meta">${quantityCopy}<span>${billingCopy}</span><span>Purchased with current plan</span></div></div><div class="wp-billing-addon-subscription-actions"><span class="wp-billing-status ${removalForAddon ? "payment-incomplete" : "active"}">${removalForAddon ? removalForAddon.status === "scheduled" ? "Scheduled" : "Authorization required" : "Active"}</span>${changeControl}${removalControl}</div></article>`;
   }).join("");
   const addonSubscriptionCards = `${subscriptionAddonCards}${planManagedAddonCards}`;
   const activeAddonCount = activeAddonSubscriptions.length + planManagedAddonAssignments.length;
@@ -3466,6 +3493,60 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
         return;
       } catch (error) {
         showToast(error?.message || "Secure checkout could not be opened.", "error");
+        button.disabled = false; button.textContent = original;
+      }
+    }));
+    app.querySelectorAll("[data-billing-remove-plan-addon]").forEach((button) => button.addEventListener("click", async () => {
+      const original = button.textContent;
+      try {
+        const request = { subscriptionId: workspaceBilling?.subscription?.id, addonCode: button.dataset.billingRemovePlanAddon };
+        button.disabled = true; button.textContent = "Calculating…";
+        const preview = await billingRequest("preview_plan_addon_removal", request);
+        const approved = await confirmPlanAddonRemoval(preview);
+        if (!approved) { button.disabled = false; button.textContent = original; return; }
+        button.textContent = "Preparing authorization…";
+        const change = await billingRequest("schedule_plan_addon_removal", request);
+        if (!change.razorpaySubscriptionId || !change.keyId) throw new Error("The payment gateway did not return a replacement mandate authorization session.");
+        await loadRazorpayCheckout();
+        const instance = new window.Razorpay({
+          key: change.keyId,
+          subscription_id: change.razorpaySubscriptionId,
+          name: "Varada Nexus",
+          image: "https://www.varadanexus.com/images/logo.png",
+          description: `${change.addon?.name || "Add-on"} removal · lower renewal authorization`,
+          prefill: { name: workspaceBilling?.customer?.name || "", email: workspaceBilling?.customer?.email || "" },
+          notes: { workspace: workspaceBilling?.customer?.companyName || session.companyName || "", removed_addon_code: request.addonCode },
+          theme: { color: "#0b6b45" },
+          handler: async (checkout) => {
+            try {
+              showToast("Mandate authorized. Scheduling the lower renewal…");
+              await billingRequest("verify_checkout", {
+                subscriptionId: change.subscriptionId,
+                razorpayPaymentId: checkout.razorpay_payment_id,
+                razorpaySubscriptionId: checkout.razorpay_subscription_id,
+                razorpaySignature: checkout.razorpay_signature,
+              });
+              showToast(`${change.addon?.name || "Add-on"} will end at renewal. Future billing excludes its price.`);
+              await renderDashboard();
+            } catch (error) {
+              showToast(error?.message || "The lower renewal authorization could not be verified.", "error");
+              button.disabled = false; button.textContent = original;
+            }
+          },
+          modal: {
+            confirm_close: true,
+            escape: true,
+            handleback: true,
+            ondismiss: async () => { button.disabled = false; button.textContent = original; await renderDashboard(); },
+          },
+        });
+        instance.on("payment.failed", (checkout) => {
+          showToast(checkout?.error?.description || "The replacement mandate was not authorized.", "error");
+          button.disabled = false; button.textContent = original;
+        });
+        instance.open();
+      } catch (error) {
+        showToast(error?.message || "The add-on cancellation could not be prepared.", "error");
         button.disabled = false; button.textContent = original;
       }
     }));
