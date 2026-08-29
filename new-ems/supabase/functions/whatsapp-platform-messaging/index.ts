@@ -1616,9 +1616,13 @@ function developerKeyView(row: any) {
     createdAt: row.created_at, lastUsedAt: row.last_used_at, expiresAt: row.expires_at, revokedAt: row.revoked_at,
   };
 }
-function developerWebhookView(row: any) {
+function developerWebhookView(row: any, connection: any = null) {
   return {
-    id: row.id, name: row.name, endpointUrl: row.endpoint_url, events: row.events || [], status: row.status,
+    id: row.id, name: row.name, softwareName: row.software_name || row.name,
+    connectionId: row.connection_id || null,
+    phoneNumber: connection?.display_phone_number || null,
+    connectionName: connection?.verified_name || null,
+    endpointUrl: row.endpoint_url, events: row.events || [], status: row.status,
     createdAt: row.created_at, lastDeliveryAt: row.last_delivery_at, lastSuccessAt: row.last_success_at, lastFailureAt: row.last_failure_at,
   };
 }
@@ -1643,37 +1647,41 @@ function cleanWebhookEvents(value: unknown) {
 async function assertIntegrationCapacity(admin: any, customer: any, master: any) {
   const limit = packageLimit(master, "integration_limit");
   if (limit === null) return;
-  const [{ count: keyCount, error: keyError }, { count: webhookCount, error: webhookError }] = await Promise.all([
-    admin.from("whatsapp_platform_api_keys").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("status", "active"),
-    admin.from("whatsapp_platform_webhook_endpoints").select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("status", "active"),
-  ]);
-  if (keyError) throw keyError; if (webhookError) throw webhookError;
-  if (Number(keyCount || 0) + Number(webhookCount || 0) >= limit) throw new Error(`The active package limit of ${limit.toLocaleString("en-IN")} integration${limit === 1 ? "" : "s"} has been reached. Add integration capacity before creating another active connection.`);
+  const { count: webhookCount, error: webhookError } = await admin.from("whatsapp_platform_webhook_endpoints")
+    .select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("status", "active");
+  if (webhookError) throw webhookError;
+  if (Number(webhookCount || 0) >= limit) throw new Error(`The active package limit of ${limit.toLocaleString("en-IN")} webhook connection${limit === 1 ? "" : "s"} has been reached. Add integration capacity before connecting another software endpoint.`);
 }
 async function developerIntegrationSummary(admin: any, customer: any) {
   requireDeveloperAdmin(customer);
   const master = await packageMaster(admin, customer);
+  const integrationLimit = packageLimit(master, "integration_limit");
+  const apiAccess = Boolean(master?.package);
   const [{ data: keys, error: keyError }, { data: webhooks, error: webhookError }, { data: deliveries, error: deliveryError }, { data: connections, error: connectionError }] = await Promise.all([
     admin.from("whatsapp_platform_api_keys").select("id,name,key_prefix,scopes,status,created_at,last_used_at,expires_at,revoked_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
-    admin.from("whatsapp_platform_webhook_endpoints").select("id,name,endpoint_url,events,status,created_at,last_delivery_at,last_success_at,last_failure_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_webhook_endpoints").select("id,name,software_name,connection_id,endpoint_url,events,status,created_at,last_delivery_at,last_success_at,last_failure_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
     admin.from("whatsapp_platform_webhook_deliveries").select("id,webhook_endpoint_id,event_id,event_type,attempt_number,status,http_status,duration_ms,error_message,created_at,completed_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
     admin.from("whatsapp_platform_connections").select("id,provider,status,display_phone_number,verified_name,updated_at").eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }),
   ]);
   if (keyError) throw keyError; if (webhookError) throw webhookError; if (deliveryError) throw deliveryError; if (connectionError) throw connectionError;
+  const connectionsById = new Map((connections || []).map((connection: any) => [connection.id, connection]));
   return {
-    apiAccess: master?.package?.entitlements?.api_access === true,
-    capacity: { limit: packageLimit(master, "integration_limit"), used: (keys || []).filter((row: any) => row.status === "active").length + (webhooks || []).filter((row: any) => row.status === "active").length },
-    apiBaseUrl: `${env("SUPABASE_URL").replace(/\/+$/, "")}/functions/v1/whatsapp-platform-messaging`,
-    metaWebhookUrl: `${env("SUPABASE_URL").replace(/\/+$/, "")}/functions/v1/whatsapp-platform-webhook`,
+    apiAccess,
+    capacity: { limit: integrationLimit, used: (webhooks || []).filter((row: any) => row.status === "active").length },
     supportedEvents: [...DEVELOPER_WEBHOOK_EVENTS],
-    apiKeys: (keys || []).map(developerKeyView), webhooks: (webhooks || []).map(developerWebhookView), deliveries: deliveries || [], connections: connections || [],
+    apiKeys: (keys || []).map(developerKeyView),
+    webhooks: (webhooks || []).map((row: any) => developerWebhookView(row, connectionsById.get(row.connection_id))),
+    deliveries: deliveries || [], connections: connections || [],
   };
 }
 async function createDeveloperApiKey(admin: any, customer: any, body: any) {
   requireDeveloperAdmin(customer);
   const master = await packageMaster(admin, customer);
-  if (master?.package?.entitlements?.api_access !== true) throw new Error("Developer API access is not included in the active package.");
-  await assertIntegrationCapacity(admin, customer, master);
+  if (!master?.package) throw new Error("An active package is required before creating an API key.");
+  const { count: activeKeyCount, error: activeKeyError } = await admin.from("whatsapp_platform_api_keys")
+    .select("id", { count: "exact", head: true }).eq("tenant_id", customer.tenant_id).eq("status", "active");
+  if (activeKeyError) throw activeKeyError;
+  if (Number(activeKeyCount || 0) >= 10) throw new Error("A workspace can have up to 10 active API keys. Revoke an unused key before creating another.");
   const name = cleanText(body.name, 80);
   if (name.length < 2) throw new Error("Enter a name for this API key.");
   const allowedScopes = new Set(["contacts:read", "contacts:write", "messages:write"]);
@@ -1702,13 +1710,21 @@ async function createDeveloperWebhook(admin: any, customer: any, body: any) {
   await assertIntegrationCapacity(admin, customer, master);
   const name = cleanText(body.name, 80);
   if (name.length < 2) throw new Error("Enter a name for this webhook.");
+  const softwareName = cleanText(body.softwareName, 80);
+  if (softwareName.length < 2) throw new Error("Enter the software connected to this webhook.");
+  const connectionId = cleanUuid(body.connectionId, "WhatsApp number");
+  const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
+    .select("id,status,display_phone_number,verified_name")
+    .eq("id", connectionId).eq("tenant_id", customer.tenant_id).maybeSingle();
+  if (connectionError) throw connectionError;
+  if (!connection || connection.status !== "connected") throw new Error("Select a connected WhatsApp number for this webhook.");
   const endpointUrl = cleanWebhookUrl(body.endpointUrl);
   const events = cleanWebhookEvents(body.events);
   const signingSecret = `whsec_${randomHex(32)}`;
-  const { data, error } = await admin.from("whatsapp_platform_webhook_endpoints").insert({ tenant_id: customer.tenant_id, name, endpoint_url: endpointUrl, signing_secret_ciphertext: await encryptDeveloperSecret(signingSecret), events, status: "active", created_by: customer.user_id }).select("id,name,endpoint_url,events,status,created_at,last_delivery_at,last_success_at,last_failure_at").single();
-  if (error?.code === "23505") throw new Error("This webhook endpoint is already connected.");
+  const { data, error } = await admin.from("whatsapp_platform_webhook_endpoints").insert({ tenant_id: customer.tenant_id, connection_id: connectionId, software_name: softwareName, name, endpoint_url: endpointUrl, signing_secret_ciphertext: await encryptDeveloperSecret(signingSecret), events, status: "active", created_by: customer.user_id }).select("id,name,software_name,connection_id,endpoint_url,events,status,created_at,last_delivery_at,last_success_at,last_failure_at").single();
+  if (error?.code === "23505") throw new Error("This endpoint is already connected to the selected WhatsApp number.");
   if (error) throw error;
-  return { webhook: developerWebhookView(data), signingSecret };
+  return { webhook: developerWebhookView(data, connection), signingSecret };
 }
 async function updateDeveloperWebhook(admin: any, customer: any, body: any) {
   requireDeveloperAdmin(customer);
@@ -1735,11 +1751,11 @@ async function deleteDeveloperWebhook(admin: any, customer: any, body: any) {
 async function testDeveloperWebhook(admin: any, customer: any, body: any) {
   requireDeveloperAdmin(customer);
   const id = cleanUuid(body.webhookId, "webhook");
-  const { data: webhook, error } = await admin.from("whatsapp_platform_webhook_endpoints").select("id,endpoint_url,signing_secret_ciphertext,status").eq("id", id).eq("tenant_id", customer.tenant_id).single();
+  const { data: webhook, error } = await admin.from("whatsapp_platform_webhook_endpoints").select("id,connection_id,software_name,endpoint_url,signing_secret_ciphertext,status").eq("id", id).eq("tenant_id", customer.tenant_id).single();
   if (error || !webhook) throw new Error("Webhook not found.");
   if (webhook.status !== "active") throw new Error("Activate the webhook before sending a test event.");
   const eventId = crypto.randomUUID();
-  const payload = JSON.stringify({ id: eventId, type: "developer.test", createdAt: new Date().toISOString(), data: { workspaceId: customer.tenant_id, message: "Varada Nexus webhook connection test" } });
+  const payload = JSON.stringify({ id: eventId, type: "developer.test", createdAt: new Date().toISOString(), data: { workspaceId: customer.tenant_id, connectionId: webhook.connection_id || null, software: webhook.software_name || null, message: "Varada Nexus webhook connection test" } });
   const secret = await decryptDeveloperSecret(webhook.signing_secret_ciphertext);
   const signatureBytes = await crypto.subtle.sign("HMAC", await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]), new TextEncoder().encode(payload));
   const signature = Array.from(new Uint8Array(signatureBytes)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
