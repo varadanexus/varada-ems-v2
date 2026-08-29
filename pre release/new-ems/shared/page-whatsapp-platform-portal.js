@@ -2838,6 +2838,12 @@ function billingView(view = "billing") {
   const labels = { team_inbox:"Team inbox",contacts:"Contacts",templates:"Message templates",campaigns:"Campaigns",flows:"Flows",automations:"Automations",api_access:"API access",priority_support:"Priority support",analytics:"Analytics" };
   const features = Object.entries(pkg.entitlements || {}).map(([key,value]) => `<li class="${value === false ? "off" : "on"}"><span>${value === false ? "×" : "✓"}</span><strong>${escapeHtml(labels[key] || key.replaceAll("_", " "))}</strong><small>${typeof value === "string" ? escapeHtml(value) : value === false ? "Not included" : "Included"}</small></li>`).join("");
   const assignedAddonMap = new Map((workspacePackageMaster.addons || []).map((addon) => [addon.code, addon]));
+  const openAddonSubscriptions = addonSubscriptions.filter((item) => !["cancelled", "completed", "expired"].includes(String(item.status || "").toLowerCase()));
+  const activeAddonSubscriptions = openAddonSubscriptions.filter((item) => ["authenticated", "active"].includes(String(item.status || "").toLowerCase()));
+  const incompleteAddonSubscriptions = openAddonSubscriptions.filter((item) => !["authenticated", "active"].includes(String(item.status || "").toLowerCase()));
+  const openSubscriptionAddonCodes = new Set(openAddonSubscriptions.map((item) => item.addon_code).filter(Boolean));
+  const activeRecurringAssignments = (workspacePackageMaster.addons || []).filter((addon) => addon.assignmentStatus === "active" && addon.billing_model === "recurring" && addon.quantity_enabled !== false);
+  const planManagedRecurringAssignments = activeRecurringAssignments.filter((addon) => !openSubscriptionAddonCodes.has(addon.code));
   const managedSubscription = Boolean(subscription && ["authenticated", "active"].includes(String(subscription.status)));
   const addonManageReady = Boolean(canManage && workspaceBilling?.configured && ["authenticated", "active"].includes(String(subscription?.status)) && !subscription?.cancel_at_cycle_end);
   const addonControl = (addon, currentQuantity = 0) => {
@@ -2865,7 +2871,7 @@ function billingView(view = "billing") {
     const assignment = assignedAddonMap.get(addon.code);
     const currentQuantity = assignment?.assignmentStatus === "active" ? Math.max(0, Number(assignment.quantity || 0)) : 0;
     const quantityEnabled = addon.quantity_enabled !== false;
-    if (currentQuantity > 0 && !quantityEnabled) return "";
+    if (currentQuantity > 0) return "";
     const managedAddon = { ...addon, billingManaged: assignment?.billingManaged === true };
     const recurrence = addon.billing_model === "recurring" ? `${escapeHtml(addon.billing_interval)} · recurring base price + GST` : "Contact billing for terms";
     const current = currentQuantity > 0
@@ -2882,9 +2888,6 @@ function billingView(view = "billing") {
   const trialCountdown = trialActive ? `${trialDaysLeft} trial day${trialDaysLeft === 1 ? "" : "s"} left · Trial ends ${formatProfileDate(trialEndsAt)}` : "";
   const statusActions = subscription ? `<div class="wp-billing-subscription-actions">${canManage && managedSubscription ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(subscription.id)}">Update payment method</button>` : ""}${canManage && subscriptionOpen && !subscription.cancel_at_cycle_end ? `<a class="wp-primary wp-button-link wp-billing-upgrade-action" href="${workspacePath("billing-plans")}#available-plans">Upgrade plan</a><button class="wp-billing-cancel-subtle" type="button" data-billing-cancel="${escapeHtml(subscription.id)}">Cancel</button>` : subscription.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">Cancellation scheduled for ${escapeHtml(formatProfileDate(subscription.current_end))}</span>` : ""}</div>` : "";
   const subscriptionCard = `<section class="wp-billing-subscription"><div><span class="wp-card-eyebrow">Subscription</span><h2>${escapeHtml(subscription ? `${subscription.package_code} · ${subscription.billing_interval}ly` : "No active subscription")}</h2><p>${subscription ? `Status: ${escapeHtml(statusLabel)}${trialActive ? ` · ${escapeHtml(trialCountdown)}` : subscription.current_end ? ` · Current period ends ${escapeHtml(formatProfileDate(subscription.current_end))}` : ""}` : "Choose a plan to continue."}</p></div><div><span class="wp-billing-status ${escapeHtml(subscription?.status || "none")}">${escapeHtml(statusLabel)}</span>${trialActive ? `<span class="wp-billing-cancellation-scheduled">${escapeHtml(`${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} remaining`)}</span>` : ""}${statusActions}</div></section>`;
-  const openAddonSubscriptions = addonSubscriptions.filter((item) => !["cancelled", "completed", "expired"].includes(String(item.status || "").toLowerCase()));
-  const activeAddonSubscriptions = openAddonSubscriptions.filter((item) => ["authenticated", "active"].includes(String(item.status || "").toLowerCase()));
-  const incompleteAddonSubscriptions = openAddonSubscriptions.filter((item) => !["authenticated", "active"].includes(String(item.status || "").toLowerCase()));
   const overviewAddonMap = new Map();
   for (const item of workspacePackageMaster.addons || []) overviewAddonMap.set(item.code, item);
   for (const item of activeAddonSubscriptions) if (!overviewAddonMap.has(item.addon_code)) overviewAddonMap.set(item.addon_code, item);
@@ -2912,7 +2915,7 @@ function billingView(view = "billing") {
     return `<button type="button" data-billing-price-breakdown="${escapeHtml(item.code || item.addon_code || "")}"><div><strong>${escapeHtml(item.name || item.addon_name || item.addon_code || "Add-on")}</strong><small>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"} · ${escapeHtml(item.billing_interval === "year" ? "Annual" : "Monthly")}</small></div><span>View price breakdown →</span></button>`;
   }).join("");
   const overviewAddons = `<section class="wp-card wp-billing-overview-addons"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Add-ons</span><h2>${overviewActiveAddons.length ? `${overviewActiveAddons.length} active` : "No active add-ons"}</h2><p>${overviewActiveAddons.length ? "Extra services currently included in your workspace." : "Add capacity or services whenever you need them."}</p></div><a class="wp-secondary wp-button-link" href="${workspacePath("billing-addons")}">${overviewActiveAddons.length ? "Manage add-ons" : "Select add-on"}</a></div>${overviewAddonRows ? `<div class="wp-billing-overview-addon-list">${overviewAddonRows}</div>` : ""}</section>`;
-  const addonSubscriptionCards = openAddonSubscriptions.map((item) => {
+  const subscriptionAddonCards = openAddonSubscriptions.map((item) => {
     const isPaymentIncomplete = item.payment_incomplete === true || ["created", "pending", "halted"].includes(String(item.status || "").toLowerCase());
     const addonStatus = isPaymentIncomplete ? "Payment incomplete" : String(item.status || "created").replaceAll("_", " ");
     const addonOpen = !["cancelled", "completed", "expired"].includes(String(item.status));
@@ -2930,8 +2933,14 @@ function billingView(view = "billing") {
       : "";
     return `<article class="wp-billing-addon-subscription ${isPaymentIncomplete ? "is-payment-incomplete" : "is-active"}"><div><span class="wp-card-eyebrow">${isPaymentIncomplete ? "Pending add-on" : "Add-on"}</span><h3>${escapeHtml(item.addon_name || item.addon_code || "Add-on")}</h3><p>${isPaymentIncomplete ? "Payment was not completed. This add-on has not been activated." : escapeHtml(item.addon_description || "")}</p><div class="wp-billing-addon-subscription-meta"><span>${quantity.toLocaleString("en-IN")} ${escapeHtml(item.unit_name || "unit")}${quantity === 1 ? "" : "s"}</span><span>${escapeHtml(item.billing_interval || "month")}ly billing</span><span>${escapeHtml(renewalCopy)}</span></div></div><div class="wp-billing-addon-subscription-actions"><span class="wp-billing-status ${isPaymentIncomplete ? "payment-incomplete" : escapeHtml(item.status || "none")}">${escapeHtml(addonStatus)}</span>${retryPayment}${canManage && addonManaged ? `<button class="wp-secondary" type="button" data-billing-update-payment="${escapeHtml(item.id)}">Update payment method</button>` : ""}${canManage && addonOpen && !item.cancel_at_cycle_end ? `<button class="wp-billing-cancel-subtle" type="button" data-billing-cancel-addon="${escapeHtml(item.id)}">${isPaymentIncomplete ? "Cancel request" : "Cancel add-on"}</button>` : item.cancel_at_cycle_end ? `<span class="wp-billing-cancellation-scheduled">${escapeHtml(renewalCopy)}</span>` : ""}</div></article>`;
   }).join("");
-  const addonCountLabel = [activeAddonSubscriptions.length ? `${activeAddonSubscriptions.length} active` : "", incompleteAddonSubscriptions.length ? `${incompleteAddonSubscriptions.length} payment incomplete` : ""].filter(Boolean).join(" · ");
-  const addonSubscriptionsSection = openAddonSubscriptions.length ? `<section class="wp-card wp-billing-addon-subscriptions"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Add-ons</span><h2>Your add-ons</h2></div><span class="wp-billing-addon-count ${activeAddonSubscriptions.length ? "" : "is-pending"}">${addonCountLabel}</span></div><div class="wp-billing-addon-subscription-list">${addonSubscriptionCards}</div></section>` : "";
+  const planManagedAddonCards = planManagedRecurringAssignments.map((addon) => {
+    const quantity = Math.max(1, Number(addon.quantity || 1));
+    return `<article class="wp-billing-addon-subscription is-active"><div><span class="wp-card-eyebrow">Add-on</span><h3>${escapeHtml(addon.name || addon.code || "Add-on")}</h3><p>${escapeHtml(addon.description || "")}</p><div class="wp-billing-addon-subscription-meta"><span>${quantity.toLocaleString("en-IN")} ${escapeHtml(addon.unit_name || "unit")}${quantity === 1 ? "" : "s"}</span><span>${escapeHtml(addon.billing_interval || "month")}ly billing</span><span>Managed with current plan</span></div></div><div class="wp-billing-addon-subscription-actions"><span class="wp-billing-status active">Active</span>${addonControl({ ...addon, billingManaged: false }, quantity)}</div></article>`;
+  }).join("");
+  const addonSubscriptionCards = `${subscriptionAddonCards}${planManagedAddonCards}`;
+  const activeAddonCount = activeAddonSubscriptions.length + planManagedRecurringAssignments.length;
+  const addonCountLabel = [activeAddonCount ? `${activeAddonCount} active` : "", incompleteAddonSubscriptions.length ? `${incompleteAddonSubscriptions.length} payment incomplete` : ""].filter(Boolean).join(" · ");
+  const addonSubscriptionsSection = addonSubscriptionCards ? `<section class="wp-card wp-billing-addon-subscriptions"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Add-ons</span><h2>Your add-ons</h2></div><span class="wp-billing-addon-count ${activeAddonCount ? "" : "is-pending"}">${addonCountLabel}</span></div><div class="wp-billing-addon-subscription-list">${addonSubscriptionCards}</div></section>` : "";
   const renewalInterval = subscription?.billing_interval === "year" ? "annual" : "monthly";
   const renewalAmount = (version) => Number(version?.[subscription?.billing_interval === "year" ? "annual_base_paise" : "monthly_base_paise"] || 0) / 100;
   const companyTrialEligible = workspaceBilling?.trialEligibility?.eligible === true;
