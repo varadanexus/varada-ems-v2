@@ -179,6 +179,14 @@ function graphVersion() {
   if (!/^v\d{1,3}\.0$/.test(value)) throw new Error("Messaging is not configured.");
   return value;
 }
+function metaProviderError(graph: any, fallback: string) {
+  const error = graph?.error || {};
+  const message = String(error.error_user_msg || error.message || fallback).trim();
+  const code = Number(error.code || 0);
+  const subcode = Number(error.error_subcode || 0);
+  const identifiers = [code ? `Meta code ${code}` : "", subcode ? `subcode ${subcode}` : ""].filter(Boolean).join(", ");
+  return new Error(identifiers ? `${message} (${identifiers}).` : message);
+}
 async function ownedBusinessNumber(admin: any, customer: any, value: unknown) {
   const connectionId = cleanUuid(value, "business number");
   const { data, error } = await admin.from("whatsapp_platform_connections")
@@ -297,13 +305,11 @@ async function assertMetaTemplateCapacity(admin: any, customer: any, connection:
   const master = await packageMaster(admin, customer);
   const limit = packageLimit(master, "template_limit");
   if (limit === null) return;
-  const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`);
-  url.searchParams.set("limit", "1");
-  url.searchParams.set("summary", "true");
-  const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  const graph = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Message template capacity could not be verified.");
-  const used = Number(graph?.summary?.total_count ?? (Array.isArray(graph?.data) ? graph.data.length : 0));
+  // Meta does not support `summary=true` for every WABA/app capability and can
+  // answer that otherwise valid read with error code 3. Use the same paginated
+  // listing that powers the template screen so capacity checks never block a
+  // legitimate create request before it reaches the provider.
+  const used = (await fetchMetaTemplates(connection.whatsapp_business_account_id, accessToken)).length;
   if (used >= limit) throw new Error(`The active package limit of ${limit.toLocaleString("en-IN")} message template${limit === 1 ? "" : "s"} has been reached. Upgrade or add template capacity before creating another template.`);
 }
 async function inviteTeamMember(admin: any, customer: any, body: any) {
@@ -433,6 +439,66 @@ async function templateConnection(admin: any, customer: any, connectionId: unkno
   if (credentialError || !credential) throw new Error("The WhatsApp connection credential is unavailable.");
   if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
   return { connection, credential, secret: await decryptCredential(credential.credential_ciphertext) };
+}
+async function inspectMetaTemplateAccess(connection: any, tokenValue: unknown) {
+  const token = String(tokenValue || "");
+  const request = async (path: string) => {
+    const response = await fetch(`https://graph.facebook.com/${graphVersion()}/${path}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    const payload = await response.json().catch(() => ({}));
+    return { ok: response.ok, status: response.status, payload };
+  };
+  const debugPath = new URLSearchParams({ input_token: token }).toString();
+  const [permissionsResult, debugResult, wabaResult] = await Promise.all([
+    request("me/permissions"),
+    request(`debug_token?${debugPath}`),
+    request(`${encodeURIComponent(connection.whatsapp_business_account_id)}?fields=id,name,owner_business_info`),
+  ]);
+  const permissions = Array.isArray(permissionsResult.payload?.data)
+    ? permissionsResult.payload.data.map((item: any) => ({ permission: String(item?.permission || ""), status: String(item?.status || "") })).filter((item: any) => item.permission)
+    : [];
+  const granted = new Set(permissions.filter((item: any) => item.status === "granted").map((item: any) => item.permission));
+  const debug = debugResult.payload?.data || {};
+  const granularScopes = Array.isArray(debug.granular_scopes)
+    ? debug.granular_scopes.map((item: any) => ({ scope: String(item?.scope || ""), targetIds: Array.isArray(item?.target_ids) ? item.target_ids.map(String) : [] }))
+    : [];
+  const managementTargets = granularScopes.find((item: any) => item.scope === "whatsapp_business_management")?.targetIds || [];
+  const wabaId = String(connection.whatsapp_business_account_id || "");
+  return {
+    graphVersion: graphVersion(), connectionId: connection.id, wabaId,
+    token: {
+      valid: debugResult.ok ? Boolean(debug.is_valid) : null,
+      appId: debugResult.ok ? String(debug.app_id || "") : "",
+      configuredAppMatch: debugResult.ok && debug.app_id ? String(debug.app_id) === env("WHATSAPP_PLATFORM_META_APP_ID") : null,
+      expiresAt: Number(debug.expires_at || 0) > 0 ? new Date(Number(debug.expires_at) * 1000).toISOString() : null,
+      permissions,
+      hasManagement: granted.has("whatsapp_business_management") || (Array.isArray(debug.scopes) && debug.scopes.includes("whatsapp_business_management")),
+      hasMessaging: granted.has("whatsapp_business_messaging") || (Array.isArray(debug.scopes) && debug.scopes.includes("whatsapp_business_messaging")),
+      managementTargetAssigned: managementTargets.length ? managementTargets.includes(wabaId) : null,
+      granularScopes,
+    },
+    waba: { readable: wabaResult.ok, id: String(wabaResult.payload?.id || ""), name: String(wabaResult.payload?.name || "") },
+    checks: {
+      permissionsEndpoint: permissionsResult.ok,
+      debugEndpoint: debugResult.ok,
+      wabaEndpoint: wabaResult.ok,
+    },
+  };
+}
+async function templateCapabilityDiagnostics(admin: any, customer: any, body: any) {
+  if (!["owner", "admin"].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can inspect Meta template access.");
+  const { connection, secret } = await templateConnection(admin, customer, body.connectionId);
+  return inspectMetaTemplateAccess(connection, secret.accessToken);
+}
+function templateCapabilityMessage(diagnostics: any) {
+  if (diagnostics?.token?.valid === false) return "The saved Meta token is invalid or expired. Reconnect this business number, then submit the template again.";
+  if (diagnostics?.token?.configuredAppMatch === false) return "This business number was authorized with a different Meta app. Reconnect it through Varada Nexus Connect, then submit the template again.";
+  if (!diagnostics?.token?.hasManagement) return "The saved Meta token is missing whatsapp_business_management. Reconnect the number and grant WhatsApp account management access.";
+  if (!diagnostics?.token?.hasMessaging) return "The saved Meta token is missing whatsapp_business_messaging. Reconnect the number and grant WhatsApp messaging access.";
+  if (diagnostics?.token?.managementTargetAssigned === false) return "The token is not assigned to this WhatsApp Business Account. Give the connected Meta user or System User full control of this WABA, then reconnect the number.";
+  if (!diagnostics?.waba?.readable) return "Meta allows sign-in but does not grant this token access to the connected WhatsApp Business Account. Assign the WABA to the token owner and reconnect the number.";
+  return "The token scopes and WABA assignment are present, but Meta has not enabled template-management capability for this app. Grant Advanced Access to whatsapp_business_management in Meta App Review, then reconnect the number.";
 }
 
 const BUSINESS_VERTICALS = new Set(["UNDEFINED","OTHER","AUTO","BEAUTY","APPAREL","EDU","ENTERTAIN","EVENT_PLAN","FINANCE","GROCERY","GOVT","HOTEL","HEALTH","NONPROFIT","PROF_SERVICES","RETAIL","TRAVEL","RESTAURANT","NOT_A_BIZ"]);
@@ -779,7 +845,7 @@ async function createTemplate(admin: any, customer: any, body: any) {
       method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(requestBody),
     });
     const graph = await graphResponse.json().catch(() => ({}));
-    if (!graphResponse.ok || !graph?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "The library template could not be added to this account.");
+    if (!graphResponse.ok || !graph?.id) throw metaProviderError(graph, "The library template could not be added to this account.");
     const template = { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), libraryTemplateName, components: bodyText ? [{ type: "BODY", text: bodyText }] : [] };
     await upsertTemplateRecord(admin, customer, connection.id, template, { source: "meta_library", contentType: "TEXT", libraryTemplateName, sampleValues: libraryBodyInputs.map((input: any) => input.text) });
     await recordDeveloperLog(admin, customer, { connectionId: connection.id, category: "template", eventType: "template.created", status: template.status.toLowerCase(), summary: `Template ${name} submitted to Meta`, resourceId: template.id, metadata: { source: "meta_library", language, category } });
@@ -845,7 +911,30 @@ async function createTemplate(admin: any, customer: any, body: any) {
     body: JSON.stringify({ name, language, category, components }),
   });
   const graph = await graphResponse.json().catch(() => ({}));
-  if (!graphResponse.ok || !graph?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Template could not be submitted to Meta.");
+  if (!graphResponse.ok || !graph?.id) {
+    let capabilityDiagnostics: any = null;
+    if (Number(graph?.error?.code || 0) === 3) {
+      capabilityDiagnostics = await inspectMetaTemplateAccess(connection, secret.accessToken).catch(() => null);
+    }
+    await recordDeveloperLog(admin, customer, {
+      connectionId: connection.id,
+      category: "template",
+      eventType: "template.submission_failed",
+      status: "failed",
+      summary: `Template ${name} was rejected by Meta before review`,
+      resourceId: null,
+      metadata: {
+        contentType, language, category,
+        providerCode: Number(graph?.error?.code || 0) || null,
+        providerSubcode: Number(graph?.error?.error_subcode || 0) || null,
+        providerType: String(graph?.error?.type || "") || null,
+        providerTraceId: String(graph?.error?.fbtrace_id || "") || null,
+        capabilityDiagnostics,
+      },
+    }).catch(() => {});
+    if (capabilityDiagnostics) throw new Error(`${templateCapabilityMessage(capabilityDiagnostics)} Meta code 3.`);
+    throw metaProviderError(graph, "Template could not be submitted to Meta.");
+  }
   const template = { id: String(graph.id), name, language, category, status: String(graph.status || "PENDING").toUpperCase(), components };
   await upsertTemplateRecord(admin, customer, connection.id, template, { source: "custom", contentType, sampleValues: authentication ? [authSampleCode] : variableExamples.slice(0, uniqueNumbers.length) });
   await recordDeveloperLog(admin, customer, { connectionId: connection.id, category: "template", eventType: "template.created", status: template.status.toLowerCase(), summary: `Template ${name} submitted to Meta`, resourceId: template.id, metadata: { contentType, language, category } });
@@ -2183,7 +2272,7 @@ Deno.serve(async (req) => {
       update_conversation: "team_inbox", add_note: "team_inbox",
       list_contacts: "contacts", create_contact: "contacts", preview_contact_import: "contacts", import_contacts: "contacts", start_google_contacts_import: "contacts", consume_google_contacts_import: "contacts", update_contact: "contacts", delete_contacts: "contacts",
       list_marketing_consent_events: "contacts",
-      list_templates: "templates", list_template_library: "templates", create_template: "templates",
+      list_templates: "templates", list_template_library: "templates", create_template: "templates", template_capability_diagnostics: "templates",
       list_flows: "flows", save_flow: "flows", set_flow_status: "flows", delete_flow: "flows",
       list_campaigns: "campaigns", list_campaign_segments: "campaigns", save_campaign_segment: "campaigns",
       delete_campaign_segment: "campaigns", save_campaign: "campaigns", decide_campaign: "campaigns", delete_campaign: "campaigns", dispatch_campaign: "campaigns",
@@ -2217,6 +2306,7 @@ Deno.serve(async (req) => {
     if (action === "update_business_profile") return json(req, await updateBusinessProfile(admin, customer, body));
     if (action === "list_templates") return json(req, await listTemplates(admin, customer, body));
     if (action === "list_template_library") return json(req, await listTemplateLibrary(admin, customer, body));
+    if (action === "template_capability_diagnostics") return json(req, await templateCapabilityDiagnostics(admin, customer, body));
     if (action === "create_template") return json(req, await createTemplate(admin, customer, body));
     if (action === "list_flows") return json(req, await listFlows(admin, customer, body));
     if (action === "save_flow") return json(req, await saveFlow(admin, customer, body));
@@ -2245,7 +2335,16 @@ Deno.serve(async (req) => {
     if (action === "delete_contacts") return json(req, await deleteContacts(admin, customer, body));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Request failed";
+    const details = error && typeof error === "object" ? error as Record<string, unknown> : {};
+    const message = error instanceof Error
+      ? error.message
+      : cleanText(details.message || details.details || details.hint || details.code || "Request failed", 500) || "Request failed";
+    console.error("WhatsApp platform messaging request failed", {
+      message,
+      code: cleanText(details.code, 80) || null,
+      details: cleanText(details.details, 500) || null,
+      hint: cleanText(details.hint, 500) || null,
+    });
     const status = /unauthorized/i.test(message) ? 401 : /cannot send|role|only workspace administrators/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 400;
     return json(req, { error: message }, status);
   }
