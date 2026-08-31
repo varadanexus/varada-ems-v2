@@ -2288,6 +2288,31 @@ function templateFullMessage(template) {
   return sections.join("\n\n").trim() || "No message preview available.";
 }
 
+function templateMessageWithSamples(template) {
+  const samples = Array.isArray(template?.sampleValues) ? template.sampleValues : [];
+  return templateFullMessage(template).replace(/\{\{(\d+)\}\}/g, (placeholder, number) => {
+    const sample = String(samples[Number(number) - 1] || "").trim();
+    return sample || placeholder;
+  });
+}
+
+function templateDetailContent(template) {
+  const integrationId = String(template?.integrationId || "");
+  const status = String(template?.status || "UNKNOWN").toLowerCase();
+  const source = template?.status === "DRAFT" ? "Workspace draft" : template?.source === "meta_library" ? "Meta library" : "Meta template";
+  const updatedAt = template?.updatedAt ? new Date(template.updatedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "Not available";
+  return `<header><div><span class="wp-card-eyebrow">Template details</span><h2>${escapeHtml(template?.name || "Message template")}</h2><p>Preview the complete message and copy its stable ID for software integrations.</p></div><button type="button" data-close-template-detail aria-label="Close">×</button></header>
+    <div class="wp-template-detail-grid">
+      <section class="wp-template-detail-summary">
+        <div class="wp-template-detail-meta"><span class="wp-template-status ${escapeHtml(status)}">${escapeHtml(templateStatusLabel(template?.status))}</span><span>${escapeHtml(template?.category || "Unknown")}</span><span>${escapeHtml(template?.language || "Unknown")}</span><span>${escapeHtml(source)}</span></div>
+        <div class="wp-template-integration-id"><div><span>Template ID</span><strong>Use this 32-character ID in API requests.</strong></div>${integrationId ? `<code>${escapeHtml(integrationId)}</code><button class="wp-secondary" type="button" data-copy-template-id="${escapeHtml(integrationId)}">Copy ID</button>` : `<p>The integration ID is being prepared. Refresh templates shortly.</p>`}</div>
+        <dl class="wp-template-detail-facts"><div><dt>Content type</dt><dd>${escapeHtml(template?.contentType || "TEXT")}</dd></div><div><dt>Last updated</dt><dd>${escapeHtml(updatedAt)}</dd></div>${template?.rejectionReason ? `<div class="is-wide"><dt>Rejection reason</dt><dd>${escapeHtml(template.rejectionReason)}</dd></div>` : ""}</dl>
+      </section>
+      <section class="wp-template-message-preview"><span class="wp-card-eyebrow">Customer preview</span><div><p>${escapeHtml(templateMessageWithSamples(template))}</p><time>Template message</time></div></section>
+    </div>
+    <footer><button class="wp-primary" type="button" data-close-template-detail>Done</button></footer>`;
+}
+
 function templatesView(connections) {
   const readyConnections = connections.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId) && (!workspaceSelectedConnectionId || connection.id === workspaceSelectedConnectionId));
   const selectedId = workspaceTemplates.connectionId || readyConnections[0]?.id || "";
@@ -2301,7 +2326,7 @@ function templatesView(connections) {
 
 function templateBuilderDialog(readyConnections, selectedId) {
   const accountOptions = readyConnections.map((connection) => `<option value="${escapeHtml(connection.id)}" ${connection.id === selectedId ? "selected" : ""}>${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}</option>`).join("");
-  return `<dialog class="wp-contact-dialog wp-template-dialog wp-template-builder" id="wpCreateTemplateDialog"><form>
+  return `<dialog class="wp-contact-dialog wp-template-detail-dialog" id="wpTemplateDetailDialog"><div data-template-detail-content></div></dialog><dialog class="wp-contact-dialog wp-template-dialog wp-template-builder" id="wpCreateTemplateDialog"><form>
     <header class="wp-template-builder-head"><div><span class="wp-card-eyebrow">Template studio</span><h2>Create a WhatsApp template</h2><p>Design the message, add examples and preview the customer experience before submitting it to Meta.</p></div><button type="button" data-close-template-dialog aria-label="Close">×</button></header>
     <div class="wp-template-builder-grid">
       <div class="wp-template-editor">
@@ -2350,7 +2375,7 @@ function templatesViewV2(connections) {
   const templates = workspaceTemplates.templates || [];
   const libraryTemplates = workspaceTemplateLibrary.templates || [];
   const count = (statuses) => templates.filter((template) => statuses.includes(template.status)).length;
-  const rows = templates.map((template) => `<article class="wp-template-row" data-template-row data-template-status="${escapeHtml(String(template.status || "UNKNOWN").toUpperCase())}"><div class="wp-template-icon">${escapeHtml((template.category || "T").charAt(0))}</div><div class="wp-template-copy"><div><strong>${escapeHtml(template.name)}</strong><span class="wp-template-status ${escapeHtml(String(template.status).toLowerCase())}">${escapeHtml(templateStatusLabel(template.status))}</span></div><p>${escapeHtml(templateBody(template))}</p><footer><span>${escapeHtml(template.category)}</span><span>${escapeHtml(template.language)}</span><span>${template.status === "DRAFT" ? "Workspace draft" : template.source === "meta_library" ? "Meta library" : "Meta template"}</span>${template.rejectionReason ? `<span>${escapeHtml(template.rejectionReason)}</span>` : ""}</footer></div></article>`).join("");
+  const rows = templates.map((template, index) => `<article class="wp-template-row" data-template-row data-template-index="${index}" data-template-status="${escapeHtml(String(template.status || "UNKNOWN").toUpperCase())}" role="button" tabindex="0" aria-label="View template ${escapeHtml(template.name)}"><div class="wp-template-icon">${escapeHtml((template.category || "T").charAt(0))}</div><div class="wp-template-copy"><div><strong>${escapeHtml(template.name)}</strong><span class="wp-template-status ${escapeHtml(String(template.status).toLowerCase())}">${escapeHtml(templateStatusLabel(template.status))}</span></div><p>${escapeHtml(templateBody(template))}</p><footer><span>${escapeHtml(template.category)}</span><span>${escapeHtml(template.language)}</span><span>${template.status === "DRAFT" ? "Workspace draft" : template.source === "meta_library" ? "Meta library" : "Meta template"}</span>${template.rejectionReason ? `<span>${escapeHtml(template.rejectionReason)}</span>` : ""}</footer></div><span class="wp-template-view-cue" aria-hidden="true">View →</span></article>`).join("");
   const selector = readyConnections.length > 1 ? `<select id="wpTemplateConnection" aria-label="WhatsApp Business account">${readyConnections.map((connection) => `<option value="${escapeHtml(connection.id)}" ${connection.id === selectedId ? "selected" : ""}>${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}</option>`).join("")}</select>` : "";
   return `<section class="wp-route-page wp-templates-page"><div class="wp-route-heading"><div><span class="wp-kicker">Approved messaging</span><h1>Message templates</h1><p>Create custom and document templates, or use Meta's pre-approved library.</p></div>${readyConnections.length ? `<div class="wp-template-create-actions"><button class="wp-secondary" id="wpCreateDocumentTemplateBtn" type="button">▧ Document</button><button class="wp-primary" id="wpCreateTemplateBtn" type="button">＋ Custom</button></div>` : `<a class="wp-primary wp-button-link" href="${workspacePath("accounts")}">Connect account</a>`}</div>${workspaceTemplates.error ? `<div class="wp-verification-notice"><strong>Templates unavailable</strong><p>${escapeHtml(workspaceTemplates.error)}</p></div>` : ""}<section class="wp-template-stats"><article><span>Total</span><strong>${templates.length}</strong></article><article><span>Draft</span><strong>${count(["DRAFT"])}</strong></article><article><span>In review</span><strong>${count(["PENDING","IN_REVIEW","IN_APPEAL"])}</strong></article><article><span>Rejected</span><strong>${count(["REJECTED"])}</strong></article><article><span>Approved</span><strong>${count(["APPROVED"])}</strong></article></section><nav class="wp-template-mode-tabs"><button class="active" type="button" data-template-panel-tab="owned">My templates</button><button type="button" data-template-panel-tab="library">Meta pre-approved library <span>${libraryTemplates.length}</span></button></nav><section class="wp-card wp-template-library" data-template-panel="owned"><header><div><span class="wp-card-eyebrow">My templates</span><h2>WhatsApp message templates</h2></div><div class="wp-template-tools">${selector}<label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search templates" data-template-search /></label><button class="wp-secondary" id="wpRefreshTemplatesBtn" type="button">Refresh</button></div></header><nav class="wp-template-status-filters" aria-label="Template status"><button class="active" type="button" data-template-status-filter="ALL">All</button><button type="button" data-template-status-filter="DRAFT">Draft</button><button type="button" data-template-status-filter="IN_REVIEW">In review</button><button type="button" data-template-status-filter="REJECTED">Rejected</button><button type="button" data-template-status-filter="APPROVED">Approved</button></nav><div class="wp-template-list">${rows || `<div class="wp-inbox-empty"><span>✦</span><strong>No templates yet</strong><p>Create a custom template or choose one from Meta's library.</p></div>`}</div></section><section class="wp-card wp-meta-library" data-template-panel="library" hidden><header><div><span class="wp-card-eyebrow">Pre-approved by Meta</span><h2>Template library</h2><p>Fixed Utility and Authentication structures for common use cases.</p></div><div class="wp-template-tools"><select id="wpLibraryCategory"><option value="UTILITY" ${workspaceTemplateLibrary.category === "UTILITY" ? "selected" : ""}>Utility</option><option value="AUTHENTICATION" ${workspaceTemplateLibrary.category === "AUTHENTICATION" ? "selected" : ""}>Authentication</option></select><select id="wpLibraryLanguage"><option value="en_US">English (US)</option><option value="en_GB">English (UK)</option><option value="hi">Hindi</option><option value="te">Telugu</option></select><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search library" data-library-search /></label></div></header>${workspaceTemplateLibrary.error ? `<div class="wp-verification-notice"><strong>Library unavailable</strong><p>${escapeHtml(workspaceTemplateLibrary.error)}</p></div>` : ""}<div class="wp-meta-library-grid">${libraryTemplates.map(libraryTemplateCard).join("") || `<div class="wp-inbox-empty"><span>⌕</span><strong>No library templates found</strong><p>Try another category or language.</p></div>`}</div></section>${templateBuilderDialog(readyConnections, selectedId)}${libraryCloneDialog(readyConnections, selectedId)}</section>`;
 }
@@ -5026,6 +5051,27 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     app.querySelectorAll("[data-template-status-filter]").forEach((item) => item.classList.toggle("active", item === button));
     applyTemplateFilters();
   }));
+  const templateDetailDialog = app.querySelector("#wpTemplateDetailDialog");
+  const openTemplateDetails = (row) => {
+    const template = workspaceTemplates.templates?.[Number(row.dataset.templateIndex)];
+    const content = templateDetailDialog?.querySelector("[data-template-detail-content]");
+    if (!template || !content) return;
+    content.innerHTML = templateDetailContent(template);
+    content.querySelectorAll("[data-close-template-detail]").forEach((button) => button.addEventListener("click", () => templateDetailDialog.close()));
+    content.querySelector("[data-copy-template-id]")?.addEventListener("click", async (event) => {
+      await navigator.clipboard.writeText(event.currentTarget.dataset.copyTemplateId || "");
+      showToast("Template ID copied.");
+    });
+    templateDetailDialog.showModal();
+  };
+  app.querySelectorAll("[data-template-index]").forEach((row) => {
+    row.addEventListener("click", () => openTemplateDetails(row));
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openTemplateDetails(row);
+    });
+  });
   app.querySelector("#wpTemplateConnection")?.addEventListener("change", (event) => {
     const url = new URL(location.href);
     url.searchParams.set("connection", event.currentTarget.value);

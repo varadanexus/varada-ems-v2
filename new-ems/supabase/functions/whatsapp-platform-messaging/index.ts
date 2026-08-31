@@ -686,6 +686,7 @@ function formatTemplateMessage(components: any[]) {
 function templateRecordView(row: any) {
   return {
     id: String(row.meta_template_id || row.id || ""), recordId: row.id,
+    integrationId: String(row.integration_id || ""),
     name: String(row.name || ""), status: String(row.status || "UNKNOWN").toUpperCase(),
     category: String(row.category || "UNKNOWN").toUpperCase(), language: String(row.language || ""),
     components: Array.isArray(row.components) ? row.components : [], source: row.source || "custom",
@@ -1140,10 +1141,10 @@ async function startChat(admin: any, customer: any, body: any) {
   if (!["owner","admin","agent"].includes(customer.role_code)) throw new Error("Your workspace role cannot start conversations.");
   const contactId = cleanUuid(body.contactId, "contact");
   const connectionId = cleanUuid(body.connectionId, "connection");
-  const templateName = String(body.templateName || "").trim();
-  const languageCode = String(body.languageCode || "en_US").trim();
-  if (!/^[a-z0-9_]{1,512}$/.test(templateName)) throw new Error("Enter the exact name of an approved WhatsApp template.");
-  if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(languageCode)) throw new Error("Enter a valid template language code, such as en_US.");
+  const templateIntegrationId = String(body.templateId || body.templateIntegrationId || "").trim();
+  let templateName = String(body.templateName || "").trim();
+  let languageCode = String(body.languageCode || "en_US").trim();
+  if (templateIntegrationId && !/^[A-Za-z0-9]{32}$/.test(templateIntegrationId)) throw new Error("Template ID must be a 32-character alphanumeric code.");
   const [{ data: contact, error: contactError }, { data: connection, error: connectionError }, { data: credential, error: credentialError }] = await Promise.all([
     admin.from("whatsapp_platform_contacts").select("id,wa_id,status").eq("id", contactId).eq("tenant_id", customer.tenant_id).single(),
     admin.from("whatsapp_platform_connections").select("id,whatsapp_business_account_id,phone_number_id,status").eq("id", connectionId).eq("tenant_id", customer.tenant_id).single(),
@@ -1154,6 +1155,17 @@ async function startChat(admin: any, customer: any, body: any) {
   if (connectionError || connection?.status !== "connected" || !connection?.phone_number_id) throw new Error("Select a connected WhatsApp business number.");
   if (credentialError || !credential) throw new Error("The WhatsApp connection credential is unavailable.");
   if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
+  if (templateIntegrationId) {
+    const { data: templateRecord, error: templateRecordError } = await admin.from("whatsapp_platform_template_records")
+      .select("integration_id,name,language,status,components").eq("tenant_id", customer.tenant_id)
+      .eq("connection_id", connectionId).eq("integration_id", templateIntegrationId).maybeSingle();
+    if (templateRecordError || !templateRecord) throw new Error("Template ID was not found for this WhatsApp number.");
+    if (String(templateRecord.status || "").toUpperCase() !== "APPROVED") throw new Error("This template is not approved for sending.");
+    templateName = String(templateRecord.name || "").trim();
+    languageCode = String(templateRecord.language || "").trim();
+  }
+  if (!/^[a-z0-9_]{1,512}$/.test(templateName)) throw new Error("Enter a templateId or the exact name of an approved WhatsApp template.");
+  if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(languageCode)) throw new Error("Enter a valid template language code, such as en_US.");
   await assertOutboundMessageCapacity(admin, customer, 1);
   let { data: conversation, error: conversationError } = await admin.from("whatsapp_platform_conversations")
     .select("id,connection_id,contact_id").eq("tenant_id", customer.tenant_id).eq("connection_id", connectionId).eq("contact_id", contactId).maybeSingle();
@@ -1190,7 +1202,7 @@ async function startChat(admin: any, customer: any, body: any) {
     tenant_id: customer.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
     meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: "template", body: preview,
     status: "accepted", provider_timestamp: now, created_by_user_id: customer.user_id,
-    safe_metadata: { template_name: templateName, language_code: languageCode },
+    safe_metadata: { template_name: templateName, template_integration_id: templateIntegrationId || null, language_code: languageCode },
   }).select("id,meta_message_id,direction,message_type,body,status,safe_metadata,provider_timestamp,created_at").single();
   if (messageError) throw messageError;
   await Promise.all([

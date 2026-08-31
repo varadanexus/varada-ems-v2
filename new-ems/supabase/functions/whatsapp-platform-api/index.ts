@@ -90,6 +90,28 @@ Deno.serve(async (req) => {
       action = "create_contact"; requireScope(session, "contacts:write");
       const parsed = await body(req);
       result = await idempotent(admin, session, req, parsed.raw, () => internalAction(session, action, parsed.value));
+    } else if (req.method === "GET" && path === "/v1/templates") {
+      action = "list_templates"; requireScope(session, "messages:write");
+      let query = admin.from("whatsapp_platform_template_records")
+        .select("integration_id,name,language,category,status,content_type,components,connection_id,updated_at")
+        .eq("tenant_id", session.tenant_id).order("updated_at", { ascending: false }).limit(500);
+      const statusFilter = String(url.searchParams.get("status") || "").trim().toUpperCase();
+      const connectionFilter = String(url.searchParams.get("connectionId") || "").trim();
+      if (statusFilter) query = query.eq("status", statusFilter);
+      if (connectionFilter) query = query.eq("connection_id", connectionFilter);
+      const { data, error } = await query;
+      if (error) throw error;
+      result = { status: 200, payload: { templates: (data || []).map((item: any) => ({
+        id: item.integration_id,
+        name: item.name,
+        language: item.language,
+        category: item.category,
+        status: item.status,
+        contentType: item.content_type,
+        components: item.components || [],
+        connectionId: item.connection_id,
+        updatedAt: item.updated_at,
+      })) } };
     } else if (req.method === "POST" && path === "/v1/messages") {
       requireScope(session, "messages:write");
       const parsed = await body(req);
