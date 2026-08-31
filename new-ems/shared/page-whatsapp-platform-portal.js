@@ -489,6 +489,33 @@ function packageFeatureLockedView(feature) {
   return `<section class="wp-route-page wp-feature-lock"><article class="wp-card"><span class="wp-kicker">Package entitlement required</span><h1>${escapeHtml(label)}</h1><p>This module is not included in the active package. Package Master is the authority for feature access and limits.</p><a class="wp-primary wp-button-link" href="${workspacePath("billing-plans")}">View plans and upgrade</a></article></section>`;
 }
 
+const PACKAGE_FEATURE_LIMIT_KEYS = {
+  flows: "flow_limit",
+  campaigns: "campaign_limit",
+  contacts: "contact_limit",
+  templates: "template_limit",
+  integrations: "integration_limit",
+};
+
+function addonEnablesPackageFeature(addon, feature) {
+  const quantity = Math.max(0, Number(addon?.quantity || 0));
+  if (!quantity || addon?.assignmentStatus && addon.assignmentStatus !== "active") return false;
+  const effects = addon?.entitlement_effects || {};
+  const explicit = effects?.[feature];
+  if (explicit === true || (typeof explicit === "number" && explicit > 0)) return true;
+  const limitKey = PACKAGE_FEATURE_LIMIT_KEYS[feature];
+  if (limitKey && Number(effects?.[limitKey] || 0) * quantity > 0) return true;
+  return feature === "flows" && /(^|[-_])flow$/.test(String(addon?.code || "").toLowerCase());
+}
+
+function effectivePackageEntitlements(master = workspacePackageMaster) {
+  const entitlements = { ...(master?.package?.entitlements || {}) };
+  Object.keys(PACKAGE_FEATURE_LIMIT_KEYS).forEach((feature) => {
+    if ((master?.addons || []).some((addon) => addonEnablesPackageFeature(addon, feature))) entitlements[feature] = true;
+  });
+  return entitlements;
+}
+
 const WORKSPACE_SIDEBAR_KEY = "varada-whatsapp-workspace-sidebar";
 
 function readWorkspaceSidebarState() {
@@ -3512,7 +3539,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const isFlowBuilderRoute = Boolean(currentFlowBuilderId());
   const isInboxRoute = view === "inbox";
   const operationalPackageName = workspacePackageMaster?.package?.name || planName(workspaceProfile?.planCode);
-  const operationalEntitlements = workspacePackageMaster?.package?.entitlements || {};
+  const operationalEntitlements = effectivePackageEntitlements();
   const sidebarNumberSelector = businessNumberSelector(connections, selectedConnection);
   const sidebarNavigation = workspaceNavigationMarkup({ inboxUnread, contactCount, campaignCount, templateCount: workspaceTemplates.templates.length, flowCount: workspaceFlows.flows.length, connectedCount: connected.length, teamCount: workspaceTeam.members.length, packageName: operationalPackageName, entitlements: operationalEntitlements });
   // Unpaid workspaces must retain the complete billing centre so owners and

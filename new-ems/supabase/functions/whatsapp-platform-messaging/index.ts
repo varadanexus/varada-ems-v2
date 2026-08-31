@@ -270,7 +270,21 @@ async function updateWorkspaceMessagingPreferences(admin: any, customer: any, bo
 async function requirePackageFeature(admin: any, customer: any, feature: string) {
   const master = await packageMaster(admin, customer);
   const enabled = master?.package?.entitlements?.[feature];
-  if (enabled === false || enabled === 0 || enabled === "none") {
+  const limitKeyByFeature: Record<string, string> = {
+    flows: "flow_limit", campaigns: "campaign_limit", contacts: "contact_limit",
+    templates: "template_limit", integrations: "integration_limit",
+  };
+  const enabledByAddon = (master?.addons || []).some((addon: any) => {
+    const quantity = Math.max(0, Number(addon?.quantity || 0));
+    if (!quantity || (addon?.assignmentStatus && addon.assignmentStatus !== "active")) return false;
+    const effects = addon?.entitlement_effects || {};
+    const explicit = effects?.[feature];
+    if (explicit === true || (typeof explicit === "number" && explicit > 0)) return true;
+    const limitKey = limitKeyByFeature[feature];
+    if (limitKey && Number(effects?.[limitKey] || 0) * quantity > 0) return true;
+    return feature === "flows" && /(^|[-_])flow$/.test(String(addon?.code || "").toLowerCase());
+  });
+  if ((enabled === false || enabled === 0 || enabled === "none") && !enabledByAddon) {
     const label = feature.replaceAll("_", " ");
     throw new Error(`${label.charAt(0).toUpperCase()}${label.slice(1)} is not included in the active package. Upgrade the subscription or add the required entitlement.`);
   }

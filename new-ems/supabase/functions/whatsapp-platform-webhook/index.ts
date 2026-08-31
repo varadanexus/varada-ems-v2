@@ -170,11 +170,16 @@ async function flowAutomationCapacity(admin: any, tenantId: string) {
     addonMap = new Map((addons || []).map((item: any) => [item.code, item.entitlement_effects || {}]));
   }
   const additional = (key: string) => (assignments || []).reduce((total: number, item: any) => total + Number(addonMap.get(item.addon_code)?.[key] || 0) * Number(item.quantity || 0), 0);
+  const flowAddonEnabled = (assignments || []).some((item: any) => {
+    if (Number(item.quantity || 0) <= 0) return false;
+    const effects = addonMap.get(item.addon_code) || {};
+    return effects.flows === true || Number(effects.flow_limit || 0) > 0 || /(^|[-_])flow$/.test(String(item.addon_code || "").toLowerCase());
+  });
   const flowLimit = plan.flow_limit === null ? null : Number(plan.flow_limit || 0) + additional("flow_limit");
   const automationLimit = plan.automation_limit === null ? null : Number(plan.automation_limit || 0) + additional("automation_limit");
   const messageLimit = plan.monthly_message_limit === null ? null : Number(plan.monthly_message_limit || 0) + additional("monthly_message_limit");
   return {
-    allowed: plan.entitlements?.flows === true && flowLimit !== 0 && automationLimit !== 0,
+    allowed: (plan.entitlements?.flows === true || flowAddonEnabled) && flowLimit !== 0 && automationLimit !== 0,
     monthlyMessageLimit: messageLimit,
   };
 }
