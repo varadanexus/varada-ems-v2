@@ -1142,9 +1142,11 @@ async function startChat(admin: any, customer: any, body: any) {
   const contactId = cleanUuid(body.contactId, "contact");
   const connectionId = cleanUuid(body.connectionId, "connection");
   const templateIntegrationId = String(body.templateId || body.templateIntegrationId || "").trim();
+  const templateParameters = Array.isArray(body.templateParameters) ? body.templateParameters.map((value: unknown) => String(value ?? "").trim()) : [];
   let templateName = String(body.templateName || "").trim();
   let languageCode = String(body.languageCode || "en_US").trim();
   if (templateIntegrationId && !/^[A-Za-z0-9]{32}$/.test(templateIntegrationId)) throw new Error("Template ID must be a 32-character alphanumeric code.");
+  if (templateParameters.length > 20 || templateParameters.some((value: string) => !value || value.length > 1024)) throw new Error("Provide up to 20 non-empty templateParameters, each no longer than 1,024 characters.");
   const [{ data: contact, error: contactError }, { data: connection, error: connectionError }, { data: credential, error: credentialError }] = await Promise.all([
     admin.from("whatsapp_platform_contacts").select("id,wa_id,status").eq("id", contactId).eq("tenant_id", customer.tenant_id).single(),
     admin.from("whatsapp_platform_connections").select("id,whatsapp_business_account_id,phone_number_id,status").eq("id", connectionId).eq("tenant_id", customer.tenant_id).single(),
@@ -1155,14 +1157,16 @@ async function startChat(admin: any, customer: any, body: any) {
   if (connectionError || connection?.status !== "connected" || !connection?.phone_number_id) throw new Error("Select a connected WhatsApp business number.");
   if (credentialError || !credential) throw new Error("The WhatsApp connection credential is unavailable.");
   if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
+  let registeredTemplate: any = null;
   if (templateIntegrationId) {
     const { data: templateRecord, error: templateRecordError } = await admin.from("whatsapp_platform_template_records")
-      .select("integration_id,name,language,status,components").eq("tenant_id", customer.tenant_id)
+      .select("integration_id,name,language,category,status,components").eq("tenant_id", customer.tenant_id)
       .eq("connection_id", connectionId).eq("integration_id", templateIntegrationId).maybeSingle();
     if (templateRecordError || !templateRecord) throw new Error("Template ID was not found for this WhatsApp number.");
     if (String(templateRecord.status || "").toUpperCase() !== "APPROVED") throw new Error("This template is not approved for sending.");
     templateName = String(templateRecord.name || "").trim();
     languageCode = String(templateRecord.language || "").trim();
+    registeredTemplate = templateRecord;
   }
   if (!/^[a-z0-9_]{1,512}$/.test(templateName)) throw new Error("Enter a templateId or the exact name of an approved WhatsApp template.");
   if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(languageCode)) throw new Error("Enter a valid template language code, such as en_US.");
@@ -1189,7 +1193,14 @@ async function startChat(admin: any, customer: any, body: any) {
   }
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: { name: templateName, language: { code: languageCode } } }),
+    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: {
+      name: templateName, language: { code: languageCode }, ...(templateParameters.length ? { components: [
+        { type: "body", parameters: templateParameters.map((text: string) => ({ type: "text", text })) },
+        ...(String(registeredTemplate?.category || templateDefinition?.category || "").toUpperCase() === "AUTHENTICATION"
+          ? [{ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: templateParameters[0] }] }]
+          : []),
+      ] } : {}),
+    } }),
   });
   const graph = await graphResponse.json().catch(() => ({}));
   if (!graphResponse.ok || !graph?.messages?.[0]?.id) {
