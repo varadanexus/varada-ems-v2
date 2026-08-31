@@ -686,7 +686,7 @@ function formatTemplateMessage(components: any[]) {
 function templateRecordView(row: any) {
   return {
     id: String(row.meta_template_id || row.id || ""), recordId: row.id,
-    integrationId: String(row.integration_id || ""),
+    integrationId: String(row.integration_id || ""), connectionId: String(row.connection_id || ""),
     name: String(row.name || ""), status: String(row.status || "UNKNOWN").toUpperCase(),
     category: String(row.category || "UNKNOWN").toUpperCase(), language: String(row.language || ""),
     components: Array.isArray(row.components) ? row.components : [], source: row.source || "custom",
@@ -805,9 +805,28 @@ async function createTemplate(admin: any, customer: any, body: any) {
   if (body.saveAsDraft === true) {
     const { connection } = await templateConnection(admin, customer, body.connectionId);
     const draftComponents: any[] = [];
-    if (headerText) draftComponents.push({ type: "HEADER", format: "TEXT", text: headerText });
-    if (bodyText) draftComponents.push({ type: "BODY", text: bodyText });
-    if (footerText) draftComponents.push({ type: "FOOTER", text: footerText });
+    if (contentType === "AUTHENTICATION") {
+      draftComponents.push({ type: "BODY", add_security_recommendation: body.addSecurityRecommendation !== false });
+      draftComponents.push({ type: "FOOTER", code_expiration_minutes: Number(body.codeExpirationMinutes || 10) });
+      draftComponents.push({ type: "BUTTONS", buttons: [{ type: "OTP", otp_type: "COPY_CODE", text: String(body.otpButtonText || "Copy Code").trim() || "Copy Code" }] });
+    } else {
+      if (contentType === "MEDIA") {
+        const mediaFormat = String(body.mediaFormat || "IMAGE").trim().toUpperCase();
+        const mediaHandle = String(body.mediaHandle || "").trim();
+        draftComponents.push({ type: "HEADER", format: ["IMAGE","VIDEO","DOCUMENT"].includes(mediaFormat) ? mediaFormat : "IMAGE", ...(mediaHandle ? { example: { header_handle: [mediaHandle] } } : {}) });
+      } else if (headerText) {
+        const headerExample = String(body.headerExample || "").trim();
+        draftComponents.push({ type: "HEADER", format: "TEXT", text: headerText, ...(headerExample ? { example: { header_text: [headerExample] } } : {}) });
+      }
+      if (bodyText) draftComponents.push({ type: "BODY", text: bodyText, ...(variableExamples.some(Boolean) ? { example: { body_text: [variableExamples.filter(Boolean)] } } : {}) });
+      if (footerText) draftComponents.push({ type: "FOOTER", text: footerText });
+      if (contentType === "CATALOG") draftComponents.push({ type: "BUTTONS", buttons: [{ type: "CATALOG", text: "View catalog" }] });
+      else if (contentType === "MPM") draftComponents.push({ type: "BUTTONS", buttons: [{ type: "MPM", text: "View items" }] });
+      else {
+        const draftButtons = buttons.slice(0, 3).map((button: any) => ({ ...button, type: String(button?.type || "").toUpperCase(), text: String(button?.text || "").trim() })).filter((button: any) => button.type && button.text);
+        if (draftButtons.length) draftComponents.push({ type: "BUTTONS", buttons: draftButtons });
+      }
+    }
     const template = await upsertTemplateRecord(admin, customer, connection.id, {
       name, language, category, status: "DRAFT", components: draftComponents,
     }, { source: libraryTemplateName ? "meta_library" : "custom", contentType, libraryTemplateName, sampleValues: contentType === "AUTHENTICATION" ? [authSampleCode].filter(Boolean) : variableExamples.filter(Boolean) });
@@ -878,6 +897,8 @@ async function createTemplate(admin: any, customer: any, body: any) {
     throw new Error("Select a supported template button type.");
   });
   if (graphButtons.some((button: any) => button.type === "QUICK_REPLY") && graphButtons.some((button: any) => button.type !== "QUICK_REPLY")) throw new Error("Quick replies and call-to-action buttons cannot be combined.");
+  if (contentType === "QUICK_REPLY" && (!graphButtons.length || graphButtons.some((button: any) => button.type !== "QUICK_REPLY"))) throw new Error("Quick reply templates require at least one quick reply button.");
+  if (contentType === "CTA" && (!graphButtons.length || graphButtons.some((button: any) => !["URL","PHONE_NUMBER"].includes(button.type)))) throw new Error("Call-to-action templates require at least one website or phone button.");
   const components: any[] = [];
   if (authentication) {
     const expiration = Number(body.codeExpirationMinutes || 10);
@@ -940,6 +961,27 @@ async function createTemplate(admin: any, customer: any, body: any) {
   await upsertTemplateRecord(admin, customer, connection.id, template, { source: "custom", contentType, sampleValues: authentication ? [authSampleCode] : variableExamples.slice(0, uniqueNumbers.length) });
   await recordDeveloperLog(admin, customer, { connectionId: connection.id, category: "template", eventType: "template.created", status: template.status.toLowerCase(), summary: `Template ${name} submitted to Meta`, resourceId: template.id, metadata: { contentType, language, category } });
   return { template };
+}
+async function deleteTemplate(admin: any, customer: any, body: any) {
+  if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace administrators can delete templates.");
+  const recordId = cleanUuid(body.recordId, "template record");
+  const { data: record, error: recordError } = await admin.from("whatsapp_platform_template_records")
+    .select("id,connection_id,name,language,status,meta_template_id,integration_id").eq("id", recordId).eq("tenant_id", customer.tenant_id).maybeSingle();
+  if (recordError || !record) throw new Error("Template not found.");
+  const draft = String(record.status || "").toUpperCase() === "DRAFT" || !record.meta_template_id;
+  if (!draft) {
+    const { connection, secret } = await templateConnection(admin, customer, record.connection_id);
+    const url = new URL(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.whatsapp_business_account_id)}/message_templates`);
+    url.searchParams.set("name", record.name);
+    const graphResponse = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${secret.accessToken}` } });
+    const graph = await graphResponse.json().catch(() => ({}));
+    if (!graphResponse.ok || graph?.success === false) throw metaProviderError(graph, "Template could not be deleted from Meta.");
+  }
+  const deletion = await admin.from("whatsapp_platform_template_records").delete()
+    .eq("tenant_id", customer.tenant_id).eq("connection_id", record.connection_id).eq("name", record.name);
+  if (deletion.error) throw deletion.error;
+  await recordDeveloperLog(admin, customer, { connectionId: record.connection_id, category: "template", eventType: "template.deleted", status: "success", summary: `Template ${record.name} deleted`, resourceId: record.integration_id, metadata: { name: record.name, language: record.language, draft } });
+  return { deleted: true, name: record.name };
 }
 async function thread(admin: any, customer: any, body: any) {
   const conversationId = cleanUuid(body.conversationId, "conversation");
@@ -2295,7 +2337,7 @@ Deno.serve(async (req) => {
       update_conversation: "team_inbox", add_note: "team_inbox",
       list_contacts: "contacts", create_contact: "contacts", preview_contact_import: "contacts", import_contacts: "contacts", start_google_contacts_import: "contacts", consume_google_contacts_import: "contacts", update_contact: "contacts", delete_contacts: "contacts",
       list_marketing_consent_events: "contacts",
-      list_templates: "templates", list_template_library: "templates", create_template: "templates", template_capability_diagnostics: "templates",
+      list_templates: "templates", list_template_library: "templates", create_template: "templates", delete_template: "templates", template_capability_diagnostics: "templates",
       list_flows: "flows", save_flow: "flows", set_flow_status: "flows", delete_flow: "flows",
       list_campaigns: "campaigns", list_campaign_segments: "campaigns", save_campaign_segment: "campaigns",
       delete_campaign_segment: "campaigns", save_campaign: "campaigns", decide_campaign: "campaigns", delete_campaign: "campaigns", dispatch_campaign: "campaigns",
@@ -2331,6 +2373,7 @@ Deno.serve(async (req) => {
     if (action === "list_template_library") return json(req, await listTemplateLibrary(admin, customer, body));
     if (action === "template_capability_diagnostics") return json(req, await templateCapabilityDiagnostics(admin, customer, body));
     if (action === "create_template") return json(req, await createTemplate(admin, customer, body));
+    if (action === "delete_template") return json(req, await deleteTemplate(admin, customer, body));
     if (action === "list_flows") return json(req, await listFlows(admin, customer, body));
     if (action === "save_flow") return json(req, await saveFlow(admin, customer, body));
     if (action === "set_flow_status") return json(req, await setFlowStatus(admin, customer, body));

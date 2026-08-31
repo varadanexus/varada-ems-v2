@@ -2306,11 +2306,11 @@ function templateDetailContent(template) {
       <section class="wp-template-detail-summary">
         <div class="wp-template-detail-meta"><span class="wp-template-status ${escapeHtml(status)}">${escapeHtml(templateStatusLabel(template?.status))}</span><span>${escapeHtml(template?.category || "Unknown")}</span><span>${escapeHtml(template?.language || "Unknown")}</span><span>${escapeHtml(source)}</span></div>
         <div class="wp-template-integration-id"><div><span>Template ID</span><strong>Use this 32-character ID in API requests.</strong></div>${integrationId ? `<code>${escapeHtml(integrationId)}</code><button class="wp-secondary" type="button" data-copy-template-id="${escapeHtml(integrationId)}">Copy ID</button>` : `<p>The integration ID is being prepared. Refresh templates shortly.</p>`}</div>
-        <dl class="wp-template-detail-facts"><div><dt>Content type</dt><dd>${escapeHtml(template?.contentType || "TEXT")}</dd></div><div><dt>Last updated</dt><dd>${escapeHtml(updatedAt)}</dd></div>${template?.rejectionReason ? `<div class="is-wide"><dt>Rejection reason</dt><dd>${escapeHtml(template.rejectionReason)}</dd></div>` : ""}</dl>
+        <dl class="wp-template-detail-facts"><div><dt>Content type</dt><dd>${escapeHtml(template?.contentType || "TEXT")}</dd></div><div><dt>Last updated</dt><dd>${escapeHtml(updatedAt)}</dd></div><div class="is-wide"><dt>WhatsApp eligibility</dt><dd>${String(template?.status || "").toUpperCase() === "APPROVED" ? "Business-initiated messaging approved" : "Available after Meta approval"}</dd></div>${template?.rejectionReason ? `<div class="is-wide"><dt>Rejection reason</dt><dd>${escapeHtml(template.rejectionReason)}</dd></div>` : ""}</dl>
       </section>
       <section class="wp-template-message-preview"><span class="wp-card-eyebrow">Customer preview</span><div><p>${escapeHtml(templateMessageWithSamples(template))}</p><time>Template message</time></div></section>
     </div>
-    <footer><button class="wp-primary" type="button" data-close-template-detail>Done</button></footer>`;
+    <footer><div><button class="wp-secondary" type="button" data-duplicate-template>Duplicate</button><button class="wp-danger" type="button" data-delete-template>Delete</button></div><button class="wp-primary" type="button" data-close-template-detail>Done</button></footer>`;
 }
 
 function templatesView(connections) {
@@ -2328,15 +2328,16 @@ function templateBuilderDialog(readyConnections, selectedId) {
   const accountOptions = readyConnections.map((connection) => `<option value="${escapeHtml(connection.id)}" ${connection.id === selectedId ? "selected" : ""}>${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}</option>`).join("");
   return `<dialog class="wp-contact-dialog wp-template-detail-dialog" id="wpTemplateDetailDialog"><div data-template-detail-content></div></dialog><dialog class="wp-contact-dialog wp-template-dialog wp-template-builder" id="wpCreateTemplateDialog"><form>
     <header class="wp-template-builder-head"><div><span class="wp-card-eyebrow">Template studio</span><h2>Create a WhatsApp template</h2><p>Design the message, add examples and preview the customer experience before submitting it to Meta.</p></div><button type="button" data-close-template-dialog aria-label="Close">×</button></header>
+    <nav class="wp-template-builder-steps" aria-label="Template creation progress"><button class="active" type="button" data-template-builder-step="setup"><span>1</span><strong>General information</strong></button><i></i><button type="button" data-template-builder-step="content"><span>2</span><strong>Content</strong></button><i></i><button type="button" data-template-builder-step="review"><span>3</span><strong>Review & submit</strong></button></nav>
     <div class="wp-template-builder-grid">
       <div class="wp-template-editor">
-        <section class="wp-template-section"><div class="wp-template-section-title"><span>01</span><div><strong>Template setup</strong><small>Name, account, language and purpose</small></div></div>
+        <section class="wp-template-section" data-template-builder-panel="setup"><div class="wp-template-section-title"><span>01</span><div><strong>Template setup</strong><small>Name, account, language and purpose</small></div></div>
           <label><span>WhatsApp Business account</span><select name="connectionId" required>${accountOptions}</select></label>
           <div class="wp-form-row"><label><span>Template name</span><input name="name" maxlength="512" pattern="[a-z0-9_]+" placeholder="order_confirmation" required /><small>Lowercase letters, numbers and underscores.</small></label><label><span>Language</span><select name="language" required><option value="en_US">English (US)</option><option value="en_GB">English (UK)</option><option value="hi">Hindi</option><option value="te">Telugu</option><option value="ta">Tamil</option><option value="kn">Kannada</option><option value="ml">Malayalam</option></select></label></div>
           <label><span>Category</span><select name="category"><option value="UTILITY">Utility — account and transaction updates</option><option value="MARKETING">Marketing — offers and engagement</option><option value="AUTHENTICATION">Authentication — one-time passcodes</option></select></label>
-          <fieldset class="wp-content-type-picker"><legend>Content type</legend><div><label><input type="radio" name="contentType" value="TEXT" checked /><span><i>¶</i><strong>Text</strong><small>Header, body and footer</small></span></label><label><input type="radio" name="contentType" value="MEDIA" /><span><i>▧</i><strong>Media</strong><small>Image, video or document</small></span></label><label><input type="radio" name="contentType" value="CTA" /><span><i>↗</i><strong>Call to action</strong><small>Website or phone buttons</small></span></label><label><input type="radio" name="contentType" value="QUICK_REPLY" /><span><i>↩</i><strong>Quick Reply</strong><small>Up to three replies</small></span></label><label><input type="radio" name="contentType" value="CATALOG" /><span><i>🛒</i><strong>Catalog</strong><small>Open the business catalog</small></span></label><label><input type="radio" name="contentType" value="MPM" /><span><i>▦</i><strong>WhatsApp Card</strong><small>Multi-product message</small></span></label><label><input type="radio" name="contentType" value="AUTHENTICATION" /><span><i>♢</i><strong>Authentication</strong><small>One-time passcode</small></span></label><label class="is-unavailable"><input type="radio" disabled /><span><i>☷</i><strong>List Picker</strong><small>Available in session messages</small></span></label><label class="is-unavailable"><input type="radio" disabled /><span><i>▤</i><strong>Carousel</strong><small>Separate builder coming next</small></span></label></div></fieldset>
+          <fieldset class="wp-content-type-picker"><legend>Content type</legend><div><label><input type="radio" name="contentType" value="TEXT" checked /><span><i>¶</i><strong>Text</strong><small>Header, body and footer</small></span></label><label><input type="radio" name="contentType" value="MEDIA" /><span><i>▧</i><strong>Media</strong><small>Image, video or document</small></span></label><label><input type="radio" name="contentType" value="CTA" /><span><i>↗</i><strong>Call to action</strong><small>Website or phone buttons</small></span></label><label><input type="radio" name="contentType" value="QUICK_REPLY" /><span><i>↩</i><strong>Quick Reply</strong><small>Up to three replies</small></span></label><label><input type="radio" name="contentType" value="CATALOG" /><span><i>🛒</i><strong>Catalog</strong><small>Open the business catalog</small></span></label><label><input type="radio" name="contentType" value="MPM" /><span><i>▦</i><strong>WhatsApp Card</strong><small>Multi-product message</small></span></label><label><input type="radio" name="contentType" value="AUTHENTICATION" /><span><i>♢</i><strong>Authentication</strong><small>One-time passcode</small></span></label></div></fieldset>
         </section>
-        <section class="wp-template-section" data-standard-template><div class="wp-template-section-title"><span>02</span><div><strong>Message content</strong><small>Build the message customers will receive</small></div></div>
+        <section class="wp-template-section" data-template-builder-panel="content" data-standard-template hidden><div class="wp-template-section-title"><span>02</span><div><strong>Message content</strong><small>Build the message customers will receive</small></div></div>
           <label data-standard-header><span>Header</span><select name="headerType"><option value="NONE">No header</option><option value="TEXT">Text header</option></select></label>
           <div class="wp-template-conditional" data-template-header hidden><label><span>Header text</span><input name="headerText" maxlength="60" placeholder="Order update for {{1}}" /><small>Up to 60 characters. One {{1}} variable is supported.</small></label><label><span>Header variable example <em>Only if {{1}} is used</em></span><input name="headerExample" maxlength="100" placeholder="Order 1048" /></label></div>
           <div class="wp-template-conditional wp-media-template-settings" data-media-template hidden><div class="wp-form-row"><label><span>Media format</span><select name="mediaFormat"><option value="IMAGE">Image</option><option value="VIDEO">Video</option><option value="DOCUMENT">Document</option></select></label><label><span>Meta sample media handle</span><input name="mediaHandle" placeholder="4::aW1hZ2U..." /><small>Use the handle returned by Meta's resumable upload API.</small></label></div></div>
@@ -2344,16 +2345,17 @@ function templateBuilderDialog(readyConnections, selectedId) {
           <div class="wp-template-examples" data-template-examples hidden><div><strong>Variable examples</strong><small>Used only to help Meta review the template.</small></div><div data-template-example-list></div></div>
           <label><span>Footer <em>Optional</em></span><input name="footerText" maxlength="60" placeholder="Varada Nexus • Reply STOP to opt out" /></label>
         </section>
-        <section class="wp-template-section" data-standard-template data-template-actions><div class="wp-template-section-title"><span>03</span><div><strong>Actions</strong><small>Add replies or a call to action</small></div></div>
+        <section class="wp-template-section" data-template-builder-panel="content" data-standard-template data-template-actions hidden><div class="wp-template-section-title"><span>03</span><div><strong>Actions</strong><small>Add replies or a call to action</small></div></div>
           <label><span>Button type</span><select name="buttonType"><option value="NONE">No buttons</option><option value="QUICK_REPLY">Quick replies</option><option value="CALL_TO_ACTION">Call to action</option></select></label>
           <div class="wp-template-conditional" data-template-quick-replies hidden><label><span>Quick reply 1</span><input name="quickReply1" maxlength="25" placeholder="Track order" /></label><label><span>Quick reply 2 <em>Optional</em></span><input name="quickReply2" maxlength="25" placeholder="Contact support" /></label><label><span>Quick reply 3 <em>Optional</em></span><input name="quickReply3" maxlength="25" placeholder="Not now" /></label></div>
           <div class="wp-template-conditional" data-template-cta hidden><div class="wp-form-row"><label><span>Website button</span><input name="urlButtonText" maxlength="25" placeholder="View order" /></label><label><span>Website URL</span><input name="urlButtonValue" type="url" placeholder="https://example.com/order" /></label></div><div class="wp-form-row"><label><span>Call button</span><input name="phoneButtonText" maxlength="25" placeholder="Call support" /></label><label><span>Phone number</span><input name="phoneButtonValue" type="tel" placeholder="+918125625629" /></label></div></div>
         </section>
-        <section class="wp-template-section wp-auth-template-settings" data-auth-template hidden><div class="wp-template-section-title"><span>02</span><div><strong>Authentication settings</strong><small>Configure the one-time passcode experience</small></div></div><div class="wp-auth-template-callout"><strong>Meta controls the message wording</strong><p>Authentication templates use Meta's preset OTP component. Add a sample code so the customer preview and submission audit can be verified before sending.</p></div><label class="wp-check-row"><input name="addSecurityRecommendation" type="checkbox" checked /><span><strong>Add security recommendation</strong><small>Tell customers not to share their verification code.</small></span></label><div class="wp-form-row"><label><span>Code expiry</span><select name="codeExpirationMinutes"><option value="5">5 minutes</option><option value="10" selected>10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option></select></label><label><span>Copy button text</span><input name="otpButtonText" maxlength="25" value="Copy Code" required /></label></div><label><span>Sample authentication code</span><input name="authSampleCode" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" placeholder="123456" required /><small>Required for review and preview only. Your application supplies the real code when sending.</small></label></section>
+        <section class="wp-template-section wp-auth-template-settings" data-template-builder-panel="content" data-auth-template hidden><div class="wp-template-section-title"><span>02</span><div><strong>Authentication settings</strong><small>Configure the one-time passcode experience</small></div></div><div class="wp-auth-template-callout"><strong>Meta controls the message wording</strong><p>Authentication templates use Meta's preset OTP component. Add a sample code so the customer preview and submission audit can be verified before sending.</p></div><label class="wp-check-row"><input name="addSecurityRecommendation" type="checkbox" checked /><span><strong>Add security recommendation</strong><small>Tell customers not to share their verification code.</small></span></label><div class="wp-form-row"><label><span>Code expiry</span><select name="codeExpirationMinutes"><option value="5">5 minutes</option><option value="10" selected>10 minutes</option><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option></select></label><label><span>Copy button text</span><input name="otpButtonText" maxlength="25" value="Copy Code" required /></label></div><label><span>Sample authentication code</span><input name="authSampleCode" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" placeholder="123456" required /><small>Required for review and preview only. Your application supplies the real code when sending.</small></label></section>
+        <section class="wp-template-section wp-template-review-panel" data-template-builder-panel="review" hidden><div class="wp-template-section-title"><span>03</span><div><strong>Review &amp; submit</strong><small>Confirm the template metadata and Meta approval request</small></div></div><div class="wp-template-review-summary"><article><span>Name</span><strong data-template-review-name>—</strong></article><article><span>Language</span><strong data-template-review-language>—</strong></article><article><span>Category</span><strong data-template-review-category>—</strong></article><article><span>Content type</span><strong data-template-review-type>—</strong></article><article class="is-wide"><span>Variable samples</span><strong data-template-review-samples>No variables</strong></article></div><div class="wp-policy-note"><strong>Meta approval lifecycle</strong><p>Submission changes the status to In review. Meta controls approval or rejection; refresh the inventory to synchronize the latest decision.</p></div></section>
       </div>
       <aside class="wp-template-preview-panel"><div class="wp-template-preview-label"><span>Live preview</span><small>Customer view</small></div><div class="wp-template-phone"><div class="wp-template-phone-bar"><i></i><strong>WhatsApp</strong><span>•••</span></div><div class="wp-template-phone-chat"><div class="wp-template-bubble"><strong data-preview-header hidden></strong><p data-preview-body>Start typing your message to see a preview.</p><small data-preview-footer hidden></small><time>12:45 ✓✓</time></div><div data-preview-buttons></div></div></div><div class="wp-template-review-note"><strong>Ready for review</strong><p>Meta checks category, clarity, variable examples and policy compliance before approval.</p></div></aside>
     </div>
-    <footer class="wp-template-builder-footer"><span>Save a workspace draft or submit the finished template to Meta.</span><div><button class="wp-secondary" type="button" data-close-template-dialog>Cancel</button><button class="wp-secondary" type="submit" value="draft" formnovalidate>Save draft</button><button class="wp-primary" type="submit" value="create">Submit to Meta</button></div></footer>
+    <footer class="wp-template-builder-footer"><span data-template-builder-help>Start with the account, name, language and supported WhatsApp content type.</span><div><button class="wp-secondary" type="button" data-close-template-dialog>Cancel</button><button class="wp-secondary" type="button" data-template-builder-back hidden>Back</button><button class="wp-secondary" type="submit" value="draft" formnovalidate>Save draft</button><button class="wp-primary" type="button" data-template-builder-next>Continue</button><button class="wp-primary" type="submit" value="create" hidden>Submit to Meta</button></div></footer>
   </form></dialog><dialog class="wp-contact-dialog wp-template-samples-dialog" id="wpTemplateSamplesDialog"><form novalidate><header><div><span class="wp-card-eyebrow">Variable samples</span><h2>Add examples for Meta review</h2><p>Examples show Meta how dynamic values will look. They are not sent to customers.</p></div><button type="button" data-close-template-samples aria-label="Close samples">×</button></header><div class="wp-template-sample-intro"><span>{{ }}</span><p>Enter one realistic value for every variable in the message body.</p></div><div class="wp-template-sample-fields" data-template-sample-fields></div><footer><button class="wp-secondary" type="button" data-close-template-samples>Back</button><button class="wp-primary" type="submit" value="save_samples">Save samples & continue</button></footer></form></dialog>`;
 }
 
@@ -5035,22 +5037,84 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     }, 650);
   });
   let templateStatusFilter = "ALL";
+  let templatePage = 1;
+  let templatePageSize = 25;
+  const templateRows = [...app.querySelectorAll("[data-template-row]")];
+  const templateLanguages = [...new Set((workspaceTemplates.templates || []).map((template) => String(template.language || "")).filter(Boolean))].sort();
+  const templateTypes = [...new Set((workspaceTemplates.templates || []).map((template) => String(template.contentType || "TEXT").toUpperCase()).filter(Boolean))].sort();
+  templateRows.forEach((row) => {
+    const template = workspaceTemplates.templates?.[Number(row.dataset.templateIndex)];
+    if (!template) return;
+    row.dataset.templateLanguage = String(template.language || "");
+    row.dataset.templateContentType = String(template.contentType || "TEXT").toUpperCase();
+    row.dataset.templateUpdatedAt = String(template.updatedAt || template.createdAt || "");
+    const meta = document.createElement("div");
+    meta.className = "wp-template-inventory-meta";
+    const eligibility = String(template.status || "").toUpperCase() === "APPROVED" ? "WhatsApp approved" : templateStatusLabel(template.status);
+    meta.innerHTML = `<span><small>Language</small><strong>${escapeHtml(template.language || "—")}</strong></span><span><small>Content</small><strong>${escapeHtml(String(template.contentType || "TEXT").replaceAll("_", " "))}</strong></span><span><small>Eligibility</small><strong>${escapeHtml(eligibility)}</strong></span><span><small>Updated</small><strong>${escapeHtml(template.updatedAt ? new Date(template.updatedAt).toLocaleDateString("en-IN", { dateStyle: "medium" }) : "—")}</strong></span>`;
+    row.insertBefore(meta, row.querySelector(".wp-template-view-cue"));
+  });
+  const templateLibrary = app.querySelector('[data-template-panel="owned"]');
+  const templateStatusNav = templateLibrary?.querySelector(".wp-template-status-filters");
+  const templateInventoryFilters = document.createElement("div");
+  templateInventoryFilters.className = "wp-template-inventory-filters";
+  templateInventoryFilters.innerHTML = `<label><span>Language</span><select data-template-language-filter><option value="ALL">All languages</option>${templateLanguages.map((language) => `<option value="${escapeHtml(language)}">${escapeHtml(language)}</option>`).join("")}</select></label><label><span>Content type</span><select data-template-type-filter><option value="ALL">All content types</option>${templateTypes.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type.replaceAll("_", " "))}</option>`).join("")}</select></label><label><span>Updated</span><select data-template-date-filter><option value="ALL">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label><button class="wp-secondary" type="button" data-clear-template-filters>Clear filters</button>`;
+  templateStatusNav?.insertAdjacentElement("afterend", templateInventoryFilters);
+  const templatePagination = document.createElement("footer");
+  templatePagination.className = "wp-template-pagination";
+  templatePagination.innerHTML = `<span data-template-page-summary></span><label>Show <select data-template-page-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label><div><button class="wp-secondary" type="button" data-template-previous>Previous</button><span data-template-page-number></span><button class="wp-secondary" type="button" data-template-next>Next</button></div>`;
+  templateLibrary?.append(templatePagination);
   const applyTemplateFilters = () => {
     const query = String(app.querySelector("[data-template-search]")?.value || "").trim().toLowerCase();
-    app.querySelectorAll("[data-template-row]").forEach((row) => {
+    const language = String(app.querySelector("[data-template-language-filter]")?.value || "ALL");
+    const contentType = String(app.querySelector("[data-template-type-filter]")?.value || "ALL");
+    const days = Number(app.querySelector("[data-template-date-filter]")?.value || 0);
+    const cutoff = days ? Date.now() - days * 86400000 : 0;
+    const matching = templateRows.filter((row) => {
       const status = String(row.dataset.templateStatus || "UNKNOWN");
       const statusMatch = templateStatusFilter === "ALL"
         || status === templateStatusFilter
         || (templateStatusFilter === "IN_REVIEW" && ["PENDING", "IN_REVIEW", "IN_APPEAL"].includes(status));
-      row.hidden = !statusMatch || Boolean(query && !row.textContent.toLowerCase().includes(query));
+      const searchMatch = !query || row.textContent.toLowerCase().includes(query);
+      const languageMatch = language === "ALL" || row.dataset.templateLanguage === language;
+      const typeMatch = contentType === "ALL" || row.dataset.templateContentType === contentType;
+      const updated = row.dataset.templateUpdatedAt ? new Date(row.dataset.templateUpdatedAt).getTime() : 0;
+      const dateMatch = !cutoff || updated >= cutoff;
+      return statusMatch && searchMatch && languageMatch && typeMatch && dateMatch;
     });
+    const pages = Math.max(1, Math.ceil(matching.length / templatePageSize));
+    templatePage = Math.min(templatePage, pages);
+    const start = (templatePage - 1) * templatePageSize;
+    const visible = new Set(matching.slice(start, start + templatePageSize));
+    templateRows.forEach((row) => { row.hidden = !visible.has(row); });
+    const summary = app.querySelector("[data-template-page-summary]");
+    const pageNumber = app.querySelector("[data-template-page-number]");
+    if (summary) summary.textContent = matching.length ? `${start + 1}–${Math.min(start + templatePageSize, matching.length)} of ${matching.length} templates` : "No matching templates";
+    if (pageNumber) pageNumber.textContent = `Page ${templatePage} of ${pages}`;
+    const previous = app.querySelector("[data-template-previous]");
+    const next = app.querySelector("[data-template-next]");
+    if (previous) previous.disabled = templatePage <= 1;
+    if (next) next.disabled = templatePage >= pages;
   };
-  app.querySelector("[data-template-search]")?.addEventListener("input", applyTemplateFilters);
+  app.querySelector("[data-template-search]")?.addEventListener("input", () => { templatePage = 1; applyTemplateFilters(); });
+  app.querySelectorAll("[data-template-language-filter],[data-template-type-filter],[data-template-date-filter]").forEach((select) => select.addEventListener("change", () => { templatePage = 1; applyTemplateFilters(); }));
+  app.querySelector("[data-template-page-size]")?.addEventListener("change", (event) => { templatePageSize = Number(event.currentTarget.value || 25); templatePage = 1; applyTemplateFilters(); });
+  app.querySelector("[data-template-previous]")?.addEventListener("click", () => { templatePage = Math.max(1, templatePage - 1); applyTemplateFilters(); });
+  app.querySelector("[data-template-next]")?.addEventListener("click", () => { templatePage += 1; applyTemplateFilters(); });
+  app.querySelector("[data-clear-template-filters]")?.addEventListener("click", () => {
+    app.querySelector("[data-template-search]").value = "";
+    app.querySelectorAll("[data-template-language-filter],[data-template-type-filter],[data-template-date-filter]").forEach((select) => { select.value = "ALL"; });
+    templateStatusFilter = "ALL"; templatePage = 1;
+    app.querySelectorAll("[data-template-status-filter]").forEach((item) => item.classList.toggle("active", item.dataset.templateStatusFilter === "ALL"));
+    applyTemplateFilters();
+  });
   app.querySelectorAll("[data-template-status-filter]").forEach((button) => button.addEventListener("click", () => {
     templateStatusFilter = button.dataset.templateStatusFilter || "ALL";
+    templatePage = 1;
     app.querySelectorAll("[data-template-status-filter]").forEach((item) => item.classList.toggle("active", item === button));
     applyTemplateFilters();
   }));
+  applyTemplateFilters();
   const templateDetailDialog = app.querySelector("#wpTemplateDetailDialog");
   const openTemplateDetails = (row) => {
     const template = workspaceTemplates.templates?.[Number(row.dataset.templateIndex)];
@@ -5061,6 +5125,19 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     content.querySelector("[data-copy-template-id]")?.addEventListener("click", async (event) => {
       await navigator.clipboard.writeText(event.currentTarget.dataset.copyTemplateId || "");
       showToast("Template ID copied.");
+    });
+    content.querySelector("[data-duplicate-template]")?.addEventListener("click", () => {
+      templateDetailDialog.close();
+      duplicateTemplateIntoBuilder(template);
+    });
+    content.querySelector("[data-delete-template]")?.addEventListener("click", async (event) => {
+      if (!window.confirm(`Delete ${template.name}?\n\n${String(template.status).toUpperCase() === "DRAFT" ? "The workspace draft will be removed." : "This removes the template from Meta and this workspace. Existing message history is preserved."}`)) return;
+      const button = event.currentTarget;
+      try {
+        button.disabled = true; button.textContent = "Deleting…";
+        await messagingRequest("delete_template", { recordId: template.recordId });
+        templateDetailDialog.close(); showToast("Template deleted."); await renderDashboard();
+      } catch (error) { showToast(error?.message || "Template could not be deleted.", "error"); button.disabled = false; button.textContent = "Delete"; }
     });
     templateDetailDialog.showModal();
   };
@@ -5151,6 +5228,35 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const templateFooterInput = templateForm?.elements.footerText;
   const templateExampleValues = new Map();
   let templateSamplesConfirmed = false;
+  let templateSamplesNextAction = "submit";
+  let templateBuilderStage = "setup";
+  const setTemplateBuilderStage = (stage) => {
+    if (!templateForm) return;
+    templateBuilderStage = stage;
+    templateForm.querySelectorAll("[data-template-builder-panel]").forEach((panel) => { panel.hidden = panel.dataset.templateBuilderPanel !== stage; });
+    templateForm.querySelectorAll("[data-template-builder-step]").forEach((button) => {
+      const order = { setup: 1, content: 2, review: 3 };
+      button.classList.toggle("active", order[button.dataset.templateBuilderStep] <= order[stage]);
+      button.setAttribute("aria-current", button.dataset.templateBuilderStep === stage ? "step" : "false");
+    });
+    const back = templateForm.querySelector("[data-template-builder-back]");
+    const next = templateForm.querySelector("[data-template-builder-next]");
+    const submit = templateForm.querySelector('button[value="create"]');
+    if (back) back.hidden = stage === "setup";
+    if (next) next.hidden = stage === "review";
+    if (submit) submit.hidden = stage !== "review";
+    const help = templateForm.querySelector("[data-template-builder-help]");
+    if (help) help.textContent = ({ setup: "Start with the account, name, language and supported WhatsApp content type.", content: "Create the customer message and provide realistic examples for every variable.", review: "Review the message and submit it to Meta. Approval status will synchronize automatically." })[stage];
+    if (stage === "review") {
+      templateForm.querySelector("[data-template-review-name]").textContent = templateForm.elements.name.value.trim() || "—";
+      templateForm.querySelector("[data-template-review-language]").textContent = templateForm.elements.language.value || "—";
+      templateForm.querySelector("[data-template-review-category]").textContent = templateForm.elements.category.value || "—";
+      templateForm.querySelector("[data-template-review-type]").textContent = templateForm.querySelector('input[name="contentType"]:checked')?.value?.replaceAll("_", " ") || "TEXT";
+      const samples = [...templateExampleValues.values()].filter(Boolean);
+      if ((templateForm.querySelector('input[name="contentType"]:checked')?.value || "") === "AUTHENTICATION") samples.splice(0, samples.length, templateForm.elements.authSampleCode.value.trim());
+      templateForm.querySelector("[data-template-review-samples]").textContent = samples.filter(Boolean).join(" · ") || "No variables";
+    }
+  };
   const previewValue = (text) => String(text || "").replace(/\{\{\s*(\d+)\s*\}\}/g, (_, number) => templateExampleValues.get(String(number)) || `sample ${number}`);
   const updateTemplateBuilder = () => {
     if (!templateForm) return;
@@ -5163,10 +5269,10 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     templateForm.querySelector("[data-template-header]").hidden = media || !headerEnabled;
     templateForm.querySelector("[data-media-template]").hidden = !media;
     templateForm.elements.mediaHandle.required = media;
-    templateForm.querySelectorAll("[data-standard-template]").forEach((section) => { section.hidden = authentication; });
+    templateForm.querySelectorAll("[data-standard-template]").forEach((section) => { section.hidden = templateBuilderStage !== "content" || authentication; });
     const actionSection = templateForm.querySelector("[data-template-actions]");
-    if (actionSection) actionSection.hidden = authentication || ["CATALOG","MPM"].includes(contentType);
-    templateForm.querySelector("[data-auth-template]").hidden = !authentication;
+    if (actionSection) actionSection.hidden = templateBuilderStage !== "content" || authentication || ["CATALOG","MPM"].includes(contentType);
+    templateForm.querySelector("[data-auth-template]").hidden = templateBuilderStage !== "content" || !authentication;
     templateBodyInput.required = !authentication;
     templateForm.elements.otpButtonText.required = authentication;
     templateForm.elements.authSampleCode.required = authentication;
@@ -5204,11 +5310,50 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   };
   const openTemplateBuilder = (type = "TEXT", mediaFormat = "IMAGE") => {
     if (!templateForm || !createTemplateDialog) return;
+    templateForm.reset(); templateExampleValues.clear(); templateSamplesConfirmed = false;
     const radio = templateForm.querySelector(`input[name="contentType"][value="${type}"]`);
     if (radio) radio.checked = true;
     templateForm.elements.mediaFormat.value = mediaFormat;
+    setTemplateBuilderStage("setup");
     createTemplateDialog.showModal();
     updateTemplateBuilder();
+  };
+  const duplicateTemplateIntoBuilder = (template) => {
+    const contentType = String(template?.contentType || "TEXT").toUpperCase();
+    const header = (template?.components || []).find((component) => String(component?.type).toUpperCase() === "HEADER");
+    const body = (template?.components || []).find((component) => String(component?.type).toUpperCase() === "BODY");
+    const footer = (template?.components || []).find((component) => String(component?.type).toUpperCase() === "FOOTER");
+    const buttons = (template?.components || []).find((component) => String(component?.type).toUpperCase() === "BUTTONS")?.buttons || [];
+    openTemplateBuilder(contentType, String(header?.format || "IMAGE").toUpperCase());
+    if (!templateForm) return;
+    templateForm.elements.name.value = `${String(template.name || "template").slice(0, 500)}_copy`;
+    if (![...templateForm.elements.language.options].some((option) => option.value === template.language)) templateForm.elements.language.add(new Option(template.language, template.language));
+    templateForm.elements.language.value = template.language || "en_US";
+    templateForm.elements.category.value = template.category || "UTILITY";
+    templateForm.elements.headerType.value = String(header?.format || "").toUpperCase() === "TEXT" ? "TEXT" : "NONE";
+    templateForm.elements.headerText.value = String(header?.text || "");
+    templateForm.elements.headerExample.value = String(header?.example?.header_text?.[0] || "");
+    templateForm.elements.mediaHandle.value = String(header?.example?.header_handle?.[0] || "");
+    templateForm.elements.bodyText.value = String(body?.text || "");
+    templateForm.elements.footerText.value = String(footer?.text || "");
+    (template.sampleValues || []).forEach((value, index) => templateExampleValues.set(String(index + 1), String(value || "")));
+    if (contentType === "AUTHENTICATION") {
+      templateForm.elements.authSampleCode.value = String(template.sampleValues?.[0] || "123456");
+      templateForm.elements.codeExpirationMinutes.value = String(footer?.code_expiration_minutes || 10);
+      templateForm.elements.otpButtonText.value = String(buttons[0]?.text || "Copy Code");
+      templateForm.elements.addSecurityRecommendation.checked = body?.add_security_recommendation !== false;
+    } else if (buttons.some((button) => String(button.type).toUpperCase() === "QUICK_REPLY")) {
+      templateForm.elements.buttonType.value = "QUICK_REPLY";
+      buttons.slice(0, 3).forEach((button, index) => { templateForm.elements[`quickReply${index + 1}`].value = button.text || ""; });
+    } else if (buttons.some((button) => ["URL","PHONE_NUMBER"].includes(String(button.type).toUpperCase()))) {
+      templateForm.elements.buttonType.value = "CALL_TO_ACTION";
+      const urlButton = buttons.find((button) => String(button.type).toUpperCase() === "URL");
+      const phoneButton = buttons.find((button) => String(button.type).toUpperCase() === "PHONE_NUMBER");
+      templateForm.elements.urlButtonText.value = urlButton?.text || ""; templateForm.elements.urlButtonValue.value = urlButton?.url || "";
+      templateForm.elements.phoneButtonText.value = phoneButton?.text || ""; templateForm.elements.phoneButtonValue.value = phoneButton?.phone_number || "";
+    }
+    updateTemplateBuilder();
+    templateForm.elements.name.focus(); templateForm.elements.name.select();
   };
   app.querySelector("#wpCreateTemplateBtn")?.addEventListener("click", () => openTemplateBuilder("TEXT"));
   app.querySelector("#wpCreateDocumentTemplateBtn")?.addEventListener("click", () => openTemplateBuilder("MEDIA", "DOCUMENT"));
@@ -5236,12 +5381,47 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     templateBodyInput.setRangeText(token, start, templateBodyInput.selectionEnd ?? start, "end");
     templateBodyInput.focus(); templateSamplesConfirmed = false; updateTemplateBuilder();
   });
+  const continueTemplateBuilder = () => {
+    if (!templateForm) return;
+    if (templateBuilderStage === "setup") {
+      const requiredSetup = [templateForm.elements.connectionId, templateForm.elements.name, templateForm.elements.language, templateForm.elements.category];
+      const invalid = requiredSetup.find((control) => !control.checkValidity());
+      if (invalid) { invalid.reportValidity(); return; }
+      setTemplateBuilderStage("content"); updateTemplateBuilder(); templateForm.querySelector('[data-template-builder-panel="content"]:not([hidden]) input, [data-template-builder-panel="content"]:not([hidden]) textarea')?.focus(); return;
+    }
+    if (templateBuilderStage === "content") {
+      if (!templateForm.reportValidity()) return;
+      const contentType = templateForm.querySelector('input[name="contentType"]:checked')?.value || "TEXT";
+      const authentication = contentType === "AUTHENTICATION";
+      const headerUsesVariable = /\{\{\s*1\s*\}\}/.test(templateForm.elements.headerText.value);
+      if (headerUsesVariable && !templateForm.elements.headerExample.value.trim()) { templateForm.elements.headerExample.focus(); showToast("Add a realistic example for the header variable.", "error"); return; }
+      if (contentType === "QUICK_REPLY" && !templateForm.elements.quickReply1.value.trim()) { templateForm.elements.quickReply1.focus(); showToast("Add at least one quick reply.", "error"); return; }
+      if (contentType === "CTA") {
+        const websiteComplete = templateForm.elements.urlButtonText.value.trim() && templateForm.elements.urlButtonValue.value.trim();
+        const phoneComplete = templateForm.elements.phoneButtonText.value.trim() && templateForm.elements.phoneButtonValue.value.trim();
+        if (!websiteComplete && !phoneComplete) { templateForm.elements.urlButtonText.focus(); showToast("Add a complete website or call button.", "error"); return; }
+      }
+      const hasBodyVariables = /\{\{\s*\d+\s*\}\}/.test(templateForm.elements.bodyText.value);
+      if (!authentication && hasBodyVariables && !templateSamplesConfirmed) { openTemplateSamples("review"); return; }
+      setTemplateBuilderStage("review"); updateTemplateBuilder();
+    }
+  };
+  templateForm?.querySelector("[data-template-builder-next]")?.addEventListener("click", continueTemplateBuilder);
+  templateForm?.querySelector("[data-template-builder-back]")?.addEventListener("click", () => {
+    setTemplateBuilderStage(templateBuilderStage === "review" ? "content" : "setup"); updateTemplateBuilder();
+  });
+  templateForm?.querySelectorAll("[data-template-builder-step]").forEach((button) => button.addEventListener("click", () => {
+    const target = button.dataset.templateBuilderStep;
+    if (target === "setup" || (target === "content" && templateBuilderStage === "review")) { setTemplateBuilderStage(target); updateTemplateBuilder(); }
+    else if ((target === "content" && templateBuilderStage === "setup") || (target === "review" && templateBuilderStage === "content")) continueTemplateBuilder();
+  }));
   templateForm?.querySelectorAll("input,textarea,select").forEach((control) => control.addEventListener("input", () => { if (control === templateBodyInput) { templateSamplesConfirmed = false; updateTemplateBuilder(); } else updateTemplatePreview(); }));
-  const openTemplateSamples = () => {
+  const openTemplateSamples = (nextAction = "submit") => {
     const numbers = [...new Set([...templateBodyInput.value.matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map((match) => match[1]))].sort((a, b) => Number(a) - Number(b));
     const fields = templateSamplesForm?.querySelector("[data-template-sample-fields]");
     if (!fields || !numbers.length) return false;
     fields.innerHTML = numbers.map((number) => `<label><span>Sample for {{${number}}}</span><input name="sample_${number}" maxlength="100" value="${escapeHtml(templateExampleValues.get(number) || "")}" placeholder="${number === "1" ? "Aarav" : "Enter sample data"}" required /><small>Replace {{${number}}} with a realistic example.</small></label>`).join("");
+    templateSamplesNextAction = nextAction;
     templateSamplesDialog.showModal();
     fields.querySelector("input")?.focus();
     return true;
@@ -5256,8 +5436,8 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     templateSamplesConfirmed = true;
     templateSamplesDialog.close();
     updateTemplateBuilder();
-    showToast("Variable samples saved. Submitting template to Meta…");
-    templateForm?.requestSubmit(templateForm.querySelector('button[value="create"]'));
+    if (templateSamplesNextAction === "review") { setTemplateBuilderStage("review"); updateTemplateBuilder(); showToast("Variable samples saved."); }
+    else { showToast("Variable samples saved. Submitting template to Meta…"); templateForm?.requestSubmit(templateForm.querySelector('button[value="create"]')); }
   });
   createTemplateDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
     const submitter = event.submitter;
