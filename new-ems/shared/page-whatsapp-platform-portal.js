@@ -2383,10 +2383,10 @@ function templatesViewV2(connections) {
     const sid = String(template.integrationId || "");
     const approved = String(template.status || "").toUpperCase() === "APPROVED";
     const updated = template.updatedAt ? new Date(template.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—";
-    return `<article class="wp-template-row wp-template-table-row" data-template-row data-template-index="${index}" data-template-status="${escapeHtml(String(template.status || "UNKNOWN").toUpperCase())}" role="button" tabindex="0" aria-label="View template ${escapeHtml(template.name)}"><div class="wp-template-table-name"><strong>${escapeHtml(template.name)}</strong>${sid ? `<button class="wp-template-sid" type="button" data-copy-template-sid="${escapeHtml(sid)}" aria-label="Copy template SID ${escapeHtml(sid)}"><code>${escapeHtml(sid)}</code><i>Copy</i></button>` : `<span class="wp-template-sid-pending">SID pending</span>`}</div><span class="wp-template-table-cell">${escapeHtml(template.language || "—")}</span><span class="wp-template-table-cell wp-template-content-type">${escapeHtml(String(template.contentType || template.category || "TEXT").replaceAll("_", " "))}</span><div class="wp-template-eligibility-list">${approved ? `<span>✓ Business initiated</span><span>✓ User initiated</span>` : `<span class="is-${escapeHtml(String(template.status || "unknown").toLowerCase())}">${escapeHtml(templateStatusLabel(template.status))}</span>`}</div><time class="wp-template-table-cell">${escapeHtml(updated)}</time><span class="wp-template-table-menu" aria-hidden="true">⋮</span></article>`;
+    return `<article class="wp-template-row wp-template-table-row" data-template-row data-template-index="${index}" data-template-status="${escapeHtml(String(template.status || "UNKNOWN").toUpperCase())}"><div class="wp-template-table-name"><button type="button" data-template-view>${escapeHtml(template.name)}</button>${sid ? `<button class="wp-template-sid" type="button" data-copy-template-sid="${escapeHtml(sid)}" aria-label="Copy template SID ${escapeHtml(sid)}"><code>${escapeHtml(sid)}</code><i>Copy</i></button>` : `<span class="wp-template-sid-pending">SID pending</span>`}</div><span class="wp-template-table-cell">${escapeHtml(template.language || "—")}</span><span class="wp-template-table-cell wp-template-content-type">${escapeHtml(String(template.contentType || template.category || "TEXT").replaceAll("_", " "))}</span><div class="wp-template-eligibility-list">${approved ? `<span>✓ Business initiated</span><span>✓ User initiated</span>` : `<span class="is-${escapeHtml(String(template.status || "unknown").toLowerCase())}">${escapeHtml(templateStatusLabel(template.status))}</span>`}</div><time class="wp-template-table-cell">${escapeHtml(updated)}</time><div class="wp-template-menu-wrap"><button class="wp-template-table-menu" type="button" data-template-operations aria-label="Template actions" aria-expanded="false">⋮</button><div class="wp-template-operations-menu" hidden><button type="button" data-template-menu-view>View details</button>${sid ? `<button type="button" data-template-menu-copy>Copy SID</button>` : ""}</div></div></article>`;
   }).join("");
   const selector = readyConnections.length > 1 ? `<select id="wpTemplateConnection" aria-label="WhatsApp Business account">${readyConnections.map((connection) => `<option value="${escapeHtml(connection.id)}" ${connection.id === selectedId ? "selected" : ""}>${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}</option>`).join("")}</select>` : "";
-  return `<section class="wp-route-page wp-templates-page wp-templates-simple"><div class="wp-route-heading wp-template-page-heading"><h1>Message templates</h1>${readyConnections.length ? `<div class="wp-template-create-actions"><button class="wp-secondary" id="wpCreateDocumentTemplateBtn" type="button">▧ Document</button><button class="wp-primary" id="wpCreateTemplateBtn" type="button">＋ Create template</button></div>` : `<a class="wp-primary wp-button-link" href="${workspacePath("accounts")}">Connect account</a>`}</div>${workspaceTemplates.error ? `<div class="wp-verification-notice"><strong>Templates unavailable</strong><p>${escapeHtml(workspaceTemplates.error)}</p></div>` : ""}<section class="wp-template-stats" aria-label="Template overview"><article class="is-total"><span>Total</span><strong>${templates.length}</strong></article><article class="is-draft"><span>Draft</span><strong>${count(["DRAFT"])}</strong></article><article class="is-review"><span>In review</span><strong>${count(["PENDING","IN_REVIEW","IN_APPEAL"])}</strong></article><article class="is-rejected"><span>Rejected</span><strong>${count(["REJECTED"])}</strong></article><article class="is-approved"><span>Approved</span><strong>${count(["APPROVED"])}</strong></article></section><section class="wp-card wp-template-library" data-template-panel="owned"><header><h2>Templates</h2><div class="wp-template-tools">${selector}<label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search name or SID" aria-label="Search templates" data-template-search /></label><button class="wp-secondary wp-icon-button" id="wpRefreshTemplatesBtn" type="button" aria-label="Refresh templates">↻ Refresh</button></div></header><nav class="wp-template-status-filters" aria-label="Template status"><button class="active" type="button" data-template-status-filter="ALL">All <span>${templates.length}</span></button><button type="button" data-template-status-filter="DRAFT">Draft <span>${count(["DRAFT"])}</span></button><button type="button" data-template-status-filter="IN_REVIEW">In review <span>${count(["PENDING","IN_REVIEW","IN_APPEAL"])}</span></button><button type="button" data-template-status-filter="REJECTED">Rejected <span>${count(["REJECTED"])}</span></button><button type="button" data-template-status-filter="APPROVED">Approved <span>${count(["APPROVED"])}</span></button></nav>${rows ? `<div class="wp-template-table-head" aria-hidden="true"><span>Name / Template SID</span><span>Language</span><span>Content type</span><span>WhatsApp eligibility</span><span>Last updated</span><span></span></div>` : ""}<div class="wp-template-list">${rows || `<div class="wp-inbox-empty"><strong>No templates yet</strong></div>`}</div></section><dialog class="wp-contact-dialog wp-meta-library-dialog" id="wpMetaLibraryDialog"><div class="wp-meta-library"><header><h2>Meta library</h2><div class="wp-template-tools"><select id="wpLibraryCategory" aria-label="Library category"><option value="UTILITY" ${workspaceTemplateLibrary.category === "UTILITY" ? "selected" : ""}>Utility</option><option value="AUTHENTICATION" ${workspaceTemplateLibrary.category === "AUTHENTICATION" ? "selected" : ""}>Authentication</option></select><select id="wpLibraryLanguage" aria-label="Library language"><option value="en_US">English (US)</option><option value="en_GB">English (UK)</option><option value="hi">Hindi</option><option value="te">Telugu</option></select><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search library" data-library-search /></label><button type="button" data-close-meta-library aria-label="Close">×</button></div></header>${workspaceTemplateLibrary.error ? `<div class="wp-verification-notice"><strong>Library unavailable</strong></div>` : ""}<div class="wp-meta-library-grid">${libraryTemplates.map(libraryTemplateCard).join("") || `<div class="wp-inbox-empty"><strong>No templates found</strong></div>`}</div></div></dialog>${templateBuilderDialog(readyConnections, selectedId)}${libraryCloneDialog(readyConnections, selectedId)}</section>`;
+  return `<section class="wp-route-page wp-templates-page wp-templates-simple"><div class="wp-route-heading wp-template-page-heading"><h1>Message templates</h1>${readyConnections.length ? `<div class="wp-template-create-actions"><button class="wp-secondary" id="wpCreateDocumentTemplateBtn" type="button">▧ Document</button><button class="wp-primary" id="wpCreateTemplateBtn" type="button">＋ Create template</button></div>` : `<a class="wp-primary wp-button-link" href="${workspacePath("accounts")}">Connect account</a>`}</div>${workspaceTemplates.error ? `<div class="wp-verification-notice"><strong>Templates unavailable</strong><p>${escapeHtml(workspaceTemplates.error)}</p></div>` : ""}<section class="wp-template-stats" aria-label="Template overview"><article class="is-total"><span>Total</span><strong>${templates.length}</strong></article><article class="is-draft"><span>Draft</span><strong>${count(["DRAFT"])}</strong></article><article class="is-review"><span>In review</span><strong>${count(["PENDING","IN_REVIEW","IN_APPEAL"])}</strong></article><article class="is-rejected"><span>Rejected</span><strong>${count(["REJECTED"])}</strong></article><article class="is-approved"><span>Approved</span><strong>${count(["APPROVED"])}</strong></article></section><section class="wp-card wp-template-library" data-template-panel="owned"><header><h2>Templates</h2><div class="wp-template-tools">${selector}<button class="wp-secondary wp-icon-button" id="wpRefreshTemplatesBtn" type="button" aria-label="Refresh templates">↻ Refresh</button></div></header><nav class="wp-template-status-filters" aria-label="Template status"><button class="active" type="button" data-template-status-filter="ALL">All <span>${templates.length}</span></button><button type="button" data-template-status-filter="DRAFT">Draft <span>${count(["DRAFT"])}</span></button><button type="button" data-template-status-filter="IN_REVIEW">In review <span>${count(["PENDING","IN_REVIEW","IN_APPEAL"])}</span></button><button type="button" data-template-status-filter="REJECTED">Rejected <span>${count(["REJECTED"])}</span></button><button type="button" data-template-status-filter="APPROVED">Approved <span>${count(["APPROVED"])}</span></button></nav>${rows ? `<div class="wp-template-table-head" aria-hidden="true"><span>Name / Template SID</span><span>Language</span><span>Content type</span><span>WhatsApp eligibility</span><span>Last updated</span><span></span></div>` : ""}<div class="wp-template-list">${rows || `<div class="wp-inbox-empty"><strong>No templates yet</strong></div>`}</div></section><dialog class="wp-contact-dialog wp-meta-library-dialog" id="wpMetaLibraryDialog"><div class="wp-meta-library"><header><h2>Meta library</h2><div class="wp-template-tools"><select id="wpLibraryCategory" aria-label="Library category"><option value="UTILITY" ${workspaceTemplateLibrary.category === "UTILITY" ? "selected" : ""}>Utility</option><option value="AUTHENTICATION" ${workspaceTemplateLibrary.category === "AUTHENTICATION" ? "selected" : ""}>Authentication</option></select><select id="wpLibraryLanguage" aria-label="Library language"><option value="en_US">English (US)</option><option value="en_GB">English (UK)</option><option value="hi">Hindi</option><option value="te">Telugu</option></select><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search library" data-library-search /></label><button type="button" data-close-meta-library aria-label="Close">×</button></div></header>${workspaceTemplateLibrary.error ? `<div class="wp-verification-notice"><strong>Library unavailable</strong></div>` : ""}<div class="wp-meta-library-grid">${libraryTemplates.map(libraryTemplateCard).join("") || `<div class="wp-inbox-empty"><strong>No templates found</strong></div>`}</div></div></dialog>${templateBuilderDialog(readyConnections, selectedId)}${libraryCloneDialog(readyConnections, selectedId)}</section>`;
 }
 
 function campaignsView() {
@@ -5060,16 +5060,17 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const templateStatusNav = templateLibrary?.querySelector(".wp-template-status-filters");
   const templateInventoryFilters = document.createElement("div");
   templateInventoryFilters.className = "wp-template-inventory-filters";
-  templateInventoryFilters.innerHTML = `<label><span>Language</span><select data-template-language-filter><option value="ALL">All languages</option>${templateLanguages.map((language) => `<option value="${escapeHtml(language)}">${escapeHtml(language)}</option>`).join("")}</select></label><label><span>Content type</span><select data-template-type-filter><option value="ALL">All content types</option>${templateTypes.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type.replaceAll("_", " "))}</option>`).join("")}</select></label><label><span>Updated</span><select data-template-date-filter><option value="ALL">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label><button class="wp-secondary" type="button" data-clear-template-filters>Clear filters</button>`;
+  templateInventoryFilters.innerHTML = `<div class="wp-template-filter-fields"><label><span>Language</span><select data-template-language-filter><option value="ALL">All languages</option>${templateLanguages.map((language) => `<option value="${escapeHtml(language)}">${escapeHtml(language)}</option>`).join("")}</select></label><label><span>Content type</span><select data-template-type-filter><option value="ALL">All content types</option>${templateTypes.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(type.replaceAll("_", " "))}</option>`).join("")}</select></label><label><span>Eligibility</span><select data-template-eligibility-filter><option value="ALL">All statuses</option><option value="APPROVED">WhatsApp approved</option><option value="IN_REVIEW">In review</option><option value="REJECTED">Rejected</option><option value="DRAFT">Draft</option></select></label><label><span>Updated</span><select data-template-date-filter><option value="ALL">Any time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label></div><div class="wp-template-search-row"><label class="wp-inbox-search"><span>⌕</span><input type="search" placeholder="Search name or SID" aria-label="Search templates" data-template-search /></label><button class="wp-primary" type="button" data-apply-template-filters>Apply</button><button class="wp-secondary" type="button" data-clear-template-filters>Clear</button><div class="wp-template-result-controls"><label>Rows <select data-template-page-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label><strong data-template-page-summary></strong></div></div>`;
   templateStatusNav?.insertAdjacentElement("afterend", templateInventoryFilters);
   const templatePagination = document.createElement("footer");
   templatePagination.className = "wp-template-pagination";
-  templatePagination.innerHTML = `<span data-template-page-summary></span><label>Show <select data-template-page-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label><div><button class="wp-secondary" type="button" data-template-previous>Previous</button><span data-template-page-number></span><button class="wp-secondary" type="button" data-template-next>Next</button></div>`;
+  templatePagination.innerHTML = `<span data-template-page-number></span><div><button class="wp-secondary" type="button" data-template-previous>Previous</button><button class="wp-secondary" type="button" data-template-next>Next</button></div>`;
   templateLibrary?.append(templatePagination);
   const applyTemplateFilters = () => {
     const query = String(app.querySelector("[data-template-search]")?.value || "").trim().toLowerCase();
     const language = String(app.querySelector("[data-template-language-filter]")?.value || "ALL");
     const contentType = String(app.querySelector("[data-template-type-filter]")?.value || "ALL");
+    const eligibility = String(app.querySelector("[data-template-eligibility-filter]")?.value || "ALL");
     const days = Number(app.querySelector("[data-template-date-filter]")?.value || 0);
     const cutoff = days ? Date.now() - days * 86400000 : 0;
     const matching = templateRows.filter((row) => {
@@ -5080,9 +5081,12 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       const searchMatch = !query || row.textContent.toLowerCase().includes(query);
       const languageMatch = language === "ALL" || row.dataset.templateLanguage === language;
       const typeMatch = contentType === "ALL" || row.dataset.templateContentType === contentType;
+      const eligibilityMatch = eligibility === "ALL"
+        || status === eligibility
+        || (eligibility === "IN_REVIEW" && ["PENDING", "IN_REVIEW", "IN_APPEAL"].includes(status));
       const updated = row.dataset.templateUpdatedAt ? new Date(row.dataset.templateUpdatedAt).getTime() : 0;
       const dateMatch = !cutoff || updated >= cutoff;
-      return statusMatch && searchMatch && languageMatch && typeMatch && dateMatch;
+      return statusMatch && searchMatch && languageMatch && typeMatch && eligibilityMatch && dateMatch;
     });
     const pages = Math.max(1, Math.ceil(matching.length / templatePageSize));
     templatePage = Math.min(templatePage, pages);
@@ -5098,14 +5102,17 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     if (previous) previous.disabled = templatePage <= 1;
     if (next) next.disabled = templatePage >= pages;
   };
-  app.querySelector("[data-template-search]")?.addEventListener("input", () => { templatePage = 1; applyTemplateFilters(); });
-  app.querySelectorAll("[data-template-language-filter],[data-template-type-filter],[data-template-date-filter]").forEach((select) => select.addEventListener("change", () => { templatePage = 1; applyTemplateFilters(); }));
+  app.querySelector("[data-apply-template-filters]")?.addEventListener("click", () => { templatePage = 1; applyTemplateFilters(); });
+  app.querySelector("[data-template-search]")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault(); templatePage = 1; applyTemplateFilters();
+  });
   app.querySelector("[data-template-page-size]")?.addEventListener("change", (event) => { templatePageSize = Number(event.currentTarget.value || 25); templatePage = 1; applyTemplateFilters(); });
   app.querySelector("[data-template-previous]")?.addEventListener("click", () => { templatePage = Math.max(1, templatePage - 1); applyTemplateFilters(); });
   app.querySelector("[data-template-next]")?.addEventListener("click", () => { templatePage += 1; applyTemplateFilters(); });
   app.querySelector("[data-clear-template-filters]")?.addEventListener("click", () => {
     app.querySelector("[data-template-search]").value = "";
-    app.querySelectorAll("[data-template-language-filter],[data-template-type-filter],[data-template-date-filter]").forEach((select) => { select.value = "ALL"; });
+    app.querySelectorAll("[data-template-language-filter],[data-template-type-filter],[data-template-eligibility-filter],[data-template-date-filter]").forEach((select) => { select.value = "ALL"; });
     templateStatusFilter = "ALL"; templatePage = 1;
     app.querySelectorAll("[data-template-status-filter]").forEach((item) => item.classList.toggle("active", item.dataset.templateStatusFilter === "ALL"));
     applyTemplateFilters();
@@ -5143,14 +5150,18 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     });
     templateDetailDialog.showModal();
   };
-  app.querySelectorAll("[data-template-index]").forEach((row) => {
-    row.addEventListener("click", () => openTemplateDetails(row));
-    row.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      openTemplateDetails(row);
-    });
-  });
+  app.querySelectorAll("[data-template-view],[data-template-menu-view]").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openTemplateDetails(button.closest("[data-template-row]"));
+  }));
+  app.querySelectorAll("[data-template-operations]").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const menu = button.parentElement?.querySelector(".wp-template-operations-menu");
+    app.querySelectorAll(".wp-template-operations-menu").forEach((other) => { if (other !== menu) other.hidden = true; });
+    if (!menu) return;
+    menu.hidden = !menu.hidden;
+    button.setAttribute("aria-expanded", String(!menu.hidden));
+  }));
   app.querySelectorAll("[data-copy-template-sid]").forEach((button) => button.addEventListener("click", async (event) => {
     event.stopPropagation();
     const copyButton = event.currentTarget;
@@ -5161,6 +5172,13 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     showToast("Template SID copied.");
     window.setTimeout(() => { if (label) label.textContent = "Copy"; }, 1400);
   }));
+  app.querySelectorAll("[data-template-menu-copy]").forEach((button) => button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    button.closest("[data-template-row]")?.querySelector("[data-copy-template-sid]")?.click();
+    const menu = button.closest(".wp-template-operations-menu");
+    if (menu) menu.hidden = true;
+  }));
+  app.addEventListener("click", () => app.querySelectorAll(".wp-template-operations-menu").forEach((menu) => { menu.hidden = true; }));
   app.querySelector("#wpTemplateConnection")?.addEventListener("change", (event) => {
     const url = new URL(location.href);
     url.searchParams.set("connection", event.currentTarget.value);
