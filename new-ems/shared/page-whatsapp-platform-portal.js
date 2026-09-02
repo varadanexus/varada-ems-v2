@@ -1,4 +1,4 @@
-import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsapp-flow-builder.js?v=2";
+import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsapp-flow-builder.js?v=13";
 
 const SESSION_KEY = "vn_whatsapp_platform_session";
 const THEME_KEY = "vn_whatsapp_platform_theme";
@@ -87,12 +87,15 @@ let workspacePackageMaster = { package: null, addons: [], availableAddons: [], e
 let workspaceMessagingPreferences = { stopMarketingOptOutEnabled: true, error: "" };
 let workspaceNotifications = { notifications: [], unreadCount: 0, error: "" };
 let workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], invoices: [], creditNotes: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
+let workspaceSupport = { tickets: [], thread: null, error: "" };
 let workspaceDeletion = { pending: false };
 let workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: "" };
 let razorpayCheckoutPromise = null;
 let profileMenuClickAwayHandler = null;
 let notificationClickAwayHandler = null;
 let workspaceNotificationRefreshTimer = null;
+let workspaceSupportRefreshTimer = null;
+let workspaceSupportRefreshBusy = false;
 let workspaceNavigationBound = false;
 let workspaceNavigationSequence = 0;
 let businessNumberRefreshTimer = null;
@@ -145,9 +148,10 @@ const WORKSPACE_VIEW_LABELS = {
   "billing-refunds": "Refunds & credit notes",
   checkout: "Secure checkout",
   settings: "Workspace settings",
+  support: "Customer support",
 };
 
-const AGENT_WORKSPACE_VIEWS = new Set(["inbox", "contacts", "campaigns", "templates", "flows", "analytics"]);
+const AGENT_WORKSPACE_VIEWS = new Set(["inbox", "contacts", "campaigns", "templates", "flows", "analytics", "support"]);
 const BILLING_WORKSPACE_VIEWS = new Set(["billing", "billing-plans", "billing-addons", "billing-invoices", "billing-ledger", "billing-refunds"]);
 const PRE_BILLING_WORKSPACE_VIEWS = new Set(["overview", "verification", "onboarding"]);
 const AI_INTEGRATION_PROMPT = `You are integrating my server with the Varada Nexus WhatsApp API.
@@ -205,7 +209,26 @@ function workspaceLocationKey() {
   return `${location.pathname}${location.search}${location.hash}`;
 }
 
-async function navigateWorkspace(url, { replace = false } = {}) {
+function safeWorkspaceReturnPath() {
+  const requested = new URLSearchParams(location.search).get("return") || "";
+  if (!requested) return "";
+  try {
+    const destination = new URL(requested, location.origin);
+    if (destination.origin !== location.origin || !destination.pathname.startsWith(WORKSPACE_PATH)) return "";
+    return `${destination.pathname}${destination.search}${destination.hash}`;
+  } catch {
+    return "";
+  }
+}
+
+function workspaceSignInUrl(returnPath = workspaceLocationKey()) {
+  const destination = new URL(ACCESS_PATH, location.origin);
+  if (returnPath && returnPath.startsWith(WORKSPACE_PATH)) destination.searchParams.set("return", returnPath);
+  destination.hash = "signin";
+  return `${destination.pathname}${destination.search}${destination.hash}`;
+}
+
+async function navigateWorkspace(url, { replace = false, refreshImmediately = false } = {}) {
   const destination = url instanceof URL ? url : new URL(url, location.href);
   if (destination.origin !== location.origin || !destination.pathname.startsWith(WORKSPACE_PATH)) {
     location.assign(destination.href);
@@ -217,6 +240,10 @@ async function navigateWorkspace(url, { replace = false } = {}) {
   else history.pushState({}, "", nextLocation);
   const sequence = ++workspaceNavigationSequence;
   window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  if (refreshImmediately) {
+    await renderDashboard({ refresh: true, navigationSequence: sequence });
+    return;
+  }
   await renderDashboard({ refresh: false });
   if (sequence !== workspaceNavigationSequence) return;
   renderDashboard({ refresh: true, preserveScroll: true, navigationSequence: sequence }).catch(() => {});
@@ -464,6 +491,7 @@ const WORKSPACE_NAV_ICONS = {
   "billing-ledger": workspaceIcon('<path d="M4 3h16v18H4zM8 7h8M8 11h8M8 15h4"/>'),
   "billing-refunds": workspaceIcon('<path d="M9 7H5v-4M5 7a8 8 0 1 1-1 8"/><path d="M8 12h8M12 9v6"/>'),
   settings: workspaceIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.15.38.36.72.6 1 .3.3.7.45 1.1.4H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z"/>'),
+  support: workspaceIcon('<path d="M4 5h16v11H8l-4 4V5Z"/><path d="M8 9h8M8 12h5"/>'),
 };
 
 function workspaceNavItem(view, icon, badge = "") {
@@ -478,10 +506,10 @@ function workspaceNavigationMarkup({ inboxUnread = 0, contactCount = 0, campaign
   const customers = `<span class="wp-nav-label">Customers</span>${workspaceNavItem("inbox", "▤", inboxUnread ? String(inboxUnread) : "")}${workspaceNavItem("contacts", "◎", contactCount ? String(contactCount) : "")}`;
   const engage = `<span class="wp-nav-label">Engage</span>${has("campaigns") ? workspaceNavItem("campaigns", "◈", campaignCount ? String(campaignCount) : "") : ""}${has("templates") ? workspaceNavItem("templates", "✦", templateCount ? String(templateCount) : "") : ""}${has("flows") ? workspaceNavItem("flows", "⌁", flowCount ? String(flowCount) : "") : ""}`;
   const insights = has("analytics") ? `<span class="wp-nav-label">Insights</span>${workspaceNavItem("analytics", "⌁")}` : "";
-  if (isAgentWorkspaceRole()) return `${customers}${engage}${insights}`;
+  if (isAgentWorkspaceRole()) return `${customers}${engage}${insights}<span class="wp-nav-label">Help</span>${workspaceNavItem("support", "?")}`;
   const profileItem = ["owner", "admin"].includes(session?.roleCode) ? workspaceNavItem("business-profile", "◎") : "";
   const billing = `<span class="wp-nav-label">Billing &amp; usage</span>${workspaceNavItem("billing", "₹")}${workspaceNavItem("billing-plans", "▤", packageName)}${workspaceNavItem("billing-addons", "+")}${workspaceNavItem("billing-invoices", "▧", String(workspaceBilling?.invoices?.length || ""))}${workspaceNavItem("billing-ledger", "≡")}${workspaceNavItem("billing-refunds", "↶", String(workspaceBilling?.creditNotes?.length || ""))}`;
-  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${billing}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${profileItem}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("settings", "⚙")}<span class="wp-nav-label">Developer</span>${workspaceNavItem("integrations", "◇")}${workspaceNavItem("integration-lab", "⌁")}${workspaceNavItem("api-guide", "?")}<span class="wp-nav-label">Monitor</span>${workspaceNavItem("developer-logs", "≡")}`;
+  return `<span class="wp-nav-label">Workspace</span>${workspaceNavItem("overview", "⌂")}${workspaceNavItem("verification", "◆", String(workspaceVerification?.status || "not_started").replaceAll("_", " "))}${workspaceNavItem("onboarding", "✓")}${customers}${engage}${billing}${insights}<span class="wp-nav-label">Administration</span>${workspaceNavItem("accounts", "◉", String(connectedCount))}${profileItem}${workspaceNavItem("team", "♙", teamCount ? String(teamCount) : "")}${workspaceNavItem("settings", "⚙")}<span class="wp-nav-label">Developer</span>${workspaceNavItem("integrations", "◇")}${workspaceNavItem("integration-lab", "⌁")}${workspaceNavItem("api-guide", "?")}<span class="wp-nav-label">Monitor</span>${workspaceNavItem("developer-logs", "≡")}<span class="wp-nav-label">Help</span>${workspaceNavItem("support", "?")}`;
 }
 
 function packageFeatureLockedView(feature) {
@@ -539,26 +567,24 @@ function workspaceNavSection(id, label, items, sidebarState) {
   return `<section class="wp-nav-section ${collapsed ? "is-collapsed" : ""}" data-workspace-nav-section="${escapeHtml(id)}"><button class="wp-nav-section-toggle" type="button" data-workspace-section-toggle="${escapeHtml(id)}" aria-expanded="${String(!collapsed)}"><span class="wp-nav-label">${escapeHtml(label)}</span><span class="wp-nav-section-chevron" aria-hidden="true">${workspaceIcon('<path d="m7 10 5 5 5-5"/>')}</span></button><div class="wp-nav-section-items">${items}</div></section>`;
 }
 
-function enhanceWorkspaceSidebar(root, sidebarState, isFlowBuilderRoute) {
+function enhanceWorkspaceSidebar(root, sidebarState) {
   const shell = root.querySelector(".wp-workspace-shell");
   const sidebar = root.querySelector(".wp-workspace-sidebar");
   const nav = root.querySelector(".wp-workspace-nav");
   const brand = root.querySelector(".wp-workspace-brand");
   if (!shell || !sidebar || !nav || !brand) return;
-  if (sidebarState.collapsed && !isFlowBuilderRoute) shell.classList.add("sidebar-collapsed");
+  if (sidebarState.collapsed) shell.classList.add("sidebar-collapsed");
 
   const brandRow = document.createElement("div");
   brandRow.className = "wp-sidebar-brand-row";
   sidebar.insertBefore(brandRow, brand);
   brandRow.appendChild(brand);
-  if (!isFlowBuilderRoute) {
-    const collapseButton = document.createElement("button");
-    collapseButton.type = "button";
-    collapseButton.id = "wpSidebarCollapseBtn";
-    collapseButton.className = "wp-sidebar-collapse";
-    collapseButton.innerHTML = `<span aria-hidden="true">${workspaceIcon('<path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M14 8l-4 4 4 4M10 12h11"/>', "wp-sidebar-collapse-icon")}</span>`;
-    brandRow.appendChild(collapseButton);
-  }
+  const collapseButton = document.createElement("button");
+  collapseButton.type = "button";
+  collapseButton.id = "wpSidebarCollapseBtn";
+  collapseButton.className = "wp-sidebar-collapse";
+  collapseButton.innerHTML = `<span aria-hidden="true">${workspaceIcon('<path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M14 8l-4 4 4 4M10 12h11"/>', "wp-sidebar-collapse-icon")}</span>`;
+  brandRow.appendChild(collapseButton);
 
   const sectionIds = { Workspace: "workspace", Customers: "customers", Engage: "engage", Insights: "insights", Administration: "administration", Developer: "developer" };
   [...nav.querySelectorAll(":scope > .wp-nav-label")].forEach((label, index) => {
@@ -705,7 +731,40 @@ function scheduleNotificationRefresh() {
   workspaceNotificationRefreshTimer = window.setTimeout(async () => {
     await refreshWorkspaceNotifications({ updateDom: true });
     scheduleNotificationRefresh();
-  }, 60_000);
+  }, 5_000);
+}
+
+function supportStateSignature(value = workspaceSupport) {
+  return JSON.stringify({
+    tickets: (value.tickets || []).map((ticket) => [ticket.id, ticket.status, ticket.lastActivityAt]),
+    ticket: value.thread?.ticket ? [value.thread.ticket.id, value.thread.ticket.status, value.thread.ticket.lastActivityAt] : null,
+    messages: (value.thread?.messages || []).map((message) => [message.id, message.created_at]),
+  });
+}
+
+async function refreshWorkspaceSupportLive() {
+  if (currentWorkspaceView() !== "support" || document.visibilityState !== "visible" || workspaceSupportRefreshBusy || !session?.sessionToken) return;
+  workspaceSupportRefreshBusy = true;
+  const before = supportStateSignature();
+  try {
+    const listed = await supportRequest("customer_list");
+    const ticketId = new URLSearchParams(location.search).get("ticket");
+    const next = { tickets: listed?.tickets || [], thread: null, error: "" };
+    if (ticketId && next.tickets.some((ticket) => ticket.id === ticketId)) next.thread = await supportRequest("customer_thread", { ticketId });
+    workspaceSupport = next;
+    if (supportStateSignature() !== before) await renderDashboard({ refresh: false, preserveScroll: true });
+  } catch { /* Keep the last successful support view during background sync. */ }
+  finally { workspaceSupportRefreshBusy = false; }
+}
+
+function scheduleWorkspaceSupportRefresh() {
+  if (workspaceSupportRefreshTimer) window.clearTimeout(workspaceSupportRefreshTimer);
+  workspaceSupportRefreshTimer = null;
+  if (currentWorkspaceView() !== "support") return;
+  workspaceSupportRefreshTimer = window.setTimeout(async () => {
+    await refreshWorkspaceSupportLive();
+    scheduleWorkspaceSupportRefresh();
+  }, 4_000);
 }
 
 function bindNotificationCentre(root) {
@@ -984,6 +1043,18 @@ async function messagingRequest(action, payload = {}) {
   return data;
 }
 
+async function supportRequest(action, payload = {}) {
+  if (!session?.sessionToken) throw new Error("Your workspace session has expired.");
+  const response = await fetch(`${runtime.supabaseUrl}/functions/v1/whatsapp-platform-support`, {
+    method: "POST", headers: { "Content-Type": "application/json", apikey: runtime.supabaseAnonKey || "" },
+    credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, sessionToken: session.sessionToken, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Customer support request failed.");
+  return data;
+}
+
 async function integrationLabRequest(action, payload = {}) {
   if (!session?.sessionToken) throw new Error("Your workspace session has expired.");
   const response = await fetch(`${runtime.supabaseUrl}/functions/v1/whatsapp-platform-integration-lab`, {
@@ -1185,6 +1256,8 @@ async function signOut(callServer = true) {
   const token = session?.sessionToken;
   if (workspaceNotificationRefreshTimer) window.clearTimeout(workspaceNotificationRefreshTimer);
   workspaceNotificationRefreshTimer = null;
+  if (workspaceSupportRefreshTimer) window.clearTimeout(workspaceSupportRefreshTimer);
+  workspaceSupportRefreshTimer = null;
   workspaceNotifications = { notifications: [], unreadCount: 0, error: "" };
   clearSession();
   if (callServer && token) authRequest("logout", { sessionToken: token }).catch(() => {});
@@ -1758,7 +1831,7 @@ async function submitAuthForm(event) {
     signupDraft = {};
     signupStep = 1;
     storeSession(data.session);
-    location.replace(isSignup ? workspacePath("verification") : WORKSPACE_PATH);
+    location.replace(isSignup ? workspacePath("verification") : (safeWorkspaceReturnPath() || WORKSPACE_PATH));
   } catch (error) {
     message.textContent = error?.message || "Authentication failed.";
   } finally {
@@ -3211,6 +3284,12 @@ function apiGuideView() {
   "phone": "+919876543210",
   "category": "lead"
 }`;
+  const flowStartExample = `{
+  "contactId": "contact_uuid",
+  "connectionId": "whatsapp_number_connection_uuid",
+  "templateId": "32_character_template_id",
+  "flowId": "template_reply_flow_uuid"
+}`;
   const webhookExample = `import { createHmac, timingSafeEqual } from "node:crypto";
 
 const expected = createHmac("sha256", process.env.VARADA_WEBHOOK_SECRET)
@@ -3230,7 +3309,7 @@ if (!timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(received, "hex"))
     "software": "Sales CRM"
   }
 }`;
-  return `<section class="wp-route-page wp-api-guide"><div class="wp-route-heading"><div><span class="wp-kicker">Developer guide</span><h1>API &amp; webhooks</h1><p>A practical, Twilio-style guide for connecting your software to Varada Nexus without exposing provider infrastructure.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("integrations")}">Open integrations</a></div><section class="wp-api-guide-layout"><aside class="wp-card wp-api-guide-nav"><strong>On this page</strong><a href="#quickstart">Quickstart</a><a href="#authentication">Authentication</a><a href="#api-requests">API requests</a><a href="#webhook-setup">Webhook setup</a><a href="#signatures">Verify signatures</a><a href="#events">Event reference</a><a href="#testing">Testing &amp; retries</a></aside><div class="wp-api-guide-content"><section class="wp-card wp-api-guide-hero" id="quickstart"><span class="wp-card-eyebrow">Quickstart</span><h2>Connect in four steps</h2><ol><li><strong>Create an API key</strong><span>Open Integrations, name your server and select the minimum required scopes.</span></li><li><strong>Store the token server-side</strong><span>The full credential is displayed once. Never place it in browser or mobile-app code.</span></li><li><strong>Create a webhook connection</strong><span>Select one WhatsApp number, identify the software using it and enter that software’s HTTPS callback URL.</span></li><li><strong>Send a test event</strong><span>Confirm the signature and return HTTP 200–299 within ten seconds.</span></li></ol></section><section class="wp-card wp-api-guide-section" id="authentication"><span class="wp-card-eyebrow">Authentication</span><h2>Bearer API keys</h2><p>API access is included with every active plan. Send the generated key in the <code>Authorization</code> header. Keys are workspace-scoped, individually revocable and limited by their assigned scopes.</p><div class="wp-api-scope-grid"><article><code>contacts:read</code><span>List and search contacts</span></article><article><code>contacts:write</code><span>Create customer records</span></article><article><code>messages:write</code><span>Start chats and send messages</span></article></div><div class="wp-policy-note"><strong>Varada Nexus Connect endpoint</strong><p>Use the branded API gateway address supplied for your workspace. Internal provider hostnames are intentionally not displayed in the portal or documentation.</p></div></section><section class="wp-card wp-api-guide-section" id="api-requests"><span class="wp-card-eyebrow">API requests</span><h2>Make your first request</h2><p>The API uses versioned REST routes, JSON bodies and JSON responses. Keep the base URL in an environment variable and append the documented <code>/v1/...</code> path.</p><div class="wp-api-code"><header><span>cURL · list contacts</span><button type="button" data-copy-developer-value="${escapeHtml(apiExample)}">Copy</button></header><pre><code>${escapeHtml(apiExample)}</code></pre></div><div class="wp-api-code"><header><span>JSON body · create contact</span><button type="button" data-copy-developer-value="${escapeHtml(createContactExample)}">Copy</button></header><pre><code>${escapeHtml(createContactExample)}</code></pre></div><table class="wp-api-reference-table"><thead><tr><th>Method and route</th><th>Scope</th><th>Purpose</th></tr></thead><tbody><tr><td><code>GET /v1/contacts</code></td><td><code>contacts:read</code></td><td>Search and paginate the complete customer directory.</td></tr><tr><td><code>POST /v1/contacts</code></td><td><code>contacts:write</code></td><td>Create a contact with duplicate safeguards.</td></tr><tr><td><code>GET /v1/numbers</code></td><td><code>messages:write</code></td><td>List connected WhatsApp numbers.</td></tr><tr><td><code>POST /v1/messages</code></td><td><code>messages:write</code></td><td>Start an approved conversation or reply inside an eligible service window.</td></tr><tr><td><code>GET /v1/messages/:id</code></td><td><code>messages:write</code></td><td>Read message delivery state.</td></tr><tr><td><code>GET /v1/requests</code></td><td>Any active key</td><td>Inspect recent API requests and request IDs.</td></tr></tbody></table></section><section class="wp-card wp-api-guide-section" id="webhook-setup"><span class="wp-card-eyebrow">Webhook setup</span><h2>Route each number independently</h2><p>A webhook connection belongs to exactly one connected WhatsApp number and one external software system. Create additional connections when another number feeds a different CRM, ERP or automation tool.</p><ul class="wp-api-checklist"><li>Use a public HTTPS URL on port 443.</li><li>Choose only the events that software needs.</li><li>Store each connection’s signing secret separately.</li><li>Pause a route without deleting its delivery history.</li><li>Use Send test before relying on production events.</li></ul><div class="wp-api-code"><header><span>Example event body</span><button type="button" data-copy-developer-value="${escapeHtml(eventPayload)}">Copy</button></header><pre><code>${escapeHtml(eventPayload)}</code></pre></div></section><section class="wp-card wp-api-guide-section" id="signatures"><span class="wp-card-eyebrow">Security</span><h2>Verify every webhook signature</h2><p>Compute HMAC-SHA256 over the exact raw request body. Compare it with <code>X-Varada-Signature</code> using a timing-safe comparison before parsing or processing the event.</p><div class="wp-api-code"><header><span>Node.js signature verification</span><button type="button" data-copy-developer-value="${escapeHtml(webhookExample)}">Copy</button></header><pre><code>${escapeHtml(webhookExample)}</code></pre></div><dl class="wp-api-header-list"><div><dt><code>X-Varada-Event</code></dt><dd>Event type, such as <code>message.status</code>.</dd></div><div><dt><code>X-Varada-Event-Id</code></dt><dd>Stable event identifier for idempotency.</dd></div><div><dt><code>X-Varada-Signature</code></dt><dd><code>sha256=&lt;hex digest&gt;</code> of the raw body.</dd></div></dl></section><section class="wp-card wp-api-guide-section" id="events"><span class="wp-card-eyebrow">Event reference</span><h2>Supported events</h2><div class="wp-api-event-grid">${["contact.created","contact.updated","message.received","message.sent","message.status","conversation.created","conversation.updated","campaign.completed"].map((name) => `<article><code>${name}</code><span>${escapeHtml(({"contact.created":"A new customer record was created.","contact.updated":"Customer data or consent changed.","message.received":"An inbound customer message was received.","message.sent":"An outbound message was accepted.","message.status":"Delivery, read or failure status changed.","conversation.created":"A new conversation was opened.","conversation.updated":"Ownership or conversation state changed.","campaign.completed":"A campaign completed its delivery run."})[name])}</span></article>`).join("")}</div></section><section class="wp-card wp-api-guide-section" id="testing"><span class="wp-card-eyebrow">Reliability</span><h2>Testing, responses and retries</h2><p>Return any HTTP 200–299 response within ten seconds. Use the event ID as an idempotency key so a retried event is processed only once.</p><div class="wp-api-response-grid"><article><strong>2xx</strong><span>Delivery accepted</span></article><article><strong>4xx</strong><span>Endpoint rejected the request</span></article><article><strong>5xx / timeout</strong><span>Temporary delivery failure</span></article></div><p>Use the delivery log to inspect the response code, duration and latest attempt. Test events contain no customer data.</p><a class="wp-secondary wp-button-link" href="${workspacePath("integration-lab")}">Run Integration Lab</a></section></div></section></section>`;
+  return `<section class="wp-route-page wp-api-guide"><div class="wp-route-heading"><div><span class="wp-kicker">Developer guide</span><h1>API &amp; webhooks</h1><p>A practical, Twilio-style guide for connecting your software to Varada Nexus without exposing provider infrastructure.</p></div><a class="wp-primary wp-button-link" href="${workspacePath("integrations")}">Open integrations</a></div><section class="wp-api-guide-layout"><aside class="wp-card wp-api-guide-nav"><strong>On this page</strong><a href="#quickstart">Quickstart</a><a href="#authentication">Authentication</a><a href="#api-requests">API requests</a><a href="#webhook-setup">Webhook setup</a><a href="#signatures">Verify signatures</a><a href="#events">Event reference</a><a href="#testing">Testing &amp; retries</a></aside><div class="wp-api-guide-content"><section class="wp-card wp-api-guide-hero" id="quickstart"><span class="wp-card-eyebrow">Quickstart</span><h2>Connect in four steps</h2><ol><li><strong>Create an API key</strong><span>Open Integrations, name your server and select the minimum required scopes.</span></li><li><strong>Store the token server-side</strong><span>The full credential is displayed once. Never place it in browser or mobile-app code.</span></li><li><strong>Create a webhook connection</strong><span>Select one WhatsApp number, identify the software using it and enter that software’s HTTPS callback URL.</span></li><li><strong>Send a test event</strong><span>Confirm the signature and return HTTP 200–299 within ten seconds.</span></li></ol></section><section class="wp-card wp-api-guide-section" id="authentication"><span class="wp-card-eyebrow">Authentication</span><h2>Bearer API keys</h2><p>API access is included with every active plan. Send the generated key in the <code>Authorization</code> header. Keys are workspace-scoped, individually revocable and limited by their assigned scopes.</p><div class="wp-api-scope-grid"><article><code>contacts:read</code><span>List and search contacts</span></article><article><code>contacts:write</code><span>Create customer records</span></article><article><code>messages:write</code><span>Start chats and send messages</span></article></div><div class="wp-policy-note"><strong>Varada Nexus Connect endpoint</strong><p>Use the branded API gateway address supplied for your workspace. Internal provider hostnames are intentionally not displayed in the portal or documentation.</p></div></section><section class="wp-card wp-api-guide-section" id="api-requests"><span class="wp-card-eyebrow">API requests</span><h2>Make your first request</h2><p>The API uses versioned REST routes, JSON bodies and JSON responses. Keep the base URL in an environment variable and append the documented <code>/v1/...</code> path.</p><div class="wp-api-code"><header><span>cURL · list contacts</span><button type="button" data-copy-developer-value="${escapeHtml(apiExample)}">Copy</button></header><pre><code>${escapeHtml(apiExample)}</code></pre></div><div class="wp-api-code"><header><span>JSON body · create contact</span><button type="button" data-copy-developer-value="${escapeHtml(createContactExample)}">Copy</button></header><pre><code>${escapeHtml(createContactExample)}</code></pre></div><div class="wp-api-code"><header><span>JSON body · send template and start flow</span><button type="button" data-copy-developer-value="${escapeHtml(flowStartExample)}">Copy</button></header><pre><code>${escapeHtml(flowStartExample)}</code></pre></div><table class="wp-api-reference-table"><thead><tr><th>Method and route</th><th>Scope</th><th>Purpose</th></tr></thead><tbody><tr><td><code>GET /v1/contacts</code></td><td><code>contacts:read</code></td><td>Search and paginate the complete customer directory.</td></tr><tr><td><code>POST /v1/contacts</code></td><td><code>contacts:write</code></td><td>Create a contact with duplicate safeguards.</td></tr><tr><td><code>GET /v1/numbers</code></td><td><code>messages:write</code></td><td>List connected WhatsApp numbers.</td></tr><tr><td><code>GET /v1/flows</code></td><td><code>messages:write</code></td><td>List active flows and template-reply mappings.</td></tr><tr><td><code>POST /v1/messages</code></td><td><code>messages:write</code></td><td>Send a template and optionally attach <code>flowId</code> so a reply starts the mapped route.</td></tr><tr><td><code>GET /v1/messages/:id</code></td><td><code>messages:write</code></td><td>Read message delivery state.</td></tr><tr><td><code>GET /v1/requests</code></td><td>Any active key</td><td>Inspect recent API requests and request IDs.</td></tr></tbody></table></section><section class="wp-card wp-api-guide-section" id="webhook-setup"><span class="wp-card-eyebrow">Webhook setup</span><h2>Route each number independently</h2><p>A webhook connection belongs to exactly one connected WhatsApp number and one external software system. Create additional connections when another number feeds a different CRM, ERP or automation tool.</p><ul class="wp-api-checklist"><li>Use a public HTTPS URL on port 443.</li><li>Choose only the events that software needs.</li><li>Store each connection’s signing secret separately.</li><li>Pause a route without deleting its delivery history.</li><li>Use Send test before relying on production events.</li></ul><div class="wp-api-code"><header><span>Example event body</span><button type="button" data-copy-developer-value="${escapeHtml(eventPayload)}">Copy</button></header><pre><code>${escapeHtml(eventPayload)}</code></pre></div></section><section class="wp-card wp-api-guide-section" id="signatures"><span class="wp-card-eyebrow">Security</span><h2>Verify every webhook signature</h2><p>Compute HMAC-SHA256 over the exact raw request body. Compare it with <code>X-Varada-Signature</code> using a timing-safe comparison before parsing or processing the event.</p><div class="wp-api-code"><header><span>Node.js signature verification</span><button type="button" data-copy-developer-value="${escapeHtml(webhookExample)}">Copy</button></header><pre><code>${escapeHtml(webhookExample)}</code></pre></div><dl class="wp-api-header-list"><div><dt><code>X-Varada-Event</code></dt><dd>Event type, such as <code>message.status</code>.</dd></div><div><dt><code>X-Varada-Event-Id</code></dt><dd>Stable event identifier for idempotency.</dd></div><div><dt><code>X-Varada-Signature</code></dt><dd><code>sha256=&lt;hex digest&gt;</code> of the raw body.</dd></div></dl></section><section class="wp-card wp-api-guide-section" id="events"><span class="wp-card-eyebrow">Event reference</span><h2>Supported events</h2><div class="wp-api-event-grid">${["contact.created","contact.updated","message.received","message.sent","message.status","conversation.created","conversation.updated","campaign.completed"].map((name) => `<article><code>${name}</code><span>${escapeHtml(({"contact.created":"A new customer record was created.","contact.updated":"Customer data or consent changed.","message.received":"An inbound customer message was received.","message.sent":"An outbound message was accepted.","message.status":"Delivery, read or failure status changed.","conversation.created":"A new conversation was opened.","conversation.updated":"Ownership or conversation state changed.","campaign.completed":"A campaign completed its delivery run."})[name])}</span></article>`).join("")}</div></section><section class="wp-card wp-api-guide-section" id="testing"><span class="wp-card-eyebrow">Reliability</span><h2>Testing, responses and retries</h2><p>Return any HTTP 200–299 response within ten seconds. Use the event ID as an idempotency key so a retried event is processed only once.</p><div class="wp-api-response-grid"><article><strong>2xx</strong><span>Delivery accepted</span></article><article><strong>4xx</strong><span>Endpoint rejected the request</span></article><article><strong>5xx / timeout</strong><span>Temporary delivery failure</span></article></div><p>Use the delivery log to inspect the response code, duration and latest attempt. Test events contain no customer data.</p><a class="wp-secondary wp-button-link" href="${workspacePath("integration-lab")}">Run Integration Lab</a></section></div></section></section>`;
 }
 
 function integrationsView() {
@@ -3271,6 +3350,21 @@ function overviewView(connections, setupReady, profile) {
   return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Business messaging workspace</span><h1>${escapeHtml(session.companyName)}</h1><p>Your operational summary and next actions. Use the sidebar to open each dedicated module.</p></div><a class="wp-primary wp-button-link" href="${workspacePath(mayOnboard ? "onboarding" : "verification")}">${mayOnboard ? "Continue setup" : "Verify business"}</a></div><section class="wp-status-grid" aria-label="Workspace status"><article class="wp-stat"><span>Workspace</span><strong><i class="wp-status-dot"></i> Active</strong></article><article class="wp-stat"><span>Verification</span><strong>${escapeHtml(String(workspaceVerification?.status || "not started").replaceAll("_", " "))}</strong></article><article class="wp-stat"><span>Current plan</span><strong>${escapeHtml(planName(profile?.planCode))}</strong></article><article class="wp-stat"><span>Setup progress</span><strong>${progress}%</strong></article></section><section class="wp-overview-actions"><a class="wp-card wp-action-card" href="${workspacePath(mayOnboard ? "onboarding" : "verification")}"><span class="wp-card-eyebrow">Next step</span><h2>${mayOnboard ? (setupReady ? "Connect Meta Business" : "Prepare your workspace") : "Verify your organisation"}</h2><p>${mayOnboard ? "Open the dedicated onboarding section to continue setup." : "Submit entity details and the required business evidence for review."}</p><strong>${mayOnboard ? "Open onboarding" : "Open verification"} →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("accounts")}"><span class="wp-card-eyebrow">Connected assets</span><h2>Business accounts</h2><p>${connections.length ? `${connections.length} account${connections.length === 1 ? "" : "s"} connected.` : "No account connected yet."}</p><strong>Manage accounts →</strong></a><a class="wp-card wp-action-card" href="${workspacePath("inbox")}"><span class="wp-card-eyebrow">Communication</span><h2>Team inbox</h2><p>Handle customer conversations, assignments, notes and replies from the shared inbox.</p><strong>View module →</strong></a></section><section class="wp-workspace-note"><div><strong>Dedicated product workspace</strong><p>Every sidebar option opens a separate module route; overview remains a concise command surface.</p></div><a href="${workspacePath("settings")}">Workspace settings</a></section></section>`;
 }
 
+function supportView() {
+  const tickets = workspaceSupport.tickets || [];
+  const detail = workspaceSupport.thread;
+  const open = tickets.filter((ticket) => !["resolved", "closed"].includes(ticket.status)).length;
+  const waiting = tickets.filter((ticket) => ticket.status === "waiting_on_customer").length;
+  const ticketRows = tickets.map((ticket) => `<button type="button" class="wp-support-ticket ${detail?.ticket?.id === ticket.id ? "active" : ""}" data-support-ticket="${escapeHtml(ticket.id)}"><span><strong>${escapeHtml(ticket.ticketNumber)}</strong><em class="wp-support-status is-${escapeHtml(ticket.status)}">${escapeHtml(ticket.status.replaceAll("_", " "))}</em></span><b>${escapeHtml(ticket.subject)}</b><small>${escapeHtml(ticket.category.replaceAll("_", " "))} · updated ${escapeHtml(formatProfileDate(ticket.lastActivityAt))}</small></button>`).join("");
+  const messages = (detail?.messages || []).map((message) => `<article class="wp-support-message ${message.authorKind === "customer" ? "mine" : "support"}"><header><strong>${escapeHtml(message.authorKind === "support" ? "Varada Nexus Support" : message.author?.display_name || "You")}</strong><span>${escapeHtml(formatProfileDate(message.created_at))}</span></header><p>${escapeHtml(message.body).replaceAll("\n", "<br>")}</p></article>`).join("");
+  const replyDeadline = detail?.ticket?.status === "waiting_on_customer" && detail.ticket.autoCloseAt ? `<div class="wp-policy-note"><strong>Reply due by ${escapeHtml(formatProfileDate(detail.ticket.autoCloseAt))}</strong><p>This ticket closes automatically 48 hours after the latest support response if you do not reply.</p></div>` : "";
+  const completedNote = ["resolved", "closed"].includes(detail?.ticket?.status) ? `<div class="wp-policy-note"><strong>${detail.ticket.status === "closed" ? "Ticket closed" : "Ticket resolved"}</strong><p>You can reopen this ticket by sending a new reply below.</p></div>` : "";
+  const replyButton = ["resolved", "closed"].includes(detail?.ticket?.status) ? "Reopen & send reply" : "Send reply";
+  const conversation = detail?.ticket ? `<section class="wp-card wp-support-conversation"><header><div><span class="wp-card-eyebrow">${escapeHtml(detail.ticket.ticketNumber)}</span><h2>${escapeHtml(detail.ticket.subject)}</h2><p>${escapeHtml(detail.ticket.description)}</p></div><em class="wp-support-status is-${escapeHtml(detail.ticket.status)}">${escapeHtml(detail.ticket.status.replaceAll("_", " "))}</em></header><div class="wp-support-thread">${messages || '<div class="wp-support-empty">Support has received this request. Updates will appear here.</div>'}</div>${replyDeadline}${completedNote}<form class="wp-support-reply" id="wpSupportReplyForm"><textarea name="message" rows="4" maxlength="5000" required placeholder="Reply to the support team"></textarea><div><small>${["resolved", "closed"].includes(detail.ticket.status) ? "Your reply will reopen this ticket." : "Replies are added securely to this ticket."}</small><button class="wp-primary" type="submit">${replyButton}</button></div></form>${detail.ticket.status === "closed" ? "" : '<button class="wp-danger-quiet" type="button" id="wpSupportCloseBtn">Close ticket</button>'}</section>` : `<section class="wp-card wp-support-welcome"><span class="wp-card-eyebrow">Ticket conversation</span><h2>Select a ticket</h2><p>Open a request to view its replies and status.</p></section>`;
+  const ticketWorkspace = tickets.length ? `<section class="wp-support-layout"><aside class="wp-card wp-support-list"><header><div><span class="wp-card-eyebrow">Requests</span><h2>Your tickets</h2></div><button type="button" class="wp-support-icon-button" id="wpSupportRefreshBtn" aria-label="Refresh tickets" title="Refresh tickets"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-14.9-4M4 4v5h5M4 13a8.1 8.1 0 0 0 14.9 4M20 20v-5h-5"/></svg></button></header><div>${ticketRows}</div></aside>${conversation}</section>` : `<section class="wp-card wp-support-empty-state"><div class="wp-support-empty-copy"><span class="wp-card-eyebrow">Support workspace</span><h2>How can we help?</h2><p>Raise a ticket and track every response in one place.</p><button class="wp-primary" type="button" data-support-create>Raise your first ticket <span aria-hidden="true">→</span></button></div><div class="wp-support-empty-visual" aria-hidden="true"><div class="wp-support-orbit wp-support-orbit-one"></div><div class="wp-support-orbit wp-support-orbit-two"></div><div class="wp-support-hero-icon"><svg viewBox="0 0 48 48"><path d="M12 33.5 7 40v-11a17 17 0 1 1 8 9"/><path d="M17 22h14M17 28h9"/></svg></div><span class="wp-support-visual-chip chip-one">API</span><span class="wp-support-visual-chip chip-two">Billing</span><span class="wp-support-visual-chip chip-three">Flows</span></div><div class="wp-support-steps" aria-label="Support process"><span><b>01</b><strong>Submit</strong></span><i></i><span><b>02</b><strong>Track</strong></span><i></i><span><b>03</b><strong>Resolve</strong></span></div></section>`;
+  return `<section class="wp-route-page wp-support-page"><div class="wp-route-heading wp-support-heading"><div><span class="wp-kicker">Customer care</span><h1>Customer support</h1><p>Get help with your WhatsApp Platform workspace.</p></div><button class="wp-primary wp-support-raise" type="button" id="wpNewSupportTicketBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Raise ticket</button></div>${workspaceSupport.error ? `<div class="wp-inline-error"><strong>Support unavailable</strong><p>${escapeHtml(workspaceSupport.error)}</p></div>` : ""}<section class="wp-status-grid wp-support-stats" aria-label="Ticket summary"><article class="wp-stat"><span class="wp-support-stat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.75h14a1.25 1.25 0 0 1 1.25 1.25v3a3 3 0 0 0 0 6v3A1.25 1.25 0 0 1 19 19.25H5A1.25 1.25 0 0 1 3.75 18v-3a3 3 0 0 0 0-6V6A1.25 1.25 0 0 1 5 4.75Z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></svg></span><span>Total tickets</span><strong>${tickets.length}</strong><small>All requests</small></article><article class="wp-stat"><span class="wp-support-stat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.25"/><path d="M7.75 12h2.4l1.35-3.25 2.15 6.5L15.2 12h2.95"/></svg></span><span>Open</span><strong>${open}</strong><small>Being handled</small></article><article class="wp-stat"><span class="wp-support-stat-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.75 7.75 0 0 1-8 7.5 8.8 8.8 0 0 1-3.25-.6L4 20l1.45-4.15A7.15 7.15 0 0 1 4 11.5 7.75 7.75 0 0 1 12 4a7.75 7.75 0 0 1 8 7.5Z"/><path d="M9 11.5h6M12 8.5v6"/></svg></span><span>Waiting for you</span><strong>${waiting}</strong><small>Needs your reply</small></article></section>${ticketWorkspace}<dialog class="wp-contact-dialog wp-support-dialog" id="wpSupportDialog"><form id="wpSupportCreateForm"><header><div><span class="wp-card-eyebrow">New request</span><h2>Raise a support ticket</h2><p>Tell us what you need help with.</p></div><button type="button" data-close-support-dialog aria-label="Close">×</button></header><div class="wp-support-form-row"><label><span>Issue area</span><select name="category"><option value="technical">Technical issue</option><option value="billing">Billing &amp; payment</option><option value="onboarding">Onboarding &amp; verification</option><option value="templates">Message templates</option><option value="flows">Flows</option><option value="api_webhooks">API &amp; webhooks</option><option value="account_access">Account access</option><option value="other">Other</option></select></label><label><span>Priority</span><select name="priority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></label></div><label><span>Subject</span><input name="subject" minlength="5" maxlength="180" required placeholder="Short summary of the issue" /></label><label><span>Details</span><textarea name="description" minlength="10" maxlength="5000" rows="6" required placeholder="Explain what happened and include any relevant reference ID."></textarea></label><footer><button class="wp-secondary" type="button" data-close-support-dialog>Cancel</button><button class="wp-primary" type="submit">Submit ticket</button></footer></form></dialog></section>`;
+}
+
 function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "profile") return profileView(profile);
   if (view === "verification") return verificationView(workspaceVerification, connections);
@@ -3287,6 +3381,7 @@ function workspaceViewContent(view, connections, setupReady, profile) {
   if (view === "integration-lab") return integrationLabView();
   if (view === "developer-logs") return developerLogsView();
   if (view === "api-guide") return apiGuideView().replace('<section class="wp-card wp-api-guide-section" id="testing">', `${aiIntegrationGuideCard()}<section class="wp-card wp-api-guide-section" id="testing">`);
+  if (view === "support") return supportView();
   if (isBillingWorkspaceView(view)) return billingView(view);
   if (view === "checkout") return checkoutView();
   if (view === "templates") return templatesViewV2(connections);
@@ -3441,7 +3536,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       workspaceContacts = { contacts: [], error: error?.message || "The contact directory could not be loaded." };
     }
   }
-  if (refresh && ["templates","inbox","campaigns","analytics"].includes(view)) {
+  if (refresh && ["templates","inbox","campaigns","analytics","flows"].includes(view)) {
     const templateConnections = connected.filter((connection) => connection.status === "connected" && (connection.whatsapp_business_account_id || connection.whatsappBusinessAccountId));
     const connectionId = templateConnections.some((connection) => connection.id === workspaceSelectedConnectionId) ? workspaceSelectedConnectionId : "";
     if (connectionId) {
@@ -3467,7 +3562,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       workspaceTemplateLibrary = { templates: [], connectionId: "", category: "UTILITY", language: "en_US", error: "" };
     }
   }
-  if (refresh && view === "flows") {
+  if (refresh && ["flows","inbox"].includes(view)) {
     try {
       const result = workspaceSelectedConnectionId ? await messagingRequest("list_flows", { connectionId: workspaceSelectedConnectionId }) : { flows: [] };
       workspaceFlows = { flows: result?.flows || [], error: "" };
@@ -3527,6 +3622,16 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       workspaceDeveloperLogs = { ...workspaceDeveloperLogs, error: error?.message || "Developer logs could not be loaded." };
     }
   }
+  if (refresh && view === "support") {
+    try {
+      const listed = await supportRequest("customer_list");
+      const ticketId = new URLSearchParams(location.search).get("ticket");
+      workspaceSupport = { tickets: listed?.tickets || [], thread: null, error: "" };
+      if (ticketId && workspaceSupport.tickets.some((ticket) => ticket.id === ticketId)) workspaceSupport.thread = await supportRequest("customer_thread", { ticketId });
+    } catch (error) {
+      workspaceSupport = { tickets: [], thread: null, error: error?.message || "Customer support could not be loaded." };
+    }
+  }
   if (renderLocation !== workspaceLocationKey() || navigationSequence !== workspaceNavigationSequence) return;
   document.body.classList.add("wp-workspace-mode");
   document.title = `${WORKSPACE_VIEW_LABELS[view]} | Varada Nexus WhatsApp Solutions`;
@@ -3548,7 +3653,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const billingLocked = workspaceBilling?.entitlement?.allowed === false
     && !isBillingWorkspaceView(view)
     && !isPreBillingWorkspaceView(view)
-    && view !== "checkout";
+    && !["checkout", "support"].includes(view);
   const featureByView = { inbox: "team_inbox", contacts: "contacts", campaigns: "campaigns", templates: "templates", flows: "flows", analytics: "analytics" };
   const requiredFeature = featureByView[view];
   const featureLocked = requiredFeature && Object.hasOwn(operationalEntitlements, requiredFeature) && [false, 0, "none"].includes(operationalEntitlements[requiredFeature]);
@@ -3561,14 +3666,56 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const profileMenu = `<div class="wp-profile-control"><button class="wp-profile-trigger" id="wpProfileMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="wpProfileMenu"><span class="wp-user"><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small></span><span class="wp-user-avatar" aria-hidden="true">${userInitial}</span><span class="wp-profile-chevron" aria-hidden="true">${workspaceIcon('<path d="m7 10 5 5 5-5"/>')}</span></button><div class="wp-profile-menu" id="wpProfileMenu" role="menu" hidden><header><span class="wp-profile-menu-avatar" aria-hidden="true">${userInitial}</span><div><strong>${escapeHtml(session.displayName)}</strong><small>${escapeHtml(session.email)}</small><em>${escapeHtml(session.companyName)} · ${escapeHtml(roleLabel)}</em></div></header>${workspaceMenuCard}<nav aria-label="Account menu"><a href="${workspacePath("settings")}" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.1A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.1A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.1A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.37.38.7.66.98.3.27.68.42 1.08.42H21v4h-.1A1.7 1.7 0 0 0 19.4 15Z"/>')}</span><span><strong>Workspace settings</strong><small>Profile and preferences</small></span></a><a href="/contact.html" role="menuitem"><span aria-hidden="true">${workspaceIcon('<circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.12c-.9.55-1.5 1.05-1.5 2.38M12 17h.01"/>')}</span><span><strong>Help &amp; support</strong><small>Contact the Varada Nexus team</small></span></a></nav><button class="wp-profile-logout" id="wpProfileLogoutBtn" type="button" role="menuitem"><span aria-hidden="true">${workspaceIcon('<path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/>')}</span><span><strong>Sign out</strong><small>End this secure session</small></span></button></div></div>`;
   const deletionBanner = workspaceDeletion?.pending ? `<section class="wp-deletion-pending" role="alert"><div><span>Account deletion pending</span><strong>This workspace is scheduled for deletion on ${escapeHtml(new Date(workspaceDeletion.scheduledFor).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }))}.</strong><small>An owner or administrator can reverse this request during the 24-hour protection window.</small></div>${workspaceDeletion.canReverse ? `<button type="button" data-reverse-account-deletion>Keep this account</button>` : ""}</section>` : "";
   const existingShell = app.querySelector(".wp-workspace-shell");
-  const preserveSidebar = Boolean(existingShell)
-    && !isFlowBuilderRoute
-    && !existingShell.classList.contains("wp-flow-builder-workspace")
-    && (preserveScroll || !refresh);
+  const preserveSidebar = Boolean(existingShell) && (preserveScroll || !refresh);
   const persistentSidebar = preserveSidebar ? existingShell.querySelector(".wp-workspace-sidebar") : null;
   const sidebarWasCollapsed = Boolean(existingShell?.classList.contains("sidebar-collapsed"));
   app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions">${notificationCentreMarkup()}<button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  if (view === "support") {
+    const dialog = app.querySelector("#wpSupportDialog");
+    app.querySelectorAll("#wpNewSupportTicketBtn, [data-support-create]").forEach((button) => button.addEventListener("click", () => dialog?.showModal()));
+    app.querySelectorAll("[data-close-support-dialog]").forEach((button) => button.addEventListener("click", () => dialog?.close()));
+    app.querySelector("#wpSupportRefreshBtn")?.addEventListener("click", () => renderDashboard({ refresh: true, preserveScroll: true }));
+    app.querySelectorAll("[data-support-ticket]").forEach((button) => button.addEventListener("click", () => {
+      const url = new URL(location.href); url.searchParams.set("ticket", button.dataset.supportTicket); navigateWorkspace(url);
+    }));
+    app.querySelector("#wpSupportCreateForm")?.addEventListener("submit", async (event) => {
+      event.preventDefault(); const form = event.currentTarget; const button = form.querySelector('button[type="submit"]'); const values = new FormData(form);
+      try { button.disabled = true; button.textContent = "Submitting…"; const result = await supportRequest("customer_create", { category: values.get("category"), priority: values.get("priority"), subject: values.get("subject"), description: values.get("description"), sourceUrl: location.href, environment: { path: location.pathname, viewport: `${innerWidth}x${innerHeight}` } }); dialog.close(); showToast(`Ticket ${result.ticket.ticketNumber} created.`, "success"); const url = new URL(location.href); url.searchParams.set("ticket", result.ticket.id); await navigateWorkspace(url, { refreshImmediately: true }); }
+      catch (error) { showToast(error?.message || "Ticket could not be created.", "error"); button.disabled = false; button.textContent = "Submit ticket"; }
+    });
+    app.querySelector("#wpSupportReplyForm")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const ticketId = workspaceSupport.thread?.ticket?.id;
+      const message = String(new FormData(form).get("message") || "").trim();
+      const previous = JSON.parse(JSON.stringify(workspaceSupport));
+      const now = new Date().toISOString();
+      const currentStatus = workspaceSupport.thread?.ticket?.status;
+      const nextStatus = ["resolved", "closed"].includes(currentStatus) ? "reopened" : currentStatus === "waiting_on_customer" ? "open" : currentStatus;
+      if (workspaceSupport.thread) {
+        workspaceSupport.thread.messages = [...(workspaceSupport.thread.messages || []), { id: `pending-${Date.now()}`, body: message, created_at: now, authorKind: "customer", author: { display_name: session.displayName || "You" } }];
+        workspaceSupport.thread.ticket = { ...workspaceSupport.thread.ticket, status: nextStatus, lastActivityAt: now };
+        workspaceSupport.tickets = workspaceSupport.tickets.map((ticket) => ticket.id === ticketId ? { ...ticket, status: nextStatus, lastActivityAt: now } : ticket);
+      }
+      await renderDashboard({ refresh: false, preserveScroll: true });
+      try {
+        await supportRequest("customer_reply", { ticketId, message });
+        showToast("Reply added.", "success");
+        await renderDashboard({ refresh: true, preserveScroll: true });
+      } catch (error) {
+        workspaceSupport = previous;
+        showToast(error?.message || "Reply could not be sent.", "error");
+        await renderDashboard({ refresh: false, preserveScroll: true });
+      }
+    });
+    app.querySelector("#wpSupportCloseBtn")?.addEventListener("click", async () => {
+      if (!confirm("Close this support ticket?")) return;
+      try { await supportRequest("customer_close", { ticketId: workspaceSupport.thread?.ticket?.id }); showToast("Ticket closed.", "success"); await renderDashboard({ refresh: true, preserveScroll: true }); }
+      catch (error) { showToast(error?.message || "Ticket could not be closed.", "error"); }
+    });
+  }
   bindOnboardingWalkthrough(app);
+  scheduleWorkspaceSupportRefresh();
   app.querySelector("#wpRefreshDeveloperLogs")?.addEventListener("click", () => renderDashboard({ refresh: true, preserveScroll: true }));
   app.querySelector("#wpProvisionIntegrationLab")?.addEventListener("click", async (event) => {
     const button = event.currentTarget;
@@ -3615,7 +3762,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   bindQuantitySteppers(app);
   if (isInboxRoute) app.querySelector(".wp-workspace-shell")?.classList.add("wp-inbox-workspace");
   const workspaceSidebarState = readWorkspaceSidebarState();
-  if (!persistentSidebar) enhanceWorkspaceSidebar(app, workspaceSidebarState, isFlowBuilderRoute);
+  if (!persistentSidebar) enhanceWorkspaceSidebar(app, workspaceSidebarState);
   app.querySelector("[data-reverse-account-deletion]")?.addEventListener("click", async (event) => {
     const button = event.currentTarget; const reason = window.prompt("Optional: why are you keeping this account?", "Deletion request withdrawn by workspace staff") || "";
     try { button.disabled = true; button.textContent = "Reversing…"; await storageRequest("reverse_account_deletion", { reason }); showToast("Account deletion has been reversed."); await renderDashboard(); }
@@ -4140,7 +4287,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   }
   if (view === "flows") {
     const numberScopedFlowRequest = (action, payload = {}) => messagingRequest(action, { ...payload, connectionId: workspaceSelectedConnectionId });
-    bindFlowsView({ root: app, flows: workspaceFlows.flows, request: numberScopedFlowRequest, onRefresh: renderDashboard, toast: showToast, escapeHtml, builderId: currentFlowBuilderId(), listUrl: workspacePath("flows") });
+    bindFlowsView({ root: app, flows: workspaceFlows.flows, templates: workspaceTemplates.templates, request: numberScopedFlowRequest, onRefresh: renderDashboard, toast: showToast, escapeHtml, builderId: currentFlowBuilderId(), listUrl: workspacePath("flows") });
   }
   if (view === "business-profile") {
     const form = app.querySelector("#wpBusinessProfileForm");
@@ -4285,7 +4432,18 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     const readyConnections = connected.filter((connection) => connection.status === "connected" && connection.phone_number_id);
     const chatConnections = readyConnections.filter((connection) => connection.id === workspaceTemplates.connectionId);
     const approvedTemplates = workspaceTemplates.templates.filter((template) => template.status === "APPROVED");
-    app.querySelector(".wp-inbox-page")?.insertAdjacentHTML("beforeend", `<dialog class="wp-contact-dialog wp-new-chat-dialog" id="wpNewChatDialog"><form method="dialog"><header><div><span class="wp-card-eyebrow">Business-initiated message</span><h2>Start a new chat</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header><label><span>Contact</span><select name="contactId" required><option value="">Select contact</option>${activeContacts.map((contact) => `<option value="${escapeHtml(contact.id)}">${escapeHtml(inboxContactName(contact))} · ${escapeHtml(contact.phone_e164 || "")}</option>`).join("")}</select><small>${activeContacts.length ? "Choose an active WhatsApp contact." : "Add an active contact before starting a chat."}</small></label><label><span>Send from</span><select name="connectionId" required>${chatConnections.map((connection) => `<option value="${escapeHtml(connection.id)}">${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}${connection.display_phone_number ? ` · ${escapeHtml(connection.display_phone_number)}` : ""}</option>`).join("")}</select><small>${chatConnections.length ? "Templates below belong to this connected business account." : "Connect a WhatsApp Business number before starting a chat."}</small></label><label><span>Approved message template</span><select name="templateKey" required><option value="">Select approved template</option>${approvedTemplates.map((template) => `<option value="${escapeHtml(`${template.name}|${template.language}`)}">${escapeHtml(template.name)} · ${escapeHtml(template.language)}</option>`).join("")}</select><small>${approvedTemplates.length ? "Only templates approved by Meta are shown." : `No approved template is available. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label><div class="wp-new-chat-template-preview" data-new-chat-template-preview hidden><strong>Full message preview</strong><p></p></div><div class="wp-policy-note"><strong>WhatsApp requirement</strong><p>A business-initiated conversation must begin with an approved template. Free-form replies become available after the customer responds and opens the 24-hour service window.</p></div><footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="send" ${activeContacts.length && chatConnections.length && approvedTemplates.length ? "" : "disabled"}>Send template</button></footer></form></dialog>`);
+    const templateReplyFlows = workspaceFlows.flows.filter((flow) => flow.status === "active" && flow.trigger_type === "template_reply");
+    app.querySelector(".wp-inbox-page")?.insertAdjacentHTML("beforeend", `
+      <dialog class="wp-contact-dialog wp-new-chat-dialog" id="wpNewChatDialog"><form method="dialog">
+        <header><div><span class="wp-card-eyebrow">Business-initiated message</span><h2>Start a new chat</h2></div><button type="submit" value="cancel" aria-label="Close">×</button></header>
+        <label><span>Contact</span><select name="contactId" required><option value="">Select contact</option>${activeContacts.map((contact) => `<option value="${escapeHtml(contact.id)}">${escapeHtml(inboxContactName(contact))} · ${escapeHtml(contact.phone_e164 || "")}</option>`).join("")}</select><small>${activeContacts.length ? "Choose an active WhatsApp contact." : "Add an active contact before starting a chat."}</small></label>
+        <label><span>Send from</span><select name="connectionId" required>${chatConnections.map((connection) => `<option value="${escapeHtml(connection.id)}">${escapeHtml(connection.verified_name || connection.display_phone_number || "WhatsApp Business")}${connection.display_phone_number ? ` · ${escapeHtml(connection.display_phone_number)}` : ""}</option>`).join("")}</select><small>${chatConnections.length ? "Templates below belong to this connected business account." : "Connect a WhatsApp Business number before starting a chat."}</small></label>
+        <label><span>Approved message template</span><select name="templateKey" required><option value="">Select approved template</option>${approvedTemplates.map((template) => `<option value="${escapeHtml(`${template.name}|${template.language}`)}">${escapeHtml(template.name)} · ${escapeHtml(template.language)}</option>`).join("")}</select><small>${approvedTemplates.length ? "Only templates approved by Meta are shown." : `No approved template is available. <a href="${workspacePath("templates")}">Open Message templates</a>.`}</small></label>
+        <label data-new-chat-flow-field hidden><span>Continue with flow</span><select name="flowId"><option value="">Do not start a flow</option>${templateReplyFlows.map((flow) => `<option value="${escapeHtml(flow.id)}" data-template-key="${escapeHtml(`${flow.trigger_config?.templateName || ""}|${flow.trigger_config?.templateLanguage || ""}`)}">${escapeHtml(flow.name)}</option>`).join("")}</select><small>The customer’s template reply starts the selected route.</small></label>
+        <div class="wp-new-chat-template-preview" data-new-chat-template-preview hidden><strong>Full message preview</strong><p></p></div>
+        <div class="wp-policy-note"><strong>WhatsApp requirement</strong><p>A business-initiated conversation must begin with an approved template. Free-form replies become available after the customer responds and opens the 24-hour service window.</p></div>
+        <footer><button class="wp-secondary" type="submit" value="cancel">Cancel</button><button class="wp-primary" type="submit" value="send" ${activeContacts.length && chatConnections.length && approvedTemplates.length ? "" : "disabled"}>Send template</button></footer>
+      </form></dialog>`);
   }
   if (view === "campaigns") {
     const dialog = app.querySelector("#wpCampaignDraftDialog");
@@ -5047,7 +5205,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       const label = escapeHtml(button.dataset.verificationDocumentName || "Verification document");
       if (stage) stage.innerHTML = result.contentType.startsWith("image/")
         ? `<img src="${verificationDocumentObjectUrl}" alt="${label}" />`
-        : `<iframe src="${verificationDocumentObjectUrl}" title="${label}"></iframe>`;
+        : `<iframe src="${verificationDocumentObjectUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH" title="${label}"></iframe>`;
     } catch (error) {
       if (stage) stage.innerHTML = `<div class="wp-verification-viewer-error"><strong>Document could not be opened</strong><p>${escapeHtml(error?.message || "Please try again.")}</p></div>`;
     }
@@ -5900,14 +6058,29 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   app.querySelector("#wpNewChatBtn")?.addEventListener("click", () => newChatDialog?.showModal());
   const newChatTemplateSelect = newChatDialog?.querySelector("select[name='templateKey']");
   const newChatTemplatePreview = newChatDialog?.querySelector("[data-new-chat-template-preview]");
+  const newChatFlowField = newChatDialog?.querySelector("[data-new-chat-flow-field]");
+  const newChatFlowSelect = newChatDialog?.querySelector("select[name='flowId']");
+  const newChatSendButton = newChatDialog?.querySelector("button[value='send']");
   const updateNewChatTemplatePreview = () => {
     const selected = workspaceTemplates.templates.find((template) => `${template.name}|${template.language}` === newChatTemplateSelect?.value);
-    if (!newChatTemplatePreview) return;
-    newChatTemplatePreview.hidden = !selected;
-    const copy = newChatTemplatePreview.querySelector("p");
+    if (newChatTemplatePreview) newChatTemplatePreview.hidden = !selected;
+    const copy = newChatTemplatePreview?.querySelector("p");
     if (copy) copy.textContent = selected ? templateFullMessage(selected) : "";
+    let matchingFlows = 0;
+    newChatFlowSelect?.querySelectorAll("option[data-template-key]").forEach((option) => {
+      const matches = Boolean(selected && option.dataset.templateKey === `${selected.name}|${selected.language}`);
+      option.hidden = !matches;
+      option.disabled = !matches;
+      if (matches) matchingFlows += 1;
+    });
+    if (newChatFlowSelect && newChatFlowSelect.selectedOptions[0]?.disabled) newChatFlowSelect.value = "";
+    if (newChatFlowField) newChatFlowField.hidden = !matchingFlows;
+    if (newChatSendButton) newChatSendButton.textContent = newChatFlowSelect?.value ? "Send & start flow" : "Send template";
   };
   newChatTemplateSelect?.addEventListener("change", updateNewChatTemplatePreview);
+  newChatFlowSelect?.addEventListener("change", () => {
+    if (newChatSendButton) newChatSendButton.textContent = newChatFlowSelect.value ? "Send & start flow" : "Send template";
+  });
   newChatDialog?.querySelector("form")?.addEventListener("submit", async (event) => {
     const submitter = event.submitter;
     if (submitter?.value !== "send") return;
@@ -5921,13 +6094,14 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
         connectionId: form.elements.connectionId.value,
         templateName,
         languageCode,
+        flowId: form.elements.flowId?.value || "",
       });
       newChatDialog.close();
-      showToast("Template sent. Conversation opened.");
+      showToast(form.elements.flowId?.value ? "Template sent. The selected reply will start the flow." : "Template sent. Conversation opened.");
       await navigateWorkspace(`${workspacePath("inbox")}?conversation=${encodeURIComponent(result.conversationId)}`);
     } catch (error) {
       showToast(error?.message || "The new conversation could not be started.", "error");
-      submitter.disabled = false; submitter.textContent = "Send template";
+      submitter.disabled = false; submitter.textContent = form.elements.flowId?.value ? "Send & start flow" : "Send template";
     }
   });
   const contactDialog = app.querySelector("#wpContactDialog");
@@ -6299,18 +6473,18 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
 async function init() {
   if (isWorkspacePage()) {
     if (!session) {
-      location.replace(`${ACCESS_PATH}#signin`);
+      location.replace(workspaceSignInUrl());
       return;
     }
     if (!runtime.supabaseUrl || !runtime.supabaseAnonKey) {
       clearSession();
-      location.replace(`${ACCESS_PATH}#signin`);
+      location.replace(workspaceSignInUrl());
       return;
     }
     bindWorkspaceNavigation();
     app.innerHTML = `<div class="wp-loading wp-branded-loading" role="status" aria-live="polite"><div class="wp-loading-brand"><span class="wp-loading-logo"><img src="/images/logo.png" alt="" /></span><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></div><div class="wp-loading-progress" aria-hidden="true"><i></i><i></i><i></i></div><p>Opening your workspace</p></div>`;
     try { await restoreSession(); }
-    catch { clearSession(); location.replace(`${ACCESS_PATH}#signin`); }
+    catch { clearSession(); location.replace(workspaceSignInUrl()); }
     return;
   }
   document.body.classList.remove("wp-workspace-mode");
@@ -6329,7 +6503,7 @@ async function init() {
     return;
   }
   if (session) {
-    location.replace(WORKSPACE_PATH);
+    location.replace(safeWorkspaceReturnPath() || WORKSPACE_PATH);
     return;
   }
   const requestedSignup = location.hash === "#signup" || location.hash === "#get-started";
