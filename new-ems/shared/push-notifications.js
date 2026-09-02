@@ -16,6 +16,7 @@ function nativePushPlugin() {
 const NATIVE_DEVICE_ID_KEY = "ems_native_push_device_id";
 const WEB_PUSH_PROMPT_SESSION_KEY = "ems_web_push_prompt_shown";
 let nativeListenersReady = false;
+let nativePreparationPromise = null;
 let nativeRegistrationWaiters = [];
 
 function nativeDeviceId() {
@@ -69,33 +70,46 @@ async function prepareNativePush() {
   const plugin = nativePushPlugin();
   if (!plugin) throw new Error("Native push support is not installed in this app build. Update the Android app.");
   if (nativeListenersReady) return plugin;
+  if (nativePreparationPromise) return nativePreparationPromise;
 
-  await plugin.addListener("registration", async ({ value }) => {
-    try {
-      const token = await saveNativeToken(value);
-      settleNativeRegistration(null, token);
-    } catch (error) {
-      settleNativeRegistration(error);
-    }
-  });
-  await plugin.addListener("registrationError", ({ error }) => {
-    settleNativeRegistration(new Error(error || "Firebase registration failed."));
-  });
-  await plugin.addListener("pushNotificationActionPerformed", ({ notification }) => {
-    openNativeNotificationTarget(notification);
-  });
-  await plugin.createChannel?.({
-    id: "ems_operational_alerts",
-    name: "EMS operational alerts",
-    description: "Operational, security and workflow alerts from Varada Nexus EMS.",
-    importance: 4,
-    visibility: 1,
-    vibration: true,
-    lights: true,
-    lightColor: "#D4B26AFF"
-  });
-  nativeListenersReady = true;
-  return plugin;
+  nativePreparationPromise = (async () => {
+    await plugin.addListener("registration", async ({ value }) => {
+      try {
+        const token = await saveNativeToken(value);
+        settleNativeRegistration(null, token);
+      } catch (error) {
+        settleNativeRegistration(error);
+      }
+    });
+    await plugin.addListener("registrationError", ({ error }) => {
+      settleNativeRegistration(new Error(error || "Firebase registration failed."));
+    });
+    await plugin.addListener("pushNotificationReceived", (notification) => {
+      window.dispatchEvent(new CustomEvent("ems:native-push-received", { detail: notification || {} }));
+    });
+    await plugin.addListener("pushNotificationActionPerformed", ({ notification }) => {
+      openNativeNotificationTarget(notification);
+    });
+    await plugin.createChannel?.({
+      id: "ems_operational_alerts",
+      name: "EMS operational alerts",
+      description: "Operational, security and workflow alerts from Varada Nexus EMS.",
+      importance: 4,
+      visibility: 1,
+      vibration: true,
+      lights: true,
+      lightColor: "#D4B26AFF"
+    });
+    nativeListenersReady = true;
+    return plugin;
+  })();
+
+  try {
+    return await nativePreparationPromise;
+  } catch (error) {
+    nativePreparationPromise = null;
+    throw error;
+  }
 }
 
 async function registerNativePush() {
@@ -259,11 +273,34 @@ function showWebPushNotice({ title, message, actionLabel = "", action = null }) 
 }
 
 export async function offerWebPushSetup() {
-  if (isNativeApp() || !window.isSecureContext) return null;
+  if (!isNativeApp() && !window.isSecureContext) return null;
   try {
     if (sessionStorage.getItem(WEB_PUSH_PROMPT_SESSION_KEY) === "true") return null;
     sessionStorage.setItem(WEB_PUSH_PROMPT_SESSION_KEY, "true");
   } catch {}
+
+  if (isNativeApp()) {
+    const support = pushSupport();
+    if (!support.supported) return null;
+    const status = await getPushNotificationStatus();
+    if (status.enabled) return null;
+    if (status.permission === "denied") {
+      return showWebPushNotice({
+        title: "Background alerts are blocked",
+        message: "Allow notifications for Varada Nexus in Android app settings so alerts can arrive while the app is closed."
+      });
+    }
+    return showWebPushNotice({
+      title: "Enable native background alerts",
+      message: "Allow Varada Nexus to receive operational and security notifications, including when the app is closed.",
+      actionLabel: "Enable notifications",
+      action: async () => {
+        const enabled = await enablePushNotifications();
+        if (!enabled.enabled) throw new Error(enabled.reason || "Notifications could not be enabled.");
+        document.querySelector("[data-ems-web-push-notice]")?.remove();
+      }
+    });
+  }
 
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;

@@ -23,6 +23,8 @@ const layout = read("new-ems/shared/layout.js");
 const dashboard = read("new-ems/shared/page-dashboard.js");
 const nativeUpdate = read("new-ems/shared/native-app-update.js");
 const liveChat = read("new-ems/shared/live-chat.js");
+const notificationUi = read("new-ems/shared/notification-ui.js");
+const nativeNavigation = read("new-ems/shared/native-navigation.js");
 const responsiveCss = read("new-ems/assets/css/responsive.css");
 const filePaths = read("android/app/src/main/res/xml/file_paths.xml");
 const login = read("login.html");
@@ -42,6 +44,9 @@ assert(directManifest.includes("android.permission.REQUEST_INSTALL_PACKAGES"), "
 assert(androidStrings.includes('<string name="app_name">Varada Nexus</string>'), "Android launcher name must be Varada Nexus.");
 assert(activity.includes("registerPlugin(NativeDevicePlugin.class)"), "Native device bridge is not registered.");
 assert(activity.includes("registerPlugin(SmsOtpPlugin.class)"), "Native SMS OTP bridge is not registered.");
+assert(activity.includes("NotificationChannel") && activity.includes("IMPORTANCE_HIGH"), "Android must create the operational notification channel at app startup.");
+assert(activity.includes("WebSettings.LOAD_DEFAULT") && activity.includes("setDomStorageEnabled(true)"), "Android WebView must retain safe cache and durable DOM storage.");
+assert(activity.includes("setAcceptThirdPartyCookies(webView, false)"), "Android WebView must reject third-party cookies.");
 assert(smsOtp.includes("startSmsRetriever()"), "Android OTP login must start the permission-free SMS Retriever API.");
 assert(smsOtp.includes("SmsRetriever.SEND_PERMISSION"), "SMS OTP receiver must require the Google Play services sender permission.");
 assert(smsOtp.includes('Pattern.compile("(?<!\\\\d)(\\\\d{6})(?!\\\\d)")'), "Native OTP extraction must accept only isolated six-digit codes.");
@@ -67,6 +72,9 @@ assert(navbar.includes('.ems-nav-sub{display:block'), "Mobile header must show t
 assert(pushNotifications.includes("Plugins?.PushNotifications"), "Web notification gate is not connected to native push notifications.");
 assert(pushNotifications.includes("requestPermissions()") && pushNotifications.includes("registerNativePush()"), "Native push permission and Firebase registration are missing.");
 assert(pushNotifications.includes("upsert_my_native_push_token"), "Native Firebase tokens are not stored in EMS.");
+assert(pushNotifications.includes('addListener("pushNotificationReceived"'), "Foreground Firebase notifications must be surfaced by the native app.");
+assert(pushNotifications.includes("Enable native background alerts"), "Authenticated Android users need a native notification activation prompt.");
+assert(notificationUi.includes("unreadCount > previousUnread"), "The first unread notification must trigger an in-app alert.");
 assert(pwa.includes("if (isNative()) return;"), "Native builds must not register the browser service worker.");
 assert(layout.includes('const saved = isMobile() ? "closed"'), "Mobile module drawers must start closed.");
 assert(layout.includes('if (sidebar?.contains(anchor)) closeMobileSidebar();'), "Mobile module drawers must close after navigation selection.");
@@ -74,6 +82,9 @@ assert(layout.includes('id="appSidebarScrim"'), "Mobile module drawers must rend
 assert(layout.includes('stopImmediatePropagation()'), "Closing the mobile drawer must block the underlying page action.");
 assert(responsiveCss.includes('.app-sidebar.open + .app-sidebar-scrim'), "Mobile drawer backdrop must cover and block the page beneath it.");
 assert(liveChat.includes('has-active-thread') && liveChat.includes('.ems-chat-panel.has-active-thread .ems-chat-side{display:none}'), "Mobile chat must show only the selected conversation thread.");
+assert(liveChat.includes("bindChatRowEvents()") && !liveChat.includes("list.innerHTML = activeTab === \"directory\" ? renderDirectoryRows(event.target.value) : renderConversationRows(event.target.value);\n    bindEvents();"), "Chat search must not duplicate launcher event handlers.");
+assert(nativeNavigation.includes("ems_native_last_authorized_route") && nativeNavigation.includes('/new-ems/modules/'), "Native relaunch must restore only a validated EMS module route.");
+assert(layout.includes("rememberNativeAuthorizedRoute()"), "Authorized native pages must be remembered for relaunch.");
 assert(dashboard.includes('.cc-admin-grid{grid-template-columns:1fr;'), "Mobile administration cards must use a readable single-column layout.");
 assert(dashboard.includes('.cc-user{width:100%;max-width:100%;min-width:0;'), "Mobile command-center identity cards must not exceed their parent card.");
 assert(dashboard.includes('.cc-actions{display:grid;width:100%;max-width:100%;min-width:0;'), "Mobile command-center actions must use a bounded grid.");
@@ -88,7 +99,7 @@ assert(layout.includes("await enforceNativeAppUpdate()"), "Protected modules mus
 assert(login.includes("await enforceNativeAppUpdate()"), "Native login must enforce the app version gate.");
 assert(login.includes('autocomplete="one-time-code"'), "OTP login must enable safe operating-system code autofill.");
 assert(login.includes('Plugins?.SmsOtp'), "OTP login is not connected to the native SMS Retriever bridge.");
-assert(login.includes("releases/latest/download/Varada-EMS.apk"), "Public login must link to the latest signed Android APK.");
+assert(login.includes("play.google.com/store/apps/details?id=com.varadanexus.ems&amp;pcampaignid=web_share"), "Public login must link to the official Google Play listing.");
 assert(releaseWorkflow.includes("assembleDirectRelease"), "Signed release workflow must build the direct release APK.");
 assert(releaseWorkflow.includes("bundlePlayRelease"), "Signed release workflow must build the Play App Bundle.");
 assert(releaseWorkflow.includes("FIREBASE_GOOGLE_SERVICES_JSON_BASE64") && releaseWorkflow.includes("android/app/google-services.json"), "Signed release workflow must restore the protected Firebase Android configuration.");

@@ -371,6 +371,23 @@ async function startChat(value) {
   await openConversation(id);
 }
 
+function bindChatRowEvents() {
+  document.querySelectorAll("[data-chat-open]").forEach((el) => {
+    el.addEventListener("click", async () => {
+      const pingId = el.getAttribute("data-chat-ping");
+      if (pingId) await acknowledgePing(pingId).catch(() => null);
+      await openConversation(el.getAttribute("data-chat-open"));
+    });
+  });
+
+  document.querySelectorAll("[data-chat-start]").forEach((el) => {
+    el.addEventListener("click", async () => {
+      try { await startChat(el.getAttribute("data-chat-start")); }
+      catch (err) { showToast(err?.message || "Could not start chat", "error"); }
+    });
+  });
+}
+
 function bindEvents() {
   document.getElementById("emsChatLauncher")?.addEventListener("click", async () => {
     STATE.open = !STATE.open;
@@ -404,20 +421,7 @@ function bindEvents() {
     });
   }
 
-  document.querySelectorAll("[data-chat-open]").forEach((el) => {
-    el.addEventListener("click", async () => {
-      const pingId = el.getAttribute("data-chat-ping");
-      if (pingId) await acknowledgePing(pingId).catch(() => null);
-      await openConversation(el.getAttribute("data-chat-open"));
-    });
-  });
-
-  document.querySelectorAll("[data-chat-start]").forEach((el) => {
-    el.addEventListener("click", async () => {
-      try { await startChat(el.getAttribute("data-chat-start")); }
-      catch (err) { showToast(err?.message || "Could not start chat", "error"); }
-    });
-  });
+  bindChatRowEvents();
 
   document.querySelectorAll("[data-chat-tab]").forEach((tab) => {
     tab.addEventListener("click", async () => {
@@ -444,7 +448,7 @@ function bindEvents() {
     const list = document.getElementById("emsChatList");
     if (!list) return;
     list.innerHTML = activeTab === "directory" ? renderDirectoryRows(event.target.value) : renderConversationRows(event.target.value);
-    bindEvents();
+    bindChatRowEvents();
   });
 
   document.getElementById("emsChatCompose")?.addEventListener("submit", async (event) => {

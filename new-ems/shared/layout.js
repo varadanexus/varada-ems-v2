@@ -15,6 +15,7 @@ import { allowDeviceInternalNavigation, enforceDeviceUnlock, enforceMandatorySec
 import { offerWebPushSetup } from "./push-notifications.js";
 import { enforceNativeAppUpdate } from "./native-app-update.js";
 import { initSupportDesk } from "./support-desk.js?v=support-1";
+import { rememberNativeAuthorizedRoute } from "./native-navigation.js";
 
 const NAV_TRANSITION_KEY = "ems_nav_pending";
 const FINANCIAL_TEXT_PATTERN = /\b(amount|rate|billing|bill(?:s|ing)?|invoice|payment|receipt|credit\s*note|receivable|payable|revenue|cost|margin|gst|tax|debit|credit|balance|outstanding|price|budget|expense|freight\s*charge|commission|penalty|settlement|quotation|quote|estimate|boq)\b/i;
@@ -403,6 +404,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   initNotificationShell().catch(() => {});
   initLiveChat().catch(() => {});
   initSupportDesk({ appUser, roleCodes, divisionId: divisionContext?.divisionId || null });
+  rememberNativeAuthorizedRoute();
   requestAnimationFrame(() => {
     app.classList.add("page-enter-active");
     finishNavigationTransition();
