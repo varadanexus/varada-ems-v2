@@ -226,5 +226,5 @@ export async function initNotificationShell() {
     try {
       await refreshNotifications();
     } catch {}
-  }, 45000);
+  }, 5000);
 }

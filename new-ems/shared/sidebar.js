@@ -217,6 +217,19 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.WHATSAPP_PLATFORM, label: "Security", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=security` },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Public Customer Portal", href: ROUTES.WHATSAPP_PLATFORM_PORTAL }
       ]
+    },
+    {
+      title: "Help & Support",
+      items: [
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Customer Support", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=customer-support` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }
+      ]
+    },
+    {
+      title: "Developer Tools",
+      items: [
+        { module: MODULES.WHATSAPP_PLATFORM, label: "API Testing", href: ROUTES.WHATSAPP_PLATFORM_API_TESTING }
+      ]
     }
   ],
   [WORKSPACES.ONBOARDING]: [
@@ -514,7 +527,7 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
   const contextualSections = Array.isArray(context?.sections) ? context.sections : null;
   const sectionsForWorkspace = [
     ...(contextualSections || MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN]),
-    ...([WORKSPACES.SUPPORT, WORKSPACES.HOSPITAL_PROJECTS].includes(workspace) ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
+    ...([WORKSPACES.SUPPORT, WORKSPACES.HOSPITAL_PROJECTS, WORKSPACES.WHATSAPP_PLATFORM].includes(workspace) ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
   ];
   const sections = sectionsForWorkspace.map((section) => {
     const visibleItems = section.items.filter((item) => item.disabled || (allowedModules || []).includes(item.module));

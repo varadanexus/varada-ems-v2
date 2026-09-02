@@ -1,10 +1,10 @@
 import { MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseAccessToken, getSupabaseClient } from "../config/supabase.js";
-import { bootstrapProtectedPage, renderModuleContent } from "./layout.js?whatsappBillingNav=2";
+import { bootstrapProtectedPage, renderModuleContent } from "./layout.js?whatsappBillingNav=5";
 import { showToast } from "./utils.js";
 
 const BILLING_VIEWS = new Set(["billing", "subscriptions", "payments", "invoices", "refunds", "credit-notes", "reconciliation"]);
-const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", ...BILLING_VIEWS, "razorpay", "meta", "security"]);
+const VIEWS = new Set(["overview", "customers", "verification", "connections", "customer-support", "package-master", "packages", ...BILLING_VIEWS, "razorpay", "meta", "security"]);
 const fileAsBase64 = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
@@ -35,6 +35,12 @@ const VIEW_META = Object.freeze({
     description: "Inspect tenant-scoped WhatsApp Business Accounts and connection readiness without exposing credentials.",
     section: "Product management",
     marker: "MC",
+  },
+  "customer-support": {
+    title: "Customer support",
+    description: "Manage WhatsApp Platform customer tickets and authenticated conversations.",
+    section: "Help & support",
+    marker: "CS",
   },
   "package-master": {
     title: "Package Master",
@@ -109,9 +115,12 @@ const VIEW_META = Object.freeze({
     marker: "SE",
   },
 });
-const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false, billingSnapshot: null, billingLoading: false, billingError: "" };
+const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false, billingSnapshot: null, billingLoading: false, billingError: "", support: { tickets: [], assignees: [], customers: [], thread: null, error: "" } };
+const supportQueueFilters = { query: "", status: "all", reply: "all", assignee: "all", sort: "newest" };
 const db = getSupabaseClient();
 let verificationPreviewUrl = "";
+let customerSupportRefreshTimer = null;
+let customerSupportRefreshBusy = false;
 const VERIFICATION_ENTITY_TYPES = Object.freeze([
   ["private_limited", "Private limited company"], ["public_limited", "Public limited company"],
   ["partnership", "Partnership"], ["sole_proprietor", "Sole proprietor"],
@@ -567,6 +576,73 @@ async function providerSecretRequest(action, payload = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || "Provider configuration request failed.");
   return data;
+}
+
+async function customerSupportRequest(action, payload = {}) {
+  const token = await getSupabaseAccessToken();
+  if (!token) throw new Error("Your EMS session has expired.");
+  const response = await fetch(`${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-support`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || "", "Content-Type": "application/json" },
+    credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Customer support request failed.");
+  return data;
+}
+
+async function customerBillingAdminRequest(action, payload = {}) {
+  const token = await getSupabaseAccessToken();
+  if (!token) throw new Error("Your EMS session has expired.");
+  const response = await fetch(`${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-billing`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || "", "Content-Type": "application/json" },
+    credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Customer billing request failed.");
+  return data;
+}
+
+async function loadCustomerSupport(ticketId = new URLSearchParams(location.search).get("ticket")) {
+  try {
+    const listed = await customerSupportRequest("staff_list");
+    state.support = { tickets: listed?.tickets || [], assignees: listed?.assignees || [], customers: listed?.customers || [], thread: null, error: "" };
+    if (ticketId && state.support.tickets.some((ticket) => ticket.id === ticketId)) state.support.thread = await customerSupportRequest("staff_thread", { ticketId });
+  } catch (error) { state.support = { tickets: [], assignees: [], customers: [], thread: null, error: error?.message || "Customer support could not be loaded." }; }
+}
+
+function customerSupportSignature(value = state.support) {
+  return JSON.stringify({
+    tickets: (value.tickets || []).map((ticket) => [ticket.id, ticket.status, ticket.priority, ticket.lastActivityAt]),
+    ticket: value.thread?.ticket ? [value.thread.ticket.id, value.thread.ticket.status, value.thread.ticket.priority, value.thread.ticket.lastActivityAt] : null,
+    messages: (value.thread?.messages || []).map((message) => [message.id, message.created_at]),
+  });
+}
+
+async function refreshCustomerSupportLive() {
+  if (state.view !== "customer-support" || document.visibilityState !== "visible" || customerSupportRefreshBusy) return;
+  customerSupportRefreshBusy = true;
+  const previous = state.support;
+  const before = customerSupportSignature(previous);
+  try {
+    await loadCustomerSupport();
+    if (state.support.error) state.support = previous;
+    else if (customerSupportSignature() !== before) render();
+  } catch { state.support = previous; }
+  finally { customerSupportRefreshBusy = false; }
+}
+
+function scheduleCustomerSupportRefresh() {
+  if (customerSupportRefreshTimer) window.clearTimeout(customerSupportRefreshTimer);
+  customerSupportRefreshTimer = null;
+  if (state.view !== "customer-support") return;
+  customerSupportRefreshTimer = window.setTimeout(async () => {
+    await refreshCustomerSupportLive();
+    scheduleCustomerSupportRefresh();
+  }, 4_000);
 }
 
 async function loadProviderSecretStatus() {
@@ -1126,7 +1202,77 @@ async function saveRates(event) {
   } catch (error) { showToast(error?.message || "Could not save rates.", TOAST_TYPES.ERROR); btn.disabled = false; }
 }
 
+function customerSupportPage() {
+  const tickets = state.support.tickets || [], detail = state.support.thread;
+  const assignees = state.support.assignees || [];
+  const customers = state.support.customers || [];
+  const open = tickets.filter((ticket) => !["resolved", "closed"].includes(ticket.status)).length;
+  const urgent = tickets.filter((ticket) => ticket.priority === "urgent" && !["resolved", "closed"].includes(ticket.status)).length;
+  const overdue = tickets.filter((ticket) => !ticket.firstRespondedAt && new Date(ticket.firstResponseDueAt).getTime() < Date.now()).length;
+  const replyOwner = (ticket) => ticket.status === "waiting_on_customer" ? "customer" : ["resolved", "closed"].includes(ticket.status) ? "none" : "support";
+  const query = supportQueueFilters.query.trim().toLocaleLowerCase();
+  const priorityRank = { urgent: 4, high: 3, normal: 2, low: 1 };
+  const filteredTickets = tickets.filter((ticket) => {
+    const searchable = [ticket.ticketNumber, ticket.subject, ticket.tenant?.name, ticket.requester?.display_name, ticket.requester?.email].filter(Boolean).join(" ").toLocaleLowerCase();
+    return (!query || searchable.includes(query))
+      && (supportQueueFilters.status === "all" || (supportQueueFilters.status === "active" ? !["resolved", "closed"].includes(ticket.status) : ticket.status === supportQueueFilters.status))
+      && (supportQueueFilters.reply === "all" || replyOwner(ticket) === supportQueueFilters.reply)
+      && (supportQueueFilters.assignee === "all" || (supportQueueFilters.assignee === "unassigned" ? !ticket.assignedToAppUserId : ticket.assignedToAppUserId === supportQueueFilters.assignee));
+  }).sort((a, b) => {
+    if (supportQueueFilters.sort === "oldest") return new Date(a.lastActivityAt) - new Date(b.lastActivityAt);
+    if (supportQueueFilters.sort === "priority") return (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0) || new Date(b.lastActivityAt) - new Date(a.lastActivityAt);
+    if (supportQueueFilters.sort === "sla") return new Date(a.firstResponseDueAt) - new Date(b.firstResponseDueAt);
+    if (supportQueueFilters.sort === "status") return String(a.status).localeCompare(String(b.status));
+    return new Date(b.lastActivityAt) - new Date(a.lastActivityAt);
+  });
+  const rows = filteredTickets.map((ticket) => {
+    const owner = replyOwner(ticket);
+    const assignee = ticket.assignee?.display_name || ticket.assignee?.email || "Unassigned";
+    const waitingLabel = owner === "customer" ? "Customer reply" : owner === "support" ? "Support reply" : "No reply needed";
+    const deadline = owner === "customer" && ticket.autoCloseAt ? `Closes ${formatDate(ticket.autoCloseAt)}` : !ticket.firstRespondedAt ? `First response ${formatDate(ticket.firstResponseDueAt)}` : "—";
+    return `<button class="wa-support-queue-row" type="button" data-admin-support-ticket="${escapeHtml(ticket.id)}"><span class="wa-support-ticket-main"><strong>${escapeHtml(ticket.subject)}</strong><small>${escapeHtml(ticket.ticketNumber)} · ${escapeHtml(ticket.tenant?.name || "Customer workspace")}</small></span><span>${status(ticket.status)}</span><span class="wa-support-priority is-${escapeHtml(ticket.priority)}">${escapeHtml(ticket.priority)}</span><span><strong>${escapeHtml(waitingLabel)}</strong><small>${escapeHtml(deadline)}</small></span><span><strong>${escapeHtml(assignee)}</strong><small>${escapeHtml(formatDate(ticket.lastActivityAt))}</small></span><span class="wa-support-open-icon" aria-hidden="true">→</span></button>`;
+  }).join("");
+  const messages = (detail?.messages || []).map((message) => `<article class="wa-support-message ${message.authorKind === "support" ? "staff" : "customer"} ${message.is_internal ? "internal" : ""}"><header><strong>${escapeHtml(message.is_internal ? "Internal note" : message.authorKind === "support" ? message.author?.display_name || "Support" : message.author?.display_name || "Customer")}</strong><span>${escapeHtml(formatDate(message.created_at))}</span></header><p>${escapeHtml(message.body)}</p></article>`).join("");
+  const assigneeOptions = [`<option value="">Unassigned</option>`, ...assignees.map((user) => `<option value="${escapeHtml(user.id)}" ${detail?.ticket?.assignedToAppUserId === user.id ? "selected" : ""}>${escapeHtml(user.display_name || user.email)}</option>`)].join("");
+  const customer = detail?.customer || (state.snapshot?.tenants || []).find((tenant) => String(tenant.id || tenant.tenantId || "").toLowerCase() === String(detail?.ticket?.tenantId || "").toLowerCase());
+  const customerTickets = tickets.filter((ticket) => ticket.tenantId === detail?.ticket?.tenantId);
+  const customerConnections = customer?.connections || [];
+  const customerMembers = customer?.users || [];
+  const customerUserRows = customerMembers.map((user) => {
+    const owner = user.roleCode === "owner";
+    const roleOptions = ["admin", "agent", "viewer"].map((role) => `<option value="${role}" ${user.roleCode === role ? "selected" : ""}>${role}</option>`).join("");
+    const statusOptions = ["active", "invited", "disabled"].map((value) => `<option value="${value}" ${user.status === value ? "selected" : ""}>${value}</option>`).join("");
+    return `<form class="wa-support-user-editor" data-support-user-form="${escapeHtml(user.id)}"><label><span>Name</span><input name="displayName" value="${escapeHtml(user.displayName || "")}" minlength="2" maxlength="100" required></label><label><span>Email</span><input name="email" type="email" value="${escapeHtml(user.email || "")}" maxlength="254" required></label><label><span>Role</span>${owner ? `<input value="Owner" disabled><input name="roleCode" type="hidden" value="owner">` : `<select name="roleCode">${roleOptions}</select>`}</label><label><span>Status</span>${owner ? `<input value="Active" disabled><input name="status" type="hidden" value="active">` : `<select name="status">${statusOptions}</select>`}</label><div class="wa-support-user-meta"><small>Last sign-in: ${escapeHtml(user.lastLoginAt ? formatDate(user.lastLoginAt) : "Never")}</small><div><button class="wa-admin-button" type="submit">Save user</button>${owner ? "" : `<button class="wa-admin-button danger" type="button" data-support-user-delete="${escapeHtml(user.id)}" data-support-user-name="${escapeHtml(user.displayName || user.email)}">Delete</button>`}</div></div></form>`;
+  }).join("");
+  const customerConnectionRows = customerConnections.map((connection) => `<article class="wa-connection-detail"><header><div><span>${escapeHtml(connection.provider || "Meta")}</span><strong>${escapeHtml(connection.verifiedName || connection.displayPhoneNumber || "WhatsApp number")}</strong><small>${escapeHtml(connection.displayPhoneNumber || "Number not assigned")}</small></div>${status(connection.status || "unknown")}</header><dl><div><dt>WABA ID</dt><dd class="wa-admin-code">${escapeHtml(connection.whatsappBusinessAccountId || "Not assigned")}</dd></div><div><dt>Phone number ID</dt><dd class="wa-admin-code">${escapeHtml(connection.phoneNumberId || "Not assigned")}</dd></div><div><dt>Meta business ID</dt><dd class="wa-admin-code">${escapeHtml(connection.metaBusinessId || "Not assigned")}</dd></div><div><dt>Connected</dt><dd>${escapeHtml(connection.connectedAt ? formatDate(connection.connectedAt) : "—")}</dd></div></dl></article>`).join("");
+  const customerInvoiceRows = (customer?.invoices || []).map((invoice) => `<tr><td><strong>${escapeHtml(invoice.invoice_number)}</strong><small>${escapeHtml(invoice.invoice_date || "—")}</small></td><td>${status(invoice.status)}</td><td>${escapeHtml(invoice.package_code || "—")}</td><td>₹${(Number(invoice.total_paise || 0) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td><td>${state.canManage ? `<button class="wa-admin-button" type="button" data-support-invoice-email="${escapeHtml(invoice.id)}">Send email</button>` : ""}</td></tr>`).join("");
+  const packages = (state.packageMaster?.packages || []).filter((pkg) => pkg.status === "active");
+  const currentPlan = customer?.planCode || "launch";
+  const packageOptions = packages.length ? packages.map((pkg) => `<option value="${escapeHtml(pkg.code)}" ${pkg.code === currentPlan ? "selected" : ""}>${escapeHtml(pkg.name)}</option>`).join("") : `<option value="${escapeHtml(currentPlan)}" selected>${escapeHtml(currentPlan)}</option>`;
+  const seatAssignment = (state.packageMaster?.assignments || []).find((entry) => entry.tenantId === customer?.id && entry.addonCode === "extra_agent_seat" && entry.status === "active");
+  const extraSeats = seatAssignment ? Number(seatAssignment.quantity || 0) : Number(customer?.additionalTeamSeats || 0);
+  const customerModal = detail?.ticket ? `<section class="wa-customer-modal" data-customer-modal="support-customer" hidden role="dialog" aria-modal="true" aria-labelledby="waSupportCustomerTitle"><div class="wa-customer-modal-shell"><header><div><span>Customer account</span><strong id="waSupportCustomerTitle">${escapeHtml(customer?.name || detail.ticket.tenant?.name || "Customer workspace")}</strong><small>${escapeHtml(customer?.ownerEmail || detail.ticket.requester?.email || "")}</small></div><div>${status(customer?.status || "active")}<button type="button" data-customer-modal-close aria-label="Close customer details">×</button></div></header><main>
+    <section class="wa-customer-detail-grid"><article><span>Package</span><strong>${escapeHtml(currentPlan)}</strong></article><article><span>Billing access</span><strong>${escapeHtml(customer?.billingAccess?.allowed === true ? "Active" : customer?.billingAccess?.allowed === false ? "Blocked" : "Unavailable")}</strong></article><article><span>Team members</span><strong>${Number(customer?.userCount ?? customerMembers.length)}</strong></article><article><span>Active sessions</span><strong>${Number(customer?.activeSessionCount || 0)}</strong></article><article><span>Connected numbers</span><strong>${customerConnections.length}</strong></article><article><span>Support history</span><strong>${customerTickets.length} tickets</strong></article></section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Customer profile</span><h3>Workspace and requester</h3></div></div><div class="wa-customer-detail-grid"><article><span>Requester</span><strong>${escapeHtml(detail.ticket.requester?.display_name || "—")}</strong></article><article><span>Email</span><strong>${escapeHtml(detail.ticket.requester?.email || customer?.ownerEmail || "—")}</strong></article><article><span>Workspace ID</span><strong class="wa-admin-code">${escapeHtml(detail.ticket.tenantId)}</strong></article><article><span>Workspace slug</span><strong>${escapeHtml(customer?.slug || "—")}</strong></article><article><span>Created</span><strong>${escapeHtml(customer?.createdAt ? formatDate(customer.createdAt) : "—")}</strong></article><article><span>Last updated</span><strong>${escapeHtml(customer?.updatedAt ? formatDate(customer.updatedAt) : "—")}</strong></article></div></section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>People &amp; access</span><h3>Users and roles</h3></div><small>${customerMembers.length} record${customerMembers.length === 1 ? "" : "s"}</small></div><div class="wa-support-user-list">${customerUserRows || '<div class="wa-admin-empty">No users found.</div>'}</div>${state.canManage ? `<form class="wa-support-invite-user" data-support-invite-user><div><strong>Invite another user</strong><small>A secure seven-day invitation is emailed automatically.</small></div><label><span>Full name</span><input name="displayName" minlength="2" maxlength="100" required></label><label><span>Work email</span><input name="email" type="email" maxlength="254" required></label><label><span>Role</span><select name="roleCode"><option value="agent">Agent</option><option value="admin">Administrator</option><option value="viewer">Viewer</option></select></label><button class="wa-admin-button primary" type="submit">Send invitation</button></form>` : ""}</section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Connected assets</span><h3>WhatsApp Business accounts</h3></div><small>${customerConnections.length} connections</small></div><div class="wa-company-connections">${customerConnectionRows || '<div class="wa-admin-empty">No Meta connection has been created.</div>'}</div></section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Verification</span><h3>Business record</h3></div>${status(customer?.verification?.status || customer?.verificationStatus || "not_started")}</div><div class="wa-customer-detail-grid"><article><span>Entity type</span><strong>${escapeHtml(customer?.verification?.entityType || "—")}</strong></article><article><span>Registration</span><strong>${escapeHtml(customer?.verification?.registrationNumber || "—")}</strong></article><article><span>GSTIN</span><strong>${escapeHtml(customer?.verification?.gstin || "—")}</strong></article><article><span>Representative</span><strong>${escapeHtml(customer?.verification?.representativeName || "—")}</strong></article><article><span>Submitted</span><strong>${escapeHtml(customer?.verification?.submittedAt ? formatDate(customer.verification.submittedAt) : "—")}</strong></article><article><span>Reviewed</span><strong>${escapeHtml(customer?.verification?.reviewedAt ? formatDate(customer.verification.reviewedAt) : "—")}</strong></article></div></section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Billing</span><h3>Subscription and invoices</h3></div><small>₹${(Number(customer?.capturedPaymentTotalPaise || 0) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })} captured</small></div><div class="wa-customer-detail-grid"><article><span>Access state</span><strong>${escapeHtml(customer?.billingAccess?.state || "Unavailable")}</strong></article><article><span>Subscription</span><strong>${escapeHtml(customer?.billingAccess?.subscriptionStatus || "Unavailable")}</strong></article><article><span>Billing interval</span><strong>${escapeHtml(customer?.billingAccess?.billingInterval || "—")}</strong></article><article><span>Access until</span><strong>${escapeHtml(customer?.billingAccess?.accessUntil ? formatDate(customer.billingAccess.accessUntil) : "—")}</strong></article><article><span>Cancellation</span><strong>${customer?.billingAccess?.cancelAtCycleEnd ? "At cycle end" : "Not scheduled"}</strong></article><article><span>Reason</span><strong>${escapeHtml(customer?.billingAccess?.reason || "Billing data unavailable")}</strong></article></div>${state.canManage && customer?.billingAccess?.subscriptionId && !customer?.billingAccess?.cancelAtCycleEnd && !["cancelled", "completed", "expired"].includes(customer?.billingAccess?.subscriptionStatus) ? `<div class="wa-subscription-cancel"><div><strong>Subscription cancellation</strong><small>Schedule the subscription to end after the paid billing cycle. WhatsApp connections stay preserved.</small></div><button class="wa-admin-button danger" type="button" data-support-cancel-subscription="${escapeHtml(customer.billingAccess.subscriptionId)}">Cancel at cycle end</button></div>` : ""}<div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Invoice</th><th>Status</th><th>Package</th><th>Total</th><th>Email</th></tr></thead><tbody>${customerInvoiceRows || '<tr><td colspan="5">No invoices found.</td></tr>'}</tbody></table></div></section>
+    ${state.canManage && customer?.id ? `<section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Account controls</span><h3>Company, contact and access</h3></div><small>Protected EMS changes</small></div><form class="wa-customer-account-form wa-support-contact-form" data-support-customer-form="${escapeHtml(customer.id)}"><label><span>Company name</span><input name="name" value="${escapeHtml(customer.name || "")}" minlength="2" maxlength="120" required></label><label><span>Owner email</span><input name="ownerEmail" type="email" value="${escapeHtml(customer.ownerEmail || "")}" maxlength="254" required></label><label><span>Contact mobile</span><input name="contactMobile" type="tel" value="${escapeHtml(customer.contactMobile || "")}" placeholder="+91 98765 43210" required></label><button class="wa-admin-button primary" type="submit">Save contact details</button></form><form class="wa-customer-account-form" data-tenant-form="${escapeHtml(customer.id)}"><label><span>Package</span><select name="plan">${packageOptions}</select></label><label><span>Extra seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extraSeats}"></label><label><span>Account status</span><select name="status"><option value="active" ${customer.status === "active" ? "selected" : ""}>Active</option><option value="suspended" ${customer.status === "suspended" ? "selected" : ""}>Suspended</option><option value="closed" ${customer.status === "closed" ? "selected" : ""}>Closed</option></select></label><button class="wa-admin-button primary" type="submit">Save package and access</button></form></section>` : ""}
+  </main></div></section>` : "";
+  const waitDeadline = detail?.ticket?.status === "waiting_on_customer" && detail.ticket.autoCloseAt ? `<span>Auto-close <strong>${escapeHtml(formatDate(detail.ticket.autoCloseAt))}</strong></span>` : "";
+  const panel = detail?.ticket ? `<section class="wa-admin-card wa-support-detail"><header><div><span class="wa-admin-kicker">${escapeHtml(detail.ticket.ticketNumber)} · ${escapeHtml(detail.ticket.tenant?.name || "Customer")}</span><h3>${escapeHtml(detail.ticket.subject)}</h3><p>${escapeHtml(detail.ticket.description)}</p></div>${status(detail.ticket.status)}</header><form class="wa-support-controls" id="waSupportControlsForm" data-status="${escapeHtml(detail.ticket.status)}" data-priority="${escapeHtml(detail.ticket.priority)}" data-assignee="${escapeHtml(detail.ticket.assignedToAppUserId || "")}"><label>Status<select name="status">${["open","acknowledged","in_progress","waiting_on_customer","resolved","closed","reopened"].map((value) => `<option value="${value}" ${detail.ticket.status === value ? "selected" : ""}>${value.replaceAll("_", " ")}</option>`).join("")}</select></label><label>Priority<select name="priority">${["low","normal","high","urgent"].map((value) => `<option value="${value}" ${detail.ticket.priority === value ? "selected" : ""}>${value}</option>`).join("")}</select></label><label>Assignee<select name="assignee">${assigneeOptions}</select></label><button class="wa-admin-button" type="submit" disabled>Save controls</button></form><div class="wa-support-sla"><span>First response due <strong>${escapeHtml(formatDate(detail.ticket.firstResponseDueAt))}</strong></span><span>Resolution due <strong>${escapeHtml(formatDate(detail.ticket.resolutionDueAt))}</strong></span>${waitDeadline}</div><div class="wa-support-thread">${messages || '<div class="wa-admin-empty">No conversation messages yet.</div>'}</div>${state.canManage && detail.ticket.status !== "closed" ? `<form class="wa-support-reply" id="waSupportReplyForm"><textarea name="message" rows="5" maxlength="5000" required placeholder="Write a response or internal note"></textarea><div class="wa-support-reply-actions"><button class="wa-admin-button" type="submit" data-support-send="note">Add internal note</button><button class="wa-admin-button primary" type="submit" data-support-send="response">Send response</button></div><small>Internal notes are always visible only to EMS staff.</small></form>` : ""}</section>` : '<section class="wa-admin-card wa-admin-empty">Select a customer ticket to review and respond.</section>';
+  const customerOptions = customers.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.tenant?.name || "Customer")} · ${escapeHtml(user.display_name || user.email)} · ${escapeHtml(user.email)}</option>`).join("");
+  state.support.customerModalHtml = customerModal;
+  const createModal = `<section class="wa-customer-modal" data-support-create-modal hidden role="dialog" aria-modal="true" aria-labelledby="waSupportCreateTitle"><div class="wa-customer-modal-shell"><header><div><span>Customer support</span><strong id="waSupportCreateTitle">Open a ticket on behalf of a customer</strong><small>The customer receives the ticket, message, notification and email.</small></div><div><button type="button" data-support-create-close aria-label="Close">×</button></div></header><main><form class="wa-support-create-form" id="waSupportCreateForm"><label><span>Customer</span><select name="customerUserId" required><option value="">Select customer</option>${customerOptions}</select></label><div class="wa-support-create-row"><label><span>Issue area</span><select name="category"><option value="technical">Technical issue</option><option value="billing">Billing &amp; payment</option><option value="onboarding">Onboarding &amp; verification</option><option value="templates">Message templates</option><option value="flows">Flows</option><option value="api_webhooks">API &amp; webhooks</option><option value="account_access">Account access</option><option value="other">Other</option></select></label><label><span>Priority</span><select name="priority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></label></div><label><span>Subject</span><input name="subject" minlength="5" maxlength="180" required></label><label><span>Opening message</span><textarea name="description" minlength="10" maxlength="5000" rows="6" required></textarea></label><div class="wa-support-reply-actions"><button class="wa-admin-button" type="button" data-support-create-close>Cancel</button><button class="wa-admin-button primary" type="submit">Open ticket</button></div></form></main></div></section>`;
+  if (detail?.ticket) return `<section class="wa-support-detail-page"><button class="wa-admin-button wa-support-back" type="button" data-support-back>← Back to customer tickets</button>${panel}</section>`;
+  const statusOptions = [["all","All statuses"],["active","Active"],["open","Open"],["acknowledged","Acknowledged"],["in_progress","In progress"],["waiting_on_customer","Waiting on customer"],["reopened","Reopened"],["resolved","Resolved"],["closed","Closed"]].map(([value,label]) => `<option value="${value}" ${supportQueueFilters.status === value ? "selected" : ""}>${label}</option>`).join("");
+  const assigneeFilterOptions = [`<option value="all" ${supportQueueFilters.assignee === "all" ? "selected" : ""}>All assignees</option>`,`<option value="unassigned" ${supportQueueFilters.assignee === "unassigned" ? "selected" : ""}>Unassigned</option>`,...assignees.map((user) => `<option value="${escapeHtml(user.id)}" ${supportQueueFilters.assignee === user.id ? "selected" : ""}>${escapeHtml(user.display_name || user.email)}</option>`)].join("");
+  return `<section class="wa-admin-stats"><article class="wa-admin-stat"><span>Total customer tickets</span><strong>${tickets.length}</strong></article><article class="wa-admin-stat"><span>Open queue</span><strong>${open}</strong></article><article class="wa-admin-stat"><span>Urgent</span><strong>${urgent}</strong></article><article class="wa-admin-stat"><span>First response overdue</span><strong>${overdue}</strong></article></section>${state.support.error ? `<div class="wa-admin-notice">${escapeHtml(state.support.error)}</div>` : ""}<section class="wa-admin-card wa-support-queue"><header><div><span class="wa-admin-kicker">Customer operations</span><h3>Customer ticket queue</h3><p>Reply ownership and inactivity deadlines update automatically.</p></div>${state.canManage ? '<button class="wa-admin-button primary" type="button" data-support-create-open>Open ticket</button>' : ""}</header><div class="wa-support-queue-tools"><label class="wa-support-search"><span>Search</span><input type="search" data-support-filter="query" value="${escapeHtml(supportQueueFilters.query)}" placeholder="Ticket, customer, subject or email"></label><label><span>Status</span><select data-support-filter="status">${statusOptions}</select></label><label><span>Waiting for</span><select data-support-filter="reply"><option value="all" ${supportQueueFilters.reply === "all" ? "selected" : ""}>Anyone</option><option value="support" ${supportQueueFilters.reply === "support" ? "selected" : ""}>Support reply</option><option value="customer" ${supportQueueFilters.reply === "customer" ? "selected" : ""}>Customer reply</option><option value="none" ${supportQueueFilters.reply === "none" ? "selected" : ""}>No reply needed</option></select></label><label><span>Assignee</span><select data-support-filter="assignee">${assigneeFilterOptions}</select></label><label><span>Sort</span><select data-support-filter="sort"><option value="newest" ${supportQueueFilters.sort === "newest" ? "selected" : ""}>Newest activity</option><option value="oldest" ${supportQueueFilters.sort === "oldest" ? "selected" : ""}>Oldest activity</option><option value="priority" ${supportQueueFilters.sort === "priority" ? "selected" : ""}>Priority</option><option value="sla" ${supportQueueFilters.sort === "sla" ? "selected" : ""}>Response deadline</option><option value="status" ${supportQueueFilters.sort === "status" ? "selected" : ""}>Status</option></select></label><button class="wa-admin-button" type="button" data-support-clear-filters>Clear</button></div><div class="wa-support-queue-summary"><strong>${filteredTickets.length}</strong><span>of ${tickets.length} tickets</span></div><div class="wa-support-queue-table"><div class="wa-support-queue-head"><span>Ticket</span><span>Status</span><span>Priority</span><span>Waiting for</span><span>Assignee / updated</span><span></span></div>${rows || '<div class="wa-admin-empty">No tickets match these filters.</div>'}</div></section>${createModal}`;
+}
+
 function content() {
+  if (state.view === "customer-support") return customerSupportPage();
   if (state.view === "package-master") return packageMaster();
   if (state.view === "packages") return packages();
   if (state.view === "billing") return billingOverview();
@@ -1148,7 +1294,7 @@ function content() {
 }
 
 function render() {
-  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal],body > [data-master-modal],body > [data-finance-refund-modal],body > [data-customer-modal]").forEach((modal) => modal.remove());
+  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal],body > [data-master-modal],body > [data-finance-refund-modal],body > [data-customer-modal],body > [data-support-create-modal]").forEach((modal) => modal.remove());
   if (verificationPreviewUrl) URL.revokeObjectURL(verificationPreviewUrl);
   verificationPreviewUrl = "";
   document.body.classList.remove("wa-document-review-open", "wa-verification-case-open", "wa-master-modal-open", "wa-finance-modal-open", "wa-customer-modal-open");
@@ -1165,9 +1311,60 @@ function render() {
   document.title = `${meta.title} | WhatsApp Business Platform | Varada Nexus`;
   renderModuleContent(`<div class="wa-admin-shell" data-admin-view="${escapeHtml(state.view)}"><section class="wa-admin-commandbar"><div class="wa-admin-command-context"><span class="wa-admin-command-marker" aria-hidden="true">${escapeHtml(meta.marker)}</span><div><span class="wa-admin-kicker">${escapeHtml(meta.section)}</span><strong>${escapeHtml(meta.title)}</strong></div></div><div class="wa-admin-actions"><a class="wa-admin-button" href="${ROUTES.WHATSAPP_PLATFORM_PORTAL}" target="_blank" rel="noopener">View public portal</a><button class="wa-admin-button primary" id="waRefresh" type="button">Refresh data</button></div></section><main class="wa-admin-view" id="waAdminContent">${content()}</main></div>`);
   bind();
+  scheduleCustomerSupportRefresh();
 }
 
 function bind() {
+  document.querySelectorAll("#waAdminContent [data-support-create-modal]").forEach((modal) => document.body.appendChild(modal));
+  if (state.view === "customer-support" && state.support.customerModalHtml) {
+    const host = document.createElement("div");
+    host.innerHTML = state.support.customerModalHtml;
+    if (host.firstElementChild) document.body.appendChild(host.firstElementChild);
+    const customerButton = document.createElement("button");
+    customerButton.type = "button";
+    customerButton.className = "wa-admin-button";
+    customerButton.dataset.openCustomer = "support-customer";
+    customerButton.textContent = "View customer details";
+    document.querySelector(".wa-support-detail > header > div")?.appendChild(customerButton);
+  }
+  const refreshSupportCustomer = async () => {
+    const ticketId = state.support.thread?.ticket?.id;
+    if (ticketId) { await loadCustomerSupport(ticketId); render(); }
+  };
+  document.querySelector("[data-support-customer-form]")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); const values = new FormData(form);
+    try { button.disabled = true; await customerSupportRequest("staff_update_customer", { tenantId: form.dataset.supportCustomerForm, name: values.get("name"), ownerEmail: values.get("ownerEmail"), contactMobile: values.get("contactMobile") }); showToast("Customer contact details updated.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "Customer details could not be updated.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
+  document.querySelector("[data-support-invite-user]")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); const values = new FormData(form); const tenantId = state.support.thread?.ticket?.tenantId;
+    try { button.disabled = true; await customerSupportRequest("staff_invite_customer_user", { tenantId, displayName: values.get("displayName"), email: values.get("email"), roleCode: values.get("roleCode") }); showToast("Invitation emailed to the new user.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "User invitation could not be sent.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
+  document.querySelectorAll("[data-support-user-form]").forEach((form) => form.addEventListener("submit", async (event) => {
+    event.preventDefault(); const button = form.querySelector("button[type=submit]"); const values = new FormData(form); const tenantId = state.support.thread?.ticket?.tenantId;
+    try { button.disabled = true; await customerSupportRequest("staff_update_customer_user", { tenantId, userId: form.dataset.supportUserForm, displayName: values.get("displayName"), email: values.get("email"), roleCode: values.get("roleCode"), status: values.get("status") }); showToast("Customer user updated.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "Customer user could not be updated.", TOAST_TYPES.ERROR); button.disabled = false; }
+  }));
+  document.querySelectorAll("[data-support-user-delete]").forEach((button) => button.addEventListener("click", async () => {
+    if (!window.confirm(`Delete ${button.dataset.supportUserName}? This removes their workspace access and active sessions.`)) return;
+    button.disabled = true;
+    try { await customerSupportRequest("staff_delete_customer_user", { tenantId: state.support.thread?.ticket?.tenantId, userId: button.dataset.supportUserDelete }); showToast("Customer user deleted.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "Customer user could not be deleted.", TOAST_TYPES.ERROR); button.disabled = false; }
+  }));
+  document.querySelectorAll("[data-support-invoice-email]").forEach((button) => button.addEventListener("click", async () => {
+    button.disabled = true; const original = button.textContent; button.textContent = "Sending…";
+    try { const result = await customerBillingAdminRequest("staff_resend_invoice", { tenantId: state.support.thread?.ticket?.tenantId, invoiceId: button.dataset.supportInvoiceEmail }); showToast(`Invoice emailed to ${result.recipient}.`, TOAST_TYPES.SUCCESS); }
+    catch (error) { showToast(error?.message || "Invoice email could not be sent.", TOAST_TYPES.ERROR); }
+    finally { button.disabled = false; button.textContent = original; }
+  }));
+  document.querySelector("[data-support-cancel-subscription]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (!window.confirm("Schedule this subscription to cancel at the end of its current paid cycle? The customer's WhatsApp connection will remain preserved.")) return;
+    button.disabled = true;
+    try { await customerBillingAdminRequest("staff_cancel_subscription", { tenantId: state.support.thread?.ticket?.tenantId, subscriptionId: button.dataset.supportCancelSubscription, cancelAtCycleEnd: true }); showToast("Subscription scheduled to cancel at cycle end.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "Subscription could not be cancelled.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
   document.querySelectorAll("#waAdminContent [data-customer-modal]").forEach((modal) => document.body.appendChild(modal));
   document.querySelectorAll("#waAdminContent [data-verification-case-modal]").forEach((modal) => document.body.appendChild(modal));
   document.querySelectorAll("#waAdminContent [data-master-modal]").forEach((modal) => document.body.appendChild(modal));
@@ -1177,7 +1374,86 @@ function bind() {
   if (requestModal) document.body.appendChild(requestModal);
   const refundModal = document.querySelector("#waAdminContent [data-finance-refund-modal]");
   if (refundModal) document.body.appendChild(refundModal);
-  document.querySelector("#waRefresh")?.addEventListener("click", () => BILLING_VIEWS.has(state.view) ? loadBillingSnapshot() : loadSnapshot());
+  document.querySelector("#waRefresh")?.addEventListener("click", async () => {
+    if (state.view === "customer-support") { await loadCustomerSupport(); render(); }
+    else if (BILLING_VIEWS.has(state.view)) await loadBillingSnapshot();
+    else await loadSnapshot();
+  });
+  document.querySelectorAll("[data-support-filter]").forEach((control) => {
+    const eventName = control.dataset.supportFilter === "query" ? "input" : "change";
+    control.addEventListener(eventName, () => {
+      supportQueueFilters[control.dataset.supportFilter] = control.value;
+      if (eventName === "input") {
+        window.clearTimeout(control._supportFilterTimer);
+        control._supportFilterTimer = window.setTimeout(() => render(), 180);
+      } else render();
+    });
+  });
+  document.querySelector("[data-support-clear-filters]")?.addEventListener("click", () => {
+    Object.assign(supportQueueFilters, { query: "", status: "all", reply: "all", assignee: "all", sort: "newest" }); render();
+  });
+  document.querySelectorAll("[data-admin-support-ticket]").forEach((button) => button.addEventListener("click", async () => {
+    const query = new URLSearchParams(location.search); query.set("view", "customer-support"); query.set("ticket", button.dataset.adminSupportTicket); history.replaceState({}, "", `${location.pathname}?${query}`); await loadCustomerSupport(button.dataset.adminSupportTicket); render();
+  }));
+  document.querySelector("[data-support-back]")?.addEventListener("click", async () => {
+    const query = new URLSearchParams(location.search); query.set("view", "customer-support"); query.delete("ticket"); history.replaceState({}, "", `${location.pathname}?${query}`); await loadCustomerSupport(null); render();
+  });
+  document.querySelector("#waSupportControlsForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button"); const values = new FormData(form); const ticketId = state.support.thread?.ticket?.id;
+    try { button.disabled = true; await customerSupportRequest("staff_update", { ticketId, status: values.get("status"), priority: values.get("priority"), assignedToAppUserId: values.get("assignee") }); showToast("Customer ticket updated.", TOAST_TYPES.SUCCESS); await loadCustomerSupport(ticketId); render(); }
+    catch (error) { showToast(error?.message || "Ticket could not be updated.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
+  const controlsForm = document.querySelector("#waSupportControlsForm");
+  const updateControlsButton = () => {
+    if (!controlsForm) return;
+    const values = new FormData(controlsForm);
+    const changed = values.get("status") !== controlsForm.dataset.status || values.get("priority") !== controlsForm.dataset.priority || values.get("assignee") !== controlsForm.dataset.assignee;
+    controlsForm.querySelector("button[type=submit]").disabled = !state.canManage || !changed;
+  };
+  controlsForm?.querySelectorAll("select").forEach((select) => select.addEventListener("change", updateControlsButton));
+  const supportCreateModal = document.querySelector("[data-support-create-modal]");
+  const closeSupportCreate = () => { if (supportCreateModal) supportCreateModal.hidden = true; };
+  document.querySelector("[data-support-create-open]")?.addEventListener("click", () => { if (supportCreateModal) { supportCreateModal.hidden = false; supportCreateModal.querySelector("select")?.focus(); } });
+  document.querySelectorAll("[data-support-create-close]").forEach((button) => button.addEventListener("click", closeSupportCreate));
+  supportCreateModal?.addEventListener("click", (event) => { if (event.target === supportCreateModal) closeSupportCreate(); });
+  document.querySelector("#waSupportCreateForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); const values = new FormData(form);
+    try {
+      button.disabled = true;
+      const result = await customerSupportRequest("staff_create", { customerUserId: values.get("customerUserId"), category: values.get("category"), priority: values.get("priority"), subject: values.get("subject"), description: values.get("description") });
+      showToast(`Ticket ${result.ticket.ticketNumber} opened.`, TOAST_TYPES.SUCCESS);
+      const query = new URLSearchParams(location.search); query.set("view", "customer-support"); query.set("ticket", result.ticket.id); history.replaceState({}, "", `${location.pathname}?${query}`);
+      await loadCustomerSupport(result.ticket.id); render();
+    } catch (error) { showToast(error?.message || "Ticket could not be opened.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
+  document.querySelector("#waSupportReplyForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = event.submitter;
+    const internal = button?.dataset.supportSend === "note";
+    const message = String(new FormData(form).get("message") || "").trim();
+    const ticketId = state.support.thread?.ticket?.id;
+    const previous = JSON.parse(JSON.stringify(state.support));
+    const now = new Date().toISOString();
+    if (state.support.thread) {
+      state.support.thread.messages = [...(state.support.thread.messages || []), { id: `pending-${Date.now()}`, body: message, is_internal: internal, created_at: now, authorKind: "support", author: { display_name: "Support" } }];
+      if (!internal) {
+        state.support.thread.ticket = { ...state.support.thread.ticket, status: "waiting_on_customer", lastActivityAt: now };
+        state.support.tickets = state.support.tickets.map((ticket) => ticket.id === ticketId ? { ...ticket, status: "waiting_on_customer", lastActivityAt: now } : ticket);
+      }
+    }
+    render();
+    try {
+      await customerSupportRequest("staff_reply", { ticketId, message, internal });
+      showToast(internal ? "Internal note saved." : "Response sent.", TOAST_TYPES.SUCCESS);
+      await loadCustomerSupport(ticketId);
+      render();
+    } catch (error) {
+      state.support = previous;
+      showToast(error?.message || "Response could not be sent.", TOAST_TYPES.ERROR);
+      render();
+    }
+  });
   const closeCustomerModal = (modal) => {
     if (!modal) return;
     modal.hidden = true;
@@ -1396,6 +1672,7 @@ function bind() {
       state.packageMaster = null;
       await loadPackageMaster();
       await loadSnapshot();
+      if (state.view === "customer-support" && state.support.thread?.ticket?.id) await loadCustomerSupport(state.support.thread.ticket.id);
     } catch (error) { showToast(error?.message || "Could not update workspace.", TOAST_TYPES.ERROR); button.disabled = false; }
   }));
   document.querySelectorAll("[data-verification-review]").forEach((form) => form.addEventListener("submit", async (event) => {
@@ -1522,7 +1799,7 @@ async function loadSnapshot() {
   if (error) { state.error = error.message || "Database setup is pending."; state.snapshot = null; }
   else {
     state.snapshot = data || {};
-    if (["customers", "connections"].includes(state.view)) {
+    if (["customers", "connections", "customer-support"].includes(state.view)) {
       const { data: directory, error: directoryError } = await db.rpc("whatsapp_platform_admin_customer_directory");
       if (!directoryError && Array.isArray(directory)) state.snapshot.tenants = directory;
     }
@@ -1568,6 +1845,7 @@ async function init() {
   state.canManage = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && ["edit", "approve"].includes(permission.action_code));
   state.canApprove = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && permission.action_code === "approve");
   await loadSnapshot();
+  if (state.view === "customer-support") { await loadPackageMaster(); await loadCustomerSupport(); render(); }
   if (["meta", "razorpay"].includes(state.view) && state.hasFullAuthority) await loadProviderSecretStatus();
   if (BILLING_VIEWS.has(state.view) && state.hasFullAuthority) await loadBillingSnapshot();
 }

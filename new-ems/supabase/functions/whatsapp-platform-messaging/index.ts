@@ -1223,6 +1223,11 @@ async function startChat(admin: any, customer: any, body: any) {
     templateName = String(templateRecord.name || "").trim();
     languageCode = String(templateRecord.language || "").trim();
     registeredTemplate = templateRecord;
+  } else if (templateName) {
+    const { data: templateRecord } = await admin.from("whatsapp_platform_template_records")
+      .select("integration_id,name,language,category,status,components").eq("tenant_id", customer.tenant_id)
+      .eq("connection_id", connectionId).eq("name", templateName).eq("language", languageCode).maybeSingle();
+    if (templateRecord && String(templateRecord.status || "").toUpperCase() === "APPROVED") registeredTemplate = templateRecord;
   }
   if (!/^[a-z0-9_]{1,512}$/.test(templateName)) throw new Error("Enter a templateId or the exact name of an approved WhatsApp template.");
   if (!/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(languageCode)) throw new Error("Enter a valid template language code, such as en_US.");
@@ -1247,15 +1252,44 @@ async function startChat(admin: any, customer: any, body: any) {
   } catch (error) {
     console.warn("Template preview could not be loaded before sending", error instanceof Error ? error.message : "Unknown error");
   }
+  let triggeredFlow: any = null;
+  if (body.flowId) {
+    const flowId = cleanUuid(body.flowId, "flow");
+    const { data: flow, error: flowError } = await admin.from("whatsapp_platform_flows")
+      .select("id,name,status,trigger_type,trigger_config,nodes")
+      .eq("id", flowId).eq("tenant_id", customer.tenant_id).eq("connection_id", connectionId).maybeSingle();
+    if (flowError || !flow) throw new Error("The selected flow was not found for this WhatsApp number.");
+    if (flow.status !== "active" || flow.trigger_type !== "template_reply") throw new Error("Select an active template-reply flow.");
+    const config = flow.trigger_config || {};
+    if (String(config.templateName || "") !== templateName || String(config.templateLanguage || "") !== languageCode) throw new Error("The selected flow is mapped to a different template.");
+    const nodeIds = new Set((Array.isArray(flow.nodes) ? flow.nodes : []).map((node: any) => String(node?.id || "")));
+    const replies = (Array.isArray(config.templateReplies) ? config.templateReplies : []).filter((reply: any) => Number.isInteger(Number(reply?.index)) && nodeIds.has(String(reply?.next || ""))).slice(0, 3);
+    if (!replies.length) throw new Error("This flow has no valid template reply routes.");
+    const templateComponents = Array.isArray(registeredTemplate?.components) ? registeredTemplate.components : Array.isArray(templateDefinition?.components) ? templateDefinition.components : [];
+    const quickReplyButtons = templateComponents.flatMap((component: any) => String(component?.type || "").toUpperCase() === "BUTTONS" && Array.isArray(component?.buttons) ? component.buttons : [])
+      .filter((button: any) => String(button?.type || "").toUpperCase() === "QUICK_REPLY").slice(0, 3);
+    if (!quickReplyButtons.length || replies.some((reply: any) => !quickReplyButtons[Number(reply.index)])) throw new Error("The selected template no longer contains the quick replies mapped by this flow.");
+    triggeredFlow = { ...flow, replies };
+  }
+  const outboundComponents: any[] = [];
+  if (templateParameters.length) {
+    outboundComponents.push({ type: "body", parameters: templateParameters.map((text: string) => ({ type: "text", text })) });
+    if (String(registeredTemplate?.category || templateDefinition?.category || "").toUpperCase() === "AUTHENTICATION") {
+      outboundComponents.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: templateParameters[0] }] });
+    }
+  }
+  if (triggeredFlow) {
+    outboundComponents.push(...triggeredFlow.replies.map((reply: any) => ({
+      type: "button",
+      sub_type: "quick_reply",
+      index: String(Number(reply.index)),
+      parameters: [{ type: "payload", payload: `vnft|${triggeredFlow.id}|${Number(reply.index)}` }],
+    })));
+  }
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: {
-      name: templateName, language: { code: languageCode }, ...(templateParameters.length ? { components: [
-        { type: "body", parameters: templateParameters.map((text: string) => ({ type: "text", text })) },
-        ...(String(registeredTemplate?.category || templateDefinition?.category || "").toUpperCase() === "AUTHENTICATION"
-          ? [{ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: templateParameters[0] }] }]
-          : []),
-      ] } : {}),
+      name: templateName, language: { code: languageCode }, ...(outboundComponents.length ? { components: outboundComponents } : {}),
     } }),
   });
   const graph = await graphResponse.json().catch(() => ({}));
@@ -1269,7 +1303,7 @@ async function startChat(admin: any, customer: any, body: any) {
     tenant_id: customer.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
     meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: "template", body: preview,
     status: "accepted", provider_timestamp: now, created_by_user_id: customer.user_id,
-    safe_metadata: { template_name: templateName, template_integration_id: templateIntegrationId || null, language_code: languageCode },
+    safe_metadata: { template_name: templateName, template_integration_id: templateIntegrationId || null, language_code: languageCode, ...(triggeredFlow ? { flow_id: triggeredFlow.id, flow_start: true } : {}) },
   }).select("id,meta_message_id,direction,message_type,body,status,safe_metadata,provider_timestamp,created_at").single();
   if (messageError) throw messageError;
   await Promise.all([
@@ -1438,10 +1472,38 @@ function validatedFlow(body: any) {
   const cleanEdges = edges.slice(0, 200).map((edge: any) => {
     const from = String(edge?.from || ""); const to = String(edge?.to || "");
     if (!ids.has(from) || !ids.has(to) || from === to) throw new Error("A flow connection references an invalid block.");
-    return { id: String(edge?.id || `${from}:${to}`).slice(0, 180), from, to };
+    const fromButton = Number.isInteger(edge?.fromButton) ? Number(edge.fromButton) : null;
+    if (fromButton !== null && (fromButton < 0 || fromButton > 2)) throw new Error("A reply-button connection has an invalid button index.");
+    return { id: String(edge?.id || `${from}:${to}`).slice(0, 180), from, to, ...(fromButton !== null ? { fromButton } : {}) };
   });
-  if (new TextEncoder().encode(JSON.stringify({ triggerConfig, nodes: cleanNodes, edges: cleanEdges })).byteLength > 150000) throw new Error("Flow definition is too large.");
-  return { name, description: description || null, status, trigger_type: triggerType, trigger_config: triggerConfig, nodes: cleanNodes, edges: cleanEdges };
+  let cleanTriggerConfig = triggerConfig;
+  if (triggerType === "template_reply") {
+    const templateIntegrationId = String(triggerConfig.templateIntegrationId || "").trim();
+    const templateName = String(triggerConfig.templateName || "").trim();
+    const templateLanguage = String(triggerConfig.templateLanguage || "").trim();
+    if (templateIntegrationId && !/^[A-Za-z0-9]{32}$/.test(templateIntegrationId)) throw new Error("Select a valid approved template for this trigger.");
+    if (!/^[a-z0-9_]{1,512}$/.test(templateName) || !/^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/.test(templateLanguage)) throw new Error("Select a valid approved template and language.");
+    const seenIndexes = new Set<number>();
+    const templateReplies = (Array.isArray(triggerConfig.templateReplies) ? triggerConfig.templateReplies : []).slice(0, 3).map((reply: any) => {
+      const index = Number(reply?.index);
+      const label = String(reply?.label || "").trim().slice(0, 20);
+      const next = String(reply?.next || "").trim();
+      if (!Number.isInteger(index) || index < 0 || index > 2 || seenIndexes.has(index) || !label || !ids.has(next)) throw new Error("Every mapped template reply must point to a valid flow block.");
+      seenIndexes.add(index);
+      return { index, label, next };
+    });
+    if (!templateReplies.length) throw new Error("Map at least one template reply to a flow block.");
+    cleanTriggerConfig = {
+      fallback: String(triggerConfig.fallback || "").trim().slice(0, 1024),
+      templateKey: String(triggerConfig.templateKey || "").trim().slice(0, 600),
+      templateIntegrationId,
+      templateName,
+      templateLanguage,
+      templateReplies,
+    };
+  }
+  if (new TextEncoder().encode(JSON.stringify({ triggerConfig: cleanTriggerConfig, nodes: cleanNodes, edges: cleanEdges })).byteLength > 150000) throw new Error("Flow definition is too large.");
+  return { name, description: description || null, status, trigger_type: triggerType, trigger_config: cleanTriggerConfig, nodes: cleanNodes, edges: cleanEdges };
 }
 
 async function saveFlow(admin: any, customer: any, body: any) {

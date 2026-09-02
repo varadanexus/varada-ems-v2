@@ -584,6 +584,32 @@ async function customerSession(admin: any, tokenValue: unknown) {
   if (!row?.tenant_id || !row?.user_id) throw new Error("Unauthorized");
   return row;
 }
+async function staffSession(req: Request) {
+  const authorization = req.headers.get("authorization") || "";
+  if (!authorization.startsWith("Bearer ")) throw new Error("Authentication required.");
+  const caller = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: authorization } } });
+  const [{ data: appUserId }, { data: full }, { data: canEdit }] = await Promise.all([
+    caller.rpc("current_app_user_id"), caller.rpc("has_full_system_authority"), caller.rpc("has_permission", { module_code: "whatsapp-platform", action_code: "edit" }),
+  ]);
+  if (!appUserId || !(full === true || canEdit === true)) throw new Error("WhatsApp Platform billing edit access is required.");
+  return { id: appUserId };
+}
+function zeptoAuthorization() { const raw = env("ZEPTO_SEND_MAIL_TOKEN").trim(); if (!raw) throw new Error("Email delivery is not configured."); return raw.toLowerCase().startsWith("zoho-enczapikey") ? raw : `Zoho-enczapikey ${raw}`; }
+async function sendInvoiceEmailByStaff(admin: any, tenantId: string, invoiceId: string) {
+  const archived = await archiveBillingDocument(admin, tenantId, "invoice", invoiceId);
+  const invoice = archived.invoice;
+  const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("name,owner_email").eq("id", tenantId).single();
+  if (tenantError || !tenant) throw new Error("Customer workspace not found.");
+  const recipient = String(invoice.billing_email || tenant.owner_email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) throw new Error("This invoice has no valid billing email.");
+  const fileName = archived.documentRecord.pdf_file_name || `${invoice.invoice_number.replace(/[^a-z0-9.-]+/gi, "-")}.pdf`;
+  const portalUrl = "https://www.varadanexus.com/whatsapp-platform/workspace/billing/";
+  const htmlBody = `<div style="margin:0;background:#f3f7f5;padding:32px 14px;font-family:Arial,Helvetica,sans-serif;color:#13231c"><div style="max-width:620px;margin:auto;background:#fff;border:1px solid #d7e4dd;border-radius:18px;overflow:hidden"><div style="padding:27px 32px;background:#061d14;color:#fff"><div style="font-size:12px;letter-spacing:.15em;text-transform:uppercase;color:#35dd94">Varada Nexus · WhatsApp Solutions</div><h1 style="font-size:25px;margin:10px 0 3px">Your invoice</h1><div style="color:#bdd1c8">${String(invoice.invoice_number).replace(/[&<>]/g, "")}</div></div><div style="padding:28px 32px"><p>Hello ${String(invoice.billing_name || tenant.name).replace(/[&<>]/g, "")},</p><p>Your requested invoice is attached to this email. You can also view all billing documents securely in your workspace.</p><p style="margin:28px 0"><a href="${portalUrl}" style="display:inline-block;background:#19bd74;color:#062418;text-decoration:none;font-weight:700;padding:14px 21px;border-radius:10px">Open billing</a></p><p style="font-size:13px;color:#718079">For billing help, contact connect@varadanexus.com.</p></div></div></div>`;
+  const response = await fetch(`${(env("ZEPTO_API_BASE_URL") || "https://api.zeptomail.in").replace(/\/+$/, "")}/v1.1/email`, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: zeptoAuthorization() }, body: JSON.stringify({ from: { address: "nexusconnect@varadanexus.com", name: "Varada Nexus Billing" }, to: [{ email_address: { address: recipient, name: invoice.billing_name || tenant.name } }], reply_to: [{ address: "connect@varadanexus.com", name: "Varada Nexus" }], subject: `${invoice.invoice_number} | Varada Nexus invoice`, htmlbody: htmlBody, textbody: `Your invoice ${invoice.invoice_number} is attached.\n\nBilling portal: ${portalUrl}\n\nFor help: connect@varadanexus.com`, track_clicks: true, track_opens: true, client_reference: `wa-invoice-resend-${invoice.id}-${Date.now()}`, attachments: [{ name: fileName, mime_type: "application/pdf", content: bytesToBase64(archived.bytes) }] }) });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || "Invoice email could not be sent.");
+  return { sent: true, recipient };
+}
 function razorpayConfigured(credentials: any) { return Boolean(credentials?.keyId && credentials?.keySecret); }
 function razorpayAuthorization(credentials: any) {
   if (!razorpayConfigured(credentials)) throw new Error("Payment processing is not configured yet.");
@@ -2440,6 +2466,21 @@ Deno.serve(async (req) => {
     const admin = adminClient();
     requestAdmin = admin;
     const action = String(body.action || "summary");
+    if (["staff_resend_invoice", "staff_cancel_subscription"].includes(action)) {
+      const staff = await staffSession(req);
+      const tenantId = cleanUuid(body.tenantId, "customer workspace");
+      if (action === "staff_resend_invoice") {
+        const invoiceId = cleanUuid(body.invoiceId, "invoice");
+        const result = await sendInvoiceEmailByStaff(admin, tenantId, invoiceId);
+        await admin.from("audit_logs").insert({ event_type: "whatsapp_invoice_resent_by_staff", action: "resend_invoice_email", module_code: "whatsapp-platform", actor_app_user_id: staff.id, entity_type: "whatsapp_platform_billing_invoice", entity_id: invoiceId, details: { tenant_id: tenantId, recipient: result.recipient } });
+        return json(req, result);
+      }
+      const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
+      const credentials = await loadRazorpaySecrets(admin);
+      const result = await cancelSubscription(admin, { tenant_id: tenantId, user_id: null, role_code: "owner" }, { subscriptionId, cancelAtCycleEnd: body.cancelAtCycleEnd !== false, disconnectConnections: false }, credentials);
+      await admin.from("audit_logs").insert({ event_type: "whatsapp_subscription_cancelled_by_staff", action: "cancel_subscription", module_code: "whatsapp-platform", actor_app_user_id: staff.id, entity_type: "whatsapp_platform_billing_subscription", entity_id: subscriptionId, details: { tenant_id: tenantId, cancel_at_cycle_end: body.cancelAtCycleEnd !== false } });
+      return json(req, result);
+    }
     const customer = await customerSession(admin, body.sessionToken);
     const mutationActions = new Set(["create_subscription", "abandon_checkout", "verify_checkout", "record_renewal_price_consent", "upgrade_subscription", "change_addons", "cancel_subscription"]);
     const previewActions = new Set(["quote_subscription_checkout", "preview_upgrade", "preview_addon_change", "sync_subscription", "payment_method_portal", "billing_document_pdf"]);

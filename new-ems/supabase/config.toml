@@ -405,6 +405,11 @@ verify_jwt = false
 [functions.whatsapp-platform-integration-lab]
 verify_jwt = false
 
+# Customer requests use the protected WhatsApp workspace session token. EMS
+# staff requests carry a bearer token and are permission-checked in-function.
+[functions.whatsapp-platform-support]
+verify_jwt = false
+
 # Browser requests use the protected WhatsApp workspace session. Razorpay
 # webhooks use their own raw-body HMAC signature validation in the function.
 [functions.whatsapp-platform-billing]

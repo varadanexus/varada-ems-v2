@@ -117,6 +117,31 @@ Deno.serve(async (req) => {
       const parsed = await body(req);
       action = parsed.value.conversationId && parsed.value.text ? "send_text" : "start_chat";
       result = await idempotent(admin, session, req, parsed.raw, () => internalAction(session, action, parsed.value));
+    } else if (req.method === "GET" && path === "/v1/flows") {
+      action = "list_flows"; requireScope(session, "messages:write");
+      let query = admin.from("whatsapp_platform_flows")
+        .select("id,connection_id,name,status,trigger_type,trigger_config,updated_at")
+        .eq("tenant_id", session.tenant_id).eq("status", "active").order("updated_at", { ascending: false }).limit(250);
+      const connectionFilter = String(url.searchParams.get("connectionId") || "").trim();
+      const triggerFilter = String(url.searchParams.get("triggerType") || "").trim();
+      if (connectionFilter) query = query.eq("connection_id", connectionFilter);
+      if (triggerFilter) query = query.eq("trigger_type", triggerFilter);
+      const { data, error } = await query;
+      if (error) throw error;
+      result = { status: 200, payload: { flows: (data || []).map((item: any) => ({
+        id: item.id,
+        connectionId: item.connection_id,
+        name: item.name,
+        status: item.status,
+        triggerType: item.trigger_type,
+        template: item.trigger_type === "template_reply" ? {
+          id: item.trigger_config?.templateIntegrationId || null,
+          name: item.trigger_config?.templateName || null,
+          language: item.trigger_config?.templateLanguage || null,
+          replies: (Array.isArray(item.trigger_config?.templateReplies) ? item.trigger_config.templateReplies : []).map((reply: any) => ({ index: Number(reply.index), label: reply.label })),
+        } : null,
+        updatedAt: item.updated_at,
+      })) } };
     } else if (req.method === "GET" && /^\/v1\/messages\/[a-f0-9-]{36}$/i.test(path)) {
       action = "get_message"; requireScope(session, "messages:write");
       const messageId = path.split("/").pop();

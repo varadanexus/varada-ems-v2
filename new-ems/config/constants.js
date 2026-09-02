@@ -55,6 +55,7 @@ export const ROUTES = {
   WHATSAPP_TEMPLATES: "/new-ems/modules/whatsapp-templates/index.html",
   WHATSAPP_SETTINGS: "/new-ems/modules/whatsapp-settings/index.html",
   WHATSAPP_PLATFORM_ADMIN: "/new-ems/modules/whatsapp-platform-admin/index.html",
+  WHATSAPP_PLATFORM_API_TESTING: "/new-ems/modules/whatsapp-platform-api-testing/index.html",
   WHATSAPP_PLATFORM_PORTAL: "/whatsapp-platform",
   EMAIL_COMMAND_CENTER: "/new-ems/modules/email-command-center/index.html",
   EMAIL_COMPOSE: "/new-ems/modules/email-compose/index.html",

@@ -201,8 +201,9 @@ function flowMatches(flow: any, inboundBody: string) {
   const keywords = [...configKeywords, ...nodeKeywords].map((item) => String(item || "").trim()).filter(Boolean);
   if (!keywords.length) return false;
   const caseSensitive = start?.config?.caseSensitive === true;
-  const source = caseSensitive ? inboundBody : inboundBody.toLocaleLowerCase();
-  return keywords.some((keyword) => source.includes(caseSensitive ? keyword : keyword.toLocaleLowerCase()));
+  const normalize = (value: string) => value.trim().replace(/\s+/g, " ");
+  const source = normalize(caseSensitive ? inboundBody : inboundBody.toLocaleLowerCase());
+  return keywords.some((keyword) => source === normalize(caseSensitive ? keyword : keyword.toLocaleLowerCase()));
 }
 
 function nextFlowNode(flow: any, nodeId: string) {
@@ -210,21 +211,40 @@ function nextFlowNode(flow: any, nodeId: string) {
   return edge?.to || null;
 }
 
+function buttonFlowNode(flow: any, nodeId: string, buttonIndex: number) {
+  const edge = (Array.isArray(flow.edges) ? flow.edges : []).find((item: any) => item?.from === nodeId && Number(item?.fromButton) === buttonIndex);
+  return edge?.to || null;
+}
+
 async function sendFlowText(admin: any, connection: any, contact: any, conversation: any, execution: any, node: any, accessToken: string, monthlyMessageLimit: number | null) {
   const text = String(node?.body || node?.config?.target || "").trim().slice(0, 4096);
   if (!text) return null;
   await assertFlowMessageCapacity(admin, connection.tenant_id, monthlyMessageLimit);
+  const buttons = (Array.isArray(node?.config?.buttons) ? node.config.buttons : [])
+    .map((button: any, index: number) => ({ index, label: String(button?.label || "").trim().slice(0, 20), next: String(button?.next || "") }))
+    .filter((button: any) => button.label && button.next)
+    .slice(0, 3);
+  const requestBody = buttons.length
+    ? {
+      messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text },
+        action: { buttons: buttons.map((button: any) => ({ type: "reply", reply: { id: `vnf|${execution.id}|${node.id}|${button.index}`, title: button.label } })) },
+      },
+    }
+    : { messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } };
   const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } }),
+    body: JSON.stringify(requestBody),
   });
   const graph = await graphResponse.json().catch(() => ({}));
   if (!graphResponse.ok || !graph?.messages?.[0]?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "flow_message_rejected");
   const now = new Date().toISOString();
   const { data: outbound, error } = await admin.from("whatsapp_platform_messages").insert({
     tenant_id: connection.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
-    meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: "text", body: text,
+    meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: buttons.length ? "interactive" : "text", body: text,
     status: "accepted", provider_timestamp: now,
     safe_metadata: { automation: true, flow_id: execution.flow_id, flow_execution_id: execution.id, flow_node_id: node.id },
   }).select("id").single();
@@ -233,7 +253,7 @@ async function sendFlowText(admin: any, connection: any, contact: any, conversat
     admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: text.replace(/\s+/g, " ").slice(0, 300), last_outbound_at: now, updated_at: now }).eq("id", conversation.id).eq("tenant_id", connection.tenant_id),
     admin.from("whatsapp_platform_contacts").update({ last_outbound_at: now, updated_at: now }).eq("id", contact.id).eq("tenant_id", connection.tenant_id),
   ]);
-  return outbound.id;
+  return { id: outbound.id, waitingForButton: buttons.length > 0 };
 }
 
 async function sendConsentConfirmation(admin: any, connection: any, contact: any, conversation: any, eventType: "opt_out" | "opt_in") {
@@ -267,16 +287,19 @@ async function sendConsentConfirmation(admin: any, connection: any, contact: any
   return outbound.id;
 }
 
-async function executeFlow(admin: any, connection: any, contact: any, conversation: any, inboundMessage: any, flow: any, monthlyMessageLimit: number | null) {
-  const inserted = await admin.from("whatsapp_platform_flow_executions").insert({
-    tenant_id: connection.tenant_id, connection_id: connection.id, flow_id: flow.id,
-    conversation_id: conversation.id, contact_id: contact.id, inbound_message_id: inboundMessage.id,
-  }).select("id,flow_id").single();
-  if (inserted.error?.code === "23505") return;
-  if (inserted.error || !inserted.data) throw inserted.error || new Error("flow_execution_create_failed");
-  const execution = inserted.data;
-  const visited: string[] = [];
-  const outputIds: string[] = [];
+async function executeFlow(admin: any, connection: any, contact: any, conversation: any, inboundMessage: any, flow: any, monthlyMessageLimit: number | null, resume: any = null) {
+  let execution = resume?.execution || null;
+  if (!execution) {
+    const inserted = await admin.from("whatsapp_platform_flow_executions").insert({
+      tenant_id: connection.tenant_id, connection_id: connection.id, flow_id: flow.id,
+      conversation_id: conversation.id, contact_id: contact.id, inbound_message_id: inboundMessage.id,
+    }).select("id,flow_id,visited_node_ids,output_message_ids").single();
+    if (inserted.error?.code === "23505") return;
+    if (inserted.error || !inserted.data) throw inserted.error || new Error("flow_execution_create_failed");
+    execution = inserted.data;
+  }
+  const visited: string[] = Array.isArray(execution.visited_node_ids) ? execution.visited_node_ids : [];
+  const outputIds: string[] = Array.isArray(execution.output_message_ids) ? execution.output_message_ids : [];
   try {
     const { data: credential, error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
       .select("credential_ciphertext,expires_at").eq("connection_id", connection.id).eq("tenant_id", connection.tenant_id).single();
@@ -286,7 +309,7 @@ async function executeFlow(admin: any, connection: any, contact: any, conversati
     const nodes = Array.isArray(flow.nodes) ? flow.nodes : [];
     const nodeMap = new Map(nodes.map((node: any) => [node.id, node]));
     const start = nodes.find((node: any) => node.type === "start");
-    let nodeId = start ? nextFlowNode(flow, start.id) : null;
+    let nodeId = resume?.startNodeId || (start ? nextFlowNode(flow, start.id) : null);
     for (let step = 0; nodeId && step < 25; step += 1) {
       if (visited.includes(nodeId)) throw new Error("flow_cycle_detected");
       const node: any = nodeMap.get(nodeId);
@@ -294,8 +317,21 @@ async function executeFlow(admin: any, connection: any, contact: any, conversati
       visited.push(nodeId);
       await admin.from("whatsapp_platform_flow_executions").update({ current_node_id: nodeId, visited_node_ids: visited, updated_at: new Date().toISOString() }).eq("id", execution.id);
       if (["message","question","address","location","ask_media","handoff"].includes(node.type)) {
-        const outputId = await sendFlowText(admin, connection, contact, conversation, execution, node, accessToken, monthlyMessageLimit);
-        if (outputId) outputIds.push(outputId);
+        const output = await sendFlowText(admin, connection, contact, conversation, execution, node, accessToken, monthlyMessageLimit);
+        if (output?.id) outputIds.push(output.id);
+        if (output?.waitingForButton) {
+          await admin.from("whatsapp_platform_flow_executions").update({ status: "processing", current_node_id: nodeId, visited_node_ids: visited, output_message_ids: outputIds, updated_at: new Date().toISOString() }).eq("id", execution.id);
+          return;
+        }
+        if (node.type === "handoff") {
+          const { error: handoffError } = await admin.from("whatsapp_platform_conversations").update({
+            status: "open",
+            priority: "high",
+            assigned_user_id: null,
+            updated_at: new Date().toISOString(),
+          }).eq("id", conversation.id).eq("tenant_id", connection.tenant_id);
+          if (handoffError) throw handoffError;
+        }
       } else if (node.type === "tag") {
         const tag = String(node?.config?.target || "").trim().slice(0, 80);
         if (tag) {
@@ -328,6 +364,49 @@ async function executeFlow(admin: any, connection: any, contact: any, conversati
 async function executeMatchingFlow(admin: any, connection: any, contact: any, conversation: any, inboundMessage: any) {
   const capacity = await flowAutomationCapacity(admin, connection.tenant_id);
   if (!capacity.allowed) return;
+  const replyId = String(inboundMessage?.safe_metadata?.button_payload || inboundMessage?.safe_metadata?.interactive_reply_id || "");
+  if (replyId.startsWith("vnft|")) {
+    const [, flowId, rawIndex, ...unexpected] = replyId.split("|");
+    const buttonIndex = Number(rawIndex);
+    const replyToMetaMessageId = String(inboundMessage?.reply_to_meta_message_id || "");
+    if (/^[a-f0-9-]{36}$/i.test(flowId || "") && Number.isInteger(buttonIndex) && buttonIndex >= 0 && buttonIndex <= 2 && !unexpected.length && replyToMetaMessageId) {
+      const { data: sourceMessage } = await admin.from("whatsapp_platform_messages")
+        .select("id,safe_metadata")
+        .eq("tenant_id", connection.tenant_id).eq("conversation_id", conversation.id).eq("connection_id", connection.id)
+        .eq("direction", "outbound").eq("message_type", "template").eq("meta_message_id", replyToMetaMessageId).maybeSingle();
+      if (sourceMessage && String(sourceMessage.safe_metadata?.flow_id || "") === flowId && sourceMessage.safe_metadata?.flow_start === true) {
+        const { data: flow } = await admin.from("whatsapp_platform_flows")
+          .select("id,trigger_type,trigger_config,nodes,edges")
+          .eq("id", flowId).eq("tenant_id", connection.tenant_id).eq("connection_id", connection.id)
+          .eq("status", "active").eq("trigger_type", "template_reply").maybeSingle();
+        const route = (Array.isArray(flow?.trigger_config?.templateReplies) ? flow.trigger_config.templateReplies : [])
+          .find((item: any) => Number(item?.index) === buttonIndex);
+        const startNodeId = String(route?.next || "");
+        const validNode = Array.isArray(flow?.nodes) && flow.nodes.some((node: any) => String(node?.id || "") === startNodeId);
+        if (flow && startNodeId && validNode) {
+          await executeFlow(admin, connection, contact, conversation, inboundMessage, flow, capacity.monthlyMessageLimit, { startNodeId });
+          return;
+        }
+      }
+    }
+  }
+  if (replyId.startsWith("vnf|")) {
+    const [, executionId, nodeId, rawIndex] = replyId.split("|");
+    const buttonIndex = Number(rawIndex);
+    const { data: execution } = await admin.from("whatsapp_platform_flow_executions")
+      .select("id,flow_id,conversation_id,contact_id,connection_id,status,current_node_id,visited_node_ids,output_message_ids")
+      .eq("id", executionId).eq("conversation_id", conversation.id).eq("contact_id", contact.id).eq("connection_id", connection.id)
+      .eq("status", "processing").maybeSingle();
+    if (execution && execution.current_node_id === nodeId && Number.isInteger(buttonIndex)) {
+      const { data: flow } = await admin.from("whatsapp_platform_flows").select("id,trigger_type,trigger_config,nodes,edges")
+        .eq("id", execution.flow_id).eq("tenant_id", connection.tenant_id).eq("connection_id", connection.id).eq("status", "active").maybeSingle();
+      const startNodeId = flow ? buttonFlowNode(flow, nodeId, buttonIndex) : null;
+      if (flow && startNodeId) {
+        await executeFlow(admin, connection, contact, conversation, inboundMessage, flow, capacity.monthlyMessageLimit, { execution, startNodeId });
+        return;
+      }
+    }
+  }
   const { data: flows, error } = await admin.from("whatsapp_platform_flows")
     .select("id,trigger_type,trigger_config,nodes,edges").eq("tenant_id", connection.tenant_id)
     .eq("connection_id", connection.id).eq("status", "active").order("updated_at", { ascending: false }).limit(25);
@@ -384,11 +463,12 @@ async function processInbound(admin: any, connection: any, value: any, message: 
     media_id: media?.id || null, media_mime_type: media?.mime_type || null, media_file_name: media?.filename || null,
     reply_to_meta_message_id: message?.context?.id || null, status: "received", provider_timestamp: conversation.receivedAt,
     safe_metadata: {
-      ...(type === "interactive" ? { interactive_type: message.interactive?.type || null } : {}),
+      ...(type === "interactive" ? { interactive_type: message.interactive?.type || null, interactive_reply_id: message.interactive?.button_reply?.id || message.interactive?.list_reply?.id || null } : {}),
+      ...(type === "button" ? { button_payload: message.button?.payload || null } : {}),
       ...(consentKeyword === "STOP" ? { marketing_opt_out: true, marketing_consent_keyword: consentKeyword } : {}),
       ...(consentKeyword === "START" ? { marketing_opt_in: true, marketing_consent_keyword: consentKeyword } : {}),
     },
-  }).select("id,body").single();
+  }).select("id,body,safe_metadata,reply_to_meta_message_id").single();
   if (error) throw error;
   await admin.from("whatsapp_platform_conversations").update({
     status: conversation.status === "resolved" ? "open" : conversation.status,

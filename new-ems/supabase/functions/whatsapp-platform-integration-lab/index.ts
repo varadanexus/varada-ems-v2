@@ -5,7 +5,7 @@ const encoder = new TextEncoder();
 const LAB_EVENTS = ["contact.created","contact.updated","message.received","message.sent","message.status","conversation.created","conversation.updated","campaign.completed"];
 function env(name:string){ return Deno.env.get(name) || ""; }
 function adminClient(){ return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth:{ persistSession:false, autoRefreshToken:false } }); }
-function cors(req:Request){ const origin=req.headers.get("origin")||""; const allowed=["https://varadanexus.com","https://www.varadanexus.com"].includes(origin)||/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin); return { ...(allowed?{"Access-Control-Allow-Origin":origin}:{}), "Access-Control-Allow-Headers":"content-type, apikey", "Access-Control-Allow-Methods":"POST,OPTIONS", "Cache-Control":"no-store", "Content-Type":"application/json", "Vary":"Origin", "X-Content-Type-Options":"nosniff" }; }
+function cors(req:Request){ const origin=req.headers.get("origin")||""; const allowed=["https://varadanexus.com","https://www.varadanexus.com"].includes(origin)||/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin); return { ...(allowed?{"Access-Control-Allow-Origin":origin}:{}), "Access-Control-Allow-Headers":"authorization, content-type, apikey", "Access-Control-Allow-Methods":"POST,OPTIONS", "Cache-Control":"no-store", "Content-Type":"application/json", "Vary":"Origin", "X-Content-Type-Options":"nosniff" }; }
 function json(req:Request, body:unknown, status=200){ return new Response(JSON.stringify(body),{status,headers:cors(req)}); }
 function randomHex(bytes=32){ return Array.from(crypto.getRandomValues(new Uint8Array(bytes))).map(v=>v.toString(16).padStart(2,"0")).join(""); }
 async function sha256(value:string){ const digest=await crypto.subtle.digest("SHA-256",encoder.encode(value)); return Array.from(new Uint8Array(digest)).map(v=>v.toString(16).padStart(2,"0")).join(""); }
@@ -17,9 +17,38 @@ async function decrypt(value:string){ const [version,iv,data]=String(value||"").
 async function hmac(secret:string,value:string){ const key=await crypto.subtle.importKey("raw",encoder.encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]); const digest=await crypto.subtle.sign("HMAC",key,encoder.encode(value)); return Array.from(new Uint8Array(digest)).map(v=>v.toString(16).padStart(2,"0")).join(""); }
 function equal(a:string,b:string){ if(!a||a.length!==b.length)return false; let d=0; for(let i=0;i<a.length;i++)d|=a.charCodeAt(i)^b.charCodeAt(i); return d===0; }
 async function session(admin:any,token:unknown){ const value=String(token||""); if(!/^[a-f0-9]{64}$/i.test(value))throw new Error("Unauthorized"); const {data,error}=await admin.rpc("whatsapp_platform_validate_session",{p_session_token:value}); const row=Array.isArray(data)?data[0]:data; if(error||!row?.tenant_id||!["owner","admin"].includes(row.role_code))throw new Error("Only workspace owners and administrators can use Integration Lab."); return row; }
+async function emsAuthority(req:Request,admin:any){
+  const jwt=String(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"");
+  if(!jwt)throw new Error("Unauthorized");
+  const userClient=createClient(env("SUPABASE_URL"),env("SUPABASE_ANON_KEY"),{global:{headers:{Authorization:`Bearer ${jwt}`}},auth:{persistSession:false}});
+  const {data:userData,error:userError}=await userClient.auth.getUser(jwt);
+  if(userError||!userData.user)throw new Error("Unauthorized");
+  const [{data:permitted,error:permissionError},{data:appUser}]=await Promise.all([
+    userClient.rpc("has_permission",{module_code:"whatsapp-platform",action_code:"view"}),
+    admin.from("app_users").select("id,email,display_name,status,deleted_at").eq("auth_user_id",userData.user.id).maybeSingle(),
+  ]);
+  const {data:roleRows}=appUser?.id?await admin.from("user_roles").select("roles(code,is_active)").eq("user_id",appUser.id):{data:[]};
+  const full=(roleRows||[]).some((row:any)=>row.roles?.is_active!==false&&["super_admin","chairman_managing_director"].includes(String(row.roles?.code||"")));
+  if(appUser?.status!=="active"||appUser?.deleted_at||((permissionError||permitted!==true)&&!full))throw new Error("Forbidden");
+  return {appUserId:appUser.id,authUserId:userData.user.id};
+}
 async function labForTenant(admin:any,tenantId:string){ const {data,error}=await admin.from("whatsapp_platform_integration_labs").select("*").eq("tenant_id",tenantId).maybeSingle(); if(error)throw error; return data; }
 function labView(lab:any,runs:any[],events:any[]){ return { configured:Boolean(lab), lab:lab?{id:lab.id,status:lab.status,connectionId:lab.connection_id,apiKeyId:lab.api_key_id,webhookEndpointId:lab.webhook_endpoint_id,createdAt:lab.created_at}:null, runs:runs||[], events:events||[] }; }
 async function summary(admin:any,customer:any){ const lab=await labForTenant(admin,customer.tenant_id); if(!lab)return labView(null,[],[]); const [{data:runs},{data:events}]=await Promise.all([admin.from("whatsapp_platform_integration_lab_runs").select("id,suite,status,passed_count,failed_count,duration_ms,results,created_at,completed_at").eq("tenant_id",customer.tenant_id).order("created_at",{ascending:false}).limit(20),admin.from("whatsapp_platform_integration_lab_events").select("id,event_id,event_type,signature_valid,received_at").eq("tenant_id",customer.tenant_id).order("received_at",{ascending:false}).limit(20)]); return labView(lab,runs||[],events||[]); }
+async function emsSummary(admin:any,tenantId?:string){
+  const [{data:tenants,error:tenantError},{data:connections,error:connectionError},{data:labs,error:labError}]=await Promise.all([
+    admin.from("whatsapp_platform_tenants").select("id,name,owner_email,status,onboarding_status").order("name"),
+    admin.from("whatsapp_platform_connections").select("tenant_id,status").eq("status","connected"),
+    admin.from("whatsapp_platform_integration_labs").select("tenant_id,status"),
+  ]);
+  if(tenantError)throw tenantError;if(connectionError)throw connectionError;if(labError)throw labError;
+  const connectionCounts=new Map<string,number>();(connections||[]).forEach((row:any)=>connectionCounts.set(row.tenant_id,(connectionCounts.get(row.tenant_id)||0)+1));
+  const configured=new Set((labs||[]).filter((row:any)=>row.status==="active").map((row:any)=>row.tenant_id));
+  const directory=(tenants||[]).map((row:any)=>({id:row.id,name:row.name,ownerEmail:row.owner_email,status:row.status,onboardingStatus:row.onboarding_status,connectedNumbers:connectionCounts.get(row.id)||0,configured:configured.has(row.id)}));
+  const selected=directory.find((row:any)=>row.id===tenantId)||directory[0]||null;
+  if(!selected)return {tenants:directory,selectedTenantId:null,...labView(null,[],[])};
+  return {tenants:directory,selectedTenantId:selected.id,...await summary(admin,{tenant_id:selected.id})};
+}
 async function provision(req:Request,admin:any,customer:any,body:any){
   const existing=await labForTenant(admin,customer.tenant_id); if(existing)return summary(admin,customer);
   let connectionQuery=admin.from("whatsapp_platform_connections").select("id,status").eq("tenant_id",customer.tenant_id).eq("status","connected");
@@ -43,7 +72,24 @@ async function runSafe(req:Request,admin:any,customer:any,body:any){ const lab=a
   results.push(await runCheck("Reads contacts with pagination",async()=>{const {response,data}=await request("/v1/contacts?page=1&pageSize=1"); if(!response.ok)throw new Error(data?.error?.message||`HTTP ${response.status}`); return {httpStatus:response.status,requestId:data.requestId};}));
   results.push(await runCheck("Exposes API request history",async()=>{const {response,data}=await request("/v1/requests?limit=5"); if(!response.ok)throw new Error(data?.error?.message||`HTTP ${response.status}`); return {httpStatus:response.status,count:data.requests?.length||0,requestId:data.requestId};}));
   results.push(await runCheck("Rejects an invalid webhook signature",async()=>{const receiverRow=await admin.from("whatsapp_platform_webhook_endpoints").select("endpoint_url").eq("id",lab.webhook_endpoint_id).single(); const response=await fetch(receiverRow.data.endpoint_url,{method:"POST",headers:{"Content-Type":"application/json","X-Varada-Signature":"sha256=invalid"},body:'{"type":"developer.invalid"}'}); if(response.status!==401)throw new Error(`Expected 401, received ${response.status}`); return {httpStatus:response.status};}));
-  results.push(await runCheck("Delivers and verifies a signed webhook",async()=>{const response=await fetch(`${env("SUPABASE_URL").replace(/\/+$/,'')}/functions/v1/whatsapp-platform-messaging`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"test_developer_webhook",sessionToken:body.sessionToken,webhookId:lab.webhook_endpoint_id})}); const data=await response.json().catch(()=>({})); if(!response.ok||!data.delivered)throw new Error(data.error||`HTTP ${response.status}`); return {httpStatus:data.httpStatus,durationMs:data.durationMs};}));
+  results.push(await runCheck("Delivers and verifies a signed webhook",async()=>{
+    if(body.sessionToken){const response=await fetch(`${env("SUPABASE_URL").replace(/\/+$/,'')}/functions/v1/whatsapp-platform-messaging`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"test_developer_webhook",sessionToken:body.sessionToken,webhookId:lab.webhook_endpoint_id})}); const data=await response.json().catch(()=>({})); if(!response.ok||!data.delivered)throw new Error(data.error||`HTTP ${response.status}`); return {httpStatus:data.httpStatus,durationMs:data.durationMs};}
+    const receiverRow=await admin.from("whatsapp_platform_webhook_endpoints").select("endpoint_url").eq("id",lab.webhook_endpoint_id).single();
+    if(receiverRow.error||!receiverRow.data?.endpoint_url)throw new Error("Managed webhook receiver is unavailable.");
+    const raw=JSON.stringify({id:crypto.randomUUID(),type:"developer.test",createdAt:new Date().toISOString(),data:{source:"ems_integration_lab"}});
+    const startedAt=Date.now();const response=await fetch(receiverRow.data.endpoint_url,{method:"POST",headers:{"Content-Type":"application/json","X-Varada-Event":"developer.test","X-Varada-Event-Id":crypto.randomUUID(),"X-Varada-Signature":`sha256=${await hmac(await decrypt(lab.webhook_secret_ciphertext),raw)}`},body:raw});
+    if(!response.ok)throw new Error(`HTTP ${response.status}`);return {httpStatus:response.status,durationMs:Date.now()-startedAt};
+  }));
   const passed=results.filter(x=>x.status==="passed").length,failed=results.length-passed,completed=new Date().toISOString(); await admin.from("whatsapp_platform_integration_lab_runs").update({status:failed?"failed":"passed",passed_count:passed,failed_count:failed,duration_ms:Date.now()-started,results,completed_at:completed}).eq("id",run.id); return {run:{id:run.id,status:failed?"failed":"passed",passedCount:passed,failedCount:failed,durationMs:Date.now()-started,results,completedAt:completed}}; }
 
-Deno.serve(async(req)=>{ const admin=adminClient(); if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)}); const url=new URL(req.url); const receiverToken=url.searchParams.get("receiver"); if(receiverToken&&req.method==="POST")return receiver(req,admin,receiverToken); if(req.method!=="POST")return json(req,{error:"Method not allowed"},405); try{ const body=await req.json().catch(()=>({})); const customer=await session(admin,body.sessionToken); if(body.action==="summary")return json(req,await summary(admin,customer)); if(body.action==="provision")return json(req,await provision(req,admin,customer,body)); if(body.action==="run_safe")return json(req,await runSafe(req,admin,customer,body)); return json(req,{error:"Unsupported action"},400); }catch(error){ return json(req,{error:error instanceof Error?error.message:"Integration Lab failed"},400); } });
+Deno.serve(async(req)=>{ const admin=adminClient(); if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)}); const url=new URL(req.url); const receiverToken=url.searchParams.get("receiver"); if(receiverToken&&req.method==="POST")return receiver(req,admin,receiverToken); if(req.method!=="POST")return json(req,{error:"Method not allowed"},405); try{ const body=await req.json().catch(()=>({}));
+  if(String(body.action||"").startsWith("ems_")){
+    const actor=await emsAuthority(req,admin);const tenantId=String(body.tenantId||"");
+    if(body.action==="ems_summary")return json(req,await emsSummary(admin,tenantId||undefined));
+    if(!/^[0-9a-f-]{36}$/i.test(tenantId))throw new Error("Select a customer workspace.");
+    const customer={tenant_id:tenantId,user_id:actor.appUserId,role_code:"ems_admin"};
+    if(body.action==="ems_provision")return json(req,{...await emsSummary(admin,tenantId),...await provision(req,admin,customer,body)});
+    if(body.action==="ems_run_safe")return json(req,await runSafe(req,admin,customer,body));
+    return json(req,{error:"Unsupported EMS action"},400);
+  }
+  const customer=await session(admin,body.sessionToken); if(body.action==="summary")return json(req,await summary(admin,customer)); if(body.action==="provision")return json(req,await provision(req,admin,customer,body)); if(body.action==="run_safe")return json(req,await runSafe(req,admin,customer,body)); return json(req,{error:"Unsupported action"},400); }catch(error){ const message=error instanceof Error?error.message:"Integration Lab failed";return json(req,{error:message},/Unauthorized/i.test(message)?401:/Forbidden/i.test(message)?403:400); } });
