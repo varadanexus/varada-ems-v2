@@ -54,6 +54,8 @@ const pwaClient = read("new-ems/shared/pwa.js");
 const liveChat = read("new-ems/shared/live-chat.js");
 const pushClient = read("new-ems/shared/push-notifications.js");
 const deviceSecurity = read("new-ems/shared/device-security.js");
+const supabaseClient = read("new-ems/config/supabase.js");
+const whatsappAdmin = read("new-ems/shared/page-whatsapp-platform-admin.js");
 assert(login.includes('rel="manifest" href="/new-ems/manifest.webmanifest"'), "Canonical login page is missing the manifest link.");
 assert(login.includes('name="mobile-web-app-capable" content="yes"'), "Canonical login page is missing the standard mobile web app capability meta tag.");
 assert(runtime.includes('navigator.serviceWorker') === false, "Service worker registration should remain isolated in pwa.js.");
@@ -94,6 +96,8 @@ assert(deviceSecurity.includes('userVerification: "required"'), "Device lock mus
 assert(deviceSecurity.includes("enforceMandatorySecuritySetup"), "Protected EMS users must be gated until device lock and push are enabled.");
 assert(layout.includes("if (isMobileSecurityDevice())"), "Mandatory biometric and push setup must remain mobile-only.");
 assert(!layout.includes('label.closest(".form-group,.form-field,.field,.input-group,[data-field]") || label.parentElement'), "Financial redaction must never fall back to removing an entire flat form.");
+assert(supabaseClient.includes('headers.set("Authorization", `Bearer ${localAuthToken}`)'), "Cached Supabase clients must receive the current LOCAL staff JWT at request time.");
+assert(!whatsappAdmin.includes("apply the pending WhatsApp Platform database migrations"), "WhatsApp administration must not misreport authentication failures as pending migrations.");
 
 if (errors.length) {
   console.error(`PWA validation failed:\n- ${errors.join("\n- ")}`);

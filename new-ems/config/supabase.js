@@ -28,16 +28,29 @@ function emptyReviewerResponse(status = 200) {
 }
 
 async function reviewerSafeFetch(input, init = {}) {
-  if (!reviewerMode) return fetch(input, init);
+  // Page modules can obtain the shared client before LOCAL session restoration
+  // finishes. Always inject the current minted token at request time so those
+  // cached client references cannot remain anonymous or keep an expired JWT.
+  const requestInit = localAuthToken
+    ? (() => {
+        const headers = new Headers(
+          init?.headers || (typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined)
+        );
+        headers.set("Authorization", `Bearer ${localAuthToken}`);
+        return { ...init, headers };
+      })()
+    : init;
+
+  if (!reviewerMode) return fetch(input, requestInit);
 
   const url = new URL(typeof input === "string" ? input : input.url, window.location.origin);
-  const method = String(init?.method || (typeof input === "string" ? "GET" : input.method) || "GET").toUpperCase();
+  const method = String(requestInit?.method || (typeof input === "string" ? "GET" : input.method) || "GET").toUpperCase();
   const rpcMarker = "/rest/v1/rpc/";
   const rpcIndex = url.pathname.indexOf(rpcMarker);
 
   if (rpcIndex >= 0) {
     const rpcName = decodeURIComponent(url.pathname.slice(rpcIndex + rpcMarker.length)).split("/")[0];
-    if (REVIEWER_BOOTSTRAP_RPCS.has(rpcName)) return fetch(input, init);
+    if (REVIEWER_BOOTSTRAP_RPCS.has(rpcName)) return fetch(input, requestInit);
     return emptyReviewerResponse();
   }
 
@@ -53,7 +66,7 @@ async function reviewerSafeFetch(input, init = {}) {
     return emptyReviewerResponse(method === "GET" || method === "HEAD" ? 200 : 403);
   }
 
-  return fetch(input, init);
+  return fetch(input, requestInit);
 }
 
 export function setGooglePlayReviewerMode(enabled) {
@@ -79,9 +92,9 @@ function hasStoredLocalSession() {
   return false;
 }
 
-// Bind (or rebind) the local staff JWT. The bearer header is immutable on a
-// client instance, so both a fresh login and a timed JWT refresh discard the
-// previous client before the next authenticated request.
+// Bind (or rebind) the local staff JWT. New clients receive the token as a
+// default header, while reviewerSafeFetch also injects the current token at
+// request time so already-cached clients survive login restoration and refresh.
 export function setLocalAuthToken(token) {
   const nextToken = token || null;
   const tokenChanged = nextToken !== localAuthToken;

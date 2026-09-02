@@ -1284,7 +1284,7 @@ function content() {
   if (state.view === "reconciliation") return billingReconciliationPage();
   if (state.view === "razorpay") return razorpaySetup();
   if (state.loading) return '<div class="wa-admin-empty">Loading platform operations…</div>';
-  if (state.error) return `<div class="wa-admin-notice"><strong>Management data is not active yet.</strong><br>${escapeHtml(state.error)}<br><br>The internal console is ready; apply the pending WhatsApp Platform database migrations to activate live customer data.</div>${state.view === "meta" ? metaSetup() : state.view === "security" ? security() : overview()}`;
+  if (state.error) return `<div class="wa-admin-notice"><strong>Management data could not be loaded.</strong><br>${escapeHtml(state.error)}<br><br>Refresh the page. If the issue continues, contact the EMS administrator.</div>${state.view === "meta" ? metaSetup() : state.view === "security" ? security() : overview()}`;
   if (state.view === "customers") return customers();
   if (state.view === "verification") return verification();
   if (state.view === "connections") return connections();
@@ -1796,7 +1796,7 @@ function bind() {
 async function loadSnapshot() {
   state.loading = true; state.error = ""; render();
   const { data, error } = await db.rpc("whatsapp_platform_admin_snapshot");
-  if (error) { state.error = error.message || "Database setup is pending."; state.snapshot = null; }
+  if (error) { state.error = error.message || "Management data could not be loaded."; state.snapshot = null; }
   else {
     state.snapshot = data || {};
     if (["customers", "connections", "customer-support"].includes(state.view)) {
