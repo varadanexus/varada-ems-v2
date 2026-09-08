@@ -1,0 +1,17 @@
+const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Presentation never enables billing or infers provider cancellation.
+export function renderPaygPlans(billing = {}) {
+  const active = billing.entitlement?.state === 'pay_per_use';
+  const subscription = billing.subscription;
+  const legacy = subscription ? `<section class="wp-card"><span class="wp-card-eyebrow">Previous subscription · recorded status</span><h2>${escape(subscription.package_code || 'Previous plan')}</h2><p>Status: ${escape(subscription.status || 'Unknown')}${subscription.cancel_at_cycle_end ? ' · Cancellation scheduled at period end' : ''}</p><p>This is the platform’s latest recorded status. Cancellation is not confirmed here until the payment provider update has synchronized.</p></section>` : '';
+  return `<section class="wp-route-page wp-billing-page">
+    <div class="wp-route-heading"><div><span class="wp-kicker">Billing &amp; usage</span><h1>Pay per use</h1><p>No monthly platform base fee. Pay for message usage and additional capacity.</p></div><span class="wp-billing-mode">${active ? 'Pay-per-use access enabled' : 'Activation pending'}</span></div>
+    ${billing.error ? `<div class="wp-verification-notice"><strong>Billing status unavailable</strong><p>${escape(billing.error)}</p></div>` : ''}
+    ${!active ? '<div class="wp-verification-notice"><strong>New pricing · activation pending</strong><p>This is the new offer, not confirmation that your billing has switched. Wallet checkout remains unavailable until backend setup and payment verification are complete. Your existing records are preserved.</p></div>' : ''}
+    <section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Platform message fee</span><h2>USD 0.0035 per message</h2><p>Incoming and outgoing messages, including service messages. Meta charges are additional and paid directly to Meta.</p></div><div class="wp-billing-price"><strong>$0</strong><span>monthly platform base fee</span></div></section>
+    <section class="wp-billing-grid"><article class="wp-card"><h2>All core features included</h2><p>Team inbox, contacts, templates, campaigns, flows, automations, analytics and API access.</p><p>Extra team seats, WhatsApp numbers and integrations remain paid capacity add-ons. Existing capacity is preserved.</p></article><article class="wp-card"><h2>Prepaid service balance</h2><p>Choose your recharge amount. Applicable GST and gateway charges are shown separately before payment; the selected recharge amount is credited as spendable balance.</p><p>INR wallets collect INR, with USD service-price equivalents. Other supported currencies are subject to availability and applicable conversion charges.</p><p>Service balance is non-refundable and cannot be withdrawn, except where required by law or to correct duplicate or erroneous charges.</p><a class="wp-secondary wp-button-link" href="/whatsapp-platform/workspace/billing/">View billing &amp; usage</a>${!active ? '<button class="wp-primary" type="button" disabled>Recharge · activation pending</button>' : ''}</article></section>
+    <section class="wp-card"><h2>Usage records and auto top-up</h2><p>Usage and payment records will show message charges, balance movements and payment references once wallet billing is activated. Auto top-up requires separate consent and a supported payment mandate; saving preferences does not enable automatic debits.</p></section>
+    ${legacy}
+  </section>`;
+}

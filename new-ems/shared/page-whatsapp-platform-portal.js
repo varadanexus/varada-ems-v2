@@ -1,4 +1,8 @@
 import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsapp-flow-builder.js?v=13";
+import { mountWalletView } from "./whatsapp-wallet-view.js?v=1";
+import { mountWalletRecharge } from "./whatsapp-wallet-checkout.js?v=1";
+import { mountWalletAutoTopup } from "./whatsapp-wallet-auto-topup.js?v=1";
+import { renderPaygPlans } from "./whatsapp-payg-plans.js?v=1";
 
 const SESSION_KEY = "vn_whatsapp_platform_session";
 const THEME_KEY = "vn_whatsapp_platform_theme";
@@ -1030,6 +1034,15 @@ function messagingEndpoint() {
 
 async function messagingRequest(action, payload = {}) {
   if (!session?.sessionToken) throw new Error("Your workspace session has expired.");
+  let pendingSendKey = null;
+  if (["send_text", "start_chat"].includes(action) && !payload.requestKey) {
+    // Store only a fingerprint, never message text or session credentials.
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([session.sessionToken, action, payload])));
+    pendingSendKey = `wp-send:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("")}`;
+    const requestKey = sessionStorage.getItem(pendingSendKey) || crypto.randomUUID();
+    sessionStorage.setItem(pendingSendKey, requestKey);
+    payload = { ...payload, requestKey };
+  }
   const response = await fetch(messagingEndpoint(), {
     method: "POST",
     headers: { "Content-Type": "application/json", apikey: runtime.supabaseAnonKey || "" },
@@ -1038,8 +1051,14 @@ async function messagingRequest(action, payload = {}) {
     referrerPolicy: "no-referrer",
     body: JSON.stringify({ action, sessionToken: session.sessionToken, ...payload }),
   });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error || "Team Inbox request failed.");
+  const data = await response.json().catch(() => { throw new Error("Team Inbox response was interrupted. Check message status before retrying."); });
+  if (!response.ok) {
+    // Clear only when the server confirms no provider acceptance and release.
+    // Timeouts, malformed responses and unknown outcomes preserve the old key.
+    if (pendingSendKey && data?.code === "WALLET_SEND_REJECTED") sessionStorage.removeItem(pendingSendKey);
+    throw new Error(data?.error || "Team Inbox request failed.");
+  }
+  if (pendingSendKey) sessionStorage.removeItem(pendingSendKey);
   return data;
 }
 
@@ -3003,6 +3022,10 @@ async function openBillingDocument(documentRecord, kind = "invoice") {
 }
 
 function billingView(view = "billing") {
+  if (view === "billing-plans") return renderPaygPlans(workspaceBilling || {});
+  if (workspaceBilling?.entitlement?.state === "pay_per_use" && ["billing", "billing-plans"].includes(view)) {
+    return `<section class="wp-route-page"><div class="wp-route-heading"><div><span class="wp-kicker">Billing &amp; usage</span><h1>Pay per use</h1><p>All core platform features are included. No monthly platform base subscription.</p></div></div><section class="wp-billing-card"><h2>Your included platform</h2><p>Team inbox, contacts, templates, campaigns, flows, automations, analytics and API access are included. Existing capacity is preserved; extra seats, WhatsApp numbers and integrations remain paid add-ons.</p><p>USD 0.0035 per incoming or outgoing message, plus Meta charges paid directly to Meta. See the usage register for charges, reserved amounts and exchange-rate evidence.</p><a class="wp-secondary wp-button-link" href="${workspacePath("billing-addons")}">Manage capacity add-ons</a> <a class="wp-secondary wp-button-link" href="${workspacePath("billing-invoices")}">Historical invoices</a></section></section>`;
+  }
   const pkg = workspacePackageMaster?.package;
   const canManage = ["owner", "admin"].includes(session.roleCode);
   const returnedSubscription = workspaceBilling?.subscription;
@@ -3670,6 +3693,17 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const persistentSidebar = preserveSidebar ? existingShell.querySelector(".wp-workspace-sidebar") : null;
   const sidebarWasCollapsed = Boolean(existingShell?.classList.contains("sidebar-collapsed"));
   app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions">${notificationCentreMarkup()}<button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  if (isBillingWorkspaceView(view) && workspaceBilling.paygEnabled === true) {
+    const walletHost = document.createElement("section");
+    walletHost.className = "wp-billing-card";
+    app.querySelector(".wp-main")?.prepend(walletHost);
+    void mountWalletView(walletHost, billingRequest, workspaceConnections, {
+      mountRecharge: (host, summary) => {
+        mountWalletRecharge(host, summary, billingRequest, loadRazorpayCheckout, () => renderDashboard({ refresh: true, preserveScroll: true }));
+        void mountWalletAutoTopup(host, summary, billingRequest);
+      },
+    });
+  }
   if (view === "support") {
     const dialog = app.querySelector("#wpSupportDialog");
     app.querySelectorAll("#wpNewSupportTicketBtn, [data-support-create]").forEach((button) => button.addEventListener("click", () => dialog?.showModal()));
@@ -6381,6 +6415,29 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   app.querySelector("#wpCreateDeveloperWebhookBtn")?.addEventListener("click", () => { ensureDeveloperDeliveryPolicyFields(); developerWebhookDialog?.showModal(); });
   app.querySelectorAll("[data-close-developer-dialog]").forEach((button) => button.addEventListener("click", () => button.closest("dialog")?.close()));
   [developerKeyDialog, developerWebhookDialog].forEach((dialog) => dialog?.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); }));
+  const keyForm=app.querySelector("#wpDeveloperKeyForm");
+  if(keyForm && !keyForm.elements.connectionId) {
+    const label=document.createElement("label");label.textContent="API key number access";
+    const select=document.createElement("select");select.name="connectionId";select.required=true;
+    select.add(new Option("Choose number access", ""));
+    for(const connection of workspaceIntegrations.connections || []) if(connection.status==="connected") {
+      select.add(new Option(connection.display_phone_number || connection.verified_name || connection.id,connection.id));
+    }
+    select.add(new Option("Entire workspace (includes shared contacts)","workspace"));
+    label.append(select);keyForm.querySelector("footer")?.before(label);
+    const note=document.createElement("p");note.textContent="Single-number keys can send and read messages for that number. Shared contact operations require a workspace-wide key.";
+    label.after(note);
+  }
+  if(keyForm) {
+    app.querySelectorAll('[data-revoke-developer-key]').forEach(button=>{
+      const key=(workspaceIntegrations.apiKeys || []).find(item=>item.id===button.dataset.revokeDeveloperKey);
+      if(!key)return;
+      const label=document.createElement("small");
+      const number=(workspaceIntegrations.connections || []).find(item=>item.id===key.connectionId);
+      label.textContent=key.connectionId ? `Number only: ${number?.display_phone_number || key.connectionId}` : "Scope: entire workspace";
+      button.before(label);
+    });
+  }
   app.querySelector("#wpDeveloperKeyForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -6389,7 +6446,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     const original = submit.textContent;
     try {
       submit.disabled = true; submit.textContent = "Creating…";
-      const result = await messagingRequest("create_developer_api_key", { name: form.elements.name.value, scopes: [...form.querySelectorAll('input[name="scopes"]:checked')].map((input) => input.value) });
+      const result = await messagingRequest("create_developer_api_key", { name: form.elements.name.value, connectionId:form.elements.connectionId.value==="workspace" ? null : form.elements.connectionId.value, scopes: [...form.querySelectorAll('input[name="scopes"]:checked')].map((input) => input.value) });
       workspaceIntegrations.revealedSecret = { label: `${result.apiKey?.name || "API"} credential`, value: result.token };
       developerKeyDialog?.close();
       await renderDashboard();
