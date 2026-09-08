@@ -2,6 +2,7 @@
 // Staff-only encrypted provider configuration for the sellable WhatsApp Platform.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { platformEntitlement } from "../_shared/whatsapp-payg-access.ts";
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_EVIDENCE_BYTES = 2 * 1024 * 1024;
@@ -286,7 +287,7 @@ Deno.serve(async (req) => {
       const { data: tenants, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("id").limit(1000);
       if (tenantError) throw tenantError;
       const accessEntries = await Promise.all((tenants || []).map(async (tenant: any) => {
-        const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: tenant.id });
+        const { data, error } = await platformEntitlement(admin,tenant.id,env("WHATSAPP_PAYG_ENABLED")==="true",env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase());
         return [tenant.id, error ? { allowed: null, state: "unknown", reason: "Billing access could not be verified." } : data];
       }));
       return json(req, { accessByTenant: Object.fromEntries(accessEntries) });
@@ -410,6 +411,16 @@ Deno.serve(async (req) => {
           processedRefunds: safeRefunds.filter((item: any) => item.status === "processed").length,
           reconciliationAlerts: missingInvoices + missingCredits + (webhookErrors || []).length + staleRefundRequests,
         },
+        paygEnabled: env("WHATSAPP_PAYG_ENABLED") === "true",
+        paygReadiness: {
+          gateEnabled: env("WHATSAPP_PAYG_ENABLED") === "true",
+          walletCheckoutEnabled: env("WHATSAPP_WALLET_CHECKOUT_ENABLED") === "true",
+          billingMode: env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase() || "not_configured",
+          razorpayKeyConfigured: Boolean(env("RAZORPAY_KEY_ID") && env("RAZORPAY_KEY_SECRET")),
+          webhookSecretConfigured: Boolean(env("RAZORPAY_WEBHOOK_SECRET")),
+          publicWebhookConfigured: Boolean(env("RAZORPAY_PUBLIC_WEBHOOK_URL")),
+        },
+        walletTenants: (tenants || []).map((tenant: any) => ({id:tenant.id,name:tenant.name})),
         subscriptions: safeSubscriptions,
         payments: safePayments,
         invoices: safeInvoices,

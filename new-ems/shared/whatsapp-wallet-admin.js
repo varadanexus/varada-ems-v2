@@ -4,9 +4,10 @@ export function usdMicros(value) {
   if (!match) throw new Error('Enter a USD amount with at most six decimal places.');
   return Number(BigInt(match[1])*1000000n+BigInt((match[2]||'').padEnd(6,'0')));
 }
-export function mountWalletAdmin(host,request,tenants) {
+export function mountWalletAdmin(host,request,tenants,readiness=null) {
   let selected=null,busy=false,loadRevision=0;
-  host.innerHTML=`<h3>Wallet configuration</h3><p>Configure native-currency wallets and USD balance thresholds. Saving does not activate charging or change balances. Currency locks after activation or financial activity.</p>
+  const readinessCopy=readiness ? `<div class="wa-admin-notice"><strong>PAYG readiness · ${readiness.gateEnabled ? 'gate enabled' : 'gate disabled'}</strong><p>Mode: ${esc(readiness.billingMode)} · Gateway keys: ${readiness.razorpayKeyConfigured ? 'configured' : 'missing'} · Webhook secret: ${readiness.webhookSecretConfigured ? 'configured' : 'missing'} · Public webhook URL: ${readiness.publicWebhookConfigured ? 'configured' : 'missing'} · Wallet checkout: ${readiness.walletCheckoutEnabled ? 'enabled' : 'disabled'}. Configuration is preparatory until every prerequisite is verified.</p></div>` : '';
+  host.innerHTML=`<h3>Wallet configuration</h3>${readinessCopy}<p>Configure native-currency wallets and USD balance thresholds. Saving does not activate charging or change balances. Currency locks after activation or financial activity.</p>
     <label>Customer <select data-wallet-tenant><option value="">Select a workspace</option>${tenants.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>
     <form data-wallet-config><fieldset disabled><label>Wallet currency <input name="currency" pattern="[A-Z]{3}" maxlength="3" required></label>
     <label>Minimum available after sending (USD) <input name="minimum" inputmode="decimal" required></label>

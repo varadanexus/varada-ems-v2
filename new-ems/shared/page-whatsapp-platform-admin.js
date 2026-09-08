@@ -1317,7 +1317,7 @@ function render() {
   if (BILLING_VIEWS.has(state.view) && state.hasFullAuthority && state.billingSnapshot) {
     const walletHost=document.createElement("section");walletHost.className="wa-admin-card";
     document.querySelector("#waAdminContent")?.prepend(walletHost);
-    mountWalletAdmin(walletHost,customerBillingAdminRequest,state.billingSnapshot.walletTenants || []);
+    mountWalletAdmin(walletHost,customerBillingAdminRequest,state.billingSnapshot.walletTenants || [],state.billingSnapshot.paygReadiness || null);
   }
   scheduleCustomerSupportRefresh();
 }
