@@ -38,6 +38,7 @@ export async function mountWalletView(host,request,connections=[],options={}) {
   try {
     const summary=await request('wallet_summary');
     if (!host.isConnected) return;
+    options.onSummary?.(summary);
     const w=summary.wallet;
     const mountCurrency=()=>{
       if (!summary.canChooseCurrency) return;
@@ -51,10 +52,10 @@ export async function mountWalletView(host,request,connections=[],options={}) {
       });
       host.append(box);
     };
-    if (!w) { host.innerHTML='<div class="wp-wallet-empty"><span aria-hidden="true">₹</span><div><strong>Set up your service wallet</strong><p>Select the currency customers will use for recharges. Service pricing remains displayed in USD.</p></div></div>';mountCurrency();return; }
+    if (!w) { host.innerHTML='<div class="wp-wallet-empty wp-wallet-setup"><span aria-hidden="true">₹</span><div><em>One-time setup</em><strong>Choose your wallet currency</strong><p>Select the currency customers will use for recharges. Service pricing remains displayed in USD.</p></div></div>';mountCurrency();return; }
     if ([w.balance_micros,w.reserved_micros].some(value=>typeof value==='number' && !Number.isSafeInteger(value))) throw new Error('Wallet amounts require an exact-precision refresh. Contact billing support.');
     const available=(BigInt(w.balance_micros)-BigInt(w.reserved_micros)).toString();
-    host.innerHTML=`<section class="wp-wallet-balance"><div><span class="wp-card-eyebrow">${escape(w.mode)} service wallet</span><h2>${w.enabled?'Wallet active':'Wallet inactive'}</h2><p>Available balance</p><strong>${escape(walletMoney(available,w.currency))}</strong></div><dl><div><dt>Reserved</dt><dd>${escape(walletMoney(w.reserved_micros,w.currency))}</dd></div><div><dt>Total balance</dt><dd>${escape(walletMoney(w.balance_micros,w.currency))}</dd></div><div><dt>Message rate</dt><dd>USD 0.0035</dd></div></dl></section>
+    host.innerHTML=`<section class="wp-wallet-balance"><div class="wp-wallet-balance-primary"><div class="wp-wallet-balance-heading"><span class="wp-card-eyebrow">${escape(w.mode)} service wallet</span><span class="wp-wallet-state ${w.enabled?'is-active':''}">${w.enabled?'Active':'Inactive'}</span></div><p>Available to spend</p><strong>${escape(walletMoney(available,w.currency))}</strong><small>Total funds less amounts reserved for messages awaiting reconciliation.</small></div><dl><div><span class="wp-wallet-metric-icon" aria-hidden="true">R</span><dt>Reserved funds</dt><dd>${escape(walletMoney(w.reserved_micros,w.currency))}</dd><small>Pending delivery result</small></div><div><span class="wp-wallet-metric-icon" aria-hidden="true">B</span><dt>Total balance</dt><dd>${escape(walletMoney(w.balance_micros,w.currency))}</dd><small>All credited funds</small></div><div><span class="wp-wallet-metric-icon" aria-hidden="true">M</span><dt>Message rate</dt><dd>USD 0.0035</dd><small>Incoming or outgoing</small></div></dl></section>
       <section class="wp-wallet-panel"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Usage register</span><h2>Wallet activity</h2><p>Review message charges, balance movements and recharge evidence. Reserved amounts remain held until delivery reconciliation.</p></div></div><form data-wallet-filters><label>Register <select name="register"><option value="usage">Message usage</option><option value="ledger">Wallet journal</option><option value="recharges">Recharges</option></select></label>
       <label>Number <select name="connectionId"><option value="">All numbers</option>${connections.map(c=>`<option value="${escape(c.id)}">${escape(c.display_phone_number || c.phone_number_id || c.id)}</option>`).join('')}</select></label>
       <label>Direction <select name="direction"><option value="">Both</option><option value="inbound">Incoming</option><option value="outbound">Outgoing</option></select></label>

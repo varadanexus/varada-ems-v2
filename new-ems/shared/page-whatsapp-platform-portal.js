@@ -1,5 +1,5 @@
 import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsapp-flow-builder.js?v=13";
-import { mountWalletView } from "./whatsapp-wallet-view.js?v=2";
+import { mountWalletView, walletMoney } from "./whatsapp-wallet-view.js?v=3";
 import { mountWalletRecharge } from "./whatsapp-wallet-checkout.js?v=2";
 import { mountWalletAutoTopup } from "./whatsapp-wallet-auto-topup.js?v=2";
 import { renderPaygBillingOverview, renderPaygCapacityAddons, renderWalletManagementPage } from "./whatsapp-payg-plans.js?v=3";
@@ -91,6 +91,7 @@ let workspacePackageMaster = { package: null, addons: [], availableAddons: [], e
 let workspaceMessagingPreferences = { stopMarketingOptOutEnabled: true, error: "" };
 let workspaceNotifications = { notifications: [], unreadCount: 0, error: "" };
 let workspaceBilling = { configured: false, mode: "test", packages: [], subscription: null, payments: [], invoices: [], creditNotes: [], renewalPriceChanges: [], customer: null, entitlement: null, error: "" };
+let workspaceWalletSummary = { wallet: null, canChooseCurrency: false, availableCurrencies: [], loaded: false, error: "" };
 let workspaceSupport = { tickets: [], thread: null, error: "" };
 let workspaceDeletion = { pending: false };
 let workspaceCheckout = { quote: null, package: null, trialEligibility: null, error: "" };
@@ -710,6 +711,33 @@ function notificationCentreMarkup() {
   }).join("");
   const content = rows || `<div class="wp-notification-empty"><span aria-hidden="true">✓</span><strong>You’re all caught up</strong><p>Important workspace updates will appear here.</p></div>`;
   return `<div class="wp-notification-control"><button class="wp-notification-trigger" id="wpNotificationBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="wpNotificationPanel" aria-label="Notifications${unreadCount ? `, ${unreadCount} unread` : ""}">${workspaceIcon('<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>')}<span class="wp-notification-badge" ${unreadCount ? "" : "hidden"}>${unreadCount > 99 ? "99+" : unreadCount}</span></button><section class="wp-notification-panel" id="wpNotificationPanel" role="dialog" aria-modal="false" aria-labelledby="wpNotificationTitle" hidden><header><div><span>Workspace updates</span><h2 id="wpNotificationTitle">Notifications</h2></div>${unreadCount ? `<button type="button" data-notifications-read-all>Mark all as read</button>` : ""}</header><div class="wp-notification-feed">${content}</div><footer><small>${workspaceNotifications.error ? escapeHtml(workspaceNotifications.error) : "Updates are created securely from verified workspace events."}</small></footer></section></div>`;
+}
+
+function walletAvailableLabel(summary = workspaceWalletSummary) {
+  const wallet = summary?.wallet;
+  if (!summary?.loaded) return { amount: "Loading…", currency: "Wallet" };
+  if (!wallet) return { amount: "Not set", currency: "Wallet" };
+  try {
+    const available = BigInt(wallet.balance_micros ?? 0) - BigInt(wallet.reserved_micros ?? 0);
+    return { amount: walletMoney(available.toString(), wallet.currency), currency: String(wallet.currency || "Wallet") };
+  } catch {
+    return { amount: `${wallet.currency || "Wallet"} —`, currency: String(wallet.currency || "Wallet") };
+  }
+}
+
+function walletTopbarMarkup() {
+  const value = walletAvailableLabel();
+  return `<a class="wp-topbar-wallet" href="${workspacePath("billing-plans")}" aria-label="Open Wallet and payments. Available balance ${escapeHtml(value.amount)}"><span class="wp-topbar-wallet-icon" aria-hidden="true">${workspaceIcon('<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z"/><path d="M3 9h18M16 14h2"/>')}</span><span><small>Available balance</small><strong data-wallet-topbar-amount>${escapeHtml(value.amount)}</strong></span><span class="wp-topbar-wallet-arrow" aria-hidden="true">›</span></a>`;
+}
+
+function updateWalletTopbar(summary) {
+  workspaceWalletSummary = { ...(summary || {}), loaded: true, error: "" };
+  const link = app.querySelector(".wp-topbar-wallet");
+  const amount = link?.querySelector("[data-wallet-topbar-amount]");
+  if (!link || !amount) return;
+  const value = walletAvailableLabel();
+  amount.textContent = value.amount;
+  link.setAttribute("aria-label", `Open Wallet and payments. Available balance ${value.amount}`);
 }
 
 async function refreshWorkspaceNotifications({ updateDom = false } = {}) {
@@ -3453,7 +3481,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   let connections = workspaceConnections;
   if (!agentWorkspace && refresh) {
     const billingAction = isBillingWorkspaceView(view) || ["owner", "admin"].includes(session.roleCode) ? "summary" : "entitlement";
-    const [onboardingResult, profileResult, deletionResult, verificationResult, packageResult, billingResult, messagingPreferencesResult] = await Promise.allSettled([
+    const [onboardingResult, profileResult, deletionResult, verificationResult, packageResult, billingResult, messagingPreferencesResult, walletResult] = await Promise.allSettled([
       onboardingRequest("status"),
       storageRequest("profile"),
       storageRequest("account_deletion_status"),
@@ -3461,6 +3489,7 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
       messagingRequest("package_master"),
       billingRequest(billingAction),
       view === "settings" ? messagingRequest("workspace_messaging_preferences") : Promise.resolve(workspaceMessagingPreferences),
+      billingRequest("wallet_summary"),
     ]);
     if (onboardingResult.status === "fulfilled") {
       metaOnboardingStatus = onboardingResult.value;
@@ -3493,6 +3522,9 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     } else {
       workspaceBilling = { ...workspaceBilling, error: billingResult.reason?.message || (billingAction === "summary" ? "Billing could not be loaded." : "Billing access could not be verified.") };
     }
+    workspaceWalletSummary = walletResult.status === "fulfilled"
+      ? { ...walletResult.value, loaded: true, error: "" }
+      : { ...workspaceWalletSummary, loaded: true, error: walletResult.reason?.message || "Wallet balance is unavailable." };
     if (view === "settings") {
       workspaceMessagingPreferences = messagingPreferencesResult.status === "fulfilled"
         ? { ...messagingPreferencesResult.value, error: "" }
@@ -3701,10 +3733,11 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const preserveSidebar = Boolean(existingShell) && (preserveScroll || !refresh);
   const persistentSidebar = preserveSidebar ? existingShell.querySelector(".wp-workspace-sidebar") : null;
   const sidebarWasCollapsed = Boolean(existingShell?.classList.contains("sidebar-collapsed"));
-  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions">${notificationCentreMarkup()}<button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
+  app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions">${agentWorkspace ? "" : walletTopbarMarkup()}${notificationCentreMarkup()}<button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
   const walletHost = app.querySelector("[data-wallet-management-host]");
   if (view === "billing-plans" && walletHost && workspaceBilling?.configured === true) {
     void mountWalletView(walletHost, billingRequest, workspaceConnections, {
+      onSummary: updateWalletTopbar,
       mountRecharge: (host, summary) => {
         mountWalletRecharge(host, summary, billingRequest, loadRazorpayCheckout, () => renderDashboard({ refresh: true, preserveScroll: true }));
         void mountWalletAutoTopup(host, summary, billingRequest);

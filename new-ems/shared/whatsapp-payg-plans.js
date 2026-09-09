@@ -14,6 +14,11 @@ function activationNotice(billing) {
   return '<div class="wp-verification-notice"><strong>Pay-per-use activation pending</strong><p>The new pricing is displayed, but wallet recharge and message charging remain unavailable until backend setup and payment verification are complete. Existing records and capacity are preserved.</p></div>';
 }
 
+function walletActivationNotice(billing) {
+  const active = isActive(billing);
+  return `<section class="wp-wallet-status-strip ${active ? 'is-active' : ''}" role="status"><span class="wp-wallet-status-icon" aria-hidden="true">${active ? '✓' : 'i'}</span><div><strong>${active ? 'Pay-per-use access enabled' : 'Wallet activation pending — safely paused'}</strong><p>${active ? 'Message usage is being charged against the available service balance.' : 'Balance management is ready for review. Recharges and message charging remain unavailable until payment verification is complete.'}</p></div><span class="wp-wallet-status-tag">${active ? 'Active' : 'Protected setup'}</span></section>`;
+}
+
 function previousBillingRecord(billing) {
   const subscription = billing?.subscription;
   if (!subscription) return '';
@@ -38,10 +43,10 @@ export function renderWalletManagementPage(billing = {}) {
   return `<section class="wp-route-page wp-billing-page">
     ${paygHeading(billing, 'Wallet & payments', 'Manage service balance, recharges, message usage, payment records and automatic top-up preferences.')}
     ${billing.error ? `<div class="wp-verification-notice"><strong>Billing status unavailable</strong><p>${escape(billing.error)}</p></div>` : ''}
-    ${activationNotice(billing)}
-    <section class="wp-wallet-command"><div><span class="wp-card-eyebrow">Prepaid service wallet</span><h2>Balance, payments and usage in one place</h2><p>Your selected recharge value becomes spendable balance. GST and gateway charges are itemized separately before payment.</p></div><div class="wp-wallet-command-rate"><span>Service rate</span><strong>USD 0.0035</strong><small>per incoming or outgoing message</small></div></section>
+    ${walletActivationNotice(billing)}
+    <section class="wp-wallet-command"><div class="wp-wallet-command-copy"><span class="wp-wallet-command-icon" aria-hidden="true">$</span><div><span class="wp-card-eyebrow">Prepaid service wallet</span><h2>Your money, usage and payments—clearly organised</h2><p>Recharge only what you need. Spendable balance, reserved funds, taxes and gateway fees stay separate and auditable.</p></div></div><div class="wp-wallet-command-rate"><span>Varada message fee</span><strong>USD 0.0035</strong><small>per incoming or outgoing message</small></div></section>
     <section class="wp-wallet-runtime" data-wallet-management-host><div class="wp-wallet-loading"><span aria-hidden="true">₹</span><div><strong>Loading wallet</strong><p>Retrieving balance, currency and payment controls…</p></div></div></section>
-    <section class="wp-wallet-assurance-grid"><article class="wp-card"><span class="wp-card-eyebrow">Payment transparency</span><h2>Recharge breakdown</h2><p>Spendable credit, service GST, gateway charge, GST on the gateway charge and the final payment total are shown separately before checkout.</p></article><article class="wp-card"><span class="wp-card-eyebrow">Balance policy</span><h2>Non-refundable service balance</h2><p>Wallet funds cannot be withdrawn or refunded except where required by law or to correct duplicate or erroneous charges.</p></article><article class="wp-card"><span class="wp-card-eyebrow">Automatic funding</span><h2>Auto top-up with consent</h2><p>Set thresholds and limits here. Automatic debits remain inactive until a supported payment mandate is separately approved.</p></article></section>
+    <section class="wp-wallet-assurance-grid" aria-label="Wallet safeguards"><article class="wp-card"><span class="wp-wallet-assurance-number">01</span><span class="wp-card-eyebrow">Payment transparency</span><h2>Recharge breakdown</h2><p>Spendable credit, service GST, gateway charge, GST on the gateway charge and the final payment total appear separately before checkout.</p></article><article class="wp-card"><span class="wp-wallet-assurance-number">02</span><span class="wp-card-eyebrow">Balance policy</span><h2>Non-refundable balance</h2><p>Wallet funds cannot be withdrawn or refunded except where required by law or to correct duplicate or erroneous charges.</p></article><article class="wp-card"><span class="wp-wallet-assurance-number">03</span><span class="wp-card-eyebrow">Automatic funding</span><h2>Auto top-up with consent</h2><p>Thresholds and limits are managed here. Automatic debits stay inactive until a supported payment mandate is separately approved.</p></article></section>
     ${previousBillingRecord(billing)}
   </section>`;
 }
