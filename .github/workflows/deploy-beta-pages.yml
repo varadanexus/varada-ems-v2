@@ -85,6 +85,12 @@ jobs:
           test -f .pages-dist/whatsapp-platform/solutions/index.html
           test -f .pages-dist/whatsapp-platform/pricing/index.html
           test -f .pages-dist/whatsapp-platform/access/index.html
+          # These are static imports of the shared portal entry point. If any
+          # are absent, every WhatsApp public/access route falls back to its
+          # SEO shell because the browser cannot evaluate the module graph.
+          test -f .pages-dist/new-ems/shared/whatsapp-wallet-view.js
+          test -f .pages-dist/new-ems/shared/whatsapp-wallet-checkout.js
+          test -f .pages-dist/new-ems/shared/whatsapp-wallet-auto-topup.js
           test ! -e .pages-dist/new-ems/docs
           test ! -e .pages-dist/new-ems/supabase
           test ! -e .pages-dist/new-ems/system-schema-dump.sql
