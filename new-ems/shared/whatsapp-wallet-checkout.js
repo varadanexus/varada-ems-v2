@@ -78,16 +78,15 @@ export function mountWalletRecharge(host,summary,request,loadCheckout,onCredited
   const w=summary.wallet;
   const section=document.createElement('section');
   section.className='wp-wallet-panel wp-wallet-recharge';
-  section.innerHTML='<h3>Recharge service balance</h3><p data-recharge-currency></p><form><label>Amount <input name="amount" inputmode="decimal" required></label><button type="submit">Continue to secure checkout</button></form><button type="button" data-recharge-verify>Retry payment verification</button><p role="status" data-recharge-status></p>';
+  section.dataset.walletRecharge='';
+  section.innerHTML=`<header class="wp-wallet-panel-heading"><span class="wp-wallet-panel-icon" aria-hidden="true">+</span><div><span class="wp-card-eyebrow">Manual funding</span><h3>Top up your wallet</h3><p data-recharge-currency></p></div><span class="wp-wallet-panel-tag">Secure checkout</span></header><form class="wp-wallet-recharge-form"><label class="wp-wallet-recharge-amount"><span>Amount to add</span><span class="wp-wallet-amount-input"><b>${w.currency}</b><input name="amount" inputmode="decimal" autocomplete="off" placeholder="Enter amount" aria-describedby="wpRechargeAmountHelp" required></span><small id="wpRechargeAmountHelp">This is the spendable service balance credited after payment verification.</small></label><div class="wp-wallet-recharge-policy" data-recharge-policy></div><label class="wp-auto-topup-consent wp-wallet-recharge-consent"><input name="nonRefundableConsent" type="checkbox" required><span><strong>I understand the balance policy</strong><small>Service-balance recharges are non-refundable except where required by law or to correct duplicate or erroneous charges.</small></span></label><footer class="wp-wallet-recharge-actions"><button class="wp-primary" type="submit">Continue to secure checkout</button><small>GST and gateway charges are shown separately before payment.</small></footer></form><div class="wp-wallet-recharge-recovery"><button class="wp-secondary" type="button" data-recharge-verify>Retry payment verification</button><button class="wp-secondary" type="button" data-recharge-discard>Discard unpaid quote</button></div><p class="wp-wallet-form-status" role="status" data-recharge-status></p>`;
   section.querySelector('[data-recharge-currency]').textContent=`Checkout currency: ${w.currency}. USD service-price equivalent is recorded with your recharge. Meta payments are separate.`;
   const policy=document.createElement('p');
   policy.textContent='Your selected amount becomes spendable service balance. Applicable GST and gateway charges are added separately. Service-balance recharges are non-refundable and cannot be withdrawn as cash, except where required by applicable law or to correct duplicate or erroneous charges.';
-  const consent=document.createElement('label');
-  const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.name='nonRefundableConsent';checkbox.required=true;
-  consent.append(checkbox,document.createTextNode(' I understand the non-refundable service-balance policy.'));
-  section.querySelector('form button').before(policy,consent);
-  const discard=document.createElement('button');discard.type='button';discard.textContent='Discard unpaid quote';section.append(discard);
-  host.append(section);
+  section.querySelector('[data-recharge-policy]').append(policy);
+  const discard=section.querySelector('[data-recharge-discard]');
+  const balance=host.querySelector('.wp-wallet-balance');
+  if (balance) balance.after(section); else host.append(section);
   const status=section.querySelector('[data-recharge-status]');
   const controller=walletCheckoutController({request,storage:localStorage,storageKey:`wp-recharge:${w.tenant_id}:${w.mode}`,
     confirmQuote:async quote=>{
