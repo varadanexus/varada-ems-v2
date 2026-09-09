@@ -9,17 +9,17 @@ export async function mountWalletAutoTopup(host,summary,request) {
   if(!summary.canManageAutoTopup || !summary.wallet || !['INR','USD'].includes(summary.wallet.currency))return;
   const section=document.createElement('section');
   section.className='wp-wallet-panel wp-wallet-auto-topup';
-  section.innerHTML=`<h3>Auto top-up preferences</h3><p data-auto-currency></p><p>Saving these preferences does not authorize a debit. Auto top-up requires a supported payment method and your approved mandate. It is not active yet.</p>
-    <form><fieldset disabled><label><input name="enabled" type="checkbox"> Request auto top-up</label>
-    <label>Trigger when available balance falls below <input name="thresholdMinor" inputmode="decimal" required></label>
-    <label>Service balance to add each time <input name="creditMinor" inputmode="decimal" required></label>
-    <label>Maximum payment each time, including GST and gateway charges <input name="maxDebitMinor" inputmode="decimal" required></label>
-    <label>Monthly payment limit, including GST and gateway charges <input name="monthlyCapMinor" inputmode="decimal" required></label>
-    <label><input name="confirmed" type="checkbox" required> I understand that service-balance recharges are non-refundable, except where required by law or to correct duplicate or erroneous charges. A separate mandate approval is required before automatic payments.</label>
-    <button type="submit">Save auto top-up preferences</button></fieldset></form><p role="status"></p>`;
+  const currency=summary.wallet.currency;
+  const amountField=(name,label,help)=>`<label class="wp-auto-topup-field"><span>${label}</span><span class="wp-wallet-amount-input"><b>${currency}</b><input name="${name}" inputmode="decimal" placeholder="0.00" required></span><small>${help}</small></label>`;
+  section.innerHTML=`<header class="wp-wallet-panel-heading"><span class="wp-wallet-panel-icon" aria-hidden="true">↻</span><div><span class="wp-card-eyebrow">Automatic funding</span><h3>Auto top-up preferences</h3><p data-auto-currency></p></div><span class="wp-wallet-panel-tag">Mandate required</span></header>
+    <div class="wp-auto-topup-notice"><span aria-hidden="true">i</span><p><strong>No automatic debit is active.</strong> Saving preferences only records your limits. A supported payment method and separate mandate approval are required before any automatic payment.</p></div>
+    <form><fieldset disabled><label class="wp-auto-topup-switch"><span><strong>Request auto top-up</strong><small>Prepare a recharge automatically when your available balance reaches the threshold.</small></span><input name="enabled" type="checkbox" role="switch"><i aria-hidden="true"></i></label>
+    <div class="wp-auto-topup-grid">${amountField('thresholdMinor','Low-balance trigger','Start a top-up below this available balance.')}${amountField('creditMinor','Balance to add','Spendable service balance credited after verified payment.')}${amountField('maxDebitMinor','Maximum per payment','Includes recharge value, GST and gateway charges.')}${amountField('monthlyCapMinor','Monthly payment limit','The maximum total automatic payments allowed each month.')}</div>
+    <label class="wp-auto-topup-consent"><input name="confirmed" type="checkbox" required><span><strong>I understand and agree</strong><small>Service-balance recharges are non-refundable except where required by law or to correct duplicate or erroneous charges. A separate mandate approval is required before automatic payments.</small></span></label>
+    <footer class="wp-auto-topup-actions"><button class="wp-primary" type="submit">Save auto top-up preferences</button><small>Preferences can be changed before mandate activation.</small></footer></fieldset></form><p class="wp-wallet-form-status" role="status"></p>`;
   section.querySelector('[data-auto-currency]').textContent=`All amounts below are in your wallet currency: ${summary.wallet.currency}. Service prices remain in USD.`;
   host.append(section);
-  const history=document.createElement('details');
+  const history=document.createElement('details');history.className='wp-auto-topup-history';
   const historyTitle=document.createElement('summary');historyTitle.textContent='Auto top-up change history (latest 50)';
   const historyList=document.createElement('ul');history.append(historyTitle,historyList);section.append(history);
   const form=section.querySelector('form'),fieldset=section.querySelector('fieldset'),status=section.querySelector('[role=status]');

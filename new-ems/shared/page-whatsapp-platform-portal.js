@@ -1,7 +1,7 @@
 import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsapp-flow-builder.js?v=13";
 import { mountWalletView, walletMoney } from "./whatsapp-wallet-view.js?v=3";
 import { mountWalletRecharge } from "./whatsapp-wallet-checkout.js?v=2";
-import { mountWalletAutoTopup } from "./whatsapp-wallet-auto-topup.js?v=2";
+import { mountWalletAutoTopup } from "./whatsapp-wallet-auto-topup.js?v=3";
 import { renderPaygBillingOverview, renderPaygCapacityAddons, renderWalletManagementPage } from "./whatsapp-payg-plans.js?v=3";
 
 const SESSION_KEY = "vn_whatsapp_platform_session";
