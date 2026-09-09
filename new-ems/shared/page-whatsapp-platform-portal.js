@@ -3904,6 +3904,44 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
         button.disabled = false; button.textContent = original;
       }
     }));
+    app.querySelectorAll("[data-payg-addon-purchase]").forEach((button) => button.addEventListener("click", async () => {
+      const addonCode = button.dataset.paygAddonPurchase;
+      const quantityInput = app.querySelector(`[data-payg-addon-quantity="${CSS.escape(addonCode)}"]`);
+      if (quantityInput && !quantityInput.reportValidity()) return;
+      const original = button.textContent;
+      try {
+        const quantity = quantityInput ? Number(quantityInput.value) : 1;
+        button.disabled = true; button.textContent = "Preparing quote…";
+        const preview = await billingRequest("wallet_quote_addon", { addonCode, quantity });
+        const quote = preview.quote || {};
+        const money = (minor) => `${quote.currency || "INR"} ${(Number(minor || 0) / 100).toFixed(2)}`;
+        const accepted = window.confirm(`${quote.name || addonCode}\n\nQuantity: ${quote.quantity}\nCapacity price: ${money(quote.recurringBaseMinor)}\nGST: ${money(quote.gstMinor)}\nGateway charge: ${money(quote.gatewayFeeMinor)}\nTotal: ${money(quote.totalMinor)} per ${quote.billingInterval || "month"}\n\nContinue to secure Razorpay checkout?`);
+        if (!accepted) { button.disabled = false; button.textContent = original; return; }
+        button.textContent = "Opening secure checkout…";
+        const requestKey = `${crypto.randomUUID().replaceAll('-', '')}${Date.now().toString(36)}`.slice(0, 64);
+        const purchase = await billingRequest("wallet_create_addon", { addonCode, quantity, requestKey });
+        if (!purchase.razorpaySubscriptionId || !purchase.keyId) throw new Error("The payment gateway did not return a secure capacity authorization session.");
+        await loadRazorpayCheckout();
+        const instance = new window.Razorpay({
+          key: purchase.keyId, subscription_id: purchase.razorpaySubscriptionId,
+          name: "Varada Nexus", image: "https://www.varadanexus.com/images/logo.png",
+          description: `${purchase.addon?.name || addonCode} capacity authorization`,
+          prefill: { name: workspaceBilling?.customer?.name || "", email: workspaceBilling?.customer?.email || "" },
+          notes: { workspace: workspaceBilling?.customer?.companyName || session.companyName || "", addon_code: addonCode, quantity: String(quantity) },
+          theme: { color: "#0b6b45" },
+          handler: async (checkout) => {
+            try {
+              await billingRequest("verify_checkout", { subscriptionId: purchase.subscriptionId, razorpayPaymentId: checkout.razorpay_payment_id, razorpaySubscriptionId: checkout.razorpay_subscription_id, razorpaySignature: checkout.razorpay_signature });
+              showToast(`${purchase.addon?.name || addonCode} payment received. Capacity will activate after captured-period verification.`);
+              await renderDashboard();
+            } catch (error) { showToast(error?.message || "Capacity payment verification failed.", "error"); button.disabled = false; button.textContent = original; }
+          },
+          modal: { confirm_close: true, escape: true, handleback: true, ondismiss: () => { button.disabled = false; button.textContent = original; } },
+        });
+        instance.on("payment.failed", (checkout) => { showToast(checkout?.error?.description || "The capacity payment failed.", "error"); button.disabled = false; button.textContent = original; });
+        instance.open();
+      } catch (error) { showToast(error?.message || "Capacity checkout could not be opened.", "error"); button.disabled = false; button.textContent = original; }
+    }));
     app.querySelectorAll("[data-billing-remove-plan-addon]").forEach((button) => button.addEventListener("click", async () => {
       const original = button.textContent;
       try {
