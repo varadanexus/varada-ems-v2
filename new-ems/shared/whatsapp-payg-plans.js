@@ -32,17 +32,16 @@ function paygHeading(billing, title, description) {
   return `<div class="wp-route-heading"><div><span class="wp-kicker">Billing &amp; usage</span><h1>${escape(title)}</h1><p>${escape(description)}</p></div><div class="wp-billing-heading-actions">${modeBadge(billing)}<a class="wp-secondary wp-button-link" href="/contact.html?subject=WhatsApp%20billing%20support">Billing support</a></div></div>`;
 }
 
-// Presentation never enables billing or infers provider cancellation.
-export function renderPaygPlans(billing = {}) {
-  const active = isActive(billing);
+// This is a management surface, not a pricing or activation claim. The live
+// wallet component replaces the loading panel after its authenticated read.
+export function renderWalletManagementPage(billing = {}) {
   return `<section class="wp-route-page wp-billing-page">
-    ${paygHeading(billing, 'Pay per use', 'No monthly platform base fee. Pay for message usage and additional capacity.')}
+    ${paygHeading(billing, 'Wallet & payments', 'Manage service balance, recharges, message usage, payment records and automatic top-up preferences.')}
     ${billing.error ? `<div class="wp-verification-notice"><strong>Billing status unavailable</strong><p>${escape(billing.error)}</p></div>` : ''}
     ${activationNotice(billing)}
-    <section class="wp-billing-hero"><div><span class="wp-card-eyebrow">Platform message fee</span><h2>USD 0.0035 per message</h2><p>Incoming and outgoing messages, including service messages. Meta charges are additional and paid directly to Meta.</p></div><div class="wp-billing-price"><strong>$0</strong><span>monthly platform base fee</span></div></section>
-    <section class="wp-billing-grid"><article class="wp-card"><h2>All core features included</h2><p>Team inbox, contacts, templates, campaigns, flows, automations, analytics and API access.</p><p>Extra team seats, WhatsApp numbers and integrations remain paid capacity add-ons. Existing capacity is preserved.</p></article><article class="wp-card"><h2>Prepaid service balance</h2><p>Choose your recharge amount. Applicable GST and gateway charges are shown separately before payment; the selected recharge amount is credited as spendable balance.</p><p>INR wallets collect INR, with USD service-price equivalents. Other supported currencies are subject to availability and applicable conversion charges.</p><p>Service balance is non-refundable and cannot be withdrawn, except where required by law or to correct duplicate or erroneous charges.</p><a class="wp-secondary wp-button-link" href="/whatsapp-platform/workspace/billing/">View wallet &amp; usage</a>${!active ? '<button class="wp-primary" type="button" disabled>Recharge · activation pending</button>' : ''}</article></section>
-    <section class="wp-card"><span class="wp-card-eyebrow">Capacity add-ons</span><h2>Scale only what you need</h2><p>Core features are included. Extra seats, WhatsApp numbers and integrations are billed separately for their captured paid period.</p>${capacityCards(billing)}</section>
-    <section class="wp-card"><h2>Usage records and auto top-up</h2><p>Usage and payment records show message charges, balance movements and payment references after wallet billing is activated. Auto top-up requires separate consent and a supported payment mandate; saving preferences does not enable automatic debits.</p></section>
+    <section class="wp-wallet-command"><div><span class="wp-card-eyebrow">Prepaid service wallet</span><h2>Balance, payments and usage in one place</h2><p>Your selected recharge value becomes spendable balance. GST and gateway charges are itemized separately before payment.</p></div><div class="wp-wallet-command-rate"><span>Service rate</span><strong>USD 0.0035</strong><small>per incoming or outgoing message</small></div></section>
+    <section class="wp-wallet-runtime" data-wallet-management-host><div class="wp-wallet-loading"><span aria-hidden="true">₹</span><div><strong>Loading wallet</strong><p>Retrieving balance, currency and payment controls…</p></div></div></section>
+    <section class="wp-wallet-assurance-grid"><article class="wp-card"><span class="wp-card-eyebrow">Payment transparency</span><h2>Recharge breakdown</h2><p>Spendable credit, service GST, gateway charge, GST on the gateway charge and the final payment total are shown separately before checkout.</p></article><article class="wp-card"><span class="wp-card-eyebrow">Balance policy</span><h2>Non-refundable service balance</h2><p>Wallet funds cannot be withdrawn or refunded except where required by law or to correct duplicate or erroneous charges.</p></article><article class="wp-card"><span class="wp-card-eyebrow">Automatic funding</span><h2>Auto top-up with consent</h2><p>Set thresholds and limits here. Automatic debits remain inactive until a supported payment mandate is separately approved.</p></article></section>
     ${previousBillingRecord(billing)}
   </section>`;
 }

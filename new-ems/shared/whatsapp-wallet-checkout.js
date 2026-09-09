@@ -77,6 +77,7 @@ export function mountWalletRecharge(host,summary,request,loadCheckout,onCredited
   if (!summary.rechargeEnabled || !['INR','USD'].includes(summary.wallet?.currency)) return;
   const w=summary.wallet;
   const section=document.createElement('section');
+  section.className='wp-wallet-panel wp-wallet-recharge';
   section.innerHTML='<h3>Recharge service balance</h3><p data-recharge-currency></p><form><label>Amount <input name="amount" inputmode="decimal" required></label><button type="submit">Continue to secure checkout</button></form><button type="button" data-recharge-verify>Retry payment verification</button><p role="status" data-recharge-status></p>';
   section.querySelector('[data-recharge-currency]').textContent=`Checkout currency: ${w.currency}. USD service-price equivalent is recorded with your recharge. Meta payments are separate.`;
   const policy=document.createElement('p');

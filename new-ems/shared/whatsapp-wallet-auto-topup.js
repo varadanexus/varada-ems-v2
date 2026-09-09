@@ -8,6 +8,7 @@ export function autoTopupMinor(value) {
 export async function mountWalletAutoTopup(host,summary,request) {
   if(!summary.canManageAutoTopup || !summary.wallet || !['INR','USD'].includes(summary.wallet.currency))return;
   const section=document.createElement('section');
+  section.className='wp-wallet-panel wp-wallet-auto-topup';
   section.innerHTML=`<h3>Auto top-up preferences</h3><p data-auto-currency></p><p>Saving these preferences does not authorize a debit. Auto top-up requires a supported payment method and your approved mandate. It is not active yet.</p>
     <form><fieldset disabled><label><input name="enabled" type="checkbox"> Request auto top-up</label>
     <label>Trigger when available balance falls below <input name="thresholdMinor" inputmode="decimal" required></label>

@@ -1,8 +1,8 @@
 import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsapp-flow-builder.js?v=13";
-import { mountWalletView } from "./whatsapp-wallet-view.js?v=1";
-import { mountWalletRecharge } from "./whatsapp-wallet-checkout.js?v=1";
-import { mountWalletAutoTopup } from "./whatsapp-wallet-auto-topup.js?v=1";
-import { renderPaygBillingOverview, renderPaygCapacityAddons, renderPaygPlans } from "./whatsapp-payg-plans.js?v=2";
+import { mountWalletView } from "./whatsapp-wallet-view.js?v=2";
+import { mountWalletRecharge } from "./whatsapp-wallet-checkout.js?v=2";
+import { mountWalletAutoTopup } from "./whatsapp-wallet-auto-topup.js?v=2";
+import { renderPaygBillingOverview, renderPaygCapacityAddons, renderWalletManagementPage } from "./whatsapp-payg-plans.js?v=3";
 
 const SESSION_KEY = "vn_whatsapp_platform_session";
 const THEME_KEY = "vn_whatsapp_platform_theme";
@@ -145,7 +145,7 @@ const WORKSPACE_VIEW_LABELS = {
   "developer-logs": "Logs",
   "api-guide": "API & webhook guide",
   billing: "Billing & usage",
-  "billing-plans": "Pay per use",
+  "billing-plans": "Wallet & payments",
   "billing-addons": "Capacity add-ons",
   "billing-invoices": "Invoices",
   "billing-ledger": "Payment ledger",
@@ -3023,7 +3023,7 @@ async function openBillingDocument(documentRecord, kind = "invoice") {
 
 function billingView(view = "billing") {
   if (view === "billing") return renderPaygBillingOverview(workspaceBilling || {});
-  if (view === "billing-plans") return renderPaygPlans(workspaceBilling || {});
+  if (view === "billing-plans") return renderWalletManagementPage(workspaceBilling || {});
   if (view === "billing-addons") return renderPaygCapacityAddons(workspaceBilling || {});
   const pkg = workspacePackageMaster?.package;
   const canManage = ["owner", "admin"].includes(session.roleCode);
@@ -3245,7 +3245,7 @@ function legacySubscriptionCheckoutView() {
 }
 
 function checkoutView() {
-  return renderPaygPlans(workspaceBilling || {});
+  return renderWalletManagementPage(workspaceBilling || {});
 }
 
 function billingAccessRequiredView() {
@@ -3702,17 +3702,16 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
   const persistentSidebar = preserveSidebar ? existingShell.querySelector(".wp-workspace-sidebar") : null;
   const sidebarWasCollapsed = Boolean(existingShell?.classList.contains("sidebar-collapsed"));
   app.innerHTML = `<main class="wp-workspace-shell ${isFlowBuilderRoute ? "wp-flow-builder-workspace" : ""}"><aside class="wp-workspace-sidebar" aria-label="WhatsApp workspace navigation"><a class="wp-workspace-brand" href="${agentWorkspace ? workspacePath("inbox") : WORKSPACE_PATH}" aria-label="Varada Nexus WhatsApp Solutions workspace"><img src="/images/logo.png" alt="" /><span><strong>Varada Nexus</strong><small>WhatsApp Solutions</small></span></a>${sidebarNumberSelector}<nav class="wp-workspace-nav">${sidebarNavigation}</nav></aside><section class="wp-workspace-content"><header class="wp-workspace-topbar"><button class="wp-sidebar-toggle" id="wpSidebarToggle" type="button" aria-label="Open workspace navigation" aria-expanded="false">☰</button><div class="wp-topbar-title"><span class="wp-breadcrumb">Workspace / ${escapeHtml(WORKSPACE_VIEW_LABELS[view])}</span><strong>${escapeHtml(isFlowBuilderRoute ? "Flow builder" : WORKSPACE_VIEW_LABELS[view])}</strong></div><div class="wp-topbar-actions">${notificationCentreMarkup()}<button class="wp-theme-toggle" id="wpThemeToggle" type="button" aria-pressed="false"><span class="wp-theme-icon" aria-hidden="true">☾</span><span class="wp-theme-label">Dark</span></button>${profileMenu}</div></header>${deletionBanner}<div class="wp-main">${mainContent}</div></section><button class="wp-sidebar-scrim" id="wpSidebarScrim" type="button" aria-label="Close workspace navigation"></button></main>${billingLocked ? "" : verificationAttentionModal()}${billingLocked ? "" : renewalConsentModal(view)}`;
-  const testWalletSetupAvailable = workspaceBilling?.configured === true && workspaceBilling?.mode === "test";
-  if (isBillingWorkspaceView(view) && (workspaceBilling.paygEnabled === true || testWalletSetupAvailable)) {
-    const walletHost = document.createElement("section");
-    walletHost.className = "wp-billing-card";
-    app.querySelector(".wp-main")?.prepend(walletHost);
+  const walletHost = app.querySelector("[data-wallet-management-host]");
+  if (view === "billing-plans" && walletHost && workspaceBilling?.configured === true) {
     void mountWalletView(walletHost, billingRequest, workspaceConnections, {
       mountRecharge: (host, summary) => {
         mountWalletRecharge(host, summary, billingRequest, loadRazorpayCheckout, () => renderDashboard({ refresh: true, preserveScroll: true }));
         void mountWalletAutoTopup(host, summary, billingRequest);
       },
     });
+  } else if (view === "billing-plans" && walletHost) {
+    walletHost.innerHTML = '<div class="wp-wallet-empty"><strong>Payment setup is pending</strong><p>Wallet controls will become available after the payment configuration is connected.</p></div>';
   }
   if (view === "support") {
     const dialog = app.querySelector("#wpSupportDialog");

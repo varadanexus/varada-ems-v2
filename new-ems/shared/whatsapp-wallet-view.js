@@ -41,7 +41,7 @@ export async function mountWalletView(host,request,connections=[],options={}) {
     const w=summary.wallet;
     const mountCurrency=()=>{
       if (!summary.canChooseCurrency) return;
-      const box=document.createElement('section');
+      const box=document.createElement('section');box.className='wp-wallet-panel wp-wallet-currency';
       box.innerHTML=`<h3>Choose wallet currency</h3><p>Service prices remain in USD. INR wallets collect INR. Other currencies may involve bank or conversion fees. Currency is locked after activation or financial activity.</p><form><label>Currency <select name="currency" required><option value="">Select currency</option>${(summary.availableCurrencies||[]).map(currency=>`<option value="${escape(currency)}">${escape(currency)}</option>`).join('')}</select></label><button type="submit">Save wallet currency</button></form><p role="status"></p>`;
       if(w?.currency) box.querySelector('select').value=w.currency;
       box.querySelector('form').addEventListener('submit',async event=>{
@@ -51,13 +51,11 @@ export async function mountWalletView(host,request,connections=[],options={}) {
       });
       host.append(box);
     };
-    if (!w) { host.innerHTML='<h2>Service balance</h2><p>Your wallet has not been configured yet.</p>';mountCurrency();return; }
+    if (!w) { host.innerHTML='<div class="wp-wallet-empty"><span aria-hidden="true">₹</span><div><strong>Set up your service wallet</strong><p>Select the currency customers will use for recharges. Service pricing remains displayed in USD.</p></div></div>';mountCurrency();return; }
     if ([w.balance_micros,w.reserved_micros].some(value=>typeof value==='number' && !Number.isSafeInteger(value))) throw new Error('Wallet amounts require an exact-precision refresh. Contact billing support.');
     const available=(BigInt(w.balance_micros)-BigInt(w.reserved_micros)).toString();
-    host.innerHTML=`<h2>Service balance &amp; message usage</h2><p>${escape(w.mode)} wallet · ${w.enabled?'Active':'Inactive'}</p>
-      <p><strong>Available: ${escape(walletMoney(available,w.currency))}</strong> · Reserved: ${escape(walletMoney(w.reserved_micros,w.currency))} · Total: ${escape(walletMoney(w.balance_micros,w.currency))}</p>
-      <p>Service rate: USD 0.0035 per incoming/outgoing message; terminal failed-message processing: USD 0.0007. Meta charges are paid separately, directly to Meta. Reserved amounts are held pending delivery reconciliation.</p>
-      <form data-wallet-filters><label>Register <select name="register"><option value="usage">Message usage</option><option value="ledger">Wallet journal</option><option value="recharges">Recharges</option></select></label>
+    host.innerHTML=`<section class="wp-wallet-balance"><div><span class="wp-card-eyebrow">${escape(w.mode)} service wallet</span><h2>${w.enabled?'Wallet active':'Wallet inactive'}</h2><p>Available balance</p><strong>${escape(walletMoney(available,w.currency))}</strong></div><dl><div><dt>Reserved</dt><dd>${escape(walletMoney(w.reserved_micros,w.currency))}</dd></div><div><dt>Total balance</dt><dd>${escape(walletMoney(w.balance_micros,w.currency))}</dd></div><div><dt>Message rate</dt><dd>USD 0.0035</dd></div></dl></section>
+      <section class="wp-wallet-panel"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Usage register</span><h2>Wallet activity</h2><p>Review message charges, balance movements and recharge evidence. Reserved amounts remain held until delivery reconciliation.</p></div></div><form data-wallet-filters><label>Register <select name="register"><option value="usage">Message usage</option><option value="ledger">Wallet journal</option><option value="recharges">Recharges</option></select></label>
       <label>Number <select name="connectionId"><option value="">All numbers</option>${connections.map(c=>`<option value="${escape(c.id)}">${escape(c.display_phone_number || c.phone_number_id || c.id)}</option>`).join('')}</select></label>
       <label>Direction <select name="direction"><option value="">Both</option><option value="inbound">Incoming</option><option value="outbound">Outgoing</option></select></label>
       <label>Message status <select name="state"><option value="">All statuses</option><option value="reserved">Reserved</option><option value="accepted">Accepted</option><option value="uncertain">Needs reconciliation</option><option value="charged">Charged</option><option value="failed">Failed</option><option value="released">Released</option></select></label>
@@ -66,7 +64,7 @@ export async function mountWalletView(host,request,connections=[],options={}) {
       <p data-wallet-status role="status"></p><div data-wallet-table style="overflow-x:auto"></div>
       <button type="button" data-wallet-prev class="wp-secondary">Previous</button> <button type="button" data-wallet-next class="wp-secondary">Next</button>
       <button type="button" data-wallet-export class="wp-secondary">Download this page (CSV)</button>
-      <p><small>Recharge credit becomes spendable only after verified payment capture. GST and gateway charges are not spendable credit. A dash means no recorded amount, not zero. CSV _minor amounts use the recorded currency decimals; _micros are millionths. Dates are UTC. CSV includes the displayed page only.</small></p>`;
+      <p class="wp-wallet-footnote"><small>Recharge credit becomes spendable only after verified payment capture. GST and gateway charges are not spendable credit. A dash means no recorded amount, not zero. CSV _minor amounts use the recorded currency decimals; _micros are millionths. Dates are UTC. CSV includes the displayed page only.</small></p></section>`;
     const form=host.querySelector('form'),status=host.querySelector('[data-wallet-status]');
     const load=async()=>{
       if (busy) return;busy=true;
@@ -99,5 +97,5 @@ export async function mountWalletView(host,request,connections=[],options={}) {
     await load();
     if (host.isConnected) mountCurrency();
     if (host.isConnected && options.mountRecharge) options.mountRecharge(host,summary);
-  } catch(error) {host.innerHTML=`<p role="alert">${escape(error.message || 'Wallet could not be loaded.')}</p>`;}
+  } catch(error) {host.innerHTML=`<div class="wp-wallet-empty" role="alert"><span aria-hidden="true">!</span><div><strong>Wallet controls are not active yet</strong><p>${escape(error.message || 'Wallet could not be loaded.')}</p></div></div>`;}
 }
