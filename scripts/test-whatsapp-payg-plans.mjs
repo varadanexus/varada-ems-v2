@@ -1,0 +1,35 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync(new URL('../new-ems/shared/whatsapp-payg-plans.js',import.meta.url),'utf8');
+const {renderPaygBillingOverview,renderPaygCapacityAddons,renderPaygPlans}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+for(const status of ['active','cancelled','completed']) {
+  const html=renderPaygPlans({subscription:{status,package_code:'<script>bad</script>'}});
+  assert.match(html,/USD 0.0035/);
+  assert.match(html,/activation pending/i);
+  assert.match(html,/disabled>Recharge/);
+  assert.match(html,new RegExp(`Status: ${status}`));
+  assert.ok(!html.includes('<script>'));
+  assert.ok(!html.includes('data-billing-subscribe'));
+}
+assert.match(renderPaygPlans({entitlement:{state:'pay_per_use'}}),/Pay-per-use access enabled/);
+const pendingOverview=renderPaygBillingOverview({mode:'test',subscription:{status:'cancelled',package_code:'Launch'},invoices:[{}],payments:[{}],creditNotes:[{}]});
+assert.match(pendingOverview,/Pay-per-use billing/);
+assert.match(pendingOverview,/Setup pending/);
+assert.match(pendingOverview,/Previous billing record/);
+assert.ok(!pendingOverview.includes('No Paid Subscription'));
+assert.ok(!pendingOverview.includes('Choose a plan'));
+assert.ok(!pendingOverview.includes('Trial completed'));
+const addonHtml=renderPaygCapacityAddons({checkoutAddons:[{code:'extra_agent_seat',name:'Extra seat',unit_amount:100,currency:'INR'}]});
+assert.match(addonHtml,/Capacity add-ons/);
+assert.match(addonHtml,/Core platform features stay included/);
+assert.match(addonHtml,/Available after wallet activation/);
+assert.ok(!addonHtml.includes('subscription plan'));
+const portal=fs.readFileSync(new URL('../new-ems/shared/page-whatsapp-platform-portal.js',import.meta.url),'utf8');
+assert.match(portal,/if \(view === "billing-plans"\) return renderPaygPlans/);
+assert.match(portal,/if \(view === "billing"\) return renderPaygBillingOverview/);
+assert.match(portal,/if \(view === "billing-addons"\) return renderPaygCapacityAddons/);
+assert.match(portal,/"billing-plans": "Pay per use"/);
+assert.match(portal,/"billing-addons": "Capacity add-ons"/);
+assert.match(portal,/Billing model<\/span><strong>Pay per use/);
+assert.match(portal,/return renderPaygPlans\(workspaceBilling \|\| \{\}\);/);
+console.log('PASS: billing, pricing and capacity routes use PAYG presentation without enabling payments');
