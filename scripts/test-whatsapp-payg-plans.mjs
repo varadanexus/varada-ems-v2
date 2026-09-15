@@ -35,6 +35,14 @@ assert.ok(!ledgerHtml.includes('Trial completed'));
 assert.ok(!ledgerHtml.includes('No payments yet'));
 const portal=fs.readFileSync(new URL('../new-ems/shared/page-whatsapp-platform-portal.js',import.meta.url),'utf8');
 const portalHtml=fs.readFileSync(new URL('../new-ems/modules/whatsapp-platform-portal/index.html',import.meta.url),'utf8');
+const publicRouteRoot=fs.realpathSync(new URL('../whatsapp-platform/',import.meta.url));
+const publicRouteHtml=[];
+for(const entry of fs.readdirSync(publicRouteRoot,{recursive:true,withFileTypes:true})) {
+  if(entry.isFile() && entry.name==='index.html') {
+    const candidate=fs.readFileSync(`${entry.parentPath}/${entry.name}`,'utf8');
+    if(candidate.includes('/new-ems/shared/page-whatsapp-platform-portal.js?v=')) publicRouteHtml.push(candidate);
+  }
+}
 assert.match(portal,/if \(view === "billing-plans"\) return renderWalletManagementPage/);
 assert.match(portal,/if \(view === "billing"\) return renderPaygBillingOverview/);
 assert.match(portal,/if \(view === "billing-addons"\) return renderPaygCapacityAddons/);
@@ -48,4 +56,6 @@ assert.match(portal,/if \(view === "checkout"\) \{[\s\S]*?workspacePath\("billin
 assert.doesNotMatch(portal,/workspacePath\("billing-plans"\)\}\$\{location\.search\}/);
 assert.match(portal,/\$\{escapeHtml\(operationalPackageName\)\} billing/);
 assert.match(portalHtml,/page-whatsapp-platform-portal\.js\?v=174/);
+assert.equal(publicRouteHtml.length,29);
+assert.ok(publicRouteHtml.every(html=>html.includes('/new-ems/shared/page-whatsapp-platform-portal.js?v=174')));
 console.log('PASS: billing, wallet management, payment ledger and capacity routes use PAYG presentation without enabling payments');
