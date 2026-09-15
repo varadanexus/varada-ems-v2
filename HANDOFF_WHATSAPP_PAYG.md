@@ -913,3 +913,12 @@ genuinely missing business decisions or account access.
 - A fresh full `node scripts/check-whatsapp-payg.cjs` run passes. The isolated message-price fixture was moved to 2099-2101 so advancing wall-clock time cannot accidentally activate its customer-specific USD 0.0028 test override; production/default pricing remains USD 0.0035.
 - Razorpay's existing dashboard tab could not be read during this checkpoint because the Chrome control bridge timed out before returning page state. No Razorpay setting, order, payment or balance was changed.
 - Remaining completion proof is one authenticated Razorpay Test Mode recharge through the customer wallet, followed by captured-payment webhook receipt, exact spendable wallet credit and ledger/recharge reconciliation. This is a financial action: immediately before opening/confirming the test payment, obtain the user's action-time confirmation. Do not create a duplicate for the existing unpaid saved intent, and do not enable live keys or live wallet charging.
+
+## 2026-09-15 checkpoint — PAYG-first EMS billing overview
+
+- A read-only Razorpay Dashboard check confirmed Test Mode is selected. Saved order `order_TZuFvBZP3fSzhJ` is INR 1,208.52, status `Created`, has zero attempts and no payments, and carries only the expected `mode=test` / `purpose=varada_service_advance` ownership notes. It remains the pending test-payment boundary; no payment was initiated.
+- The live anonymous pricing RPC independently returned USD rate micros `3500` and failed-processing micros `700`, with the current global version valid until 2036.
+- The authenticated EMS Billing Overview still contained misleading current-model labels for `Active subscriptions` and `Recent subscriptions`. It now leads with active wallets, metered messages, captured wallet recharges, uncertain usage, finance alerts and read-only legacy-record counts.
+- The Billing Overview now shows recent customer-wallet balances/reservations and recent prepaid recharge orders. Historical subscription rows remain available only through `Legacy billing records`; they are not presented as current packages or subscriptions.
+- `whatsapp-platform-admin-secrets` now returns tenant-labelled wallet and recharge rows plus exact wallet/recharge/usage counts for the PAYG dashboard. Its canonical function was redeployed after the change.
+- Full `node scripts/check-whatsapp-payg.cjs` passes, including a new guard that rejects reintroducing active/recent subscription language into the current Billing Overview.

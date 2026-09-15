@@ -366,7 +366,7 @@ Deno.serve(async (req) => {
       return json(req, { success: true, requestId, tenantId, status: "pending", scheduledFor, reversibleUntil: scheduledFor });
     }
     if (action === "billing_snapshot") {
-      const [{ data: tenants, error: tenantError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentError }, { data: invoices, error: invoiceError }, { data: refunds, error: refundError }, { data: creditNotes, error: creditError }, { data: refundRequests, error: requestError }, { data: webhookErrors, error: webhookError }] = await Promise.all([
+      const [{ data: tenants, error: tenantError }, { data: subscriptions, error: subscriptionError }, { data: payments, error: paymentError }, { data: invoices, error: invoiceError }, { data: refunds, error: refundError }, { data: creditNotes, error: creditError }, { data: refundRequests, error: requestError }, { data: webhookErrors, error: webhookError }, { data: wallets, error: walletError }, { data: recharges, error: rechargeError, count: rechargeCount }, { count: capturedRechargeCount, error: capturedRechargeError }, { count: usageCount, error: usageCountError }, { count: uncertainUsageCount, error: uncertainUsageError }] = await Promise.all([
         admin.from("whatsapp_platform_tenants").select("id,name,plan_code,status"),
         admin.from("whatsapp_platform_billing_subscriptions").select("id,tenant_id,package_code,billing_interval,status,paid_count,remaining_count,current_start,current_end,charge_at,cancel_at_cycle_end,activated_at,cancelled_at,safe_metadata,created_at").order("created_at", { ascending: false }).limit(250),
         admin.from("whatsapp_platform_billing_payments").select("id,tenant_id,subscription_id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").order("created_at", { ascending: false }).limit(500),
@@ -375,8 +375,13 @@ Deno.serve(async (req) => {
         admin.from("whatsapp_platform_billing_credit_notes").select("id,tenant_id,invoice_id,refund_id,credit_note_number,document_environment,credit_note_date,status,currency,total_paise,reason,provider_refund_id,provider_payment_id,provider_invoice_id,issued_at").order("credit_note_date", { ascending: false }).limit(500),
         admin.from("whatsapp_platform_billing_refund_requests").select("id,tenant_id,payment_id,amount_paise,currency,reason,status,provider_refund_id,provider_error,expires_at,submitted_at,completed_at,created_at").order("created_at", { ascending: false }).limit(500),
         admin.from("whatsapp_platform_billing_webhook_events").select("id,provider_event_id,event_type,received_at,processing_error").not("processing_error", "is", null).order("received_at", { ascending: false }).limit(100),
+        admin.from("whatsapp_platform_wallets").select("tenant_id,mode,currency,enabled,balance_micros,reserved_micros,minimum_available_usd_micros,low_balance_usd_micros,minimum_topup_usd_micros,enabled_at,updated_at").order("updated_at", { ascending: false }).limit(250),
+        admin.from("whatsapp_platform_wallet_recharges").select("id,tenant_id,mode,currency,currency_exponent,amount_minor,credit_amount_minor,credit_micros,provider_order_id,provider_payment_id,state,captured_at,created_at", { count: "exact" }).order("created_at", { ascending: false }).limit(250),
+        admin.from("whatsapp_platform_wallet_recharges").select("id", { count: "exact", head: true }).eq("state", "captured"),
+        admin.from("whatsapp_platform_wallet_usage").select("id", { count: "exact", head: true }),
+        admin.from("whatsapp_platform_wallet_usage").select("id", { count: "exact", head: true }).eq("state", "uncertain"),
       ]);
-      if (tenantError) throw tenantError; if (subscriptionError) throw subscriptionError; if (paymentError) throw paymentError; if (invoiceError) throw invoiceError; if (refundError) throw refundError; if (creditError) throw creditError; if (requestError) throw requestError; if (webhookError) throw webhookError;
+      if (tenantError) throw tenantError; if (subscriptionError) throw subscriptionError; if (paymentError) throw paymentError; if (invoiceError) throw invoiceError; if (refundError) throw refundError; if (creditError) throw creditError; if (requestError) throw requestError; if (webhookError) throw webhookError; if (walletError) throw walletError; if (rechargeError) throw rechargeError; if (capturedRechargeError) throw capturedRechargeError; if (usageCountError) throw usageCountError; if (uncertainUsageError) throw uncertainUsageError;
       const tenantMap = new Map((tenants || []).map((tenant: any) => [tenant.id, tenant]));
       const subscriptionMap = new Map((subscriptions || []).map((item: any) => [item.id, item]));
       const invoiceByPayment = new Map((invoices || []).map((item: any) => [item.payment_id, item]));
@@ -392,6 +397,8 @@ Deno.serve(async (req) => {
       const safeInvoices = (invoices || []).map((item: any) => ({ ...item, tenant_name: tenantMap.get(item.tenant_id)?.name || "Unknown workspace" }));
       const safeRefunds = (refunds || []).map((item: any) => ({ ...item, tenant_name: tenantMap.get(item.tenant_id)?.name || "Unknown workspace", credit_note_number: creditByRefund.get(item.id)?.credit_note_number || null }));
       const safeCredits = (creditNotes || []).map((item: any) => ({ ...item, tenant_name: tenantMap.get(item.tenant_id)?.name || "Unknown workspace" }));
+      const safeWallets = (wallets || []).map((item: any) => ({ ...item, tenant_name: tenantMap.get(item.tenant_id)?.name || "Unknown workspace" }));
+      const safeRecharges = (recharges || []).map((item: any) => ({ ...item, tenant_name: tenantMap.get(item.tenant_id)?.name || "Unknown workspace" }));
       const capturedRevenuePaise = safePayments.filter((item: any) => item.captured && item.status === "captured").reduce((total: number, item: any) => total + Number(item.amount_paise || 0), 0);
       const issuedInvoicePaise = safeInvoices.filter((item: any) => item.status !== "void").reduce((total: number, item: any) => total + Number(item.total_paise || 0), 0);
       const issuedCreditPaise = safeCredits.filter((item: any) => item.status !== "void").reduce((total: number, item: any) => total + Number(item.total_paise || 0), 0);
@@ -410,6 +417,13 @@ Deno.serve(async (req) => {
           pendingRefunds: safeRefunds.filter((item: any) => item.status === "pending").length,
           processedRefunds: safeRefunds.filter((item: any) => item.status === "processed").length,
           reconciliationAlerts: missingInvoices + missingCredits + (webhookErrors || []).length + staleRefundRequests,
+          wallets: safeWallets.length,
+          activeWallets: safeWallets.filter((item: any) => item.enabled).length,
+          recharges: Number(rechargeCount || 0),
+          capturedRecharges: Number(capturedRechargeCount || 0),
+          usageRecords: Number(usageCount || 0),
+          uncertainUsage: Number(uncertainUsageCount || 0),
+          legacySubscriptions: safeSubscriptions.length,
         },
         paygEnabled: env("WHATSAPP_PAYG_ENABLED") === "true",
         paygReadiness: {
@@ -421,6 +435,8 @@ Deno.serve(async (req) => {
           publicWebhookConfigured: Boolean(env("RAZORPAY_PUBLIC_WEBHOOK_URL")),
         },
         walletTenants: (tenants || []).map((tenant: any) => ({id:tenant.id,name:tenant.name})),
+        wallets: safeWallets,
+        recharges: safeRecharges,
         subscriptions: safeSubscriptions,
         payments: safePayments,
         invoices: safeInvoices,
