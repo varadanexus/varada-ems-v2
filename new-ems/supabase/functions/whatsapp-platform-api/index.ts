@@ -23,7 +23,7 @@ async function apiSession(admin: any, req: Request) {
   const match = authorization.match(/^Bearer\s+(vn_(?:test|live)_[a-f0-9]{8}_[a-f0-9]{48})$/i);
   if (!match) throw new Error("UNAUTHORIZED");
   const { data: key, error } = await admin.from("whatsapp_platform_api_keys")
-    .select("id,tenant_id,scopes,status,expires_at").eq("token_hash", await sha256(match[1])).eq("status", "active").maybeSingle();
+    .select("id,tenant_id,scopes,status,expires_at,connection_id").eq("token_hash", await sha256(match[1])).eq("status", "active").maybeSingle();
   if (error || !key || (key.expires_at && new Date(key.expires_at).getTime() <= Date.now())) throw new Error("UNAUTHORIZED");
   await admin.from("whatsapp_platform_api_keys").update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", key.id);
   return { ...key, token: match[1] };
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
         .select("integration_id,name,language,category,status,content_type,components,connection_id,updated_at")
         .eq("tenant_id", session.tenant_id).order("updated_at", { ascending: false }).limit(500);
       const statusFilter = String(url.searchParams.get("status") || "").trim().toUpperCase();
-      const connectionFilter = String(url.searchParams.get("connectionId") || "").trim();
+      const connectionFilter = session.connection_id || String(url.searchParams.get("connectionId") || "").trim();
       if (statusFilter) query = query.eq("status", statusFilter);
       if (connectionFilter) query = query.eq("connection_id", connectionFilter);
       const { data, error } = await query;
@@ -116,13 +116,15 @@ Deno.serve(async (req) => {
       requireScope(session, "messages:write");
       const parsed = await body(req);
       action = parsed.value.conversationId && parsed.value.text ? "send_text" : "start_chat";
+      const stableKey = String(req.headers.get("idempotency-key") || parsed.value.requestKey || "").trim();
+      if (stableKey) parsed.value.requestKey = `api:${await sha256(`${session.id}:${stableKey}`)}`;
       result = await idempotent(admin, session, req, parsed.raw, () => internalAction(session, action, parsed.value));
     } else if (req.method === "GET" && path === "/v1/flows") {
       action = "list_flows"; requireScope(session, "messages:write");
       let query = admin.from("whatsapp_platform_flows")
         .select("id,connection_id,name,status,trigger_type,trigger_config,updated_at")
         .eq("tenant_id", session.tenant_id).eq("status", "active").order("updated_at", { ascending: false }).limit(250);
-      const connectionFilter = String(url.searchParams.get("connectionId") || "").trim();
+      const connectionFilter = session.connection_id || String(url.searchParams.get("connectionId") || "").trim();
       const triggerFilter = String(url.searchParams.get("triggerType") || "").trim();
       if (connectionFilter) query = query.eq("connection_id", connectionFilter);
       if (triggerFilter) query = query.eq("trigger_type", triggerFilter);
@@ -146,12 +148,12 @@ Deno.serve(async (req) => {
       action = "get_message"; requireScope(session, "messages:write");
       const messageId = path.split("/").pop();
       const { data, error } = await admin.from("whatsapp_platform_messages").select("id,meta_message_id,conversation_id,connection_id,contact_id,direction,message_type,body,status,error_code,error_title,provider_timestamp,created_at,updated_at").eq("id", messageId).eq("tenant_id", session.tenant_id).maybeSingle();
-      result = error || !data ? { status: 404, payload: { error: "Message not found." } } : { status: 200, payload: { message: data } };
+      result = error || !data || (session.connection_id && data.connection_id!==session.connection_id) ? { status: 404, payload: { error: "Message not found." } } : { status: 200, payload: { message: data } };
     } else if (req.method === "GET" && path === "/v1/numbers") {
       action = "list_numbers"; requireScope(session, "messages:write");
       const { data, error } = await admin.from("whatsapp_platform_connections").select("id,display_phone_number,verified_name,status,onboarding_metadata,updated_at").eq("tenant_id", session.tenant_id).order("updated_at", { ascending: false });
       if (error) throw error;
-      result = { status: 200, payload: { numbers: (data || []).map((item: any) => ({
+      result = { status: 200, payload: { numbers: (data || []).filter((item: any)=>!session.connection_id || item.id===session.connection_id).map((item: any) => ({
         id: item.id,
         displayPhoneNumber: item.display_phone_number,
         verifiedName: item.verified_name,
@@ -162,7 +164,7 @@ Deno.serve(async (req) => {
     } else if (req.method === "GET" && path === "/v1/requests") {
       action = "list_requests";
       const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "25", 10) || 25));
-      const { data, error } = await admin.from("whatsapp_platform_api_requests").select("request_id,method,path,action,response_status,duration_ms,error_code,created_at").eq("tenant_id", session.tenant_id).order("created_at", { ascending: false }).limit(limit);
+      const { data, error } = await admin.from("whatsapp_platform_api_requests").select("request_id,method,path,action,response_status,duration_ms,error_code,created_at").eq("tenant_id", session.tenant_id).eq("api_key_id",session.id).order("created_at", { ascending: false }).limit(limit);
       if (error) throw error;
       result = { status: 200, payload: { requests: data || [] } };
     } else {

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {stripTypeScriptTypes} from 'node:module';
+const source=await readFile(new URL('../new-ems/supabase/functions/_shared/whatsapp-api-number-scope.ts',import.meta.url),'utf8');
+const {enforceApiNumber}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+const customer={auth_kind:'api_key',api_connection_id:'number-a',tenant_id:'tenant-a'};
+let number='number-a';
+const admin={from(){const q={select(){return q;},eq(){return q;},async maybeSingle(){return {data:{connection_id:number}};}};return q;}};
+const body={};await enforceApiNumber(admin,customer,'start_chat',body);assert.equal(body.connectionId,'number-a');
+await assert.rejects(enforceApiNumber(admin,customer,'start_chat',{connectionId:'number-b'}),/another/);
+await enforceApiNumber(admin,customer,'send_text',{conversationId:'conversation-a'});
+number='number-b';await assert.rejects(enforceApiNumber(admin,customer,'send_text',{}),/conversation/);
+await assert.rejects(enforceApiNumber(admin,customer,'list_contacts',{}),/workspace-wide/);
+await enforceApiNumber(admin,{auth_kind:'api_key'},'list_contacts',{});
+console.log('PASS: number-scoped send/conversation guards and explicit legacy workspace scope');

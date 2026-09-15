@@ -3,6 +3,7 @@
 // Provider credentials are encrypted server-side and are never returned.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { platformEntitlement } from "../_shared/whatsapp-payg-access.ts";
 import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const MAX_BODY_BYTES = 24 * 1024;
@@ -89,7 +90,7 @@ async function customerSession(admin: any, tokenValue: unknown) {
   return row;
 }
 async function billingEntitlement(admin: any, customer: any) {
-  const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+  const { data, error } = await platformEntitlement(admin,customer.tenant_id,env("WHATSAPP_PAYG_ENABLED")==="true",env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase());
   if (error) throw error;
   return data || { allowed: false, state: "payment_required", reason: "Billing access could not be verified." };
 }
@@ -275,25 +276,25 @@ async function configurationStatus(admin: any, customer: any) {
   const version = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
   const entitlement = await billingEntitlement(admin, customer);
   let numberCapacity: any = null;
-  let connections: any[] = [];
   if (entitlement.allowed) {
     numberCapacity = await reconcileNumberCapacity(admin, customer);
-    const { data, error } = await admin
+  }
+  // Billing controls usage, not visibility of the customer's existing assets.
+  // Never reconcile/mutate capacity while billing access is inactive.
+  const { data: connections, error } = await admin
       .from("whatsapp_platform_connections")
       .select("id,status,meta_business_id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
       .eq("tenant_id", customer.tenant_id)
       .neq("status", "disconnected")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    connections = data || [];
-  }
   return {
     configured: Boolean(appId && appSecret && configurationId && /^v\d{1,3}\.0$/.test(version)),
     publicAppId: appId || null,
     publicConfigurationId: configurationId || null,
     publicGraphVersion: /^v\d{1,3}\.0$/.test(version) ? version : null,
     environment: env("WHATSAPP_PLATFORM_META_PRODUCTION_READY") === "true" ? "production" : "testing",
-    connections,
+    connections: connections || [],
     entitlement,
     numberCapacity,
   };

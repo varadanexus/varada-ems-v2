@@ -4,7 +4,7 @@ const source=fs.readFileSync(new URL('../new-ems/shared/whatsapp-payg-plans.js',
 const {renderPaygBillingOverview,renderPaygCapacityAddons,renderWalletManagementPage}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 for(const status of ['active','cancelled','completed']) {
   const html=renderWalletManagementPage({subscription:{status,package_code:'<script>bad</script>'}});
-  assert.match(html,/USD 0.0035/);
+  assert.match(html,/data-wallet-page-rate>Loading/);
   assert.match(html,/activation pending/i);
   assert.match(html,/Wallet &amp; payments/);
   assert.match(html,/data-wallet-management-host/);

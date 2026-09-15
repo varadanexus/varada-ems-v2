@@ -738,6 +738,8 @@ function updateWalletTopbar(summary) {
   const value = walletAvailableLabel();
   amount.textContent = value.amount;
   link.setAttribute("aria-label", `Open Wallet and payments. Available balance ${value.amount}`);
+  const pageRate = app.querySelector("[data-wallet-page-rate]");
+  if (pageRate) pageRate.textContent = `USD ${summary?.servicePriceUsd || '—'}`;
 }
 
 async function refreshWorkspaceNotifications({ updateDom = false } = {}) {

@@ -4,6 +4,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
+import { walletBilling } from "../_shared/whatsapp-wallet-billing.ts";
+import { paygTransitionReport } from "../_shared/whatsapp-payg-transition.ts";
+import { walletRechargeQuote } from "../_shared/whatsapp-wallet-recharge-quote.ts";
+import { platformEntitlement } from "../_shared/whatsapp-payg-access.ts";
+import { paygAddonQuote } from "../_shared/whatsapp-payg-addons.ts";
 
 const MAX_BODY_BYTES = 512 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
@@ -30,6 +35,14 @@ const DEFAULT_ISSUER = {
 };
 
 function env(name: string) { return Deno.env.get(name) || ""; }
+function proxyTokenMatches(received: string, expected: string) {
+  const actual = new TextEncoder().encode(received);
+  const wanted = new TextEncoder().encode(expected);
+  let difference = actual.length ^ wanted.length;
+  const length = Math.max(actual.length, wanted.length);
+  for (let index = 0; index < length; index += 1) difference |= (actual[index % (actual.length || 1)] || 0) ^ (wanted[index % (wanted.length || 1)] || 0);
+  return difference === 0;
+}
 function adminClient() { return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } }); }
 function fromBase64Url(value: string) {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
@@ -442,16 +455,23 @@ async function decryptSecret(value: string, context: string) {
   );
   return new TextDecoder().decode(decrypted);
 }
+function razorpayKeyMode(keyId: unknown): "live" | "test" | "" {
+  const value = String(keyId || "").trim();
+  if (value.startsWith("rzp_live_")) return "live";
+  if (value.startsWith("rzp_test_")) return "test";
+  return "";
+}
 async function loadRazorpaySecrets(admin: any) {
   const { data, error } = await admin.from("whatsapp_platform_provider_settings").select("setting_key,encrypted_value").in("setting_key", ["razorpay_key_id", "razorpay_key_secret", "razorpay_webhook_secret"]);
   if (error) throw error;
   const values: Record<string, string> = {};
   for (const row of data || []) values[row.setting_key] = await decryptSecret(row.encrypted_value, row.setting_key);
-  return {
-    keyId: values.razorpay_key_id || env("RAZORPAY_KEY_ID"),
-    keySecret: values.razorpay_key_secret || env("RAZORPAY_KEY_SECRET"),
-    webhookSecret: values.razorpay_webhook_secret || env("RAZORPAY_WEBHOOK_SECRET"),
-  };
+  const stored = { keyId: values.razorpay_key_id, keySecret: values.razorpay_key_secret, webhookSecret: values.razorpay_webhook_secret };
+  const configured = { keyId: env("RAZORPAY_KEY_ID"), keySecret: env("RAZORPAY_KEY_SECRET"), webhookSecret: env("RAZORPAY_WEBHOOK_SECRET") };
+  const expectedMode = env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase();
+  if (razorpayKeyMode(configured.keyId) === expectedMode && configured.keySecret) return configured;
+  if (razorpayKeyMode(stored.keyId) === expectedMode && stored.keySecret) return stored;
+  return stored.keyId && stored.keySecret ? stored : configured;
 }
 function isLoopback(origin: string) {
   try { const url = new URL(origin); return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) && ["http:", "https:"].includes(url.protocol); }
@@ -584,7 +604,7 @@ async function customerSession(admin: any, tokenValue: unknown) {
   if (!row?.tenant_id || !row?.user_id) throw new Error("Unauthorized");
   return row;
 }
-async function staffSession(req: Request) {
+async function staffSession(req: Request, requireFullAuthority = false) {
   const authorization = req.headers.get("authorization") || "";
   if (!authorization.startsWith("Bearer ")) throw new Error("Authentication required.");
   const caller = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: authorization } } });
@@ -592,6 +612,7 @@ async function staffSession(req: Request) {
     caller.rpc("current_app_user_id"), caller.rpc("has_full_system_authority"), caller.rpc("has_permission", { module_code: "whatsapp-platform", action_code: "edit" }),
   ]);
   if (!appUserId || !(full === true || canEdit === true)) throw new Error("WhatsApp Platform billing edit access is required.");
+  if (requireFullAuthority && full !== true) throw new Error("Full billing authority is required for wallet administration.");
   return { id: appUserId };
 }
 function zeptoAuthorization() { const raw = env("ZEPTO_SEND_MAIL_TOKEN").trim(); if (!raw) throw new Error("Email delivery is not configured."); return raw.toLowerCase().startsWith("zoho-enczapikey") ? raw : `Zoho-enczapikey ${raw}`; }
@@ -640,7 +661,26 @@ function timingSafeHexEqual(expected: string, received: string) {
   return difference === 0;
 }
 function billingMode(credentials: any): "live" | "test" {
-  return credentials?.keyId?.startsWith("rzp_live_") ? "live" : "test";
+  return razorpayKeyMode(credentials?.keyId) === "live" ? "live" : "test";
+}
+function walletService(admin: any, credentials: any) {
+  const configuredMode = env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase();
+  if (!["live", "test"].includes(configuredMode) || configuredMode !== billingMode(credentials)) {
+    throw new Error("Wallet billing mode and Razorpay credentials do not match. Checkout is paused.");
+  }
+  return walletBilling({ admin, mode: billingMode(credentials), keyId: credentials.keyId,
+    resolveQuote: async (customer: any, wallet: any, amountMinor: number, discountMinor = 0) => {
+      const now = new Date().toISOString();
+      const {data,error}=await admin.from("whatsapp_platform_wallet_charge_policies").select("*")
+        .eq("tenant_id",customer.tenant_id).eq("mode",configuredMode).eq("currency",wallet.currency)
+        .lte("valid_from",now).gt("valid_until",now).limit(2);
+      if(error)throw error;
+      if(data?.length!==1)throw new Error("A unique verified tax and gateway policy is required for this workspace.");
+      return walletRechargeQuote(amountMinor,{...data[0].policy,id:data[0].id,currency:wallet.currency},discountMinor);
+    },
+    checkoutEnabled: env("WHATSAPP_WALLET_CHECKOUT_ENABLED") === "true",
+    gateway: (path: string, init: RequestInit = {}) => razorpayRequest(path, init, credentials),
+    hmac: (value: string) => hmacSha256(credentials.keySecret, value), equal: timingSafeHexEqual });
 }
 function assertSubscriptionMode(subscription: any, credentials: any) {
   const subscriptionMode = subscription?.safe_metadata?.mode === "live" ? "live" : "test";
@@ -830,7 +870,7 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
     admin.from("whatsapp_platform_billing_subscriptions").select("id,package_code,billing_interval,subscription_kind,addon_code,addon_quantity,parent_subscription_id,status,quantity,paid_count,remaining_count,short_url,current_start,current_end,charge_at,ended_at,cancel_at_cycle_end,checkout_verified_at,activated_at,cancelled_at,package_price_version_id,recurring_base_paise,gst_rate_bps,safe_metadata,created_at").eq("tenant_id", customer.tenant_id).eq("safe_metadata->>mode", mode).order("created_at", { ascending: false }).limit(50),
     admin.from("whatsapp_platform_billing_payments").select("id,provider_payment_id,provider_invoice_id,amount_paise,currency,status,captured,payment_method,paid_at,created_at").eq("tenant_id", customer.tenant_id).eq("safe_metadata->>mode", mode).order("created_at", { ascending: false }).limit(20),
     admin.from("whatsapp_platform_billing_renewal_price_changes").select("id,subscription_id,replacement_subscription_id,from_price_version_id,target_price_version_id,effective_at,status,notice_version,notice_shown_at,decided_at,created_at").eq("tenant_id", customer.tenant_id).in("status", ["pending_consent", "accepted", "processing", "failed"]).order("created_at", { ascending: false }),
-    admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id }),
+    platformEntitlement(admin,customer.tenant_id,env("WHATSAPP_PAYG_ENABLED")==="true",env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase()),
     admin.from("whatsapp_platform_billing_invoices").select("id,invoice_number,document_environment,invoice_date,status,currency,base_subtotal_paise,discount_paise,taxable_base_paise,gst_rate_bps,gst_paise,gateway_adjustment_paise,total_paise,provider_invoice_id,provider_payment_id,package_code,billing_interval,billing_name,billing_email,billing_gstin,billing_address,issuer_snapshot,line_items,issued_at").eq("tenant_id", customer.tenant_id).eq("document_environment", mode).order("invoice_date", { ascending: false }).limit(50),
     admin.from("whatsapp_platform_billing_credit_notes").select("id,invoice_id,credit_note_number,document_environment,credit_note_date,status,currency,taxable_base_paise,gst_paise,gateway_adjustment_paise,total_paise,reason,provider_refund_id,provider_payment_id,provider_invoice_id,issued_at").eq("tenant_id", customer.tenant_id).eq("document_environment", mode).order("credit_note_date", { ascending: false }).limit(50),
     admin.rpc("whatsapp_platform_trial_eligibility", { p_tenant_id: customer.tenant_id }),
@@ -1016,8 +1056,9 @@ async function billingSummary(admin: any, customer: any, credentials: any) {
   } : null;
   return {
     configured: razorpayConfigured(credentials), keyId: razorpayConfigured(credentials) ? credentials.keyId : "",
+    paygEnabled: env("WHATSAPP_PAYG_ENABLED") === "true",
     mode,
-    webhookUrl: `${env("SUPABASE_URL")}/functions/v1/whatsapp-platform-billing?webhook=razorpay`,
+    webhookUrl: env("RAZORPAY_PUBLIC_WEBHOOK_URL") || null,
     packages: publicPackages, checkoutAddons: checkoutAddons || [], subscription: publicSubscription, addonSubscriptions: publicAddonSubscriptions, planAddonRemoval, payments: payments || [], invoices: invoices || [], creditNotes: creditNotes || [], renewalPriceChanges: publicRenewalChanges, entitlement, trialEligibility,
     customer: { name: customer.display_name || customer.company_name || "", email: customer.email || "", companyName: customer.company_name || "" },
   };
@@ -1430,6 +1471,7 @@ async function verifyCheckout(admin: any, customer: any, body: any, credentials:
   await bindPaymentIntentEvidence(admin, subscription, payment);
   await upsertPayment(admin, subscription, payment);
   const synced = await syncSubscriptionEntity(admin, subscription, providerSubscription);
+  if (payment.captured === true) await finalizePaygStandaloneAddonPayment(admin, synced, payment, credentials, providerSubscription);
   const { error: verifyError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ checkout_verified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", subscription.id);
   if (verifyError) throw verifyError;
   await finalizeCheckoutQuote(admin, synced);
@@ -2101,6 +2143,73 @@ async function previewAddonChange(admin: any, customer: any, body: any, credenti
   const context = await addonChangeContext(admin, customer, body, credentials);
   return { addon: { code: context.addon.code, name: context.addon.name, unitName: context.addon.unit_name, quantityEnabled: context.addon.quantity_enabled !== false }, quote: context.quote };
 }
+async function createPaygStandaloneAddon(admin: any, customer: any, body: any, credentials: any) {
+  if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage capacity.");
+  const mode = billingMode(credentials);
+  const access = await platformEntitlement(admin, customer.tenant_id, true, mode);
+  if (access.error) throw access.error;
+  if (!access.data?.allowed || access.data.state !== "pay_per_use") throw new Error("An active pay-per-use workspace is required.");
+  const requestKey = String(body.requestKey || "").trim();
+  if (!/^[A-Za-z0-9_-]{16,100}$/.test(requestKey)) throw new Error("Valid capacity purchase request key required.");
+  const addonCode = cleanCode(body.addonCode, "add-on");
+  const quantity = Number(body.quantity);
+  const { data: existing, error: existingError } = await admin.from("whatsapp_platform_billing_subscriptions")
+    .select("*").eq("tenant_id", customer.tenant_id).eq("payg_standalone", true)
+    .eq("safe_metadata->>mode", mode).eq("safe_metadata->>payg_request_key", requestKey)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return { keyId: credentials.keyId, subscriptionId: existing.id, razorpaySubscriptionId: existing.provider_subscription_id, shortUrl: existing.short_url, addon: { code: existing.addon_code, quantity: existing.addon_quantity }, quote: existing.safe_metadata?.payg_quote || null, reused: true };
+  const { data: addon, error: addonError } = await admin.from("whatsapp_platform_addon_master").select("*").eq("code", addonCode).single();
+  if (addonError || !addon) throw addonError || new Error("Capacity add-on is unavailable.");
+  const quote = paygAddonQuote(addon, quantity, checkoutGrossPaise);
+  const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants").select("plan_code").eq("id", customer.tenant_id).single();
+  if (tenantError || !tenant) throw tenantError || new Error("Workspace package information is unavailable.");
+  const packageCode = tenant.plan_code === "starter" ? "launch" : tenant.plan_code;
+  const plan = await razorpayRequest("/plans", {
+    method: "POST",
+    body: JSON.stringify({
+      period: quote.billingInterval === "year" ? "yearly" : "monthly", interval: 1,
+      item: { name: `${quote.name} · Varada Nexus PAYG`.slice(0, 80), amount: quote.totalMinor, currency: quote.currency, description: "Standalone Varada Nexus PAYG capacity add-on" },
+      notes: { product: "Varada Nexus WhatsApp Solutions", tenant_id: customer.tenant_id, addon_code: quote.addonCode, subscription_kind: "addon", payg_standalone: true, mode, request_key: requestKey },
+    }),
+  }, credentials);
+  const planId = providerId(plan.id, "plan");
+  const totalCount = quote.billingInterval === "year" ? 10 : 120;
+  const created = await razorpayRequest("/subscriptions", {
+    method: "POST",
+    body: JSON.stringify({
+      plan_id: planId, total_count: totalCount, quantity: 1, customer_notify: true,
+      notes: { tenant_id: customer.tenant_id, package_code: packageCode, billing_interval: quote.billingInterval, addon_code: quote.addonCode, addon_quantity: quote.quantity, subscription_kind: "addon", payg_standalone: true, mode, request_key: requestKey },
+    }),
+  }, credentials);
+  const providerSubscriptionId = providerId(created.id, "sub");
+  const metadata = { subscription_kind: "addon", payg_standalone: true, addon_code: quote.addonCode, addon_quantity: quote.quantity, payg_request_key: requestKey, mode, payg_quote: quote };
+  try {
+    const { data: subscription, error } = await admin.from("whatsapp_platform_billing_subscriptions").insert({
+      tenant_id: customer.tenant_id, package_code: packageCode, billing_interval: quote.billingInterval,
+      subscription_kind: "addon", payg_standalone: true, addon_code: quote.addonCode, addon_quantity: quote.quantity,
+      provider_plan_id: planId, provider_subscription_id: providerSubscriptionId, status: String(created.status || "created").toLowerCase(),
+      quantity: 1, total_count: totalCount, paid_count: Number(created.paid_count || 0), remaining_count: created.remaining_count == null ? totalCount : Number(created.remaining_count),
+      short_url: created.short_url || null, charge_at: unixDate(created.charge_at), created_by_user_id: customer.user_id,
+      recurring_base_paise: quote.recurringBaseMinor, gst_rate_bps: 1800, safe_metadata: metadata,
+    }).select("*").single();
+    if (error || !subscription) throw error || new Error("PAYG capacity subscription could not be recorded.");
+    return { keyId: credentials.keyId, subscriptionId: subscription.id, razorpaySubscriptionId: providerSubscriptionId, shortUrl: created.short_url || null, addon: { code: quote.addonCode, name: quote.name, quantity: quote.quantity, unitName: addon.unit_name }, quote, reused: false };
+  } catch (error) {
+    // A concurrent request may have won the unique request-key insert after
+    // both calls created a provider subscription. Reuse the durable row and
+    // cancel only the losing provider subscription.
+    const { data: raced } = await admin.from("whatsapp_platform_billing_subscriptions")
+      .select("*").eq("tenant_id", customer.tenant_id).eq("payg_standalone", true)
+      .eq("safe_metadata->>mode", mode).eq("safe_metadata->>payg_request_key", requestKey).maybeSingle();
+    if (raced) {
+      await razorpayRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }) }, credentials).catch(() => null);
+      return { keyId: credentials.keyId, subscriptionId: raced.id, razorpaySubscriptionId: raced.provider_subscription_id, shortUrl: raced.short_url, addon: { code: raced.addon_code, quantity: raced.addon_quantity }, quote: raced.safe_metadata?.payg_quote || null, reused: true };
+    }
+    await razorpayRequest(`/subscriptions/${encodeURIComponent(providerSubscriptionId)}/cancel`, { method: "POST", body: JSON.stringify({ cancel_at_cycle_end: 0 }) }, credentials).catch(() => null);
+    throw error;
+  }
+}
 async function changeAddons(admin: any, customer: any, body: any, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
   const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
@@ -2272,6 +2381,36 @@ async function finalizeAddonChange(admin: any, replacementSubscription: any, cre
     throw error;
   }
 }
+async function finalizePaygStandaloneAddonPayment(admin: any, subscription: any, paymentEntity: any, credentials: any, providerSubscriptionEntity: any = null) {
+  if (!subscription?.payg_standalone || String(subscription.subscription_kind || "") !== "addon" || !paymentEntity?.id || paymentEntity.captured !== true) return { completed: false };
+  const paymentId = providerId(paymentEntity.id, "pay");
+  const mode = subscription.safe_metadata?.mode === "live" ? "live" : "test";
+  const metadata = subscription.safe_metadata || {};
+  if (metadata.capacity_period_recorded_at && metadata.capacity_period_payment_id === paymentId) return { completed: true, replayed: true };
+  const payment = await razorpayRequest(`/payments/${encodeURIComponent(paymentId)}`, {}, credentials);
+  if (payment.id !== paymentId || payment.status !== "captured" || payment.captured !== true) throw new Error("PAYG capacity payment is not captured.");
+  if (payment.subscription_id && providerId(payment.subscription_id, "sub") !== subscription.provider_subscription_id) throw new Error("PAYG capacity payment belongs to a different subscription.");
+  const expectedAmount = Number(metadata.payg_quote?.totalMinor || 0);
+  const amount = Number(payment.amount);
+  if (!Number.isSafeInteger(expectedAmount) || expectedAmount < 1 || amount !== expectedAmount) throw new Error("PAYG capacity payment amount does not match the quoted total.");
+  const currency = String(payment.currency || "").toUpperCase();
+  if (currency !== String(metadata.payg_quote?.currency || "").toUpperCase()) throw new Error("PAYG capacity payment currency does not match the quoted add-on.");
+  const providerSubscription = providerSubscriptionEntity || await razorpayRequest(`/subscriptions/${encodeURIComponent(subscription.provider_subscription_id)}`, {}, credentials);
+  if (providerSubscription.id !== subscription.provider_subscription_id) throw new Error("PAYG capacity subscription identity mismatch.");
+  const paidFrom = unixDate(providerSubscription.current_start);
+  const paidUntil = unixDate(providerSubscription.current_end);
+  if (!paidFrom || !paidUntil || new Date(paidUntil).getTime() <= new Date(paidFrom).getTime()) throw new Error("Razorpay did not return a finite PAYG capacity period.");
+  const { data: period, error } = await admin.rpc("whatsapp_payg_record_capacity_period", {
+    p_tenant: subscription.tenant_id, p_mode: mode, p_subscription: subscription.id, p_payment: paymentId,
+    p_from: paidFrom, p_until: paidUntil,
+    p_evidence: { status: "captured", paymentId, subscriptionId: subscription.provider_subscription_id, amountMinor: String(amount), currency, invoiceId: payment.invoice_id || null },
+  });
+  if (error) throw error;
+  const nextMetadata = { ...metadata, capacity_period_recorded_at: new Date().toISOString(), capacity_period_payment_id: paymentId, capacity_period_id: period?.id || null };
+  const { error: updateError } = await admin.from("whatsapp_platform_billing_subscriptions").update({ checkout_verified_at: nextMetadata.capacity_period_recorded_at, safe_metadata: nextMetadata, updated_at: nextMetadata.capacity_period_recorded_at }).eq("id", subscription.id).eq("payg_standalone", true);
+  if (updateError) throw updateError;
+  return { completed: true, period };
+}
 async function cancelSubscription(admin: any, customer: any, body: any, credentials: any) {
   if (!['owner', 'admin'].includes(customer.role_code)) throw new Error("Only workspace owners and administrators can manage billing.");
   const subscriptionId = cleanUuid(body.subscriptionId, "subscription");
@@ -2377,6 +2516,9 @@ async function processWebhook(admin: any, eventRecordId: string, payload: any, c
     const subscriptionEntity = payload?.payload?.subscription?.entity || null;
     const paymentEntity = payload?.payload?.payment?.entity || null;
     const refundEntity = payload?.payload?.refund?.entity || null;
+    if (env("WHATSAPP_PAYG_ENABLED") === "true" && paymentEntity?.status === "captured") {
+      await walletService(admin, credentials).capturedWebhook(paymentEntity);
+    }
     if (subscriptionEntity?.id) {
       const providerSubscriptionId = providerId(subscriptionEntity.id, "sub");
       const { data: subscription, error } = await admin.from("whatsapp_platform_billing_subscriptions").select("*").eq("provider_subscription_id", providerSubscriptionId).maybeSingle();
@@ -2387,11 +2529,29 @@ async function processWebhook(admin: any, eventRecordId: string, payload: any, c
           await bindPaymentIntentEvidence(admin, synced, paymentEntity);
           await upsertPayment(admin, synced, paymentEntity);
         }
+        if (paymentEntity?.id && paymentEntity.captured === true) {
+          await finalizePaygStandaloneAddonPayment(admin, synced, paymentEntity, credentials, subscriptionEntity);
+        }
         await finalizeCheckoutQuote(admin, synced);
         await finalizeProratedUpgrade(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
         await finalizeRenewalPriceChange(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
         await finalizeAddonChange(admin, synced, credentials, paymentEntity?.id ? providerId(paymentEntity.id, "pay") : null);
         await finalizePlanAddonRemoval(admin, synced, credentials);
+      }
+    }
+    // Razorpay can deliver payment.captured without a subscription entity.
+    // Recover standalone PAYG capacity by the payment's verified subscription
+    // identity instead of waiting for a second webhook shape.
+    if (!subscriptionEntity?.id && paymentEntity?.id && paymentEntity?.subscription_id && paymentEntity.captured === true) {
+      const standaloneProviderSubscriptionId = providerId(paymentEntity.subscription_id, "sub");
+      const { data: standalone, error: standaloneError } = await admin.from("whatsapp_platform_billing_subscriptions").select("*")
+        .eq("provider_subscription_id", standaloneProviderSubscriptionId).eq("payg_standalone", true).maybeSingle();
+      if (standaloneError) throw standaloneError;
+      if (standalone) {
+        const verifiedSubscription = await razorpayRequest(`/subscriptions/${encodeURIComponent(standaloneProviderSubscriptionId)}`, {}, credentials);
+        const syncedStandalone = await syncSubscriptionEntity(admin, standalone, verifiedSubscription);
+        await upsertPayment(admin, syncedStandalone, paymentEntity);
+        await finalizePaygStandaloneAddonPayment(admin, syncedStandalone, paymentEntity, credentials, verifiedSubscription);
       }
     }
     if (refundEntity?.id) await recordRefund(admin, refundEntity);
@@ -2407,6 +2567,8 @@ async function processWebhook(admin: any, eventRecordId: string, payload: any, c
   }
 }
 async function acceptWebhook(req: Request, raw: string) {
+  const proxyToken = env("RAZORPAY_WEBHOOK_PROXY_TOKEN");
+  if (proxyToken && !proxyTokenMatches(req.headers.get("x-varada-webhook-proxy") || "", proxyToken)) return json(req, { error: "Webhook proxy authorization failed" }, 401);
   const admin = adminClient();
   const credentials = await loadRazorpaySecrets(admin);
   const webhookSecret = credentials.webhookSecret;
@@ -2466,6 +2628,86 @@ Deno.serve(async (req) => {
     const admin = adminClient();
     requestAdmin = admin;
     const action = String(body.action || "summary");
+    if (action === "staff_wallet_publish_charge_policy") {
+      const staff=await staffSession(req,true);
+      if(env("WHATSAPP_PAYG_ENABLED")!=="true")throw new Error("Usage billing is not available yet.");
+      if(body.confirmed!==true)throw new Error("Verify the applicable tax and gateway policy before publishing.");
+      const mode=env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase();
+      if(!["test","live"].includes(mode))throw new Error("Wallet billing mode is not configured.");
+      const currency=String(body.currency || "").toUpperCase();
+      walletRechargeQuote(10000,{...body.policy,id:"validation",currency});
+      const {data,error}=await admin.rpc("whatsapp_wallet_publish_charge_policy",{
+        p_tenant:cleanUuid(body.tenantId,"customer workspace"),p_mode:mode,p_actor:staff.id,p_currency:currency,
+        p_policy:body.policy,p_reference:body.sourceReference,p_reason:body.reason,p_from:body.validFrom,p_until:body.validUntil,
+      });
+      if(error)throw error;
+      return json(req,{policy:data});
+    }
+    if (action === "staff_wallet_publish_fx") {
+      const staff=await staffSession(req,true);
+      if(env("WHATSAPP_PAYG_ENABLED")!=="true") throw new Error("Usage billing is not available yet.");
+      if(typeof body.unitsPerUsd!=="string" || !/^\d+(\.\d{1,8})?$/.test(body.unitsPerUsd)) throw new Error("Supply the exact exchange rate as a decimal string.");
+      const {data,error}=await admin.rpc("whatsapp_wallet_publish_fx",{
+        p_actor:staff.id,p_currency:String(body.currency || "").toUpperCase(),p_units_per_usd:body.unitsPerUsd,
+        p_valid_from:body.validFrom,p_valid_until:body.validUntil,p_source:body.source,p_reference:body.sourceReference,p_reason:body.reason,
+      });
+      if(error) throw error;
+      return json(req,{rate:data});
+    }
+    if (action === "staff_wallet_publish_message_price") {
+      const staff=await staffSession(req,true);
+      if(env("WHATSAPP_PAYG_ENABLED")!=="true") throw new Error("Usage billing is not available yet.");
+      if(body.confirmed!==true) throw new Error("Confirm the effective scope and message prices before publishing.");
+      const tenantId=body.scope==="global" ? null : cleanUuid(body.tenantId,"customer workspace");
+      for(const field of ["rateMicros","failedRateMicros"]) if(!Number.isSafeInteger(body[field])) throw new Error("Message prices must use integer USD micro-units.");
+      const {data,error}=await admin.rpc("whatsapp_wallet_publish_message_price",{
+        p_actor:staff.id,p_tenant:tenantId,p_rate:body.rateMicros,p_failed_rate:body.failedRateMicros,
+        p_from:body.validFrom,p_until:body.validUntil,p_reason:body.reason,
+      });
+      if(error) throw error;
+      return json(req,{price:data});
+    }
+    if (["staff_wallet_configure", "staff_wallet_snapshot"].includes(action)) {
+      const staff = await staffSession(req, true);
+      if (env("WHATSAPP_PAYG_ENABLED") !== "true") throw new Error("Usage billing is not available yet.");
+      const tenantId = cleanUuid(body.tenantId, "customer workspace");
+      const mode = env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase();
+      if (!["test", "live"].includes(mode)) throw new Error("Wallet billing mode is not configured.");
+      if (action === "staff_wallet_configure") {
+        for (const field of ["minimumAvailableUsdMicros", "lowBalanceUsdMicros", "minimumTopupUsdMicros"]) {
+          if (!Number.isSafeInteger(body[field])) throw new Error("Wallet thresholds must be integer USD micro-units.");
+        }
+        const { data, error } = await admin.rpc("whatsapp_wallet_configure", {
+          p_tenant: tenantId, p_mode: mode, p_actor: staff.id, p_currency: String(body.currency || "").toUpperCase(),
+          p_minimum_available: body.minimumAvailableUsdMicros, p_low_balance: body.lowBalanceUsdMicros,
+          p_minimum_topup: body.minimumTopupUsdMicros, p_reason: body.reason,
+        });
+        if (error) throw error;
+        return json(req, { wallet: data });
+      }
+      const tables = ["whatsapp_platform_wallets", "whatsapp_platform_wallet_config_audit", "whatsapp_platform_wallet_events",
+        "whatsapp_platform_wallet_charge_policies", "whatsapp_platform_wallet_auto_topup_audit"];
+      const results = await Promise.all(tables.map(table => {
+        let query = admin.from(table).select("*").eq("tenant_id", tenantId).eq("mode", mode);
+        if (table.endsWith("_events")) query = query.eq("processing_status", "pending");
+        return query.order("created_at", { ascending: false }).limit(100);
+      }));
+      for (const result of results) if (result.error) throw result.error;
+      const [subscriptions, assignments, globalPrices, tenantPrices] = await Promise.all([
+        admin.from("whatsapp_platform_billing_subscriptions").select("id,provider_subscription_id,subscription_kind,addon_code,status,current_end,cancel_at_cycle_end,safe_metadata", { count: "exact" }).eq("tenant_id",tenantId).limit(1000),
+        admin.from("whatsapp_platform_tenant_addons").select("addon_code,quantity,status,source_subscription_id", { count: "exact" }).eq("tenant_id",tenantId).eq("status","active").limit(1000),
+        admin.from("whatsapp_platform_message_price_versions").select("*").is("tenant_id",null).order("valid_from",{ascending:false}).limit(100),
+        admin.from("whatsapp_platform_message_price_versions").select("*").eq("tenant_id",tenantId).order("valid_from",{ascending:false}).limit(100),
+      ]);
+      if (subscriptions.error) throw subscriptions.error;
+      if (assignments.error) throw assignments.error;
+      if (globalPrices.error) throw globalPrices.error;
+      if (tenantPrices.error) throw tenantPrices.error;
+      if (subscriptions.count>1000 || assignments.count>1000) throw new Error("Transition audit requires pagination; no readiness decision is available.");
+      return json(req, { wallet: results[0].data?.[0] || null, configurationAudit: results[1].data, pendingEvents: results[2].data, mode,
+        chargePolicies:results[3].data,autoTopupAudit:results[4].data,messagePrices:[...(tenantPrices.data||[]),...(globalPrices.data||[])],
+        transition: paygTransitionReport(subscriptions.data || [], assignments.data || [], mode) });
+    }
     if (["staff_resend_invoice", "staff_cancel_subscription"].includes(action)) {
       const staff = await staffSession(req);
       const tenantId = cleanUuid(body.tenantId, "customer workspace");
@@ -2482,7 +2724,17 @@ Deno.serve(async (req) => {
       return json(req, result);
     }
     const customer = await customerSession(admin, body.sessionToken);
-    const mutationActions = new Set(["create_subscription", "abandon_checkout", "verify_checkout", "record_renewal_price_consent", "upgrade_subscription", "change_addons", "cancel_subscription"]);
+    if (env("WHATSAPP_PAYG_ENABLED")==="true" && ["create_subscription","upgrade_subscription","quote_subscription_checkout","preview_upgrade"].includes(action)) {
+      const access=await platformEntitlement(admin,customer.tenant_id,true,env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase());
+      if(access.error) throw access.error;
+      if(access.data?.state==="pay_per_use") throw new Error("Your workspace uses pay-per-use billing. A base subscription is not required.");
+    }
+    const mutationActions = new Set(["create_subscription", "abandon_checkout", "verify_checkout", "record_renewal_price_consent", "upgrade_subscription", "change_addons", "cancel_subscription", "wallet_create_recharge", "wallet_verify_recharge", "wallet_reconcile_recharge"]);
+    mutationActions.add("wallet_choose_currency");
+    mutationActions.add("wallet_create_addon");
+    mutationActions.add("wallet_quote_recharge");
+    mutationActions.add("wallet_discard_quote");
+    mutationActions.add("wallet_save_auto_topup");
     const previewActions = new Set(["quote_subscription_checkout", "preview_upgrade", "preview_addon_change", "sync_subscription", "payment_method_portal", "billing_document_pdf"]);
     const maxRequests = mutationActions.has(action) ? 10 : previewActions.has(action) ? 30 : 120;
     const { data: auditClaim, error: auditError } = await admin.rpc("whatsapp_platform_begin_billing_action", {
@@ -2494,12 +2746,45 @@ Deno.serve(async (req) => {
     requestAuditId = auditClaim.id;
     let result: any;
     if (action === "entitlement") {
-      const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+      const { data, error } = await platformEntitlement(admin,customer.tenant_id,env("WHATSAPP_PAYG_ENABLED")==="true",env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase());
       if (error) throw error;
       result = { entitlement: data };
     } else {
       const credentials = await loadRazorpaySecrets(admin);
-      if (action === "summary") result = await billingSummary(admin, customer, credentials);
+      if (action.startsWith("wallet_")) {
+        // Wallet setup and read-only records are available before charging is
+        // enabled in either provider mode. This lets an owner select a native
+        // wallet currency and inspect an empty wallet without enabling message
+        // metering, recharge checkout or automatic debits. Those financial
+        // mutations remain gated by the normal PAYG and checkout flags below.
+        const setupOnlyWalletAction = ["wallet_summary", "wallet_choose_currency", "wallet_history", "wallet_auto_topup_settings"].includes(action);
+        if (env("WHATSAPP_PAYG_ENABLED") !== "true" && !setupOnlyWalletAction) {
+          throw new Error("Usage billing is not available yet.");
+        }
+        const service = walletService(admin, credentials);
+        if (action === "wallet_summary") result = await service.summary(customer);
+        else if (action === "wallet_choose_currency") result = await service.chooseCurrency(customer,body);
+        else if (action === "wallet_history") result = await service.history(customer, body);
+        else if (action === "wallet_quote_addon") {
+          if (!["owner","admin"].includes(customer.role_code)) throw new Error("Only workspace owners or admins can manage paid capacity.");
+          const access = await platformEntitlement(admin,customer.tenant_id,true,env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase());
+          if (access.error) throw access.error;
+          if (!access.data?.allowed || access.data.state !== "pay_per_use") throw new Error("An active pay-per-use workspace is required.");
+          const {data:addon,error:addonError}=await admin.from("whatsapp_platform_addon_master").select("*").eq("code",cleanCode(body.addonCode,"add-on")).single();
+          if(addonError) throw addonError;
+          result={quote:paygAddonQuote(addon,body.quantity,checkoutGrossPaise)};
+        }
+        else if (action === "wallet_create_addon") result = await createPaygStandaloneAddon(admin, customer, body, credentials);
+        else if (action === "wallet_quote_recharge") result = await service.quoteRecharge(customer, body);
+        else if (action === "wallet_auto_topup_settings") result = await service.autoTopupSettings(customer);
+        else if (action === "wallet_save_auto_topup") result = await service.saveAutoTopup(customer, body);
+        else if (action === "wallet_discard_quote") result = await service.discardQuote(customer, body);
+        else if (action === "wallet_create_recharge") result = await service.createRecharge(customer, body);
+        else if (action === "wallet_verify_recharge") result = await service.verifyRecharge(customer, body);
+        else if (action === "wallet_reconcile_recharge") result = await service.reconcileRecharge(customer, body);
+        else throw new Error("Unsupported wallet action.");
+      }
+      else if (action === "summary") result = await billingSummary(admin, customer, credentials);
       else if (action === "billing_document_pdf") result = await billingDocumentPdf(admin, customer, body);
       else if (action === "quote_subscription_checkout") result = await quoteSubscriptionCheckout(admin, customer, body);
       else if (action === "create_subscription") result = await createSubscription(admin, customer, body, credentials);

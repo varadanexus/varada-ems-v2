@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const source=await readFile(new URL('../assets/whatsapp-payg-pricing.js',import.meta.url),'utf8');
+const {usageEstimate}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+assert.equal(usageEstimate('1000','1000'),'7.00');
+assert.equal(usageEstimate('1','0'),'0.0035');
+assert.equal(usageEstimate('0','0'),'0.00');
+assert.equal(usageEstimate('1000','1000',3200),'6.40');
+for(const value of ['-1','1.5','1e3','', '1000000000000'])assert.throws(()=>usageEstimate(value,'0'));
+console.log('PASS: USD public estimate counts both directions using the current server-provided message price');

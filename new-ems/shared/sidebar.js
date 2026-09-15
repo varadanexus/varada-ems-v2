@@ -193,15 +193,15 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Commercial Control",
       items: [
-        { module: MODULES.WHATSAPP_PLATFORM, label: "Package Master", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=package-master` },
-        { module: MODULES.WHATSAPP_PLATFORM, label: "Packages & Offers", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=packages` }
+        { module: MODULES.WHATSAPP_PLATFORM, label: "PAYG pricing & coupons", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=package-master` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Public pricing preview", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=packages` }
       ]
     },
     {
       title: "Billing",
       items: [
         { module: MODULES.WHATSAPP_PLATFORM, label: "Billing Overview", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=billing` },
-        { module: MODULES.WHATSAPP_PLATFORM, label: "Subscriptions", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=subscriptions` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Legacy billing records", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=subscriptions` },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Payment Ledger", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=payments` },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Invoices", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=invoices` },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Refunds", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=refunds` },

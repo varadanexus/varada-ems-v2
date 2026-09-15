@@ -3,6 +3,7 @@
 // External customer sessions are validated server-side before any Drive call.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { platformEntitlement } from "../_shared/whatsapp-payg-access.ts";
 import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const ROOT_FOLDER_ID = Deno.env.get("GDRIVE_WHATSAPP_PLATFORM_FOLDER_ID") || "1Tnq1agDpaLCIT_ZGiDRjVOXa7KYDASQp";
@@ -59,7 +60,7 @@ async function customerSession(admin: any, rawToken: unknown) {
   return customer;
 }
 async function billingEntitlement(admin: any, customer: any) {
-  const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+  const { data, error } = await platformEntitlement(admin,customer.tenant_id,env("WHATSAPP_PAYG_ENABLED")==="true",env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase());
   if (error) throw error;
   return data || { allowed: false, state: "payment_required", reason: "Billing access could not be verified." };
 }

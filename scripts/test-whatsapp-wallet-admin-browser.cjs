@@ -1,0 +1,92 @@
+// Isolated headless UI test, no user browser, network, credentials or payments.
+const {chromium}=require('playwright');
+const fs=require('node:fs');
+const path=require('node:path');
+const assert=require('node:assert/strict');
+(async()=>{
+  const browser=await chromium.launch({headless:true});
+  try{
+    const page=await browser.newPage();
+    await page.route('**/*',route=>route.abort());
+    await page.setContent('<main id="host"></main><section id="price"></section><section id="customerPrice"></section>');
+    const source=fs.readFileSync(path.join(__dirname,'../new-ems/shared/whatsapp-wallet-admin.js'),'utf8');
+    await page.evaluate(async source=>{
+      const module=await import(URL.createObjectURL(new Blob([source],{type:'text/javascript'})));
+      window.testCalls=[];
+      module.mountWalletAdmin(document.querySelector('#host'),async(action,body)=>{
+        window.testCalls.push({action,body});
+        if(action==='staff_wallet_snapshot')return {mode:'test',wallet:null,configurationAudit:[],pendingEvents:[],transition:{blockers:[],retainedCapacity:[]},
+          chargePolicies:[{id:'policy-fixture',currency:'INR',policy:{serviceGstBps:1800,gatewayBps:200,gatewayGstBps:1800,gatewayFixedMinor:0,gatewayBasis:'subtotal'},verified_by:'reviewer-fixture',evidence_reference:'<img src=x onerror=alert(1)>',recorded_reason:'Synthetic only'}],
+          autoTopupAudit:[{revision:1,actor_id:'owner-fixture',settings:{state:'awaiting_mandate',currency:'INR',threshold_minor:50000,credit_minor:100000,max_debit_minor:125000,monthly_cap_minor:500000,consent_version:'auto-topup-nonrefundable-v1'}}]};
+        return {};
+      },[{id:'tenant-a',name:'Test workspace'}]);
+      const priceRequest=async(action,body)=>{window.testCalls.push({action,body});return {};};
+      module.mountMessagePriceAdmin(document.querySelector('#price'),priceRequest,[{id:'tenant-a',name:'Test workspace'}],{allowGlobal:true});
+      module.mountMessagePriceAdmin(document.querySelector('#customerPrice'),priceRequest,[],{tenantId:'tenant-a',tenantName:'Test workspace',allowGlobal:false});
+    },source);
+    await page.locator('[data-wallet-tenant]').selectOption('tenant-a');
+    await page.getByText('policy-fixture',{exact:true}).waitFor();
+    assert.equal(await page.locator('[data-wallet-audit] img').count(),0,'Evidence text must not execute HTML');
+    assert.ok((await page.locator('[data-wallet-audit]').innerText()).includes('awaiting_mandate'));
+    await page.getByLabel('Reason for change').fill('Test inactive wallet setup');
+    await page.getByRole('button',{name:'Save configuration',exact:true}).click();
+    await page.getByText('Configuration saved; charging status unchanged.',{exact:false}).waitFor();
+    await page.getByLabel('Currency (not USD)',{exact:true}).fill('INR');
+    await page.getByLabel('Currency units per USD',{exact:true}).fill('83.12345678');
+    await page.getByLabel('Valid from (UTC)',{exact:true}).fill('2026-09-08T00:00');
+    await page.getByLabel('Valid until (UTC, maximum seven days)',{exact:true}).fill('2026-09-09T00:00');
+    await page.getByLabel('Source',{exact:true}).fill('Synthetic test fixture');
+    await page.getByLabel('Source URL or document reference',{exact:true}).fill('fixture-only-001');
+    await page.getByLabel('Reason',{exact:true}).fill('Isolated browser test only');
+    await page.getByLabel('I verified this rate',{exact:false}).check();
+    await page.getByRole('button',{name:'Publish verified rate'}).click();
+    await page.getByText('Verified rate published.',{exact:false}).waitFor();
+    const calls=await page.evaluate(()=>window.testCalls);
+    const config=calls.find(c=>c.action==='staff_wallet_configure');
+    assert.equal(config.body.minimumAvailableUsdMicros,350000);
+    assert.equal(config.body.currency,'INR');
+    const fx=calls.find(c=>c.action==='staff_wallet_publish_fx');
+    assert.equal(fx.body.validFrom,'2026-09-08T00:00:00Z');
+    assert.equal(fx.body.unitsPerUsd,'83.12345678');
+    assert.equal(fx.body.sourceReference,'fixture-only-001');
+    await page.getByLabel('Policy currency',{exact:false}).selectOption('INR');
+    await page.getByLabel('Service GST (basis points; 100 = 1%)',{exact:true}).fill('1800');
+    await page.getByLabel('Gateway fee (basis points)',{exact:true}).fill('200');
+    await page.getByLabel('GST on gateway fee (basis points)',{exact:true}).fill('1800');
+    await page.getByLabel('Fixed gateway fee (currency subunits)',{exact:true}).fill('0');
+    await page.getByLabel('Gateway calculation basis',{exact:false}).selectOption('subtotal');
+    await page.getByLabel('Policy valid from (UTC)',{exact:true}).fill('2026-09-08T00:00');
+    await page.getByLabel('Policy valid until (UTC)',{exact:true}).fill('2026-09-09T00:00');
+    await page.getByLabel('Tax and tariff evidence reference',{exact:true}).fill('Synthetic policy fixture');
+    await page.getByLabel('Policy reason',{exact:true}).fill('Isolated policy form test');
+    await page.getByLabel('I verified the tax treatment',{exact:false}).check();
+    await page.getByRole('button',{name:'Publish verified charge policy',exact:true}).click();
+    await page.getByText('Verified charge policy recorded. Checkout activation is unchanged.',{exact:true}).waitFor();
+    const policy=await page.evaluate(()=>window.testCalls.find(c=>c.action==='staff_wallet_publish_charge_policy'));
+    assert.equal(policy.body.tenantId,'tenant-a');assert.equal(policy.body.confirmed,true);
+    assert.equal(policy.body.policy.serviceGstBps,1800);assert.equal(policy.body.policy.gatewayFixedMinor,0);
+    assert.equal(policy.body.validFrom,'2026-09-08T00:00:00Z');
+    await page.getByLabel('Policy reason',{exact:true}).fill('Do not carry this to a different customer');
+    await page.locator('[data-wallet-tenant]').selectOption('');
+    assert.equal(await page.locator('[data-wallet-audit]').innerText(),'');
+    assert.equal(await page.getByLabel('Policy reason',{exact:true}).inputValue(),'');
+    assert.equal(await page.locator('[data-wallet-config] fieldset').evaluate(fieldset=>fieldset.disabled),true);
+    assert.equal(await page.locator('[data-wallet-config] input[name=minimum]').inputValue(),'');
+    const globalPrice=page.locator('#price');
+    await globalPrice.getByLabel('Standard message fee').fill('0.0034');
+    await globalPrice.getByLabel('Commercial reason and reference').fill('Approved global price fixture');
+    await globalPrice.getByLabel('Confirm price publication').check();
+    await globalPrice.getByRole('button',{name:'Publish message price'}).click();
+    await globalPrice.getByText('Message price published.',{exact:false}).waitFor();
+    const customerPrice=page.locator('#customerPrice');
+    await customerPrice.getByLabel('Standard message fee').fill('0.0031');
+    await customerPrice.getByLabel('Commercial reason and reference').fill('Approved customer override fixture');
+    await customerPrice.getByLabel('Confirm price publication').check();
+    await customerPrice.getByRole('button',{name:'Publish message price'}).click();
+    await customerPrice.getByText('Message price published.',{exact:false}).waitFor();
+    const prices=await page.evaluate(()=>window.testCalls.filter(c=>c.action==='staff_wallet_publish_message_price'));
+    assert.equal(prices.length,2);assert.equal(prices[0].body.scope,'global');assert.equal(prices[0].body.rateMicros,3400);
+    assert.equal(prices[1].body.scope,'customer');assert.equal(prices[1].body.tenantId,'tenant-a');assert.equal(prices[1].body.rateMicros,3100);
+    console.log('PASS: isolated Chromium EMS configuration and FX form submissions, UTC conversion and exact rate string');
+  }finally{await browser.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});

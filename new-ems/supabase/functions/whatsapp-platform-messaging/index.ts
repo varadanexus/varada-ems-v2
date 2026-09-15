@@ -2,6 +2,9 @@
 // Protected customer API for the sellable WhatsApp Solutions Team Inbox.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { walletSend } from "../_shared/whatsapp-wallet-messaging.ts";
+import { platformEntitlement, paygPackageMaster, withStandaloneCapacity } from "../_shared/whatsapp-payg-access.ts";
+import { enforceApiNumber } from "../_shared/whatsapp-api-number-scope.ts";
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
@@ -70,15 +73,15 @@ async function developerApiSession(admin: any, req: Request, action: string) {
   if (!requiredScope) throw new Error("This action is not available through the Developer API.");
   const tokenHash = await sha256(match[1]);
   const { data: key, error } = await admin.from("whatsapp_platform_api_keys")
-    .select("id,tenant_id,created_by,scopes,status,expires_at")
+    .select("id,tenant_id,created_by,scopes,status,expires_at,connection_id")
     .eq("token_hash", tokenHash).eq("status", "active").maybeSingle();
   if (error || !key || (key.expires_at && new Date(key.expires_at).getTime() <= Date.now())) throw new Error("Unauthorized");
   if (!Array.isArray(key.scopes) || !key.scopes.includes(requiredScope)) throw new Error(`This API key does not include the ${requiredScope} scope.`);
   await admin.from("whatsapp_platform_api_keys").update({ last_used_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", key.id);
-  return { tenant_id: key.tenant_id, user_id: key.created_by, role_code: "agent", api_key_id: key.id, auth_kind: "api_key" };
+  return { tenant_id: key.tenant_id, user_id: key.created_by, role_code: "agent", api_key_id: key.id, auth_kind: "api_key", api_connection_id:key.connection_id };
 }
 async function billingEntitlement(admin: any, customer: any) {
-  const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+  const { data, error } = await platformEntitlement(admin,customer.tenant_id,env("WHATSAPP_PAYG_ENABLED")==="true",env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase());
   if (error) throw error;
   return data || { allowed: false, state: "payment_required", reason: "Billing access could not be verified." };
 }
@@ -248,7 +251,18 @@ async function packageMaster(admin: any, customer: any) {
     p_user_id: customer.user_id,
   });
   if (error) throw error;
-  return data || { package: null, addons: [], availableAddons: [] };
+  const master = data || { package: null, addons: [], availableAddons: [] };
+  if (env("WHATSAPP_PAYG_ENABLED")==="true") {
+    const entitlement=await billingEntitlement(admin,customer);
+    if(entitlement.allowed && entitlement.state==="pay_per_use") {
+      const {data:capacity,error:capacityError}=await admin.rpc('whatsapp_payg_capacity_totals',{
+        p_tenant:customer.tenant_id,p_mode:entitlement.mode,
+      });
+      if(capacityError)throw capacityError;
+      return withStandaloneCapacity(paygPackageMaster(master),capacity || []);
+    }
+  }
+  return master;
 }
 async function workspaceMessagingPreferences(admin: any, customer: any) {
   const { data, error } = await admin.from("whatsapp_platform_tenants")
@@ -1059,12 +1073,21 @@ async function sendText(admin: any, customer: any, body: any) {
   if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("The WhatsApp connection has expired. Reconnect Meta Business.");
   await assertOutboundMessageCapacity(admin, customer, 1);
   const secret = await decryptCredential(credential.credential_ciphertext);
-  const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+  const payload = { messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } };
+  const { graph, replayed } = await walletSend({ admin, enabled: env("WHATSAPP_PAYG_ENABLED") === "true",
+    mode: env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(), tenantId: customer.tenant_id,
+    connectionId: connection.id, requestKey: body.requestKey, source: "inbox", payload,
+    send: (meteredPayload: any) => fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
     method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } }),
-  });
-  const graph = await graphResponse.json().catch(() => ({}));
-  if (!graphResponse.ok || !graph?.messages?.[0]?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Message could not be sent.");
+    body: JSON.stringify(meteredPayload), signal: AbortSignal.timeout(20000),
+  }) });
+  if (replayed) {
+    const { data: prior, error: priorError } = await admin.from("whatsapp_platform_messages")
+      .select("id,meta_message_id,direction,message_type,body,status,provider_timestamp,created_at")
+      .eq("tenant_id",customer.tenant_id).eq("connection_id",connection.id).eq("meta_message_id",String(graph.messages[0].id)).maybeSingle();
+    if (priorError) throw priorError;
+    if (prior) return { message:prior, replayed:true };
+  }
   const now = new Date().toISOString();
   const { data: message, error: messageError } = await admin.from("whatsapp_platform_messages").insert({
     tenant_id: customer.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
@@ -1235,13 +1258,11 @@ async function startChat(admin: any, customer: any, body: any) {
   let { data: conversation, error: conversationError } = await admin.from("whatsapp_platform_conversations")
     .select("id,connection_id,contact_id").eq("tenant_id", customer.tenant_id).eq("connection_id", connectionId).eq("contact_id", contactId).maybeSingle();
   if (conversationError) throw conversationError;
-  let conversationCreated = false;
   if (!conversation) {
     const created = await admin.from("whatsapp_platform_conversations").insert({ tenant_id: customer.tenant_id, connection_id: connectionId, contact_id: contactId, status: "open", priority: "normal" })
       .select("id,connection_id,contact_id").single();
     if (created.error || !created.data) throw new Error("Conversation could not be created.");
     conversation = created.data;
-    conversationCreated = true;
   }
   const secret = await decryptCredential(credential.credential_ciphertext);
   let templateDefinition: any = null;
@@ -1286,16 +1307,23 @@ async function startChat(admin: any, customer: any, body: any) {
       parameters: [{ type: "payload", payload: `vnft|${triggeredFlow.id}|${Number(reply.index)}` }],
     })));
   }
-  const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
-    method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: {
+  const payload = { messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: {
       name: templateName, language: { code: languageCode }, ...(outboundComponents.length ? { components: outboundComponents } : {}),
-    } }),
-  });
-  const graph = await graphResponse.json().catch(() => ({}));
-  if (!graphResponse.ok || !graph?.messages?.[0]?.id) {
-    if (conversationCreated) await admin.from("whatsapp_platform_conversations").delete().eq("id", conversation.id).eq("tenant_id", customer.tenant_id);
-    throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Template message could not be sent.");
+    } };
+  const { graph, replayed } = await walletSend({ admin, enabled: env("WHATSAPP_PAYG_ENABLED") === "true",
+    mode: env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(), tenantId: customer.tenant_id,
+    connectionId: connection.id, requestKey: body.requestKey, source: "template", payload,
+    send: (meteredPayload: any) => fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+      method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify(meteredPayload), signal: AbortSignal.timeout(20000),
+    }) });
+  // Keep the conversation on uncertainty; a late callback may still reference it.
+  if (replayed) {
+    const { data: prior, error: priorError } = await admin.from("whatsapp_platform_messages")
+      .select("id,conversation_id,meta_message_id,direction,message_type,body,status,safe_metadata,provider_timestamp,created_at")
+      .eq("tenant_id",customer.tenant_id).eq("connection_id",connection.id).eq("meta_message_id",String(graph.messages[0].id)).maybeSingle();
+    if (priorError) throw priorError;
+    if (prior) return { conversationId:prior.conversation_id, message:prior, replayed:true };
   }
   const now = new Date().toISOString();
   const preview = formatTemplateMessage(templateDefinition?.components || []) || `Template: ${templateName}`;
@@ -1758,14 +1786,19 @@ async function dispatchCampaign(admin: any, customer: any, body: any) {
         await admin.from("whatsapp_platform_campaign_deliveries").update({ status: "skipped", last_error_code: "marketing_opt_out", last_error_message: "Customer opted out before campaign delivery.", updated_at: new Date().toISOString() }).eq("id", delivery.id);
         return;
       }
-      const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+      const requestBody = { messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: { name: campaign.template_name, language: { code: campaign.template_language } } };
+      const {graph,replayed}=await walletSend({admin,enabled:env("WHATSAPP_PAYG_ENABLED")==="true",
+        mode:env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(),tenantId:customer.tenant_id,connectionId:connection.id,
+        requestKey:`campaign:${delivery.id}`,source:"campaign",payload:requestBody,
+        send:(meteredPayload: any)=>fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
         method: "POST", headers: { Authorization: `Bearer ${secret.accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "template", template: { name: campaign.template_name, language: { code: campaign.template_language } } }),
-      });
-      const graph = await graphResponse.json().catch(() => ({}));
-      if (!graphResponse.ok || !graph?.messages?.[0]?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "Meta rejected the campaign message.");
+        body: JSON.stringify(meteredPayload),signal:AbortSignal.timeout(20000),
+      })});
       const now = new Date().toISOString();
-      const messageResult = await admin.from("whatsapp_platform_messages").insert({
+      const priorResult = replayed ? await admin.from("whatsapp_platform_messages").select("id,status")
+        .eq("tenant_id",customer.tenant_id).eq("connection_id",connection.id).eq("meta_message_id",String(graph.messages[0].id)).maybeSingle() : {data:null,error:null};
+      if (priorResult.error) throw priorResult.error;
+      const messageResult = priorResult.data ? priorResult : await admin.from("whatsapp_platform_messages").insert({
         tenant_id: customer.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
         meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: "template", body: campaign.preview_body || `Template: ${campaign.template_name}`,
         status: "accepted", provider_timestamp: now, created_by_user_id: customer.user_id,
@@ -1773,13 +1806,14 @@ async function dispatchCampaign(admin: any, customer: any, body: any) {
       }).select("id").single();
       if (messageResult.error || !messageResult.data) throw messageResult.error || new Error("Campaign message audit failed.");
       await Promise.all([
-        admin.from("whatsapp_platform_campaign_deliveries").update({ conversation_id: conversation.id, message_id: messageResult.data.id, meta_message_id: String(graph.messages[0].id), status: "accepted", accepted_at: now, last_error_code: null, last_error_message: null, updated_at: now }).eq("id", delivery.id),
+        admin.from("whatsapp_platform_campaign_deliveries").update({ conversation_id: conversation.id, message_id: messageResult.data.id, meta_message_id: String(graph.messages[0].id), status: priorResult.data?.status || "accepted", accepted_at: now, last_error_code: null, last_error_message: null, updated_at: now }).eq("id", delivery.id),
         admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: String(campaign.preview_body || `Template: ${campaign.template_name}`).replace(/\s+/g, " ").slice(0, 300), last_outbound_at: now, updated_at: now }).eq("id", conversation.id),
         admin.from("whatsapp_platform_contacts").update({ last_outbound_at: now, updated_at: now }).eq("id", contact.id),
       ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Campaign message failed.";
-      await admin.from("whatsapp_platform_campaign_deliveries").update({ status: "failed", failed_at: new Date().toISOString(), last_error_code: "send_failed", last_error_message: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", delivery.id);
+      const uncertain = error?.code === "WALLET_SEND_UNCERTAIN";
+      await admin.from("whatsapp_platform_campaign_deliveries").update({ status: uncertain ? "processing" : "failed", failed_at: uncertain ? null : new Date().toISOString(), last_error_code: uncertain ? "reconciliation_required" : "send_failed", last_error_message: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", delivery.id);
     }
   }));
   const [{ count: remaining }, { count: accepted }, { count: failed }] = await Promise.all([
@@ -1961,7 +1995,7 @@ function requireDeveloperAdmin(customer: any) {
 }
 function developerKeyView(row: any) {
   return {
-    id: row.id, name: row.name, keyPrefix: row.key_prefix, scopes: row.scopes || [], status: row.status,
+    id: row.id, name: row.name, keyPrefix: row.key_prefix, scopes: row.scopes || [], status: row.status, connectionId:row.connection_id || null,
     createdAt: row.created_at, lastUsedAt: row.last_used_at, expiresAt: row.expires_at, revokedAt: row.revoked_at,
   };
 }
@@ -2014,7 +2048,7 @@ async function developerIntegrationSummary(admin: any, customer: any) {
   const integrationLimit = packageLimit(master, "integration_limit");
   const apiAccess = Boolean(master?.package);
   const [{ data: keys, error: keyError }, { data: webhooks, error: webhookError }, { data: deliveries, error: deliveryError }, { data: connections, error: connectionError }] = await Promise.all([
-    admin.from("whatsapp_platform_api_keys").select("id,name,key_prefix,scopes,status,created_at,last_used_at,expires_at,revoked_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
+    admin.from("whatsapp_platform_api_keys").select("id,name,key_prefix,scopes,status,created_at,last_used_at,expires_at,revoked_at,connection_id").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
     admin.from("whatsapp_platform_webhook_endpoints").select("id,name,software_name,connection_id,endpoint_url,fallback_url,max_attempts,fallback_max_attempts,timeout_ms,retry_on,events,status,created_at,last_delivery_at,last_success_at,last_failure_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(50),
     admin.from("whatsapp_platform_webhook_deliveries").select("id,webhook_endpoint_id,webhook_job_id,event_id,event_type,attempt_number,target_kind,status,http_status,duration_ms,error_message,next_attempt_at,created_at,completed_at").eq("tenant_id", customer.tenant_id).order("created_at", { ascending: false }).limit(100),
     admin.from("whatsapp_platform_connections").select("id,provider,status,display_phone_number,verified_name,updated_at").eq("tenant_id", customer.tenant_id).order("updated_at", { ascending: false }),
@@ -2128,8 +2162,9 @@ async function createDeveloperApiKey(admin: any, customer: any, body: any) {
   const mode = env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase() === "live" ? "live" : "test";
   const prefixPart = randomHex(4);
   const token = `vn_${mode}_${prefixPart}_${randomHex(24)}`;
-  const row = { tenant_id: customer.tenant_id, name, key_prefix: `vn_${mode}_${prefixPart}`, token_hash: await sha256(token), scopes, status: "active", created_by: customer.user_id };
-  const { data, error } = await admin.from("whatsapp_platform_api_keys").insert(row).select("id,name,key_prefix,scopes,status,created_at,last_used_at,expires_at,revoked_at").single();
+  const apiNumber = body.connectionId ? await ownedBusinessNumber(admin,customer,body.connectionId) : null;
+  const row = { tenant_id: customer.tenant_id, name, key_prefix: `vn_${mode}_${prefixPart}`, token_hash: await sha256(token), scopes, status: "active", created_by: customer.user_id, connection_id:apiNumber?.id || null };
+  const { data, error } = await admin.from("whatsapp_platform_api_keys").insert(row).select("id,name,key_prefix,scopes,status,created_at,last_used_at,expires_at,revoked_at,connection_id").single();
   if (error) throw error;
   return { apiKey: developerKeyView(data), token };
 }
@@ -2401,6 +2436,7 @@ Deno.serve(async (req) => {
     if (customer.auth_kind === "api_key" && !DEVELOPER_API_ACTION_SCOPES[action]) {
       return json(req, { error: "This action is not available through the Developer API." }, 403);
     }
+    await enforceApiNumber(admin,customer,action,body);
     if (action !== "package_master" && !NOTIFICATION_ACTIONS.has(action)) {
       const entitlement = await billingEntitlement(admin, customer);
       if (!entitlement.allowed) return json(req, { error: entitlement.reason, code: "BILLING_ACCESS_REQUIRED", billing: entitlement }, 402);
@@ -2488,6 +2524,7 @@ Deno.serve(async (req) => {
       hint: cleanText(details.hint, 500) || null,
     });
     const status = /unauthorized/i.test(message) ? 401 : /cannot send|role|only workspace administrators/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 400;
-    return json(req, { error: message }, status);
+    const walletCode=["WALLET_SEND_UNCERTAIN","WALLET_SEND_REJECTED"].includes(String(details.code)) ? details.code : undefined;
+    return json(req, { error: message, code: walletCode }, status);
   }
 });

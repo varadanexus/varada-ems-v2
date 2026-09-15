@@ -3,6 +3,9 @@
 // This endpoint never writes to the EMS internal-company WhatsApp tables.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordWalletWebhook } from "../_shared/whatsapp-wallet-webhook.ts";
+import { walletSend } from "../_shared/whatsapp-wallet-messaging.ts";
+import { platformEntitlement } from "../_shared/whatsapp-payg-access.ts";
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const encoder = new TextEncoder();
@@ -143,14 +146,16 @@ function safeMessageType(value: unknown) {
 async function connectionForPhone(admin: any, phoneNumberId: string) {
   const { data, error } = await admin.from("whatsapp_platform_connections")
     .select("id,tenant_id,phone_number_id,status").eq("phone_number_id", phoneNumberId)
-    .in("status", ["connected", "pending"]).limit(1);
+    .in("status", ["connected", "pending"]).limit(2);
   if (error) throw error;
+  if (data?.length > 1) throw new Error("Ambiguous WhatsApp number ownership; routing paused");
   return data?.[0] || null;
 }
 
 async function flowAutomationCapacity(admin: any, tenantId: string) {
-  const { data: entitlement, error: entitlementError } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: tenantId });
+  const { data: entitlement, error: entitlementError } = await platformEntitlement(admin,tenantId,env("WHATSAPP_PAYG_ENABLED")==="true",env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase());
   if (entitlementError || entitlement?.allowed !== true) return { allowed: false, monthlyMessageLimit: 0 };
+  if (entitlement.state==="pay_per_use") return {allowed:true,monthlyMessageLimit:null};
   const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
     .select("plan_code,status").eq("id", tenantId).single();
   if (tenantError || tenant?.status !== "active") return { allowed: false, monthlyMessageLimit: 0 };
@@ -234,13 +239,20 @@ async function sendFlowText(admin: any, connection: any, contact: any, conversat
       },
     }
     : { messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } };
-  const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+  const { graph, replayed } = await walletSend({admin,enabled:env("WHATSAPP_PAYG_ENABLED")==="true",
+    mode:env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(),tenantId:connection.tenant_id,connectionId:connection.id,
+    requestKey:`flow:${execution.id}:${await sha256(String(node.id))}`,source:"flow",payload:requestBody,
+    send:(meteredPayload: any)=>fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-  });
-  const graph = await graphResponse.json().catch(() => ({}));
-  if (!graphResponse.ok || !graph?.messages?.[0]?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "flow_message_rejected");
+    body: JSON.stringify(meteredPayload), signal:AbortSignal.timeout(20000),
+  })});
+  if (replayed) {
+    const {data:prior,error:priorError}=await admin.from("whatsapp_platform_messages").select("id")
+      .eq("tenant_id",connection.tenant_id).eq("connection_id",connection.id).eq("meta_message_id",String(graph.messages[0].id)).maybeSingle();
+    if (priorError) throw priorError;
+    if (prior) return {id:prior.id,waitingForButton:buttons.length>0};
+  }
   const now = new Date().toISOString();
   const { data: outbound, error } = await admin.from("whatsapp_platform_messages").insert({
     tenant_id: connection.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
@@ -256,7 +268,7 @@ async function sendFlowText(admin: any, connection: any, contact: any, conversat
   return { id: outbound.id, waitingForButton: buttons.length > 0 };
 }
 
-async function sendConsentConfirmation(admin: any, connection: any, contact: any, conversation: any, eventType: "opt_out" | "opt_in") {
+async function sendConsentConfirmation(admin: any, connection: any, contact: any, conversation: any, eventType: "opt_out" | "opt_in", inboundMessageId: string) {
   const text = eventType === "opt_out"
     ? "You have been unsubscribed from marketing messages. You can still contact us for service and support. Reply START to subscribe again."
     : "You are subscribed to marketing messages again. Reply STOP at any time to unsubscribe.";
@@ -265,13 +277,21 @@ async function sendConsentConfirmation(admin: any, connection: any, contact: any
   if (credentialError || !credential) throw new Error("consent_confirmation_credential_unavailable");
   if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("consent_confirmation_credential_expired");
   const { accessToken } = await decryptCredential(credential.credential_ciphertext);
-  const graphResponse = await fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+  const requestBody = { messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } };
+  const {graph,replayed}=await walletSend({admin,enabled:env("WHATSAPP_PAYG_ENABLED")==="true",
+    mode:env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(),tenantId:connection.tenant_id,connectionId:connection.id,
+    requestKey:`consent:${inboundMessageId}:${eventType}`,source:"consent",payload:requestBody,
+    send:(meteredPayload: any)=>fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } }),
-  });
-  const graph = await graphResponse.json().catch(() => ({}));
-  if (!graphResponse.ok || !graph?.messages?.[0]?.id) throw new Error(graph?.error?.error_user_msg || graph?.error?.message || "consent_confirmation_rejected");
+    body: JSON.stringify(meteredPayload), signal:AbortSignal.timeout(20000),
+  })});
+  if (replayed) {
+    const {data:prior,error:priorError}=await admin.from("whatsapp_platform_messages").select("id")
+      .eq("tenant_id",connection.tenant_id).eq("connection_id",connection.id).eq("meta_message_id",String(graph.messages[0].id)).maybeSingle();
+    if (priorError) throw priorError;
+    if (prior) return prior.id;
+  }
   const now = new Date().toISOString();
   const { data: outbound, error } = await admin.from("whatsapp_platform_messages").insert({
     tenant_id: connection.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
@@ -498,7 +518,7 @@ async function processInbound(admin: any, connection: any, value: any, message: 
     let confirmationStatus = "sent";
     let confirmationError: string | null = null;
     try {
-      confirmationMessageId = await sendConsentConfirmation(admin, connection, contact, conversation, eventType);
+      confirmationMessageId = await sendConsentConfirmation(admin, connection, contact, conversation, eventType, inboundMessage.id);
     } catch (confirmationFailure) {
       confirmationStatus = "failed";
       confirmationError = (confirmationFailure instanceof Error ? confirmationFailure.message : "consent_confirmation_failed").slice(0, 1000);
@@ -607,6 +627,9 @@ Deno.serve(async (req) => {
     if (!constantTimeEqual(signature.toLowerCase(), expectedSignature.toLowerCase())) return json({ error: "Invalid signature" }, 401);
     const eventHash = await sha256(raw);
     const payload = JSON.parse(raw || "{}");
+    if (env("WHATSAPP_PAYG_ENABLED") === "true") {
+      await recordWalletWebhook({admin,payload,mode:env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(),connectionForPhone});
+    }
     const { data: event, error: eventError } = await admin.from("whatsapp_platform_webhook_events").insert({
       event_hash: eventHash, object_type: String(payload?.object || "").slice(0, 100) || null,
       entry_count: Array.isArray(payload?.entry) ? payload.entry.length : 0,

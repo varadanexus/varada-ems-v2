@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { stripTypeScriptTypes } from 'node:module';
+const source=await readFile(new URL('../new-ems/supabase/functions/_shared/whatsapp-wallet-webhook.ts',import.meta.url),'utf8');
+const {recordWalletWebhook}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+const timestamp=String(Math.floor(Date.now()/1000));
+const change=(phone,id)=>({field:'messages',value:{metadata:{phone_number_id:phone},messages:[{id,type:'text',timestamp,text:{body:'private'}}],statuses:[{id:`out-${id}`,status:'delivered',timestamp}]}});
+const payload={object:'whatsapp_business_account',entry:[{changes:[change('phone-a','one'),change('phone-b','two')]}]};
+payload.entry[0].changes[0].value.statuses[0].biz_opaque_callback_data='vnwallet:10000000-0000-4000-8000-000000000001';
+const calls=[];
+const deps={payload,mode:'test',admin:{rpc:async(name,args)=>{calls.push({name,args});return {data:{processed:false}};}},
+  connectionForPhone:async(_,phone)=>({id:`connection-${phone}`,tenant_id:`tenant-${phone}`})};
+await recordWalletWebhook(deps);
+assert.equal(calls.length,4);
+assert.equal(calls[0].args.p_tenant,'tenant-phone-a');
+assert.equal(calls[2].args.p_tenant,'tenant-phone-b');
+assert.equal(calls[1].args.p_kind,'delivered');
+assert.equal(calls[1].args.p_callback_usage,'10000000-0000-4000-8000-000000000001');
+assert.equal(calls[0].args.p_callback_usage,null);
+assert.equal(JSON.stringify(calls).includes('private'),false);
+await assert.rejects(recordWalletWebhook({...deps,mode:'unknown'}),/mode/);
+await assert.rejects(recordWalletWebhook({...deps,admin:{rpc:async()=>({error:Error('storage failed')})}}),/storage failed/);
+const invalid=structuredClone(payload); invalid.entry[0].changes[0].value.messages[0].timestamp='bad';
+await assert.rejects(recordWalletWebhook({...deps,payload:invalid}),/timestamp/);
+console.log('PASS: tenant/number routing, inbound/status evidence, storage-failure retry, and no message-content retention');
