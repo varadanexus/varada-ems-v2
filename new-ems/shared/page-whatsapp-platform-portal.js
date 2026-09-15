@@ -200,7 +200,7 @@ function currentWorkspaceView() {
   if (view === "checkout") {
     // Retired subscription checkout URLs must never revive the previous plan
     // flow. Send saved links and browser history to the prepaid wallet instead.
-    location.replace(`${workspacePath("billing-plans")}${location.search}${location.hash}`);
+    location.replace(workspacePath("billing-plans"));
     return "billing-plans";
   }
   const resolvedView = Object.hasOwn(WORKSPACE_VIEW_LABELS, view) ? view : "overview";
