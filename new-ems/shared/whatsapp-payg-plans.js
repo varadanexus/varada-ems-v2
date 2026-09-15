@@ -51,6 +51,16 @@ export function renderWalletManagementPage(billing = {}) {
   </section>`;
 }
 
+export function renderPaygPaymentLedger(billing = {}) {
+  return `<section class="wp-route-page wp-billing-page">
+    ${paygHeading(billing, 'Payment ledger', 'Review captured wallet recharges, balance movements and message usage from one auditable register.')}
+    ${billing.error ? `<div class="wp-verification-notice"><strong>Billing status unavailable</strong><p>${escape(billing.error)}</p></div>` : ''}
+    ${walletActivationNotice(billing)}
+    <section class="wp-wallet-runtime" data-wallet-ledger-host><div class="wp-wallet-loading"><span aria-hidden="true">₹</span><div><strong>Loading payment ledger</strong><p>Retrieving captured recharges and verified gateway references…</p></div></div></section>
+    <section class="wp-card"><span class="wp-card-eyebrow">Audit policy</span><h2>Recharge value and charges remain separate</h2><p>The ledger preserves spendable credit, service GST, gateway charge, GST on the gateway charge, checkout total, provider order and payment references. Test and live payment modes remain isolated.</p></section>
+  </section>`;
+}
+
 export function renderPaygBillingOverview(billing = {}) {
   const active = isActive(billing);
   const invoices = Number((billing.invoices || []).length);

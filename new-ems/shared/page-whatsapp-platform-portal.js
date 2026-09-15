@@ -1,8 +1,8 @@
 import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsapp-flow-builder.js?v=13";
-import { mountWalletView, walletMoney } from "./whatsapp-wallet-view.js?v=5";
+import { mountWalletView, walletMoney } from "./whatsapp-wallet-view.js?v=6";
 import { mountWalletRecharge } from "./whatsapp-wallet-checkout.js?v=3";
 import { mountWalletAutoTopup } from "./whatsapp-wallet-auto-topup.js?v=3";
-import { renderPaygBillingOverview, renderPaygCapacityAddons, renderWalletManagementPage } from "./whatsapp-payg-plans.js?v=3";
+import { renderPaygBillingOverview, renderPaygCapacityAddons, renderPaygPaymentLedger, renderWalletManagementPage } from "./whatsapp-payg-plans.js?v=4";
 
 const SESSION_KEY = "vn_whatsapp_platform_session";
 const THEME_KEY = "vn_whatsapp_platform_theme";
@@ -3055,6 +3055,7 @@ function billingView(view = "billing") {
   if (view === "billing") return renderPaygBillingOverview(workspaceBilling || {});
   if (view === "billing-plans") return renderWalletManagementPage(workspaceBilling || {});
   if (view === "billing-addons") return renderPaygCapacityAddons(workspaceBilling || {});
+  if (view === "billing-ledger") return renderPaygPaymentLedger(workspaceBilling || {});
   const pkg = workspacePackageMaster?.package;
   const canManage = ["owner", "admin"].includes(session.roleCode);
   const returnedSubscription = workspaceBilling?.subscription;
@@ -3747,6 +3748,17 @@ async function renderDashboard({ refresh = true, preserveScroll = false, navigat
     });
   } else if (view === "billing-plans" && walletHost) {
     walletHost.innerHTML = '<div class="wp-wallet-empty"><strong>Payment setup is pending</strong><p>Wallet controls will become available after the payment configuration is connected.</p></div>';
+  }
+  const walletLedgerHost = app.querySelector("[data-wallet-ledger-host]");
+  if (view === "billing-ledger" && walletLedgerHost && workspaceBilling?.configured === true) {
+    void mountWalletView(walletLedgerHost, billingRequest, workspaceConnections, {
+      initialRegister: "recharges",
+      showBalance: false,
+      showCurrency: false,
+      onSummary: updateWalletTopbar,
+    });
+  } else if (view === "billing-ledger" && walletLedgerHost) {
+    walletLedgerHost.innerHTML = '<div class="wp-wallet-empty"><strong>Payment setup is pending</strong><p>The PAYG ledger will become available after payment configuration is connected.</p></div>';
   }
   if (view === "support") {
     const dialog = app.querySelector("#wpSupportDialog");

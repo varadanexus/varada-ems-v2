@@ -922,3 +922,12 @@ genuinely missing business decisions or account access.
 - The Billing Overview now shows recent customer-wallet balances/reservations and recent prepaid recharge orders. Historical subscription rows remain available only through `Legacy billing records`; they are not presented as current packages or subscriptions.
 - `whatsapp-platform-admin-secrets` now returns tenant-labelled wallet and recharge rows plus exact wallet/recharge/usage counts for the PAYG dashboard. Its canonical function was redeployed after the change.
 - Full `node scripts/check-whatsapp-payg.cjs` passes, including a new guard that rejects reintroducing active/recent subscription language into the current Billing Overview.
+
+## 2026-09-15 checkpoint — successful Test Mode recharge and PAYG ledger correction
+
+- The authenticated customer wallet reused saved Razorpay Test Mode order `order_TZuFvBZP3fSzhJ`; no duplicate order was created. Razorpay reported a successful INR 1,208.52 test payment with payment ID `pay_TcF0gFqMORl0Cd`.
+- The verified callback credited exactly INR 1,000.00 of spendable service balance. INR 180.00 service GST, INR 24.17 gateway charge and INR 4.35 GST on the gateway charge remained separate and were not credited. Reserved balance is INR 0.00.
+- The wallet recharge register shows one captured record with the same order/payment IDs and the exact INR 1,208.52 checkout total. The wallet journal independently shows one INR 1,000.00 `topup` balance movement ending at INR 1,000.00.
+- The standalone customer `Payment ledger` route still rendered the retired subscription-payment array and incorrectly said `No payments yet`. It was changed to mount the PAYG wallet register directly, defaulting to captured recharges while retaining switches for wallet journal and message usage. The obsolete trial/subscription notice is no longer part of this route.
+- Focused PAYG plan and wallet-view tests pass after the ledger correction. The correction still needs a scoped commit/push, successful Pages deployment and authenticated live visual verification before this checkpoint is complete.
+- Test Mode remains active. Live Razorpay keys and live wallet charging remain disabled and must not be enabled without a separate production-readiness decision.

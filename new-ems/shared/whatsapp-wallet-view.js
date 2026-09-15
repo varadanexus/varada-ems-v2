@@ -33,7 +33,7 @@ const fields={
 };
 export async function mountWalletView(host,request,connections=[],options={}) {
   if (!host) return;
-  let register='usage',offset=0,rows=[],columns=fields.usage,busy=false;
+  let register=Object.hasOwn(fields,options.initialRegister)?options.initialRegister:'usage',offset=0,rows=[],columns=fields[register],busy=false;
   host.innerHTML='<p role="status">Loading wallet and usage…</p>';
   try {
     const summary=await request('wallet_summary');
@@ -66,7 +66,9 @@ export async function mountWalletView(host,request,connections=[],options={}) {
       <button type="button" data-wallet-prev class="wp-secondary">Previous</button> <button type="button" data-wallet-next class="wp-secondary">Next</button>
       <button type="button" data-wallet-export class="wp-secondary">Download this page (CSV)</button>
       <p class="wp-wallet-footnote"><small>Recharge credit becomes spendable only after verified payment capture. GST and gateway charges are not spendable credit. A dash means no recorded amount, not zero. CSV _minor amounts use the recorded currency decimals; _micros are millionths. Dates are UTC. CSV includes the displayed page only.</small></p></section>`;
+    if (options.showBalance===false) host.querySelector('.wp-wallet-balance')?.remove();
     const form=host.querySelector('form'),status=host.querySelector('[data-wallet-status]');
+    form.elements.register.value=register;
     const load=async()=>{
       if (busy) return;busy=true;
       [...form.querySelectorAll('button'),...host.querySelectorAll('[data-wallet-prev],[data-wallet-next],[data-wallet-export]')].forEach(b=>b.disabled=true);
@@ -96,7 +98,7 @@ export async function mountWalletView(host,request,connections=[],options={}) {
       const link=document.createElement('a');link.href=url;link.download=`varada-${register}-${offset+1}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     });
     await load();
-    if (host.isConnected) mountCurrency();
+    if (host.isConnected && options.showCurrency!==false) mountCurrency();
     if (host.isConnected && options.mountRecharge) options.mountRecharge(host,summary);
     const topup=host.querySelector('[data-wallet-topup]');
     const recharge=host.querySelector('[data-wallet-recharge]');
