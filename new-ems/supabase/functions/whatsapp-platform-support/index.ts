@@ -2,6 +2,7 @@
 // Tenant-isolated WhatsApp Platform customer support and staff operations.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { platformEntitlement } from "../_shared/whatsapp-payg-access.ts";
 
 const MAX_BODY_BYTES = 48 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
@@ -220,11 +221,15 @@ async function customerIntelligence(admin: any, tenantId: string) {
     if (sessionError) throw sessionError;
     activeSessionCount = Number(count || 0);
   }
-  const subscriptionActive = subscription?.status === "active" && (!subscription.current_end || new Date(subscription.current_end).getTime() > Date.now());
-  const trialActive = subscription?.status === "authenticated" && subscription.charge_at && new Date(subscription.charge_at).getTime() > Date.now();
-  const workspaceActive = tenant.status === "active";
-  const billingAllowed = workspaceActive && (subscriptionActive || trialActive);
-  const packageCode = subscription?.package_code || tenant.plan_code || null;
+  const { data: entitlement, error: entitlementError } = await platformEntitlement(
+    admin,
+    tenantId,
+    env("WHATSAPP_PAYG_ENABLED") === "true",
+    env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(),
+  );
+  if (entitlementError) throw entitlementError;
+  const payg = entitlement?.billingModel === "usage" || entitlement?.state === "pay_per_use";
+  const packageCode = payg ? "pay_per_use" : (entitlement?.packageCode || subscription?.package_code || tenant.plan_code || null);
   return {
     id: tenant.id,
     name: tenant.name,
@@ -243,10 +248,13 @@ async function customerIntelligence(admin: any, tenantId: string) {
     connections: (connections || []).map((connection: any) => ({ id: connection.id, provider: connection.provider, metaBusinessId: connection.meta_business_id, whatsappBusinessAccountId: connection.whatsapp_business_account_id, phoneNumberId: connection.phone_number_id, displayPhoneNumber: connection.display_phone_number, verifiedName: connection.verified_name, status: connection.status, onboardingMetadata: connection.onboarding_metadata || {}, connectedAt: connection.connected_at, createdAt: connection.created_at, updatedAt: connection.updated_at })),
     verification: verification ? { id: verification.id, status: verification.status, entityType: verification.entity_type, registrationNumber: verification.registration_number, gstin: verification.gstin, representativeName: verification.authorised_representative_name, representativeTitle: verification.authorised_representative_title, submittedAt: verification.submitted_at, reviewedAt: verification.reviewed_at } : null,
     billingAccess: {
-      subscriptionId: subscription?.id || null,
-      allowed: billingAllowed,
-      state: !workspaceActive ? "workspace_inactive" : subscriptionActive ? "paid" : trialActive ? "trial" : "payment_required",
-      reason: !workspaceActive ? "Workspace access is inactive." : subscriptionActive ? "Active paid subscription" : trialActive ? "Authorized trial access" : "No current billing entitlement.",
+      subscriptionId: payg ? null : (subscription?.id || null),
+      legacySubscriptionId: subscription?.id || null,
+      billingModel: payg ? "usage" : "subscription",
+      mode: entitlement?.mode || null,
+      allowed: entitlement?.allowed === true,
+      state: entitlement?.state || "payment_required",
+      reason: entitlement?.reason || "No current billing entitlement.",
       subscriptionStatus: subscription?.status || null,
       packageCode,
       accessUntil: subscription?.current_end || subscription?.charge_at || null,

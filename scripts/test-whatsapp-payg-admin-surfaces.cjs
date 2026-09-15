@@ -5,6 +5,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const admin = fs.readFileSync(path.join(root, 'pre release/new-ems/shared/page-whatsapp-platform-admin.js'), 'utf8');
 const adminSecrets = fs.readFileSync(path.join(root, 'new-ems/supabase/functions/whatsapp-platform-admin-secrets/index.ts'), 'utf8');
+const support = fs.readFileSync(path.join(root, 'new-ems/supabase/functions/whatsapp-platform-support/index.ts'), 'utf8');
 const sidebar = fs.readFileSync(path.join(root, 'pre release/new-ems/shared/sidebar.js'), 'utf8');
 const walletAdmin = fs.readFileSync(path.join(root, 'pre release/new-ems/shared/whatsapp-wallet-admin.js'), 'utf8');
 
@@ -32,5 +33,11 @@ assert.doesNotMatch(billingOverviewBody, /Recent subscriptions/);
 assert.match(adminSecrets, /whatsapp_platform_wallet_recharges/);
 assert.match(adminSecrets, /whatsapp_platform_wallet_usage/);
 assert.match(adminSecrets, /capturedRecharges/);
+assert.match(support, /platformEntitlement/);
+assert.match(support, /billingModel: payg \? "usage" : "subscription"/);
+assert.doesNotMatch(support, /const billingAllowed = workspaceActive && \(subscriptionActive \|\| trialActive\)/);
+assert.match(admin, /<span>Wallet access<\/span>/);
+assert.match(admin, /<span>Billing model<\/span>/);
+assert.doesNotMatch(admin, /A missed or failed payment blocks product access only/);
 
 console.log('PASS: EMS current commercial and billing surfaces expose PAYG wallets, usage, recharges and audited pricing while isolating legacy subscriptions.');
