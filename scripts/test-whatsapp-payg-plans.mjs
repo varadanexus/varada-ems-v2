@@ -43,4 +43,6 @@ assert.match(portal,/"billing-addons": "Capacity add-ons"/);
 assert.match(portal,/Billing model<\/span><strong>Pay per use/);
 assert.match(portal,/return renderWalletManagementPage\(workspaceBilling \|\| \{\}\);/);
 assert.match(portal,/initialRegister: "recharges"/);
+assert.match(portal,/if \(view === "checkout"\) \{[\s\S]*?workspacePath\("billing-plans"\)/);
+assert.match(portal,/\$\{escapeHtml\(operationalPackageName\)\} billing/);
 console.log('PASS: billing, wallet management, payment ledger and capacity routes use PAYG presentation without enabling payments');
