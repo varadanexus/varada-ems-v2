@@ -17,6 +17,23 @@ export function rechargeHistoryRow(row) {
     gateway_fee_minor:fees?.gatewayFeeMinor ?? null,gateway_gst_minor:fees?.gatewayGstMinor ?? null,
     charge_policy_id:fees?.policyId ?? null};
 }
+const rateLabels={
+  incoming:['Incoming','Messages received from customers'],
+  service:['Service','Free-form replies in the service window'],
+  utility:['Utility','Transactional template messages'],
+  authentication:['Authentication','Verification and one-time passcodes'],
+  marketing:['Marketing','Promotional template messages'],
+};
+export function walletRateCard(summary={}) {
+  const card=summary.commercialRateCard;
+  if(!card?.rates || typeof card.rates!=='object')return '';
+  const rows=Object.entries(rateLabels).map(([key,[label,note]])=>{
+    const value=card.rates[key];
+    return `<div class="wp-wallet-rate-item"><span>${escape(label)}</span><strong>${escape(card.currency || 'USD')} ${escape(value ?? '—')}</strong><small>${escape(note)}</small></div>`;
+  }).join('');
+  const scope=card.scope==='customer'?'Your negotiated rate card':'Standard Varada rate card';
+  return `<section class="wp-wallet-panel wp-wallet-rate-card" aria-labelledby="wpWalletRateTitle"><header class="wp-wallet-panel-heading"><span class="wp-wallet-panel-icon" aria-hidden="true">$</span><div><span class="wp-card-eyebrow">Your message pricing</span><h2 id="wpWalletRateTitle">${escape(scope)}</h2><p>Varada service fees per processed message. Meta messaging charges remain separate and are paid directly to Meta.</p></div><span class="wp-wallet-panel-tag">${card.scope==='customer'?'Customer price':'Global price'}</span></header><div class="wp-wallet-rate-grid">${rows}</div><div class="wp-wallet-rate-note"><span>Rates shown in USD</span><a href="/terms-of-service.html#whatsapp-pricing">Additional pricing terms</a></div></section>`;
+}
 export function walletMinorMoney(value,currency,exponent) {
   if (value==null || !Number.isInteger(exponent) || exponent<0 || exponent>3
     || (typeof value==='number' && !Number.isSafeInteger(value))) return `${currency} —`;
@@ -55,7 +72,8 @@ export async function mountWalletView(host,request,connections=[],options={}) {
     if (!w) { host.innerHTML='<div class="wp-wallet-empty wp-wallet-setup"><span aria-hidden="true">₹</span><div><em>One-time setup</em><strong>Choose your wallet currency</strong><p>Select the currency customers will use for recharges. Service pricing remains displayed in USD.</p></div></div>';mountCurrency();return; }
     if ([w.balance_micros,w.reserved_micros].some(value=>typeof value==='number' && !Number.isSafeInteger(value))) throw new Error('Wallet amounts require an exact-precision refresh. Contact billing support.');
     const available=(BigInt(w.balance_micros)-BigInt(w.reserved_micros)).toString();
-    host.innerHTML=`<section class="wp-wallet-balance"><div class="wp-wallet-balance-primary"><div class="wp-wallet-balance-heading"><span class="wp-card-eyebrow">${escape(w.mode)} service wallet</span><span class="wp-wallet-state ${w.enabled?'is-active':''}">${w.enabled?'Active':'Inactive'}</span></div><p>Available to spend</p><strong>${escape(walletMoney(available,w.currency))}</strong><small>Total funds less amounts reserved for messages awaiting reconciliation.</small><button class="wp-primary wp-wallet-topup" type="button" data-wallet-topup ${summary.rechargeEnabled?'':'disabled'} aria-describedby="wpWalletTopupNote">Top up wallet</button><small class="wp-wallet-topup-note" id="wpWalletTopupNote">${summary.rechargeEnabled?'Add funds through verified secure checkout.':'Available after Test Mode wallet activation.'}</small></div><dl><div><span class="wp-wallet-metric-icon" aria-hidden="true">R</span><dt>Reserved funds</dt><dd>${escape(walletMoney(w.reserved_micros,w.currency))}</dd><small>Pending delivery result</small></div><div><span class="wp-wallet-metric-icon" aria-hidden="true">B</span><dt>Total balance</dt><dd>${escape(walletMoney(w.balance_micros,w.currency))}</dd><small>All credited funds</small></div><div><span class="wp-wallet-metric-icon" aria-hidden="true">M</span><dt>Message rate</dt><dd>USD ${escape(summary.servicePriceUsd)}</dd><small>${summary.messagePriceScope==='customer'?'Customer-specific rate':'Global rate'} · incoming or outgoing</small></div></dl></section>
+    host.innerHTML=`<section class="wp-wallet-balance"><div class="wp-wallet-balance-primary"><div class="wp-wallet-balance-heading"><span class="wp-card-eyebrow">${escape(w.mode)} service wallet</span><span class="wp-wallet-state ${w.enabled?'is-active':''}">${w.enabled?'Active':'Inactive'}</span></div><p>Available to spend</p><strong>${escape(walletMoney(available,w.currency))}</strong><small>Total funds less amounts reserved for messages awaiting reconciliation.</small><button class="wp-primary wp-wallet-topup" type="button" data-wallet-topup ${summary.rechargeEnabled?'':'disabled'} aria-describedby="wpWalletTopupNote">Top up wallet</button><small class="wp-wallet-topup-note" id="wpWalletTopupNote">${summary.rechargeEnabled?'Add funds through verified secure checkout.':'Available after Test Mode wallet activation.'}</small></div><dl><div><span class="wp-wallet-metric-icon" aria-hidden="true">R</span><dt>Reserved funds</dt><dd>${escape(walletMoney(w.reserved_micros,w.currency))}</dd><small>Pending delivery result</small></div><div><span class="wp-wallet-metric-icon" aria-hidden="true">B</span><dt>Total balance</dt><dd>${escape(walletMoney(w.balance_micros,w.currency))}</dd><small>All credited funds</small></div><div><span class="wp-wallet-metric-icon" aria-hidden="true">M</span><dt>Pricing</dt><dd>${summary.commercialRateCard?.scope==='customer'?'Custom':'Standard'}</dd><small>See your category rate card below</small></div></dl></section>
+      ${walletRateCard(summary)}
       <section class="wp-wallet-panel"><div class="wp-card-heading"><div><span class="wp-card-eyebrow">Usage register</span><h2>Wallet activity</h2><p>Review message charges, balance movements and recharge evidence. Reserved amounts remain held until delivery reconciliation.</p></div></div><form data-wallet-filters><label>Register <select name="register"><option value="usage">Message usage</option><option value="ledger">Wallet journal</option><option value="recharges">Recharges</option></select></label>
       <label>Number <select name="connectionId"><option value="">All numbers</option>${connections.map(c=>`<option value="${escape(c.id)}">${escape(c.display_phone_number || c.phone_number_id || c.id)}</option>`).join('')}</select></label>
       <label>Direction <select name="direction"><option value="">Both</option><option value="inbound">Incoming</option><option value="outbound">Outgoing</option></select></label>

@@ -4,6 +4,7 @@ export function usdMicros(value) {
   if (!match) throw new Error('Enter a USD amount with at most six decimal places.');
   return Number(BigInt(match[1])*1000000n+BigInt((match[2]||'').padEnd(6,'0')));
 }
+const priceText=value=>(Number(value||0)/1000000).toFixed(6).replace(/0+$/,'').replace(/\.$/,'') || '0';
 
 const localDateTime=value=>{
   const date=new Date(value);
@@ -18,10 +19,18 @@ export function mountMessagePriceAdmin(host,request,tenants=[],options={}) {
   const now=new Date();
   const until=new Date(now);until.setUTCFullYear(until.getUTCFullYear()+10);
   host.classList.add('wa-message-price-card');
-  host.innerHTML=`<div class="wa-price-card-head"><div class="wa-price-card-icon">$</div><div><span class="wa-admin-kicker">Versioned pricing</span><h3>${fixedTenantId?'Customer message price':'PAYG message pricing'}</h3><p>${fixedTenantId?`Publish a private rate for ${esc(fixedTenantName)}. It overrides the global rate only for this workspace.`:'Publish the public global USD rate or an individual customer override. Prior usage and price versions remain unchanged.'}</p></div><span class="wa-price-audit-badge">Immutable audit</span></div>
+  host.innerHTML=`<div class="wa-price-card-head"><div class="wa-price-card-icon">$</div><div><span class="wa-admin-kicker">Versioned pricing catalogue</span><h3>${fixedTenantId?'Customer message rate card':'WhatsApp message rate cards'}</h3><p>${fixedTenantId?`Publish private category prices for ${esc(fixedTenantName)}. They override the public rate card only for this workspace.`:'Publish the public category prices or an individual customer rate card. This catalogue does not activate or alter wallet charging.'}</p></div><span class="wa-price-audit-badge">Immutable audit</span></div>
     <form data-message-price-admin class="wa-price-form">
       ${fixedTenantId?`<input type="hidden" name="scope" value="customer"><input type="hidden" name="tenantId" value="${esc(fixedTenantId)}">`:`<div class="wa-price-form-grid scope"><label><span>Price scope</span><select name="scope" required>${allowGlobal?'<option value="global">Global public price</option>':''}<option value="customer">Individual customer override</option></select><small>Choose whether this appears publicly or applies privately.</small></label><label><span>Customer workspace</span><select name="tenantId"><option value="">Select customer</option>${tenants.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select><small>Required only for an individual override.</small></label></div>`}
-      <div class="wa-price-form-grid rates"><label class="wa-price-field featured"><span>Standard message fee</span><span class="wa-price-input"><b>USD</b><input name="rate" inputmode="decimal" value="0.0035" required></span><small>Every incoming or outgoing message · up to six decimals</small></label><label class="wa-price-field"><span>Terminal failed-message fee</span><span class="wa-price-input"><b>USD</b><input name="failedRate" inputmode="decimal" value="0.0007" required></span><small>Applied only after terminal delivery failure processing</small></label></div>
+      <section class="wa-rate-card-editor"><div class="wa-rate-card-editor-head"><div><span class="wa-admin-kicker">Customer-facing prices</span><h4>Set each message type independently</h4></div><button type="button" class="wa-admin-button" data-copy-standard-rates>Use USD 0.0035 for all</button></div>
+      <div class="wa-price-form-grid rates categories">
+        <label class="wa-price-field featured"><span>Incoming message</span><span class="wa-price-input"><b>USD</b><input name="incomingRate" inputmode="decimal" value="0.0035" required></span><small>Messages received from a customer</small></label>
+        <label class="wa-price-field"><span>Free-form / service reply</span><span class="wa-price-input"><b>USD</b><input name="serviceRate" inputmode="decimal" value="0.0035" required></span><small>Replies sent during the customer-service window</small></label>
+        <label class="wa-price-field"><span>Utility template</span><span class="wa-price-input"><b>USD</b><input name="utilityRate" inputmode="decimal" value="0.0035" required></span><small>Transactional and account-related templates</small></label>
+        <label class="wa-price-field"><span>Authentication template</span><span class="wa-price-input"><b>USD</b><input name="authenticationRate" inputmode="decimal" value="0.0035" required></span><small>One-time passwords and verification templates</small></label>
+        <label class="wa-price-field"><span>Marketing template</span><span class="wa-price-input"><b>USD</b><input name="marketingRate" inputmode="decimal" value="0.0035" required></span><small>Promotions, offers and engagement templates</small></label>
+      </div>
+      <details class="wa-rate-card-advanced"><summary>Additional processing terms</summary><label class="wa-price-field"><span>Eligible failed-message processing</span><span class="wa-price-input"><b>USD</b><input name="failedRate" inputmode="decimal" value="0.0007" required></span><small>Commercial term shown in billing terms, not the primary public sales message</small></label></details></section>
       <div class="wa-price-form-grid window"><label><span>Effective from</span><input name="from" type="datetime-local" value="${localDateTime(now)}" required><small>New usage from this moment uses the version.</small></label><label><span>Valid until</span><input name="until" type="datetime-local" value="${localDateTime(until)}" required><small>A later version can replace this window safely.</small></label></div>
       <label class="wa-price-reason"><span>Commercial reason and reference</span><textarea name="reason" minlength="10" maxlength="1000" placeholder="Example: approved standard rate for FY 2026–27" required></textarea></label>
       <footer class="wa-price-form-footer"><label class="wa-price-confirm"><input name="confirmed" type="checkbox" required><span><strong>Confirm price publication</strong><small>I confirm the scope, prices and effective window. Publishing appends immutable audit evidence.</small></span></label><button class="wa-admin-button primary" type="submit">Publish message price <span aria-hidden="true">→</span></button></footer>
@@ -39,13 +48,33 @@ export function mountMessagePriceAdmin(host,request,tenants=[],options={}) {
     button.disabled=true;message.textContent='Publishing verified price…';
     try{
       await request('staff_wallet_publish_message_price',{scope:scope.value,tenantId,
-        rateMicros:usdMicros(form.elements.rate.value),failedRateMicros:usdMicros(form.elements.failedRate.value),
+        incomingRateMicros:usdMicros(form.elements.incomingRate.value),serviceRateMicros:usdMicros(form.elements.serviceRate.value),
+        utilityRateMicros:usdMicros(form.elements.utilityRate.value),authenticationRateMicros:usdMicros(form.elements.authenticationRate.value),
+        marketingRateMicros:usdMicros(form.elements.marketingRate.value),failedRateMicros:usdMicros(form.elements.failedRate.value),
         validFrom:new Date(form.elements.from.value).toISOString(),validUntil:new Date(form.elements.until.value).toISOString(),reason:form.elements.reason.value.trim(),confirmed:form.elements.confirmed.checked});
-      message.textContent='Message price published. Existing usage and prior versions were not changed.';
+      message.textContent='Commercial rate card published. Wallet charging, existing usage and prior versions were not changed.';
       form.elements.reason.value='';form.elements.confirmed.checked=false;
     }catch(error){message.textContent=error.message || 'Message price could not be published.';}
     finally{button.disabled=false;}
   });
+  host.querySelector('[data-copy-standard-rates]')?.addEventListener('click',()=>{
+    for(const name of ['incomingRate','serviceRate','utilityRate','authenticationRate','marketingRate'])form.elements[name].value='0.0035';
+  });
+  if(allowGlobal && !fixedTenantId) {
+    const meta=document.createElement('details');meta.className='wa-rate-card-advanced';
+meta.innerHTML=`<summary>Meta country reference prices · calculator only</summary><p>Publish a country-specific USD reference from Meta's current rate card. Blank means unavailable; zero means free. This never changes Varada fees or wallet deductions.</p><form data-meta-reference class="wa-price-form"><div class="wa-price-form-grid categories"><label>Recipient country code<input name="country" pattern="[A-Z]{2}" maxlength="2" placeholder="IN" required></label><label>Marketing (USD)<input name="marketing" inputmode="decimal" placeholder="0.0118"></label><label>Utility (USD)<input name="utility" inputmode="decimal" placeholder="0.0014"></label><label>Authentication (USD)<input name="authentication" inputmode="decimal" placeholder="0.0014"></label></div><label>Effective from<input name="effective" type="datetime-local" value="${localDateTime(now)}" required></label><label>Official source / rate-card reference<input name="source" type="url" value="https://whatsappbusiness.com/products/platform-pricing/" required></label><label>Meta reference reason<textarea name="reason" minlength="10" maxlength="1000" required></textarea></label><label class="wa-price-confirm"><input name="confirmed" type="checkbox" required><span>Confirm country, categories and effective date</span></label><button type="submit" class="wa-admin-button primary">Publish Meta reference</button></form><p role="status"></p>`;
+    host.append(meta);
+    const metaForm=meta.querySelector('form');
+    metaForm.addEventListener('submit',async event=>{
+      event.preventDefault();if(!metaForm.reportValidity())return;
+      const button=metaForm.querySelector('button'),status=meta.querySelector('[role="status"]');button.disabled=true;
+      try {
+        const amount=name=>metaForm.elements[name].value.trim()===''?null:usdMicros(metaForm.elements[name].value);
+        await request('staff_meta_publish_reference',{countryCode:metaForm.elements.country.value,marketingMicros:amount('marketing'),utilityMicros:amount('utility'),authenticationMicros:amount('authentication'),effectiveFrom:new Date(metaForm.elements.effective.value).toISOString(),sourceReference:metaForm.elements.source.value,reason:metaForm.elements.reason.value.trim(),confirmed:metaForm.elements.confirmed.checked});
+        status.textContent='Meta calculator reference published. Wallet charging unchanged.';metaForm.elements.confirmed.checked=false;
+      }catch(error){status.textContent=error.message || 'Meta reference could not be published.';}finally{button.disabled=false;}
+    });
+  }
 }
 export function mountWalletAdmin(host,request,tenants,readiness=null) {
   let selected=null,busy=false,loadRevision=0;
@@ -92,8 +121,8 @@ export function mountWalletAdmin(host,request,tenants,readiness=null) {
         <ul>${(data.chargePolicies||[]).map(p=>`<li><strong>${esc(p.id)}</strong> · ${esc(p.currency)} · ${esc(p.valid_from)} to ${esc(p.valid_until)}
           <p>Service GST: ${esc(p.policy?.serviceGstBps)} bps · Gateway: ${esc(p.policy?.gatewayBps)} bps · Gateway GST: ${esc(p.policy?.gatewayGstBps)} bps · Fixed fee: ${esc(p.policy?.gatewayFixedMinor)} subunits · Basis: ${esc(p.policy?.gatewayBasis)}</p>
           <p>Reviewer: ${esc(p.verified_by)} · Evidence: ${esc(p.evidence_reference)} · Reason: ${esc(p.recorded_reason)}</p></li>`).join('') || '<li>No verified charge policies recorded.</li>'}</ul>
-        <h4>Message price history</h4><p>Customer-specific versions take priority while valid; otherwise the newest valid global price applies.</p>
-        <ul>${(data.messagePrices||[]).map(p=>`<li><strong>${p.tenant_id?'Customer override':'Global price'}</strong> · USD ${(Number(p.usd_rate_micros)/1000000).toFixed(6).replace(/0+$/,'')} per message · failed USD ${(Number(p.usd_failed_rate_micros)/1000000).toFixed(6).replace(/0+$/,'')}<p>${esc(p.valid_from)} to ${esc(p.valid_until)} · ${esc(p.reason)}</p></li>`).join('') || '<li>No message price versions recorded.</li>'}</ul>
+        <h4>Commercial rate-card history</h4><p>Customer-specific versions take priority for presentation while valid. These records do not change wallet deductions.</p>
+        <ul>${(data.messagePrices||[]).map(p=>`<li><strong>${p.tenant_id?'Customer override':'Global public card'}</strong><p>Incoming USD ${priceText(p.usd_incoming_rate_micros)} · Service USD ${priceText(p.usd_service_rate_micros)} · Utility USD ${priceText(p.usd_utility_rate_micros)} · Authentication USD ${priceText(p.usd_authentication_rate_micros)} · Marketing USD ${priceText(p.usd_marketing_rate_micros)}</p><p>${esc(p.valid_from)} to ${esc(p.valid_until)} · ${esc(p.reason)}</p></li>`).join('') || '<li>No commercial rate cards recorded.</li>'}</ul>
         <h4>Auto top-up preference history</h4><p>Latest 100 changes. Preferences are not proof of an approved mandate or completed debit.</p>
         <ul>${(data.autoTopupAudit||[]).map(a=>`<li>Revision ${esc(a.revision)} · ${esc(a.created_at)} · Actor ${esc(a.actor_id)} · ${esc(a.settings?.state)}
           <p>${esc(a.settings?.currency)} subunits — trigger ${esc(a.settings?.threshold_minor)}, credit ${esc(a.settings?.credit_minor)}, gross debit cap ${esc(a.settings?.max_debit_minor)}, monthly gross cap ${esc(a.settings?.monthly_cap_minor)} · Consent ${esc(a.settings?.consent_version)}</p></li>`).join('') || '<li>No auto top-up preference changes.</li>'}</ul>`;
@@ -159,31 +188,6 @@ export function mountWalletAdmin(host,request,tenants,readiness=null) {
         validFrom:`${form.elements.from.value}:00Z`,validUntil:`${form.elements.until.value}:00Z`,sourceReference:form.elements.reference.value.trim(),reason:form.elements.reason.value.trim()});
       message.textContent='Verified charge policy recorded. Checkout activation is unchanged.';form.reset();
     }catch(error){message.textContent=error.message || 'Charge policy could not be recorded.';}
-    finally{busy=false;button.disabled=false;selector.disabled=false;}
-  });
-  const pricing=document.createElement('section');
-  pricing.innerHTML=`<h3>PAYG message pricing</h3><p>Publish the public global USD rate or an individual customer workspace override. Existing usage keeps its original price-version evidence.</p>
-    <form><label>Price scope <select name="scope" required><option value="customer">Selected customer override</option><option value="global">Global public price</option></select></label>
-    <label>Incoming or outgoing message (USD) <input name="rate" inputmode="decimal" value="0.0035" required></label>
-    <label>Terminal failed-message processing (USD) <input name="failedRate" inputmode="decimal" value="0.0007" required></label>
-    <label>Effective from (UTC) <input name="from" type="datetime-local" required></label>
-    <label>Valid until (UTC) <input name="until" type="datetime-local" required></label>
-    <label>Reason for this price <textarea name="reason" minlength="10" maxlength="1000" required></textarea></label>
-    <label><input name="confirmed" type="checkbox" required> I confirm this scope, price and effective window. Publishing appends immutable evidence.</label>
-    <button class="wa-admin-button" type="submit">Publish message price</button></form><p role="status"></p>`;
-  host.append(pricing);
-  pricing.querySelector('form').addEventListener('submit',async event=>{
-    event.preventDefault();const form=event.currentTarget,button=form.querySelector('button'),message=pricing.querySelector('[role="status"]');
-    if(!form.reportValidity() || busy)return;
-    if(form.elements.scope.value==='customer' && !selected){message.textContent='Select and load a customer before publishing an override.';return;}
-    busy=true;button.disabled=true;selector.disabled=true;
-    try{
-      await request('staff_wallet_publish_message_price',{scope:form.elements.scope.value,tenantId:selected,
-        rateMicros:usdMicros(form.elements.rate.value),failedRateMicros:usdMicros(form.elements.failedRate.value),
-        validFrom:`${form.elements.from.value}:00Z`,validUntil:`${form.elements.until.value}:00Z`,reason:form.elements.reason.value.trim(),confirmed:form.elements.confirmed.checked});
-      message.textContent='Message price published. Existing usage and prior versions were not changed.';
-      if(selected)await load();
-    }catch(error){message.textContent=error.message || 'Message price could not be published.';}
     finally{busy=false;button.disabled=false;selector.disabled=false;}
   });
   fx.innerHTML=`<h3>Exchange-rate evidence</h3><p>Rates apply to all wallets using that currency, including test wallets. Enter verified rates only. Publishing appends immutable evidence; it does not convert existing balances.</p>

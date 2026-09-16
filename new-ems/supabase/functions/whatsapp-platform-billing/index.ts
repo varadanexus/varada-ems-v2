@@ -2686,18 +2686,33 @@ Deno.serve(async (req) => {
       if(error) throw error;
       return json(req,{rate:data});
     }
+    if (action === "staff_meta_publish_reference") {
+      const staff=await staffSession(req,true);
+      if(body.confirmed!==true || !/^[A-Z]{2}$/.test(body.countryCode || "")) throw new Error("Confirm a valid recipient country and Meta reference rates.");
+      for(const field of ["marketingMicros","utilityMicros","authenticationMicros"]) {
+        if(body[field]!==null && (!Number.isSafeInteger(body[field]) || body[field]<0 || body[field]>10000000)) throw new Error("Invalid Meta reference price.");
+      }
+      const {data,error}=await admin.rpc("whatsapp_meta_publish_reference",{p_actor:staff.id,p_country:body.countryCode,
+        p_marketing:body.marketingMicros,p_utility:body.utilityMicros,p_authentication:body.authenticationMicros,
+        p_from:body.effectiveFrom,p_source:body.sourceReference,p_reason:body.reason});
+      if(error)throw error;
+      return json(req,{reference:data,walletChargingChanged:false});
+    }
     if (action === "staff_wallet_publish_message_price") {
       const staff=await staffSession(req,true);
-      if(env("WHATSAPP_PAYG_ENABLED")!=="true") throw new Error("Usage billing is not available yet.");
       if(body.confirmed!==true) throw new Error("Confirm the effective scope and message prices before publishing.");
       const tenantId=body.scope==="global" ? null : cleanUuid(body.tenantId,"customer workspace");
-      for(const field of ["rateMicros","failedRateMicros"]) if(!Number.isSafeInteger(body[field])) throw new Error("Message prices must use integer USD micro-units.");
-      const {data,error}=await admin.rpc("whatsapp_wallet_publish_message_price",{
-        p_actor:staff.id,p_tenant:tenantId,p_rate:body.rateMicros,p_failed_rate:body.failedRateMicros,
+      const rateFields=["incomingRateMicros","serviceRateMicros","utilityRateMicros","authenticationRateMicros","marketingRateMicros","failedRateMicros"];
+      for(const field of rateFields) if(!Number.isSafeInteger(body[field])) throw new Error("Message prices must use integer USD micro-units.");
+      const {data,error}=await admin.rpc("whatsapp_pricing_publish_rate_card",{
+        p_actor:staff.id,p_tenant:tenantId,
+        p_incoming_rate:body.incomingRateMicros,p_service_rate:body.serviceRateMicros,
+        p_utility_rate:body.utilityRateMicros,p_authentication_rate:body.authenticationRateMicros,
+        p_marketing_rate:body.marketingRateMicros,p_failed_rate:body.failedRateMicros,
         p_from:body.validFrom,p_until:body.validUntil,p_reason:body.reason,
       });
       if(error) throw error;
-      return json(req,{price:data});
+      return json(req,{rateCard:data,walletChargingChanged:false});
     }
     if (action === "staff_wallet_set_activation") {
       const staff=await staffSession(req,true);
@@ -2756,8 +2771,8 @@ Deno.serve(async (req) => {
       const [subscriptions, assignments, globalPrices, tenantPrices, reconciliations] = await Promise.all([
         admin.from("whatsapp_platform_billing_subscriptions").select("id,provider_subscription_id,subscription_kind,addon_code,status,current_end,cancel_at_cycle_end,safe_metadata,paid_count,updated_at", { count: "exact" }).eq("tenant_id",tenantId).limit(1000),
         admin.from("whatsapp_platform_tenant_addons").select("addon_code,quantity,status,source_subscription_id", { count: "exact" }).eq("tenant_id",tenantId).eq("status","active").limit(1000),
-        admin.from("whatsapp_platform_message_price_versions").select("*").is("tenant_id",null).order("valid_from",{ascending:false}).limit(100),
-        admin.from("whatsapp_platform_message_price_versions").select("*").eq("tenant_id",tenantId).order("valid_from",{ascending:false}).limit(100),
+        admin.from("whatsapp_platform_message_rate_cards").select("*").is("tenant_id",null).order("valid_from",{ascending:false}).limit(100),
+        admin.from("whatsapp_platform_message_rate_cards").select("*").eq("tenant_id",tenantId).order("valid_from",{ascending:false}).limit(100),
         admin.from("whatsapp_platform_payg_subscription_reconciliations").select("*").eq("tenant_id",tenantId).eq("mode",mode).order("created_at",{ascending:false}).limit(1000),
       ]);
       if (subscriptions.error) throw subscriptions.error;

@@ -13,13 +13,17 @@ const assert=require('node:assert/strict');
       window.testCalls=[];let currency='INR';
       await module.mountWalletView(document.querySelector('#host'),async(action,body)=>{
         window.testCalls.push({action,body});
-        if(action==='wallet_summary')return {wallet:{tenant_id:'tenant-a',mode:'test',currency,enabled:true,balance_micros:10000000,reserved_micros:3500},rechargeEnabled:true,canChooseCurrency:true,availableCurrencies:['INR','USD']};
+        if(action==='wallet_summary')return {wallet:{tenant_id:'tenant-a',mode:'test',currency,enabled:true,balance_micros:10000000,reserved_micros:3500},rechargeEnabled:true,canChooseCurrency:true,availableCurrencies:['INR','USD'],commercialRateCard:{id:'rate-a',currency:'USD',scope:'customer',validFrom:'2026-09-01T00:00:00Z',validUntil:'2030-09-01T00:00:00Z',rates:{incoming:'0.0032',service:'0.0033',utility:'0.0034',authentication:'0.0035',marketing:'0.0036'}}};
         if(action==='wallet_choose_currency'){currency=body.currency;return {};}
         if(action==='wallet_history')return {rows:Array.from({length:body.offset?1:50},(_,i)=>({occurred_at:'2026-09-08',connection_id:'number-a',meta_message_id:`meta-${i}`,direction:'outbound',state:'charged',currency,charged_micros:3500,reserved_micros:0,usd_rate_micros:3500,reference:'<script>bad()</script>'})),count:51};
       },[{id:'number-a',display_phone_number:'+91 Test number'}],{mountRecharge:host=>{const section=document.createElement('section');section.dataset.walletRecharge='';section.innerHTML='<input name="amount">';host.append(section);}});
     },fs.readFileSync(path.join(__dirname,'../new-ems/shared/whatsapp-wallet-view.js'),'utf8'));
     await page.getByText('1–50 of 51 records',{exact:true}).waitFor();
     assert.ok(await page.getByText('INR 9.9965',{exact:true}).isVisible());
+    assert.ok(await page.getByRole('heading',{name:'Your negotiated rate card'}).isVisible());
+    assert.ok(await page.getByText('USD 0.0032',{exact:true}).isVisible());
+    assert.ok(await page.getByText('USD 0.0036',{exact:true}).isVisible());
+    assert.equal(await page.getByText('Customer price',{exact:true}).count(),1);
     await page.getByRole('button',{name:'Top up wallet',exact:true}).click();
     assert.equal(await page.locator('[data-wallet-recharge] input[name=amount]').evaluate(input=>document.activeElement===input),true);
     await page.getByRole('button',{name:'Next',exact:true}).click();

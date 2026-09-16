@@ -1,5 +1,5 @@
 import { bindFlowsView, renderFlowBuilderPage, renderFlowsView } from "./whatsapp-flow-builder.js?v=13";
-import { mountWalletView, walletMoney } from "./whatsapp-wallet-view.js?v=6";
+import { mountWalletView, walletMoney } from "./whatsapp-wallet-view.js?v=7";
 import { mountWalletRecharge } from "./whatsapp-wallet-checkout.js?v=3";
 import { mountWalletAutoTopup } from "./whatsapp-wallet-auto-topup.js?v=3";
 import { renderPaygBillingOverview, renderPaygCapacityAddons, renderPaygPaymentLedger, renderWalletManagementPage } from "./whatsapp-payg-plans.js?v=4";
@@ -1654,7 +1654,7 @@ function renderAuth(mode = "login", focusAuth = false) {
         <div class="wp-overview-grid">
           <a href="/whatsapp-platform/features/"><span>01</span><h3>Features</h3><p>Shared inbox, campaigns, automation, contacts, analytics, APIs and team controls.</p><strong>Explore features →</strong></a>
           <a href="/whatsapp-platform/solutions/"><span>02</span><h3>Solutions</h3><p>See practical journeys for sales, customer service, operations, healthcare and marketing.</p><strong>Explore solutions →</strong></a>
-          <a href="/whatsapp-platform/pricing/"><span>03</span><h3>Pricing</h3><p>Compare Launch, Growth and Enterprise plan structures and understand how billing works.</p><strong>Explore pricing →</strong></a>
+          <a href="/whatsapp-platform/pricing/"><span>03</span><h3>Pricing</h3><p>Explore pay-as-you-go message pricing, recipient-country estimates and flexible capacity add-ons.</p><strong>Explore pricing →</strong></a>
           <a href="/whatsapp-platform/results/"><span>04</span><h3>Results &amp; playbooks</h3><p>Choose the operating metrics and launch playbooks that match your customer journey.</p><strong>Plan measurable outcomes →</strong></a>
           <a href="/whatsapp-platform/developers/"><span>05</span><h3>Developers</h3><p>Understand events, webhooks, integrations and the secure architecture behind connected workflows.</p><strong>Explore integrations →</strong></a>
           <a href="/whatsapp-platform/trust/"><span>06</span><h3>Security &amp; trust</h3><p>Review access governance, workspace separation, responsible messaging and privacy practices.</p><strong>Review safeguards →</strong></a>
@@ -1690,7 +1690,7 @@ function renderAuth(mode = "login", focusAuth = false) {
         <div class="wp-faq-list">
           <details><summary>Is this the same as the WhatsApp Business app?</summary><p>No. This solution is designed around the WhatsApp Business Platform for multi-user teams, structured workflows, templates, automation and integrations.</p></details>
           <details><summary>Can I use my existing business number?</summary><p>Often yes, subject to Meta eligibility and the current setup of that number. We review the safest onboarding or migration route with you before any change.</p></details>
-          <details><summary>How does pricing work?</summary><p>You pay a Varada Nexus plan or service fee plus applicable Meta messaging charges. Your quote reflects team access, connected numbers, automation, integrations and expected volume.</p></details>
+          <details><summary>How does pricing work?</summary><p>You pay the published Varada Nexus fee for each processed message plus applicable Meta messaging charges paid separately to Meta. Core platform features are included; only additional seats, numbers and integrations are billed separately.</p></details>
           <details><summary>How quickly can we launch?</summary><p>Timing depends on business verification, number readiness and solution complexity. A straightforward setup can move quickly; custom workflows and migrations take longer.</p></details>
           <details><summary>Can we send bulk promotional messages?</summary><p>Marketing must follow WhatsApp opt-in, template and quality requirements. We do not support unofficial blasting or methods that put your number and customer trust at risk.</p></details>
         </div>

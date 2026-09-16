@@ -30,6 +30,7 @@ const scripts=[
   'scripts/test-whatsapp-payg-addon-shape.cjs',
   'scripts/test-whatsapp-payg-capacity-periods.cjs',
   'scripts/test-whatsapp-payg-pricing.mjs',
+  'scripts/test-whatsapp-payg-pricing-browser.cjs',
   'webhook-proxy/test.mjs',
   'scripts/check-supabase-migrations.cjs',
 ];

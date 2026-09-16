@@ -59,10 +59,28 @@ export function walletBilling({ admin, gateway, hmac, equal, mode, keyId, checko
     },
     async summary(customer: any) {
       const current = await wallet(customer.tenant_id);
-      const price = await rpc('whatsapp_wallet_resolve_message_price',{p_tenant:customer.tenant_id,p_at:new Date().toISOString()});
+      const at = new Date().toISOString();
+      const [price, commercialPrice] = await Promise.all([
+        rpc('whatsapp_wallet_resolve_message_price',{p_tenant:customer.tenant_id,p_at:at}),
+        rpc('whatsapp_pricing_resolve_rate_card',{p_tenant:customer.tenant_id,p_at:at}),
+      ]);
       const usd = (micros: any) => (Number(micros || 0) / 1000000).toFixed(6).replace(/0+$/,'').replace(/\.$/,'');
       return { wallet: current, servicePriceUsd: usd(price.usd_rate_micros), failedMessagePriceUsd: usd(price.usd_failed_rate_micros),
         messagePriceVersionId: price.id, messagePriceScope: price.tenant_id ? 'customer' : 'global', metaPaidDirectly: true,
+        commercialRateCard: {
+          id: commercialPrice.id,
+          currency: 'USD',
+          scope: commercialPrice.tenant_id ? 'customer' : 'global',
+          validFrom: commercialPrice.valid_from,
+          validUntil: commercialPrice.valid_until,
+          rates: {
+            incoming: usd(commercialPrice.usd_incoming_rate_micros),
+            service: usd(commercialPrice.usd_service_rate_micros),
+            utility: usd(commercialPrice.usd_utility_rate_micros),
+            authentication: usd(commercialPrice.usd_authentication_rate_micros),
+            marketing: usd(commercialPrice.usd_marketing_rate_micros),
+          },
+        },
         canManageAutoTopup: ['owner','admin'].includes(customer.role_code),
         availableCurrencies: ['INR','USD'], canChooseCurrency: ['owner','admin'].includes(customer.role_code) && !current?.enabled,
         rechargeEnabled: checkoutEnabled && Boolean(current?.enabled) && ['owner','admin'].includes(customer.role_code) };

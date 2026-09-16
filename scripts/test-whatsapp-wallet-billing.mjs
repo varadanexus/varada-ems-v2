@@ -32,6 +32,11 @@ function fixture(options = {}) {
     async rpc(name, params) {
       calls.push({name,params});
       if(options.rpcError===name)return {error:Error('Rejected stored quote or consent')};
+      if (name==='whatsapp_wallet_resolve_message_price') return {data:{id:'meter-version',tenant_id:null,usd_rate_micros:3500,usd_failed_rate_micros:700}};
+      if (name==='whatsapp_pricing_resolve_rate_card') return {data:{id:'commercial-version',tenant_id:options.customerRateCard?'tenant-a':null,
+        usd_incoming_rate_micros:options.customerRateCard?3200:3500,usd_service_rate_micros:3500,
+        usd_utility_rate_micros:3400,usd_authentication_rate_micros:3300,usd_marketing_rate_micros:3600,
+        usd_failed_rate_micros:700,valid_from:'2026-09-01T00:00:00Z',valid_until:'2030-09-01T00:00:00Z'}};
       if (name.endsWith('prepare_recharge')) return {data:recharge};
       if (name.endsWith('claim_recharge_order')) return {data:options.claim ?? true};
       return {data:{...recharge,provider_order_id:params.p_order_id || recharge.provider_order_id}};
@@ -52,6 +57,19 @@ function fixture(options = {}) {
 const callback = {rechargeId:'recharge-a',paymentId:'pay_A',signature:'signed:order_A|pay_A'};
 const quoteBody={amountMinor:100000,requestKey:'unique-request-key-123'};
 const acceptance={rechargeId:'recharge-a',acceptedTotalMinor:120785,policyVersion:'service-balance-nonrefundable-v1',policyAccepted:true};
+{
+  const global=fixture();
+  const globalSummary=await global.service.summary(customer);
+  assert.equal(globalSummary.commercialRateCard.scope,'global');
+  assert.deepEqual(globalSummary.commercialRateCard.rates,{incoming:'0.0035',service:'0.0035',utility:'0.0034',authentication:'0.0033',marketing:'0.0036'});
+  assert.equal(globalSummary.servicePriceUsd,'0.0035','Existing wallet meter remains independently visible to backend consumers');
+  const custom=fixture({customerRateCard:true});
+  const customSummary=await custom.service.summary(customer);
+  assert.equal(customSummary.commercialRateCard.scope,'customer');
+  assert.equal(customSummary.commercialRateCard.rates.incoming,'0.0032');
+  assert.equal(custom.calls.filter(call=>call.name==='whatsapp_wallet_resolve_message_price').length,1);
+  assert.equal(custom.calls.filter(call=>call.name==='whatsapp_pricing_resolve_rate_card').length,1);
+}
 {
   const {service,calls}=fixture();
   await assert.rejects(service.quoteRecharge(customer,quoteBody),/policy is not configured/);

@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 const source=await readFile(new URL('../new-ems/shared/whatsapp-wallet-view.js',import.meta.url),'utf8');
-const {walletMoney,walletCsv,walletMinorMoney,rechargeHistoryRow}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const {walletMoney,walletCsv,walletMinorMoney,rechargeHistoryRow,walletRateCard}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 assert.equal(walletMinorMoney(120785,'INR',2),'INR 1207.85');
 assert.equal(walletMinorMoney(null,'INR',2),'INR —');
 assert.equal(walletMinorMoney(0,'INR',2),'INR 0.00');
+assert.equal(walletRateCard({commercialRateCard:null}), '');
+const card=walletRateCard({commercialRateCard:{currency:'USD',scope:'customer',rates:{incoming:'0.0032',service:'0.0033',utility:'0.0034',authentication:'0.0035',marketing:'0.0036'}}});
+assert.match(card,/Your negotiated rate card/);
+assert.match(card,/USD 0\.0032/);
+assert.doesNotMatch(card,/failed/i,'Failed processing belongs in linked pricing terms, not the primary customer card');
 assert.equal(walletMinorMoney(100,'INR',undefined),'INR —');
 const recharge={credit_amount_minor:100000,amount_minor:120785,charge_breakdown:{serviceGstMinor:18000,gatewayFeeMinor:2360,gatewayGstMinor:425,policyId:'fixture-v1'}};
 const flat=rechargeHistoryRow(recharge);
