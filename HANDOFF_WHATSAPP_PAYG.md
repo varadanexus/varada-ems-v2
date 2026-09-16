@@ -1063,6 +1063,14 @@ genuinely missing business decisions or account access.
 - SQL fixtures cover identity/limit/type/expiry mismatch, pending status, stale verification, nonzero credit, replay conflicts, immutable storage and unchanged `awaiting_mandate` preference state. Recording evidence does not activate auto-top-up or release pending registration slots.
 - All three mandate registration/order/evidence migrations remain LOCAL ONLY. Next implement consent-safe lifecycle/slot resolution and customer creation recovery, connect authenticated Test actions/UI, then automatic recharge limits/orchestration and provider end-to-end verification. Live activation and prior paid-period financial decision remain separate gates.
 
+### Registration lifecycle and pending-slot resolution
+
+- Added local migration `20260916213000_whatsapp_wallet_mandate_registration_lifecycle.sql` with immutable registration outcome audit and server-only close RPC. Active owner/admin plus explicit confirmation and reason are required.
+- `abandoned_before_provider` is permitted only when no order attempt was ever claimed. Unknown external outcomes cannot be abandoned merely because they expired. `authorization_verified` requires stored verified provider evidence. Closing removes only the matching pending slot; immutable registration/order/token evidence remains.
+- Neither outcome cancels the provider mandate, enables automatic debits, changes preferences or moves funds. Exact outcome replay is idempotent; conflicting actor/reason/outcome rejects. Future runtime must load the current pending slot for registration actions and separately verify current mandate usability before automatic debit.
+- Isolated SQL fixtures pass for missing confirmation/evidence, unsafe abandonment after claim, exact/conflicting replay, slot isolation, fresh registration after safe closure, and immutable outcome evidence. Four mandate migrations remain LOCAL ONLY, not applied remotely.
+- Next implement durable customer creation/recovery and authenticated Test-only service/UI wiring with current-slot checks, then automatic recharge policy/worker limits and provider end-to-end verification. Final Live activation and treatment of prior INR 56.80 paid service remain unconfirmed.
+
 - Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
 - Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
 - Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.

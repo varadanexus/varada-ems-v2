@@ -15,6 +15,7 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916210000_whatsapp_wallet_mandate_registration.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916211000_whatsapp_wallet_mandate_order_binding.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916212000_whatsapp_wallet_verified_mandate_evidence.sql'),'utf8'));
+    await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916213000_whatsapp_wallet_mandate_registration_lifecycle.sql'),'utf8'));
     const tenant='11111111-1111-4111-8111-111111111111', actor='22222222-2222-4222-8222-222222222222', id='33333333-3333-4333-8333-333333333333', other='44444444-4444-4444-8444-444444444444';
     await db.query("insert into whatsapp_platform_users values($1,$2,'active','owner')",[actor,tenant]);
     await db.query("insert into whatsapp_platform_wallets values($1,'test','INR',true),($1,'live','INR',true)",[tenant]);
@@ -32,8 +33,12 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     const providerOrder={entity:'order',id:'order_MandateFixture',amount:0,currency:'INR',receipt:id,notes:{tenant_id:tenant,mode:'test',purpose:'varada_wallet_mandate',registration_id:id,settings_revision:'3'},token:{secret:'DO_NOT_STORE'}};
     const bind=async(customer=providerCustomer,order=providerOrder)=>(await db.query('select whatsapp_wallet_bind_mandate_order($1,$2,$3,$4,$5) result',[tenant,'test',id,customer,order])).rows[0].result;
     const claim=async(customer=providerCustomer)=>(await db.query('select whatsapp_wallet_claim_mandate_order($1,$2,$3,$4) result',[tenant,'test',id,customer])).rows[0].result;
+    const close=async(mode='test',registrationId=id,outcome='authorization_verified',confirmed=true)=>(await db.query('select whatsapp_wallet_close_mandate_registration($1,$2,$3,$4,$5,$6,$7) result',[tenant,mode,actor,registrationId,outcome,'Customer confirmed registration outcome',confirmed])).rows[0].result;
+    await assert.rejects(close(),/Verified provider/);
+    await assert.rejects(close('test',id,'authorization_verified',false),/confirmation/);
     await assert.rejects(bind(),/claimed order attempt/);
     assert.equal(await claim(),true);assert.equal(await claim(),false,'A second order POST is never claimed');
+    await assert.rejects(close('test',id,'abandoned_before_provider'),/Provider attempt exists/);
     await assert.rejects(claim({...providerCustomer,id:'cust_Other'}),/attempt conflict/);
     for(const change of [{amount:1000},{amount:'0'},{receipt:other},{customer_id:'cust_Other'},{notes:{...providerOrder.notes,mode:'live'}},{notes:{...providerOrder.notes,purpose:'varada_service_advance'}}])await assert.rejects(bind(providerCustomer,{...providerOrder,...change}),/ownership mismatch/);
     await assert.rejects(bind({...providerCustomer,notes:{...providerCustomer.notes,tenant_id:actor}}),/ownership mismatch/);
@@ -62,11 +67,20 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     assert.deepEqual(await bind(),bound,'Recovery evidence remains retrievable after settings change without activation');
     await assert.rejects(begin(),/current pending/);
     await assert.rejects(begin([...args.slice(0,4),4,...args.slice(5)]),/replay conflict/);
+    const resolved=await close();assert.equal(resolved.outcome,'authorization_verified');
+    assert.deepEqual(await close(),resolved);
+    await assert.rejects(close('test',id,'abandoned_before_provider'),/replay conflict/);
+    assert.equal((await db.query("select count(*)::int count from whatsapp_platform_wallet_mandate_registration_slots where mode='test'")).rows[0].count,0);
+    assert.equal((await close('live',other,'abandoned_before_provider')).outcome,'abandoned_before_provider');
+    const newId='55555555-5555-4555-8555-555555555555';
+    assert.equal((await begin([tenant,'live',actor,newId,...args.slice(4)])).id,newId,'Closing an unattempted intent permits a fresh registration');
+    await assert.rejects(db.query('delete from whatsapp_platform_wallet_mandate_registration_outcomes'),/immutable/);
     await db.exec("select set_config('request.jwt.claim.role','authenticated',false)");
     await assert.rejects(begin(),/Server only/);
     await assert.rejects(bind(),/Server only/);
     await assert.rejects(record(),/Server only/);
-    assert.equal((await db.query('select count(*)::int count from whatsapp_platform_wallet_mandate_registrations')).rows[0].count,2);
+    await assert.rejects(close(),/Server only/);
+    assert.equal((await db.query('select count(*)::int count from whatsapp_platform_wallet_mandate_registrations')).rows[0].count,3);
     assert.equal((await db.query("select has_table_privilege('authenticated','whatsapp_platform_wallet_mandate_registrations','SELECT') allowed")).rows[0].allowed,false);
     console.log('PASS: immutable mandate intent, explicit consent, mode/tenant identity, stale-settings rejection and single pending slot; no provider calls or debit');
   } finally { await db.close(); }
