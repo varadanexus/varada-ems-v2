@@ -9,6 +9,8 @@ import { paygTransitionReport } from "../_shared/whatsapp-payg-transition.ts";
 import { walletRechargeQuote } from "../_shared/whatsapp-wallet-recharge-quote.ts";
 import { platformEntitlement } from "../_shared/whatsapp-payg-access.ts";
 import { paygAddonQuote } from "../_shared/whatsapp-payg-addons.ts";
+import { walletMandateService } from "../_shared/whatsapp-wallet-mandate-service.ts";
+import * as mandateHelpers from "../_shared/whatsapp-wallet-mandate.ts";
 
 const MAX_BODY_BYTES = 512 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
@@ -681,6 +683,24 @@ function walletService(admin: any, credentials: any) {
     checkoutEnabled: env("WHATSAPP_WALLET_CHECKOUT_ENABLED") === "true",
     gateway: (path: string, init: RequestInit = {}) => razorpayRequest(path, init, credentials),
     hmac: (value: string) => hmacSha256(credentials.keySecret, value), equal: timingSafeHexEqual });
+}
+function testMandateService(admin: any, customer: any) {
+  if (env("WHATSAPP_MANDATE_TEST_ENABLED") !== "true"
+    || env("WHATSAPP_MANDATE_TEST_TENANT_ID") !== customer.tenant_id) throw new Error("Mandate Test access is not enabled for this workspace.");
+  const dedicatedKey = env("RAZORPAY_TEST_KEY_ID");
+  const credentials = dedicatedKey
+    ? { keyId: dedicatedKey, keySecret: env("RAZORPAY_TEST_KEY_SECRET") }
+    : { keyId: env("RAZORPAY_KEY_ID"), keySecret: env("RAZORPAY_KEY_SECRET") };
+  if (razorpayKeyMode(credentials.keyId) !== "test" || !credentials.keySecret) throw new Error("Separate Razorpay Test credentials are required. Live credentials cannot be used.");
+  return walletMandateService({ admin, mode: "test", enabled: true, keyId: credentials.keyId, helpers: mandateHelpers,
+    gateway: (path: string, init: RequestInit = {}) => razorpayRequest(path, init, credentials),
+    hmac: (value: string) => hmacSha256(credentials.keySecret, value), equal: timingSafeHexEqual,
+    resolveIdentity: async (session: any) => {
+      const { data, error } = await admin.from("whatsapp_platform_users").select("display_name,email,contact_phone")
+        .eq("tenant_id", session.tenant_id).eq("id", session.user_id).eq("status", "active").single();
+      if (error) throw error;
+      return { name: data.display_name, email: data.email, contact: data.contact_phone };
+    } });
 }
 function assertSubscriptionMode(subscription: any, credentials: any) {
   const subscriptionMode = subscription?.safe_metadata?.mode === "live" ? "live" : "test";
@@ -2777,6 +2797,7 @@ Deno.serve(async (req) => {
     mutationActions.add("wallet_quote_recharge");
     mutationActions.add("wallet_discard_quote");
     mutationActions.add("wallet_save_auto_topup");
+    for (const mandateAction of ["wallet_mandate_test_begin", "wallet_mandate_test_authorise", "wallet_mandate_test_verify", "wallet_mandate_test_close"]) mutationActions.add(mandateAction);
     const previewActions = new Set(["quote_subscription_checkout", "preview_upgrade", "preview_addon_change", "sync_subscription", "payment_method_portal", "billing_document_pdf"]);
     const maxRequests = mutationActions.has(action) ? 10 : previewActions.has(action) ? 30 : 120;
     const { data: auditClaim, error: auditError } = await admin.rpc("whatsapp_platform_begin_billing_action", {
@@ -2792,8 +2813,15 @@ Deno.serve(async (req) => {
       if (error) throw error;
       result = { entitlement: data };
     } else {
-      const credentials = await loadRazorpaySecrets(admin);
-      if (action.startsWith("wallet_")) {
+      const credentials = action.startsWith("wallet_mandate_test_") ? null : await loadRazorpaySecrets(admin);
+      if (action.startsWith("wallet_mandate_test_")) {
+        const service = testMandateService(admin, customer);
+        if (action === "wallet_mandate_test_begin") result = await service.begin(customer, body);
+        else if (action === "wallet_mandate_test_authorise") result = await service.authorise(customer, body);
+        else if (action === "wallet_mandate_test_verify") result = await service.verify(customer, body);
+        else if (action === "wallet_mandate_test_close") result = await service.close(customer, body);
+        else throw new Error("Unsupported mandate Test action.");
+      } else if (action.startsWith("wallet_")) {
         // Wallet setup and read-only records are available before charging is
         // enabled in either provider mode. This lets an owner select a native
         // wallet currency and inspect an empty wallet without enabling message
