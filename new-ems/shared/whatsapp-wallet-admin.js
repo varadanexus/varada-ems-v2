@@ -79,6 +79,9 @@ export function mountWalletAdmin(host,request,tenants,readiness=null) {
       form.elements.topup.value=String((w.minimum_topup_usd_micros ?? 10000000)/1000000);
       form.elements.reason.value='';fieldset.disabled=false;
       status.textContent=`${data.mode} · ${w.enabled?'Active':'Inactive'} · ${data.pendingEvents?.length || 0} pending billing events shown (up to 100)`;
+      activation.dataset.walletEnabled=String(Boolean(w.enabled));
+      activation.querySelector('[data-wallet-activation-state]').textContent=`${String(data.mode || '').toUpperCase()} wallet · ${w.enabled?'Active':'Inactive'}`;
+      activation.querySelector('select[name=enabled]').value=w.enabled?'false':'true';
       host.querySelector('[data-wallet-audit]').innerHTML=`<h4>Subscription transition review</h4><p>${esc(data.transition?.note || 'Transition review unavailable.')}</p>
         <ul>${(data.transition?.blockers || []).map(b=>`<li><strong>${esc(b.code)}</strong> · ${esc(b.providerSubscriptionId || b.addonCode || b.subscriptionId)} · ${esc(b.detail)}</li>`).join('') || '<li>No blockers found in the stored records. This is not activation approval.</li>'}</ul>
         <h4>Paid capacity to preserve</h4><ul>${(data.transition?.retainedCapacity || []).map(a=>`<li>${esc(a.addonCode)} · ${esc(a.quantity)} units</li>`).join('') || '<li>No active paid capacity assignments found.</li>'}</ul>
@@ -96,6 +99,8 @@ export function mountWalletAdmin(host,request,tenants,readiness=null) {
   };
   selector.addEventListener('change',()=>{
     charge.querySelector('form').reset();charge.querySelector('[role="status"]').textContent='';
+    activation.querySelector('form').reset();activation.querySelector('[role="status"]').textContent='';
+    activation.querySelector('[data-wallet-activation-state]').textContent='Select a workspace to inspect activation readiness.';
     void load();
   });
   form.addEventListener('submit',async event=>{
@@ -186,5 +191,29 @@ export function mountWalletAdmin(host,request,tenants,readiness=null) {
       message.textContent='Verified rate published. Historical evidence and balances were not overwritten.';form.reset();
     }catch(error){message.textContent=error.message || 'Rate publication failed.';}
     finally{button.disabled=false;}
+  });
+  const activation=document.createElement('section');
+  activation.className='wa-wallet-activation';
+  activation.innerHTML=`<div class="wa-price-card-head"><div class="wa-price-card-icon" aria-hidden="true">✓</div><div><span class="wa-admin-kicker">Controlled rollout</span><h3>Wallet activation</h3><p>Activation is separate from configuration. The server rechecks gateway mode, branded webhook, current FX, charge policy, message pricing, unresolved payments and legacy subscription transition before changing access.</p></div><span class="wa-price-audit-badge">Fail closed</span></div>
+    <form class="wa-price-form"><div class="wa-wallet-activation-state" data-wallet-activation-state>Select a workspace to inspect activation readiness.</div>
+      <div class="wa-price-form-grid scope"><label><span>Requested state</span><select name="enabled" required><option value="true">Activate wallet</option><option value="false">Deactivate wallet</option></select><small>Deactivation stops new metered access but never removes balances or ledger evidence.</small></label><label><span>Rollout evidence reference</span><input name="reference" minlength="5" maxlength="1000" placeholder="Release review, ticket or reconciliation reference" required><small>Required for Live activation and retained in immutable configuration history.</small></label></div>
+      <label class="wa-price-reason"><span>Activation reason</span><textarea name="reason" minlength="10" maxlength="1000" placeholder="Explain why this workspace is ready, or why access is being disabled" required></textarea></label>
+      <footer class="wa-price-form-footer"><label class="wa-price-confirm"><input name="confirmed" type="checkbox" required><span><strong>Confirm controlled billing-state change</strong><small>I reviewed the transition blockers and understand that activating a Live wallet permits real PAYG message charges and wallet recharges.</small></span></label><button class="wa-admin-button primary" type="submit">Apply wallet state <span aria-hidden="true">→</span></button></footer>
+    </form><p class="wa-price-status" role="status"></p>`;
+  host.append(activation);
+  activation.querySelector('form').addEventListener('submit',async event=>{
+    event.preventDefault();const activationForm=event.currentTarget,button=activationForm.querySelector('button'),message=activation.querySelector('[role="status"]');
+    if(!activationForm.reportValidity())return;
+    if(!selected || busy){message.textContent='Select and load a customer first.';return;}
+    const tenantId=selected;busy=true;button.disabled=true;selector.disabled=true;
+    try{
+      const enabled=activationForm.elements.enabled.value==='true';
+      const result=await request('staff_wallet_set_activation',{tenantId,enabled,reason:activationForm.elements.reason.value.trim(),
+        evidenceReference:activationForm.elements.reference.value.trim(),confirmed:activationForm.elements.confirmed.checked});
+      message.textContent=result?.activation?.changed===false?'Wallet state was already current; readiness was revalidated.':`Wallet ${enabled?'activated':'deactivated'} with immutable audit evidence.`;
+      activationForm.elements.reason.value='';activationForm.elements.reference.value='';activationForm.elements.confirmed.checked=false;
+      await load();
+    }catch(error){message.textContent=error.message || 'Wallet activation state could not be changed.';}
+    finally{busy=false;button.disabled=false;selector.disabled=false;}
   });
 }

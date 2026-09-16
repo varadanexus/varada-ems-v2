@@ -8,9 +8,15 @@ const { PGlite } = require(process.env.WALLET_TEST_PGLITE || path.join(process.e
   const db = new PGlite();
   await db.exec(`create role anon; create role authenticated; create role service_role;
     create schema auth; create function auth.role() returns text language sql as $$ select coalesce(nullif(current_setting('request.jwt.claim.role',true),''),nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'role') $$;
-    create table public.whatsapp_platform_tenants(id uuid primary key);
+    create table public.whatsapp_platform_tenants(id uuid primary key,status text not null default 'active');
     create table public.whatsapp_platform_connections(id uuid primary key,tenant_id uuid);
     create table public.whatsapp_platform_users(id uuid primary key,tenant_id uuid,status text,role_code text);
+    create table public.whatsapp_platform_billing_runtime(singleton boolean primary key,provider_mode text not null);
+    insert into public.whatsapp_platform_billing_runtime values(true,'test');
+    create table public.whatsapp_platform_billing_subscriptions(
+      id uuid primary key default gen_random_uuid(),tenant_id uuid not null,subscription_kind text not null default 'package',
+      addon_code text,status text,current_end timestamptz,safe_metadata jsonb not null default '{}'::jsonb
+    );
     create table public.whatsapp_platform_billing_coupons(id uuid primary key default gen_random_uuid(),code text unique,name text,description text default '',status text,discount_type text,percentage_bps integer,fixed_amount_paise bigint,max_discount_paise bigint,currency text,minimum_subtotal_paise bigint,applies_to_package_codes jsonb default '[]',applies_to_addon_codes jsonb default '[]',billing_intervals jsonb default '[]',first_payment_only boolean default false,provider_offer_id text,maximum_redemptions integer,maximum_redemptions_per_tenant integer,valid_from timestamptz,valid_until timestamptz,created_by_auth_user_id uuid,updated_by_auth_user_id uuid,created_at timestamptz default now(),updated_at timestamptz default now());
     create table public.whatsapp_platform_billing_coupon_redemptions(id uuid primary key default gen_random_uuid(),coupon_id uuid,tenant_id uuid,subscription_id uuid,reservation_key uuid unique default gen_random_uuid(),status text,coupon_code text,discount_type text,percentage_bps integer,fixed_amount_paise bigint,subtotal_paise bigint,discount_paise bigint,currency text,package_code text,billing_interval text,package_price_version_id uuid,quote_snapshot jsonb default '{}',reserved_at timestamptz default now(),reservation_expires_at timestamptz,applied_at timestamptz,released_at timestamptz,created_at timestamptz default now(),updated_at timestamptz default now());
     select set_config('request.jwt.claim.role','service_role',false);`);
@@ -29,6 +35,7 @@ const { PGlite } = require(process.env.WALLET_TEST_PGLITE || path.join(process.e
   await db.exec(fs.readFileSync(path.join(__dirname, '../new-ems/supabase/migrations/20260909110000_whatsapp_test_wallet_activation.sql'),'utf8'));
   await db.exec(fs.readFileSync(path.join(__dirname, '../new-ems/supabase/migrations/20260909120000_whatsapp_payg_message_pricing.sql'),'utf8'));
   await db.exec(fs.readFileSync(path.join(__dirname, '../new-ems/supabase/migrations/20260909123000_whatsapp_wallet_recharge_coupons.sql'),'utf8'));
+  await db.exec(fs.readFileSync(path.join(__dirname, '../new-ems/supabase/migrations/20260916163000_whatsapp_live_wallet_activation.sql'),'utf8'));
   const tenant = '10000000-0000-0000-0000-000000000001';
   const connection = '20000000-0000-0000-0000-000000000001';
   const query = async (sql, params=[]) => (await db.query(sql, params)).rows;
@@ -196,6 +203,26 @@ const { PGlite } = require(process.env.WALLET_TEST_PGLITE || path.join(process.e
   await assert.rejects(rpc('whatsapp_wallet_set_test_activation',[tenant3,payer,false,'Unauthorized cross-workspace deactivation']),/owner or admin/);
   assert.equal((await rpc('whatsapp_wallet_set_test_activation',[tenant3,owner3,false,'End isolated Test Mode activation test'])).enabled,false);
   assert.equal((await query("select count(*)::int n from whatsapp_platform_wallet_config_audit where tenant_id=$1 and action in ('activate_test','deactivate_test')",[tenant3]))[0].n,2);
+  const tenant4='10000000-0000-0000-0000-000000000004';
+  const liveActor='50000000-0000-0000-0000-000000000004';
+  await query('insert into whatsapp_platform_tenants values ($1)',[tenant4]);
+  await query("insert into whatsapp_platform_wallets(tenant_id,mode,currency) values ($1,'live','USD')",[tenant4]);
+  const liveActivation=[tenant4,'live',liveActor,true,'Enable Live wallet after isolated production-readiness checks','release-review-fixture-001',true];
+  await assert.rejects(rpc('whatsapp_wallet_set_activation',liveActivation),/runtime and wallet activation mode/);
+  await query("update whatsapp_platform_billing_runtime set provider_mode='live' where singleton=true");
+  await assert.rejects(rpc('whatsapp_wallet_set_activation',liveActivation),/charge policy/);
+  await rpc('whatsapp_wallet_publish_charge_policy',[tenant4,'live',liveActor,'USD',chargePolicy,'Synthetic Live activation policy','Isolated Live activation fixture',new Date(Date.now()-60000).toISOString(),new Date(Date.now()+3600000).toISOString()]);
+  const legacyLive=(await query("insert into whatsapp_platform_billing_subscriptions(tenant_id,subscription_kind,status,current_end,safe_metadata) values ($1,'package','active',now()+interval '30 days','{\"mode\":\"live\"}') returning id",[tenant4]))[0].id;
+  await assert.rejects(rpc('whatsapp_wallet_set_activation',liveActivation),/package or included-feature subscription/);
+  await query("update whatsapp_platform_billing_subscriptions set status='cancelled',current_end=now()-interval '1 second' where id=$1",[legacyLive]);
+  const liveResult=await rpc('whatsapp_wallet_set_activation',liveActivation);
+  assert.equal(liveResult.changed,true);assert.equal(liveResult.wallet.enabled,true);assert.ok(liveResult.wallet.enabled_at);
+  assert.equal((await rpc('whatsapp_wallet_set_activation',liveActivation)).changed,false,'Repeated Live activation is a validated no-op');
+  const liveAudit=(await query("select action,evidence_reference from whatsapp_platform_wallet_config_audit where tenant_id=$1 and mode='live' order by id desc limit 1",[tenant4]))[0];
+  assert.equal(liveAudit.action,'activate_live');assert.equal(liveAudit.evidence_reference,'release-review-fixture-001');
+  await assert.rejects((async()=>{await db.exec("select set_config('request.jwt.claim.role','authenticated',false)");try{return await rpc('whatsapp_wallet_set_activation',liveActivation);}finally{await db.exec("select set_config('request.jwt.claim.role','service_role',false)");}})(),/Server only/);
+  const liveDisabled=await rpc('whatsapp_wallet_set_activation',[tenant4,'live',liveActor,false,'Disable Live wallet after isolated activation test','release-review-fixture-001',true]);
+  assert.equal(liveDisabled.wallet.enabled,false);assert.equal(liveDisabled.changed,true);
   const tenant2='10000000-0000-0000-0000-000000000002';
   const connection2='20000000-0000-0000-0000-000000000002';
   await query('insert into whatsapp_platform_tenants values ($1)',[tenant2]);

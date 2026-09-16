@@ -2667,6 +2667,34 @@ Deno.serve(async (req) => {
       if(error) throw error;
       return json(req,{price:data});
     }
+    if (action === "staff_wallet_set_activation") {
+      const staff=await staffSession(req,true);
+      if(env("WHATSAPP_PAYG_ENABLED")!=="true") throw new Error("Usage billing is not available yet.");
+      if(body.confirmed!==true || typeof body.enabled!=="boolean") throw new Error("Confirm the requested wallet activation state.");
+      const tenantId=cleanUuid(body.tenantId,"customer workspace");
+      const mode=env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase();
+      if(!["test","live"].includes(mode)) throw new Error("Wallet billing mode is not configured.");
+      if(body.enabled===true) {
+        if(env("WHATSAPP_WALLET_CHECKOUT_ENABLED")!=="true") throw new Error("Wallet checkout must be enabled before wallet activation.");
+        const credentials=await loadRazorpaySecrets(admin);
+        if(!razorpayConfigured(credentials) || billingMode(credentials)!==mode || !credentials.webhookSecret) {
+          throw new Error(`Complete ${mode} Razorpay credentials and webhook secret are required.`);
+        }
+        const webhookUrl=env("RAZORPAY_PUBLIC_WEBHOOK_URL").trim();
+        let parsedWebhook: URL;
+        try { parsedWebhook=new URL(webhookUrl); } catch { throw new Error("A valid branded Razorpay webhook URL is required."); }
+        const brandedHost=parsedWebhook.hostname==="varada-razorpay-webhook.varadanexus.workers.dev" || parsedWebhook.hostname==="varadanexus.com" || parsedWebhook.hostname.endsWith(".varadanexus.com");
+        if(parsedWebhook.protocol!=="https:" || !brandedHost || parsedWebhook.pathname!=="/razorpay") {
+          throw new Error("The Live wallet requires the branded HTTPS Razorpay webhook endpoint.");
+        }
+      }
+      const {data,error}=await admin.rpc("whatsapp_wallet_set_activation",{
+        p_tenant:tenantId,p_mode:mode,p_actor:staff.id,p_enabled:body.enabled,p_reason:body.reason,
+        p_evidence_reference:body.evidenceReference || "",p_confirmed:body.confirmed,
+      });
+      if(error) throw error;
+      return json(req,{activation:data,mode});
+    }
     if (["staff_wallet_configure", "staff_wallet_snapshot"].includes(action)) {
       const staff = await staffSession(req, true);
       if (env("WHATSAPP_PAYG_ENABLED") !== "true") throw new Error("Usage billing is not available yet.");
