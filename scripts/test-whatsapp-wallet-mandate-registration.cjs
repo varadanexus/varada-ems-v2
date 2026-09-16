@@ -30,6 +30,10 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     const providerCustomer={entity:'customer',id:'cust_MandateFixture',notes:{tenant_id:tenant,mode:'test',purpose:'varada_wallet_mandate_customer'},email:'DO_NOT_STORE'};
     const providerOrder={entity:'order',id:'order_MandateFixture',amount:0,currency:'INR',receipt:id,notes:{tenant_id:tenant,mode:'test',purpose:'varada_wallet_mandate',registration_id:id,settings_revision:'3'},token:{secret:'DO_NOT_STORE'}};
     const bind=async(customer=providerCustomer,order=providerOrder)=>(await db.query('select whatsapp_wallet_bind_mandate_order($1,$2,$3,$4,$5) result',[tenant,'test',id,customer,order])).rows[0].result;
+    const claim=async(customer=providerCustomer)=>(await db.query('select whatsapp_wallet_claim_mandate_order($1,$2,$3,$4) result',[tenant,'test',id,customer])).rows[0].result;
+    await assert.rejects(bind(),/claimed order attempt/);
+    assert.equal(await claim(),true);assert.equal(await claim(),false,'A second order POST is never claimed');
+    await assert.rejects(claim({...providerCustomer,id:'cust_Other'}),/attempt conflict/);
     for(const change of [{amount:1000},{amount:'0'},{receipt:other},{customer_id:'cust_Other'},{notes:{...providerOrder.notes,mode:'live'}},{notes:{...providerOrder.notes,purpose:'varada_service_advance'}}])await assert.rejects(bind(providerCustomer,{...providerOrder,...change}),/ownership mismatch/);
     await assert.rejects(bind({...providerCustomer,notes:{...providerCustomer.notes,tenant_id:actor}}),/ownership mismatch/);
     const bound=await bind();assert.equal(bound.provider_order_id,providerOrder.id);
@@ -43,6 +47,7 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     assert.equal((await begin([tenant,'live',actor,other,...args.slice(4)])).mode,'live','Modes have separate slots');
     await assert.rejects(db.query('delete from whatsapp_platform_wallet_mandate_registrations where id=$1',[id]),/immutable/);
     await db.query("update whatsapp_platform_wallet_auto_topup_preferences set revision=4 where mode='test'");
+    await assert.rejects(claim(),/Current owned/);
     assert.deepEqual(await bind(),bound,'Recovery evidence remains retrievable after settings change without activation');
     await assert.rejects(begin(),/current pending/);
     await assert.rejects(begin([...args.slice(0,4),4,...args.slice(5)]),/replay conflict/);

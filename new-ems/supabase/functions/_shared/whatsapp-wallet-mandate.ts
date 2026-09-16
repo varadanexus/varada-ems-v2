@@ -39,6 +39,32 @@ export function emandateAuthorisationOrder(customer: any, wallet: any, settings:
       registration_id: registration.id, settings_revision: String(settings.revision) } };
 }
 
+// Server-loaded registration and binding only. The database claim is committed
+// before POST: uncertain outcomes require reconciliation, never another POST.
+export async function createEmandateAuthorisation({ gateway, rpc, customer, wallet, settings, registration, mode, keyId, nowSeconds }: any) {
+  const request = emandateAuthorisationOrder(customer, wallet, settings, registration, mode, nowSeconds);
+  if (typeof keyId !== 'string' || !new RegExp(`^rzp_${mode}_[A-Za-z0-9]+$`).test(keyId)) {
+    throw new Error('Mandate checkout key does not match provider mode');
+  }
+  let orderId = registration.provider_order_id;
+  if (!orderId) {
+    const providerCustomer = await gateway(`/customers/${encodeURIComponent(request.customer_id)}`);
+    const claimed = await rpc('whatsapp_wallet_claim_mandate_order', { p_tenant: customer.tenant_id, p_mode: mode,
+      p_registration: registration.id, p_customer: providerCustomer });
+    if (claimed !== true) throw new Error('Mandate order outcome pending; reconcile the existing attempt before retrying');
+    const providerOrder = await gateway('/orders', { method: 'POST', body: JSON.stringify(request) });
+    const binding = await rpc('whatsapp_wallet_bind_mandate_order', { p_tenant: customer.tenant_id, p_mode: mode,
+      p_registration: registration.id, p_customer: providerCustomer, p_order: providerOrder });
+    if (binding?.registration_id !== registration.id || binding.tenant_id !== customer.tenant_id
+      || binding.mode !== mode || binding.provider_customer_id !== request.customer_id) throw new Error('Stored mandate order binding mismatch');
+    orderId = binding.provider_order_id;
+  }
+  if (!/^order_[A-Za-z0-9]+$/.test(orderId)) throw new Error('Valid stored mandate order required');
+  return { registrationId: registration.id, orderId, customerId: request.customer_id, keyId,
+    amountMinor: 0, currency: 'INR', recurring: true, state: 'awaiting_authorisation',
+    maximumDebitMinor: request.token.max_amount, expiresAt: new Date(request.token.expire_at * 1000).toISOString() };
+}
+
 // Read-only provider reconciliation. Caller must authenticate the request and
 // lock/revalidate the pending registration before persisting this evidence.
 // Do not route this zero-value payment to whatsapp_wallet_capture_recharge.

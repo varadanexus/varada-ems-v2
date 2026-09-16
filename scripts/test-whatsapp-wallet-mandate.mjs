@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {stripTypeScriptTypes} from 'node:module';
 const source=await readFile(new URL('../new-ems/supabase/functions/_shared/whatsapp-wallet-mandate.ts',import.meta.url),'utf8');
-const {verifiedEmandate,fetchVerifiedEmandate,emandateAuthorisationOrder,verifyEmandateAuthorisation}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+const {verifiedEmandate,fetchVerifiedEmandate,emandateAuthorisationOrder,verifyEmandateAuthorisation,createEmandateAuthorisation}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
 const tenant='11111111-1111-4111-8111-111111111111', actor='22222222-2222-4222-8222-222222222222';
 const customer={tenant_id:tenant,user_id:actor,role_code:'owner'};
 const wallet={tenant_id:tenant,mode:'test',currency:'INR',enabled:true};
@@ -23,6 +23,18 @@ assert.throws(()=>emandateAuthorisationOrder(customer,{...wallet,enabled:false},
 const token={id:'token_Fixture',entity:'token',method:'emandate',recurring:true,recurring_details:{status:'confirmed'},max_amount:125000,expired_at:2000000000,token:'SECRET',bank_details:{account_number:'SENSITIVE'}};
 const result=verifiedEmandate(token,'token_Fixture',125000,1900000000);
 const pending={...registration,provider_order_id:'order_AuthFixture'};
+const sequence=[];
+const createArgs={customer,wallet,settings,registration,mode:'test',keyId:'rzp_test_Fixture',nowSeconds:1900000000,
+  gateway:async(path,options)=>{sequence.push(path);if(path==='/orders'){assert.equal(options.method,'POST');assert.equal(JSON.parse(options.body).amount,0);return {id:'order_AuthFixture'};}assert.equal(path,'/customers/cust_Fixture');return {id:'cust_Fixture',entity:'customer'};},
+  rpc:async(name,parameters)=>{sequence.push(name);if(name==='whatsapp_wallet_claim_mandate_order')return true;assert.equal(name,'whatsapp_wallet_bind_mandate_order');return {registration_id:registration.id,tenant_id:tenant,mode:'test',provider_customer_id:'cust_Fixture',provider_order_id:'order_AuthFixture'};}};
+assert.equal((await createEmandateAuthorisation(createArgs)).amountMinor,0);
+assert.deepEqual(sequence,['/customers/cust_Fixture','whatsapp_wallet_claim_mandate_order','/orders','whatsapp_wallet_bind_mandate_order']);
+sequence.length=0;
+assert.equal((await createEmandateAuthorisation({...createArgs,registration:pending})).orderId,pending.provider_order_id);
+assert.equal(sequence.length,0,'Stored binding returns checkout without another provider order');
+await assert.rejects(createEmandateAuthorisation({...createArgs,rpc:async()=>false}),/reconcile/);
+assert.ok(!sequence.includes('/orders'),'Already claimed/unknown outcome never creates another order');
+await assert.rejects(createEmandateAuthorisation({...createArgs,keyId:'rzp_live_Fixture'}),/mode/);
 const authOrder={...order,id:pending.provider_order_id,entity:'order'};
 const authPayment={id:'pay_AuthFixture',entity:'payment',order_id:authOrder.id,customer_id:'cust_Fixture',currency:'INR',amount:0,method:'emandate',status:'captured',captured:true,amount_refunded:0,token_id:token.id,email:'PRIVATE_EMAIL'};
 const authToken={...token,expired_at:registration.expires_at_seconds};

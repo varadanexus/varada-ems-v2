@@ -1049,6 +1049,13 @@ genuinely missing business decisions or account access.
 - Expanded PGlite fixtures pass for nonzero/string amounts, customer/tenant/mode/purpose mismatch, conflicting identity, immutable storage, safe projection and retrieval after settings change. Both registration migrations remain LOCAL ONLY pending the completed lifecycle and remote migration review.
 - Next: wire server-side customer/order creation with recovery, implement immutable verified-token evidence and audited slot resolution/mandate lifecycle, then authenticated consent/Checkout UI and threshold-driven recharge orchestration. Final Live activation and unused prior paid-period decision remain outstanding.
 
+### Authorization orchestration and uncertain-outcome safety
+
+- Extended the unapplied order-binding migration with immutable order-attempt claims. Claim locks current wallet/settings, validates the original actor, expiry and provider-customer ownership, and returns true only once. Binding now requires that matching claim.
+- Added `createEmandateAuthorisation` server helper: validates server-loaded intent and mode-specific public key, fetches customer evidence, commits claim before zero-value order POST, binds provider response through the guarded RPC, and returns a safe recurring Checkout projection. Existing binding returns directly; a claimed uncertain attempt never makes a second POST.
+- SQL fixtures verify single claim, conflicting customer rejection, required claim before binding and stale-settings denial. Mocked orchestration fixtures verify claim-before-POST order, binding reuse, unknown-outcome rejection and key-mode separation. No real Razorpay calls occurred.
+- Registration/order migrations remain unapplied remotely; helpers have no public production action yet. Still need durable provider-customer creation/recovery, supported-method verification, token-evidence persistence and slot lifecycle, authenticated consent UI, automatic recharge worker/limits and end-to-end Test verification. Do not enable production actions until these are reviewed.
+
 - Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
 - Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
 - Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.
