@@ -16,6 +16,7 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916211000_whatsapp_wallet_mandate_order_binding.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916212000_whatsapp_wallet_verified_mandate_evidence.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916213000_whatsapp_wallet_mandate_registration_lifecycle.sql'),'utf8'));
+    await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916214000_whatsapp_wallet_mandate_customers.sql'),'utf8'));
     const tenant='11111111-1111-4111-8111-111111111111', actor='22222222-2222-4222-8222-222222222222', id='33333333-3333-4333-8333-333333333333', other='44444444-4444-4444-8444-444444444444';
     await db.query("insert into whatsapp_platform_users values($1,$2,'active','owner')",[actor,tenant]);
     await db.query("insert into whatsapp_platform_wallets values($1,'test','INR',true),($1,'live','INR',true)",[tenant]);
@@ -29,7 +30,17 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     const first=await begin(); assert.equal(first.id,id); assert.equal(first.max_debit_minor,125000);
     assert.equal(first.settings_snapshot.revision,3); assert.equal(first.confirmed,true);
     assert.deepEqual(await begin(),first,'Exact retry retains the original immutable intent');
-    const providerCustomer={entity:'customer',id:'cust_MandateFixture',notes:{tenant_id:tenant,mode:'test',purpose:'varada_wallet_mandate_customer'},email:'DO_NOT_STORE'};
+    const providerCustomer={entity:'customer',id:'cust_MandateFixture',notes:{tenant_id:tenant,mode:'test',purpose:'varada_wallet_mandate_customer',creation_registration_id:id},email:'DO_NOT_STORE'};
+    const customerClaim=async()=>(await db.query('select whatsapp_wallet_claim_mandate_customer($1,$2,$3) result',[tenant,'test',id])).rows[0].result;
+    const customerBind=async(value=providerCustomer)=>(await db.query('select whatsapp_wallet_bind_mandate_customer($1,$2,$3) result',[tenant,'test',value])).rows[0].result;
+    await assert.rejects(customerBind(),/no rows/);
+    assert.equal(await customerClaim(),true);assert.equal(await customerClaim(),false,'Only one provider customer POST is claimed');
+    await assert.rejects(customerBind({...providerCustomer,notes:{...providerCustomer.notes,creation_registration_id:other}}),/identity mismatch/);
+    const customerBinding=await customerBind();assert.equal(customerBinding.provider_customer_id,providerCustomer.id);
+    assert.ok(!JSON.stringify(customerBinding).includes('DO_NOT_STORE'));
+    assert.deepEqual(await customerBind(),customerBinding);
+    await assert.rejects(customerBind({...providerCustomer,id:'cust_Another'}),/replay conflict/);
+    await assert.rejects(db.query('delete from whatsapp_platform_wallet_mandate_customers'),/immutable/);
     const providerOrder={entity:'order',id:'order_MandateFixture',amount:0,currency:'INR',receipt:id,notes:{tenant_id:tenant,mode:'test',purpose:'varada_wallet_mandate',registration_id:id,settings_revision:'3'},token:{secret:'DO_NOT_STORE'}};
     const bind=async(customer=providerCustomer,order=providerOrder)=>(await db.query('select whatsapp_wallet_bind_mandate_order($1,$2,$3,$4,$5) result',[tenant,'test',id,customer,order])).rows[0].result;
     const claim=async(customer=providerCustomer)=>(await db.query('select whatsapp_wallet_claim_mandate_order($1,$2,$3,$4) result',[tenant,'test',id,customer])).rows[0].result;
@@ -80,6 +91,8 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     await assert.rejects(bind(),/Server only/);
     await assert.rejects(record(),/Server only/);
     await assert.rejects(close(),/Server only/);
+    await assert.rejects(customerClaim(),/Server only/);
+    await assert.rejects(customerBind(),/Server only/);
     assert.equal((await db.query('select count(*)::int count from whatsapp_platform_wallet_mandate_registrations')).rows[0].count,3);
     assert.equal((await db.query("select has_table_privilege('authenticated','whatsapp_platform_wallet_mandate_registrations','SELECT') allowed")).rows[0].allowed,false);
     console.log('PASS: immutable mandate intent, explicit consent, mode/tenant identity, stale-settings rejection and single pending slot; no provider calls or debit');

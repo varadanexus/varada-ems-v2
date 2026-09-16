@@ -1071,6 +1071,13 @@ genuinely missing business decisions or account access.
 - Isolated SQL fixtures pass for missing confirmation/evidence, unsafe abandonment after claim, exact/conflicting replay, slot isolation, fresh registration after safe closure, and immutable outcome evidence. Four mandate migrations remain LOCAL ONLY, not applied remotely.
 - Next implement durable customer creation/recovery and authenticated Test-only service/UI wiring with current-slot checks, then automatic recharge policy/worker limits and provider end-to-end verification. Final Live activation and treatment of prior INR 56.80 paid service remain unconfirmed.
 
+### Durable provider-customer creation/recovery foundation
+
+- New local migration `20260916214000_whatsapp_wallet_mandate_customers.sql` records one immutable provider-customer creation attempt per tenant/mode and an immutable provider-ID mapping. Claim requires current active INR wallet, original active owner/admin, pending registration and exact settings snapshot/expiry.
+- Repeated claim returns false rather than authorizing another POST. Server binding requires fetched customer entity/ID and exact tenant/mode/purpose/creation-registration metadata. Conflicting provider identities reject; the audit stores no contact/bank/token-secret details. Mapping recovery remains possible after an external timeout/settings change without activating a mandate.
+- Added PGlite coverage for bind-without-claim, one claim only, wrong creation ID, exact/conflicting replay, immutable storage, safe projection and server-only restrictions. No actual customer API call was made; orchestration still needs to create/recover a customer through the documented `/customers` API and then use this mapping.
+- Five mandate migrations are LOCAL ONLY. Next connect the durable customer and order flows to authenticated Test actions/UI with current-slot checks, then finalize auto-top-up activation/worker limits and end-to-end Test provider verification. No Live financial decision was inferred from automatic continuations.
+
 - Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
 - Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
 - Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.
