@@ -990,3 +990,18 @@ genuinely missing business decisions or account access.
 - Cancelled `sub_TVStbLl02ZJUz2` shows an independent Extra integration add-on, UPI, one charged invoice paid on 29 Aug 2026, INR 6.05. The EMS legacy register's generic Launch display must not be used as proof that this provider record is a base subscription.
 - Total prior Live paid value observed is INR 56.80. User confirmation is required for treatment of unused paid service/capacity periods. Proposed question: confirm whether these were the user's own internal tests and whether to waive their remaining service/capacity without refund or wallet credit, preserving all invoices/payment records, before preparing Live PAYG activation. Do not record a waiver under the existing zero-value reconciliation outcome; a separately guarded audited outcome would be required after confirmation.
 - No cancellation, payment, refund, credit, reconciliation decision or activation was submitted during provider inspection. Final Live activation still needs separate action-time confirmation after charge/FX and transition checks are ready.
+
+## 2026-09-16 save checkpoint
+
+### Subsequent local implementation — legacy product display
+
+- Canonical EMS legacy register now distinguishes `subscription_kind=addon` using its add-on code from historical base packages, includes the provider subscription reference, and labels terminal records `no_renewal`.
+- Missing period-end dates no longer fall back to creation time or stale terminal charge dates. Actual stored period ends remain visible as evidence, not an upcoming debit claim.
+- Admin snapshot projection now includes subscription kind, add-on code and provider ID; shell revision is v49. Full local PAYG suite passed and new isolated legacy-render tests passed (cancelled integration, missing period, active base package and preserved completed-period date).
+- These latest UI/backend projection changes are LOCAL ONLY and not deployed or committed yet. Next: deploy the canonical admin-secrets function, narrowly commit/push the changed canonical files and test, verify the exact Pages run and live assets. Do not overwrite unrelated `pre release` changes.
+- Financial confirmation is still missing; no Live activation, waiver, refund, credit or payment was performed.
+
+- Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
+- Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
+- Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.
+- Preserve unrelated worktree changes and Test wallet funds; do not reset, clean or broadly stage files when resuming.
