@@ -2628,6 +2628,18 @@ Deno.serve(async (req) => {
     const admin = adminClient();
     requestAdmin = admin;
     const action = String(body.action || "summary");
+    if (action === "staff_wallet_reconcile_subscription") {
+      const staff=await staffSession(req,true);
+      const mode=env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase();
+      if(body.confirmed!==true) throw new Error("Confirm the legacy financial reconciliation decision.");
+      const {data,error}=await admin.rpc("whatsapp_payg_reconcile_legacy_subscription",{
+        p_tenant:cleanUuid(body.tenantId,"customer workspace"),p_mode:mode,
+        p_subscription:cleanUuid(body.subscriptionId,"legacy subscription"),p_actor:staff.id,
+        p_outcome:body.outcome,p_evidence_reference:body.evidenceReference,p_reason:body.reason,p_confirmed:body.confirmed,
+      });
+      if(error) throw error;
+      return json(req,data);
+    }
     if (action === "staff_wallet_publish_charge_policy") {
       const staff=await staffSession(req,true);
       if(env("WHATSAPP_PAYG_ENABLED")!=="true")throw new Error("Usage billing is not available yet.");
@@ -2721,20 +2733,22 @@ Deno.serve(async (req) => {
         return query.order("created_at", { ascending: false }).limit(100);
       }));
       for (const result of results) if (result.error) throw result.error;
-      const [subscriptions, assignments, globalPrices, tenantPrices] = await Promise.all([
-        admin.from("whatsapp_platform_billing_subscriptions").select("id,provider_subscription_id,subscription_kind,addon_code,status,current_end,cancel_at_cycle_end,safe_metadata", { count: "exact" }).eq("tenant_id",tenantId).limit(1000),
+      const [subscriptions, assignments, globalPrices, tenantPrices, reconciliations] = await Promise.all([
+        admin.from("whatsapp_platform_billing_subscriptions").select("id,provider_subscription_id,subscription_kind,addon_code,status,current_end,cancel_at_cycle_end,safe_metadata,paid_count,updated_at", { count: "exact" }).eq("tenant_id",tenantId).limit(1000),
         admin.from("whatsapp_platform_tenant_addons").select("addon_code,quantity,status,source_subscription_id", { count: "exact" }).eq("tenant_id",tenantId).eq("status","active").limit(1000),
         admin.from("whatsapp_platform_message_price_versions").select("*").is("tenant_id",null).order("valid_from",{ascending:false}).limit(100),
         admin.from("whatsapp_platform_message_price_versions").select("*").eq("tenant_id",tenantId).order("valid_from",{ascending:false}).limit(100),
+        admin.from("whatsapp_platform_payg_subscription_reconciliations").select("*").eq("tenant_id",tenantId).eq("mode",mode).order("created_at",{ascending:false}).limit(1000),
       ]);
       if (subscriptions.error) throw subscriptions.error;
       if (assignments.error) throw assignments.error;
       if (globalPrices.error) throw globalPrices.error;
       if (tenantPrices.error) throw tenantPrices.error;
+      if (reconciliations.error) throw reconciliations.error;
       if (subscriptions.count>1000 || assignments.count>1000) throw new Error("Transition audit requires pagination; no readiness decision is available.");
       return json(req, { wallet: results[0].data?.[0] || null, configurationAudit: results[1].data, pendingEvents: results[2].data, mode,
         chargePolicies:results[3].data,autoTopupAudit:results[4].data,messagePrices:[...(tenantPrices.data||[]),...(globalPrices.data||[])],
-        transition: paygTransitionReport(subscriptions.data || [], assignments.data || [], mode) });
+        transition: paygTransitionReport(subscriptions.data || [], assignments.data || [], mode, Date.now(), reconciliations.data || []) });
     }
     if (["staff_resend_invoice", "staff_cancel_subscription"].includes(action)) {
       const staff = await staffSession(req);

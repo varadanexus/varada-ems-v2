@@ -15,7 +15,7 @@ const assert=require('node:assert/strict');
       window.testCalls=[];
       module.mountWalletAdmin(document.querySelector('#host'),async(action,body)=>{
         window.testCalls.push({action,body});
-        if(action==='staff_wallet_snapshot')return {mode:'test',wallet:null,configurationAudit:[],pendingEvents:[],transition:{blockers:[],retainedCapacity:[]},
+        if(action==='staff_wallet_snapshot')return {mode:'test',wallet:null,configurationAudit:[],pendingEvents:[],transition:{blockers:[{code:'paid_through_reconciliation',subscriptionId:'legacy-fixture',currentEnd:null,detail:'Synthetic review required'}],retainedCapacity:[]},
           chargePolicies:[{id:'policy-fixture',currency:'INR',policy:{serviceGstBps:1800,gatewayBps:200,gatewayGstBps:1800,gatewayFixedMinor:0,gatewayBasis:'subtotal'},verified_by:'reviewer-fixture',evidence_reference:'<img src=x onerror=alert(1)>',recorded_reason:'Synthetic only'}],
           autoTopupAudit:[{revision:1,actor_id:'owner-fixture',settings:{state:'awaiting_mandate',currency:'INR',threshold_minor:50000,credit_minor:100000,max_debit_minor:125000,monthly_cap_minor:500000,consent_version:'auto-topup-nonrefundable-v1'}}]};
         return {};
@@ -28,6 +28,14 @@ const assert=require('node:assert/strict');
     await page.getByText('policy-fixture',{exact:true}).waitFor();
     assert.equal(await page.locator('[data-wallet-audit] img').count(),0,'Evidence text must not execute HTML');
     assert.ok((await page.locator('[data-wallet-audit]').innerText()).includes('awaiting_mandate'));
+    await page.getByLabel('Verified outcome',{exact:false}).selectOption('test_only_no_live_value');
+    await page.getByLabel('Reconciliation evidence reference',{exact:true}).fill('fixture-provider-cancellation-001');
+    await page.getByLabel('Reconciliation reason',{exact:true}).fill('Synthetic terminal no-value history verification');
+    await page.getByLabel('I verified the provider cancellation',{exact:false}).check();
+    await page.getByRole('button',{name:'Record reconciliation',exact:true}).click();
+    await page.getByText('Immutable transition evidence recorded; wallet activation unchanged.',{exact:false}).waitFor();
+    const legacyDecision=await page.evaluate(()=>window.testCalls.find(c=>c.action==='staff_wallet_reconcile_subscription'));
+    assert.deepEqual(legacyDecision.body,{tenantId:'tenant-a',subscriptionId:'legacy-fixture',outcome:'test_only_no_live_value',evidenceReference:'fixture-provider-cancellation-001',reason:'Synthetic terminal no-value history verification',confirmed:true});
     await page.getByLabel('Reason for change').fill('Test inactive wallet setup');
     await page.getByRole('button',{name:'Save configuration',exact:true}).click();
     await page.getByText('Configuration saved; charging status unchanged.',{exact:false}).waitFor();

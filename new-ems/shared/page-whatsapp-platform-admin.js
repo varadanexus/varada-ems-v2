@@ -2,7 +2,7 @@ import { MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js
 import { getSupabaseAccessToken, getSupabaseClient } from "../config/supabase.js";
 import { bootstrapProtectedPage, renderModuleContent } from "./layout.js?whatsappBillingNav=5";
 import { showToast } from "./utils.js";
-import { mountMessagePriceAdmin, mountWalletAdmin } from "./whatsapp-wallet-admin.js?v=3";
+import { mountMessagePriceAdmin, mountWalletAdmin } from "./whatsapp-wallet-admin.js?v=4";
 
 const BILLING_VIEWS = new Set(["billing", "subscriptions", "payments", "invoices", "refunds", "credit-notes", "reconciliation"]);
 const VIEWS = new Set(["overview", "customers", "verification", "connections", "customer-support", "package-master", "packages", ...BILLING_VIEWS, "razorpay", "meta", "security"]);

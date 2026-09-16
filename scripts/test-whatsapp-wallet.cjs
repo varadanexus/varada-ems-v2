@@ -15,8 +15,9 @@ const { PGlite } = require(process.env.WALLET_TEST_PGLITE || path.join(process.e
     insert into public.whatsapp_platform_billing_runtime values(true,'test');
     create table public.whatsapp_platform_billing_subscriptions(
       id uuid primary key default gen_random_uuid(),tenant_id uuid not null,subscription_kind text not null default 'package',
-      addon_code text,status text,current_end timestamptz,safe_metadata jsonb not null default '{}'::jsonb
+      addon_code text,status text,current_end timestamptz,paid_count integer not null default 0,safe_metadata jsonb not null default '{}'::jsonb
     );
+    create table public.whatsapp_platform_billing_payments(id uuid primary key default gen_random_uuid(),subscription_id uuid,status text,captured boolean,amount_paise bigint);
     create table public.whatsapp_platform_billing_coupons(id uuid primary key default gen_random_uuid(),code text unique,name text,description text default '',status text,discount_type text,percentage_bps integer,fixed_amount_paise bigint,max_discount_paise bigint,currency text,minimum_subtotal_paise bigint,applies_to_package_codes jsonb default '[]',applies_to_addon_codes jsonb default '[]',billing_intervals jsonb default '[]',first_payment_only boolean default false,provider_offer_id text,maximum_redemptions integer,maximum_redemptions_per_tenant integer,valid_from timestamptz,valid_until timestamptz,created_by_auth_user_id uuid,updated_by_auth_user_id uuid,created_at timestamptz default now(),updated_at timestamptz default now());
     create table public.whatsapp_platform_billing_coupon_redemptions(id uuid primary key default gen_random_uuid(),coupon_id uuid,tenant_id uuid,subscription_id uuid,reservation_key uuid unique default gen_random_uuid(),status text,coupon_code text,discount_type text,percentage_bps integer,fixed_amount_paise bigint,subtotal_paise bigint,discount_paise bigint,currency text,package_code text,billing_interval text,package_price_version_id uuid,quote_snapshot jsonb default '{}',reserved_at timestamptz default now(),reservation_expires_at timestamptz,applied_at timestamptz,released_at timestamptz,created_at timestamptz default now(),updated_at timestamptz default now());
     select set_config('request.jwt.claim.role','service_role',false);`);
@@ -36,6 +37,7 @@ const { PGlite } = require(process.env.WALLET_TEST_PGLITE || path.join(process.e
   await db.exec(fs.readFileSync(path.join(__dirname, '../new-ems/supabase/migrations/20260909120000_whatsapp_payg_message_pricing.sql'),'utf8'));
   await db.exec(fs.readFileSync(path.join(__dirname, '../new-ems/supabase/migrations/20260909123000_whatsapp_wallet_recharge_coupons.sql'),'utf8'));
   await db.exec(fs.readFileSync(path.join(__dirname, '../new-ems/supabase/migrations/20260916163000_whatsapp_live_wallet_activation.sql'),'utf8'));
+  await db.exec(fs.readFileSync(path.join(__dirname, '../new-ems/supabase/migrations/20260916190000_whatsapp_payg_subscription_transition_reconciliation.sql'),'utf8'));
   const tenant = '10000000-0000-0000-0000-000000000001';
   const connection = '20000000-0000-0000-0000-000000000001';
   const query = async (sql, params=[]) => (await db.query(sql, params)).rows;
@@ -214,6 +216,24 @@ const { PGlite } = require(process.env.WALLET_TEST_PGLITE || path.join(process.e
   await rpc('whatsapp_wallet_publish_charge_policy',[tenant4,'live',liveActor,'USD',chargePolicy,'Synthetic Live activation policy','Isolated Live activation fixture',new Date(Date.now()-60000).toISOString(),new Date(Date.now()+3600000).toISOString()]);
   const legacyLive=(await query("insert into whatsapp_platform_billing_subscriptions(tenant_id,subscription_kind,status,current_end,safe_metadata) values ($1,'package','active',now()+interval '30 days','{\"mode\":\"live\"}') returning id",[tenant4]))[0].id;
   await assert.rejects(rpc('whatsapp_wallet_set_activation',liveActivation),/package or included-feature subscription/);
+  const reconciliationArgs=[tenant4,'live',legacyLive,liveActor,'test_only_no_live_value','fixture-no-value-001','Verified isolated cancelled no-value fixture',true];
+  await assert.rejects(rpc('whatsapp_payg_reconcile_legacy_subscription',reconciliationArgs),/terminal/);
+  await query("update whatsapp_platform_billing_subscriptions set status='cancelled',paid_count=1 where id=$1",[legacyLive]);
+  await assert.rejects(rpc('whatsapp_payg_reconcile_legacy_subscription',reconciliationArgs),/cannot be dismissed/);
+  await query("update whatsapp_platform_billing_subscriptions set paid_count=0 where id=$1",[legacyLive]);
+  await query("insert into whatsapp_platform_billing_payments(subscription_id,status,captured,amount_paise) values($1,'captured',true,100)",[legacyLive]);
+  await assert.rejects(rpc('whatsapp_payg_reconcile_legacy_subscription',reconciliationArgs),/cannot be dismissed/);
+  await query('delete from whatsapp_platform_billing_payments where subscription_id=$1',[legacyLive]);
+  const reconciliation=await rpc('whatsapp_payg_reconcile_legacy_subscription',reconciliationArgs);
+  assert.equal(reconciliation.changed,true);
+  assert.equal((await rpc('whatsapp_payg_reconcile_legacy_subscription',reconciliationArgs)).changed,false);
+  await assert.rejects(query('delete from whatsapp_platform_payg_subscription_reconciliations'),/immutable/);
+  assert.equal((await rpc('whatsapp_wallet_set_activation',liveActivation)).wallet.enabled,true);
+  await query("update whatsapp_platform_billing_subscriptions set status='active' where id=$1",[legacyLive]);
+  await assert.rejects(rpc('whatsapp_wallet_set_activation',liveActivation),/package or included-feature subscription/);
+  await query("update whatsapp_platform_billing_subscriptions set status='cancelled',paid_count=1 where id=$1",[legacyLive]);
+  await assert.rejects(rpc('whatsapp_wallet_set_activation',liveActivation),/package or included-feature subscription/);
+  await rpc('whatsapp_wallet_set_activation',[tenant4,'live',liveActor,false,'Reset isolated reconciliation activation fixture','fixture-no-value-001',true]);
   await query("update whatsapp_platform_billing_subscriptions set status='cancelled',current_end=now()-interval '1 second' where id=$1",[legacyLive]);
   const liveResult=await rpc('whatsapp_wallet_set_activation',liveActivation);
   assert.equal(liveResult.changed,true);assert.equal(liveResult.wallet.enabled,true);assert.ok(liveResult.wallet.enabled_at);

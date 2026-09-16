@@ -84,6 +84,8 @@ export function mountWalletAdmin(host,request,tenants,readiness=null) {
       activation.querySelector('select[name=enabled]').value=w.enabled?'false':'true';
       host.querySelector('[data-wallet-audit]').innerHTML=`<h4>Subscription transition review</h4><p>${esc(data.transition?.note || 'Transition review unavailable.')}</p>
         <ul>${(data.transition?.blockers || []).map(b=>`<li><strong>${esc(b.code)}</strong> · ${esc(b.providerSubscriptionId || b.addonCode || b.subscriptionId)} · ${esc(b.detail)}</li>`).join('') || '<li>No blockers found in the stored records. This is not activation approval.</li>'}</ul>
+        ${(data.transition?.blockers || []).some(b=>b.code==='paid_through_reconciliation')?`<form data-legacy-reconciliation class="wa-price-form"><h4>Record legacy transition evidence</h4><p>No subscription, payment or balance is changed. Test-only classification is allowed only for a cancelled record with zero paid count and zero captured value. Do not use it for real customer payments.</p><label>Legacy subscription<select name="subscriptionId" required>${data.transition.blockers.filter(b=>b.code==='paid_through_reconciliation').map(b=>`<option value="${esc(b.subscriptionId)}">${esc(b.subscriptionId)} · paid through ${esc(b.currentEnd || 'unknown')}</option>`).join('')}</select></label><label>Verified outcome<select name="outcome" required><option value="">Select verified outcome</option><option value="test_only_no_live_value">Test-only record, no live value</option><option value="paid_period_expired">Paid-through period fully expired</option></select></label><label>Reconciliation evidence reference<input name="reference" minlength="5" maxlength="1000" required></label><label>Reconciliation reason<textarea name="reason" minlength="10" maxlength="1000" required></textarea></label><label class="wa-price-confirm"><input name="confirmed" type="checkbox" required><span>I verified the provider cancellation and financial evidence. This is not wallet activation approval.</span></label><button type="submit" class="wa-admin-button">Record reconciliation</button><p role="status"></p></form>`:''}
+        <h4>Immutable transition decisions</h4><ul>${(data.transition?.reconciliations || []).map(r=>`<li>${esc(r.subscriptionId)} · ${esc(r.outcome)} · ${esc(r.createdAt)}<p>${esc(r.evidenceReference)} · ${esc(r.reason)}</p></li>`).join('') || '<li>No transition decisions recorded.</li>'}</ul>
         <h4>Paid capacity to preserve</h4><ul>${(data.transition?.retainedCapacity || []).map(a=>`<li>${esc(a.addonCode)} · ${esc(a.quantity)} units</li>`).join('') || '<li>No active paid capacity assignments found.</li>'}</ul>
         <h4>Configuration history</h4><ul>${(data.configurationAudit||[]).map(a=>`<li>${esc(a.created_at)} · ${esc(a.actor_id)} · ${esc(a.reason)}</li>`).join('') || '<li>No configuration changes.</li>'}</ul>
         <h4>Recharge charge-policy history</h4><p>Latest 100 records. Dates are UTC; policy validity is not checkout activation.</p>
@@ -102,6 +104,21 @@ export function mountWalletAdmin(host,request,tenants,readiness=null) {
     activation.querySelector('form').reset();activation.querySelector('[role="status"]').textContent='';
     activation.querySelector('[data-wallet-activation-state]').textContent='Select a workspace to inspect activation readiness.';
     void load();
+  });
+  host.addEventListener('submit',async event=>{
+    const reconciliationForm=event.target;
+    if(!reconciliationForm.matches('[data-legacy-reconciliation]'))return;
+    event.preventDefault();
+    if(!selected || busy || !reconciliationForm.reportValidity())return;
+    const button=reconciliationForm.querySelector('button'),message=reconciliationForm.querySelector('[role=status]');
+    busy=true;button.disabled=true;selector.disabled=true;
+    try{
+      await request('staff_wallet_reconcile_subscription',{tenantId:selected,subscriptionId:reconciliationForm.elements.subscriptionId.value,
+        outcome:reconciliationForm.elements.outcome.value,evidenceReference:reconciliationForm.elements.reference.value.trim(),
+        reason:reconciliationForm.elements.reason.value.trim(),confirmed:reconciliationForm.elements.confirmed.checked});
+      await load();status.textContent+=' · Immutable transition evidence recorded; wallet activation unchanged.';
+    }catch(error){message.textContent=error.message || 'Reconciliation could not be recorded.';button.disabled=false;}
+    finally{busy=false;selector.disabled=false;}
   });
   form.addEventListener('submit',async event=>{
     event.preventDefault();if (!selected || busy) return;

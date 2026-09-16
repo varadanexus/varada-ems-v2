@@ -1,8 +1,13 @@
 // Read-only transition analysis. It never cancels subscriptions or alters grants.
-export function paygTransitionReport(subscriptions: any[], assignments: any[], mode: string, nowMs = Date.now()) {
+export function paygTransitionReport(subscriptions: any[], assignments: any[], mode: string, nowMs = Date.now(), reconciliations: any[] = []) {
   if (!['test','live'].includes(mode) || !Number.isFinite(nowMs)) throw new Error('Valid transition mode and time required');
   const retainedCodes=new Set(['extra_agent_seat','extra_whatsapp_number','extra_integration']);
   const terminal=new Set(['cancelled','completed','expired']);
+  const reconciledIds=new Set(reconciliations.filter(r=>{
+    const s=subscriptions.find(s=>s.id===r?.subscription_id),snapshot=r?.source_snapshot?.subscription;
+    return r?.mode===mode && s && snapshot && terminal.has(s.status) &&
+      ['status','current_end','subscription_kind','addon_code','paid_count','updated_at'].every(k=>s[k]===snapshot[k]);
+  }).map(r=>r.subscription_id));
   const modeUnknown=subscriptions.filter(s=>!['test','live'].includes(s.safe_metadata?.mode));
   const inMode=subscriptions.filter(s=>s.safe_metadata?.mode===mode);
   const current=inMode.filter(s=>!terminal.has(s.status));
@@ -23,7 +28,7 @@ export function paygTransitionReport(subscriptions: any[], assignments: any[], m
   for(const subscription of inMode.filter(s=>terminal.has(s.status))) {
     const end=subscription.current_end ? Date.parse(subscription.current_end) : NaN;
     if(subscription.subscription_kind!=='addon' || !retainedCodes.has(subscription.addon_code)) {
-      if(!Number.isFinite(end) || end>nowMs) blockers.push({code:'paid_through_reconciliation',subscriptionId:subscription.id,
+      if((!Number.isFinite(end) || end>nowMs) && !reconciledIds.has(subscription.id)) blockers.push({code:'paid_through_reconciliation',subscriptionId:subscription.id,
         currentEnd:subscription.current_end || null,
         detail:'Confirm the unused paid period is preserved or financially reconciled before usage charging starts.'} as any);
     }
@@ -32,6 +37,7 @@ export function paygTransitionReport(subscriptions: any[], assignments: any[], m
       detail:'This active capacity grant references an ended subscription. Verify its paid-through entitlement and replacement before transition.'} as any);
   }
   return {mode,readyForSubscriptionTransition:blockers.length===0,blockers,
+    reconciliations:reconciliations.filter(r=>r?.mode===mode).map(r=>({subscriptionId:r.subscription_id,outcome:r.outcome,evidenceReference:r.evidence_reference,reason:r.reason,createdAt:r.created_at})),
     retainedSubscriptions:retainedSubscriptions.map(s=>({id:s.id,addonCode:s.addon_code,status:s.status,providerSubscriptionId:s.provider_subscription_id})),
     retainedCapacity:retainedCapacity.map(a=>({addonCode:a.addon_code,quantity:a.quantity,sourceSubscriptionId:a.source_subscription_id || null})),
     note:'This checks stored subscription records only. Live provider verification, financial reconciliation, feature access and wallet activation checks are still required.'};

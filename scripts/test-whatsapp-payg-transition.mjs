@@ -26,4 +26,9 @@ assert.equal(paygTransitionReport([{...ended,current_end:'2030-01-01T00:00:00Z'}
 assert.equal(paygTransitionReport([{...ended,current_end:'2020-01-01T00:00:00Z'}],[],'live').readyForSubscriptionTransition,true);
 assert.equal(paygTransitionReport([{...ended,safe_metadata:{}}],[],'live').blockers[0].code,'unverified_subscription_mode');
 assert.equal(paygTransitionReport([{...ended,current_end:'2020-01-01T00:00:00Z'}],[{addon_code:'extra_agent_seat',quantity:2,status:'active',source_subscription_id:'ended'}],'live').blockers[0].code,'terminal_subscription_capacity');
+const decision={mode:'live',subscription_id:'ended',outcome:'test_only_no_live_value',source_snapshot:{subscription:ended}};
+assert.equal(paygTransitionReport([ended],[],'live',Date.now(),[decision]).readyForSubscriptionTransition,true);
+assert.equal(paygTransitionReport([{...ended,status:'active'}],[],'live',Date.now(),[decision]).readyForSubscriptionTransition,false);
+assert.equal(paygTransitionReport([{...ended,paid_count:1}],[],'live',Date.now(),[decision]).readyForSubscriptionTransition,false);
+assert.equal(paygTransitionReport([ended],[{addon_code:'extra_agent_seat',quantity:2,status:'active',source_subscription_id:'ended'}],'live',Date.now(),[decision]).readyForSubscriptionTransition,false);
 console.log('PASS: subscription-mode separation, retained capacity, included-feature review and cancellation-at-cycle-end remains a blocker');
