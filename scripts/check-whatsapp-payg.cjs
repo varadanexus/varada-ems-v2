@@ -19,6 +19,7 @@ const scripts=[
   'scripts/test-whatsapp-wallet-checkout-browser.cjs',
   'scripts/test-whatsapp-wallet-auto-topup-browser.cjs',
   'scripts/test-whatsapp-wallet-mandate.mjs',
+  'scripts/test-whatsapp-wallet-mandate-registration.cjs',
   'scripts/test-whatsapp-payg-transition.mjs',
   'scripts/test-whatsapp-payg-access.mjs',
   'scripts/test-whatsapp-api-number-scope.mjs',

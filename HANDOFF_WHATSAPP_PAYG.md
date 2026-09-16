@@ -1028,6 +1028,13 @@ genuinely missing business decisions or account access.
 - Added isolated tests for ownership/mode/actor mismatch, stale revision, missing consent, invalid/unsafe numeric limits, disabled/USD wallet, expiry and sensitive-field omission. This pure builder makes no provider calls and has no production call site yet.
 - Still required: database registration lock/persistence and evidence audit, provider supported-method verification, actual registration API/Checkout wiring, payment/token verification and mandate lifecycle, threshold-triggered recharge orchestration with one in-flight attempt/monthly gross cap, captured-only credit and end-to-end Test verification. Do not call auto-top-up complete or expose it as active from this helper alone.
 
+### Auto-top-up registration persistence
+
+- New local migration `20260916210000_whatsapp_wallet_mandate_registration.sql` introduces immutable authorization intents and a separate tenant/mode pending slot. Server-only begin RPC locks wallet and settings, requires active owner/admin and enabled INR wallet, exact current opted-in settings plus separate mandate confirmation, stores the complete settings snapshot and gross limit, and validates the customer-approved expiry.
+- Exact registration-ID retries return original evidence. Conflicting identity/expiry/settings reject. A second pending request rejects; expiry alone does not release an unknown provider outcome. Test and Live use independent slots. There is no provider call, balance change, active mandate or debit scheduler in this migration.
+- Dedicated PGlite test passed and is included in the full PAYG suite. Migration is LOCAL ONLY, not applied remotely. Registration slot resolution/provider binding and audited lifecycle RPCs remain to be implemented before exposing begin through customer UI.
+- Previous authorization-helper commit `91683fb` is local; push it together with this persistence work only after tests pass. Preserve unrelated changes.
+
 - Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
 - Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
 - Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.

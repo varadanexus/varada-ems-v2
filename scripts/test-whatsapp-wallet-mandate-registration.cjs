@@ -1,0 +1,43 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env.TEMP,'varada-wallet-test-runtime/node_modules/@electric-sql/pglite'));
+(async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(`create role anon; create role authenticated; create role service_role; create schema auth;
+      create function auth.role() returns text language sql as $$select current_setting('request.jwt.claim.role',true)$$;
+      select set_config('request.jwt.claim.role','service_role',false);
+      create table whatsapp_platform_users(id uuid primary key,tenant_id uuid,status text,role_code text);
+      create table whatsapp_platform_wallets(tenant_id uuid,mode text,currency text,enabled boolean,primary key(tenant_id,mode));
+      create table whatsapp_platform_wallet_auto_topup_preferences(tenant_id uuid,mode text,currency text,revision integer,requested_enabled boolean,state text,consent_version text,max_debit_minor bigint);
+      create function whatsapp_wallet_fx_immutable() returns trigger language plpgsql as $$begin raise exception 'immutable';end;$$;`);
+    await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916210000_whatsapp_wallet_mandate_registration.sql'),'utf8'));
+    const tenant='11111111-1111-4111-8111-111111111111', actor='22222222-2222-4222-8222-222222222222', id='33333333-3333-4333-8333-333333333333', other='44444444-4444-4444-8444-444444444444';
+    await db.query("insert into whatsapp_platform_users values($1,$2,'active','owner')",[actor,tenant]);
+    await db.query("insert into whatsapp_platform_wallets values($1,'test','INR',true),($1,'live','INR',true)",[tenant]);
+    await db.query("insert into whatsapp_platform_wallet_auto_topup_preferences values($1,'test','INR',3,true,'awaiting_mandate','auto-topup-nonrefundable-v1',125000),($1,'live','INR',3,true,'awaiting_mandate','auto-topup-nonrefundable-v1',125000)",[tenant]);
+    const expiry = Number((await db.query("select floor(extract(epoch from now())) + 86400 as expiry")).rows[0].expiry);
+    const args=[tenant,'test',actor,id,3,expiry,'auto-topup-emandate-v1',true];
+    const begin=async (values=args)=>(await db.query('select whatsapp_wallet_begin_mandate_registration($1,$2,$3,$4,$5,$6,$7,$8) result',values)).rows[0].result;
+    await assert.rejects(begin([...args.slice(0,7),false]),/consent/);
+    await assert.rejects(begin([...args.slice(0,4),2,...args.slice(5)]),/current pending/);
+    await assert.rejects(begin([...args.slice(0,5),0,...args.slice(6)]),/expiry/);
+    const first=await begin(); assert.equal(first.id,id); assert.equal(first.max_debit_minor,125000);
+    assert.equal(first.settings_snapshot.revision,3); assert.equal(first.confirmed,true);
+    assert.deepEqual(await begin(),first,'Exact retry retains the original immutable intent');
+    await assert.rejects(begin([...args.slice(0,3),other,...args.slice(4)]),/already pending/);
+    await assert.rejects(begin([...args.slice(0,5),expiry+1,...args.slice(6)]),/replay conflict/);
+    await assert.rejects(begin([tenant,'live',...args.slice(2)]),/replay conflict/);
+    assert.equal((await begin([tenant,'live',actor,other,...args.slice(4)])).mode,'live','Modes have separate slots');
+    await assert.rejects(db.query('delete from whatsapp_platform_wallet_mandate_registrations where id=$1',[id]),/immutable/);
+    await db.query("update whatsapp_platform_wallet_auto_topup_preferences set revision=4 where mode='test'");
+    await assert.rejects(begin(),/current pending/);
+    await assert.rejects(begin([...args.slice(0,4),4,...args.slice(5)]),/replay conflict/);
+    await db.exec("select set_config('request.jwt.claim.role','authenticated',false)");
+    await assert.rejects(begin(),/Server only/);
+    assert.equal((await db.query('select count(*)::int count from whatsapp_platform_wallet_mandate_registrations')).rows[0].count,2);
+    assert.equal((await db.query("select has_table_privilege('authenticated','whatsapp_platform_wallet_mandate_registrations','SELECT') allowed")).rows[0].allowed,false);
+    console.log('PASS: immutable mandate intent, explicit consent, mode/tenant identity, stale-settings rejection and single pending slot; no provider calls or debit');
+  } finally { await db.close(); }
+})().catch(error=>{console.error(error);process.exitCode=1;});
