@@ -1021,6 +1021,13 @@ genuinely missing business decisions or account access.
 - Do not ask the user to enable eNACH as though it were missing. This is positive dashboard method evidence, not a completed API registration/charge test or proof of every on-demand account capability. Next verify supported-method API shape and registration availability before enabling wallet auto-top-up.
 - No Request, Cancel, financial, key or other settings mutation was clicked. Existing subscriptions remain cancelled. Use the activated netbanking/debit-card eNACH route for implementation research; do not require pending Aadhaar eSign or unrequested Paper NACH.
 
+### Auto-top-up implementation — authorization request boundary
+
+- Added pure `emandateAuthorisationOrder` to the canonical mandate helper. It builds only a zero-value INR e-mandate netbanking authorization order from server-loaded wallet/settings/registration identities, with a unique registration receipt and distinct `varada_wallet_mandate` purpose (never a recharge).
+- Requires enabled owned INR wallet, owner/admin, pending opted-in settings, exact settings revision, separate `auto-topup-emandate-v1` confirmation, current non-refundable policy, approved matching gross debit limit and future explicitly approved expiry within one year. It whitelists output fields and omits extra bank/sensitive input.
+- Added isolated tests for ownership/mode/actor mismatch, stale revision, missing consent, invalid/unsafe numeric limits, disabled/USD wallet, expiry and sensitive-field omission. This pure builder makes no provider calls and has no production call site yet.
+- Still required: database registration lock/persistence and evidence audit, provider supported-method verification, actual registration API/Checkout wiring, payment/token verification and mandate lifecycle, threshold-triggered recharge orchestration with one in-flight attempt/monthly gross cap, captured-only credit and end-to-end Test verification. Do not call auto-top-up complete or expose it as active from this helper alone.
+
 - Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
 - Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
 - Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.

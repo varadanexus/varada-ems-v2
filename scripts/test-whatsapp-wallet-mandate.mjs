@@ -2,7 +2,24 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {stripTypeScriptTypes} from 'node:module';
 const source=await readFile(new URL('../new-ems/supabase/functions/_shared/whatsapp-wallet-mandate.ts',import.meta.url),'utf8');
-const {verifiedEmandate,fetchVerifiedEmandate}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+const {verifiedEmandate,fetchVerifiedEmandate,emandateAuthorisationOrder}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+const tenant='11111111-1111-4111-8111-111111111111', actor='22222222-2222-4222-8222-222222222222';
+const customer={tenant_id:tenant,user_id:actor,role_code:'owner'};
+const wallet={tenant_id:tenant,mode:'test',currency:'INR',enabled:true};
+const settings={...wallet,revision:3,requested_enabled:true,state:'awaiting_mandate',consent_version:'auto-topup-nonrefundable-v1',credit_minor:100000,max_debit_minor:125000,monthly_cap_minor:500000,threshold_minor:5000};
+const registration={id:'33333333-3333-4333-8333-333333333333',tenant_id:tenant,mode:'test',actor_id:actor,settings_revision:3,provider_customer_id:'cust_Fixture',max_debit_minor:125000,expires_at_seconds:1900000000+86400,confirmed:true,consent_version:'auto-topup-emandate-v1',bank_details:'NEVER_FORWARD'};
+const order=emandateAuthorisationOrder(customer,wallet,settings,registration,'test',1900000000);
+assert.equal(order.amount,0);assert.equal(order.token.max_amount,125000);assert.equal(order.receipt,registration.id);
+assert.equal(order.notes.purpose,'varada_wallet_mandate');assert.equal(order.notes.settings_revision,'3');
+assert.ok(!JSON.stringify(order).includes('NEVER_FORWARD'));
+for(const change of [{confirmed:false},{settings_revision:2},{mode:'live'},{tenant_id:actor},{actor_id:tenant},{consent_version:'auto-topup-nonrefundable-v1'},{max_debit_minor:125001},{expires_at_seconds:1900000000},{expires_at_seconds:1900000000+367*86400},{provider_customer_id:'../customers'}]) {
+  assert.throws(()=>emandateAuthorisationOrder(customer,wallet,settings,{...registration,...change},'test',1900000000));
+}
+for(const change of [{requested_enabled:false},{state:'disabled'},{currency:'USD'},{max_debit_minor:NaN},{max_debit_minor:'125000'},{monthly_cap_minor:124999},{threshold_minor:-1}]) {
+  assert.throws(()=>emandateAuthorisationOrder(customer,wallet,{...settings,...change},registration,'test',1900000000));
+}
+assert.throws(()=>emandateAuthorisationOrder({...customer,role_code:'agent'},wallet,settings,registration,'test',1900000000));
+assert.throws(()=>emandateAuthorisationOrder(customer,{...wallet,enabled:false},settings,registration,'test',1900000000));
 const token={id:'token_Fixture',entity:'token',method:'emandate',recurring:true,recurring_details:{status:'confirmed'},max_amount:125000,expired_at:2000000000,token:'SECRET',bank_details:{account_number:'SENSITIVE'}};
 const result=verifiedEmandate(token,'token_Fixture',125000,1900000000);
 assert.equal(result.currency,'INR');
