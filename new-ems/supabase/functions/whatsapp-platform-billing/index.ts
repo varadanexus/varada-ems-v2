@@ -11,6 +11,7 @@ import { platformEntitlement } from "../_shared/whatsapp-payg-access.ts";
 import { paygAddonQuote } from "../_shared/whatsapp-payg-addons.ts";
 import { walletMandateService } from "../_shared/whatsapp-wallet-mandate-service.ts";
 import * as mandateHelpers from "../_shared/whatsapp-wallet-mandate.ts";
+import { rechargeFx } from "../_shared/whatsapp-recharge-fx.ts";
 
 const MAX_BODY_BYTES = 512 * 1024;
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
@@ -2674,6 +2675,17 @@ Deno.serve(async (req) => {
       });
       if(error)throw error;
       return json(req,{policy:data});
+    }
+    if (action === "staff_recharge_fx_snapshot" || action === "staff_recharge_fx_control") {
+      const staff=await staffSession(req,true);
+      const rpc=async(name,args)=>{const {data,error}=await admin.rpc(name,args);if(error)throw error;return data;};
+      if(action === "staff_recharge_fx_control") {
+        if(body.confirmed!==true || !['automatic','manual'].includes(body.mode))throw new Error('Confirm the recharge exchange-rate mode.');
+        if(body.mode==='manual' && (typeof body.unitsPerUsd!=='string' || !/^\d{1,4}(\.\d{1,8})?$/.test(body.unitsPerUsd)))throw new Error('Enter INR per USD with up to eight decimal places.');
+        await rpc('whatsapp_recharge_fx_set_control',{p_actor:staff.id,p_mode:body.mode,p_rate:body.mode==='manual'?body.unitsPerUsd:null,
+          p_from:body.effectiveFrom,p_until:body.mode==='manual'?body.expiresAt:null,p_reason:body.reason});
+      }
+      return json(req,await rechargeFx({rpc}).snapshot());
     }
     if (action === "staff_wallet_publish_fx") {
       const staff=await staffSession(req,true);

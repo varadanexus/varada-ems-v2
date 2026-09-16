@@ -3,6 +3,7 @@ const {spawnSync}=require('node:child_process');
 const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const scripts=[
+  'scripts/test-whatsapp-recharge-fx.cjs',
   'scripts/test-whatsapp-onboarding-visibility.mjs',
   'scripts/test-whatsapp-payg-plans.mjs',
   'scripts/test-whatsapp-wallet.cjs',

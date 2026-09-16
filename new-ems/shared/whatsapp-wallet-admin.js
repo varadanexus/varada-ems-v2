@@ -12,6 +12,38 @@ const localDateTime=value=>{
   return new Date(date.getTime()-offset).toISOString().slice(0,16);
 };
 
+export function mountRechargeFxAdmin(host,request) {
+  host.className='wa-price-card';
+  host.innerHTML=`<div class="wa-price-card-head"><div class="wa-price-card-icon">₹</div><div><span class="wa-admin-kicker">Recharge conversion · INR / USD</span><h3>Automatic rates & manual override</h3><p>Daily reference rates for the proposed USD-wallet recharge flow. These controls do not change the current wallet meter, existing orders or balances. Payment collection remains paused.</p></div></div>
+    <p data-recharge-fx-summary role="status">Loading exchange-rate evidence…</p>
+    <button type="button" data-recharge-fx-refresh class="wa-admin-button">Refresh rate status</button>
+    <form class="wa-price-form" data-recharge-fx-control><div class="wa-price-form-grid categories">
+      <label>Recharge rate mode<select name="mode"><option value="manual">Manual override</option><option value="automatic">Return to automatic</option></select></label>
+      <label>Manual INR per USD<input name="rate" inputmode="decimal" placeholder="Enter verified rate" pattern="[0-9]+([.][0-9]{1,8})?" required></label>
+      <label>Effective time<input name="from" type="datetime-local" value="${localDateTime(new Date())}" required></label>
+      <label>Manual override expiry<input name="until" type="datetime-local" required></label></div>
+      <label>Override reason / reference<textarea name="reason" minlength="10" maxlength="1000" required></textarea></label>
+      <label class="wa-price-confirm"><input name="confirmed" type="checkbox" required><span>I confirm this rate applies only to new recharge quotes. Existing orders and balances must not be repriced.</span></label>
+      <button type="submit" class="wa-admin-button primary">Save recharge rate control</button></form>
+    <p data-recharge-fx-result role="status"></p><details><summary>Recharge-rate control history · latest 50</summary><div data-recharge-fx-history></div></details>
+    <p>Automatic mode refreshes the server cache when due; it is not a real-time trading rate. An expired manual override pauses rate availability until another control is approved. <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer">Rates By Exchange Rate API</a></p>`;
+  const form=host.querySelector('form'),summary=host.querySelector('[data-recharge-fx-summary]'),result=host.querySelector('[data-recharge-fx-result]'),refresh=host.querySelector('[data-recharge-fx-refresh]');
+  let busy=false;
+  const render=data=>{
+    summary.textContent=`${data.mode || 'automatic'} · ${data.usable?'1 USD = INR '+data.unitsPerUsd:'No usable rate — new recharge quotes must pause'}${data.automatic?.provider_updated_at?' · Provider updated '+data.automatic.provider_updated_at:''}${data.control?.expires_at?' · Manual expires '+data.control.expires_at:''}${data.refreshError?' · '+data.refreshError:''}`;
+    host.querySelector('[data-recharge-fx-history]').innerHTML=(data.history||[]).map(row=>`<p>${esc(row.created_at)} · ${esc(row.mode)} · INR ${esc(row.units_per_usd || 'automatic')} · ${esc(row.effective_from)} → ${esc(row.expires_at || 'until replaced')} · Operator ${esc(row.actor_id)} · ${esc(row.reason)}</p>`).join('') || '<p>No manual controls published.</p>';
+  };
+  const load=async()=>{if(busy)return;busy=true;refresh.disabled=true;try{render(await request('staff_recharge_fx_snapshot',{}));}catch(error){summary.textContent=error.message||'Rate status unavailable.';}finally{busy=false;refresh.disabled=false;}};
+  form.elements.mode.addEventListener('change',()=>{const manual=form.elements.mode.value==='manual';for(const name of ['rate','until']){form.elements[name].required=manual;form.elements[name].disabled=!manual;}});
+  refresh.addEventListener('click',load);
+  form.addEventListener('submit',async event=>{event.preventDefault();if(busy||!form.reportValidity())return;busy=true;const button=form.querySelector('button');button.disabled=true;refresh.disabled=true;
+    try{render(await request('staff_recharge_fx_control',{mode:form.elements.mode.value,unitsPerUsd:form.elements.rate.value.trim(),effectiveFrom:new Date(form.elements.from.value).toISOString(),
+      expiresAt:form.elements.mode.value==='manual'?new Date(form.elements.until.value).toISOString():null,reason:form.elements.reason.value.trim(),confirmed:form.elements.confirmed.checked}));result.textContent='Audited recharge control saved. Payment collection and wallet charging unchanged.';form.elements.confirmed.checked=false;}
+    catch(error){result.textContent=error.message||'Control could not be saved. Check history before retrying an uncertain request.';}finally{busy=false;button.disabled=false;refresh.disabled=false;}
+  });
+  load();
+}
+
 export function mountMessagePriceAdmin(host,request,tenants=[],options={}) {
   const fixedTenantId=options.tenantId || '';
   const fixedTenantName=options.tenantName || 'Selected customer';
@@ -160,6 +192,7 @@ export function mountWalletAdmin(host,request,tenants,readiness=null) {
     } catch(error) {status.textContent=error.message || 'Configuration could not be saved.';fieldset.disabled=false;}
     finally {busy=false;selector.disabled=false;}
   });
+  const rechargeFxHost=document.createElement('section');host.append(rechargeFxHost);mountRechargeFxAdmin(rechargeFxHost,request);
   const fx=document.createElement('section');
   const charge=document.createElement('section');
   charge.innerHTML=`<h3>Recharge tax and gateway policy</h3><p>Applies to the selected customer and configured billing mode. Verify tax applicability, gateway tariffs and whether passing fees to customers is permitted. No rates are prefilled. Publishing does not enable payments.</p>
@@ -190,7 +223,7 @@ export function mountWalletAdmin(host,request,tenants,readiness=null) {
     }catch(error){message.textContent=error.message || 'Charge policy could not be recorded.';}
     finally{busy=false;button.disabled=false;selector.disabled=false;}
   });
-  fx.innerHTML=`<h3>Exchange-rate evidence</h3><p>Rates apply to all wallets using that currency, including test wallets. Enter verified rates only. Publishing appends immutable evidence; it does not convert existing balances.</p>
+  fx.innerHTML=`<h3>Legacy native-wallet exchange-rate evidence</h3><p>Separate from the recharge override above. Rates apply to the current native-currency message meter, including test wallets. Enter verified rates only. Publishing appends immutable evidence; it does not convert existing balances.</p>
     <form><label>Currency (not USD) <input name="currency" pattern="[A-Z]{3}" maxlength="3" required></label>
     <label>Currency units per USD <input name="rate" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,8})?" required></label>
     <label>Valid from (UTC) <input name="from" type="datetime-local" required></label>
