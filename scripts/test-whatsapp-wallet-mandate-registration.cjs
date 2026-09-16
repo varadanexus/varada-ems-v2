@@ -14,6 +14,7 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
       create function whatsapp_wallet_fx_immutable() returns trigger language plpgsql as $$begin raise exception 'immutable';end;$$;`);
     await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916210000_whatsapp_wallet_mandate_registration.sql'),'utf8'));
     await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916211000_whatsapp_wallet_mandate_order_binding.sql'),'utf8'));
+    await db.exec(fs.readFileSync(path.join(__dirname,'../new-ems/supabase/migrations/20260916212000_whatsapp_wallet_verified_mandate_evidence.sql'),'utf8'));
     const tenant='11111111-1111-4111-8111-111111111111', actor='22222222-2222-4222-8222-222222222222', id='33333333-3333-4333-8333-333333333333', other='44444444-4444-4444-8444-444444444444';
     await db.query("insert into whatsapp_platform_users values($1,$2,'active','owner')",[actor,tenant]);
     await db.query("insert into whatsapp_platform_wallets values($1,'test','INR',true),($1,'live','INR',true)",[tenant]);
@@ -39,6 +40,16 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     const bound=await bind();assert.equal(bound.provider_order_id,providerOrder.id);
     assert.ok(!JSON.stringify(bound).includes('DO_NOT_STORE'));
     assert.deepEqual(await bind(),bound);
+    const evidence={registrationId:id,settingsRevision:3,providerCustomerId:providerCustomer.id,providerOrderId:providerOrder.id,providerPaymentId:'pay_AuthFixture',providerTokenId:'token_AuthFixture',method:'emandate',currency:'INR',status:'confirmed',walletCreditMinor:0,maximumDebitMinor:125000,expiresAt:new Date(expiry*1000).toISOString(),verifiedAt:new Date((expiry-86400)*1000).toISOString(),bank_details:'DO_NOT_STORE'};
+    const record=async(value=evidence)=>(await db.query('select whatsapp_wallet_record_verified_mandate($1,$2,$3,$4) result',[tenant,'test',id,value])).rows[0].result;
+    for(const change of [{walletCreditMinor:1000},{status:'pending'},{providerCustomerId:'cust_Other'},{providerOrderId:'order_Other'},{settingsRevision:2},{maximumDebitMinor:125001},{maximumDebitMinor:'125000'},{expiresAt:new Date((expiry+1)*1000).toISOString()}])await assert.rejects(record({...evidence,...change}),/evidence mismatch/);
+    await assert.rejects(record({...evidence,verifiedAt:new Date((expiry-86400-601)*1000).toISOString()}),/Fresh verification/);
+    const verified=await record();assert.equal(verified.provider_token_id,'token_AuthFixture');
+    assert.ok(!JSON.stringify(verified).includes('DO_NOT_STORE'));
+    assert.deepEqual(await record(),verified);
+    await assert.rejects(record({...evidence,providerTokenId:'token_Another'}),/replay conflict/);
+    await assert.rejects(db.query('delete from whatsapp_platform_wallet_verified_mandates'),/immutable/);
+    assert.equal((await db.query("select state from whatsapp_platform_wallet_auto_topup_preferences where mode='test'")).rows[0].state,'awaiting_mandate','Verified evidence alone does not activate automatic debits');
     await assert.rejects(bind(providerCustomer,{...providerOrder,id:'order_Another'}),/replay conflict/);
     await assert.rejects(db.query('update whatsapp_platform_wallet_mandate_orders set provider_order_id=$1',['order_Another']),/immutable/);
     await assert.rejects(begin([...args.slice(0,3),other,...args.slice(4)]),/already pending/);
@@ -54,6 +65,7 @@ const {PGlite} = require(process.env.WALLET_TEST_PGLITE || path.join(process.env
     await db.exec("select set_config('request.jwt.claim.role','authenticated',false)");
     await assert.rejects(begin(),/Server only/);
     await assert.rejects(bind(),/Server only/);
+    await assert.rejects(record(),/Server only/);
     assert.equal((await db.query('select count(*)::int count from whatsapp_platform_wallet_mandate_registrations')).rows[0].count,2);
     assert.equal((await db.query("select has_table_privilege('authenticated','whatsapp_platform_wallet_mandate_registrations','SELECT') allowed")).rows[0].allowed,false);
     console.log('PASS: immutable mandate intent, explicit consent, mode/tenant identity, stale-settings rejection and single pending slot; no provider calls or debit');

@@ -1056,6 +1056,13 @@ genuinely missing business decisions or account access.
 - SQL fixtures verify single claim, conflicting customer rejection, required claim before binding and stale-settings denial. Mocked orchestration fixtures verify claim-before-POST order, binding reuse, unknown-outcome rejection and key-mode separation. No real Razorpay calls occurred.
 - Registration/order migrations remain unapplied remotely; helpers have no public production action yet. Still need durable provider-customer creation/recovery, supported-method verification, token-evidence persistence and slot lifecycle, authenticated consent UI, automatic recharge worker/limits and end-to-end Test verification. Do not enable production actions until these are reviewed.
 
+### Verified mandate audit persistence
+
+- Added local migration `20260916212000_whatsapp_wallet_verified_mandate_evidence.sql`. Server-only record RPC verifies the immutable registration/order binding, exact approved limit/expiry, zero authorization credit, confirmed INR e-mandate status, and fresh server verification before storing a whitelisted evidence projection.
+- New evidence also requires current enabled wallet/settings snapshot, active original owner/admin and pending slot. Exact replay returns original audit evidence but is explicitly not current mandate usability proof. Conflicting payment/token identities reject; raw bank/contact/token secrets are never persisted.
+- SQL fixtures cover identity/limit/type/expiry mismatch, pending status, stale verification, nonzero credit, replay conflicts, immutable storage and unchanged `awaiting_mandate` preference state. Recording evidence does not activate auto-top-up or release pending registration slots.
+- All three mandate registration/order/evidence migrations remain LOCAL ONLY. Next implement consent-safe lifecycle/slot resolution and customer creation recovery, connect authenticated Test actions/UI, then automatic recharge limits/orchestration and provider end-to-end verification. Live activation and prior paid-period financial decision remain separate gates.
+
 - Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
 - Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
 - Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.
