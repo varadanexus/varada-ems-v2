@@ -40,6 +40,38 @@ export function emandateAuthorisationOrder(customer: any, wallet: any, settings:
 }
 
 // Server-loaded registration and binding only. The database claim is committed
+// identity and binding must be loaded from the authenticated workspace/profile
+// and protected mapping; never accept a browser-supplied provider customer ID.
+export async function createEmandateCustomer({ gateway, rpc, customer, wallet, settings, registration, mode, identity, binding, nowSeconds }: any) {
+  // A local placeholder validates the intent before any personal data is sent.
+  emandateAuthorisationOrder(customer, wallet, settings, { ...registration, provider_customer_id: 'cust_Preflight' }, mode, nowSeconds);
+  if (binding) {
+    if (binding.tenant_id !== customer.tenant_id || binding.mode !== mode
+      || !/^cust_[A-Za-z0-9]+$/.test(binding.provider_customer_id || '')) throw new Error('Stored provider customer mapping mismatch');
+    const providerCustomer = await gateway(`/customers/${encodeURIComponent(binding.provider_customer_id)}`);
+    if (providerCustomer?.entity !== 'customer' || providerCustomer.id !== binding.provider_customer_id
+      || providerCustomer.notes?.tenant_id !== customer.tenant_id || providerCustomer.notes?.mode !== mode
+      || providerCustomer.notes?.purpose !== 'varada_wallet_mandate_customer') throw new Error('Provider customer mapping ownership mismatch');
+    return { providerCustomerId: binding.provider_customer_id };
+  }
+  const name = String(identity?.name || '').trim();
+  const email = String(identity?.email || '').trim();
+  const contact = String(identity?.contact || '').trim();
+  if (name.length < 2 || name.length > 120 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    || !/^\+[1-9][0-9]{7,14}$/.test(contact)) throw new Error('Verified customer name, email and international contact required');
+  const claimed = await rpc('whatsapp_wallet_claim_mandate_customer', { p_tenant: customer.tenant_id, p_mode: mode, p_registration: registration.id });
+  if (claimed !== true) throw new Error('Provider customer creation outcome pending; reconcile the existing attempt before retrying');
+  const providerCustomer = await gateway('/customers', { method: 'POST', body: JSON.stringify({ name, email, contact,
+    fail_existing: '1', notes: { tenant_id: customer.tenant_id, mode, purpose: 'varada_wallet_mandate_customer', creation_registration_id: registration.id } }) });
+  const saved = await rpc('whatsapp_wallet_bind_mandate_customer', { p_tenant: customer.tenant_id, p_mode: mode, p_customer: providerCustomer });
+  if (saved?.tenant_id !== customer.tenant_id || saved.mode !== mode
+    || !/^cust_[A-Za-z0-9]+$/.test(saved.provider_customer_id || '') || saved.provider_customer_id !== providerCustomer?.id) {
+    throw new Error('Stored provider customer binding mismatch');
+  }
+  return { providerCustomerId: saved.provider_customer_id };
+}
+
+// Server-loaded registration and binding only. The database claim is committed
 // before POST: uncertain outcomes require reconciliation, never another POST.
 export async function createEmandateAuthorisation({ gateway, rpc, customer, wallet, settings, registration, mode, keyId, nowSeconds }: any) {
   const request = emandateAuthorisationOrder(customer, wallet, settings, registration, mode, nowSeconds);

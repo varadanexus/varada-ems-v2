@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {stripTypeScriptTypes} from 'node:module';
 const source=await readFile(new URL('../new-ems/supabase/functions/_shared/whatsapp-wallet-mandate.ts',import.meta.url),'utf8');
-const {verifiedEmandate,fetchVerifiedEmandate,emandateAuthorisationOrder,verifyEmandateAuthorisation,createEmandateAuthorisation}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+const {verifiedEmandate,fetchVerifiedEmandate,emandateAuthorisationOrder,verifyEmandateAuthorisation,createEmandateAuthorisation,createEmandateCustomer}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
 const tenant='11111111-1111-4111-8111-111111111111', actor='22222222-2222-4222-8222-222222222222';
 const customer={tenant_id:tenant,user_id:actor,role_code:'owner'};
 const wallet={tenant_id:tenant,mode:'test',currency:'INR',enabled:true};
@@ -20,6 +20,21 @@ for(const change of [{requested_enabled:false},{state:'disabled'},{currency:'USD
 }
 assert.throws(()=>emandateAuthorisationOrder({...customer,role_code:'agent'},wallet,settings,registration,'test',1900000000));
 assert.throws(()=>emandateAuthorisationOrder(customer,{...wallet,enabled:false},settings,registration,'test',1900000000));
+const customerSequence=[];
+const providerCustomer={id:'cust_Fixture',entity:'customer',notes:{tenant_id:tenant,mode:'test',purpose:'varada_wallet_mandate_customer',creation_registration_id:registration.id},email:'PRIVATE_EMAIL'};
+const mapping={tenant_id:tenant,mode:'test',provider_customer_id:'cust_Fixture'};
+const customerArgs={customer,wallet,settings,registration,mode:'test',nowSeconds:1900000000,identity:{name:'Fixture Customer',email:'fixture@example.test',contact:'+919876543210',bank:'NEVER_FORWARD'},
+  gateway:async(path,options)=>{customerSequence.push(path);assert.equal(path,'/customers');const request=JSON.parse(options.body);assert.equal(request.fail_existing,'1');assert.equal(request.notes.creation_registration_id,registration.id);assert.ok(!JSON.stringify(request).includes('NEVER_FORWARD'));return providerCustomer;},
+  rpc:async(name)=>{customerSequence.push(name);if(name==='whatsapp_wallet_claim_mandate_customer')return true;assert.equal(name,'whatsapp_wallet_bind_mandate_customer');return mapping;}};
+assert.deepEqual(await createEmandateCustomer(customerArgs),{providerCustomerId:'cust_Fixture'});
+assert.deepEqual(customerSequence,['whatsapp_wallet_claim_mandate_customer','/customers','whatsapp_wallet_bind_mandate_customer']);
+customerSequence.length=0;
+await assert.rejects(createEmandateCustomer({...customerArgs,rpc:async()=>false}),/reconcile/);
+assert.equal(customerSequence.length,0,'Unknown customer outcome never repeats POST');
+assert.deepEqual(await createEmandateCustomer({...customerArgs,binding:mapping,gateway:async(path)=>{assert.equal(path,'/customers/cust_Fixture');return providerCustomer;},rpc:async()=>{throw Error('No claim for existing mapping');}}),{providerCustomerId:'cust_Fixture'});
+await assert.rejects(createEmandateCustomer({...customerArgs,binding:{...mapping,mode:'live'}}),/mapping mismatch/);
+await assert.rejects(createEmandateCustomer({...customerArgs,identity:{...customerArgs.identity,contact:'123'}}),/international contact/);
+await assert.rejects(createEmandateCustomer({...customerArgs,registration:{...registration,confirmed:false}}),/consent/);
 const token={id:'token_Fixture',entity:'token',method:'emandate',recurring:true,recurring_details:{status:'confirmed'},max_amount:125000,expired_at:2000000000,token:'SECRET',bank_details:{account_number:'SENSITIVE'}};
 const result=verifiedEmandate(token,'token_Fixture',125000,1900000000);
 const pending={...registration,provider_order_id:'order_AuthFixture'};

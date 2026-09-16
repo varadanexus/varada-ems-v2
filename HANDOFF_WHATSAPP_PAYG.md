@@ -1078,6 +1078,13 @@ genuinely missing business decisions or account access.
 - Added PGlite coverage for bind-without-claim, one claim only, wrong creation ID, exact/conflicting replay, immutable storage, safe projection and server-only restrictions. No actual customer API call was made; orchestration still needs to create/recover a customer through the documented `/customers` API and then use this mapping.
 - Five mandate migrations are LOCAL ONLY. Next connect the durable customer and order flows to authenticated Test actions/UI with current-slot checks, then finalize auto-top-up activation/worker limits and end-to-end Test provider verification. No Live financial decision was inferred from automatic continuations.
 
+### Customer creation orchestration
+
+- Added `createEmandateCustomer` server helper. It validates owned consent/settings before personal-data transmission, uses only verified profile name/email/international contact, commits the tenant/mode creation claim before `/customers` POST, and binds the returned customer through the guarded RPC. Extra profile fields are omitted; duplicate-existing requests fail rather than silently adopt unrelated identities.
+- Existing protected customer mapping is reused only after server GET verifies exact provider ID and tenant/mode/purpose notes. Unknown prior creation claim returns a reconciliation error without another POST. Helper outputs only provider customer ID, not contact details.
+- Mock fixtures pass for claim-before-POST, safe profile projection, binding reuse, unknown-outcome refusal, wrong mode, invalid contact and missing consent. No real provider request was made. Full production service/UI integration still absent; five mandate migrations remain remotely unapplied.
+- Next implement a current-pending-slot loader and authenticated Test-only actions to invoke the customer/order/verification/lifecycle helpers, with no browser-supplied provider identity and no direct Live exposure. Then consent UI, automatic recharge worker/limits and end-to-end Test validation remain required.
+
 - Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
 - Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
 - Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.
