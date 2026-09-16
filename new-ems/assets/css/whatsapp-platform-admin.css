@@ -177,6 +177,47 @@
 .wa-admin-stat small { display: block; margin-top: 6px; color: #65d990; }
 .wa-admin-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 16px; }
 .wa-admin-card { padding: 22px; border: 1px solid rgba(218,178,83,.2); border-radius: 18px; background: #10110f; }
+/* Scoped billing workspace: shared financial actions and selectors unchanged. */
+.wa-billing-controls { display:grid; gap:22px; min-width:0; }
+.wa-billing-controls > h3 { margin:0; font-size:22px; }
+.wa-billing-controls > p { margin:0; }
+.wa-billing-controls label { display:grid; gap:8px; min-width:0; color:#abb5ad; font-size:12px; font-weight:600; line-height:1.5; }
+.wa-billing-controls input:not([type=checkbox]),.wa-billing-controls select,.wa-billing-controls textarea { box-sizing:border-box; width:100%; min-width:0; min-height:44px; padding:11px 13px; border:1px solid rgba(218,178,83,.22); border-radius:11px; background:#0a0e0b; color:#f2f1e8; color-scheme:dark; font:inherit; font-size:13px; transition:border-color .15s,box-shadow .15s; }
+.wa-billing-controls textarea { min-height:90px; resize:vertical; }
+.wa-billing-controls :is(input,select,textarea):focus-visible { outline:2px solid #58dc8a; outline-offset:2px; }
+.wa-billing-controls :is(input,select,textarea):disabled { opacity:.48; cursor:not-allowed; }
+.wa-billing-controls fieldset { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; min-width:0; margin:0; padding:22px; border:1px solid rgba(218,178,83,.16); border-radius:15px; background:rgba(255,255,255,.015); }
+.wa-billing-controls [data-wallet-config] fieldset > label:last-of-type,.wa-billing-controls [data-wallet-config] fieldset > button { grid-column:1/-1; }
+.wa-billing-controls > section { min-width:0; margin:0; padding:24px; border:1px solid rgba(218,178,83,.2); border-radius:18px; background:linear-gradient(130deg,#111710,#0b0e0b); }
+.wa-billing-controls > section > h3 { margin:0 0 10px; font-size:19px; }
+.wa-billing-controls > section > p { color:#929e96; line-height:1.65; }
+.wa-billing-controls > section > form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-top:22px; }
+.wa-billing-controls > section > form > label:has(textarea),.wa-billing-controls > section > form > label:has(input[type=checkbox]),.wa-billing-controls > section > form > button { grid-column:1/-1; }
+.wa-billing-controls label:has(>input[type=checkbox]) { display:flex; align-items:flex-start; gap:11px; padding:14px; border:1px solid rgba(88,220,138,.18); border-radius:11px; background:rgba(37,211,102,.035); }
+.wa-billing-controls input[type=checkbox] { flex:0 0 auto; width:17px; height:17px; margin:2px 0 0; accent-color:#25d366; }
+.wa-billing-controls button:not(.wa-price-form-grid button) { justify-self:start; min-height:42px; padding:11px 18px; border:1px solid rgba(218,178,83,.3); border-radius:11px; background:#182018; color:#e5ca77; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+.wa-billing-controls button:disabled { opacity:.45; cursor:not-allowed; }
+.wa-billing-controls button.primary,.wa-billing-controls [data-wallet-config] button { background:#25d366; border-color:#25d366; color:#052410; }
+.wa-billing-controls > section.wa-price-card { padding:0; overflow:hidden; }
+.wa-billing-controls .wa-price-card > :not(.wa-price-card-head) { margin:20px 24px; }
+.wa-billing-controls .wa-price-card form { display:grid; gap:18px; }
+.wa-billing-controls .wa-price-card .wa-price-form-grid { margin:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+.wa-billing-controls [data-recharge-fx-summary] { padding:16px; border:1px solid rgba(88,220,138,.24); border-radius:12px; background:rgba(37,211,102,.055); color:#bee9cc; overflow-wrap:anywhere; }
+.wa-billing-controls details { padding:14px; border:1px solid rgba(218,178,83,.17); border-radius:12px; color:#abb5ad; overflow-wrap:anywhere; }
+.wa-billing-controls summary { cursor:pointer; color:#e5ca77; font-weight:600; }
+.wa-billing-controls [role=status]:empty,.wa-billing-controls [data-wallet-audit]:empty { display:none; }
+.wa-billing-readiness { padding:22px; border:1px solid rgba(88,220,138,.22); border-radius:16px; background:radial-gradient(ellipse at top right,rgba(37,211,102,.08),transparent 70%),#0e150f; }
+.wa-billing-readiness header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:18px; }
+.wa-billing-readiness h4 { margin:6px 0 0; color:#f2f1e8; font-size:18px; }
+.wa-billing-readiness-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; }
+.wa-billing-readiness-grid > div { padding:14px; border:1px solid rgba(255,255,255,.07); border-radius:11px; background:rgba(255,255,255,.025); }
+.wa-billing-readiness-grid span { display:block; color:#929e96; font-size:11px; margin-bottom:8px; }
+.wa-billing-readiness-grid strong { display:flex; align-items:center; gap:7px; color:#81dda4; font-size:12px; }
+.wa-billing-readiness-grid i { width:6px; height:6px; flex-shrink:0; background:currentColor; border-radius:50%; }
+.wa-billing-readiness-grid .is-pending strong { color:#e5ca77; }
+.wa-billing-readiness > p { margin:16px 0 0; color:#929e96; font-size:12px; line-height:1.6; }
+@media(max-width:1050px){.wa-billing-readiness-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:640px){.wa-billing-controls fieldset,.wa-billing-controls > section > form,.wa-billing-controls .wa-price-card .wa-price-form-grid{grid-template-columns:1fr}.wa-billing-controls > section,.wa-billing-controls fieldset,.wa-billing-readiness{padding:16px}.wa-billing-readiness-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.wa-billing-readiness header{align-items:flex-start}.wa-billing-controls .wa-price-card > :not(.wa-price-card-head){margin:16px}.wa-billing-controls button{width:100%;justify-self:stretch}.wa-billing-controls .wa-price-card-head{padding:18px;grid-template-columns:auto minmax(0,1fr)}}
 .wa-admin-card h3 { margin: 0 0 7px; color: #fff; font-size: 18px; }
 .wa-admin-card > p { margin: 0 0 18px; color: #8e958f; line-height: 1.6; }
 .wa-admin-list { display: grid; gap: 10px; }

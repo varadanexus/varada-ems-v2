@@ -9,6 +9,7 @@ const assert=require('node:assert/strict');
     const page=await browser.newPage();
     await page.route('**/*',route=>route.abort());
     await page.setContent('<main id="host"></main><section id="price"></section><section id="customerPrice"></section>');
+    await page.addStyleTag({content:fs.readFileSync(path.join(__dirname,'../new-ems/assets/css/whatsapp-platform-admin.css'),'utf8')});
     const source=fs.readFileSync(path.join(__dirname,'../new-ems/shared/whatsapp-wallet-admin.js'),'utf8');
     await page.evaluate(async source=>{
       const module=await import(URL.createObjectURL(new Blob([source],{type:'text/javascript'})));
@@ -19,7 +20,7 @@ const assert=require('node:assert/strict');
           chargePolicies:[{id:'policy-fixture',currency:'INR',policy:{serviceGstBps:1800,gatewayBps:200,gatewayGstBps:1800,gatewayFixedMinor:0,gatewayBasis:'subtotal'},verified_by:'reviewer-fixture',evidence_reference:'<img src=x onerror=alert(1)>',recorded_reason:'Synthetic only'}],
           autoTopupAudit:[{revision:1,actor_id:'owner-fixture',settings:{state:'awaiting_mandate',currency:'INR',threshold_minor:50000,credit_minor:100000,max_debit_minor:125000,monthly_cap_minor:500000,consent_version:'auto-topup-nonrefundable-v1'}}]};
         return {};
-      },[{id:'tenant-a',name:'Test workspace'}]);
+      },[{id:'tenant-a',name:'Test workspace'}],{billingMode:'live',gateEnabled:true,razorpayKeyConfigured:true,webhookSecretConfigured:true,publicWebhookConfigured:true,walletCheckoutEnabled:false});
       const priceRequest=async(action,body)=>{window.testCalls.push({action,body});return {};};
       module.mountMessagePriceAdmin(document.querySelector('#price'),priceRequest,[{id:'tenant-a',name:'Test workspace'}],{allowGlobal:true});
       module.mountMessagePriceAdmin(document.querySelector('#customerPrice'),priceRequest,[],{tenantId:'tenant-a',tenantName:'Test workspace',allowGlobal:false});
@@ -136,6 +137,12 @@ const assert=require('node:assert/strict');
     await rechargeFx.getByRole('button',{name:'Save recharge rate control'}).click();
     const controls=await page.evaluate(()=>window.testCalls.filter(c=>c.action==='staff_recharge_fx_control'));
     assert.equal(controls.length,2);assert.equal(controls[1].body.expiresAt,null);assert.equal(controls[1].body.mode,'automatic');
-    console.log('PASS: isolated Chromium EMS configuration, rate cards, Meta reference and manual/automatic recharge FX controls; no payments');
+    assert.equal(await page.locator('.wa-billing-readiness-grid > div').count(),5);
+    assert.match(await page.locator('[data-wallet-config] fieldset').evaluate(node=>getComputedStyle(node).gridTemplateColumns),/^(repeat\(2,|[\d.]+px [\d.]+px$)/);
+    await page.locator('#price').evaluate(node=>node.remove());await page.locator('#customerPrice').evaluate(node=>node.remove());
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.locator('[data-wallet-config] fieldset').evaluate(node=>getComputedStyle(node).gridTemplateColumns.trim().split(/\s+/).length),1);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Billing controls must fit mobile width');
+    console.log('PASS: isolated Chromium EMS configuration, rate cards, Meta reference, recharge FX controls and responsive billing layout; no payments');
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
