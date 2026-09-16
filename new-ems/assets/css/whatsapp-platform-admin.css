@@ -200,7 +200,7 @@
 .wa-billing-controls button.primary,.wa-billing-controls [data-wallet-config] button { background:#25d366; border-color:#25d366; color:#052410; }
 .wa-billing-controls > section.wa-price-card { padding:0; overflow:hidden; }
 .wa-billing-controls .wa-price-card > :not(.wa-price-card-head) { margin:20px 24px; }
-.wa-billing-controls .wa-price-card form { display:grid; gap:18px; }
+.wa-billing-controls > section.wa-price-card form { display:grid; grid-template-columns:1fr; gap:18px; }
 .wa-billing-controls .wa-price-card .wa-price-form-grid { margin:0; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
 .wa-billing-controls [data-recharge-fx-summary] { padding:16px; border:1px solid rgba(88,220,138,.24); border-radius:12px; background:rgba(37,211,102,.055); color:#bee9cc; overflow-wrap:anywhere; }
 .wa-billing-controls details { padding:14px; border:1px solid rgba(218,178,83,.17); border-radius:12px; color:#abb5ad; overflow-wrap:anywhere; }
