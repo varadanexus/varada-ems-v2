@@ -34,11 +34,11 @@ const server = http.createServer((request,response)=>{
     await page.goto(`http://127.0.0.1:${port}/whatsapp-platform/pricing/?country=IN`,{waitUntil:'networkidle'});
 
     await page.getByRole('heading',{name:'Pay as you go. Grow without limits.'}).waitFor();
-    assert.equal(await page.locator('.vn-pricing-product-nav').evaluate(node=>getComputedStyle(node).position),'relative');
-    assert.equal(await page.locator('.vn-pricing-product-nav').getByText('Pricing',{exact:true}).getAttribute('class'),'active');
+    assert.equal(await page.locator('.vn-pricing-product-nav').count(),0);
     assert.equal(await page.locator('select[name=country]').inputValue(),'IN');
     assert.equal(await page.locator('[data-public-base-rate]').textContent(),'0.0032','Public RPC category rates must update the rendered offer');
-    assert.equal(await page.getByText(/failed/i).count(),0,'Failed-processing language belongs in linked terms, not the primary sales page');
+    assert.equal(await page.locator('[data-public-failed-rate]').textContent(),'0.0007');
+    assert.ok((await page.getByText('Failed-message processing:',{exact:false}).innerText()).includes('instead of the normal outbound platform fee'));
 
     await page.locator('input[name=incoming]').fill('500');
     await page.locator('input[name=utility]').fill('2000');
@@ -58,10 +58,9 @@ const server = http.createServer((request,response)=>{
     assert.equal(await page.locator('input[name=marketing]').inputValue(),'0');
 
     await page.locator('#pricing-calculator').scrollIntoViewIfNeeded();
-    assert.ok((await page.locator('.vn-pricing-product-nav').boundingBox()).y<0,'Product navigation must scroll away instead of covering calculator content');
     await page.setViewportSize({width:390,height:844});
     await page.evaluate(()=>scrollTo(0,0));
-    for(const label of ['Overview','API','Features','Pricing'])assert.ok(await page.locator('.vn-pricing-product-nav').getByText(label,{exact:true}).isVisible());
+    assert.equal(await page.locator('.vn-pricing-product-nav').count(),0);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth),0,'Mobile pricing page must not overflow horizontally');
     assert.deepEqual(errors,[]);
 
