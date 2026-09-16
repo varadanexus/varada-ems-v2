@@ -1001,6 +1001,26 @@ genuinely missing business decisions or account access.
 - These latest UI/backend projection changes are LOCAL ONLY and not deployed or committed yet. Next: deploy the canonical admin-secrets function, narrowly commit/push the changed canonical files and test, verify the exact Pages run and live assets. Do not overwrite unrelated `pre release` changes.
 - Financial confirmation is still missing; no Live activation, waiver, refund, credit or payment was performed.
 
+### Deployment follow-up
+
+- Legacy-register correction is committed and pushed as `b63b9b6`. Admin-secrets deployment was independently verified `ACTIVE`, version 30. The CLI printed successful deployment before a telemetry shutdown timeout; the fresh remote function listing confirms completion, so do not redeploy merely because of that telemetry error.
+- Pages run `35089768954` is confirmed running for exact SHA `b63b9b6602fd7bcb25035103990ea8ffb4594fce`; watch session 91568 was live during this checkpoint. Verify its terminal result and live v49 assets before claiming frontend deployment complete.
+- Earlier Pages runs `35089217543` (capacity guard) and `35089368517` (provider-evidence handoff) are now verified successful.
+
+### Verified frontend and auto-top-up integration audit
+
+- Pages run `35089768954` completed successfully for `b63b9b6602fd7bcb25035103990ea8ffb4594fce`. Fresh HTTPS checks confirmed shell v49, capacity add-on identity, `no_renewal`, and Legacy subscription register in the deployed module. Latest frontend correction is now deployed, not merely queued.
+- Current `walletBilling.autoTopupSettings` and `saveAutoTopup` explicitly return `mandateActivationAvailable:false`. The standalone mandate helper validates stored INR customer/token identity and confirmed recurring evidence but has no call site initiating registration or debit. Automatic top-up is NOT complete.
+- Razorpay official integration documentation inspected on 16 Sept: https://raw.githubusercontent.com/razorpay/markdown-docs/master/payments/recurring-payments/emandate/integrate.md states on-demand recurring e-mandate capability must be activated by Razorpay Support and supported methods checked. Existing subscription capability is not proof that on-demand Recurring Payments is enabled. Account capability remains unverified; do not assume it is absent or enabled.
+- Official subsequent-payment flow: create a unique order then recurring payment using confirmed customer-owned token; provider created/pending state is not captured funds, and e-mandate confirmation can take a working day. See https://raw.githubusercontent.com/razorpay/markdown-docs/master/api/payments/recurring-payments/emandate/create-subsequent-payments.md . Preserve pending attempts and credit only verified capture; never promise instant automatic funding or substitute the retired monthly package subscription.
+- Next independent work: verify account on-demand recurring capability read-only, then implement and test registration, tenant/mode-scoped mandate persistence, explicit mandate consent, threshold/monthly gross-limit enforcement, single in-flight recharge and capture-only ledger reconciliation before any real debit. Prior paid-period decision and final Live activation confirmation remain required.
+
+### Live dashboard mandate-method evidence
+
+- Fresh read-only Chrome inspection: Account & Settings → Netbanking → E-Mandate shows eNACH `ACTIVATED` / Payment method active on your checkout. eSign is `REQUESTED`, with an overdue enablement estimate; Paper NACH still has `Request`. Test Mode switch remains off.
+- Do not ask the user to enable eNACH as though it were missing. This is positive dashboard method evidence, not a completed API registration/charge test or proof of every on-demand account capability. Next verify supported-method API shape and registration availability before enabling wallet auto-top-up.
+- No Request, Cancel, financial, key or other settings mutation was clicked. Existing subscriptions remain cancelled. Use the activated netbanking/debit-card eNACH route for implementation research; do not require pending Aadhaar eSign or unrequested Paper NACH.
+
 - Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
 - Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
 - Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.
