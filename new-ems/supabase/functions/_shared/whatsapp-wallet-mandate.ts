@@ -39,6 +39,41 @@ export function emandateAuthorisationOrder(customer: any, wallet: any, settings:
       registration_id: registration.id, settings_revision: String(settings.revision) } };
 }
 
+// Read-only provider reconciliation. Caller must authenticate the request and
+// lock/revalidate the pending registration before persisting this evidence.
+// Do not route this zero-value payment to whatsapp_wallet_capture_recharge.
+export async function verifyEmandateAuthorisation(gateway: any, customer: any, wallet: any, settings: any,
+  registration: any, paymentId: string, mode: string, nowSeconds: number) {
+  const expected = emandateAuthorisationOrder(customer, wallet, settings, registration, mode, nowSeconds);
+  if (!/^order_[A-Za-z0-9]+$/.test(registration?.provider_order_id || '')
+    || !/^pay_[A-Za-z0-9]+$/.test(paymentId)) throw new Error('Invalid stored authorisation order or payment identifier');
+  const order = await gateway(`/orders/${encodeURIComponent(registration.provider_order_id)}`);
+  if (order?.entity !== 'order' || order.id !== registration.provider_order_id || order.amount !== 0
+    || order.currency !== 'INR' || order.receipt !== expected.receipt
+    || order.notes?.tenant_id !== expected.notes.tenant_id || order.notes?.mode !== mode
+    || order.notes?.purpose !== expected.notes.purpose || order.notes?.registration_id !== registration.id
+    || order.notes?.settings_revision !== expected.notes.settings_revision) {
+    throw new Error('Authorisation order ownership or purpose mismatch');
+  }
+  const payment = await gateway(`/payments/${encodeURIComponent(paymentId)}`);
+  if (payment?.entity !== 'payment' || payment.id !== paymentId || payment.order_id !== order.id
+    || payment.customer_id !== expected.customer_id || payment.currency !== 'INR' || payment.amount !== 0
+    || payment.method !== 'emandate' || payment.status !== 'captured' || payment.captured !== true
+    || payment.amount_refunded !== 0 || !/^token_[A-Za-z0-9]+$/.test(payment.token_id || '')) {
+    throw new Error('Captured zero-value customer authorisation payment required');
+  }
+  const mandate = await fetchVerifiedEmandate(gateway, { tenant_id: customer.tenant_id, mode, currency: 'INR',
+    provider_customer_id: expected.customer_id, provider_token_id: payment.token_id,
+    max_debit_minor: expected.token.max_amount }, customer.tenant_id, mode, nowSeconds);
+  if (mandate.maximumDebitMinor !== expected.token.max_amount
+    || mandate.expiresAt !== new Date(expected.token.expire_at * 1000).toISOString()) {
+    throw new Error('Provider mandate does not match the exact approved limit and expiry');
+  }
+  return { ...mandate, registrationId: registration.id, settingsRevision: settings.revision,
+    providerCustomerId: expected.customer_id, providerOrderId: order.id, providerPaymentId: payment.id,
+    verifiedAt: new Date(nowSeconds * 1000).toISOString(), walletCreditMinor: 0 };
+}
+
 export async function fetchVerifiedEmandate(gateway: any, stored: any, tenantId: string, mode: string, nowSeconds: number) {
   if(!['test','live'].includes(mode) || stored?.tenant_id!==tenantId || stored?.mode!==mode
     || stored?.currency!=='INR' || !/^cust_[A-Za-z0-9]+$/.test(stored?.provider_customer_id || '')

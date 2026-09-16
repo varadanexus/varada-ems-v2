@@ -1035,6 +1035,13 @@ genuinely missing business decisions or account access.
 - Dedicated PGlite test passed and is included in the full PAYG suite. Migration is LOCAL ONLY, not applied remotely. Registration slot resolution/provider binding and audited lifecycle RPCs remain to be implemented before exposing begin through customer UI.
 - Previous authorization-helper commit `91683fb` is local; push it together with this persistence work only after tests pass. Preserve unrelated changes.
 
+### Authorization evidence verification
+
+- Persistence commit `84e8496` and its preceding helper commit are pushed; full local suite passed with 465 canonical migrations. Remote registration migration remains unapplied.
+- Added read-only `verifyEmandateAuthorisation`: revalidates current wallet/settings/consent before provider reads, verifies the stored order's zero amount, receipt, tenant/mode/purpose and settings revision, then fetches the payment and derives its token only from provider evidence. Captured zero-value INR e-mandate payment must belong to the exact order/customer.
+- Fetches that customer's token collection and requires a uniquely confirmed token with exactly the approved gross limit and expiry. Output omits bank/contact/token secrets and explicitly reports zero wallet credit. No capture-recharge RPC, registration activation or real provider call is performed by local tests.
+- Focused fixtures reject another order/customer, a normal recharge purpose/nonzero amount, authorized-but-not-captured payment, stale revision, altered expiry/limit, refunds and invalid IDs. Production caller still needs authenticated callback/webhook handling and locked evidence persistence; the helper is not wired to production yet.
+
 - Saved at the user's request. Latest pushed checkpoint is `f1b08d3`; no further implementation or financial action was performed in this save turn.
 - Next safe UI task: correct the EMS legacy subscription register to distinguish independent capacity add-ons from base packages and show cancelled records as having no renewal. This correction is not yet implemented.
 - Still awaiting explicit confirmation about treatment of INR 56.80 of prior Live paid service/capacity. Live wallet activation, approved Live FX/charge policy and end-to-end automatic top-up remain unfinished. Do not treat a continuation or save request as financial confirmation.
