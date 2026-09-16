@@ -38,6 +38,7 @@ const server = http.createServer((request,response)=>{
     assert.equal(await page.locator('select[name=country]').inputValue(),'IN');
     assert.equal(await page.locator('[data-public-base-rate]').textContent(),'0.0032','Public RPC category rates must update the rendered offer');
     assert.equal(await page.locator('[data-public-failed-rate]').textContent(),'0.0007');
+    assert.equal(await page.locator('#pricing-calculator > .vn-pricing-disclosure + .vn-pricing-disclosure [data-public-failed-rate]').count(),1,'Failed-message fine print must immediately follow calculator disclosure');
     assert.ok((await page.getByText('Failed-message processing:',{exact:false}).innerText()).includes('instead of the normal outbound platform fee'));
 
     await page.locator('input[name=incoming]').fill('500');
