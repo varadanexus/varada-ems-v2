@@ -480,11 +480,11 @@ Deno.serve(async (req) => {
       const keyId = String(body.keyId || "").trim();
       const keySecret = String(body.keySecret || "").trim();
       const webhookSecret = String(body.webhookSecret || "").trim();
-      if (!/^rzp_(test|live)_[A-Za-z0-9]{8,64}$/.test(keyId)) return json(req, { error: "Enter a valid Razorpay Key ID." }, 400);
+      if (!/^rzp_live_[A-Za-z0-9]{8,64}$/.test(keyId)) return json(req, { error: "Enter a valid Razorpay Live Key ID." }, 400);
       if (!/^\S{16,128}$/.test(keySecret)) return json(req, { error: "Enter the Razorpay Key Secret." }, 400);
       if (!/^\S{16,128}$/.test(webhookSecret)) return json(req, { error: "Enter a webhook signing secret of at least 16 characters." }, 400);
       const now = new Date().toISOString();
-      const providerMode = keyId.startsWith("rzp_live_") ? "live" : "test";
+      const providerMode = "live";
       // Change the entitlement mode first. If credential persistence fails, the
       // result is fail-closed rather than allowing test payments in production.
       const { error: modeError } = await admin.from("whatsapp_platform_billing_runtime").upsert({
