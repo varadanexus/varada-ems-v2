@@ -972,3 +972,11 @@ genuinely missing business decisions or account access.
 - Full PAYG suite passes after the change, including new SQL and browser tests for reconciliation, captured-value rejection, active-state rejection, immutable audit and exact EMS request bodies. No transition decision or payment was submitted remotely.
 - Supabase SQL Editor browser inspection failed repeatedly with CDP focus timeouts; the bridge later reported `Debugger unattached`. EMS inspection succeeded before the bridge loss. Reconnect/refresh Chrome only if deeper authenticated provider inspection is needed.
 - Remaining: verify the exact legacy provider/payment history, obtain any missing financial decision, configure the inactive Live wallet and approved charge/FX policy, then request immediate final activation confirmation. Auto-top-up mandate creation and real automatic debit validation are also still unproven; preferences alone are not an active auto-top-up feature.
+
+## 2026-09-16 checkpoint — database-enforced paid-capacity preservation
+
+- Reconciliation UI commit `d8eb36b` was deployed successfully by Pages run `35088941005`. Direct HTTPS checks confirmed shell v48 and the wallet-admin v4 reconciliation form/action. Billing function v80 was verified `ACTIVE`.
+- A backend audit found that the activation SQL did not enforce the paid-capacity blockers already shown in EMS. New migration `20260916200000_whatsapp_live_activation_capacity_guard.sql` is now applied remotely with matching Local/Remote history.
+- Live activation now rejects active retained seat/number/integration assignments whose source subscription is ended, bundled with a base/included-feature subscription, from another mode or tenant, or has an invalid capacity identity. The guard does not remove or rewrite the grant. Valid active standalone retained-capacity subscriptions remain compatible with PAYG.
+- Full `node scripts/check-whatsapp-payg.cjs` passes with 464 canonical migrations. The SQL regression verifies activation rejection and preservation of the original two-seat grant before a separately simulated fixture reconciliation permits activation. These are isolated fixtures only.
+- No production activation, financial transaction, wallet balance movement or capacity mutation was performed. The financial/FX/mandate and authenticated provider-verification boundaries above remain outstanding.
