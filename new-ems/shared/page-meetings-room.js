@@ -162,7 +162,7 @@ async function startJitsi() {
       email: state.meeting.host_email || state.boot?.appUser?.email || ""
     },
     configOverwrite: {
-      prejoinPageEnabled: false,
+      prejoinConfig: { enabled: false },
       disableDeepLinking: true,
       disableInviteFunctions: true,
       disableModeratorIndicator: true,

@@ -123,7 +123,7 @@ async function startJitsi() {
       email: state.invite.email || ""
     },
     configOverwrite: {
-      prejoinPageEnabled: false,
+      prejoinConfig: { enabled: false },
       disableDeepLinking: true,
       disableInviteFunctions: true,
       disableModeratorIndicator: true,
