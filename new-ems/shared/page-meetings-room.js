@@ -6,6 +6,7 @@ import {
   listParticipants,
   mintMeetingHostJwt,
   setMeetingStatus,
+  setParticipantActive,
   setParticipantApproval,
   subscribeToMeeting,
   unsubscribe
@@ -125,17 +126,19 @@ function updatePanels() {
 
   const roster = document.querySelector("#mrRoster");
   if (roster) {
-    roster.innerHTML = state.participants.map((row) => `
+    roster.innerHTML = state.participants.map((row) => {
+      const sharedLinkGuest = row.join_method === "shared_link";
+      return `
       <div class="mr-roster-row">
         <strong>${escapeHtml(row.name || "-")}</strong>
         <small>${escapeHtml(row.phone || "-")} · ${escapeHtml(row.email || "-")}</small>
         <small>${escapeHtml(row.company_name || "-")} · ${escapeHtml(row.designation || row.role || "-")}</small>
-        <div style="margin-top:.5rem;">${presencePill(row.status)} ${row.is_approved ? presencePill("approved") : presencePill("waiting")}</div>
+        <div style="margin-top:.5rem;">${presencePill(row.status)} ${sharedLinkGuest ? presencePill("shared link") : (row.is_approved ? presencePill("approved") : presencePill("waiting"))}</div>
         <div class="mr-roster-tools">
-          <button class="btn btn-ghost" type="button" data-toggle-approve="${row.id}">${row.is_approved ? "Remove" : "Admit"}</button>
+          ${sharedLinkGuest ? `<button class="btn btn-ghost" type="button" data-toggle-active="${row.id}">${row.is_active ? "Remove" : "Restore"}</button>` : `<button class="btn btn-ghost" type="button" data-toggle-approve="${row.id}">${row.is_approved ? "Remove" : "Admit"}</button>`}
         </div>
       </div>
-    `).join("") || '<div class="empty-state">No participants added yet.</div>';
+    `; }).join("") || '<div class="empty-state">No participants added yet.</div>';
   }
 }
 
@@ -210,6 +213,13 @@ async function bind() {
     if (!row) return;
     await setParticipantApproval(row.id, !row.is_approved);
     showToast(row.is_approved ? "Participant returned to lobby" : "Participant admitted", TOAST_TYPES.SUCCESS);
+    await refresh();
+  }; });
+  document.querySelectorAll("[data-toggle-active]").forEach((button) => { button.onclick = async () => {
+    const row = state.participants.find((item) => String(item.id) === String(button.getAttribute("data-toggle-active")));
+    if (!row) return;
+    await setParticipantActive(row.id, !row.is_active, row.join_method === "shared_link" ? "waiting" : "invited");
+    showToast(row.is_active ? "Participant removed" : "Participant restored", TOAST_TYPES.SUCCESS);
     await refresh();
   }; });
 }

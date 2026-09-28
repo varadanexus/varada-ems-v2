@@ -77,6 +77,11 @@ export function buildMeetingInviteLink(_inviteToken, _origin = "") {
   return `${PUBLIC_WEBSITE_ORIGIN}${ROUTES.MEETINGS_LOGIN}`;
 }
 
+export function buildMeetingShareLink(joinToken, origin = PUBLIC_WEBSITE_ORIGIN) {
+  const base = String(origin || PUBLIC_WEBSITE_ORIGIN).replace(/\/+$/, "");
+  return `${base}/portals/meeting/meeting-join.html?j=${encodeURIComponent(joinToken || "")}`;
+}
+
 export function buildHostRoomLink(meetingId) {
   return `${ROUTES.MEETINGS_ROOM}?id=${encodeURIComponent(meetingId)}`;
 }
@@ -112,6 +117,14 @@ export async function requestMeetingJoinOtp(inviteToken) {
 
 export async function verifyMeetingJoinOtp(inviteToken, otp) {
   return meetingIntegration("verify_join_otp", { inviteToken, otp });
+}
+
+export async function getMeetingShareLink(meetingId) {
+  return meetingIntegration("get_meeting_share_link", { meetingId });
+}
+
+export async function rotateMeetingShareLink(meetingId) {
+  return meetingIntegration("rotate_meeting_share_link", { meetingId });
 }
 
 export async function listMeetings() {
@@ -193,7 +206,7 @@ export async function deleteMeeting(id) {
 export async function listParticipants(meetingId) {
   const { data, error } = await client()
     .from("credentials")
-    .select("id,meeting_id,name,phone,email,company_name,designation,role,is_active,is_approved,status,invite_token,notes,created_at,invited_at,approved_at,joined_at,removed_at,invite_meta,otp_expires_at,otp_verified_at,otp_last_sent_at")
+    .select("id,meeting_id,name,phone,email,company_name,designation,role,is_active,is_approved,status,join_method,invite_token,notes,created_at,invited_at,approved_at,joined_at,removed_at,invite_meta,otp_expires_at,otp_verified_at,otp_last_sent_at")
     .eq("meeting_id", meetingId)
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -261,14 +274,14 @@ export async function setParticipantApproval(id, approved) {
   return data;
 }
 
-export async function setParticipantActive(id, active) {
+export async function setParticipantActive(id, active, activeStatus = "invited") {
   const now = new Date().toISOString();
   const { data, error } = await client()
     .from("credentials")
     .update({
       is_active: active,
       removed_at: active ? null : now,
-      status: active ? "invited" : "disabled"
+      status: active ? activeStatus : "disabled"
     })
     .eq("id", id)
     .select("id,is_active,status,removed_at")
@@ -306,7 +319,7 @@ export async function getMeetingWorkspaceData() {
 export async function getInviteRecordByToken(token) {
   const { data, error } = await client()
     .from("credentials")
-    .select("id,meeting_id,name,phone,email,company_name,designation,role,is_active,is_approved,status,invite_token,notes,created_at,invited_at,approved_at,joined_at,removed_at,invite_meta,otp_expires_at,otp_verified_at,otp_last_sent_at,meetings(id,title,room_name,status,scheduled_at,scheduled_local,duration_minutes,agenda,lobby_note,host_name,host_email,room_domain,access_mode,started_at,ended_at)")
+    .select("id,meeting_id,name,phone,email,company_name,designation,role,is_active,is_approved,status,join_method,invite_token,notes,created_at,invited_at,approved_at,joined_at,removed_at,invite_meta,otp_expires_at,otp_verified_at,otp_last_sent_at,meetings(id,title,room_name,status,scheduled_at,scheduled_local,duration_minutes,agenda,lobby_note,host_name,host_email,room_domain,access_mode,started_at,ended_at)")
     .eq("invite_token", token)
     .single();
   if (error) throw error;

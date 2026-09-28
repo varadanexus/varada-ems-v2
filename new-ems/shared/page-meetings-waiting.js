@@ -37,11 +37,12 @@ function roomUrl() {
 async function refreshInvite() {
   state.invite = await getInviteRecordByToken(token);
   const invite = state.invite;
+  const sharedLinkGuest = invite?.join_method === "shared_link" && invite?.meetings?.access_mode === "shared_link";
   if (!invite?.is_active) {
     render(`<h1>Invite disabled</h1><p>The host has disabled this meeting invite.</p><div class="mw-actions"><a class="btn btn-ghost" href="${ROUTES.ROOT}">Close</a></div>`);
     return false;
   }
-  if (!invite?.otp_verified_at) {
+  if (!sharedLinkGuest && !invite?.otp_verified_at) {
     window.location.href = `${ROUTES.MEETINGS_GUEST}?t=${encodeURIComponent(token)}`;
     return false;
   }
@@ -49,7 +50,7 @@ async function refreshInvite() {
     render(`<h1>Meeting ended</h1><p>The host has already closed this session.</p><div class="mw-actions"><a class="btn btn-ghost" href="${ROUTES.ROOT}">Close</a></div>`);
     return false;
   }
-  if (invite?.is_approved) {
+  if ((sharedLinkGuest && invite?.meetings?.status === "live") || (!sharedLinkGuest && invite?.is_approved)) {
     window.location.href = roomUrl();
     return false;
   }
@@ -58,12 +59,13 @@ async function refreshInvite() {
 
 function renderWaiting() {
   const meeting = state.invite?.meetings || {};
+  const sharedLinkGuest = state.invite?.join_method === "shared_link" && meeting.access_mode === "shared_link";
   render(`
     <span class="mw-chip">Waiting Room</span>
     <h1 style="margin:.75rem 0 .35rem;">${escapeHtml(meeting.title || "Meeting")}</h1>
-    <p style="margin:0;color:#c9c5b8;">Hello ${escapeHtml(state.invite?.name || "Guest")}, please stay on this page until the host admits you.</p>
+    <p style="margin:0;color:#c9c5b8;">Hello ${escapeHtml(state.invite?.name || "Guest")}, ${sharedLinkGuest ? "please stay on this page until the host or administrator starts the meeting." : "please stay on this page until the host admits you."}</p>
     <div class="mw-loader"></div>
-    <div class="mw-note">${escapeHtml(meeting.lobby_note || "The host will admit you when the session is ready. Keep this page open.")}</div>
+    <div class="mw-note">${escapeHtml(meeting.lobby_note || (sharedLinkGuest ? "The video conference will become available as soon as the meeting is started. Keep this page open." : "The host will admit you when the session is ready. Keep this page open."))}</div>
     <div class="mw-actions">
       <button class="btn btn-ghost" id="mwRefreshBtn" type="button">Refresh Status</button>
       <a class="btn btn-ghost" href="${ROUTES.ROOT}">Leave</a>

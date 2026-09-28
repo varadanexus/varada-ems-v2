@@ -70,14 +70,20 @@ function loadJitsiScript(domain, appId) {
 
 async function refreshInvite() {
   state.invite = await getInviteRecordByToken(token);
-  if (!state.invite?.is_active || !state.invite?.is_approved) {
+  const sharedLinkGuest = state.invite?.join_method === "shared_link" && state.invite?.meetings?.access_mode === "shared_link";
+  if (!state.invite?.is_active || (!sharedLinkGuest && !state.invite?.is_approved)) {
     showToast("Host removed you from the meeting.", TOAST_TYPES.INFO);
     window.location.href = `${ROUTES.MEETINGS_WAITING}?t=${encodeURIComponent(token)}`;
     return false;
   }
-  if (!state.invite?.otp_verified_at) {
+  if (!sharedLinkGuest && !state.invite?.otp_verified_at) {
     showToast("OTP verification is required before joining the room.", TOAST_TYPES.INFO);
     window.location.href = `${ROUTES.MEETINGS_GUEST}?t=${encodeURIComponent(token)}`;
+    return false;
+  }
+  if (sharedLinkGuest && state.invite?.meetings?.status !== "live") {
+    showToast("Please wait for the host to start the meeting.", TOAST_TYPES.INFO);
+    window.location.href = `${ROUTES.MEETINGS_WAITING}?t=${encodeURIComponent(token)}`;
     return false;
   }
   if (state.invite?.meetings?.status === "ended") {

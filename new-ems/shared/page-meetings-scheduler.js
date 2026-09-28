@@ -5,12 +5,14 @@ import {
   buildMeetingInviteLink,
   deleteMeeting,
   deleteParticipant,
+  getMeetingShareLink,
   getMeetingSettings,
   listMeetings,
   listParticipants,
   saveMeeting,
   saveParticipant,
   sendMeetingInvite,
+  rotateMeetingShareLink,
   setMeetingStatus,
   setParticipantActive,
   setParticipantApproval,
@@ -30,6 +32,7 @@ const state = {
   meetings: [],
   selectedMeetingId: new URLSearchParams(window.location.search).get("meeting") || "",
   participants: [],
+  shareLink: null,
   channel: null,
   filter: "all",
   search: "",
@@ -76,7 +79,7 @@ function meetingMetrics() {
   return {
     total: rows.length,
     approved: rows.filter((r) => r.is_approved).length,
-    waiting: rows.filter((r) => !r.is_approved && r.is_active).length,
+    waiting: rows.filter((r) => r.is_active && (r.status === "waiting" || !r.is_approved)).length,
     joined: rows.filter((r) => r.status === "in_meeting").length,
     otpVerified: rows.filter((r) => r.otp_verified_at).length,
     sent: rows.filter((r) => r.invite_meta?.whatsapp_sent || r.invite_meta?.email_sent).length,
@@ -190,6 +193,10 @@ function planForm(meeting) {
         <div class="mws-field"><label>Meeting Domain</label><input name="room_domain" type="text" value="${escapeHtml(meeting?.room_domain || settings.jitsiDomain || "meet.jit.si")}" placeholder="8x8.vc / meet.jit.si" /></div>
         <div class="mws-field"><label>Host Name</label><input name="host_name" type="text" value="${escapeHtml(meeting?.host_name || "")}" placeholder="Althi Prudhvi" /></div>
         <div class="mws-field"><label>Host Email</label><input name="host_email" type="email" value="${escapeHtml(meeting?.host_email || "")}" placeholder="host@varadanexus.com" /></div>
+        <div class="mws-field full"><label>Guest Access</label><select name="access_mode">
+          <option value="approval" ${meeting?.access_mode !== "shared_link" ? "selected" : ""}>Private invitations — OTP and individual host approval</option>
+          <option value="shared_link" ${meeting?.access_mode === "shared_link" ? "selected" : ""}>Shareable link — no OTP, wait until host starts meeting</option>
+        </select><small>Shareable-link guests enter their name, company and designation, then remain in the waiting room until this meeting is started.</small></div>
         <div class="mws-field full"><label>Agenda</label><textarea name="agenda" placeholder="Topics, approvals needed, decisions, action ownership.">${escapeHtml(meeting?.agenda || "")}</textarea></div>
         <div class="mws-field full"><label>Lobby Instruction</label><textarea name="lobby_note" placeholder="Instruction shown to invitees before host approval.">${escapeHtml(meeting?.lobby_note || settings.defaultLobbyNote || "")}</textarea></div>
         <div class="full mws-actions"><button class="btn" type="submit">${meeting ? "Save & Continue" : "Create & Continue"}</button></div>
@@ -209,6 +216,15 @@ function participantsStep(meeting) {
         <button class="btn btn-danger" type="button" data-delete-participant="${row.id}">Delete</button>
       </td>
     </tr>`).join("") || '<tr><td colspan="5">No participants added yet.</td></tr>';
+  if (meeting.access_mode === "shared_link") return `
+    <section class="mws-section">
+      <div class="mws-section-head"><div><h4>Waiting-Room Registrations</h4><p>Guests register themselves through the secure meeting link. Full name is mandatory; company and designation are optional.</p></div></div>
+      <div class="mws-note">No OTP or individual approval is required. Registered guests remain in the waiting room until the host or administrator starts the meeting.</div>
+      <div class="table-shell" style="margin-top:1rem"><table>
+        <thead><tr><th>Participant</th><th>Contact</th><th>Role</th><th>State</th><th>Actions</th></tr></thead>
+        <tbody>${roster}</tbody>
+      </table></div>
+    </section>`;
   return `
     <section class="mws-section">
       <div class="mws-section-head"><div><h4>Register Participants</h4><p>Add attendees. Mobile numbers are treated as Indian (+91) automatically.</p></div></div>
@@ -231,6 +247,30 @@ function participantsStep(meeting) {
 }
 
 function invitesStep(meeting) {
+  if (meeting.access_mode === "shared_link") {
+    const shareUrl = state.shareLink?.shareUrl || "";
+    const rows = state.participants.map((row) => `<tr>
+      <td><div class="mws-person"><strong>${escapeHtml(row.name || "-")}</strong><span class="muted">${escapeHtml(row.company_name || "-")}</span></div></td>
+      <td>${escapeHtml(row.designation || "-")}</td>
+      <td>${meetingStatusPill(row.status || "waiting")}</td>
+      <td>${escapeHtml(fmt(row.created_at))}</td>
+      <td class="mws-inline-actions"><button class="btn btn-ghost" type="button" data-toggle-active="${row.id}">${row.is_active ? "Remove" : "Restore"}</button></td>
+    </tr>`).join("") || '<tr><td colspan="5">No guests have opened the shared link yet.</td></tr>';
+    return `
+      <section class="mws-section">
+        <div class="mws-section-head"><div><h4>Shareable Meeting Link</h4><p>Anyone with this link can register without OTP and wait for the host to start the meeting.</p></div></div>
+        <div class="mws-field"><label>Guest Link</label><input type="text" value="${escapeHtml(shareUrl)}" readonly /></div>
+        <div class="mws-actions" style="margin-top:.8rem">
+          <button class="btn" id="msCopyShareLink" type="button" ${shareUrl ? "" : "disabled"}>Copy Link</button>
+          <button class="btn btn-ghost" id="msRotateShareLink" type="button">Regenerate Link</button>
+        </div>
+        <div class="mws-note">Regenerating immediately disables the previous link. Guests already registered remain in the waiting room.</div>
+        <div class="table-shell" style="margin-top:1rem"><table>
+          <thead><tr><th>Guest</th><th>Designation</th><th>State</th><th>Registered</th><th>Actions</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </section>`;
+  }
   const rows = state.participants.map((row) => {
     const meta = row.invite_meta || {};
     return `<tr>
@@ -258,10 +298,11 @@ function invitesStep(meeting) {
 
 function liveStep(meeting) {
   const m = meetingMetrics();
+  const sharedLinkMeeting = meeting.access_mode === "shared_link";
   return `
     <section class="mws-section">
       <div class="mws-section-head">
-        <div><h4>Live Room</h4><p>Join with your authenticated EMS admin session. Guests enter separately through mobile OTP.</p></div>
+        <div><h4>Live Room</h4><p>${sharedLinkMeeting ? "Start the meeting to release registered guests from the waiting room into the video conference." : "Join with your authenticated EMS admin session. Guests enter separately through mobile OTP."}</p></div>
         <div class="mws-actions">
           ${meeting.status === "live" ? `<button class="btn btn-ghost" id="msEnd" type="button">End Meeting</button>` : `<button class="btn" id="msStart" type="button">Mark Live</button>`}
           <a class="btn" href="${buildHostRoomLink(meeting.id)}">Join as Host &rarr;</a>
@@ -269,14 +310,14 @@ function liveStep(meeting) {
       </div>
       <div class="mws-kpis">
         <div class="mws-kpi"><span>Participants</span><strong>${m.total}</strong></div>
-        <div class="mws-kpi"><span>Approved</span><strong>${m.approved}</strong></div>
+        <div class="mws-kpi"><span>${sharedLinkMeeting ? "Registered" : "Approved"}</span><strong>${sharedLinkMeeting ? m.total : m.approved}</strong></div>
         <div class="mws-kpi"><span>Waiting</span><strong>${m.waiting}</strong></div>
-        <div class="mws-kpi"><span>OTP Verified</span><strong>${m.otpVerified}</strong></div>
+        <div class="mws-kpi"><span>${sharedLinkMeeting ? "Link Guests" : "OTP Verified"}</span><strong>${sharedLinkMeeting ? m.total : m.otpVerified}</strong></div>
         <div class="mws-kpi"><span>In Room</span><strong>${m.joined}</strong></div>
       </div>
       <div class="mws-actions">
         <button class="btn btn-ghost" id="msCopyRoom" type="button">Copy Room Name</button>
-        <a class="btn btn-ghost" href="${ROUTES.MEETINGS_LOGIN}?t=${encodeURIComponent(state.participants[0]?.invite_token || "")}">Guest Entry Page</a>
+        ${sharedLinkMeeting ? `<button class="btn btn-ghost" id="msCopyShareLink" type="button" ${state.shareLink?.shareUrl ? "" : "disabled"}>Copy Guest Link</button>` : `<a class="btn btn-ghost" href="${ROUTES.MEETINGS_LOGIN}?t=${encodeURIComponent(state.participants[0]?.invite_token || "")}">Guest Entry Page</a>`}
       </div>
       <div class="mws-note">Room: ${escapeHtml(meeting.room_name || "-")} · ${escapeHtml(meeting.room_domain || "meet.jit.si")} · Status: ${escapeHtml(meeting.status || "scheduled")}</div>
     </section>`;
@@ -324,10 +365,16 @@ async function refreshMeetings() {
   const meeting = selectedMeeting();
   if (meeting) {
     state.selectedMeetingId = meeting.id;
-    state.participants = await listParticipants(meeting.id);
+    const [participants, shareLink] = await Promise.all([
+      listParticipants(meeting.id),
+      meeting.access_mode === "shared_link" ? getMeetingShareLink(meeting.id).catch(() => null) : Promise.resolve(null)
+    ]);
+    state.participants = participants;
+    state.shareLink = shareLink;
     subscribeSelectedMeeting();
   } else if (!isNew()) {
     state.participants = [];
+    state.shareLink = null;
     unsubscribe(state.channel);
     state.channel = null;
   }
@@ -359,6 +406,7 @@ async function submitMeeting(event) {
     host_email: form.get("host_email"),
     agenda: form.get("agenda"),
     lobby_note: form.get("lobby_note"),
+    access_mode: form.get("access_mode"),
     status: meetingId ? undefined : "scheduled"
   });
   state.selectedMeetingId = record.id;
@@ -386,7 +434,7 @@ function openMeeting(id) {
 }
 
 function bindRegister() {
-  document.querySelector("#msNew")?.addEventListener("click", () => { state.selectedMeetingId = "__new__"; state.participants = []; state.view = "wizard"; state.step = "plan"; renderPage(); });
+  document.querySelector("#msNew")?.addEventListener("click", () => { state.selectedMeetingId = "__new__"; state.participants = []; state.shareLink = null; state.view = "wizard"; state.step = "plan"; renderPage(); });
   document.querySelector("#msSearch")?.addEventListener("input", (e) => { state.search = e.target.value || ""; renderRegister(); });
   document.querySelectorAll("[data-filter]").forEach((b) => b.addEventListener("click", () => { state.filter = b.getAttribute("data-filter") || "all"; renderRegister(); }));
   document.querySelectorAll("[data-open-meeting]").forEach((b) => b.addEventListener("click", () => openMeeting(b.getAttribute("data-open-meeting"))));
@@ -419,6 +467,16 @@ function bindWizard() {
     await setMeetingStatus(meeting.id, "ended", { ended_at: new Date().toISOString() }); showToast("Meeting ended", TOAST_TYPES.SUCCESS); await reloadAndRender();
   });
   document.querySelector("#msCopyRoom")?.addEventListener("click", () => { const m = selectedMeeting(); if (m?.room_name) copyText(m.room_name, "Room name"); });
+  document.querySelector("#msCopyShareLink")?.addEventListener("click", () => {
+    if (state.shareLink?.shareUrl) copyText(state.shareLink.shareUrl, "Meeting link");
+  });
+  document.querySelector("#msRotateShareLink")?.addEventListener("click", async () => {
+    const meeting = selectedMeeting(); if (!meeting) return;
+    if (!window.confirm("Regenerate this meeting link? The previous link will stop working immediately.")) return;
+    state.shareLink = await rotateMeetingShareLink(meeting.id);
+    showToast("New meeting link generated", TOAST_TYPES.SUCCESS);
+    renderPage();
+  });
 
   document.querySelectorAll("[data-copy-invite]").forEach((b) => b.addEventListener("click", () => copyText(buildMeetingInviteLink(b.getAttribute("data-copy-invite") || ""), "Invite link")));
   document.querySelectorAll("[data-send-invite]").forEach((b) => b.addEventListener("click", async () => {
@@ -439,7 +497,7 @@ function bindWizard() {
   }));
   document.querySelectorAll("[data-toggle-active]").forEach((b) => b.addEventListener("click", async () => {
     const row = state.participants.find((it) => String(it.id) === String(b.getAttribute("data-toggle-active"))); if (!row) return;
-    await setParticipantActive(row.id, !row.is_active); showToast(row.is_active ? "Participant disabled" : "Participant enabled", TOAST_TYPES.SUCCESS); await reloadAndRender();
+    await setParticipantActive(row.id, !row.is_active, row.join_method === "shared_link" ? "waiting" : "invited"); showToast(row.is_active ? "Participant disabled" : "Participant enabled", TOAST_TYPES.SUCCESS); await reloadAndRender();
   }));
   document.querySelectorAll("[data-delete-participant]").forEach((b) => b.addEventListener("click", async () => {
     const row = state.participants.find((it) => String(it.id) === String(b.getAttribute("data-delete-participant"))); if (!row) return;

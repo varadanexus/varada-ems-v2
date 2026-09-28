@@ -85,6 +85,8 @@ jobs:
           test -f .pages-dist/whatsapp-platform/solutions/index.html
           test -f .pages-dist/whatsapp-platform/pricing/index.html
           test -f .pages-dist/whatsapp-platform/access/index.html
+          test -f .pages-dist/portals/meeting/meeting-join.html
+          grep -q 'shared_link' .pages-dist/new-ems/shared/page-meetings-scheduler.js
           # These are static imports of the shared portal entry point. If any
           # are absent, every WhatsApp public/access route falls back to its
           # SEO shell because the browser cannot evaluate the module graph.
