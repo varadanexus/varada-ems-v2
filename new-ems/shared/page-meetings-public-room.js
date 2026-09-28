@@ -8,6 +8,11 @@ document.querySelector("#app")?.classList.add("page-enter-active");
 const token = new URLSearchParams(window.location.search).get("t") || "";
 const state = { invite: null, api: null, channel: null, pollHandle: null };
 
+function syncViewportHeight() {
+  const height = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty("--mpr-viewport-height", `${Math.round(height)}px`);
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 }
@@ -15,20 +20,25 @@ function escapeHtml(value) {
 function render(content) {
   document.querySelector("#app").innerHTML = `
     <style>
-      :root{color-scheme:dark}
+      :root{color-scheme:dark;--mpr-viewport-height:100dvh}
       *{box-sizing:border-box}
-      body{margin:0;overflow:hidden;background:#040508;color:#f7f4ec;font-family:Manrope,Inter,Arial,sans-serif}
-      .mpr-shell{position:relative;min-height:100vh;padding:0 18px 18px;overflow:hidden;background:radial-gradient(circle at 78% 8%,rgba(195,154,68,.11),transparent 28%),linear-gradient(145deg,#050609 0%,#07080d 55%,#040508 100%)}
+      html,body,#app{width:100%;height:100%;background:#040508}
+      body{margin:0;overflow:hidden;background:#040508;color:#f7f4ec;font-family:Manrope,Inter,Arial,sans-serif;overscroll-behavior:none}
+      .mpr-shell{position:relative;width:100%;height:var(--mpr-viewport-height);min-height:0;display:flex;flex-direction:column;padding:max(0px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));overflow:hidden;background:radial-gradient(circle at 78% 8%,rgba(195,154,68,.11),transparent 28%),linear-gradient(145deg,#050609 0%,#07080d 55%,#040508 100%)}
       .mpr-shell:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(120deg,transparent 0 48%,rgba(230,200,126,.025) 48.1% 48.3%,transparent 48.4%)}
-      .mpr-bar{position:relative;z-index:2;min-height:76px;display:grid;grid-template-columns:minmax(210px,1fr) minmax(240px,1.4fr) minmax(210px,1fr);align-items:center;gap:1.2rem;padding:10px 8px;border-bottom:1px solid rgba(230,200,126,.18);background:rgba(5,6,9,.82);backdrop-filter:blur(18px)}
+      .mpr-bar{position:relative;z-index:2;flex:0 0 auto;min-height:76px;display:grid;grid-template-columns:minmax(210px,1fr) minmax(240px,1.4fr) minmax(210px,1fr);align-items:center;gap:1.2rem;padding:10px 8px;border-bottom:1px solid rgba(230,200,126,.18);background:rgba(5,6,9,.82);backdrop-filter:blur(18px)}
       .mpr-brand{display:flex;align-items:center;gap:12px}.mpr-brand img{width:45px;height:45px;object-fit:contain;filter:drop-shadow(0 0 12px rgba(230,200,126,.16))}.mpr-brand strong{display:block;font-size:.82rem;letter-spacing:.17em;text-transform:uppercase}.mpr-brand span{display:block;margin-top:3px;color:#9b9788;font-size:.61rem;letter-spacing:.22em;text-transform:uppercase}
-      .mpr-title{text-align:center}.mpr-title strong{display:block;font-family:"Playfair Display",Georgia,serif;font-size:1.12rem;color:#f7f4ec}.mpr-title span{display:block;margin-top:3px;color:#9b9788;font-size:.72rem;letter-spacing:.04em}
-      .mpr-actions{display:flex;gap:.6rem;flex-wrap:wrap}
+      .mpr-title{min-width:0;text-align:center}.mpr-title strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:"Playfair Display",Georgia,serif;font-size:1.12rem;color:#f7f4ec}.mpr-title span{display:block;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9b9788;font-size:.72rem;letter-spacing:.04em}
+      .mpr-actions{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
       .mpr-actions{justify-content:flex-end}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:.58rem 1.2rem;border-radius:99px;border:1px solid rgba(230,200,126,.38);background:rgba(230,200,126,.06);color:#e6c87e;font-size:.7rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;text-decoration:none;cursor:pointer;transition:.25s ease}.btn:hover{background:rgba(230,200,126,.14);box-shadow:0 0 24px rgba(195,154,68,.12)}
-      .mpr-stage{position:relative;z-index:1;height:calc(100vh - 94px);padding-top:18px}
+      .mpr-live{display:inline-flex;align-items:center;gap:6px;color:#b9b5a8;font-size:.68rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.mpr-live:before{content:"";width:8px;height:8px;border-radius:50%;background:#66d18f;box-shadow:0 0 12px rgba(102,209,143,.75)}
+      .mpr-stage{position:relative;z-index:1;flex:1 1 auto;min-height:0;padding-top:14px}
       .mpr-room{height:100%;overflow:hidden;border:1px solid rgba(230,200,126,.2);border-radius:18px;background:#050609;box-shadow:0 24px 70px rgba(0,0,0,.55),0 0 0 1px rgba(230,200,126,.025) inset}
-      .mpr-room iframe{display:block;border-radius:17px}
-      @media(max-width:720px){.mpr-shell{padding:0 8px 8px}.mpr-bar{min-height:68px;grid-template-columns:1fr auto;padding:8px 4px}.mpr-brand img{width:38px;height:38px}.mpr-brand strong{font-size:.7rem}.mpr-brand span{font-size:.54rem}.mpr-title{display:none}.mpr-stage{height:calc(100vh - 76px);padding-top:8px}.mpr-room{border-radius:13px}.mpr-room iframe{border-radius:12px}.btn{min-height:38px;padding:.5rem .9rem}}
+      .mpr-room iframe{display:block;width:100%!important;height:100%!important;border-radius:17px}
+      @media(max-width:900px){.mpr-bar{grid-template-columns:minmax(180px,1fr) minmax(180px,1.2fr) auto;gap:.7rem}.mpr-title strong{font-size:1rem}.btn{padding:.55rem .9rem}}
+      @media(max-width:720px){.mpr-shell{padding:max(0px,env(safe-area-inset-top)) max(7px,env(safe-area-inset-right)) max(7px,env(safe-area-inset-bottom)) max(7px,env(safe-area-inset-left))}.mpr-bar{min-height:62px;grid-template-columns:minmax(0,1fr) auto;gap:.5rem;padding:7px 3px}.mpr-brand{min-width:0;gap:9px}.mpr-brand img{width:38px;height:38px}.mpr-brand strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.7rem}.mpr-brand span{font-size:.54rem}.mpr-title{display:none}.mpr-actions{gap:.45rem}.mpr-live{font-size:.6rem}.mpr-stage{padding-top:7px}.mpr-room{border-radius:13px}.mpr-room iframe{border-radius:12px}.btn{min-height:42px;padding:.5rem .85rem;touch-action:manipulation}}
+      @media(max-width:420px){.mpr-brand span{display:none}.mpr-live span{display:none}.mpr-actions{flex-wrap:nowrap}.btn{padding-inline:.72rem;font-size:.64rem}}
+      @media(max-height:520px) and (orientation:landscape){.mpr-shell{padding-block:max(0px,env(safe-area-inset-top)) max(5px,env(safe-area-inset-bottom))}.mpr-bar{min-height:48px;padding:3px}.mpr-brand img{width:32px;height:32px}.mpr-brand span,.mpr-title,.mpr-live{display:none}.mpr-actions .btn{min-height:36px;padding:.35rem .7rem}.mpr-stage{padding-top:5px}.mpr-room{border-radius:10px}.mpr-room iframe{border-radius:9px}}
     </style>
     <main class="mpr-shell">${content}</main>
   `;
@@ -47,7 +57,8 @@ function roomPage() {
         <span>${escapeHtml(state.invite?.name || "Guest")} · ${escapeHtml(meeting.host_name || "Varada Nexus Host")}</span>
       </div>
       <div class="mpr-actions">
-        <a class="btn" href="${ROUTES.ROOT}">Leave</a>
+        <span class="mpr-live"><span>Live</span></span>
+        <a class="btn" href="${ROUTES.ROOT}" aria-label="Leave meeting">Leave</a>
       </div>
     </header>
     <section class="mpr-stage" aria-label="Live meeting">
@@ -143,6 +154,7 @@ async function startJitsi() {
 }
 
 async function init() {
+  syncViewportHeight();
   if (!token) {
     render(`<div style="padding:2rem;"><h1>Invalid room link</h1></div>`);
     return;
@@ -169,5 +181,10 @@ window.addEventListener("beforeunload", () => {
   updateInvitePresence(token, "offline").catch(() => {});
   try { state.api?.dispose?.(); } catch {}
 });
+
+window.addEventListener("resize", syncViewportHeight, { passive: true });
+window.addEventListener("orientationchange", syncViewportHeight, { passive: true });
+window.visualViewport?.addEventListener("resize", syncViewportHeight, { passive: true });
+window.visualViewport?.addEventListener("scroll", syncViewportHeight, { passive: true });
 
 init();
