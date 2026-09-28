@@ -77,7 +77,7 @@ function renderShell() {
             </div>
             <div class="mr-actions">
               <a class="btn btn-ghost" href="${ROUTES.MEETINGS_SCHEDULER}?meeting=${encodeURIComponent(state.meeting.id)}">Back to Studio</a>
-              <button class="btn btn-ghost" id="mrMarkLiveBtn" type="button">Mark Live</button>
+              <span id="mrStatusControl">${state.meeting.status === "live" ? `<button class="btn btn-ghost" id="mrPauseBtn" type="button">Return to Waiting Room</button>` : `<button class="btn btn-ghost" id="mrMarkLiveBtn" type="button">Mark Live</button>`}</span>
               <button class="btn" id="mrEndBtn" type="button">End Meeting</button>
             </div>
           </div>
@@ -107,6 +107,10 @@ function renderShell() {
 
 function updatePanels() {
   if (!state.meeting) return;
+  const statusControl = document.querySelector("#mrStatusControl");
+  if (statusControl) statusControl.innerHTML = state.meeting.status === "live"
+    ? `<button class="btn btn-ghost" id="mrPauseBtn" type="button">Return to Waiting Room</button>`
+    : `<button class="btn btn-ghost" id="mrMarkLiveBtn" type="button">Mark Live</button>`;
   const title = document.querySelector("#mrMeetingTitle");
   if (title) title.textContent = state.meeting.title || "Meeting Room";
   const sub = document.querySelector("#mrMeetingSub");
@@ -201,8 +205,16 @@ async function bind() {
     await refresh();
   };
 
+  const pauseBtn = document.querySelector("#mrPauseBtn");
+  if (pauseBtn) pauseBtn.onclick = async () => {
+    await setMeetingStatus(meetingId, "waiting", { ended_at: null });
+    showToast("Meeting returned to the waiting room. The guest link is unchanged.", TOAST_TYPES.SUCCESS);
+    await refresh();
+  };
+
   const endBtn = document.querySelector("#mrEndBtn");
   if (endBtn) endBtn.onclick = async () => {
+    if (!window.confirm("End this meeting? Guests will see that the session has ended. The shared link will remain attached to this meeting.")) return;
     await setMeetingStatus(meetingId, "ended", { ended_at: new Date().toISOString() });
     showToast("Meeting ended", TOAST_TYPES.SUCCESS);
     await refresh();

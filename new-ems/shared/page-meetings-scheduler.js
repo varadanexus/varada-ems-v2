@@ -304,7 +304,10 @@ function liveStep(meeting) {
       <div class="mws-section-head">
         <div><h4>Live Room</h4><p>${sharedLinkMeeting ? "Start the meeting to release registered guests from the waiting room into the video conference." : "Join with your authenticated EMS admin session. Guests enter separately through mobile OTP."}</p></div>
         <div class="mws-actions">
-          ${meeting.status === "live" ? `<button class="btn btn-ghost" id="msEnd" type="button">End Meeting</button>` : `<button class="btn" id="msStart" type="button">Mark Live</button>`}
+          ${meeting.status === "live" ? `
+            <button class="btn btn-ghost" id="msPause" type="button">Return to Waiting Room</button>
+            <button class="btn btn-ghost" id="msEnd" type="button">End Meeting</button>
+          ` : `<button class="btn" id="msStart" type="button">Mark Live</button>`}
           <a class="btn" href="${buildHostRoomLink(meeting.id)}">Join as Host &rarr;</a>
         </div>
       </div>
@@ -462,8 +465,15 @@ function bindWizard() {
     const meeting = selectedMeeting(); if (!meeting) return;
     await setMeetingStatus(meeting.id, "live", { started_at: new Date().toISOString() }); showToast("Meeting marked live", TOAST_TYPES.SUCCESS); await reloadAndRender();
   });
+  document.querySelector("#msPause")?.addEventListener("click", async () => {
+    const meeting = selectedMeeting(); if (!meeting) return;
+    await setMeetingStatus(meeting.id, "waiting", { ended_at: null });
+    showToast("Meeting returned to the waiting room. The guest link is unchanged.", TOAST_TYPES.SUCCESS);
+    await reloadAndRender();
+  });
   document.querySelector("#msEnd")?.addEventListener("click", async () => {
     const meeting = selectedMeeting(); if (!meeting) return;
+    if (!window.confirm("End this meeting? Guests will see that the session has ended. The shared link will remain attached to this meeting.")) return;
     await setMeetingStatus(meeting.id, "ended", { ended_at: new Date().toISOString() }); showToast("Meeting ended", TOAST_TYPES.SUCCESS); await reloadAndRender();
   });
   document.querySelector("#msCopyRoom")?.addEventListener("click", () => { const m = selectedMeeting(); if (m?.room_name) copyText(m.room_name, "Room name"); });
