@@ -377,7 +377,7 @@ async function renderVerificationQr(userId) {
     const canvas = document.createElement("canvas");
     canvas.width = 220; canvas.height = 220;
     canvas.dataset.verifyCanvas = String(userId);
-    await QRCode.toCanvas(canvas, `${location.origin}/new-ems/employee-verification.html`, {
+    await QRCode.toCanvas(canvas, `${location.origin}/new-ems/employee-verification.html?employeeId=${encodeURIComponent(profile.employee_code)}`, {
       width: 220, margin: 2, color: { dark: "#10151e", light: "#ffffff" }
     });
     holder.replaceChildren(canvas);
@@ -442,8 +442,12 @@ function renderUserModal(user) {
               <label><span class="muted">Employee ID *</span><input data-verify-code="${escAttr(user.id)}" maxlength="40" placeholder="e.g. VN-EMP-104" value="${escAttr(verificationProfiles.get(String(user.id))?.employee_code || "")}"></label>
               <label><span class="muted">Job title *</span><input data-verify-title="${escAttr(user.id)}" maxlength="120" placeholder="e.g. Project Manager" value="${escAttr(verificationProfiles.get(String(user.id))?.job_title || "")}"></label>
               <label><span class="muted">Department</span><input data-verify-department="${escAttr(user.id)}" maxlength="120" placeholder="Department" value="${escAttr(verificationProfiles.get(String(user.id))?.department || "")}"></label>
+              <label><span class="muted">Company / division</span><input data-verify-company="${escAttr(user.id)}" maxlength="160" placeholder="Varada Nexus · Division" value="${escAttr(verificationProfiles.get(String(user.id))?.company_division || "")}"></label>
+              <label><span class="muted">Office address</span><input data-verify-address="${escAttr(user.id)}" maxlength="240" placeholder="Office / work address" value="${escAttr(verificationProfiles.get(String(user.id))?.work_address || "")}"></label>
               <label><span class="muted">Active status</span><select data-verify-status="${escAttr(user.id)}"><option value="active" ${verificationProfiles.get(String(user.id))?.employment_status !== "inactive" ? "selected" : ""}>Active</option><option value="inactive" ${verificationProfiles.get(String(user.id))?.employment_status === "inactive" ? "selected" : ""}>Inactive</option></select></label>
+              <label><span class="muted">ID valid through (optional)</span><input data-verify-valid="${escAttr(user.id)}" type="date" value="${escAttr(verificationProfiles.get(String(user.id))?.valid_until || "")}"></label>
             </div>
+            <label style="display:block;margin-top:.7rem"><span class="muted">Portrait image URL (optional)</span><input data-verify-photo="${escAttr(user.id)}" type="url" maxlength="500" placeholder="https://…" value="${escAttr(verificationProfiles.get(String(user.id))?.photo_url || "")}"></label>
             <div class="eu-action-grid" style="margin-top:.7rem"><button class="btn" data-save-verification="${escAttr(user.id)}">Save details &amp; generate QR</button><a class="btn" data-verify-open="${escAttr(user.id)}" href="#" target="_blank" rel="noopener" ${verificationProfiles.get(String(user.id))?.employee_code ? "" : "hidden"}>Open verification page</a><button class="btn" data-verify-download="${escAttr(user.id)}" ${verificationProfiles.get(String(user.id))?.employee_code ? "" : "hidden"}>Download QR</button></div>
             <div data-verify-qr="${escAttr(user.id)}" style="margin-top:.8rem"></div>
           </div>
@@ -744,6 +748,10 @@ function renderUsers() {
           employee_code: employeeCode,
           job_title: jobTitle,
           department: field("department") || null,
+          company_division: field("company") || null,
+          work_address: field("address") || null,
+          valid_until: field("valid") || null,
+          photo_url: field("photo") || null,
           employment_status: field("status") || "active",
           updated_at: new Date().toISOString()
         }, { onConflict: "user_id" }).select("*").single();
@@ -761,7 +769,7 @@ function renderUsers() {
 
   body.querySelectorAll("a[data-verify-open]").forEach((link) => {
     const profile = verificationProfiles.get(String(link.getAttribute("data-verify-open")));
-    if (profile?.employee_code) link.href = "/new-ems/employee-verification.html";
+    if (profile?.employee_code) link.href = `/new-ems/employee-verification.html?employeeId=${encodeURIComponent(profile.employee_code)}`;
   });
   body.querySelectorAll("button[data-verify-download]").forEach((btn) => {
     btn.addEventListener("click", () => {
