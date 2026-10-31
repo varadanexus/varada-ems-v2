@@ -12,6 +12,8 @@ import { sendWhatsAppWorkspaceMessage } from "./whatsapp-api.js";
 import { getSupabaseClient } from "../config/supabase.js";
 
 const client = getSupabaseClient();
+const verificationProfiles = new Map();
+const verificationLoaded = new Set();
 
 let allUsers = [];
 let allRoles = [];
@@ -365,6 +367,26 @@ function startPasswordRevealCountdown() {
   }, 1000);
 }
 
+async function renderVerificationQr(userId) {
+  const profile = verificationProfiles.get(String(userId));
+  const holder = document.querySelector(`[data-verify-qr="${userId}"]`);
+  if (!profile?.employee_code || !holder || holder.dataset.ready === "true") return;
+  holder.dataset.ready = "true";
+  try {
+    const { default: QRCode } = await import("https://esm.sh/qrcode@1.5.4");
+    const canvas = document.createElement("canvas");
+    canvas.width = 220; canvas.height = 220;
+    canvas.dataset.verifyCanvas = String(userId);
+    await QRCode.toCanvas(canvas, `${location.origin}/new-ems/employee-verification.html`, {
+      width: 220, margin: 2, color: { dark: "#10151e", light: "#ffffff" }
+    });
+    holder.replaceChildren(canvas);
+  } catch {
+    holder.textContent = "QR code could not be generated. Check the network connection and reopen this employee.";
+    holder.dataset.ready = "false";
+  }
+}
+
 function renderUserModal(user) {
   const role = (user.user_roles || []).map((x) => x.roles?.name || x.roles?.code).filter(Boolean).join(", ") || "Assigned role";
   const hasAllScope = (user.user_divisions || []).some((x) => String(x.scope || "").toLowerCase() === "all");
@@ -411,6 +433,19 @@ function renderUserModal(user) {
               <input data-edit-phone="${escAttr(user.id)}" placeholder="Phone" value="${escAttr(user.phone)}" ${user.auth_provider === "supabase" ? "disabled" : ""} />
               <div class="eu-action-grid"><button class="btn" data-edit-save="${escAttr(user.id)}">Save details</button><button class="btn" data-edit-cancel="${escAttr(user.id)}">Cancel</button></div>
             </div>
+          </div>
+
+          <div class="eu-action-section">
+            <h4>Employee ID verification</h4>
+            <p class="muted" style="margin:0 0 .8rem">Enter the details that should appear when this employee’s ID QR is scanned. Saving creates the QR automatically.</p>
+            <div class="eu-mapping-grid">
+              <label><span class="muted">Employee ID *</span><input data-verify-code="${escAttr(user.id)}" maxlength="40" placeholder="e.g. VN-EMP-104" value="${escAttr(verificationProfiles.get(String(user.id))?.employee_code || "")}"></label>
+              <label><span class="muted">Job title *</span><input data-verify-title="${escAttr(user.id)}" maxlength="120" placeholder="e.g. Project Manager" value="${escAttr(verificationProfiles.get(String(user.id))?.job_title || "")}"></label>
+              <label><span class="muted">Department</span><input data-verify-department="${escAttr(user.id)}" maxlength="120" placeholder="Department" value="${escAttr(verificationProfiles.get(String(user.id))?.department || "")}"></label>
+              <label><span class="muted">Active status</span><select data-verify-status="${escAttr(user.id)}"><option value="active" ${verificationProfiles.get(String(user.id))?.employment_status !== "inactive" ? "selected" : ""}>Active</option><option value="inactive" ${verificationProfiles.get(String(user.id))?.employment_status === "inactive" ? "selected" : ""}>Inactive</option></select></label>
+            </div>
+            <div class="eu-action-grid" style="margin-top:.7rem"><button class="btn" data-save-verification="${escAttr(user.id)}">Save details &amp; generate QR</button><a class="btn" data-verify-open="${escAttr(user.id)}" href="#" target="_blank" rel="noopener" ${verificationProfiles.get(String(user.id))?.employee_code ? "" : "hidden"}>Open verification page</a><button class="btn" data-verify-download="${escAttr(user.id)}" ${verificationProfiles.get(String(user.id))?.employee_code ? "" : "hidden"}>Download QR</button></div>
+            <div data-verify-qr="${escAttr(user.id)}" style="margin-top:.8rem"></div>
           </div>
 
           <div class="eu-action-section">
@@ -474,6 +509,15 @@ function renderUsers() {
   }).join("");
   const selected = allUsers.find((u) => String(u.id) === String(selectedUserId));
   body.innerHTML = cards + (selected ? renderUserModal(selected) : "") + renderStaffTermsModal() + renderPasswordRevealModal();
+
+  if (selected && !verificationLoaded.has(String(selected.id))) {
+    verificationLoaded.add(String(selected.id));
+    client.from("employee_verification_profiles").select("*").eq("user_id", selected.id).maybeSingle().then(({ data }) => {
+      verificationProfiles.set(String(selected.id), data || {});
+      if (String(selectedUserId) === String(selected.id)) renderUsers();
+    }).catch(() => {});
+  }
+  if (selected && verificationProfiles.get(String(selected.id))?.employee_code) renderVerificationQr(selected.id);
 
   body.querySelectorAll("button[data-open-user-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -683,6 +727,50 @@ function renderUsers() {
       } catch (error) {
         showToast(error?.message || "Failed to update details", "error");
       }
+    });
+  });
+
+  body.querySelectorAll("button[data-save-verification]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.getAttribute("data-save-verification");
+      const field = (name) => body.querySelector(`[data-verify-${name}="${userId}"]`)?.value?.trim() || "";
+      const employeeCode = field("code");
+      const jobTitle = field("title");
+      if (!employeeCode || !jobTitle) return showToast("Employee ID and job title are required", "error");
+      btn.disabled = true;
+      try {
+        const { data, error } = await client.from("employee_verification_profiles").upsert({
+          user_id: userId,
+          employee_code: employeeCode,
+          job_title: jobTitle,
+          department: field("department") || null,
+          employment_status: field("status") || "active",
+          updated_at: new Date().toISOString()
+        }, { onConflict: "user_id" }).select("*").single();
+        if (error) throw error;
+        verificationProfiles.set(String(userId), data);
+        showToast("Employee details saved and QR generated", "success");
+        renderUsers();
+      } catch (error) {
+        showToast(error?.message || "Could not save employee verification details", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  body.querySelectorAll("a[data-verify-open]").forEach((link) => {
+    const profile = verificationProfiles.get(String(link.getAttribute("data-verify-open")));
+    if (profile?.employee_code) link.href = "/new-ems/employee-verification.html";
+  });
+  body.querySelectorAll("button[data-verify-download]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const canvas = body.querySelector(`canvas[data-verify-canvas="${btn.getAttribute("data-verify-download")}"]`);
+      if (!canvas) return;
+      const link = document.createElement("a");
+      link.download = "employee-verification-qr.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
     });
   });
 
