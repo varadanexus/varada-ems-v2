@@ -141,11 +141,12 @@
               <section class="form-section" aria-labelledby="companySectionTitle">
                 <h3 class="section-title" id="companySectionTitle">Company details</h3>
                 <div class="field-grid">
-                  <div class="field wide"><label for="companyName">Company name *</label><input id="companyName" required autocomplete="organization" placeholder="Enter registered company name"></div>
-                  <div class="field wide"><label for="companyAddress">Registered / office address</label><textarea id="companyAddress" autocomplete="street-address" placeholder="Building, street, city, state and PIN code"></textarea></div>
-                  <div class="field"><label for="companyEmail">Company email</label><input id="companyEmail" type="email" autocomplete="email" placeholder="accounts@company.com"></div>
+                  <div class="field wide"><label for="companyName">Company name *</label><input id="companyName" required autocomplete="organization" value="Varada Nexus Private Limited"></div>
+                  <div class="field wide"><label for="companyAddress">Registered / office address</label><textarea id="companyAddress" autocomplete="street-address">80-17-28, K B Nagar, A V A Road, Rajahmundry, Andhra Pradesh - 533101</textarea></div>
+                  <div class="field"><label for="companyEmail">Company email</label><input id="companyEmail" type="email" autocomplete="email" value="accounts@varadanexus.com"></div>
                   <div class="field"><label for="companyPhone">Contact number</label><input id="companyPhone" type="tel" autocomplete="tel" placeholder="+91"></div>
-                  <div class="field"><label for="companyTaxId">Company tax / registration ID</label><input id="companyTaxId" placeholder="GSTIN or registration number"></div>
+                  <div class="field"><label for="companyTaxId">GSTIN</label><input id="companyTaxId" value="37AAKCV7495B1ZV"></div>
+                  <div class="field"><label for="companyCin">CIN</label><input id="companyCin" value="U43121AP2025PTC117741"></div>
                   <div class="field"><label for="companyLogo">Company logo (optional)</label><input id="companyLogo" type="file" accept="image/png,image/jpeg,image/webp"></div>
                 </div>
               </section>
@@ -199,7 +200,7 @@
             <article class="payslip" id="payslipPreview" aria-label="Generated payslip">
               <div class="slip-top">
                 <div class="slip-company">
-                  <img id="previewLogo" class="slip-logo" alt="Company logo">
+                  <img id="previewLogo" class="slip-logo" src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus logo">
                   <div class="slip-company-copy"><h2 class="slip-company-name" id="previewCompany">Company name</h2><p class="slip-company-address" id="previewAddress"></p><p class="slip-company-contact" id="previewCompanyContact"></p></div>
                 </div>
                 <div class="slip-title-block"><p class="slip-title">Salary statement</p><p class="slip-period" id="previewPeriod">Pay period</p></div>
@@ -241,6 +242,7 @@
     (() => {
       const form = document.getElementById("payslipForm");
       const $ = (id) => document.getElementById(id);
+      const defaultLogo = "/new-ems/assets/pdf/vn-logo.png";
       const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]);
       const read = (id) => $(id).value.trim();
       const amount = (id) => Math.max(0, Number($(id).value) || 0);
@@ -279,7 +281,8 @@
         $("previewAddress").textContent = read("companyAddress");
         const contact = [read("companyEmail"), read("companyPhone")].filter(Boolean).join(" · ");
         const taxId = read("companyTaxId");
-        $("previewCompanyContact").textContent = [contact, taxId ? "Registration: " + taxId : ""].filter(Boolean).join(" · ");
+        const cin = read("companyCin");
+        $("previewCompanyContact").textContent = [contact, taxId ? "GSTIN: " + taxId : "", cin ? "CIN: " + cin : ""].filter(Boolean).join(" · ");
         $("previewPeriod").textContent = periodText(read("payPeriod"));
         $("previewEmployee").textContent = read("employeeName") || "—";
         $("previewEmployeeId").textContent = read("employeeId") || "—";
@@ -288,7 +291,7 @@
         $("previewPaidDays").textContent = read("paidDays") || "—";
         $("previewPaymentDate").textContent = dateText(read("paymentDate"));
         $("previewPan").textContent = read("employeePan") || "—";
-        $("previewCompanyTax").textContent = taxId || "—";
+        $("previewCompanyTax").textContent = [taxId ? "GSTIN: " + taxId : "", cin ? "CIN: " + cin : ""].filter(Boolean).join(" · ") || "—";
         $("earningsRows").innerHTML = makeRows(earnings, totalEarnings, "earnings");
         $("deductionRows").innerHTML = makeRows(deductions, totalDeductions, "deductions");
         $("previewNetPay").textContent = money(netPay);
@@ -299,13 +302,13 @@
       form.addEventListener("input", updatePreview);
       form.addEventListener("change", updatePreview);
       form.addEventListener("reset", () => window.setTimeout(() => {
-        $("previewLogo").removeAttribute("src");
-        $("previewLogo").style.display = "none";
+        $("previewLogo").src = defaultLogo;
+        $("previewLogo").style.display = "block";
         updatePreview();
       }, 0));
       $("companyLogo").addEventListener("change", (event) => {
         const file = event.target.files?.[0];
-        if (!file) { $("previewLogo").removeAttribute("src"); $("previewLogo").style.display = "none"; return; }
+        if (!file) { $("previewLogo").src = defaultLogo; $("previewLogo").style.display = "block"; return; }
         if (!file.type.startsWith("image/")) return;
         const reader = new FileReader();
         reader.onload = () => { $("previewLogo").src = String(reader.result); $("previewLogo").style.display = "block"; };
@@ -318,6 +321,7 @@
         }
         window.print();
       });
+      $("previewLogo").style.display = "block";
       updatePreview();
     })();
   </script>
