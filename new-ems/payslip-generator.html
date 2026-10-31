@@ -34,10 +34,10 @@
     .field{display:grid;min-width:0;gap:6px}
     .field.wide{grid-column:1/-1}
     .field label{color:#aaa697;font-size:11px;font-weight:650;letter-spacing:.025em}
-    .field input,.field textarea{width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;outline:none;background:#050609;color:#f6f2e8;font:inherit;font-size:12px;transition:border-color .18s,box-shadow .18s}
+    .field input,.field textarea,.field select{width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;outline:none;background:#050609;color:#f6f2e8;font:inherit;font-size:12px;transition:border-color .18s,box-shadow .18s}
     .field textarea{min-height:68px;resize:vertical;line-height:1.5}
     .field input::placeholder,.field textarea::placeholder{color:#625f56}
-    .field input:focus,.field textarea:focus{border-color:rgba(230,200,126,.7);box-shadow:0 0 0 3px rgba(230,200,126,.1)}
+    .field input:focus,.field textarea:focus,.field select:focus{border-color:rgba(230,200,126,.7);box-shadow:0 0 0 3px rgba(230,200,126,.1)}
     .field input[type="file"]{padding:7px;font-size:11px}
     .field input[type="file"]::file-selector-button{margin-right:9px;padding:6px 9px;border:1px solid var(--border-soft);border-radius:7px;background:#16140f;color:#e6c87e;font:inherit;cursor:pointer}
     .line-items{display:grid;gap:8px}
@@ -159,6 +159,7 @@
                   <div class="field"><label for="department">Department</label><input id="department" autocomplete="off" placeholder="Department"></div>
                   <div class="field"><label for="payPeriod">Salary month *</label><input id="payPeriod" type="month" required></div>
                   <div class="field"><label for="paymentDate">Payment date</label><input id="paymentDate" type="date"></div>
+                  <div class="field"><label for="paymentMethod">Payment method</label><select id="paymentMethod"><option value="">Select payment method</option><option value="Bank transfer">Bank transfer</option><option value="Cash">Cash</option><option value="Cheque">Cheque</option></select></div>
                   <div class="field"><label for="paidDays">Paid days</label><input id="paidDays" type="number" min="0" max="31" step="0.5" inputmode="decimal" placeholder="e.g. 30"></div>
                   <div class="field"><label for="employeePan">PAN / tax ID (optional)</label><input id="employeePan" autocomplete="off" placeholder="Enter if applicable"></div>
                 </div>
@@ -212,6 +213,7 @@
                 <div class="slip-meta-item"><span>Department</span><strong id="previewDepartment">—</strong></div>
                 <div class="slip-meta-item"><span>Paid days</span><strong id="previewPaidDays">—</strong></div>
                 <div class="slip-meta-item"><span>Payment date</span><strong id="previewPaymentDate">—</strong></div>
+                <div class="slip-meta-item"><span>Payment method</span><strong id="previewPaymentMethod">—</strong></div>
                 <div class="slip-meta-item"><span>PAN / tax ID</span><strong id="previewPan">—</strong></div>
                 <div class="slip-meta-item"><span>Company registration</span><strong id="previewCompanyTax">—</strong></div>
               </div>
@@ -290,6 +292,7 @@
         $("previewDepartment").textContent = read("department") || "—";
         $("previewPaidDays").textContent = read("paidDays") || "—";
         $("previewPaymentDate").textContent = dateText(read("paymentDate"));
+        $("previewPaymentMethod").textContent = read("paymentMethod") || "—";
         $("previewPan").textContent = read("employeePan") || "—";
         $("previewCompanyTax").textContent = [taxId ? "GSTIN: " + taxId : "", cin ? "CIN: " + cin : ""].filter(Boolean).join(" · ") || "—";
         $("earningsRows").innerHTML = makeRows(earnings, totalEarnings, "earnings");
