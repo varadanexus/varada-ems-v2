@@ -25,14 +25,14 @@
 </head>
 <body>
   <main class="shell"><article class="card">
-    <header class="head"><div class="brand"><img class="brand-logo" src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus logo"><div class="brand-copy"><strong>Varada Nexus</strong><span>Employee identity verification</span></div></div><div class="security-mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 19 6v5.2c0 4.3-2.9 7.6-7 9.3-4.1-1.7-7-5-7-9.3V6l7-2.5Z" stroke="currentColor" stroke-width="1.6"/><path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Official record</div><div class="eyebrow">Official employment verification</div><h1>Employee identity verification</h1><p class="intro">Verify an employee’s identity and current employment details using the employee ID or the barcode on their company-issued ID card.</p></header>
-    <form id="lookupForm" class="lookup"><div class="lookup-label-row"><label for="employeeId">Employee ID</label><span class="manual-hint">Public verification · No account required</span></div><div class="lookup-row"><input id="employeeId" name="employeeId" autocomplete="off" maxlength="40" placeholder="Enter employee ID" required><button class="verify-button" type="submit"><svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Verify employee</button></div><div class="scan-row"><button id="scanQrButton" class="scan-button" type="button"><svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 8h3v3H8zM14 8h2v2h-2zM14 13h3v3h-3zM8 14h2v2H8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Scan ID barcode or QR</button><p class="scan-help">Allow camera access to scan the code printed on the employee ID card.</p></div><div id="qr-reader" class="hidden"></div><p id="lookupError" class="lookup-error" role="status"></p></form>
+    <header class="head"><div class="brand"><img class="brand-logo" src="/new-ems/assets/pdf/vn-logo.png" alt="Varada Nexus logo"><div class="brand-copy"><strong>Varada Nexus</strong><span>Employee identity verification</span></div></div><div class="security-mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 19 6v5.2c0 4.3-2.9 7.6-7 9.3-4.1-1.7-7-5-7-9.3V6l7-2.5Z" stroke="currentColor" stroke-width="1.6"/><path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> Official record</div><div class="eyebrow">Official employment verification</div><h1>Employee identity verification</h1><p class="intro">Verify an employee’s identity and current employment details by scanning the barcode above the employee ID on their company-issued card.</p></header>
+    <form id="lookupForm" class="lookup"><div class="lookup-label-row"><label for="employeeId">Employee ID</label><span class="manual-hint">Public verification · No account required</span></div><div class="lookup-row"><input id="employeeId" name="employeeId" autocomplete="off" maxlength="40" placeholder="Enter employee ID" required><button class="verify-button" type="submit"><svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Verify employee</button></div><div class="scan-row"><button id="scanQrButton" class="scan-button" type="button"><svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 8h3v3H8zM14 8h2v2h-2zM14 13h3v3h-3zM8 14h2v2H8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Scan employee barcode</button><p class="scan-help">Point your camera at the barcode printed above the employee ID. The ID will be read and verified automatically.</p></div><div id="qr-reader" class="hidden"></div><p id="lookupError" class="lookup-error" role="status"></p></form>
     <div id="profile" class="profile hidden">
       <div class="profile-kicker"><span>Employment record</span><span><i class="dot"></i> Verified against company records</span></div>
       <section class="person"><div id="avatar" class="avatar" aria-hidden="true"><span id="initial">V</span><img id="photo" class="hidden" alt="Employee portrait"></div><div class="person-copy"><h2 id="name" class="name"></h2><div id="code" class="code"></div><div id="status" class="badge"><span class="dot"></span><span id="statusText">Verified · Active</span></div></div></section>
       <div class="details-heading">Employment details</div><section class="details"><div class="item"><span>Position</span><strong id="title"></strong></div><div class="item"><span>Department</span><strong id="department"></strong></div><div class="item"><span>Company / division</span><strong id="company"></strong></div><div class="item wide"><span>Office address</span><strong id="address"></strong></div><div class="item"><span>ID valid through</span><strong id="valid"></strong></div><div class="item"><span>Verified at</span><strong id="verifiedAt"></strong></div></section>
     </div>
-    <footer class="foot"><div class="foot-copy"><strong>Questions about this verification?</strong><span>Contact Varada Nexus at <a href="mailto:connect@varadanexus.com">connect@varadanexus.com</a>.</span></div></footer>
+    <footer class="foot"><div class="foot-copy"><strong>Questions about this verification?</strong><span>Contact Varada Nexus at <a href="mailto:admin@varadanexus.com">admin@varadanexus.com</a>.</span></div></footer>
   </article></main>
   <script src="/new-ems/config/runtime.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -48,9 +48,9 @@
         qrScanner = null;
       }
       show("qr-reader", false);
-      byId("scanQrButton").textContent = "Scan ID barcode or QR";
+      byId("scanQrButton").textContent = "Scan employee barcode";
     };
-    const getEmployeeIdFromQr = (decoded) => {
+    const getEmployeeIdFromCode = (decoded) => {
       const value = String(decoded || "").trim();
       try {
         const url = new URL(value);
@@ -81,8 +81,8 @@
         show("qr-reader", true);
         qrScanner = new Html5Qrcode("qr-reader", { formatsToSupport: barcodeFormats });
         await qrScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 230, height: 180 } }, async (decoded) => {
-          const employeeId = getEmployeeIdFromQr(decoded);
-          if (!employeeId) { byId("lookupError").textContent = "That code does not contain an employee ID. Scan the barcode or QR on an employee ID card."; return; }
+          const employeeId = getEmployeeIdFromCode(decoded);
+          if (!employeeId) { byId("lookupError").textContent = "The scanned barcode could not be read as an employee ID. Try scanning the barcode above the ID on the employee card, or enter the ID manually."; return; }
           byId("employeeId").value = employeeId;
           await stopQrScanner();
           byId("lookupForm").requestSubmit();
