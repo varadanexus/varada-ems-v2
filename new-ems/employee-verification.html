@@ -69,6 +69,8 @@
     const byId = (id) => document.getElementById(id);
     const show = (id, visible) => byId(id).classList.toggle("hidden", !visible);
     let qrScanner = null;
+    let scannerSession = 0;
+    let orientationRestartPending = false;
     const stopQrScanner = async () => {
       if (qrScanner) {
         try { if (qrScanner.isScanning) await qrScanner.stop(); } catch {}
@@ -91,6 +93,7 @@
       }
     };
     byId("scanQrButton").addEventListener("click", async () => {
+      scannerSession += 1;
       if (qrScanner) { await stopQrScanner(); return; }
       try {
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import("https://esm.sh/html5-qrcode@2.3.8");
@@ -110,10 +113,13 @@
         qrScanner = new Html5Qrcode("qr-reader", { formatsToSupport: barcodeFormats });
         const scanConfig = {
           fps: 20,
-          qrbox: (viewfinderWidth, viewfinderHeight) => ({
-            width: Math.floor(viewfinderWidth * 0.94),
-            height: Math.min(Math.floor(viewfinderHeight * 0.56), 260)
-          }),
+          qrbox: (viewfinderWidth, viewfinderHeight) => {
+            const portraitCamera = viewfinderHeight > viewfinderWidth;
+            return {
+              width: Math.floor(viewfinderWidth * 0.98),
+              height: Math.min(Math.floor(viewfinderHeight * (portraitCamera ? 0.58 : 0.66)), portraitCamera ? 320 : 260)
+            };
+          },
           videoConstraints: {
             facingMode: { ideal: "environment" },
             width: { ideal: 1280 },
@@ -131,6 +137,16 @@
         await stopQrScanner();
         byId("lookupError").textContent = error?.message || "Camera access is unavailable. Allow camera access and try scanning again.";
       }
+    });
+    window.addEventListener("orientationchange", () => {
+      if (!qrScanner || orientationRestartPending) return;
+      orientationRestartPending = true;
+      const currentSession = scannerSession;
+      stopQrScanner().then(() => window.setTimeout(() => {
+        orientationRestartPending = false;
+        if (scannerSession !== currentSession || document.hidden) return;
+        byId("scanQrButton").click();
+      }, 350));
     });
     const verifyEmployee = async (employeeId) => {
       const errorText = byId("lookupError");
