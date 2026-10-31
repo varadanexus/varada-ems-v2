@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050609">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Payslip Generator | Varada Nexus EMS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="/assets/site.css?v=home-orbit-removed">
+  <style>
+    :root{color-scheme:dark;font-family:var(--font);background:var(--bg);color:var(--text)}
+    body.payslip-page{min-height:100vh;background:var(--bg);color:var(--text)}
+    .ambient{z-index:-2}
+    .page-main{position:relative;padding:calc(var(--nav-h) + 48px) 0 80px}
+    .page-wrap{max-width:1480px;margin:0 auto;padding:0 clamp(18px,3.4vw,44px)}
+    .page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:30px}
+    .page-eyebrow{margin:0 0 10px;color:var(--accent);font-size:11px;font-weight:800;letter-spacing:.2em;text-transform:uppercase}
+    .page-heading h1{margin:0;font-family:var(--font-serif);font-size:clamp(36px,5vw,58px);line-height:1;letter-spacing:-.04em;color:#f7f4ec}
+    .page-heading p{max-width:620px;margin:14px 0 0;color:var(--text-3);font-size:14px;line-height:1.7}
+    .privacy-note{flex:0 0 auto;max-width:265px;padding:13px 16px;border:1px solid var(--border-soft);border-radius:14px;background:#ffffff04;color:var(--text-3);font-size:12px;line-height:1.55}
+    .privacy-note strong{display:block;margin-bottom:3px;color:#e6c87e;font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+    .workspace{display:grid;grid-template-columns:minmax(350px,.88fr) minmax(0,1.12fr);align-items:start;gap:22px}
+    .editor-panel,.preview-panel{min-width:0;border:1px solid rgba(230,200,126,.16);border-radius:20px;background:linear-gradient(155deg,rgba(230,200,126,.045),transparent 48%),#08090d;box-shadow:0 24px 70px rgba(0,0,0,.3)}
+    .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 22px;border-bottom:1px solid var(--border-soft)}
+    .panel-head h2{margin:0;color:#f2eee4;font-size:13px;font-weight:750;letter-spacing:.1em;text-transform:uppercase}
+    .panel-head span{color:var(--text-3);font-size:11px}
+    .form-body{display:grid;gap:20px;padding:22px}
+    .form-section{display:grid;gap:12px}
+    .section-title{display:flex;align-items:center;gap:10px;margin:0;color:#e6c87e;font-size:10px;font-weight:850;letter-spacing:.16em;text-transform:uppercase}
+    .section-title:after{height:1px;flex:1;content:"";background:linear-gradient(90deg,rgba(230,200,126,.2),transparent)}
+    .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px 12px}
+    .field{display:grid;min-width:0;gap:6px}
+    .field.wide{grid-column:1/-1}
+    .field label{color:#aaa697;font-size:11px;font-weight:650;letter-spacing:.025em}
+    .field input,.field textarea{width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;outline:none;background:#050609;color:#f6f2e8;font:inherit;font-size:12px;transition:border-color .18s,box-shadow .18s}
+    .field textarea{min-height:68px;resize:vertical;line-height:1.5}
+    .field input::placeholder,.field textarea::placeholder{color:#625f56}
+    .field input:focus,.field textarea:focus{border-color:rgba(230,200,126,.7);box-shadow:0 0 0 3px rgba(230,200,126,.1)}
+    .field input[type="file"]{padding:7px;font-size:11px}
+    .field input[type="file"]::file-selector-button{margin-right:9px;padding:6px 9px;border:1px solid var(--border-soft);border-radius:7px;background:#16140f;color:#e6c87e;font:inherit;cursor:pointer}
+    .line-items{display:grid;gap:8px}
+    .money-field{position:relative}
+    .money-field:before{position:absolute;top:50%;left:12px;transform:translateY(-50%);content:"₹";color:#9e8c5b;font-size:12px;pointer-events:none}
+    .money-field input{padding-left:27px;text-align:right;font-variant-numeric:tabular-nums}
+    .money-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,.58fr);align-items:center;gap:12px}
+    .money-row label{color:#b9b2a3;font-size:11px;font-weight:600}
+    .money-row input{width:100%;height:38px;padding:0 10px;border:1px solid rgba(255,255,255,.1);border-radius:9px;outline:none;background:#050609;color:#f7f4ec;font:inherit;font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+    .money-row input:focus{border-color:rgba(230,200,126,.7);box-shadow:0 0 0 3px rgba(230,200,126,.1)}
+    .editor-actions{position:sticky;bottom:0;z-index:2;display:flex;flex-wrap:wrap;gap:9px;padding:14px 22px 18px;border-top:1px solid var(--border-soft);background:rgba(8,9,13,.94);backdrop-filter:blur(14px);border-radius:0 0 20px 20px}
+    .action-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:0 16px;border:1px solid var(--border);border-radius:10px;background:var(--grad-gold);color:#16120a;font:inherit;font-size:11px;font-weight:800;letter-spacing:.04em;cursor:pointer;transition:transform .18s,filter .18s}
+    .action-button:hover{transform:translateY(-1px);filter:brightness(1.06)}
+    .action-button.secondary{border-color:var(--border-soft);background:#ffffff05;color:#d3c9ad}
+    .action-button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+    .preview-panel{position:sticky;top:calc(var(--nav-h) + 18px);overflow:hidden}
+    .preview-label{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 20px;border-bottom:1px solid var(--border-soft);color:var(--text-3);font-size:10px;font-weight:750;letter-spacing:.14em;text-transform:uppercase}
+    .preview-label span:last-child{color:#9ac9a5;letter-spacing:.07em}
+    .preview-stage{padding:clamp(16px,3vw,34px);background:radial-gradient(ellipse at 50% 0,rgba(230,200,126,.08),transparent 62%),#0b0c10}
+    .payslip{max-width:760px;margin:0 auto;padding:clamp(22px,3.5vw,42px);border:1px solid #ded8ca;border-radius:4px;background:#fff;color:#1c1b18;box-shadow:0 18px 50px rgba(0,0,0,.32);font-family:Arial,Helvetica,sans-serif}
+    .slip-top{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding-bottom:20px;border-bottom:2px solid #b7964a}
+    .slip-company{display:flex;align-items:flex-start;gap:14px;min-width:0}
+    .slip-logo{display:none;width:62px;height:62px;flex:0 0 62px;object-fit:contain;border:1px solid #e6e1d7;border-radius:4px}
+    .slip-company-copy{min-width:0}
+    .slip-company-name{margin:0;color:#161615;font-size:clamp(16px,2vw,21px);font-weight:800;letter-spacing:.025em;overflow-wrap:anywhere}
+    .slip-company-address{margin:6px 0 0;color:#625f59;font-size:10px;line-height:1.55;white-space:pre-line}
+    .slip-company-contact{margin:4px 0 0;color:#625f59;font-size:10px;line-height:1.5;overflow-wrap:anywhere}
+    .slip-title-block{flex:0 0 auto;text-align:right}
+    .slip-title{margin:0;color:#a17d31;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}
+    .slip-period{margin:7px 0 0;color:#24231f;font-size:14px;font-weight:750}
+    .slip-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 18px;padding:18px 0;border-bottom:1px solid #e7e3db}
+    .slip-meta-item{min-width:0}
+    .slip-meta-item span{display:block;color:#858076;font-size:8px;font-weight:750;letter-spacing:.12em;text-transform:uppercase}
+    .slip-meta-item strong{display:block;margin-top:5px;color:#24231f;font-size:10px;font-weight:700;overflow-wrap:anywhere}
+    .slip-tables{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+    .slip-table{width:100%;border-collapse:collapse;table-layout:fixed}
+    .slip-table th{padding:9px 8px;border-bottom:1px solid #ded8ca;background:#f7f5f0;color:#6d6659;font-size:8px;font-weight:800;letter-spacing:.1em;text-align:left;text-transform:uppercase}
+    .slip-table th:last-child,.slip-table td:last-child{text-align:right}
+    .slip-table td{padding:8px;border-bottom:1px solid #efede8;color:#37352f;font-size:9px;overflow-wrap:anywhere}
+    .slip-table td:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
+    .slip-table tr:last-child td{border-bottom:0}
+    .slip-total-row td{border-top:1px solid #ded8ca!important;color:#1b1a17;font-weight:800}
+    .net-pay{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:18px;padding:15px 16px;border:1px solid #dfd3b2;background:#fbf8ef}
+    .net-pay span{color:#705c2c;font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+    .net-pay strong{color:#171612;font-size:clamp(19px,3vw,26px);font-weight:800;font-variant-numeric:tabular-nums}
+    .amount-words{margin:11px 0 0;color:#716d63;font-size:9px;line-height:1.5}
+    .amount-words strong{color:#403d36}
+    .slip-note{margin:15px 0 0;color:#898479;font-size:8px;line-height:1.5}
+    .slip-signatures{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:42px}
+    .signature{padding-top:8px;border-top:1px solid #bcb6aa;color:#777166;font-size:8px;text-align:center}
+    .slip-empty{display:none;max-width:760px;margin:0 auto;padding:80px 28px;border:1px dashed rgba(230,200,126,.3);border-radius:18px;color:#a9a597;text-align:center}
+    .slip-empty strong{display:block;margin-bottom:8px;color:#e6c87e;font-size:13px}
+    .slip-empty span{font-size:12px;line-height:1.6}
+    .preview-stage.is-empty .payslip{display:none}
+    .preview-stage.is-empty .slip-empty{display:block}
+    .site-footer{margin-top:0}
+    @media(max-width:1040px){.workspace{grid-template-columns:minmax(310px,.9fr) minmax(0,1.1fr);gap:16px}.slip-tables{gap:9px}.slip-table th,.slip-table td{padding:7px 6px}}
+    @media(max-width:820px){.page-main{padding-top:calc(var(--nav-h) + 38px)}.page-heading{align-items:flex-start;flex-direction:column}.privacy-note{max-width:none}.workspace{grid-template-columns:minmax(0,1fr)}.preview-panel{position:relative;top:auto;grid-row:1}.editor-panel{grid-row:2}}
+    @media(max-width:560px){.page-wrap{padding:0 12px}.page-heading h1{font-size:38px}.page-heading p{font-size:13px}.form-body{padding:17px}.panel-head{padding:17px}.editor-actions{padding:12px 17px 15px}.preview-stage{padding:12px}.payslip{padding:20px}.slip-top{gap:10px}.slip-meta{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.slip-tables{grid-template-columns:minmax(0,1fr);gap:14px}.slip-table th,.slip-table td{padding:8px}.slip-logo{width:48px;height:48px;flex-basis:48px}.field-grid{grid-template-columns:minmax(0,1fr)}.field.wide{grid-column:1}.money-row{grid-template-columns:minmax(0,1fr) 120px}.action-button{flex:1 1 140px}}
+    @media print{
+      @page{size:A4;margin:12mm}
+      html,body{min-height:0!important;background:#fff!important;color:#111!important}
+      .ambient,.site-nav,.site-footer,.page-heading,.editor-panel,.preview-label{display:none!important}
+      .page-main{padding:0!important}
+      .page-wrap{max-width:none!important;padding:0!important}
+      .workspace{display:block!important}
+      .preview-panel{position:static!important;overflow:visible!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important}
+      .preview-stage{padding:0!important;background:#fff!important}
+      .payslip{max-width:none!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+      .slip-empty{display:none!important}
+      .slip-company-name,.slip-meta-item strong,.slip-table td,.slip-title,.slip-period,.net-pay strong,.amount-words strong{color:#111!important}
+      .slip-logo{print-color-adjust:exact;-webkit-print-color-adjust:exact}
+      *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    }
+  </style>
+</head>
+<body class="payslip-page">
+  <div class="ambient" aria-hidden="true"></div>
+  <header class="site-nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="/"><img src="/images/logo.png" alt="Varada Nexus logo"><span><span class="b-name">Varada <span class="gold-text">Nexus</span></span><span class="b-sub">Private Limited</span></span></a>
+      <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+      <nav class="nav-links">
+        <a href="/">Home</a>
+        <div class="nav-item"><a href="/services.html" class="nav-drop-toggle">Services<span class="nav-caret" aria-hidden="true"></span></a><div class="nav-drop"><a href="/hospital.html">Hospital Infrastructure</a><a href="/consultancy.html">Hospital Consultancy</a><a href="/logistics.html">Mining &amp; Logistics</a><a href="/import-export.html">Import &amp; Export</a><a href="/ecommerce.html">E-Commerce</a><a href="/hr.html">HR &amp; PR</a><a href="/arbitrage.html">Strategic Arbitrage</a><a href="/services.html" class="nav-drop-all">All Services &rarr;</a></div></div>
+        <a href="/founder.html">Founder</a><a href="/team.html">Team</a><a href="/contact.html">Contact</a><a href="/login.html">Login</a><a href="/portals/meeting/meeting-login.html" class="nav-cta">Join Meeting</a>
+      </nav>
+    </div>
+  </header>
+  <main class="page-main">
+    <div class="page-wrap">
+      <div class="page-heading">
+        <div><p class="page-eyebrow">EMS document studio</p><h1>Payslip generator</h1><p>Create a clear monthly payslip with your company and employee details. Review the live preview, then print or save it as a PDF.</p></div>
+        <div class="privacy-note"><strong>Private by design</strong>Details are used in this browser to build the preview. They are not uploaded or saved by this page.</div>
+      </div>
+      <div class="workspace">
+        <section class="editor-panel" aria-labelledby="editorTitle">
+          <div class="panel-head"><h2 id="editorTitle">Payslip details</h2><span>Enter details manually</span></div>
+          <form id="payslipForm">
+            <div class="form-body">
+              <section class="form-section" aria-labelledby="companySectionTitle">
+                <h3 class="section-title" id="companySectionTitle">Company details</h3>
+                <div class="field-grid">
+                  <div class="field wide"><label for="companyName">Company name *</label><input id="companyName" required autocomplete="organization" placeholder="Enter registered company name"></div>
+                  <div class="field wide"><label for="companyAddress">Registered / office address</label><textarea id="companyAddress" autocomplete="street-address" placeholder="Building, street, city, state and PIN code"></textarea></div>
+                  <div class="field"><label for="companyEmail">Company email</label><input id="companyEmail" type="email" autocomplete="email" placeholder="accounts@company.com"></div>
+                  <div class="field"><label for="companyPhone">Contact number</label><input id="companyPhone" type="tel" autocomplete="tel" placeholder="+91"></div>
+                  <div class="field"><label for="companyTaxId">Company tax / registration ID</label><input id="companyTaxId" placeholder="GSTIN or registration number"></div>
+                  <div class="field"><label for="companyLogo">Company logo (optional)</label><input id="companyLogo" type="file" accept="image/png,image/jpeg,image/webp"></div>
+                </div>
+              </section>
+              <section class="form-section" aria-labelledby="employeeSectionTitle">
+                <h3 class="section-title" id="employeeSectionTitle">Employee and pay period</h3>
+                <div class="field-grid">
+                  <div class="field"><label for="employeeName">Employee name *</label><input id="employeeName" required autocomplete="off" placeholder="Enter employee name"></div>
+                  <div class="field"><label for="employeeId">Employee ID *</label><input id="employeeId" required autocomplete="off" placeholder="Enter employee ID"></div>
+                  <div class="field"><label for="designation">Designation</label><input id="designation" autocomplete="off" placeholder="Job title"></div>
+                  <div class="field"><label for="department">Department</label><input id="department" autocomplete="off" placeholder="Department"></div>
+                  <div class="field"><label for="payPeriod">Salary month *</label><input id="payPeriod" type="month" required></div>
+                  <div class="field"><label for="paymentDate">Payment date</label><input id="paymentDate" type="date"></div>
+                  <div class="field"><label for="paidDays">Paid days</label><input id="paidDays" type="number" min="0" max="31" step="0.5" inputmode="decimal" placeholder="e.g. 30"></div>
+                  <div class="field"><label for="employeePan">PAN / tax ID (optional)</label><input id="employeePan" autocomplete="off" placeholder="Enter if applicable"></div>
+                </div>
+              </section>
+              <section class="form-section" aria-labelledby="earningsTitle">
+                <h3 class="section-title" id="earningsTitle">Earnings · INR</h3>
+                <div class="line-items">
+                  <div class="money-row"><label for="basic">Basic salary</label><div class="money-field"><input id="basic" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="hra">House rent allowance</label><div class="money-field"><input id="hra" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="da">Dearness allowance</label><div class="money-field"><input id="da" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="conveyance">Conveyance allowance</label><div class="money-field"><input id="conveyance" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="special">Special allowance</label><div class="money-field"><input id="special" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="incentive">Bonus / incentives</label><div class="money-field"><input id="incentive" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="otherEarnings">Other earnings</label><div class="money-field"><input id="otherEarnings" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                </div>
+              </section>
+              <section class="form-section" aria-labelledby="deductionsTitle">
+                <h3 class="section-title" id="deductionsTitle">Deductions · INR</h3>
+                <div class="line-items">
+                  <div class="money-row"><label for="pf">Provident fund</label><div class="money-field"><input id="pf" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="esi">ESI</label><div class="money-field"><input id="esi" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="professionalTax">Professional tax</label><div class="money-field"><input id="professionalTax" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="tds">TDS / income tax</label><div class="money-field"><input id="tds" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="loan">Loan / advance</label><div class="money-field"><input id="loan" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                  <div class="money-row"><label for="otherDeductions">Other deductions</label><div class="money-field"><input id="otherDeductions" type="number" min="0" step="0.01" inputmode="decimal" value="0"></div></div>
+                </div>
+              </section>
+            </div>
+            <div class="editor-actions">
+              <button class="action-button" id="printButton" type="button">Print / Save PDF</button>
+              <button class="action-button secondary" id="resetButton" type="reset">Clear details</button>
+            </div>
+          </form>
+        </section>
+        <section class="preview-panel" aria-label="Live payslip preview">
+          <div class="preview-label"><span>Document preview</span><span>Updates as you type</span></div>
+          <div class="preview-stage is-empty" id="previewStage">
+            <div class="slip-empty"><strong>Your payslip preview will appear here</strong><span>Enter the company name, employee name, ID and salary month to begin.</span></div>
+            <article class="payslip" id="payslipPreview" aria-label="Generated payslip">
+              <div class="slip-top">
+                <div class="slip-company">
+                  <img id="previewLogo" class="slip-logo" alt="Company logo">
+                  <div class="slip-company-copy"><h2 class="slip-company-name" id="previewCompany">Company name</h2><p class="slip-company-address" id="previewAddress"></p><p class="slip-company-contact" id="previewCompanyContact"></p></div>
+                </div>
+                <div class="slip-title-block"><p class="slip-title">Salary statement</p><p class="slip-period" id="previewPeriod">Pay period</p></div>
+              </div>
+              <div class="slip-meta">
+                <div class="slip-meta-item"><span>Employee name</span><strong id="previewEmployee">—</strong></div>
+                <div class="slip-meta-item"><span>Employee ID</span><strong id="previewEmployeeId">—</strong></div>
+                <div class="slip-meta-item"><span>Designation</span><strong id="previewDesignation">—</strong></div>
+                <div class="slip-meta-item"><span>Department</span><strong id="previewDepartment">—</strong></div>
+                <div class="slip-meta-item"><span>Paid days</span><strong id="previewPaidDays">—</strong></div>
+                <div class="slip-meta-item"><span>Payment date</span><strong id="previewPaymentDate">—</strong></div>
+                <div class="slip-meta-item"><span>PAN / tax ID</span><strong id="previewPan">—</strong></div>
+                <div class="slip-meta-item"><span>Company registration</span><strong id="previewCompanyTax">—</strong></div>
+              </div>
+              <div class="slip-tables">
+                <table class="slip-table"><thead><tr><th colspan="2">Earnings</th></tr><tr><th>Pay component</th><th>Amount</th></tr></thead><tbody id="earningsRows"></tbody></table>
+                <table class="slip-table"><thead><tr><th colspan="2">Deductions</th></tr><tr><th>Deduction</th><th>Amount</th></tr></thead><tbody id="deductionRows"></tbody></table>
+              </div>
+              <div class="net-pay"><span>Net pay</span><strong id="previewNetPay">₹0.00</strong></div>
+              <p class="amount-words"><strong>Amount in words:</strong> <span id="previewWords">Rupees zero only</span></p>
+              <p class="slip-note">This is a computer-generated salary statement. Please contact the company if any information needs correction.</p>
+              <div class="slip-signatures"><div class="signature">Employee acknowledgement</div><div class="signature">Authorised signatory</div></div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap"><div class="footer-grid">
+      <div><div class="footer-brand"><img src="/images/logo.png" alt="Varada Nexus"><div><div class="fb-name">Varada Nexus Private Limited</div><p>Building and operating systems across healthcare, mining, logistics, global trade, and digital commerce.</p></div></div></div>
+      <div class="footer-col"><h4>Company</h4><a href="/">Home</a><a href="/founder.html">Founder</a><a href="/team.html">Team</a><a href="/contact.html">Contact</a></div>
+      <div class="footer-col"><h4>Services</h4><a href="/hospital.html">Hospital Infrastructure</a><a href="/consultancy.html">Hospital Consultancy</a><a href="/logistics.html">Mining &amp; Logistics</a><a href="/import-export.html">Import &amp; Export</a><a href="/ecommerce.html">E-Commerce</a><a href="/hr.html">HR &amp; PR</a><a href="/arbitrage.html">Strategic Arbitrage</a></div>
+      <div class="footer-col"><h4>Access</h4><a href="/login.html">EMS Login</a><a href="/portals/meeting/meeting-login.html">Join Meeting</a><a href="/services.html">All Services</a><a href="/new-ems/employee-verification.html">Employee Verification</a></div>
+    </div><div class="footer-bottom"><span>&copy; <span data-year>2026</span> Varada Nexus Private Limited. All rights reserved.</span><span>Rajahmundry, Andhra Pradesh, India</span></div></div>
+  </footer>
+  <script src="/assets/site.js?v=payslip-generator-1"></script>
+  <script>
+    (() => {
+      const form = document.getElementById("payslipForm");
+      const $ = (id) => document.getElementById(id);
+      const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]);
+      const read = (id) => $(id).value.trim();
+      const amount = (id) => Math.max(0, Number($(id).value) || 0);
+      const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+      const dateText = (value) => value ? new Date(value + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+      const periodText = (value) => value ? new Date(value + "-01T00:00:00").toLocaleDateString("en-IN", { month: "long", year: "numeric" }) : "Pay period";
+      const ones = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+      const tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+      function underThousand(value) {
+        let out = "";
+        if (value >= 100) { out += ones[Math.floor(value / 100)] + " hundred"; value %= 100; if (value) out += " "; }
+        if (value >= 20) out += tens[Math.floor(value / 10)] + (value % 10 ? "-" + ones[value % 10] : "");
+        else if (value > 0) out += ones[value];
+        return out;
+      }
+      function amountInWords(value) {
+        const rupees = Math.floor(value);
+        const paise = Math.round((value - rupees) * 100);
+        let rest = rupees;
+        const groups = [[10000000, "crore"], [100000, "lakh"], [1000, "thousand"]];
+        const parts = [];
+        groups.forEach(([size, label]) => { const group = Math.floor(rest / size); if (group) parts.push(underThousand(group) + " " + label); rest %= size; });
+        if (rest) parts.push(underThousand(rest));
+        let words = "Rupees " + (parts.join(" ") || "zero");
+        if (paise) words += " and " + underThousand(paise) + " paise";
+        return words + " only";
+      }
+      const earnings = [["Basic salary", "basic"], ["House rent allowance", "hra"], ["Dearness allowance", "da"], ["Conveyance allowance", "conveyance"], ["Special allowance", "special"], ["Bonus / incentives", "incentive"], ["Other earnings", "otherEarnings"]];
+      const deductions = [["Provident fund", "pf"], ["ESI", "esi"], ["Professional tax", "professionalTax"], ["TDS / income tax", "tds"], ["Loan / advance", "loan"], ["Other deductions", "otherDeductions"]];
+      const makeRows = (items, total, label) => items.map(([name, id]) => `<tr><td>${escapeHtml(name)}</td><td>${money(amount(id))}</td></tr>`).join("") + `<tr class="slip-total-row"><td>Total ${label}</td><td>${money(total)}</td></tr>`;
+      function updatePreview() {
+        const totalEarnings = earnings.reduce((sum, [, id]) => sum + amount(id), 0);
+        const totalDeductions = deductions.reduce((sum, [, id]) => sum + amount(id), 0);
+        const netPay = totalEarnings - totalDeductions;
+        $("previewCompany").textContent = read("companyName") || "Company name";
+        $("previewAddress").textContent = read("companyAddress");
+        const contact = [read("companyEmail"), read("companyPhone")].filter(Boolean).join(" · ");
+        const taxId = read("companyTaxId");
+        $("previewCompanyContact").textContent = [contact, taxId ? "Registration: " + taxId : ""].filter(Boolean).join(" · ");
+        $("previewPeriod").textContent = periodText(read("payPeriod"));
+        $("previewEmployee").textContent = read("employeeName") || "—";
+        $("previewEmployeeId").textContent = read("employeeId") || "—";
+        $("previewDesignation").textContent = read("designation") || "—";
+        $("previewDepartment").textContent = read("department") || "—";
+        $("previewPaidDays").textContent = read("paidDays") || "—";
+        $("previewPaymentDate").textContent = dateText(read("paymentDate"));
+        $("previewPan").textContent = read("employeePan") || "—";
+        $("previewCompanyTax").textContent = taxId || "—";
+        $("earningsRows").innerHTML = makeRows(earnings, totalEarnings, "earnings");
+        $("deductionRows").innerHTML = makeRows(deductions, totalDeductions, "deductions");
+        $("previewNetPay").textContent = money(netPay);
+        $("previewWords").textContent = netPay >= 0 ? amountInWords(netPay) : "Deductions exceed total earnings";
+        const isReady = Boolean(read("companyName") && read("employeeName") && read("employeeId") && read("payPeriod"));
+        $("previewStage").classList.toggle("is-empty", !isReady);
+      }
+      form.addEventListener("input", updatePreview);
+      form.addEventListener("change", updatePreview);
+      form.addEventListener("reset", () => window.setTimeout(() => {
+        $("previewLogo").removeAttribute("src");
+        $("previewLogo").style.display = "none";
+        updatePreview();
+      }, 0));
+      $("companyLogo").addEventListener("change", (event) => {
+        const file = event.target.files?.[0];
+        if (!file) { $("previewLogo").removeAttribute("src"); $("previewLogo").style.display = "none"; return; }
+        if (!file.type.startsWith("image/")) return;
+        const reader = new FileReader();
+        reader.onload = () => { $("previewLogo").src = String(reader.result); $("previewLogo").style.display = "block"; };
+        reader.readAsDataURL(file);
+      });
+      $("printButton").addEventListener("click", () => {
+        if (!form.reportValidity()) return;
+        if (earnings.reduce((sum, [, id]) => sum + amount(id), 0) - deductions.reduce((sum, [, id]) => sum + amount(id), 0) < 0) {
+          if (!window.confirm("Deductions exceed earnings. Print this payslip anyway?")) return;
+        }
+        window.print();
+      });
+      updatePreview();
+    })();
+  </script>
+</body>
+</html>
