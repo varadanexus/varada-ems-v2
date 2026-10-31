@@ -108,7 +108,19 @@
         ].filter((format) => format !== undefined);
         show("qr-reader", true);
         qrScanner = new Html5Qrcode("qr-reader", { formatsToSupport: barcodeFormats });
-        await qrScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 230, height: 180 } }, async (decoded) => {
+        const scanConfig = {
+          fps: 20,
+          qrbox: (viewfinderWidth, viewfinderHeight) => ({
+            width: Math.floor(viewfinderWidth * 0.94),
+            height: Math.min(Math.floor(viewfinderHeight * 0.56), 260)
+          }),
+          videoConstraints: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        };
+        await qrScanner.start({ facingMode: "environment" }, scanConfig, async (decoded) => {
           const employeeId = getEmployeeIdFromCode(decoded);
           if (!employeeId) { byId("lookupError").textContent = "This barcode could not be read. Scan the barcode printed above the employee ID on the company-issued card."; return; }
           await stopQrScanner();
