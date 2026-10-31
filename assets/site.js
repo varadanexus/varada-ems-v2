@@ -142,6 +142,42 @@
     ].filter(Boolean).forEach(function (item) { links.appendChild(item); });
   })();
 
+  /* Make employee identity checks easy to find from every public site footer. */
+  document.querySelectorAll(".site-footer").forEach(function (footer) {
+    var grid = footer.querySelector(".footer-grid");
+    var access = grid && Array.prototype.find.call(grid.querySelectorAll(".footer-col"), function (column) {
+      var heading = column.querySelector("h4");
+      return heading && heading.textContent.trim().toLowerCase() === "access";
+    });
+    if (grid && !access) {
+      access = document.createElement("div");
+      access.className = "footer-col";
+      var heading = document.createElement("h4");
+      heading.textContent = "Access";
+      access.appendChild(heading);
+      grid.appendChild(access);
+    }
+    if (!grid) {
+      access = footer.querySelector(".footer-legal-links");
+      if (!access) {
+        access = document.createElement("span");
+        access.className = "footer-legal-links";
+        (footer.querySelector(".footer-bottom") || footer).appendChild(access);
+      }
+    }
+    if (access.querySelector('a[href="/new-ems/employee-verification.html"]')) return;
+    var verification = document.createElement("a");
+    verification.href = "/new-ems/employee-verification.html";
+    verification.textContent = "Employee Verification";
+    if (!grid && access.children.length) {
+      var separator = document.createElement("span");
+      separator.setAttribute("aria-hidden", "true");
+      separator.textContent = "·";
+      access.appendChild(separator);
+    }
+    access.appendChild(verification);
+  });
+
   /* mobile menu */
   var toggle = document.querySelector(".nav-toggle");
   if (toggle) {
