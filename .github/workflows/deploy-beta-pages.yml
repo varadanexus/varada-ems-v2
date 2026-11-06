@@ -59,6 +59,7 @@ jobs:
           cp -R blog .pages-dist/blog
           cp -R professional-tools .pages-dist/professional-tools
           cp -R whatsapp-platform .pages-dist/whatsapp-platform
+          cp -R goa .pages-dist/goa
           cp favicon.ico .pages-dist/favicon.ico
           cp sw.js .pages-dist/sw.js
           cp -R new-ems/. .pages-dist/new-ems/
@@ -75,6 +76,9 @@ jobs:
       - name: Verify Pages bundle
         shell: bash
         run: |
+          test -f .pages-dist/goa/index.html
+          test -f .pages-dist/goa/manifest.webmanifest
+          test -f .pages-dist/goa/sw.js
           test -f .pages-dist/sw.js
           test -f .pages-dist/new-ems/manifest.webmanifest
           test -f .pages-dist/new-ems/index.html
