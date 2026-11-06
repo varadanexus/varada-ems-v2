@@ -1,4 +1,4 @@
-const CACHE='goa-afterglow-shell-v2';
+const CACHE='goa-afterglow-shell-v3';
 const BASE=new URL('./',self.location.href);
 const SHELL=['./','index.html','style.css','config.js','app.js','pwa.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png','icons/apple-touch-icon.png','icons/badge-96.png'].map(p=>new URL(p,BASE).href);
 self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);await cache.addAll(SHELL);await self.skipWaiting()})()));
@@ -22,4 +22,3 @@ self.addEventListener('notificationclick',event=>{
  const safe=target.origin===BASE.origin&&target.pathname.startsWith(BASE.pathname)?target.href:BASE.href+'#overview';
  event.waitUntil((async()=>{const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});const existing=windows.find(w=>{const u=new URL(w.url);return u.origin===BASE.origin&&u.pathname.startsWith(BASE.pathname)});if(existing){await existing.navigate(safe);return existing.focus()}return self.clients.openWindow(safe)})());
 });
-

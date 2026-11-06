@@ -1,5 +1,6 @@
 // Custom trip accounts. No calls to Supabase Auth. Secrets stay in Edge runtime.
 import { tripNotifications } from './notifications.ts';
+import { tripWhatsApp } from './whatsapp.ts';
 const env=(key:string)=>Deno.env.get(key)||'';
 const SUPABASE=env('SUPABASE_URL');
 const SERVICE=env('SUPABASE_SERVICE_ROLE_KEY');
@@ -18,6 +19,11 @@ async function rpc(name:string,data:unknown){const res=await fetch(`${SUPABASE}/
 async function api(action:string,session:string,data:unknown={}){return rpc('goa_server_api',{p_action:action,p_session:session,p_data:data})}
 async function auth(action:string,data:unknown){return rpc('goa_server_auth',{p_action:action,p_data:data})}
 const notifications=tripNotifications(rpc,env);
+const whatsapp=tripWhatsApp(rpc,env);
+function whatsappPhone(value:unknown){const p=String(value||'').trim().replace(/^whatsapp:/,'').replace(/[\s()-]/g,'');if(!/^\+[1-9]\d{7,14}$/.test(p))throw Error('Enter your WhatsApp number with country code');return p}
+async function otpProof(id:string,phone:string,code:string){const key=await crypto.subtle.importKey('raw',encoder.encode(SERVICE),{name:'HMAC',hash:'SHA-256'},false,['sign']);return hex(await crypto.subtle.sign('HMAC',key,encoder.encode(id+'|'+phone+'|'+code)))}
+function otpCode(){const n=new Uint32Array(1);do{crypto.getRandomValues(n)}while(n[0]>=4294000000);return String(n[0]%1000000).padStart(6,'0')}
+async function whatsappAdmin(data:any,session:string,raw:string){if(raw){const ctx=await api('context',session);if(ctx.trip_id===TRIP&&ctx.role==='admin')return;throw Error('Only the trip admin can manage WhatsApp')}const info=await auth('inspect',{invite_hash:await digest(String(data.setup_invite||''))});if(info.trip_id!==TRIP||info.role!=='admin')throw Error('Admin setup is required')}
 async function notifyTrip(session:string,kind:string,section:string){
  try{const event=await notifications.enqueue(session,kind,section);if(!event)return;const task=notifications.deliver(session,event,kind,section).catch(()=>{});const runtime=(globalThis as any).EdgeRuntime;if(runtime?.waitUntil)runtime.waitUntil(task);else await task}catch{/* Notification failure must not discard a saved trip change. */}
 }
@@ -50,11 +56,44 @@ Deno.serve(async req=>{
   const body=JSON.parse(text);const action=String(body.action||'');const data=body.data||{};
   const ip=req.headers.get('cf-connecting-ip')||req.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim()||'unknown';
   const rawSession=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');const session=await digest(rawSession);
+  if(['whatsappSetup','whatsappStatus','sendAdminSetup','whatsappDelivery'].includes(action)){
+   await whatsappAdmin(data,session,rawSession);
+   if(action==='whatsappSetup')return json(await whatsapp.setup());
+   if(action==='whatsappStatus')return json(await whatsapp.status(true));
+   if(action==='sendAdminSetup'){
+    const invite=await whatsapp.db('bootstrap',{invite_hash:await digest(String(data.setup_invite||'')),trip_id:TRIP});
+    if(!await rpc('goa_server_rate',{p_key:await digest('admin-invite:'+invite.phone),p_limit:3}))throw Error('Please wait before sending another invitation');
+    const message=await whatsapp.send('invite',invite.phone,{'1':'Trip admin','2':'https://www.varadanexus.com/goa/#join='+data.setup_invite});
+    await whatsapp.db('delivery',{trip_id:TRIP,invite_id:invite.id,phone:invite.phone,message_sid:message.sid,status:message.status});return json({message_sid:message.sid,status:message.status});
+   }
+   const known=await whatsapp.db('delivery_lookup',{message_sid:String(data.message_sid),trip_id:TRIP});if(!known)throw Error('Trip message not found');return json(await whatsapp.delivery(data.message_sid));
+  }
+  if(action==='authOptions'){const status=await whatsapp.status();return json({whatsapp_available:status.configured&&status.templates.some((t:any)=>t.alias==='otp'&&t.status==='approved')})}
+  if(action==='requestOtp'){
+   const phone=whatsappPhone(data.phone),purpose=String(data.purpose||'login');
+   if(!await rpc('goa_server_rate',{p_key:await digest('otp-ip:'+ip),p_limit:10})||!await rpc('goa_server_rate',{p_key:await digest('otp-phone:'+phone),p_limit:5}))return json({error:'Too many verification requests. Try again in 15 minutes.'},429);
+   const templates=await whatsapp.status();if(!templates.configured||!templates.templates.some((t:any)=>t.alias==='otp'&&t.status==='approved'))throw Error('WhatsApp verification is waiting for template approval.');
+   let draft:any={};let invite_hash='';
+   if(purpose==='signup'||purpose==='test'){
+    invite_hash=await digest(String(data.invite||''));const info=await auth('inspect',{invite_hash});if(info.trip_id!==TRIP)throw Error('Invitation belongs to a different trip');
+    const c=contact(data.email||phone);if(purpose==='test'){draft={contact:info.contact}}else{const name=String(data.display_name||'').trim(),password=String(data.password||'');if(!name||name.length>100)throw Error('Enter your name');if(password.length<10||password.length>128)throw Error('Use a password with 10 to 128 characters');const salt=hex(crypto.getRandomValues(new Uint8Array(16)));draft={...c,display_name:name,salt,hash:await passwordHash(password,salt)}}
+   }
+   const id=crypto.randomUUID(),code=otpCode();const prepared=await whatsapp.db('prepare',{id,phone,purpose,trip_id:TRIP,invite_hash,draft,code_hash:await otpProof(id,phone,code)},purpose==='link'?session:null);
+   if(prepared.eligible){try{const message=await whatsapp.send('otp',phone,{'1':code});await whatsapp.db('sent',{id,message_sid:message.sid});await whatsapp.db('delivery',{trip_id:TRIP,phone,message_sid:message.sid,status:message.status})}catch(e){await whatsapp.db('failed',{id});throw e}}
+   return json({challenge_id:id,phone_hint:'•••• '+phone.slice(-4),expires_in:300,resend_after:60,message:'If this number can access the trip, a WhatsApp code has been sent.'});
+  }
+  if(action==='verifyOtp'){
+   if(!await rpc('goa_server_rate',{p_key:await digest('otp-verify:'+ip),p_limit:30}))return json({error:'Too many attempts. Please try again later.'},429);
+   const phone=whatsappPhone(data.phone),code=String(data.code||'');if(!/^\d{6}$/.test(code))throw Error('Enter the six-digit WhatsApp code');
+   const token=random();const result=await whatsapp.db('verify',{id:String(data.challenge_id),trip_id:TRIP,session_hash:await digest(token),code_hash:await otpProof(String(data.challenge_id),phone,code)},rawSession?session:null);
+   if(!result.ok)return json({error:result.error},400);if(result.test||result.linked)return json(result);return json({...result,access_token:token});
+  }
   if(['inspectInvite','register','login','prepareStorage'].includes(action)){
    if(!await rpc('goa_server_rate',{p_key:await digest('ip:'+ip+':'+action),p_limit:action==='inspectInvite'?60:20}))return json({error:'Too many attempts. Please try again in 15 minutes.'},429);
   }
   if(action==='inspectInvite'){return json(await auth('inspect',{invite_hash:await digest(String(data.invite||''))}))}
   if(action==='register'||action==='login'){
+   if(action==='register')throw Error('Verify your WhatsApp number to create an account.');
    const c=contact(data.contact);const password=String(data.password||'');if(password.length<10||password.length>128)throw Error('Use a password with 10 to 128 characters');
    if(!await rpc('goa_server_rate',{p_key:await digest('contact:'+c.contact),p_limit:10}))return json({error:'Too many sign-in attempts. Please try again in 15 minutes.'},429);
    const token=random();const session_hash=await digest(token);const invite_hash=data.invite?await digest(String(data.invite)):'';let result;
@@ -80,6 +119,15 @@ Deno.serve(async req=>{
    return json(result);
   }
   const ctx=await api('context',session);if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
+  if(action==='sendWhatsAppInvite'){
+   if(ctx.role!=='admin')throw Error('Only the trip admin can invite participants');if(data.opt_in!==true)throw Error('Confirm the recipient agreed to receive this WhatsApp invitation');
+   const phone=whatsappPhone(data.phone),label=String(data.label||'').trim();if(!label||label.length>100)throw Error('Enter the participant name');
+   if(!await rpc('goa_server_rate',{p_key:await digest('wa-invite:'+ctx.user_id),p_limit:20}))throw Error('Invitation limit reached. Please try later');
+   const templates=await whatsapp.status();if(!templates.templates.some((t:any)=>t.alias==='invite'&&t.status==='approved'))throw Error('The WhatsApp invitation template is waiting for approval.');
+   const token=random();const invite=await whatsapp.db('create_invite',{phone,label,token_hash:await digest(token)},session);
+   try{const message=await whatsapp.send('invite',phone,{'1':label,'2':'https://www.varadanexus.com/goa/#join='+token});await whatsapp.db('delivery',{trip_id:TRIP,invite_id:invite.id,phone,message_sid:message.sid,status:message.status});return json({token,message_sid:message.sid,status:message.status})}
+   catch(e){await whatsapp.db('delivery',{trip_id:TRIP,invite_id:invite.id,phone,status:'failed'});throw e}
+  }
   if(action==='pushConfig')return json(notifications.config());
   if(action==='pushSubscribe')return json(await notifications.subscribe(session,data));
   if(action==='pushUnsubscribe')return json(await notifications.unsubscribe(session,data));

@@ -62,3 +62,14 @@ Notifications use the existing server-side VAPID keys without changing EMS keys,
 The /goa/ service worker never removes EMS caches or handles routes outside /goa/. Only the public static app shell is cached offline; private trip API responses and downloaded files are not cached. Sign-in persists on the device until logout or the fourteen-day session expiry.
 
 Admin setup is reserved for prudhvisanker@gmail.com. Migration 006 adds scoped push storage, and migration 007 adds the owner-email check. No Supabase Auth account is used.
+## WhatsApp invitations and OTP
+
+The trip endpoint reuses the existing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM and/or TWILIO_MESSAGING_SERVICE_SID environment secrets. Existing EMS WhatsApp functions, template registry rows, contacts, and OTP tables are not modified.
+
+The separate Goa templates are goa_afterglow_invite_v1 (UTILITY) and goa_afterglow_otp_v1 (AUTHENTICATION, Copy Code). Sending is enabled only after the corresponding template is approved. Provider approval is refreshed when a pending template is checked after sixty seconds. Template IDs/statuses live in goa_private.whatsapp_templates.
+
+Admins send invitations by entering a name and WhatsApp number and confirming recipient consent. The single-use invitation is bound to that phone number. Sign-up requires that invitation, account details/password, and WhatsApp OTP verification. Log-in defaults to a WhatsApp code; password sign-in remains available for existing accounts. Existing signed-in accounts can link WhatsApp using a code from their account menu. Admin setup is bound to prudhvisanker@gmail.com and the separately configured admin phone.
+
+Phone fields include a country-code selector defaulting to India (+91), and pasted full international numbers are supported. Codes contain six random digits, expire after five minutes, have a sixty-second resend cooldown, and allow five verification attempts. Only a server-keyed HMAC is stored; plaintext codes and Twilio credentials are never saved in frontend code or database challenge records. Incorrect attempts persist, resends invalidate older codes, and successful verification consumes the code. IP/phone request limits apply. Unknown login numbers receive a generic response.
+
+Migrations 008-010 add only trip-private WhatsApp/OTP records and service-only functions. SQL rollback tests verify phone binding, attempt persistence and limits, cooldown, resends, verified signup, replay/expiry denial, and grants. Frontend tests mock messages and cover country-code handling, OTP screens, invitation consent and mobile layout. One real OTP was sent to the owner-provided number and confirmed received; Twilio reported it read.
