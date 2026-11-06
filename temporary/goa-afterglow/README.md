@@ -37,7 +37,7 @@ The frontend contains only a publishable Supabase key. Elevated database and Goo
 
 ## Source and hosting
 
-The buildless frontend is in dist/. The trip source is backed up under temporary/goa-afterglow/ on the temporary/goa-afterglow branch of varadanexus/varada-ems-v2. Main and release branches are untouched. The nested Pages workflow is a reference for a future dedicated repository and does not run the existing EMS deployment.
+The buildless frontend is in dist/. The trip source is backed up under temporary/goa-afterglow/ on the temporary/goa-afterglow branch of varadanexus/varada-ems-v2. The release branch now also contains goa/ and the Pages packaging step that publishes it. Existing EMS runtime files are unchanged. The nested Pages workflow in the source backup remains only a reference.
 
 Hosted source uses the existing .openai/hosting.json identity. SQL files 001 and 003 record the initial schema; migration 004 replaces its account system, and 005 adds file removal. There is no Supabase Auth account setup in the current app.
 
@@ -47,8 +47,18 @@ Desktop/mobile browser checks cover the welcome page, account form, navigation, 
 
 ## Temporary site removal
 
-Live site: https://goa-afterglow-trip.clever-sky-9771.chatgpt.site
+Primary app: https://www.varadanexus.com/goa/
 
-The custom hostname goa.varadanexus.com is registered with hosting but requires DNS verification. Change only that subdomain's records. No new domain purchase is needed.
+The app uses the existing main-domain /goa/ path. No DNS change or domain purchase is required. The earlier pending goa.varadanexus.com hostname is not needed for this route.
 
 After the trip, export the trip and save desired Drive files, then remove temporary hosting, DNS, trip sessions/invitations, and dedicated trip database objects. Preserve the shared Supabase project, EMS data, main domain, GitHub account, and Drive files. Nothing is scheduled for automatic deletion because the trip end date is unknown.
+
+## Home-screen installation and notifications
+
+The manifest, standalone display, app icons, and scoped service worker support installation on iOS and Android. Android browsers can show a native install prompt after the participant taps Install. iPhone users follow the Safari Share > Add to Home Screen instructions. Browsers do not permit silent installation or silent notification permission grants. Create the account from an invitation first, then install; sign in again in the installed app if needed.
+
+Notifications use the existing server-side VAPID keys without changing EMS keys, notification tables, functions, or workers. Trip-only subscriptions and delivery events are in goa_private. New messages, plans, polls, expenses, checklist items, links/files, and settings updates create generic lock-screen notices. Removed members, expired sessions, and signed-out sessions do not receive new notifications. Each device must enable notifications. The app offers Send me a test. A real Chrome browser subscription, server push, and worker notification were verified end to end; physical iOS delivery still depends on the participant installing and granting permission on their device.
+
+The /goa/ service worker never removes EMS caches or handles routes outside /goa/. Only the public static app shell is cached offline; private trip API responses and downloaded files are not cached. Sign-in persists on the device until logout or the fourteen-day session expiry.
+
+Admin setup is reserved for prudhvisanker@gmail.com. Migration 006 adds scoped push storage, and migration 007 adds the owner-email check. No Supabase Auth account is used.

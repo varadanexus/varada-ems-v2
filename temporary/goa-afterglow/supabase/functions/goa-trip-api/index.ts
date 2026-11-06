@@ -1,10 +1,11 @@
 // Custom trip accounts. No calls to Supabase Auth. Secrets stay in Edge runtime.
+import { tripNotifications } from './notifications.ts';
 const env=(key:string)=>Deno.env.get(key)||'';
 const SUPABASE=env('SUPABASE_URL');
 const SERVICE=env('SUPABASE_SERVICE_ROLE_KEY');
 const TRIP='8412a56b-fccf-412f-b203-54cb3d1bf87d';
 const ROOT='1UHh4f-MBU5xdeKFlDvCSEqS87t4T8_Pm';
-const ORIGINS=new Set(['https://goa-afterglow-trip.clever-sky-9771.chatgpt.site','https://goa.varadanexus.com','http://127.0.0.1:4173','http://localhost:4173']);
+const ORIGINS=new Set(['https://goa-afterglow-trip.clever-sky-9771.chatgpt.site','https://goa.varadanexus.com','https://www.varadanexus.com','https://varadanexus.com','http://127.0.0.1:4173','http://localhost:4173']);
 const encoder=new TextEncoder();
 const hex=(b:ArrayBuffer|Uint8Array)=>Array.from(new Uint8Array(b instanceof Uint8Array?b.buffer:b)).map(x=>x.toString(16).padStart(2,'0')).join('');
 const random=()=>hex(crypto.getRandomValues(new Uint8Array(32)));
@@ -16,6 +17,10 @@ function contact(input:unknown){const v=String(input||'').trim();if(v.includes('
 async function rpc(name:string,data:unknown){const res=await fetch(`${SUPABASE}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:SERVICE,Authorization:`Bearer ${SERVICE}`,'Content-Type':'application/json'},body:JSON.stringify(data)});const text=await res.text();const value=text?JSON.parse(text):null;if(!res.ok){const message=String(value?.message||'Request failed');if(value?.code==='23505')throw Error('An account already uses this email or mobile number. Sign in instead.');throw Error(message)}return value}
 async function api(action:string,session:string,data:unknown={}){return rpc('goa_server_api',{p_action:action,p_session:session,p_data:data})}
 async function auth(action:string,data:unknown){return rpc('goa_server_auth',{p_action:action,p_data:data})}
+const notifications=tripNotifications(rpc,env);
+async function notifyTrip(session:string,kind:string,section:string){
+ try{const event=await notifications.enqueue(session,kind,section);if(!event)return;const task=notifications.deliver(session,event,kind,section).catch(()=>{});const runtime=(globalThis as any).EdgeRuntime;if(runtime?.waitUntil)runtime.waitUntil(task);else await task}catch{/* Notification failure must not discard a saved trip change. */}
+}
 function b64url(data:string|Uint8Array){const s=typeof data==='string'?data:String.fromCharCode(...data);return btoa(s).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_')}
 let cached:{token:string,expires:number}|null=null;
 async function googleToken(){if(cached&&cached.expires>Date.now()+60000)return cached.token;const raw=env('GOOGLE_SERVICE_ACCOUNT_JSON');if(!raw)throw Error('Drive service account is not configured');const sa=JSON.parse(raw);const now=Math.floor(Date.now()/1000);const claim={iss:sa.client_email,scope:'https://www.googleapis.com/auth/drive',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3600};const unsigned=b64url(JSON.stringify({alg:'RS256',typ:'JWT'}))+'.'+b64url(JSON.stringify(claim));const pem=sa.private_key.replace(/-----[^-]+-----/g,'').replace(/\s/g,'');const key=await crypto.subtle.importKey('pkcs8',Uint8Array.from(atob(pem),c=>c.charCodeAt(0)),{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);const sig=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,encoder.encode(unsigned));const res=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:unsigned+'.'+b64url(new Uint8Array(sig))})});const data=await res.json();if(!res.ok)throw Error('Drive service-account sign-in failed');cached={token:data.access_token,expires:Date.now()+data.expires_in*1000};return cached.token}
@@ -75,6 +80,14 @@ Deno.serve(async req=>{
    return json(result);
   }
   const ctx=await api('context',session);if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
+  if(action==='pushConfig')return json(notifications.config());
+  if(action==='pushSubscribe')return json(await notifications.subscribe(session,data));
+  if(action==='pushUnsubscribe')return json(await notifications.unsubscribe(session,data));
+  if(action==='pushStatus')return json(await notifications.status(session));
+  if(action==='pushTest'){
+   if(!await rpc('goa_server_rate',{p_key:await digest('push-test:'+ctx.user_id),p_limit:5}))throw Error('Please wait before sending another test notification');
+   const event=await notifications.enqueue(session,'test','overview');return json(await notifications.deliver(session,event,'test','overview'));
+  }
   if(action==='createInvite'){const token=random();await api(action,session,{label:data.label,token_hash:await digest(token)});return json({token})}
   if(action==='upload'){
    const category=String(data.category||'');const folder=await categoryFolder(category);const mime=String(data.mime_type||'');if(!ALLOWED_MIME.has(mime))throw Error('This file type is not supported');
@@ -85,7 +98,7 @@ Deno.serve(async req=>{
    const boundary='goa_'+crypto.randomUUID();
    const multipart=new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`,bin,`\r\n--${boundary}--`]);
    const file=await(await drive('/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,size',{method:'POST',headers:{'Content-Type':`multipart/related; boundary=${boundary}`},body:multipart})).json();
-   try{return json(await api('recordFile',session,{drive_id:file.id,name:file.name,category,mime_type:file.mimeType,size_bytes:Number(file.size||bin.length)}))}
+   try{const result=await api('recordFile',session,{drive_id:file.id,name:file.name,category,mime_type:file.mimeType,size_bytes:Number(file.size||bin.length)});await notifyTrip(session,'file','links');return json(result)}
    catch{await drive(`/drive/v3/files/${file.id}?supportsAllDrives=true`,{method:'DELETE'}).catch(()=>{});throw Error('Could not save the upload record. Please retry.')}
   }
   // File removal explicitly requested by the trip owner; use reversible Drive trash.
@@ -102,6 +115,12 @@ Deno.serve(async req=>{
    return new Response(res.body,{headers:{...cors,'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,'X-Content-Type-Options':'nosniff'}});
   }
   const actions=new Set(['get','logout','saveTrip','add','update','delete','vote','listInvites','revokeInvite','removeMember','listFiles']);if(!actions.has(action))throw Error('Unknown action');
-  return json(await api(action,session,data));
+  const result=await api(action,session,data);
+  if(action==='saveTrip')await notifyTrip(session,'settings','overview');
+  if(action==='add'){
+   const kinds:Record<string,[string,string]>={message:['message','discussions'],itinerary:['plan','itinerary'],poll:['poll','polls'],expense:['expense','expenses'],checklist:['checklist','checklist'],link:['file','links']};
+   const event=kinds[data.kind];if(event)await notifyTrip(session,event[0],event[1]);
+  }
+  return json(result);
  }catch(error){const message=error instanceof Error?error.message:'Request failed';const safe=message.includes('SUPABASE')||message.includes('GOOGLE_SERVICE_ACCOUNT_JSON')?'The storage connection needs administrator attention.':message;return json({error:safe},/sign in again|no longer have access/.test(message)?401:400)}
 });
