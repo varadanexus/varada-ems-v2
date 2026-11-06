@@ -1,0 +1,107 @@
+// Custom trip accounts. No calls to Supabase Auth. Secrets stay in Edge runtime.
+const env=(key:string)=>Deno.env.get(key)||'';
+const SUPABASE=env('SUPABASE_URL');
+const SERVICE=env('SUPABASE_SERVICE_ROLE_KEY');
+const TRIP='8412a56b-fccf-412f-b203-54cb3d1bf87d';
+const ROOT='1UHh4f-MBU5xdeKFlDvCSEqS87t4T8_Pm';
+const ORIGINS=new Set(['https://goa-afterglow-trip.clever-sky-9771.chatgpt.site','https://goa.varadanexus.com','http://127.0.0.1:4173','http://localhost:4173']);
+const encoder=new TextEncoder();
+const hex=(b:ArrayBuffer|Uint8Array)=>Array.from(new Uint8Array(b instanceof Uint8Array?b.buffer:b)).map(x=>x.toString(16).padStart(2,'0')).join('');
+const random=()=>hex(crypto.getRandomValues(new Uint8Array(32)));
+const digest=async(s:string)=>hex(await crypto.subtle.digest('SHA-256',encoder.encode(s)));
+const bytes=(s:string)=>Uint8Array.from(s.match(/.{2}/g)||[],x=>parseInt(x,16));
+async function passwordHash(password:string,salt:string){const key=await crypto.subtle.importKey('raw',encoder.encode(password),'PBKDF2',false,['deriveBits']);return hex(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt:bytes(salt),iterations:600000},key,256))}
+function equal(a:string,b:string){let diff=a.length^b.length;for(let i=0;i<Math.max(a.length,b.length);i++)diff|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0);return diff===0}
+function contact(input:unknown){const v=String(input||'').trim();if(v.includes('@')){if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)||v.length>254)throw Error('Enter a valid email address');return{contact:v.toLowerCase(),contact_kind:'email'}}const n=v.replace(/[\s()-]/g,'');if(!/^\+[1-9]\d{7,14}$/.test(n))throw Error('Enter a mobile number with country code, for example +91 98765 43210');return{contact:n,contact_kind:'mobile'}}
+async function rpc(name:string,data:unknown){const res=await fetch(`${SUPABASE}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:SERVICE,Authorization:`Bearer ${SERVICE}`,'Content-Type':'application/json'},body:JSON.stringify(data)});const text=await res.text();const value=text?JSON.parse(text):null;if(!res.ok){const message=String(value?.message||'Request failed');if(value?.code==='23505')throw Error('An account already uses this email or mobile number. Sign in instead.');throw Error(message)}return value}
+async function api(action:string,session:string,data:unknown={}){return rpc('goa_server_api',{p_action:action,p_session:session,p_data:data})}
+async function auth(action:string,data:unknown){return rpc('goa_server_auth',{p_action:action,p_data:data})}
+function b64url(data:string|Uint8Array){const s=typeof data==='string'?data:String.fromCharCode(...data);return btoa(s).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_')}
+let cached:{token:string,expires:number}|null=null;
+async function googleToken(){if(cached&&cached.expires>Date.now()+60000)return cached.token;const raw=env('GOOGLE_SERVICE_ACCOUNT_JSON');if(!raw)throw Error('Drive service account is not configured');const sa=JSON.parse(raw);const now=Math.floor(Date.now()/1000);const claim={iss:sa.client_email,scope:'https://www.googleapis.com/auth/drive',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+3600};const unsigned=b64url(JSON.stringify({alg:'RS256',typ:'JWT'}))+'.'+b64url(JSON.stringify(claim));const pem=sa.private_key.replace(/-----[^-]+-----/g,'').replace(/\s/g,'');const key=await crypto.subtle.importKey('pkcs8',Uint8Array.from(atob(pem),c=>c.charCodeAt(0)),{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);const sig=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,encoder.encode(unsigned));const res=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:unsigned+'.'+b64url(new Uint8Array(sig))})});const data=await res.json();if(!res.ok)throw Error('Drive service-account sign-in failed');cached={token:data.access_token,expires:Date.now()+data.expires_in*1000};return cached.token}
+async function drive(path:string,options:RequestInit={}){const token=await googleToken();const res=await fetch('https://www.googleapis.com'+path,{...options,headers:{Authorization:`Bearer ${token}`,...options.headers}});if(!res.ok){const d=await res.json().catch(()=>({}));const m=String(d.error?.message||'Drive request failed');if(m.includes('storage quota'))throw Error('Google Drive requires a Shared Drive for this service-account upload. The folder must be in a Shared Drive.');throw Error(`Drive: ${m}`)}return res}
+const folders=[
+ {key:'travel',name:'01 Travel',children:[['tickets','01 Tickets'],['transfers','02 Transfers and Local Transport']]},
+ {key:'stay',name:'02 Stay',children:[['confirmations','01 Confirmations'],['property','02 Property Details']]},
+ {key:'itinerary',name:'03 Itinerary',children:[['plans','01 Plans'],['places','02 Places and Activities']]},
+ {key:'expenses',name:'04 Expenses',children:[['receipts','01 Receipts'],['shared','02 Shared Costs']]},
+ {key:'documents',name:'05 Shared Documents',children:[['general','01 General'],['exports','02 Trip Exports']]},
+ {key:'memories',name:'06 Photos and Videos',children:[['photos','01 Photos'],['videos','02 Videos']]}
+];
+const categories=new Map(folders.flatMap(f=>f.children.map(([k,n])=>[`${f.key}/${k}`,{parent:f.name,name:n}])));
+async function findFolder(parent:string,name:string,create=false){const q=`'${parent}' in parents and name = '${name.replace(/'/g,"\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;const data=await(await drive('/drive/v3/files?'+new URLSearchParams({q,fields:'files(id,name)',supportsAllDrives:'true',includeItemsFromAllDrives:'true'}))).json();if(data.files?.length)return data.files[0].id;if(!create)throw Error('The trip storage folders have not been prepared by the admin yet');const f=await(await drive('/drive/v3/files?supportsAllDrives=true&fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:[parent],appProperties:{goa_trip:TRIP}})})).json();return f.id}
+async function prepareStorage(){const root=await(await drive(`/drive/v3/files/${ROOT}?supportsAllDrives=true&fields=id,name,mimeType,driveId,capabilities(canAddChildren),permissions(type,role)`)).json();if(root.mimeType!=='application/vnd.google-apps.folder'||!root.capabilities?.canAddChildren)throw Error('The service account needs permission to add files to the selected Drive folder');const result=[];for(const f of folders){const p=await findFolder(ROOT,f.name,true);for(const [,n]of f.children)await findFolder(p,n,true);result.push(f.name)}return {root:root.name,folders:result,shared_drive:!!root.driveId,publicly_shared:root.permissions?.some((p:{type:string})=>p.type==='anyone')||false}}
+async function categoryFolder(category:string){const f=categories.get(category);if(!f)throw Error('Choose a trip storage category');const p=await findFolder(ROOT,f.parent);return findFolder(p,f.name)}
+const ALLOWED_MIME=new Set(['application/pdf','image/jpeg','image/png','image/webp','image/heic','video/mp4','video/quicktime','text/plain','text/csv','application/json','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+Deno.serve(async req=>{
+ const origin=req.headers.get('origin');const cors={'Access-Control-Allow-Origin':origin&&ORIGINS.has(origin)?origin:'https://goa-afterglow-trip.clever-sky-9771.chatgpt.site','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
+ const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json'}});
+ if(origin&&!ORIGINS.has(origin))return json({error:'Origin not allowed'},403);
+ if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
+ if(req.method!=='POST')return json({error:'Use POST'},405);
+ try{
+  if(Number(req.headers.get('content-length')||0)>15000000)return json({error:'File too large. Maximum 10 MB.'},413);
+  const text=await req.text();if(text.length>15000000)return json({error:'File too large. Maximum 10 MB.'},413);
+  const body=JSON.parse(text);const action=String(body.action||'');const data=body.data||{};
+  const ip=req.headers.get('cf-connecting-ip')||req.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim()||'unknown';
+  const rawSession=(req.headers.get('authorization')||'').replace(/^Bearer\s+/i,'');const session=await digest(rawSession);
+  if(['inspectInvite','register','login','prepareStorage'].includes(action)){
+   if(!await rpc('goa_server_rate',{p_key:await digest('ip:'+ip+':'+action),p_limit:action==='inspectInvite'?60:20}))return json({error:'Too many attempts. Please try again in 15 minutes.'},429);
+  }
+  if(action==='inspectInvite'){return json(await auth('inspect',{invite_hash:await digest(String(data.invite||''))}))}
+  if(action==='register'||action==='login'){
+   const c=contact(data.contact);const password=String(data.password||'');if(password.length<10||password.length>128)throw Error('Use a password with 10 to 128 characters');
+   if(!await rpc('goa_server_rate',{p_key:await digest('contact:'+c.contact),p_limit:10}))return json({error:'Too many sign-in attempts. Please try again in 15 minutes.'},429);
+   const token=random();const session_hash=await digest(token);const invite_hash=data.invite?await digest(String(data.invite)):'';let result;
+   if(action==='register'){
+    if(!invite_hash)throw Error('Open your invitation link to create an account');
+    const info=await auth('inspect',{invite_hash});if(info.trip_id!==TRIP)throw Error('Invitation belongs to a different trip');
+    const display_name=String(data.display_name||'').trim();if(display_name.length<1||display_name.length>100)throw Error('Enter your name');
+    const salt=hex(crypto.getRandomValues(new Uint8Array(16)));const hash=await passwordHash(password,salt);
+    result=await auth('register',{...c,display_name,salt,hash,session_hash,invite_hash});
+   }else{
+    const found=await auth('lookup',c);const hash=await passwordHash(password,found?.salt||'00000000000000000000000000000000');
+    if(!found||!equal(hash,found.hash))return json({error:'Email/mobile or password is incorrect'},401);
+    if(invite_hash){const info=await auth('inspect',{invite_hash});if(info.trip_id!==TRIP)throw Error('Invitation belongs to a different trip')}
+    result=await auth('login',{account_id:found.id,trip_id:TRIP,session_hash,invite_hash});
+   }
+   return json({...result,access_token:token});
+  }
+  if(action==='prepareStorage'){
+   if(data.invite){const info=await auth('inspect',{invite_hash:await digest(String(data.invite))});if(info.trip_id!==TRIP||info.role!=='admin')throw Error('Admin access required')}
+   else{const ctx=await api('context',session);if(ctx.trip_id!==TRIP||ctx.role!=='admin')throw Error('Admin access required')}
+   const result=await prepareStorage();
+   if(data.audit){const folder=await categoryFolder('documents/general');const q=`'${folder}' in parents and trashed = false`;const files=await(await drive('/drive/v3/files?'+new URLSearchParams({q,fields:'files(id,name,mimeType,size,appProperties)',supportsAllDrives:'true',includeItemsFromAllDrives:'true'}))).json();return json({...result,audit_files:files.files})}
+   return json(result);
+  }
+  const ctx=await api('context',session);if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
+  if(action==='createInvite'){const token=random();await api(action,session,{label:data.label,token_hash:await digest(token)});return json({token})}
+  if(action==='upload'){
+   const category=String(data.category||'');const folder=await categoryFolder(category);const mime=String(data.mime_type||'');if(!ALLOWED_MIME.has(mime))throw Error('This file type is not supported');
+   const name=String(data.name||'').replace(/[\x00-\x1f/\\]/g,'_').slice(0,180).trim();if(!name)throw Error('Choose a file');
+   const raw=String(data.base64||'');if(raw.length>13981016)throw Error('Maximum file size is 10 MB');const bin=Uint8Array.from(atob(raw),c=>c.charCodeAt(0));if(!bin.length||bin.length>10485760)throw Error('Maximum file size is 10 MB');
+   if(!await rpc('goa_server_rate',{p_key:await digest('upload:'+ctx.user_id),p_limit:30}))throw Error('Upload limit reached. Try again in 15 minutes.');
+   const meta={name,mimeType:mime,parents:[folder],appProperties:{goa_trip:TRIP,goa_uploader:ctx.user_id}};
+   const boundary='goa_'+crypto.randomUUID();
+   const multipart=new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`,bin,`\r\n--${boundary}--`]);
+   const file=await(await drive('/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,size',{method:'POST',headers:{'Content-Type':`multipart/related; boundary=${boundary}`},body:multipart})).json();
+   try{return json(await api('recordFile',session,{drive_id:file.id,name:file.name,category,mime_type:file.mimeType,size_bytes:Number(file.size||bin.length)}))}
+   catch{await drive(`/drive/v3/files/${file.id}?supportsAllDrives=true`,{method:'DELETE'}).catch(()=>{});throw Error('Could not save the upload record. Please retry.')}
+  }
+  // File removal explicitly requested by the trip owner; use reversible Drive trash.
+  if(action==='deleteFile'){
+   const file=await api('file',session,{id:data.id});if(!file)throw Error('File not found');
+   if(ctx.role!=='admin'&&file.uploaded_by!==ctx.user_id)throw Error('Only the uploader or admin can remove this file');
+   await drive(`/drive/v3/files/${encodeURIComponent(file.drive_id)}?supportsAllDrives=true`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})});
+   try{await rpc('goa_server_forget_file',{p_session:session,p_id:data.id});return json({removed:true,trashed:true})}
+   catch{await drive(`/drive/v3/files/${encodeURIComponent(file.drive_id)}?supportsAllDrives=true`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:false})}).catch(()=>{});throw Error('Could not remove the file. Please retry.')}
+  }
+  if(action==='download'){
+   const file=await api('file',session,{id:data.id});if(!file)throw Error('File not found');
+   const res=await drive(`/drive/v3/files/${encodeURIComponent(file.drive_id)}?alt=media&supportsAllDrives=true`);
+   return new Response(res.body,{headers:{...cors,'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,'X-Content-Type-Options':'nosniff'}});
+  }
+  const actions=new Set(['get','logout','saveTrip','add','update','delete','vote','listInvites','revokeInvite','removeMember','listFiles']);if(!actions.has(action))throw Error('Unknown action');
+  return json(await api(action,session,data));
+ }catch(error){const message=error instanceof Error?error.message:'Request failed';const safe=message.includes('SUPABASE')||message.includes('GOOGLE_SERVICE_ACCOUNT_JSON')?'The storage connection needs administrator attention.':message;return json({error:safe},/sign in again|no longer have access/.test(message)?401:400)}
+});
