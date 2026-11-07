@@ -44,11 +44,34 @@ async function findFolder(parent:string,name:string,create=false){const q=`'${pa
 async function prepareStorage(){const root=await(await drive(`/drive/v3/files/${ROOT}?supportsAllDrives=true&fields=id,name,mimeType,driveId,capabilities(canAddChildren),permissions(type,role)`)).json();if(root.mimeType!=='application/vnd.google-apps.folder'||!root.capabilities?.canAddChildren)throw Error('The service account needs permission to add files to the selected Drive folder');const result=[];for(const f of folders){const p=await findFolder(ROOT,f.name,true);for(const [,n]of f.children)await findFolder(p,n,true);result.push(f.name)}return {root:root.name,folders:result,shared_drive:!!root.driveId,publicly_shared:root.permissions?.some((p:{type:string})=>p.type==='anyone')||false}}
 async function categoryFolder(category:string){const f=categories.get(category);if(!f)throw Error('Choose a trip storage category');const p=await findFolder(ROOT,f.parent);return findFolder(p,f.name)}
 const ALLOWED_MIME=new Set(['application/pdf','image/jpeg','image/png','image/webp','image/heic','video/mp4','video/quicktime','text/plain','text/csv','application/json','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+const pause=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
+async function chatSocket(req:Request){
+ const offered=(req.headers.get('sec-websocket-protocol')||'').split(',').map(v=>v.trim());
+ const credential=offered.find(v=>v.startsWith('session.'))?.slice(8)||'';
+ if(!/^[a-f0-9]{64}$/.test(credential))throw Error('Chat sign-in is required');
+ const session=await digest(credential);const ctx=await api('context',session);
+ if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
+ const requested=Number(new URL(req.url).searchParams.get('after')||0);let after=Number.isSafeInteger(requested)&&requested>0?requested:0;
+ const {socket,response}=Deno.upgradeWebSocket(req,{protocol:'goa-chat-v1',idleTimeout:0});
+ let stopped=false,resolveClosed:()=>void=()=>{};const closed=new Promise<void>(resolve=>{resolveClosed=resolve});
+ const runtime=(globalThis as any).EdgeRuntime;runtime?.waitUntil?.(closed);
+ const leave=()=>rpc('goa_server_chat_presence',{p_session:session,p_peer:null,p_group:true,p_typing:false,p_online:false}).catch(()=>{});
+ socket.onopen=()=>{
+  socket.send(JSON.stringify({type:'ready',after}));
+  void (async()=>{try{while(!stopped&&socket.readyState===WebSocket.OPEN){const update=await rpc('goa_server_chat_sync',{p_session:session,p_after:after,p_limit:100});after=Math.max(after,Number(update.last_event_id||0));socket.send(JSON.stringify({type:'sync',...update}));await pause(1000)}}catch(error){if(socket.readyState===WebSocket.OPEN){socket.send(JSON.stringify({type:'error',message:'Live chat is reconnecting.'}));socket.close(1011,'Live sync interrupted')}}})();
+ };
+ socket.onmessage=event=>{void (async()=>{try{const message=JSON.parse(String(event.data));if(message.type==='typing'){await rpc('goa_server_chat_presence',{p_session:session,p_peer:message.peer_id||null,p_group:message.peer_id?false:true,p_typing:message.typing===true,p_online:true})}else if(message.type==='ping'&&socket.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'pong'}))}catch{/* Invalid ephemeral events are ignored. */}})()};
+ socket.onerror=()=>{stopped=true};
+ socket.onclose=()=>{stopped=true;void leave();resolveClosed()};
+ setTimeout(()=>{if(socket.readyState===WebSocket.OPEN)socket.close(1012,'Scheduled reconnect')},300000);
+ return response;
+}
 Deno.serve(async req=>{
  const origin=req.headers.get('origin');const cors={'Access-Control-Allow-Origin':origin&&ORIGINS.has(origin)?origin:'https://goa-afterglow-trip.clever-sky-9771.chatgpt.site','Access-Control-Allow-Headers':'authorization,apikey,content-type','Access-Control-Allow-Methods':'POST,OPTIONS','Vary':'Origin','Cache-Control':'no-store'};
  const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{...cors,'Content-Type':'application/json'}});
  if(origin&&!ORIGINS.has(origin))return json({error:'Origin not allowed'},403);
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
+ if((req.headers.get('upgrade')||'').toLowerCase()==='websocket'){try{return await chatSocket(req)}catch(error){return json({error:error instanceof Error?error.message:'Chat connection failed'},401)}}
  if(req.method!=='POST')return json({error:'Use POST'},405);
  try{
   if(Number(req.headers.get('content-length')||0)>15000000)return json({error:'File too large. Maximum 10 MB.'},413);
@@ -136,6 +159,13 @@ Deno.serve(async req=>{
    if(!await rpc('goa_server_rate',{p_key:await digest('push-test:'+ctx.user_id),p_limit:5}))throw Error('Please wait before sending another test notification');
    const event=await notifications.enqueue(session,'test','overview');return json(await notifications.deliver(session,event,'test','overview'));
   }
+  if(action==='chatHistory')return json(await rpc('goa_server_chat_history',{p_session:session,p_peer:data.peer_id||null,p_before:data.before_id||null,p_limit:80}));
+  if(action==='chatSend'){
+   if(!await rpc('goa_server_rate',{p_key:await digest('chat-send:'+ctx.user_id),p_limit:120}))throw Error('You are sending messages too quickly. Please wait a moment.');
+   const result=await rpc('goa_server_chat_send',{p_session:session,p_recipient:data.peer_id||null,p_body:String(data.text||''),p_client_id:String(data.client_id||'')});
+   if(!data.peer_id)await notifyTrip(session,'message','discussions');return json(result);
+  }
+  if(action==='chatDelete')return json(await rpc('goa_server_chat_delete',{p_session:session,p_message:Number(data.id)}));
   if(action==='createInvite'){const token=random();await api(action,session,{label:data.label,token_hash:await digest(token)});return json({token})}
   if(action==='upload'){
    const category=String(data.category||'');const folder=await categoryFolder(category);const mime=String(data.mime_type||'');if(!ALLOWED_MIME.has(mime))throw Error('This file type is not supported');
@@ -172,3 +202,4 @@ Deno.serve(async req=>{
   return json(result);
  }catch(error){const message=error instanceof Error?error.message:'Request failed';const safe=message.includes('SUPABASE')||message.includes('GOOGLE_SERVICE_ACCOUNT_JSON')?'The storage connection needs administrator attention.':message;return json({error:safe},/sign in again|no longer have access/.test(message)?401:400)}
 });
+
