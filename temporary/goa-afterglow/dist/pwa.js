@@ -45,6 +45,7 @@ window.addEventListener('appinstalled',()=>{installPrompt=null;render();app()?.t
 window.addEventListener('goa-state',()=>{render();syncExisting().catch(()=>{})});
 window.addEventListener('online',()=>app()?.toast('Back online. Your trip is ready to sync.'));
 window.addEventListener('offline',()=>app()?.toast('You’re offline. Connect to load your private trip details.'));
-window.GOA_PWA={disconnect};
+window.GOA_PWA={disconnect,enableNotifications:()=>action(enable)};
 if('serviceWorker'in navigator&&isSecureContext){navigator.serviceWorker.register(new URL('sw.js',import.meta.url),{scope:'./',updateViaCache:'none'}).then(async reg=>{registration=reg;const sub=await reg.pushManager?.getSubscription();enabled=!!sub&&Notification.permission==='granted';await syncExisting().catch(()=>{});render()}).catch(()=>{registration=null;render()})}
 render();
+

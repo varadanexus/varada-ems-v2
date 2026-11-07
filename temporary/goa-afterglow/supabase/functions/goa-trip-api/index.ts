@@ -17,13 +17,14 @@ function equal(a:string,b:string){let diff=a.length^b.length;for(let i=0;i<Math.
 function contact(input:unknown){const v=String(input||'').trim();if(v.includes('@')){if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)||v.length>254)throw Error('Enter a valid email address');return{contact:v.toLowerCase(),contact_kind:'email'}}const n=v.replace(/[\s()-]/g,'');if(!/^\+[1-9]\d{7,14}$/.test(n))throw Error('Enter a mobile number with country code, for example +91 98765 43210');return{contact:n,contact_kind:'mobile'}}
 async function rpc(name:string,data:unknown){const res=await fetch(`${SUPABASE}/rest/v1/rpc/${name}`,{method:'POST',headers:{apikey:SERVICE,Authorization:`Bearer ${SERVICE}`,'Content-Type':'application/json'},body:JSON.stringify(data)});const text=await res.text();const value=text?JSON.parse(text):null;if(!res.ok){const message=String(value?.message||'Request failed');if(value?.code==='23505')throw Error('An account already uses this email or mobile number. Sign in instead.');throw Error(message)}return value}
 async function api(action:string,session:string,data:unknown={}){return rpc('goa_server_api',{p_action:action,p_session:session,p_data:data})}
+async function access(action:string,session:string,data:unknown={}){return rpc('goa_server_access',{p_action:action,p_session:session,p_data:data})}
 async function auth(action:string,data:unknown){return rpc('goa_server_auth',{p_action:action,p_data:data})}
 const notifications=tripNotifications(rpc,env);
 const whatsapp=tripWhatsApp(rpc,env);
 function whatsappPhone(value:unknown){const p=String(value||'').trim().replace(/^whatsapp:/,'').replace(/[\s()-]/g,'');if(!/^\+[1-9]\d{7,14}$/.test(p))throw Error('Enter your WhatsApp number with country code');return p}
 async function otpProof(id:string,phone:string,code:string){const key=await crypto.subtle.importKey('raw',encoder.encode(SERVICE),{name:'HMAC',hash:'SHA-256'},false,['sign']);return hex(await crypto.subtle.sign('HMAC',key,encoder.encode(id+'|'+phone+'|'+code)))}
 function otpCode(){const n=new Uint32Array(1);do{crypto.getRandomValues(n)}while(n[0]>=4294000000);return String(n[0]%1000000).padStart(6,'0')}
-async function whatsappAdmin(data:any,session:string,raw:string){if(raw){const ctx=await api('context',session);if(ctx.trip_id===TRIP&&ctx.role==='admin')return;throw Error('Only the trip admin can manage WhatsApp')}const info=await auth('inspect',{invite_hash:await digest(String(data.setup_invite||''))});if(info.trip_id!==TRIP||info.role!=='admin')throw Error('Admin setup is required')}
+async function whatsappAdmin(data:any,session:string,raw:string){if(raw){const ctx=await access('context',session);if(ctx.trip_id===TRIP&&ctx.role==='admin')return;throw Error('Only the trip admin can manage WhatsApp')}const info=await auth('inspect',{invite_hash:await digest(String(data.setup_invite||''))});if(info.trip_id!==TRIP||info.role!=='admin')throw Error('Admin setup is required')}
 async function notifyTrip(session:string,kind:string,section:string){
  try{const event=await notifications.enqueue(session,kind,section);if(!event)return;const task=notifications.deliver(session,event,kind,section).catch(()=>{});const runtime=(globalThis as any).EdgeRuntime;if(runtime?.waitUntil)runtime.waitUntil(task);else await task}catch{/* Notification failure must not discard a saved trip change. */}
 }
@@ -49,8 +50,9 @@ async function chatSocket(req:Request){
  const offered=(req.headers.get('sec-websocket-protocol')||'').split(',').map(v=>v.trim());
  const credential=offered.find(v=>v.startsWith('session.'))?.slice(8)||'';
  if(!/^[a-f0-9]{64}$/.test(credential))throw Error('Chat sign-in is required');
- const session=await digest(credential);const ctx=await api('context',session);
+ const session=await digest(credential);const ctx=await access('context',session);
  if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
+ if(ctx.agreement_required)throw Error('Accept the crew agreement before opening chat');
  const requested=Number(new URL(req.url).searchParams.get('after')||0);let after=Number.isSafeInteger(requested)&&requested>0?requested:0;
  const {socket,response}=Deno.upgradeWebSocket(req,{protocol:'goa-chat-v1',idleTimeout:0});
  let stopped=false,resolveClosed:()=>void=()=>{};const closed=new Promise<void>(resolve=>{resolveClosed=resolve});
@@ -136,12 +138,20 @@ Deno.serve(async req=>{
   }
   if(action==='prepareStorage'){
    if(data.invite){const info=await auth('inspect',{invite_hash:await digest(String(data.invite))});if(info.trip_id!==TRIP||info.role!=='admin')throw Error('Admin access required')}
-   else{const ctx=await api('context',session);if(ctx.trip_id!==TRIP||ctx.role!=='admin')throw Error('Admin access required')}
+   else{const ctx=await access('context',session);if(ctx.trip_id!==TRIP||ctx.role!=='admin')throw Error('Admin access required')}
    const result=await prepareStorage();
    if(data.audit){const folder=await categoryFolder('documents/general');const q=`'${folder}' in parents and trashed = false`;const files=await(await drive('/drive/v3/files?'+new URLSearchParams({q,fields:'files(id,name,mimeType,size,appProperties)',supportsAllDrives:'true',includeItemsFromAllDrives:'true'}))).json();return json({...result,audit_files:files.files})}
    return json(result);
   }
-  const ctx=await api('context',session);if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
+  const ctx=await access('context',session);if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
+  if(action==='get'){
+   if(ctx.agreement_required)return json({trip:{title:'Our Goa escape',departure:'',start:'',end:'',budget:'',notes:''},entries:[],members:[{trip_id:ctx.trip_id,user_id:ctx.user_id,display_name:ctx.display_name,role:ctx.role,is_owner:ctx.is_owner}],votes:[],files:[],agreement_required:true,agreement_version:ctx.agreement_version});
+   const result=await api('get',session);result.members=await access('members',session);return json({...result,agreement_required:false,agreement_version:ctx.agreement_version});
+  }
+  if(action==='acceptAgreement')return json(await access('acceptAgreement',session,data));
+  if(action==='logout')return json(await api('logout',session));
+  if(ctx.agreement_required)throw Error('Accept the crew agreement before entering the trip');
+  if(action==='setMemberRole'||action==='removeMember')return json(await access(action,session,data));
   if(action==='sendWhatsAppInvite'){
    if(ctx.role!=='admin')throw Error('Only the trip admin can invite participants');if(data.opt_in!==true)throw Error('Confirm the recipient agreed to receive this WhatsApp invitation');
    const phone=whatsappPhone(data.phone),label=String(data.label||'').trim();if(!label||label.length>100)throw Error('Enter the participant name');
@@ -192,7 +202,7 @@ Deno.serve(async req=>{
    const res=await drive(`/drive/v3/files/${encodeURIComponent(file.drive_id)}?alt=media&supportsAllDrives=true`);
    return new Response(res.body,{headers:{...cors,'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,'X-Content-Type-Options':'nosniff'}});
   }
-  const actions=new Set(['get','logout','saveTrip','add','update','delete','vote','listInvites','revokeInvite','removeMember','listFiles']);if(!actions.has(action))throw Error('Unknown action');
+  const actions=new Set(['saveTrip','add','update','delete','vote','listInvites','revokeInvite','listFiles']);if(!actions.has(action))throw Error('Unknown action');
   const result=await api(action,session,data);
   if(action==='saveTrip')await notifyTrip(session,'settings','overview');
   if(action==='add'){
