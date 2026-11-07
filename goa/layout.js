@@ -3,7 +3,7 @@
  const root=document.documentElement;
  const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
  const phone=()=>matchMedia('(max-width: 900px)').matches||(standalone()&&navigator.maxTouchPoints>0);
- const labels={overview:'Our trip',itinerary:'Itinerary',discussions:'Discussions',polls:'Polls',expenses:'Expenses',checklist:'Checklist',links:'Files & bookings',crew:'The crew',settings:'Trip settings'};
+ const labels={overview:'Our trip',itinerary:'Itinerary',discussions:'Discussions',polls:'Polls',expenses:'Expenses',checklist:'Checklist',links:'Bookings',crew:'The crew',settings:'Trip settings'};
  let opened=false;
  function closeMenu(restore=false){opened=false;document.body?.classList.remove('drawer-open');const aside=document.querySelector('.sidebar');if(aside){aside.classList.remove('open');aside.inert=phone();if(phone())aside.setAttribute('aria-hidden','true');else aside.removeAttribute('aria-hidden')}const main=document.querySelector('main');if(main)main.inert=false;document.querySelector('#mobile-menu')?.setAttribute('aria-expanded','false');document.querySelector('#mobile-more')?.setAttribute('aria-expanded','false');if(restore)document.querySelector('#mobile-menu')?.focus()}
  function toggleMenu(){if(!phone())return;opened=!opened;document.body.classList.toggle('drawer-open',opened);const aside=document.querySelector('.sidebar');aside.classList.toggle('open',opened);aside.inert=!opened;aside.setAttribute('aria-hidden',String(!opened));document.querySelector('main').inert=opened;document.querySelector('#mobile-menu')?.setAttribute('aria-expanded',String(opened));document.querySelector('#mobile-more')?.setAttribute('aria-expanded',String(opened));if(opened)document.querySelector('#drawer-close')?.focus()}
@@ -12,3 +12,4 @@
  function init(){geometry();closeMenu();document.querySelector('#drawer-backdrop')?.addEventListener('click',()=>closeMenu(true));document.querySelector('#drawer-close')?.addEventListener('click',()=>closeMenu(true));document.querySelector('#mobile-more')?.addEventListener('click',toggleMenu);document.addEventListener('keydown',e=>{if(e.key==='Escape'&&opened){e.preventDefault();closeMenu(true)}});window.addEventListener('hashchange',()=>closeMenu());setPage(location.hash.slice(1)||'overview')}
  window.GOA_LAYOUT={setPage,closeMenu,toggleMenu,geometry};geometry();window.addEventListener('resize',geometry);window.addEventListener('orientationchange',geometry);window.visualViewport?.addEventListener('resize',geometry);matchMedia('(display-mode: standalone)').addEventListener?.('change',geometry);if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
+
