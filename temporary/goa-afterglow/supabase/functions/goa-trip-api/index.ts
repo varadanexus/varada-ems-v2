@@ -19,6 +19,7 @@ async function rpc(name:string,data:unknown){const res=await fetch(`${SUPABASE}/
 async function api(action:string,session:string,data:unknown={}){return rpc('goa_server_api',{p_action:action,p_session:session,p_data:data})}
 async function access(action:string,session:string,data:unknown={}){return rpc('goa_server_access',{p_action:action,p_session:session,p_data:data})}
 async function bookings(action:string,session:string,data:unknown={}){return rpc('goa_server_bookings',{p_action:action,p_session:session,p_data:data})}
+async function expenseBills(action:string,session:string,data:unknown={}){return rpc('goa_server_expense_bills',{p_action:action,p_session:session,p_data:data})}
 async function auth(action:string,data:unknown){return rpc('goa_server_auth',{p_action:action,p_data:data})}
 const notifications=tripNotifications(rpc,env);
 const whatsapp=tripWhatsApp(rpc,env);
@@ -46,6 +47,7 @@ async function findFolder(parent:string,name:string,create=false){const q=`'${pa
 async function prepareStorage(){const root=await(await drive(`/drive/v3/files/${ROOT}?supportsAllDrives=true&fields=id,name,mimeType,driveId,capabilities(canAddChildren),permissions(type,role)`)).json();if(root.mimeType!=='application/vnd.google-apps.folder'||!root.capabilities?.canAddChildren)throw Error('The service account needs permission to add files to the selected Drive folder');const result=[];for(const f of folders){const p=await findFolder(ROOT,f.name,true);for(const [,n]of f.children)await findFolder(p,n,true);result.push(f.name)}return {root:root.name,folders:result,shared_drive:!!root.driveId,publicly_shared:root.permissions?.some((p:{type:string})=>p.type==='anyone')||false}}
 async function categoryFolder(category:string){const f=categories.get(category);if(!f)throw Error('Choose a booking category');const p=await findFolder(ROOT,f.parent,true);return findFolder(p,f.name,true)}
 async function chatFolder(){return findFolder(ROOT,'07 Chat Attachments',true)}
+async function expenseBillFolder(){return categoryFolder('expenses/receipts')}
 const ALLOWED_MIME=new Set(['application/pdf','image/jpeg','image/png','image/webp','image/heic','video/mp4','video/quicktime','text/plain','text/csv','application/json','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
 const CHAT_MIME=new Set(['application/pdf','image/jpeg','image/png','image/webp','image/heic','text/plain','text/csv','application/json','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
 const pause=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -148,8 +150,8 @@ Deno.serve(async req=>{
   }
   const ctx=await access('context',session);if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
   if(action==='get'){
-   if(ctx.agreement_required)return json({trip:{title:'Our Goa escape',departure:'',start:'',end:'',budget:'',notes:''},entries:[],members:[{trip_id:ctx.trip_id,user_id:ctx.user_id,display_name:ctx.display_name,role:ctx.role,is_owner:ctx.is_owner}],votes:[],files:[],agreement_required:true,agreement_version:ctx.agreement_version});
-   const result=await api('get',session);result.members=await access('members',session);result.files=await bookings('list',session);return json({...result,agreement_required:false,agreement_version:ctx.agreement_version});
+   if(ctx.agreement_required)return json({trip:{title:'Our Goa escape',departure:'',start:'',end:'',budget:'',notes:''},entries:[],members:[{trip_id:ctx.trip_id,user_id:ctx.user_id,display_name:ctx.display_name,role:ctx.role,is_owner:ctx.is_owner}],votes:[],files:[],expense_bills:[],agreement_required:true,agreement_version:ctx.agreement_version});
+   const result=await api('get',session);result.members=await access('members',session);result.files=await bookings('list',session);result.expense_bills=await expenseBills('list',session);return json({...result,agreement_required:false,agreement_version:ctx.agreement_version});
   }
   if(action==='acceptAgreement')return json(await access('acceptAgreement',session,data));
   if(action==='logout')return json(await api('logout',session));
@@ -171,6 +173,32 @@ Deno.serve(async req=>{
   if(action==='pushTest'){
    if(!await rpc('goa_server_rate',{p_key:await digest('push-test:'+ctx.user_id),p_limit:5}))throw Error('Please wait before sending another test notification');
    const event=await notifications.enqueue(session,'test','overview');return json(await notifications.deliver(session,event,'test','overview'));
+  }
+  if(action==='addExpense'){
+   const payerId=String(data.payer_id||''),members=await access('members',session),payer=members.find((m:any)=>m.user_id===payerId);
+   if(!payer)throw Error('Choose a current crew member who paid');
+   const expense={title:String(data.title||'').trim(),amount:Number(data.amount),payer_id:payer.user_id,payer:payer.display_name,notes:String(data.notes||'').trim()};
+   const attachment=data.attachment&&typeof data.attachment==='object'?data.attachment:null;
+   const created=await api('add',session,{kind:'expense',data:expense});
+   let uploaded:any=null;
+   try{
+    if(attachment){
+     const mime=String(attachment.mime_type||''),name=String(attachment.name||'').replace(/[\x00-\x1f/\\]/g,'_').slice(0,180).trim(),raw=String(attachment.base64||'');
+     if(!CHAT_MIME.has(mime))throw Error('This bill type is not supported');if(!name)throw Error('Choose a bill');if(raw.length>13981016)throw Error('Maximum bill size is 10 MB');
+     const bin=Uint8Array.from(atob(raw),c=>c.charCodeAt(0));if(!bin.length||bin.length>10485760)throw Error('Maximum bill size is 10 MB');
+     if(!await rpc('goa_server_rate',{p_key:await digest('expense-bill:'+ctx.user_id),p_limit:30}))throw Error('Upload limit reached. Try again in 15 minutes.');
+     const folder=await expenseBillFolder(),boundary='goa_expense_'+crypto.randomUUID(),meta={name,mimeType:mime,parents:[folder],appProperties:{goa_trip:TRIP,goa_expense:String(created.id),goa_uploader:ctx.user_id}};
+     const multipart=new Blob([`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`,bin,`\r\n--${boundary}--`]);
+     uploaded=await(await drive('/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,name,mimeType,size',{method:'POST',headers:{'Content-Type':`multipart/related; boundary=${boundary}`},body:multipart})).json();
+     await expenseBills('record',session,{entry_id:created.id,drive_id:uploaded.id,name:uploaded.name,mime_type:uploaded.mimeType,size_bytes:Number(uploaded.size||bin.length)});
+    }
+   }catch(error){if(uploaded?.id)await drive(`/drive/v3/files/${uploaded.id}?supportsAllDrives=true`,{method:'DELETE'}).catch(()=>{});await api('delete',session,{id:created.id}).catch(()=>{});throw error}
+   await notifyTrip(session,'expense','expenses');return json(created);
+  }
+  if(action==='expenseBill'){
+   const file=await expenseBills('file',session,{entry_id:data.entry_id});if(!file)throw Error('Bill not found or unavailable');
+   const res=await drive(`/drive/v3/files/${encodeURIComponent(file.drive_id)}?alt=media&supportsAllDrives=true`),disposition=data.download===true?'attachment':'inline';
+   return new Response(res.body,{headers:{...cors,'Content-Type':file.mime_type,'Content-Length':String(file.size_bytes||''),'Content-Disposition':`${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,'X-Content-Type-Options':'nosniff'}});
   }
   if(action==='chatHistory')return json(await rpc('goa_server_chat_history',{p_session:session,p_peer:data.peer_id||null,p_before:data.before_id||null,p_limit:80}));
   if(action==='chatSend'){
@@ -210,6 +238,11 @@ Deno.serve(async req=>{
    const file=await bookings('file',session,{id:data.id});if(!file)throw Error('Booking not found or unavailable');
    const res=await drive(`/drive/v3/files/${encodeURIComponent(file.drive_id)}?alt=media&supportsAllDrives=true`);
    return new Response(res.body,{headers:{...cors,'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,'X-Content-Type-Options':'nosniff'}});
+  }
+  if(action==='delete'){
+   const bill=await expenseBills('removeInfo',session,{entry_id:data.id}).catch((error:Error)=>{if(error.message.includes('Expense not found'))return null;throw error});
+   if(bill?.drive_id)await drive(`/drive/v3/files/${encodeURIComponent(bill.drive_id)}?supportsAllDrives=true`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})});
+   try{const result=await api('delete',session,data);return json(result)}catch(error){if(bill?.drive_id)await drive(`/drive/v3/files/${encodeURIComponent(bill.drive_id)}?supportsAllDrives=true`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:false})}).catch(()=>{});throw error}
   }
   const actions=new Set(['saveTrip','add','update','delete','vote','listInvites','revokeInvite','listFiles']);if(!actions.has(action))throw Error('Unknown action');
   const result=await api(action,session,data);
