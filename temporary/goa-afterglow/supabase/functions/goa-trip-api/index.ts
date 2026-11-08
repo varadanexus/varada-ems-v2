@@ -20,6 +20,7 @@ async function api(action:string,session:string,data:unknown={}){return rpc('goa
 async function access(action:string,session:string,data:unknown={}){return rpc('goa_server_access',{p_action:action,p_session:session,p_data:data})}
 async function bookings(action:string,session:string,data:unknown={}){return rpc('goa_server_bookings',{p_action:action,p_session:session,p_data:data})}
 async function expenseBills(action:string,session:string,data:unknown={}){return rpc('goa_server_expense_bills',{p_action:action,p_session:session,p_data:data})}
+async function manualCrew(action:string,session:string,data:unknown={}){return rpc('goa_server_manual_crew',{p_action:action,p_session:session,p_data:data})}
 async function auth(action:string,data:unknown){return rpc('goa_server_auth',{p_action:action,p_data:data})}
 const notifications=tripNotifications(rpc,env);
 const whatsapp=tripWhatsApp(rpc,env);
@@ -150,13 +151,15 @@ Deno.serve(async req=>{
   }
   const ctx=await access('context',session);if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
   if(action==='get'){
-   if(ctx.agreement_required)return json({trip:{title:'Our Goa escape',departure:'',start:'',end:'',budget:'',notes:''},entries:[],members:[{trip_id:ctx.trip_id,user_id:ctx.user_id,display_name:ctx.display_name,role:ctx.role,is_owner:ctx.is_owner}],votes:[],files:[],expense_bills:[],agreement_required:true,agreement_version:ctx.agreement_version});
-   const result=await api('get',session);result.members=await access('members',session);result.files=await bookings('list',session);result.expense_bills=await expenseBills('list',session);return json({...result,agreement_required:false,agreement_version:ctx.agreement_version});
+   if(ctx.agreement_required)return json({trip:{title:'Our Goa escape',departure:'',start:'',end:'',budget:'',notes:''},entries:[],members:[{trip_id:ctx.trip_id,user_id:ctx.user_id,display_name:ctx.display_name,role:ctx.role,is_owner:ctx.is_owner}],manual_crew:[],votes:[],files:[],expense_bills:[],agreement_required:true,agreement_version:ctx.agreement_version});
+   const result=await api('get',session);result.members=await access('members',session);result.manual_crew=await manualCrew('list',session);result.files=await bookings('list',session);result.expense_bills=await expenseBills('list',session);return json({...result,agreement_required:false,agreement_version:ctx.agreement_version});
   }
   if(action==='acceptAgreement')return json(await access('acceptAgreement',session,data));
   if(action==='logout')return json(await api('logout',session));
   if(ctx.agreement_required)throw Error('Accept the crew agreement before entering the trip');
   if(action==='setMemberRole'||action==='removeMember')return json(await access(action,session,data));
+  if(action==='addManualCrew')return json(await manualCrew('add',session,{display_name:data.display_name}));
+  if(action==='removeManualCrew')return json(await manualCrew('remove',session,{id:data.id}));
   if(action==='sendWhatsAppInvite'){
    if(ctx.role!=='admin')throw Error('Only the trip admin can invite participants');if(data.opt_in!==true)throw Error('Confirm the recipient agreed to receive this WhatsApp invitation');
    const phone=whatsappPhone(data.phone),label=String(data.label||'').trim();if(!label||label.length>100)throw Error('Enter the participant name');
@@ -175,9 +178,12 @@ Deno.serve(async req=>{
    const event=await notifications.enqueue(session,'test','overview');return json(await notifications.deliver(session,event,'test','overview'));
   }
   if(action==='addExpense'){
-   const payerId=String(data.payer_id||''),members=await access('members',session),payer=members.find((m:any)=>m.user_id===payerId);
-   if(!payer)throw Error('Choose a current crew member who paid');
-   const expense={title:String(data.title||'').trim(),amount:Number(data.amount),payer_id:payer.user_id,payer:payer.display_name,notes:String(data.notes||'').trim()};
+   const members=await access('members',session),manual=await manualCrew('list',session),people=[...members.map((m:any)=>({key:`account:${m.user_id}`,id:m.user_id,kind:'account',display_name:m.display_name})),...manual.map((m:any)=>({key:`manual:${m.id}`,id:m.id,kind:'manual',display_name:m.display_name}))],personMap=new Map(people.map((p:any)=>[p.key,p]));
+   const payerKey=String(data.payer_key||''),payer:any=personMap.get(payerKey);if(!payer)throw Error('Choose a current crew member who paid');
+   const requested=Array.isArray(data.split_keys)?data.split_keys.map((value:unknown)=>String(value)):[],splitKeys=[...new Set(requested)],splitPeople:any[]=splitKeys.map(key=>personMap.get(key)).filter(Boolean);
+   if(!splitKeys.length||splitKeys.length!==splitPeople.length)throw Error('Choose at least one current crew member for the split');
+   const splitWith=splitPeople.map(person=>({key:person.key,kind:person.kind,name:person.display_name}));
+   const expense={title:String(data.title||'').trim(),amount:Number(data.amount),payer_key:payer.key,payer_id:payer.kind==='account'?payer.id:null,payer_kind:payer.kind,payer:payer.display_name,split_with:splitWith,split_count:splitWith.length,notes:String(data.notes||'').trim()};
    const attachment=data.attachment&&typeof data.attachment==='object'?data.attachment:null;
    const created=await api('add',session,{kind:'expense',data:expense});
    let uploaded:any=null;
