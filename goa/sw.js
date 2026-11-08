@@ -1,6 +1,6 @@
-const CACHE='goa-afterglow-shell-v12-chat-files';
+const CACHE='goa-afterglow-shell-v13-expense-bills';
 const BASE=new URL('./',self.location.href);
-const SHELL=['./','index.html','style.css','config.js','app.js','pwa.js','layout.js','mobile.css','style.css?v=chat-files-v8','app.js?v=chat-files-v8','pwa.js?v=chat-files-v8','layout.js?v=chat-files-v8','mobile.css?v=chat-files-v8','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png','icons/apple-touch-icon.png','icons/badge-96.png'].map(p=>new URL(p,BASE).href);
+const SHELL=['./','index.html','style.css','config.js','app.js','pwa.js','layout.js','mobile.css','style.css?v=expense-bills-v9','app.js?v=expense-bills-v9','pwa.js?v=expense-bills-v9','layout.js?v=expense-bills-v9','mobile.css?v=expense-bills-v9','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png','icons/apple-touch-icon.png','icons/badge-96.png'].map(p=>new URL(p,BASE).href);
 self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);await cache.addAll(SHELL);await self.skipWaiting()})()));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('goa-afterglow-shell-')&&k!==CACHE).map(k=>caches.delete(k)));await self.clients.claim()})()));
 self.addEventListener('fetch',event=>{
