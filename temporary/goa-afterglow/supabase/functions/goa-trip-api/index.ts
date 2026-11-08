@@ -250,6 +250,7 @@ Deno.serve(async req=>{
    if(bill?.drive_id)await drive(`/drive/v3/files/${encodeURIComponent(bill.drive_id)}?supportsAllDrives=true`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})});
    try{const result=await api('delete',session,data);return json(result)}catch(error){if(bill?.drive_id)await drive(`/drive/v3/files/${encodeURIComponent(bill.drive_id)}?supportsAllDrives=true`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:false})}).catch(()=>{});throw error}
   }
+  if(action==='pollCustomVote')return json(await rpc('goa_server_poll_custom_vote',{p_session:session,p_entry:data.id,p_answer:data.answer}));
   const actions=new Set(['saveTrip','add','update','delete','vote','listInvites','revokeInvite','listFiles']);if(!actions.has(action))throw Error('Unknown action');
   const result=await api(action,session,data);
   if(action==='saveTrip')await notifyTrip(session,'settings','overview');
