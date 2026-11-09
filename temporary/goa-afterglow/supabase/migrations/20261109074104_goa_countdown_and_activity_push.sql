@@ -1,4 +1,5 @@
 -- Goa-only scheduled countdowns and targeted direct-message push. EMS data is untouched.
+-- Filename matches the migration version recorded by the hosted project.
 begin;
 
 create table if not exists goa_private.push_countdown_runs(
