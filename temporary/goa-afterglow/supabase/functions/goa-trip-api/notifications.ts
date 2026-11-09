@@ -14,15 +14,30 @@ export function tripNotifications(rpc:Rpc,env:(key:string)=>string){
   async unsubscribe(session:string,data:any){await db('unsubscribe',session,{endpoint_hash:await hash(endpoint(data.endpoint))});return {enabled:false}},
   status:(session:string)=>db('status',session),
   async enqueue(session:string,kind:string,section:string){if(!configured())return null;return db('event',session,{kind,section})},
+  async enqueueDirect(session:string,recipient:string){if(!configured())return null;return rpc('goa_server_push_direct',{p_session:session,p_recipient:recipient})},
   async deliver(session:string,event:any,kind:string,section:string){
    if(!event)return {delivered:0,failed:0,subscribed:0};
-   const text:Record<string,string>={message:'There is a new message in your trip.',plan:'Your crew has a new plan to check out.',poll:'There is a new trip poll waiting for your vote.',expense:'A shared expense was added to the trip.',checklist:'There is a new item on your trip checklist.',file:'A new file or link was added to the trip.',settings:'Your admin updated the trip details.',test:'Trip notifications are working on this device.'};
+   const text:Record<string,string>={message:'There is a new message in your trip.',direct:'You received a private message from a crew member.',plan:'Your crew added a new itinerary plan.',poll:'There is a new trip poll waiting for your vote.',expense:'A shared expense was added to the trip.',checklist:'There is a new item on your trip checklist.',file:'A new ticket, stay, booking, or trip file was added.',settings:'Your admin updated the trip details.',test:'Trip notifications are working on this device.'};
    let delivered=0,failed=0;
    await Promise.allSettled(event.subscriptions.map(async(sub:any)=>{
     try{await webpush.sendNotification({endpoint:sub.endpoint,keys:sub.keys},JSON.stringify({title:'Goa Afterglow',body:text[kind]||'Your trip has an update.',tag:'goa-'+kind,url:sub.app_url+'#'+section,event_id:event.id}),{TTL:3600,urgency:'normal',timeout:10000});delivered++}
     catch(error){failed++;const code=(error as {statusCode?:number}).statusCode;if(code===404||code===410)await db('expire',session,{endpoint_hash:sub.endpoint_hash})}
    }));
    await db('finish',session,{id:event.id,delivered,failed});return {delivered,failed,subscribed:event.subscriptions.length};
+  },
+  async countdown(tripId:string){
+   if(!configured())return {delivered:0,failed:0,subscribed:0,reason:'not_configured'};
+   const event=await rpc('goa_server_push_countdown',{p_action:'prepare',p_trip:tripId,p_data:{}});
+   if(!event?.send)return {delivered:0,failed:0,subscribed:Number(event?.subscribed||0),reason:event?.reason||'not_due'};
+   const days=Number(event.days),title=days===0?'Goa starts today! 🌴':days===1?'1 day to Goa 🌴':`${days} days to Goa 🌴`;
+   const body=days===0?'The wait is over. Open Afterglow for today’s plans.':days===1?'Almost time—check tickets, stays, and the latest itinerary.':`Your crew’s countdown is on. Open Afterglow to see the latest plan.`;
+   let delivered=0,failed=0;
+   await Promise.allSettled((event.subscriptions||[]).map(async(sub:any)=>{
+    try{await webpush.sendNotification({endpoint:sub.endpoint,keys:sub.keys},JSON.stringify({title,body,tag:'goa-trip-countdown',renotify:true,url:sub.app_url+'#overview',countdown_days:days}),{TTL:82800,urgency:'low',timeout:10000});delivered++}
+    catch(error){failed++;const code=(error as {statusCode?:number}).statusCode;if(code===404||code===410)await rpc('goa_server_push_countdown',{p_action:'expire',p_trip:tripId,p_data:{endpoint_hash:sub.endpoint_hash,run_date:event.run_date}})}
+   }));
+   await rpc('goa_server_push_countdown',{p_action:'finish',p_trip:tripId,p_data:{run_date:event.run_date,delivered,failed}});return {delivered,failed,subscribed:event.subscriptions.length,days};
   }
  };
 }
+
