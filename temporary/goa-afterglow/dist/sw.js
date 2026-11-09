@@ -1,4 +1,4 @@
-const CACHE='goa-afterglow-shell-v17-invite-actions';
+const CACHE='goa-afterglow-shell-v18-settings-app-tools';
 const BASE=new URL('./',self.location.href);
 const SHELL=['./','index.html','style.css','config.js','app.js','pwa.js','layout.js','mobile.css','style.css?v=invite-actions-v13','app.js?v=invite-actions-v13','pwa.js?v=invite-actions-v13','layout.js?v=invite-actions-v13','mobile.css?v=invite-actions-v13','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable-512.png','icons/apple-touch-icon.png','icons/badge-96.png'].map(p=>new URL(p,BASE).href);
 self.addEventListener('install',event=>event.waitUntil((async()=>{const cache=await caches.open(CACHE);await cache.addAll(SHELL);await self.skipWaiting()})()));

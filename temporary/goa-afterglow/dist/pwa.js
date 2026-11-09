@@ -1,5 +1,6 @@
 let installPrompt=null,registration=null,busy=false;
 const mount=document.querySelector('#app-setup');
+if(mount)mount.hidden=true;
 const isIOS=()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const installed=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
 const app=()=>window.GOA_APP;
