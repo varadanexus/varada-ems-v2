@@ -22,6 +22,7 @@ async function bookings(action:string,session:string,data:unknown={}){return rpc
 async function expenseBills(action:string,session:string,data:unknown={}){return rpc('goa_server_expense_bills',{p_action:action,p_session:session,p_data:data})}
 async function manualCrew(action:string,session:string,data:unknown={}){return rpc('goa_server_manual_crew',{p_action:action,p_session:session,p_data:data})}
 async function inviteTracking(action:string,session:string,data:unknown={}){return rpc('goa_server_invite_tracking',{p_action:action,p_session:session,p_data:data})}
+async function paymentGroups(action:string,session:string,data:unknown={}){return rpc('goa_server_payment_groups',{p_action:action,p_session:session,p_data:data})}
 async function auth(action:string,data:unknown){return rpc('goa_server_auth',{p_action:action,p_data:data})}
 const notifications=tripNotifications(rpc,env);
 const whatsapp=tripWhatsApp(rpc,env);
@@ -158,8 +159,10 @@ Deno.serve(async req=>{
   if(action==='countdownPush')return json(await notifications.countdown(TRIP));
   const ctx=await access('context',session);if(ctx.trip_id!==TRIP)throw Error('Trip access denied');
   if(action==='get'){
-   if(ctx.agreement_required)return json({trip:{title:'Our Goa escape',departure:'',start:'',end:'',budget:'',notes:''},entries:[],members:[{trip_id:ctx.trip_id,user_id:ctx.user_id,display_name:ctx.display_name,role:ctx.role,is_owner:ctx.is_owner}],manual_crew:[],votes:[],files:[],expense_bills:[],agreement_required:true,agreement_version:ctx.agreement_version});
-   const result=await api('get',session);result.members=await access('members',session);result.manual_crew=await manualCrew('list',session);result.files=await bookings('list',session);result.expense_bills=await expenseBills('list',session);return json({...result,agreement_required:false,agreement_version:ctx.agreement_version});
+   if(ctx.agreement_required)return json({trip:{title:'Our Goa escape',departure:'',start:'',end:'',budget:'',notes:''},entries:[],members:[{trip_id:ctx.trip_id,user_id:ctx.user_id,display_name:ctx.display_name,role:ctx.role,is_owner:ctx.is_owner}],manual_crew:[],payment_groups:[],votes:[],files:[],expense_bills:[],agreement_required:true,agreement_version:ctx.agreement_version});
+   const result=await api('get',session);result.members=await access('members',session);result.manual_crew=await manualCrew('list',session);result.payment_groups=await paymentGroups('list',session);result.files=await bookings('list',session);result.expense_bills=await expenseBills('list',session);
+   if(ctx.role!=='admin'&&result.payment_groups.length){const group=result.payment_groups[0],own=`account:${ctx.user_id}`,keys=new Set(group.head_id===ctx.user_id?group.members.map((person:any)=>person.key):[own]);result.entries=result.entries.filter((entry:any)=>entry.kind!=='expense'||(Array.isArray(entry.data?.split_with)&&entry.data.split_with.some((person:any)=>keys.has(person.key))));const visible=new Set(result.entries.filter((entry:any)=>entry.kind==='expense').map((entry:any)=>entry.id));result.expense_bills=result.expense_bills.filter((bill:any)=>visible.has(bill.entry_id))}
+   return json({...result,agreement_required:false,agreement_version:ctx.agreement_version});
   }
   if(action==='acceptAgreement')return json(await access('acceptAgreement',session,data));
   if(action==='logout')return json(await api('logout',session));
@@ -167,6 +170,8 @@ Deno.serve(async req=>{
   if(action==='setMemberRole'||action==='removeMember')return json(await access(action,session,data));
   if(action==='addManualCrew')return json(await manualCrew('add',session,{display_name:data.display_name}));
   if(action==='removeManualCrew')return json(await manualCrew('remove',session,{id:data.id}));
+  if(action==='savePaymentGroup')return json(await paymentGroups('save',session,{id:data.id,name:data.name,head_id:data.head_id,member_keys:data.member_keys}));
+  if(action==='removePaymentGroup')return json(await paymentGroups('remove',session,{id:data.id}));
   if(action==='listInvites')return json(await inviteTracking('list',session));
   if(action==='removeInviteTracking')return json(await inviteTracking('hide',session,{id:data.id}));
   if(action==='resendWhatsAppInvite'){
@@ -219,6 +224,7 @@ Deno.serve(async req=>{
    await notifyTrip(session,'expense','expenses');return json(created);
   }
   if(action==='expenseBill'){
+   if(ctx.role!=='admin'){const groups=await paymentGroups('list',session);if(groups.length){const group=groups[0],own=`account:${ctx.user_id}`,keys=new Set(group.head_id===ctx.user_id?group.members.map((person:any)=>person.key):[own]),snapshot=await api('get',session),entry=snapshot.entries.find((item:any)=>item.id===data.entry_id&&item.kind==='expense');if(!entry||!Array.isArray(entry.data?.split_with)||!entry.data.split_with.some((person:any)=>keys.has(person.key)))throw Error('This bill is not assigned to you')}}
    const file=await expenseBills('file',session,{entry_id:data.entry_id});if(!file)throw Error('Bill not found or unavailable');
    const res=await drive(`/drive/v3/files/${encodeURIComponent(file.drive_id)}?alt=media&supportsAllDrives=true`),disposition=data.download===true?'attachment':'inline';
    return new Response(res.body,{headers:{...cors,'Content-Type':file.mime_type,'Content-Length':String(file.size_bytes||''),'Content-Disposition':`${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,'X-Content-Type-Options':'nosniff'}});
