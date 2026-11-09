@@ -120,7 +120,9 @@ Deno.serve(async req=>{
   if(action==='verifyOtp'){
    if(!await rpc('goa_server_rate',{p_key:await digest('otp-verify:'+ip),p_limit:30}))return json({error:'Too many attempts. Please try again later.'},429);
    const phone=whatsappPhone(data.phone),code=String(data.code||'');if(!/^\d{6}$/.test(code))throw Error('Enter the six-digit WhatsApp code');
-   const token=random();const result=await whatsapp.db('verify',{id:String(data.challenge_id),trip_id:TRIP,session_hash:await digest(token),code_hash:await otpProof(String(data.challenge_id),phone,code)},rawSession?session:null);
+   const token=random(),sessionHash=await digest(token),codeHash=await otpProof(String(data.challenge_id),phone,code);
+   const prepared=await rpc('goa_server_activate_prepared_invite',{p_challenge:String(data.challenge_id),p_trip:TRIP,p_session_hash:sessionHash,p_code_hash:codeHash});
+   const result=prepared?.handled?prepared:await whatsapp.db('verify',{id:String(data.challenge_id),trip_id:TRIP,session_hash:sessionHash,code_hash:codeHash},rawSession?session:null);
    if(!result.ok)return json({error:result.error},400);if(result.test||result.linked)return json(result);return json({...result,access_token:token});
   }
   if(['inspectInvite','register','login','prepareStorage'].includes(action)){
