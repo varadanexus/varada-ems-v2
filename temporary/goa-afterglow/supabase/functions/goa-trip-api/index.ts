@@ -21,6 +21,7 @@ async function access(action:string,session:string,data:unknown={}){return rpc('
 async function bookings(action:string,session:string,data:unknown={}){return rpc('goa_server_bookings',{p_action:action,p_session:session,p_data:data})}
 async function expenseBills(action:string,session:string,data:unknown={}){return rpc('goa_server_expense_bills',{p_action:action,p_session:session,p_data:data})}
 async function manualCrew(action:string,session:string,data:unknown={}){return rpc('goa_server_manual_crew',{p_action:action,p_session:session,p_data:data})}
+async function inviteTracking(action:string,session:string,data:unknown={}){return rpc('goa_server_invite_tracking',{p_action:action,p_session:session,p_data:data})}
 async function auth(action:string,data:unknown){return rpc('goa_server_auth',{p_action:action,p_data:data})}
 const notifications=tripNotifications(rpc,env);
 const whatsapp=tripWhatsApp(rpc,env);
@@ -160,6 +161,16 @@ Deno.serve(async req=>{
   if(action==='setMemberRole'||action==='removeMember')return json(await access(action,session,data));
   if(action==='addManualCrew')return json(await manualCrew('add',session,{display_name:data.display_name}));
   if(action==='removeManualCrew')return json(await manualCrew('remove',session,{id:data.id}));
+  if(action==='listInvites')return json(await inviteTracking('list',session));
+  if(action==='removeInviteTracking')return json(await inviteTracking('hide',session,{id:data.id}));
+  if(action==='resendWhatsAppInvite'){
+   if(ctx.role!=='admin')throw Error('Only the trip admin can resend invitations');
+   if(!await rpc('goa_server_rate',{p_key:await digest('wa-resend:'+ctx.user_id),p_limit:20}))throw Error('Invitation limit reached. Please try later');
+   const templates=await whatsapp.status();if(!templates.templates.some((t:any)=>t.alias==='invite'&&t.status==='approved'))throw Error('The WhatsApp invitation template is waiting for approval.');
+   const token=random();const invite=await inviteTracking('resend',session,{id:data.id,token_hash:await digest(token)});
+   try{const message=await whatsapp.send('invite',invite.phone,{'1':invite.label,'2':'https://www.varadanexus.com/goa/#join='+token});await whatsapp.db('delivery',{trip_id:TRIP,invite_id:invite.id,phone:invite.phone,message_sid:message.sid,status:message.status});return json({status:message.status,expires_at:invite.expires_at})}
+   catch(error){await whatsapp.db('delivery',{trip_id:TRIP,invite_id:invite.id,phone:invite.phone,status:'failed'});throw error}
+  }
   if(action==='sendWhatsAppInvite'){
    if(ctx.role!=='admin')throw Error('Only the trip admin can invite participants');if(data.opt_in!==true)throw Error('Confirm the recipient agreed to receive this WhatsApp invitation');
    const phone=whatsappPhone(data.phone),label=String(data.label||'').trim();if(!label||label.length>100)throw Error('Enter the participant name');
