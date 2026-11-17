@@ -57,6 +57,7 @@ jobs:
           cp -R images .pages-dist/images
           cp -R portals .pages-dist/portals
           cp -R blog .pages-dist/blog
+          cp -R careers .pages-dist/careers
           cp -R professional-tools .pages-dist/professional-tools
           cp -R whatsapp-platform .pages-dist/whatsapp-platform
           cp -R goa .pages-dist/goa
@@ -77,6 +78,9 @@ jobs:
         shell: bash
         run: |
           test -f .pages-dist/goa/index.html
+          test -f .pages-dist/careers/index.html
+          test -f .pages-dist/careers/job/index.html
+          test -f .pages-dist/careers/careers.js
           test -f .pages-dist/goa/manifest.webmanifest
           test -f .pages-dist/goa/sw.js
           test -f .pages-dist/sw.js

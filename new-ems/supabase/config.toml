@@ -463,6 +463,9 @@ verify_jwt = false
 [functions.intelligence-feeds]
 verify_jwt = false
 
+[functions.career-applications]
+verify_jwt = false
+
   # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

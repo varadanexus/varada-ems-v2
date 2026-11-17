@@ -305,6 +305,21 @@ const MENU_BY_WORKSPACE = {
       ]
     }
   ],
+  [WORKSPACES.CAREERS]: [
+    {
+      title: "Careers Workspace",
+      items: [
+        { module: MODULES.DASHBOARD, label: "Command Center", href: ROUTES.DASHBOARD },
+        { module: MODULES.CAREERS, label: "Job Publishing", href: ROUTES.CAREERS }
+      ]
+    },
+    {
+      title: "Public Website",
+      items: [
+        { module: MODULES.CAREERS, label: "View Careers Page", href: "/careers/" }
+      ]
+    }
+  ],
   [WORKSPACES.SOCIAL_MEDIA]: [
     {
       title: "Nexus Social",

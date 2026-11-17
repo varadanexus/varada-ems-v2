@@ -78,6 +78,7 @@ export const ROUTES = {
   DIGITAL_SERVICES_VENDORS: "/new-ems/modules/digital-services-vendors/index.html",
   DIGITAL_SERVICES_BILLING: "/new-ems/modules/digital-services-billing/index.html",
   DIGITAL_SERVICES_SETTINGS: "/new-ems/modules/digital-services-settings/index.html",
+  CAREERS: "/new-ems/modules/careers/index.html",
   SOCIAL_MEDIA_MANAGER: "/new-ems/modules/social-media-manager/index.html",
   WORLD_MONITOR: "/new-ems/modules/world-monitor/index.html",
   MARKETING_COMMAND_CENTER: "/new-ems/modules/marketing-command-center/index.html",
@@ -219,6 +220,7 @@ export const MODULES = {
   IMPORTS_EXPORTS: "imports-exports",
   TRADING: "trading",
   HR_PR: "hr-pr",
+  CAREERS: "careers",
   ARBITRAGE: "arbitrage",
   ECOMMERCE: "e-commerce",
   ACCOUNTS: "accounts",
@@ -376,6 +378,7 @@ export const CONTROL_CENTER_MODULES = [
   { module: MODULES.IMPORTS_EXPORTS, title: "Imports & Exports", subtitle: "Shipment and compliance desk", href: null },
   { module: MODULES.TRADING, title: "Trading", subtitle: "Order and margin ops", href: null },
   { module: MODULES.HR_PR, title: "HR & PR", subtitle: "People and communications", href: null },
+  { module: MODULES.CAREERS, title: "Careers", subtitle: "Create, publish, and manage public job opportunities", href: ROUTES.CAREERS },
   { module: MODULES.ARBITRAGE, title: "Arbitrage", subtitle: "Opportunity and risk desk", href: null },
   { module: MODULES.ECOMMERCE, title: "E-Commerce", subtitle: "Storefront operations", href: null },
   { module: MODULES.ACCOUNTS, title: "Accounts", subtitle: "Finance operations cockpit", href: ROUTES.CENTRAL_ACCOUNTS_DASHBOARD },
@@ -418,6 +421,7 @@ export const WORKSPACES = {
   SOCIAL_MEDIA: "social-media",
   WORLD_MONITOR: "world-monitor",
   SUPPORT: "support",
+  CAREERS: "careers",
   ONBOARDING: "onboarding",
   // Compatibility alias: marketing operations live in this single workspace.
   MARKETING: "digital-services"
