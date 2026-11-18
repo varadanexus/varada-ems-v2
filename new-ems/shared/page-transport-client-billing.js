@@ -148,6 +148,7 @@ function renderShell(divisionLabel) {
 
     <section class="card" style="margin-bottom:1rem;">
       <h3>Bill Preview</h3>
+      <div id="clientBillingExpenseBreakdown" style="margin-bottom:1rem;" hidden></div>
       <div id="clientBillingNonGstKpis" class="billing-kpis">
         <div class="billing-kpi"><label>Gross Total</label><strong id="clientBillingGrossTotal">Rs. 0.00</strong></div>
         <div class="billing-kpi"><label>Support Deduction Total</label><strong id="clientBillingSupportTotal">Rs. 0.00</strong></div>
@@ -311,10 +312,16 @@ function bindEvents() {
 }
 
 async function loadEligibleTrips(transportClientId) {
-  PAGE_STATE.rows = await listTransportClientBillableTrips({
+  const rows = await listTransportClientBillableTrips({
     divisionId: PAGE_STATE.divisionId,
     transportClientId
   });
+  try {
+    await loadClientPaidExpenses(rows);
+  } catch (error) {
+    console.warn("Could not load client-paid trip expenses", error);
+  }
+  PAGE_STATE.rows = rows;
   PAGE_STATE.selectedTripIds = new Set();
   const selectAll = qs("#clientBillingSelectAll");
   if (selectAll) selectAll.checked = false;
@@ -831,8 +838,52 @@ function syncSelectAll() {
   selectAll.checked = PAGE_STATE.rows.length > 0 && PAGE_STATE.rows.every((row) => PAGE_STATE.selectedTripIds.has(String(row.trip_id)));
 }
 
+async function loadClientPaidExpenses(rows) {
+  const byTrip = new Map(rows.map(row => [row.trip_id, []]));
+  const ids = [...byTrip.keys()];
+  const client = getSupabaseClient();
+  for (let start = 0; start < ids.length; start += 50) {
+    const batch = ids.slice(start, start + 50);
+    for (let offset = 0; ; offset += 250) {
+      const { data, error } = await client.from("transport_trip_expenses")
+        .select("trip_id,expense_date,category,notes,amount")
+        .eq("division_id", PAGE_STATE.divisionId).in("trip_id", batch)
+        .eq("paid_by", "Client").is("deleted_at", null).or("is_active.is.null,is_active.eq.true")
+        .order("expense_date").order("id").range(offset, offset + 249);
+      if (error) throw error;
+      for (const expense of data) byTrip.get(expense.trip_id).push(expense);
+      if (data.length < 250) break;
+    }
+  }
+  for (const row of rows) row.clientPaidExpenses = byTrip.get(row.trip_id);
+}
+
+function renderClientPaidExpenses(rows) {
+  const panel = qs("#clientBillingExpenseBreakdown");
+  if (!panel) return;
+  panel.hidden = rows.length === 0;
+  if (panel.hidden) return;
+  if (rows.some(row => !row.clientPaidExpenses)) {
+    panel.textContent = "Client-paid expense details could not be loaded. Reload the trips to retry.";
+    return;
+  }
+  const items = rows.flatMap(row => row.clientPaidExpenses.map(expense => ({ ...expense, trip: row.trip_no })));
+  if (!items.length) {
+    panel.textContent = "No client-paid expenses for the selected trips.";
+    return;
+  }
+  const total = items.reduce((sum, item) => sum + Number(item.amount), 0);
+  panel.innerHTML = `<h4>Client-paid expenses</h4><div class="table-shell"><table class="billing-trip-table">
+    <thead><tr><th>Trip</th><th>Date</th><th>Category</th><th>Notes</th><th>Amount</th></tr></thead>
+    <tbody>${items.map(item => `<tr><td>${escapeHtml(item.trip)}</td><td>${escapeHtml(item.expense_date)}</td>
+      <td>${escapeHtml(item.category)}</td><td>${escapeHtml(item.notes || "—")}</td><td>${formatMoney(item.amount)}</td></tr>`).join("")}</tbody>
+    <tfoot><tr><th colspan="4">Total paid by client</th><td>${formatMoney(total)}</td></tr></tfoot>
+    </table></div>`;
+}
+
 function updatePreview() {
   const selectedRows = PAGE_STATE.rows.filter((row) => PAGE_STATE.selectedTripIds.has(String(row.trip_id)));
+  renderClientPaidExpenses(selectedRows);
   const grossTotal = selectedRows.reduce((sum, row) => sum + Number(row.client_gross_amount || 0), 0);
   const supportTotal = selectedRows.reduce((sum, row) => sum + Number(row.support_deduction_amount || 0), 0);
   const netTotal = selectedRows.reduce((sum, row) => sum + Number(row.client_net_receivable || 0), 0);
