@@ -565,93 +565,38 @@ async function downloadBillPdf(billId, details = null) {
       },
       startY: 40
     });
+    const lines = resolved.trip_lines || [];
+    y = addTable(doc, {
+      startY: y + 8,
+      head: ["Trip No", "Truck No", "Date", "Qty MT", "Rate / MT", "Gross", "Support Deduction", "Net Receivable"],
+      body: lines.map(line => [
+        line.trip_no || "-",
+        tripPdfMeta.get(String(line.trip_id))?.truckNo || "N/A",
+        formatPdfDate(line.trip_date),
+        formatPdfQuantity(line.quantity_mt),
+        Number(line.client_rate_per_mt).toFixed(3),
+        formatPdfCurrency(line.client_gross_amount),
+        formatPdfCurrency(line.support_deduction_amount),
+        formatPdfCurrency(line.client_net_receivable)
+      ]),
+      foot: ["TOTAL", "", "", formatPdfQuantity(lines.reduce((sum, line) => sum + Number(line.quantity_mt), 0)), "",
+        formatPdfCurrency(resolved.gross_total), formatPdfCurrency(resolved.support_deduction_total), formatPdfCurrency(resolved.net_receivable)],
+      options: { headFillColor: [0, 102, 204] }
+    });
+    const summaryStartY = y + 5;
     if (resolved.billing_type === "GST") {
       const invoiceTotal = resolveInvoiceTotal(resolved);
       const netPayable = Number((invoiceTotal - totalCreditNotes).toFixed(2));
-      const isIntraState = String(clientInfo.stateCode || "") === "37";
-      const gstTotal = resolved.gst_base === "MARGIN_ONLY" ? Number(resolved.gst_amount || 0) : 0;
-      const adjustedFreightTotal = (resolved.trip_lines || []).reduce((sum, line) => {
-        const meta = tripPdfMeta.get(String(line.trip_id || line.id || line.trip_no || "")) || {};
-        const freightAmount = Number(line.client_net_receivable || 0);
-        const serviceChargeAmount = Number(meta.serviceChargeAmount || 0);
-        const gstAmount = resolved.gst_base === "MARGIN_ONLY"
-          ? Number(resolved.gst_amount || 0) / Math.max((resolved.trip_lines || []).length || 1, 1)
-          : 0;
-        return sum + (freightAmount - serviceChargeAmount - gstAmount);
-      }, 0);
-      const adjustedServiceChargeTotal = (resolved.trip_lines || []).reduce((sum, line) => {
-        const meta = tripPdfMeta.get(String(line.trip_id || line.id || line.trip_no || "")) || {};
-        const serviceChargeAmount = Number(meta.serviceChargeAmount || 0);
-        const gstAmount = resolved.gst_base === "MARGIN_ONLY"
-          ? Number(resolved.gst_amount || 0) / Math.max((resolved.trip_lines || []).length || 1, 1)
-          : 0;
-        return sum + (serviceChargeAmount - gstAmount);
-      }, 0);
-      const subtotalTaxable = adjustedServiceChargeTotal + gstTotal;
-      y = addTable(doc, {
-        startY: y + 8,
-        head: ["Trip No", "Truck No", "Date", "Qty MT", "Freight Charges", "Service Charges", "GST"],
-        body: (resolved.trip_lines || []).map((line) => {
-          const meta = tripPdfMeta.get(String(line.trip_id || line.id || line.trip_no || "")) || {};
-          const freightAmount = Number(line.client_net_receivable || 0);
-          const serviceChargeAmount = Number(meta.serviceChargeAmount ?? 0);
-          const gstAmount = resolved.gst_base === "MARGIN_ONLY"
-            ? Number(resolved.gst_amount || 0) / Math.max((resolved.trip_lines || []).length || 1, 1)
-            : 0;
-          const displayFreightAmount = freightAmount - serviceChargeAmount - gstAmount;
-          const displayServiceChargeAmount = serviceChargeAmount - gstAmount;
-          return [
-            line.trip_no || "—",
-            meta.truckNo || "N/A",
-            formatPdfDate(line.trip_date),
-            formatPdfQuantity(line.quantity_mt),
-            formatPdfCurrency(displayFreightAmount),
-            formatPdfCurrency(displayServiceChargeAmount),
-            formatPdfCurrency(gstAmount)
-          ];
-        }),
-        foot: [
-          "TOTAL",
-          "",
-          "",
-          formatPdfQuantity((resolved.trip_lines || []).reduce((sum, line) => sum + Number(line.quantity_mt || 0), 0)),
-          formatPdfCurrency((resolved.trip_lines || []).reduce((sum, line) => {
-            const meta = tripPdfMeta.get(String(line.trip_id || line.id || line.trip_no || "")) || {};
-            const freightAmount = Number(line.client_net_receivable || 0);
-            const serviceChargeAmount = Number(meta.serviceChargeAmount || 0);
-            const gstAmount = resolved.gst_base === "MARGIN_ONLY"
-              ? Number(resolved.gst_amount || 0) / Math.max((resolved.trip_lines || []).length || 1, 1)
-              : 0;
-            return sum + (freightAmount - serviceChargeAmount - gstAmount);
-          }, 0)),
-          formatPdfCurrency((resolved.trip_lines || []).reduce((sum, line) => {
-            const meta = tripPdfMeta.get(String(line.trip_id || line.id || line.trip_no || "")) || {};
-            const serviceChargeAmount = Number(meta.serviceChargeAmount || 0);
-            const gstAmount = resolved.gst_base === "MARGIN_ONLY"
-              ? Number(resolved.gst_amount || 0) / Math.max((resolved.trip_lines || []).length || 1, 1)
-              : 0;
-            return sum + (serviceChargeAmount - gstAmount);
-          }, 0)),
-          formatPdfCurrency(resolved.gst_base === "MARGIN_ONLY" ? Number(resolved.gst_amount || 0) : 0)
-        ],
-        options: { headFillColor: [0, 102, 204] }
-      });
-      const summaryStartY = y + 5;
-      const cgstAmount = isIntraState ? gstTotal / 2 : 0;
-      const sgstAmount = isIntraState ? gstTotal / 2 : 0;
       const taxSummaryEndY = addOldEmsTaxSummaryBlock(doc, {
         startY: summaryStartY,
         marginLeft: 110,
         tableWidth: 85,
         rows: [
-          { label: "Logistics Coordination Charges", value: formatPdfCurrency(adjustedServiceChargeTotal) },
-          ...(isIntraState
-            ? [
-                { label: `GST (${Number(resolved.gst_percentage || 0)}%)`, value: formatPdfCurrency(gstTotal) }
-              ]
-            : [{ label: `GST (${Number(resolved.gst_percentage || 0)}%)`, value: formatPdfCurrency(gstTotal) }]),
-          { label: "Subtotal (Taxable)", value: formatPdfCurrency(subtotalTaxable) },
-          { label: "Freight Charges (No GST - Pure Agent)", value: formatPdfCurrency(adjustedFreightTotal) },
+          ...(resolved.gst_base === "MARGIN_ONLY" ? [
+            { label: "Freight (transporter cost)", value: formatPdfCurrency(resolved.transporter_cost) }
+          ] : []),
+          { label: resolved.gst_base === "MARGIN_ONLY" ? "Taxable service charges" : "Taxable value", value: formatPdfCurrency(resolved.taxable_value) },
+          { label: `GST (${Number(resolved.gst_percentage || 0)}%)`, value: formatPdfCurrency(resolved.gst_amount) },
           [{ content: "Total Invoice Value", styles: { fontStyle: "bold" } }, { content: formatPdfCurrency(invoiceTotal), styles: { fontStyle: "bold" } }],
           ...(totalCreditNotes > 0
             ? [
@@ -670,44 +615,6 @@ async function downloadBillPdf(billId, details = null) {
       y = Math.max(bankEndY, taxSummaryEndY, creditNotesEndY) + 8;
     } else {
       const netPayable = Number((Number(resolved.net_receivable || 0) - totalCreditNotes).toFixed(2));
-      y = addTable(doc, {
-        startY: y + 8,
-        head: ["Trip No", "Truck No", "Date", "Qty MT", "Freight Charges", "Service Charges", "GST"],
-        body: (resolved.trip_lines || []).map((line) => {
-          const meta = tripPdfMeta.get(String(line.trip_id || line.id || line.trip_no || "")) || {};
-          const freightAmount = Number(line.client_net_receivable || 0);
-          const serviceChargeAmount = Number(meta.serviceChargeAmount || 0);
-          const gstAmount = 0;
-          return [
-            line.trip_no || "—",
-            meta.truckNo || "N/A",
-            formatPdfDate(line.trip_date),
-            formatPdfQuantity(line.quantity_mt),
-            formatPdfCurrency(freightAmount - serviceChargeAmount - gstAmount),
-            formatPdfCurrency(serviceChargeAmount - gstAmount),
-            formatPdfCurrency(gstAmount)
-          ];
-        }),
-        foot: [
-          "TOTAL",
-          "",
-          "",
-          formatPdfQuantity((resolved.trip_lines || []).reduce((sum, line) => sum + Number(line.quantity_mt || 0), 0)),
-          formatPdfCurrency((resolved.trip_lines || []).reduce((sum, line) => {
-            const meta = tripPdfMeta.get(String(line.trip_id || line.id || line.trip_no || "")) || {};
-            const freightAmount = Number(line.client_net_receivable || 0);
-            const serviceChargeAmount = Number(meta.serviceChargeAmount || 0);
-            return sum + (freightAmount - serviceChargeAmount);
-          }, 0)),
-          formatPdfCurrency((resolved.trip_lines || []).reduce((sum, line) => {
-            const meta = tripPdfMeta.get(String(line.trip_id || line.id || line.trip_no || "")) || {};
-            return sum + Number(meta.serviceChargeAmount || 0);
-          }, 0)),
-          formatPdfCurrency(0)
-        ],
-        options: { headFillColor: [0, 102, 204] }
-      });
-      const summaryStartY = y + 5;
       const summaryEndY = addOldEmsTaxSummaryBlock(doc, {
         startY: summaryStartY,
         marginLeft: 110,
@@ -758,7 +665,7 @@ async function loadBillTripPdfMeta(tripLines = []) {
   const client = getSupabaseClient();
   const { data: trips, error: tripError } = await client
     .from("transport_trips")
-    .select("id,truck_id,company_margin")
+    .select("id,truck_id")
     .in("id", tripIds)
     .is("deleted_at", null);
   if (tripError) throw tripError;
@@ -776,8 +683,7 @@ async function loadBillTripPdfMeta(tripLines = []) {
   (trips || []).forEach((trip) => {
     const truck = truckMap.get(String(trip.truck_id || ""));
     result.set(String(trip.id), {
-      truckNo: truck?.registration_no || truck?.name || "N/A",
-      serviceChargeAmount: Number(trip.company_margin || 0)
+      truckNo: truck?.registration_no || truck?.name || "N/A"
     });
   });
   return result;
