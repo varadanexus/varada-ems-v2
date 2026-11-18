@@ -29,6 +29,10 @@ function trimText(value = "") {
   return String(value || "").trim();
 }
 
+function isUuid(value = "") {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimText(value));
+}
+
 function normalizePhone(value = "") {
   let digits = String(value || "").replace(/\D/g, "");
   if (!digits) return "";
@@ -684,7 +688,7 @@ async function sendMeetingEmailInvite({ admin, invite, meeting, inviteUrl }: any
 async function loadInviteByParticipant(admin: any, participantId: string) {
   const { data: invite, error } = await admin
     .from("credentials")
-    .select("id,meeting_id,name,phone,email,company_name,designation,role,is_active,is_approved,status,invite_token,invite_meta,otp_hash,otp_expires_at,otp_verified_at,otp_last_sent_at,otp_attempt_count,meetings(id,title,room_name,status,scheduled_at,scheduled_local,duration_minutes,agenda,lobby_note,host_name,host_email,room_domain,access_mode,started_at,ended_at)")
+    .select("id,meeting_id,name,phone,email,company_name,designation,role,is_active,is_approved,status,join_method,invite_token,invite_meta,otp_hash,otp_expires_at,otp_verified_at,otp_last_sent_at,otp_attempt_count,meetings(id,title,room_name,status,scheduled_at,scheduled_local,duration_minutes,agenda,lobby_note,host_name,host_email,room_domain,access_mode,started_at,ended_at)")
     .eq("id", participantId)
     .single();
   if (error || !invite?.id) throw new Error("Participant invite not found");
@@ -694,7 +698,7 @@ async function loadInviteByParticipant(admin: any, participantId: string) {
 async function loadInviteByToken(admin: any, inviteToken: string) {
   const { data: invite, error } = await admin
     .from("credentials")
-    .select("id,meeting_id,name,phone,email,company_name,designation,role,is_active,is_approved,status,invite_token,invite_meta,otp_hash,otp_expires_at,otp_verified_at,otp_last_sent_at,otp_attempt_count,meetings(id,title,room_name,status,scheduled_at,scheduled_local,duration_minutes,agenda,lobby_note,host_name,host_email,room_domain,access_mode,started_at,ended_at)")
+    .select("id,meeting_id,name,phone,email,company_name,designation,role,is_active,is_approved,status,join_method,invite_token,invite_meta,otp_hash,otp_expires_at,otp_verified_at,otp_last_sent_at,otp_attempt_count,meetings(id,title,room_name,status,scheduled_at,scheduled_local,duration_minutes,agenda,lobby_note,host_name,host_email,room_domain,access_mode,started_at,ended_at)")
     .eq("invite_token", inviteToken)
     .single();
   if (error || !invite?.id) throw new Error("Invite not found");
@@ -703,8 +707,13 @@ async function loadInviteByToken(admin: any, inviteToken: string) {
 
 function inviteAccessState(invite: any) {
   const meeting = invite?.meetings || {};
+  const sharedLinkGuest = invite?.join_method === "shared_link" && meeting.access_mode === "shared_link";
   if (!invite?.is_active) return { nextStep: "blocked", message: "Invite is disabled" };
   if (String(meeting.status || "").toLowerCase() === "ended") return { nextStep: "ended", message: "Meeting has already ended" };
+  if (sharedLinkGuest) {
+    if (String(meeting.status || "").toLowerCase() === "live") return { nextStep: "room", message: "Join live room" };
+    return { nextStep: "waiting", message: "Waiting for the host to start the meeting" };
+  }
   if (!invite?.otp_verified_at) return { nextStep: "otp", message: "OTP verification required" };
   if (invite?.is_approved && String(meeting.status || "").toLowerCase() === "live") return { nextStep: "room", message: "Join live room" };
   return { nextStep: "waiting", message: invite?.is_approved ? "Waiting for host to start the live room" : "Waiting for host approval" };
@@ -895,6 +904,123 @@ async function verifyJoinOtp(admin: any, body: any) {
   });
 }
 
+async function loadMeetingShareLink(admin: any, joinToken: string) {
+  if (!isUuid(joinToken)) throw new Error("Meeting link is invalid");
+  const { data, error } = await admin
+    .from("meeting_share_links")
+    .select("id,meeting_id,join_token,is_active,meetings(id,title,status,scheduled_at,scheduled_local,duration_minutes,lobby_note,host_name,access_mode)")
+    .eq("join_token", joinToken)
+    .maybeSingle();
+  if (error || !data?.id) throw new Error("Meeting link is invalid or no longer available");
+  return data;
+}
+
+function publicMeetingSummary(link: any) {
+  const meeting = link?.meetings || {};
+  if (!link?.is_active || meeting.access_mode !== "shared_link") throw new Error("This shared meeting link is disabled");
+  if (String(meeting.status || "").toLowerCase() === "ended") throw new Error("This meeting has ended");
+  return {
+    id: meeting.id,
+    title: meeting.title,
+    status: meeting.status,
+    scheduledAt: meeting.scheduled_at,
+    scheduledLocal: meeting.scheduled_local,
+    durationMinutes: meeting.duration_minutes,
+    lobbyNote: meeting.lobby_note,
+    hostName: meeting.host_name
+  };
+}
+
+async function getMeetingShareLink(req: Request, admin: any, body: any, rotate = false) {
+  await requireMeetingCaller(req, admin);
+  const meetingId = trimText(body?.meetingId);
+  if (!isUuid(meetingId)) return json({ error: "A valid meetingId is required" }, 400);
+  const { data: meeting, error: meetingError } = await admin
+    .from("meetings")
+    .select("id,access_mode")
+    .eq("id", meetingId)
+    .maybeSingle();
+  if (meetingError || !meeting?.id) return json({ error: "Meeting not found" }, 404);
+  if (meeting.access_mode !== "shared_link") return json({ error: "This meeting does not use a shareable link" }, 409);
+
+  let { data: link, error } = await admin
+    .from("meeting_share_links")
+    .select("id,join_token,is_active")
+    .eq("meeting_id", meetingId)
+    .maybeSingle();
+  if (error) throw error;
+
+  if (!link) {
+    const created = await admin
+      .from("meeting_share_links")
+      .insert({ meeting_id: meetingId, is_active: true })
+      .select("id,join_token,is_active")
+      .single();
+    if (created.error) throw created.error;
+    link = created.data;
+  } else if (rotate || !link.is_active) {
+    const updated = await admin
+      .from("meeting_share_links")
+      .update({ join_token: crypto.randomUUID(), is_active: true, updated_at: new Date().toISOString() })
+      .eq("id", link.id)
+      .select("id,join_token,is_active")
+      .single();
+    if (updated.error) throw updated.error;
+    link = updated.data;
+  }
+
+  const origin = getMeetingInviteConfig().publicOrigin || PUBLIC_WEBSITE_ORIGIN;
+  const shareUrl = `${origin.replace(/\/+$/, "")}/portals/meeting/meeting-join.html?j=${encodeURIComponent(link.join_token)}`;
+  return json({ ok: true, joinToken: link.join_token, shareUrl });
+}
+
+async function getSharedMeeting(admin: any, body: any) {
+  try {
+    const link = await loadMeetingShareLink(admin, trimText(body?.joinToken));
+    return json({ ok: true, meeting: publicMeetingSummary(link) });
+  } catch (error) {
+    return json({ error: error?.message || "Meeting link is unavailable" }, 404);
+  }
+}
+
+async function registerSharedGuest(admin: any, body: any) {
+  const name = trimText(body?.name).slice(0, 120);
+  const companyName = trimText(body?.companyName).slice(0, 160);
+  const designation = trimText(body?.designation).slice(0, 160);
+  if (name.length < 2) return json({ error: "Enter your full name to join the waiting room" }, 400);
+
+  let link;
+  try {
+    link = await loadMeetingShareLink(admin, trimText(body?.joinToken));
+    publicMeetingSummary(link);
+  } catch (error) {
+    return json({ error: error?.message || "Meeting link is unavailable" }, 403);
+  }
+
+  const now = new Date().toISOString();
+  const { data: guest, error } = await admin
+    .from("credentials")
+    .insert({
+      meeting_id: link.meeting_id,
+      name,
+      company_name: companyName,
+      designation,
+      role: "guest",
+      is_active: true,
+      is_approved: true,
+      status: "waiting",
+      join_method: "shared_link",
+      invited_at: now,
+      approved_at: now,
+      notes: "Registered through shareable meeting link"
+    })
+    .select("id,invite_token")
+    .single();
+  if (error || !guest?.invite_token) return json({ error: "Unable to enter the waiting room right now" }, 500);
+
+  return json({ ok: true, inviteToken: guest.invite_token, nextStep: "waiting" });
+}
+
 async function requestPhoneJoinOtp(admin: any, body: any) {
   const phone = normalizePhone(body?.phone);
   if (phone.length < 10) return json({ error: "Enter the mobile number registered for this meeting." }, 400);
@@ -995,6 +1121,11 @@ Deno.serve(async (req) => {
 
     if (action === "config_status") return json(configStatus());
 
+    if (action === "get_meeting_share_link") return await getMeetingShareLink(req, admin, body, false);
+    if (action === "rotate_meeting_share_link") return await getMeetingShareLink(req, admin, body, true);
+    if (action === "get_shared_meeting") return await getSharedMeeting(admin, body);
+    if (action === "register_shared_guest") return await registerSharedGuest(admin, body);
+
     if (action === "mint_host_jwt") {
       const caller = await requireMeetingCaller(req, admin);
       const meetingId = trimText(body?.meetingId);
@@ -1029,11 +1160,18 @@ Deno.serve(async (req) => {
       const inviteToken = trimText(body?.inviteToken);
       if (!inviteToken) return json({ error: "inviteToken is required" }, 400);
       const invite = await loadInviteByToken(admin, inviteToken);
+      const sharedLinkGuest = invite.join_method === "shared_link" && invite.meetings?.access_mode === "shared_link";
       if (!invite.is_active) return json({ error: "Invite is disabled" }, 403);
-      if (!invite.is_approved) return json({ error: "Host approval is still pending" }, 403);
-      if (!invite.otp_verified_at) return json({ error: "OTP verification is required before joining the live room" }, 403);
       if (String(invite.meetings?.status || "").toLowerCase() === "ended") {
         return json({ error: "Meeting has already ended" }, 403);
+      }
+      if (sharedLinkGuest) {
+        if (String(invite.meetings?.status || "").toLowerCase() !== "live") {
+          return json({ error: "Please wait for the host to start the meeting" }, 403);
+        }
+      } else {
+        if (!invite.is_approved) return json({ error: "Host approval is still pending" }, 403);
+        if (!invite.otp_verified_at) return json({ error: "OTP verification is required before joining the live room" }, 403);
       }
       const minted = await mintJaasJwt({
         meeting: invite.meetings,

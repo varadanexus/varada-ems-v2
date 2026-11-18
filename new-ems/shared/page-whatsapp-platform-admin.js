@@ -1,9 +1,18 @@
 import { MODULES, ROUTES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { getSupabaseAccessToken, getSupabaseClient } from "../config/supabase.js";
-import { bootstrapProtectedPage, renderModuleContent } from "./layout.js";
+import { bootstrapProtectedPage, renderModuleContent } from "./layout.js?whatsappBillingNav=5";
 import { showToast } from "./utils.js";
+import { mountMessagePriceAdmin, mountWalletAdmin } from "./whatsapp-wallet-admin.js?v=7";
 
-const VIEWS = new Set(["overview", "customers", "verification", "connections", "package-master", "packages", "meta", "security"]);
+const BILLING_VIEWS = new Set(["billing", "subscriptions", "payments", "invoices", "refunds", "credit-notes", "reconciliation"]);
+const VIEWS = new Set(["overview", "customers", "verification", "connections", "customer-support", "package-master", "packages", ...BILLING_VIEWS, "razorpay", "meta", "security"]);
+const CURRENT_CAPACITY_ADDON_CODES = new Set(["extra_agent_seat", "extra_whatsapp_number", "extra_integration"]);
+const fileAsBase64 = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+  reader.onerror = () => reject(new Error("The evidence photo could not be read."));
+  reader.readAsDataURL(file);
+});
 const VIEW_META = Object.freeze({
   overview: {
     title: "Platform overview",
@@ -29,17 +38,71 @@ const VIEW_META = Object.freeze({
     section: "Product management",
     marker: "MC",
   },
+  "customer-support": {
+    title: "Customer support",
+    description: "Manage WhatsApp Platform customer tickets and authenticated conversations.",
+    section: "Help & support",
+    marker: "CS",
+  },
   "package-master": {
-    title: "Package Master",
-    description: "Maintain the central source of truth for customer entitlements, limits, billing and add-ons.",
+    title: "Commercial controls",
+    description: "Manage PAYG wallet pricing, coupons, customer access and paid capacity add-ons.",
     section: "Commercial control",
     marker: "PM",
   },
   packages: {
-    title: "Packages & Offers",
-    description: "Manage the public pricing and offer catalogue independently from operational customer access.",
+    title: "Public pricing preview",
+    description: "Review the public PAYG offer, wallet policy and paid capacity catalogue without exposing retired subscription packages.",
     section: "Public website",
     marker: "P&",
+  },
+  billing: {
+    title: "Billing overview",
+    description: "Monitor PAYG wallets, usage charging, recharges, payments and commercial readiness.",
+    section: "Billing",
+    marker: "BO",
+  },
+  subscriptions: {
+    title: "Legacy billing records",
+    description: "Read-only historical subscriptions retained for reconciliation after the PAYG migration.",
+    section: "Billing",
+    marker: "SU",
+  },
+  payments: {
+    title: "Payment ledger",
+    description: "Review captured Razorpay transactions, balances and protected refund actions.",
+    section: "Billing",
+    marker: "PL",
+  },
+  invoices: {
+    title: "Invoices",
+    description: "Review central EMS invoice numbers, GST breakdowns and Razorpay transaction references.",
+    section: "Billing",
+    marker: "IN",
+  },
+  refunds: {
+    title: "Refunds",
+    description: "Monitor Razorpay refund requests, processing state and customer credit outcomes.",
+    section: "Billing",
+    marker: "RF",
+  },
+  "credit-notes": {
+    title: "Credit notes",
+    description: "Review central EMS credit notes issued from processed Razorpay refunds.",
+    section: "Billing",
+    marker: "CN",
+  },
+  reconciliation: {
+    title: "Reconciliation",
+    description: "Resolve gaps between payments, invoices, refunds, credit notes and webhook processing.",
+    section: "Billing",
+    marker: "RC",
+  },
+  razorpay: {
+    title: "Razorpay settings",
+    description: "Configure protected Razorpay credentials and verified payment webhooks used by wallet recharges and capacity purchases.",
+    section: "Billing",
+    marker: "RP",
   },
   meta: {
     title: "Meta App Setup",
@@ -54,9 +117,12 @@ const VIEW_META = Object.freeze({
     marker: "SE",
   },
 });
-const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false };
+const state = { view: "overview", snapshot: null, loading: true, error: "", canManage: false, canApprove: false, hasFullAuthority: false, catalog: null, catalogError: "", catalogLoading: false, packageMaster: null, packageMasterError: "", packageMasterLoading: false, providerSecretStatus: null, providerSecretLoading: false, billingSnapshot: null, billingLoading: false, billingError: "", support: { tickets: [], assignees: [], customers: [], thread: null, error: "" } };
+const supportQueueFilters = { query: "", status: "all", reply: "all", assignee: "all", sort: "newest" };
 const db = getSupabaseClient();
 let verificationPreviewUrl = "";
+let customerSupportRefreshTimer = null;
+let customerSupportRefreshBusy = false;
 const VERIFICATION_ENTITY_TYPES = Object.freeze([
   ["private_limited", "Private limited company"], ["public_limited", "Public limited company"],
   ["partnership", "Partnership"], ["sole_proprietor", "Sole proprietor"],
@@ -91,7 +157,7 @@ function metrics() {
 function overview() {
   const recent = (state.snapshot?.tenants || []).slice(0, 5);
   return `${metrics()}<section class="wa-admin-grid">
-    <article class="wa-admin-card"><h3>Recent customer workspaces</h3><p>Companies registering through the public product portal.</p><div class="wa-admin-list">${recent.length ? recent.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.ownerEmail)} · ${escapeHtml(item.planCode)}</small></div>${status(item.status)}</div>`).join("") : '<div class="wa-admin-empty">No customer workspaces have been created.</div>'}</div></article>
+    <article class="wa-admin-card"><h3>Recent customer workspaces</h3><p>Companies registering through the public product portal.</p><div class="wa-admin-list">${recent.length ? recent.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.ownerEmail)} · PAYG wallet</small></div>${status(item.status)}</div>`).join("") : '<div class="wa-admin-empty">No customer workspaces have been created.</div>'}</div></article>
     <article class="wa-admin-card"><h3>Product readiness</h3><p>Operational controls for launching the customer-facing application.</p><div class="wa-admin-checklist">
       <div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Customer access controls</strong><small>Protected and independently managed</small></div>${status("ready")}</div>
       <div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Tenant isolation</strong><small>Customer data separated at database level</small></div>${status("ready")}</div>
@@ -104,22 +170,53 @@ function customers() {
   if (!state.packageMaster && !state.packageMasterError && !state.packageMasterLoading) loadPackageMaster();
   const masterPackages = (state.packageMaster?.packages || []).filter((pkg) => pkg.status === "active");
   const rows = state.snapshot?.tenants || [];
-  if (!rows.length) return '<section class="wa-admin-card"><h3>Customer companies</h3><p>Manage product tenants, plans and access status.</p><div class="wa-admin-empty">No customers yet. New public signups will appear here.</div></section>';
-  return `<section class="wa-admin-card"><h3>Customer companies</h3><p>Plans supply included team seats. Extra purchased seats can be assigned per customer; active members and pending invitations both consume capacity.</p><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Company</th><th>Owner</th><th>Team seats</th><th>Connections</th><th>Plan, extra seats &amp; status</th><th>Created</th></tr></thead><tbody>${rows.map((item) => {
+  if (!rows.length) return '<section class="wa-admin-card"><h3>Customer companies</h3><p>Manage PAYG customers, paid capacity and access status.</p><div class="wa-admin-empty">No customers yet. New public signups will appear here.</div></section>';
+  const cards = rows.map((item) => {
     const planCode = item.planCode === "starter" ? "launch" : item.planCode;
     const masterPackage = masterPackages.find((pkg) => pkg.code === planCode);
     const included = masterPackage ? (masterPackage.team_member_limit == null ? null : Number(masterPackage.team_member_limit)) : (item.includedTeamSeats == null ? null : Number(item.includedTeamSeats));
     const seatAssignment = (state.packageMaster?.assignments || []).find((entry) => entry.tenantId === item.id && entry.addonCode === "extra_agent_seat" && entry.status === "active");
     const extra = seatAssignment ? Number(seatAssignment.quantity || 0) : Number(item.additionalTeamSeats || 0);
     const capacity = included == null ? "Unlimited" : String(included + extra);
-    const packageOptions = masterPackages.length ? masterPackages.map((pkg) => `<option value="${escapeHtml(pkg.code)}" ${planCode === pkg.code ? "selected" : ""}>${escapeHtml(pkg.name)}${pkg.status === "draft" ? " (draft)" : ""}</option>`).join("") : `<option value="${escapeHtml(planCode)}" selected>${escapeHtml(masterPackage?.name || planCode)}</option>`;
-    return `<tr><td><strong>${escapeHtml(item.name)}</strong><br><small>${escapeHtml(item.slug)}</small></td><td>${escapeHtml(item.ownerEmail)}</td><td><strong>${Number(item.userCount || 0)} / ${capacity}</strong><br><small>${included == null ? "Package unlimited" : `${included} included + ${extra} extra`}</small></td><td>${Number(item.connectionCount || 0)}</td><td>${state.canManage ? `<form class="wa-admin-inline-form" data-tenant-form="${escapeHtml(item.id)}"><label><span>Package Master assignment</span><select name="plan">${packageOptions}</select></label><label><span>Extra seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extra}" /></label><label><span>Status</span><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select></label><button type="submit">Save</button></form>` : `${escapeHtml(masterPackage?.name || planCode)} · ${capacity} seats · ${status(item.status)}`}</td><td>${escapeHtml(formatDate(item.createdAt))}</td></tr>`;
-  }).join("")}</tbody></table></div></section>`;
+    const members = item.users || [];
+    const connections = item.connections || (state.snapshot?.connections || []).filter((connection) => connection.tenantId === item.id);
+    const verification = item.verification || (state.snapshot?.verifications || []).find((entry) => entry.tenantId === item.id);
+    const memberRows = members.length ? members.map((member) => `<tr><td><strong>${escapeHtml(member.displayName || "Unnamed member")}</strong><small>${escapeHtml(member.email)}</small></td><td>${status(member.roleCode || "viewer")}</td><td>${status(member.status || "disabled")}</td><td>${escapeHtml(member.lastLoginAt ? formatDate(member.lastLoginAt) : "Never")}</td></tr>`).join("") : '<tr><td colspan="4"><div class="wa-admin-empty">No users are attached to this account.</div></td></tr>';
+    const connectionRows = connections.length ? connections.map((connection) => `<div class="wa-customer-connection"><div><strong>${escapeHtml(connection.verifiedName || connection.displayPhoneNumber || "WhatsApp connection")}</strong><small>${escapeHtml(connection.displayPhoneNumber || "Number not assigned")} · ${escapeHtml(connection.whatsappBusinessAccountId || "WABA not assigned")}</small></div>${status(connection.status || "pending")}</div>`).join("") : '<div class="wa-admin-empty">No Meta connection has been created.</div>';
+    const modal = `<section class="wa-customer-modal" data-customer-modal="${escapeHtml(item.id)}" hidden role="dialog" aria-modal="true" aria-labelledby="waCustomer-${escapeHtml(item.id)}"><div class="wa-customer-modal-shell"><header><div><span>Customer account</span><strong id="waCustomer-${escapeHtml(item.id)}">${escapeHtml(item.name)}</strong><small>${escapeHtml(item.ownerEmail)} · created ${escapeHtml(formatDate(item.createdAt))}</small></div><div>${status(item.status)}<button type="button" data-customer-modal-close aria-label="Close customer account">×</button></div></header><main>
+      <section class="wa-customer-detail-grid"><article><span>Workspace ID</span><strong class="wa-admin-code">${escapeHtml(item.id)}</strong></article><article><span>Workspace slug</span><strong>${escapeHtml(item.slug)}</strong></article><article><span>Access model</span><strong>PAYG wallet</strong></article><article><span>Verification</span><strong>${escapeHtml(verification?.status || item.verificationStatus || "not started")}</strong></article><article><span>Seat usage</span><strong>${Number(item.userCount || 0)} / ${capacity}</strong></article><article><span>Meta connections</span><strong>${connections.length}</strong></article></section>
+      <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>People &amp; access</span><h3>Users and roles</h3></div><small>${members.length} total records</small></div><div class="wa-admin-table-wrap"><table class="wa-admin-table wa-customer-users"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last sign-in</th></tr></thead><tbody>${memberRows}</tbody></table></div></section>
+      <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Connected assets</span><h3>WhatsApp Business accounts</h3></div><small>${connections.length} connections</small></div><div class="wa-customer-connections">${connectionRows}</div></section>
+      ${state.canManage ? `<section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Account controls</span><h3>PAYG access and capacity</h3></div><small>Changes apply to this workspace</small></div><form class="wa-customer-account-form" data-tenant-form="${escapeHtml(item.id)}"><input type="hidden" name="plan" value="${escapeHtml(planCode)}"><label><span>Extra agent seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extra}" /></label><label><span>Status</span><select name="status"><option ${item.status === "active" ? "selected" : ""}>active</option><option ${item.status === "suspended" ? "selected" : ""}>suspended</option><option ${item.status === "closed" ? "selected" : ""}>closed</option></select></label><button class="wa-admin-button primary" type="submit">Save account</button></form></section>` : ""}
+      ${state.hasFullAuthority ? `<section class="wa-customer-modal-section" data-customer-message-pricing="${escapeHtml(item.id)}" data-customer-name="${escapeHtml(item.name)}"></section>` : ""}
+      ${state.hasFullAuthority ? `<section class="wa-customer-danger"><div><span>Danger zone</span><h3>Schedule complete account deletion</h3><p>Evidence is stored in the company’s protected Drive folder. The workspace owner or an administrator can reverse the request for 24 hours before guarded deletion begins.</p><button class="wa-admin-button danger" type="button" data-customer-delete-open="${escapeHtml(item.id)}">Delete account</button></div><form class="wa-customer-delete-form" data-customer-delete-form="${escapeHtml(item.id)}" data-customer-name="${escapeHtml(item.name)}" hidden><div class="wa-customer-delete-form-head"><strong>Deletion request and evidence</strong><button type="button" data-customer-delete-cancel>Cancel</button></div><label><span>Who requested this deletion?</span><input name="requestedBy" maxlength="160" autocomplete="off" placeholder="Customer name and email, or authorised requester" required /></label><label><span>Internal note</span><textarea name="internalNote" rows="3" minlength="10" maxlength="1000" placeholder="Record the request source, reason and internal context." required></textarea></label><label><span>Photo evidence of requester</span><input name="evidencePhoto" type="file" accept="image/png,image/jpeg" capture="user" required /><small>JPG or PNG, maximum 2 MB. Capture only with the person’s consent.</small></label><div class="wa-customer-location"><button class="wa-admin-button" type="button" data-capture-delete-location>Capture current location</button><span data-delete-location-status>Location not captured</span></div><input name="latitude" type="hidden" /><input name="longitude" type="hidden" /><input name="locationAccuracy" type="hidden" /><input name="locationCapturedAt" type="hidden" /><label><span>Type <strong>${escapeHtml(item.name)}</strong> to confirm</span><input name="confirmationName" autocomplete="off" required /></label><label class="wa-customer-delete-check"><input name="confirmed" type="checkbox" required /><span>I confirm the requester consented to the photo and location evidence. This request may be reversed within 24 hours; after that, guarded deletion is final.</span></label><button class="wa-admin-button danger" type="submit" disabled>Schedule deletion</button></form></section>` : ""}
+    </main></div></section>`;
+    return `<article class="wa-customer-card"><button type="button" class="wa-customer-card-open" data-open-customer="${escapeHtml(item.id)}"><header><span class="wa-customer-avatar">${escapeHtml(String(item.name || "C").slice(0, 1).toUpperCase())}</span><div><span>PAYG wallet customer</span><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.ownerEmail)}</small></div>${status(item.status)}</header><div class="wa-customer-card-metrics"><div><span>Team</span><strong>${Number(item.userCount || 0)} / ${capacity}</strong></div><div><span>Connections</span><strong>${connections.length}</strong></div><div><span>Verification</span><strong>${escapeHtml(verification?.status || item.verificationStatus || "not started")}</strong></div></div><footer><span>Created ${escapeHtml(formatDate(item.createdAt))}</span><strong>Open account →</strong></footer></button></article>${modal}`;
+  }).join("");
+  return `<section class="wa-admin-card wa-customer-directory"><div class="wa-admin-secret-heading"><div><h3>Customer companies</h3><p>Open a company card to review its workspace, users, connected assets, PAYG capacity and protected account controls.</p></div>${status(`${rows.length}_accounts`)}</div><div class="wa-customer-card-grid">${cards}</div></section>`;
 }
 
 function connections() {
-  const rows = state.snapshot?.connections || [];
-  return `<section class="wa-admin-card"><h3>Customer Meta connections</h3><p>Safe operational view of customer-owned WhatsApp Business Accounts. Provider secrets are never displayed.</p>${rows.length ? `<div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Company</th><th>Verified name</th><th>Phone</th><th>WABA ID</th><th>Status</th><th>Connected</th></tr></thead><tbody>${rows.map((item) => `<tr><td>${escapeHtml(item.tenantName)}</td><td>${escapeHtml(item.verifiedName || "—")}</td><td>${escapeHtml(item.displayPhoneNumber || "—")}</td><td><span class="wa-admin-code">${escapeHtml(item.whatsappBusinessAccountId || "not assigned")}</span></td><td>${status(item.status)}</td><td>${escapeHtml(formatDate(item.connectedAt))}</td></tr>`).join("")}</tbody></table></div>` : '<div class="wa-admin-empty">No customer has connected a Meta Business Account.</div>'}</section>`;
+  const tenants = (state.snapshot?.tenants || []).filter((tenant) => (tenant.connections || []).length);
+  if (!tenants.length) return '<section class="wa-admin-card"><h3>Customer Meta connections</h3><p>Safe operational view of customer-owned WhatsApp Business Accounts. Provider secrets are never displayed.</p><div class="wa-admin-empty">No customer has connected a Meta Business Account.</div></section>';
+  const cards = tenants.map((tenant) => {
+    const rows = tenant.connections || [];
+    const activeRows = rows.filter((connection) => connection.status !== "disconnected");
+    const billing = tenant.billingAccess || {};
+    const billingKnown = typeof billing.allowed === "boolean";
+    const accessLabel = !billingKnown ? "access_unknown" : billing.allowed ? (billing.state === "trial" ? "trial_access" : "access_active") : "access_blocked";
+    const connectionRows = rows.map((connection) => {
+      const label = connection.verifiedName || connection.displayPhoneNumber || "WhatsApp number";
+      const metadata = connection.onboardingMetadata || {};
+      const canDisconnect = state.hasFullAuthority && connection.status !== "disconnected";
+      return `<article class="wa-connection-detail"><header><div><span>WhatsApp number</span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(connection.displayPhoneNumber || "Number not assigned")}</small></div>${status(connection.status || "pending")}</header><dl><div><dt>WABA ID</dt><dd class="wa-admin-code">${escapeHtml(connection.whatsappBusinessAccountId || "Not assigned")}</dd></div><div><dt>Phone number ID</dt><dd class="wa-admin-code">${escapeHtml(connection.phoneNumberId || "Not assigned")}</dd></div><div><dt>Meta business ID</dt><dd class="wa-admin-code">${escapeHtml(connection.metaBusinessId || "Not assigned")}</dd></div><div><dt>Provider</dt><dd>${escapeHtml(connection.provider || "meta")}</dd></div><div><dt>Quality</dt><dd>${escapeHtml(metadata.qualityRating || "Not reported")}</dd></div><div><dt>Phone status</dt><dd>${escapeHtml(metadata.phoneStatus || metadata.codeVerificationStatus || "Not reported")}</dd></div><div><dt>Connected</dt><dd>${escapeHtml(formatDate(connection.connectedAt))}</dd></div><div><dt>Last updated</dt><dd>${escapeHtml(formatDate(connection.updatedAt || connection.createdAt))}</dd></div></dl>${canDisconnect ? `<div class="wa-connection-controls"><button class="wa-admin-button danger" type="button" data-disconnect-open="${escapeHtml(connection.id)}">Disconnect number</button><form data-connection-disconnect-form="${escapeHtml(connection.id)}" data-connection-label="${escapeHtml(label)}" hidden><div class="wa-connection-warning"><strong>This is a permanent Meta disconnection.</strong><p>The number will be deregistered from WhatsApp Cloud API and its stored authorization removed. Conversation and audit history will remain.</p><p>Non-payment must never use this control: billing failure blocks workspace access while preserving the number connection.</p></div><label><span>Type <strong>DISCONNECT</strong> to confirm</span><input name="confirmation" autocomplete="off" pattern="DISCONNECT" required /></label><div><button class="wa-admin-button" type="button" data-disconnect-cancel>Keep connected</button><button class="wa-admin-button danger" type="submit">Disconnect permanently</button></div></form></div>` : ""}</article>`;
+    }).join("");
+    const billingModel = billing.billingModel === "usage" ? "Pay per use" : (billing.packageCode || tenant.planCode || "Not assigned");
+    const modal = `<section class="wa-customer-modal" data-customer-modal="connection-${escapeHtml(tenant.id)}" hidden role="dialog" aria-modal="true" aria-labelledby="waConnectionCompany-${escapeHtml(tenant.id)}"><div class="wa-customer-modal-shell"><header><div><span>Company Meta connections</span><strong id="waConnectionCompany-${escapeHtml(tenant.id)}">${escapeHtml(tenant.name)}</strong><small>${escapeHtml(tenant.ownerEmail)} · ${rows.length} total connection${rows.length === 1 ? "" : "s"}</small></div><div>${status(accessLabel)}<button type="button" data-customer-modal-close aria-label="Close company connections">×</button></div></header><main><section class="wa-customer-detail-grid"><article><span>Workspace status</span><strong>${escapeHtml(tenant.status || "unknown")}</strong></article><article><span>Wallet access</span><strong>${escapeHtml(!billingKnown ? "Unknown" : billing.allowed ? "Allowed" : "Blocked")}</strong></article><article><span>Access reason</span><strong>${escapeHtml(billing.reason || "Wallet summary has not loaded. Refresh data to verify access.")}</strong></article><article><span>Billing model</span><strong>${escapeHtml(billingModel)}</strong></article><article><span>Connected numbers</span><strong>${activeRows.length}</strong></article><article><span>Workspace ID</span><strong class="wa-admin-code">${escapeHtml(tenant.id)}</strong></article></section><section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Connected assets</span><h3>All numbers and Meta connections</h3></div><small>Credentials are never displayed</small></div><div class="wa-company-connections">${connectionRows}</div></section><section class="wa-access-separation-note"><strong>Access and connection are separate controls</strong><p>An inactive wallet or insufficient service balance blocks billable messaging only. It does not deregister a customer-owned WhatsApp number. Disconnection is reserved for an explicit customer removal request.</p></section></main></div></section>`;
+    const searchable = [tenant.name, tenant.ownerEmail, ...rows.flatMap((connection) => [connection.displayPhoneNumber, connection.verifiedName, connection.whatsappBusinessAccountId])].filter(Boolean).join(" ").toLocaleLowerCase();
+    return `<article class="wa-connection-company-card" data-connection-company-card data-connection-search="${escapeHtml(searchable)}"><button type="button" data-open-customer="connection-${escapeHtml(tenant.id)}"><header><span class="wa-customer-avatar">${escapeHtml(String(tenant.name || "C").slice(0, 1).toUpperCase())}</span><div><span>Customer company</span><strong>${escapeHtml(tenant.name)}</strong><small>${escapeHtml(tenant.ownerEmail)}</small></div>${status(accessLabel)}</header><div class="wa-connection-company-metrics"><div><span>Active connections</span><strong>${activeRows.length}</strong></div><div><span>Total records</span><strong>${rows.length}</strong></div><div><span>Workspace</span><strong>${escapeHtml(tenant.status || "unknown")}</strong></div></div><footer><span>${escapeHtml(activeRows[0]?.displayPhoneNumber || "No active number")}</span><strong>Open details →</strong></footer></button></article>${modal}`;
+  }).join("");
+  return `<section class="wa-admin-card wa-connections-directory"><div class="wa-admin-secret-heading"><div><h3>Customer Meta connections</h3><p>Select a company to review every attached number, Meta identifier, billing access state and protected disconnection controls.</p></div>${status(`${tenants.length}_companies`)}</div><label class="wa-connection-search"><span>Search connections</span><input type="search" data-connection-search-input placeholder="Company name, email or mobile number" autocomplete="off" /><small>Search also matches verified names and WABA IDs.</small></label><div class="wa-connection-company-grid">${cards}</div><div class="wa-admin-empty" data-connection-search-empty hidden>No company matches this search.</div></section>`;
 }
 
 function verificationLegacy() {
@@ -221,8 +318,18 @@ async function reviewVerification(tenantId, decision, notes, button) {
   }
   if (button) button.disabled = true;
   try {
-    const { error } = await db.rpc("whatsapp_platform_admin_review_verification", { p_tenant_id: tenantId, p_decision: decision, p_notes: notes || null });
-    if (error) throw error;
+    const token = await getSupabaseAccessToken();
+    if (!token) throw new Error("Your secure session has expired. Sign in again.");
+    const response = await fetch(`${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-admin-verification`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || "", "Content-Type": "application/json" },
+      credentials: "omit",
+      cache: "no-store",
+      referrerPolicy: "no-referrer",
+      body: JSON.stringify({ action: "review_verification", tenantId, decision, notes: notes || null }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result?.error || "Verification review could not be updated.");
     showToast(decision === "verified" ? "Provider business pre-check approved." : "Verification review updated.", TOAST_TYPES.SUCCESS);
     closeVerificationDocument();
     await loadSnapshot();
@@ -322,6 +429,156 @@ function metaSetup() {
   return `<section class="wa-admin-grid"><article class="wa-admin-card"><h3>Meta application</h3><p>Production configuration for the sellable WhatsApp Business Platform product.</p><div class="wa-admin-list"><div class="wa-admin-row"><strong>Meta App ID</strong><span class="wa-admin-code">${escapeHtml(config.metaAppId || "Not configured")}</span></div><div class="wa-admin-row"><strong>Business verification</strong>${status("complete")}</div><div class="wa-admin-row"><strong>Tech Provider App Review</strong>${status("in_review")}</div><div class="wa-admin-row"><strong>Embedded Signup Configuration</strong>${status(embeddedReady ? "ready" : "not_configured")}</div><div class="wa-admin-row"><strong>Server credential</strong>${status(providerState)}</div><div class="wa-admin-row"><strong>Public portal</strong><a class="wa-admin-button" href="${escapeHtml(ROUTES.WHATSAPP_PLATFORM_PORTAL)}" target="_blank" rel="noopener">Open portal</a></div></div></article><article class="wa-admin-card"><h3>Launch checklist</h3><p>Complete these controls before accepting production customers.</p><div class="wa-admin-checklist"><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Dedicated Meta app created</strong><small>Varada Nexus Connect</small></div></div><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Business verification</strong><small>Verified in Meta Business Manager</small></div></div><div class="wa-admin-check"><span class="wa-admin-check-icon">✓</span><div><strong>Embedded Signup configuration</strong><small>Configuration ID ${escapeHtml(config.embeddedSignupConfigId || "pending")}</small></div></div><div class="wa-admin-check pending"><span class="wa-admin-check-icon">4</span><div><strong>Complete Tech Provider review</strong><small>Submission is in review; Meta may request additional evidence</small></div></div></div></article>${secretControl}${webhookControl}</section>`;
 }
 
+function razorpaySetup() {
+  const provider = state.providerSecretStatus;
+  const configured = provider?.razorpayConfigured === true;
+  const webhookConfigured = provider?.razorpayWebhookConfigured === true;
+  const endpoint = "https://varada-razorpay-webhook.varadanexus.workers.dev/razorpay";
+  if (!state.hasFullAuthority) return `<section class="wa-admin-card"><h3>Razorpay billing credentials</h3><div class="wa-admin-empty">Only the Chairman &amp; Managing Director or Super Admin can configure payment credentials.</div></section>`;
+  const secretField = (name, label, placeholder = "") => `<label class="wa-admin-secret-field"><span>${label}</span><span class="wa-admin-secret-input"><input name="${name}" type="password" autocomplete="new-password" minlength="16" maxlength="128" ${placeholder ? `placeholder="${placeholder}"` : ""} required /><button type="button" data-secret-toggle="${name}" aria-label="Show ${label}" aria-pressed="false">Show</button></span><small>Write-only encrypted server credential; never paste it into chat or source files.</small></label>`;
+  return `<section class="wa-admin-grid">
+    <article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>PAYG payment gateway · Live Mode</h3><p>Live wallet recharges and paid capacity use this production credential set.</p></div>${status(configured && webhookConfigured ? "configured" : "not_configured")}</div><div class="wa-admin-list"><div class="wa-admin-row"><strong>Live API credentials</strong><span>${configured ? `Configured ${escapeHtml(formatDate(provider.razorpayUpdatedAt))}` : "Not configured"}</span></div><div class="wa-admin-row"><strong>Live webhook signing secret</strong><span>${webhookConfigured ? `Configured ${escapeHtml(formatDate(provider.razorpayWebhookUpdatedAt))}` : "Not configured"}</span></div><div class="wa-admin-row"><strong>Live webhook URL</strong><span class="wa-admin-code">${endpoint}</span></div></div></article>
+    <article class="wa-admin-card wa-admin-secret-card"><div class="wa-admin-secret-heading"><div><h3>${configured ? "Rotate active Razorpay credentials" : "Enter active Razorpay credentials"}</h3><p>Saving here changes the active provider mode. Keep the approved Live credentials here.</p></div>${status(configured ? "protected" : "action_required")}</div><form data-razorpay-secret-form autocomplete="off"><label class="wa-admin-secret-field"><span>Key ID</span><span class="wa-admin-secret-input"><input name="razorpay_key_id" type="text" autocomplete="off" minlength="17" maxlength="80" placeholder="rzp_live_…" required /></span><small>Razorpay Dashboard → Account &amp; Settings → API Keys.</small></label>${secretField("razorpay_key_secret", "Key Secret")}${secretField("razorpay_webhook_secret", "Webhook signing secret")}<div class="wa-admin-secret-footer"><span>This credential set controls active billing mode.</span><button class="wa-admin-button primary" type="submit">Encrypt &amp; save active credentials</button></div></form></article>
+    <article class="wa-admin-card"><h3>Razorpay Live webhook setup</h3><p>Use the branded production webhook URL and retained payment/subscription events for wallet and historical reconciliation.</p><ol class="wa-admin-steps"><li>Open Razorpay Dashboard in Live Mode → Account &amp; Settings → Webhooks.</li><li>Use the URL shown above and the Live webhook signing secret.</li><li>Keep the webhook enabled for production payment capture and reconciliation events.</li></ol></article>
+  </section>`;
+}
+
+function adminBillingMoney(paise, currency = "INR") {
+  try { return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(paise || 0) / 100); }
+  catch { return `${currency} ${(Number(paise || 0) / 100).toLocaleString("en-IN")}`; }
+}
+
+function adminExactMoney(value, currency = "USD", exponent = 6) {
+  try {
+    const amount = BigInt(String(value ?? 0));
+    const scale = 10n ** BigInt(exponent);
+    const absolute = amount < 0n ? -amount : amount;
+    const whole = absolute / scale;
+    const fraction = (absolute % scale).toString().padStart(exponent, "0").replace(/0+$/, "");
+    const decimals = fraction ? `.${fraction.padEnd(Math.min(2, exponent), "0")}` : exponent ? ".00" : "";
+    return `${currency} ${amount < 0n ? "-" : ""}${whole.toLocaleString("en-IN")}${decimals}`;
+  } catch { return `${currency} 0.00`; }
+}
+
+async function loadBillingSnapshot() {
+  if (!state.hasFullAuthority || state.billingLoading) return;
+  state.billingLoading = true; state.billingError = ""; render();
+  try { state.billingSnapshot = await providerSecretRequest("billing_snapshot"); }
+  catch (error) { state.billingSnapshot = null; state.billingError = error?.message || "Billing data could not be loaded."; }
+  state.billingLoading = false; render();
+}
+
+async function submitBillingRefund(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const values = new FormData(form);
+  const amountPaise = Math.round(Number(values.get("amount") || 0) * 100);
+  const maxPaise = Number(values.get("maxPaise") || 0);
+  const reason = String(values.get("reason") || "").trim();
+  const button = form.querySelector('button[type="submit"]');
+  if (!Number.isSafeInteger(amountPaise) || amountPaise < 1 || amountPaise > maxPaise) { showToast("Enter an amount within the refundable balance.", TOAST_TYPES.ERROR); return; }
+  if (reason.length < 10 || reason.length > 500) { showToast("Enter a finance reason of 10 to 500 characters.", TOAST_TYPES.ERROR); return; }
+  if (values.get("confirmed") !== "on") { showToast("Confirm the irreversible Razorpay refund instruction.", TOAST_TYPES.ERROR); return; }
+  button.disabled = true; button.textContent = "Submitting securely…";
+  try {
+    const result = await providerSecretRequest("billing_refund", { paymentId: values.get("paymentId"), amountPaise, reason, confirmed: true });
+    showToast(`Refund ${result?.refund?.id || "request"} submitted to Razorpay.`, TOAST_TYPES.SUCCESS);
+    document.querySelector("[data-finance-refund-modal]")?.setAttribute("hidden", "");
+    document.body.classList.remove("wa-finance-modal-open");
+    await loadBillingSnapshot();
+  } catch (error) {
+    showToast(error?.message || "Refund could not be submitted.", TOAST_TYPES.ERROR);
+    button.disabled = false; button.textContent = "Submit refund";
+  }
+}
+
+function billingOverview() {
+  if (state.billingLoading) return '<div class="wa-admin-empty">Loading protected billing data…</div>';
+  if (state.billingError) return `<div class="wa-admin-notice"><strong>Billing data unavailable.</strong><br>${escapeHtml(state.billingError)}</div>`;
+  const totals = state.billingSnapshot?.totals || {};
+  const wallets = (state.billingSnapshot?.wallets || []).slice(0, 6);
+  const recharges = (state.billingSnapshot?.recharges || []).slice(0, 6);
+  return `<section class="wa-admin-stats wa-finance-stats"><article class="wa-admin-stat"><span>Active wallets</span><strong>${Number(totals.activeWallets || 0)}</strong><small>${Number(totals.wallets || 0)} configured across modes</small></article><article class="wa-admin-stat"><span>Metered messages</span><strong>${Number(totals.usageRecords || 0)}</strong><small>Incoming and outgoing usage records</small></article><article class="wa-admin-stat"><span>Captured recharges</span><strong>${Number(totals.capturedRecharges || 0)}</strong><small>${Number(totals.recharges || 0)} protected recharge records</small></article><article class="wa-admin-stat ${Number(totals.uncertainUsage || 0) ? "attention" : "healthy"}"><span>Usage awaiting review</span><strong>${Number(totals.uncertainUsage || 0)}</strong><small>${Number(totals.uncertainUsage || 0) ? "Uncertain delivery outcomes" : "No uncertain message charges"}</small></article><article class="wa-admin-stat"><span>Issued documents</span><strong>${Number(totals.invoices || 0)}</strong><small>${escapeHtml(adminBillingMoney(totals.issuedInvoicePaise))} documented</small></article><article class="wa-admin-stat"><span>Credit notes</span><strong>${Number(totals.creditNotes || 0)}</strong><small>${escapeHtml(adminBillingMoney(totals.issuedCreditPaise))} credited</small></article><article class="wa-admin-stat"><span>Legacy records</span><strong>${Number(totals.legacySubscriptions || 0)}</strong><small>Read-only subscription history</small></article><article class="wa-admin-stat ${Number(totals.reconciliationAlerts || 0) ? "attention" : "healthy"}"><span>Finance alerts</span><strong>${Number(totals.reconciliationAlerts || 0)}</strong><small>${Number(totals.reconciliationAlerts || 0) ? "Requires reconciliation review" : "Financial evidence is aligned"}</small></article></section><section class="wa-admin-grid"><article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Customer wallets</h3><p>Current balance, reserved funds and operating mode.</p></div><a class="wa-admin-button" href="?view=package-master">Manage PAYG</a></div><div class="wa-admin-list">${wallets.length ? wallets.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.mode)} · ${escapeHtml(adminExactMoney(item.reserved_micros, item.currency))} reserved</small></div><div><span>${escapeHtml(adminExactMoney(item.balance_micros, item.currency))}</span>${status(item.enabled ? "active" : "disabled")}</div></div>`).join("") : '<div class="wa-admin-empty">No wallets configured yet.</div>'}</div></article><article class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Recent wallet recharges</h3><p>Saved orders and verified captures from the prepaid wallet.</p></div><a class="wa-admin-button" href="?view=payments">View payment ledger</a></div><div class="wa-admin-list">${recharges.length ? recharges.map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.provider_order_id || "Prepared recharge")} · ${escapeHtml(item.mode)} · ${escapeHtml(formatDate(item.captured_at || item.created_at))}</small></div><div><span>${escapeHtml(adminExactMoney(item.amount_minor, item.currency, Number(item.currency_exponent || 2)))}</span>${status(item.state)}</div></div>`).join("") : '<div class="wa-admin-empty">No wallet recharges yet.</div>'}</div></article></section><section class="wa-admin-card"><h3>PAYG billing controls</h3><p>Manage message pricing, wallet coupons and paid capacity. Historical subscriptions remain read-only and cannot create new monthly packages.</p><div class="wa-admin-actions"><a class="wa-admin-button primary" href="?view=package-master">Open PAYG pricing &amp; coupons</a><a class="wa-admin-button" href="?view=payments">Open payment ledger</a><a class="wa-admin-button" href="?view=reconciliation">Reconciliation</a><a class="wa-admin-button" href="?view=subscriptions">Legacy billing records</a><a class="wa-admin-button" href="?view=razorpay">Razorpay Settings</a></div></section>`;
+}
+
+function billingSubscriptions() {
+  if (state.billingLoading) return '<div class="wa-admin-empty">Loading subscriptions and payments…</div>';
+  if (state.billingError) return `<div class="wa-admin-notice"><strong>Billing data unavailable.</strong><br>${escapeHtml(state.billingError)}</div>`;
+  const subscriptions = state.billingSnapshot?.subscriptions || [];
+  const payments = state.billingSnapshot?.payments || [];
+  const invoices = state.billingSnapshot?.invoices || [];
+  const refunds = state.billingSnapshot?.refunds || [];
+  const creditNotes = state.billingSnapshot?.creditNotes || [];
+  const reconciliation = state.billingSnapshot?.reconciliation || {};
+  const subscriptionRows = subscriptions.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.id)}</small></td><td>${escapeHtml(item.package_code)}<br><small>${escapeHtml(item.billing_interval)}</small></td><td>${status(item.status)}</td><td>${Number(item.paid_count || 0)}<br><small>${item.remaining_count == null ? "—" : `${Number(item.remaining_count)} remaining`}</small></td><td>${escapeHtml(formatDate(item.current_end || item.charge_at || item.created_at))}</td></tr>`).join("");
+  const paymentRows = payments.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.provider_payment_id)} · ${escapeHtml(item.mode)}</small></td><td><strong>${escapeHtml(item.invoice_number || "Awaiting EMS invoice")}</strong><br><small>${escapeHtml(item.provider_invoice_id || "No Razorpay invoice")}</small></td><td>${escapeHtml(item.payment_method || "—")}</td><td>${status(item.status)}</td><td><strong>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</strong><br><small>${Number(item.refunded_paise || 0) ? `${escapeHtml(adminBillingMoney(item.refunded_paise, item.currency))} refunded` : "No refund"}</small></td><td>${escapeHtml(formatDate(item.paid_at || item.created_at))}</td><td>${Number(item.refundable_paise || 0) > 0 ? `<button class="wa-admin-button danger" type="button" data-billing-refund-open="${escapeHtml(item.id)}" data-refund-workspace="${escapeHtml(item.tenant_name)}" data-refund-payment="${escapeHtml(item.provider_payment_id)}" data-refund-currency="${escapeHtml(item.currency)}" data-refund-balance="${Number(item.refundable_paise)}">Refund</button>` : '<span class="wa-finance-settled">Settled</span>'}</td></tr>`).join("");
+  const invoiceRows = invoices.map((item) => `<tr><td><strong>${escapeHtml(item.invoice_number)}</strong><br><small>${escapeHtml(item.document_environment)}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.taxable_base_paise, item.currency))}<br><small>GST ${escapeHtml(adminBillingMoney(item.gst_paise, item.currency))}</small></td><td>${escapeHtml(adminBillingMoney(item.total_paise, item.currency))}</td><td>${escapeHtml(item.provider_invoice_id)}<br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(formatDate(item.issued_at))}</td></tr>`).join("");
+  const refundRows = refunds.map((item) => `<tr><td><strong>${escapeHtml(item.provider_refund_id)}</strong><br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</td><td>${escapeHtml(item.credit_note_number || (item.status === "processed" ? "Credit note pending" : "Issued after processing"))}</td><td>${escapeHtml(item.reason || "—")}</td><td>${escapeHtml(formatDate(item.processed_at || item.created_at))}</td></tr>`).join("");
+  const creditRows = creditNotes.map((item) => `<tr><td><strong>${escapeHtml(item.credit_note_number)}</strong><br><small>${escapeHtml(item.document_environment)}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.total_paise, item.currency))}</td><td>${escapeHtml(item.provider_refund_id)}</td><td>${escapeHtml(item.provider_invoice_id)}</td><td>${escapeHtml(formatDate(item.issued_at))}</td></tr>`).join("");
+  const webhookRows = (reconciliation.webhookErrors || []).map((item) => `<div class="wa-admin-row"><div><strong>${escapeHtml(item.event_type)}</strong><small>${escapeHtml(item.provider_event_id)} · ${escapeHtml(formatDate(item.received_at))}</small></div><span>${escapeHtml(item.processing_error)}</span></div>`).join("");
+  const refundModal = `<section class="wa-finance-refund-modal" data-finance-refund-modal hidden><form class="wa-finance-refund-shell" data-finance-refund-form><header><div><span>Protected finance action</span><strong>Issue Razorpay refund</strong><small data-refund-summary></small></div><button type="button" data-finance-refund-close aria-label="Close">×</button></header><main><div class="wa-finance-refund-balance"><span>Refundable balance</span><strong data-refund-balance-label></strong></div><input type="hidden" name="paymentId" /><input type="hidden" name="maxPaise" /><label>Refund amount<input name="amount" type="number" min="0.01" step="0.01" required /><small>The amount is submitted to Razorpay in the payment currency.</small></label><label>Finance reason<textarea name="reason" minlength="10" maxlength="500" rows="4" required placeholder="Explain why this refund is being issued."></textarea></label><label class="wa-finance-confirm"><input name="confirmed" type="checkbox" required /><span>I confirm this is an irreversible instruction to refund the customer through Razorpay. A central EMS credit note will be issued only when Razorpay reports the refund as processed.</span></label></main><footer><button class="wa-admin-button" type="button" data-finance-refund-close>Cancel</button><button class="wa-admin-button danger" type="submit">Submit refund</button></footer></form></section>`;
+  return `<section class="wa-admin-card wa-finance-reconciliation ${Number(state.billingSnapshot?.totals?.reconciliationAlerts || 0) ? "attention" : "healthy"}"><div class="wa-admin-secret-heading"><div><h3>Reconciliation control</h3><p>Cross-checks captured payments, EMS invoices, processed refunds, central credit notes and webhook processing.</p></div>${status(`${Number(state.billingSnapshot?.totals?.reconciliationAlerts || 0)}_alerts`)}</div><div class="wa-finance-checks"><div><span>Captured payments missing invoice</span><strong>${Number(reconciliation.missingInvoices || 0)}</strong></div><div><span>Processed refunds missing credit note</span><strong>${Number(reconciliation.missingCredits || 0)}</strong></div><div><span>Failed webhook events</span><strong>${Number((reconciliation.webhookErrors || []).length)}</strong></div><div><span>Expired refund reservations</span><strong>${Number(reconciliation.staleRefundRequests || 0)}</strong></div></div>${webhookRows ? `<div class="wa-admin-list wa-finance-webhook-errors">${webhookRows}</div>` : ""}</section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Customer subscriptions</h3><p>Razorpay lifecycle state synchronized by verified checkout callbacks and webhooks.</p></div>${status(`${subscriptions.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace</th><th>Package</th><th>Status</th><th>Payments</th><th>Next billing date</th></tr></thead><tbody>${subscriptionRows || '<tr><td colspan="5">No subscriptions yet.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card" id="payments"><div class="wa-admin-secret-heading"><div><h3>Payment &amp; refund ledger</h3><p>Refund commands are balance-checked, submitted server-side and recorded in the EMS audit log.</p></div>${status(`${payments.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace / payment</th><th>EMS / Razorpay invoice</th><th>Method</th><th>Status</th><th>Amount</th><th>Paid</th><th>Action</th></tr></thead><tbody>${paymentRows || '<tr><td colspan="7">No payments yet.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Central invoice register</h3><p>Taxable value, GST, central EMS sequence and Razorpay references.</p></div>${status(`${invoices.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS invoice</th><th>Workspace</th><th>Status</th><th>Taxable / GST</th><th>Total</th><th>Razorpay references</th><th>Issued</th></tr></thead><tbody>${invoiceRows || '<tr><td colspan="7">No invoices issued.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Refund register</h3><p>Razorpay refund state and the resulting EMS credit note.</p></div>${status(`${refunds.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Refund / payment</th><th>Workspace</th><th>Status</th><th>Amount</th><th>Credit note</th><th>Reason</th><th>Updated</th></tr></thead><tbody>${refundRows || '<tr><td colspan="7">No refunds recorded.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Central credit-note register</h3><p>Credit notes inherit the EMS-wide statutory sequence in live mode.</p></div>${status(`${creditNotes.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS credit note</th><th>Workspace</th><th>Status</th><th>Total</th><th>Razorpay refund</th><th>Razorpay invoice</th><th>Issued</th></tr></thead><tbody>${creditRows || '<tr><td colspan="7">No credit notes issued.</td></tr>'}</tbody></table></div></section>${refundModal}`;
+}
+
+function financePageState(loadingText) {
+  if (state.billingLoading) return `<div class="wa-admin-empty">${escapeHtml(loadingText)}</div>`;
+  if (state.billingError) return `<div class="wa-admin-notice"><strong>Billing data unavailable.</strong><br>${escapeHtml(state.billingError)}</div>`;
+  return "";
+}
+
+function financeRefundModal() {
+  return `<section class="wa-finance-refund-modal" data-finance-refund-modal hidden><form class="wa-finance-refund-shell" data-finance-refund-form><header><div><span>Protected finance action</span><strong>Issue Razorpay refund</strong><small data-refund-summary></small></div><button type="button" data-finance-refund-close aria-label="Close">×</button></header><main><div class="wa-finance-refund-balance"><span>Refundable balance</span><strong data-refund-balance-label></strong></div><input type="hidden" name="paymentId" /><input type="hidden" name="maxPaise" /><label>Refund amount<input name="amount" type="number" min="0.01" step="0.01" required /><small>The amount is submitted to Razorpay in the payment currency.</small></label><label>Finance reason<textarea name="reason" minlength="10" maxlength="500" rows="4" required placeholder="Explain why this refund is being issued."></textarea></label><label class="wa-finance-confirm"><input name="confirmed" type="checkbox" required /><span>I confirm this is an irreversible instruction to refund the customer through Razorpay. A central EMS credit note will be issued only when Razorpay reports the refund as processed.</span></label></main><footer><button class="wa-admin-button" type="button" data-finance-refund-close>Cancel</button><button class="wa-admin-button danger" type="submit">Submit refund</button></footer></form></section>`;
+}
+
+function billingSubscriptionsPage() {
+  const guard = financePageState("Loading customer subscriptions…"); if (guard) return guard;
+  const rows = (state.billingSnapshot?.subscriptions || []).map((item) => {
+    const ended = ["cancelled", "completed", "expired"].includes(String(item.status).toLowerCase());
+    const product = item.subscription_kind === "addon" ? `Capacity add-on · ${item.addon_code || "Not recorded"}` : `Legacy package · ${item.package_code || "Not recorded"}`;
+    const period = item.current_end || (!ended ? item.charge_at : null);
+    return `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.id)}<br>${escapeHtml(item.provider_subscription_id || "Provider reference not recorded")}</small></td><td>${escapeHtml(product)}<br><small>${escapeHtml(item.billing_interval)} · ${escapeHtml(item.mode)}</small></td><td>${status(item.status)}</td><td>${Number(item.paid_count || 0)}<br><small>${item.remaining_count == null ? "—" : `${Number(item.remaining_count)} remaining`}</small></td><td>${escapeHtml(formatDate(item.current_start || item.activated_at || item.created_at))}</td><td>${period ? escapeHtml(formatDate(period)) : "Not recorded"}</td><td>${ended ? status("no_renewal") : item.cancel_at_cycle_end ? status("ends_at_cycle") : status("recurring")}</td></tr>`;
+  }).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Legacy subscription register</h3><p>Historical packages and independent capacity add-ons. Period dates are retained evidence, not confirmation of an upcoming debit.</p></div>${status(`${(state.billingSnapshot?.subscriptions || []).length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace / provider</th><th>Historical product</th><th>Status</th><th>Payments</th><th>Started</th><th>Period end / next charge</th><th>Renewal</th></tr></thead><tbody>${rows || '<tr><td colspan="7">No historical subscriptions.</td></tr>'}</tbody></table></div></section>`;
+}
+
+function billingPaymentsPage() {
+  const guard = financePageState("Loading protected payment ledger…"); if (guard) return guard;
+  const payments = state.billingSnapshot?.payments || [];
+  const rows = payments.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><br><small>${escapeHtml(item.provider_payment_id)} · ${escapeHtml(item.mode)}</small></td><td><strong>${escapeHtml(item.invoice_number || "Awaiting EMS invoice")}</strong><br><small>${escapeHtml(item.provider_invoice_id || "No Razorpay invoice")}</small></td><td>${escapeHtml(item.payment_method || "—")}</td><td>${status(item.status)}</td><td><strong>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</strong><br><small>${Number(item.refunded_paise || 0) ? `${escapeHtml(adminBillingMoney(item.refunded_paise, item.currency))} refunded` : "No refund"}</small></td><td>${escapeHtml(adminBillingMoney(item.refundable_paise, item.currency))}</td><td>${escapeHtml(formatDate(item.paid_at || item.created_at))}</td><td>${Number(item.refundable_paise || 0) > 0 ? `<button class="wa-admin-button danger" type="button" data-billing-refund-open="${escapeHtml(item.id)}" data-refund-workspace="${escapeHtml(item.tenant_name)}" data-refund-payment="${escapeHtml(item.provider_payment_id)}" data-refund-currency="${escapeHtml(item.currency)}" data-refund-balance="${Number(item.refundable_paise)}">Refund</button>` : '<span class="wa-finance-settled">Settled</span>'}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Verified payment ledger</h3><p>Captured Razorpay transactions with EMS documents, refunded value and remaining refundable balance.</p></div>${status(`${payments.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Workspace / payment</th><th>EMS / Razorpay invoice</th><th>Method</th><th>Status</th><th>Gross / refunded</th><th>Refundable</th><th>Paid</th><th>Action</th></tr></thead><tbody>${rows || '<tr><td colspan="8">No payments yet.</td></tr>'}</tbody></table></div></section>${financeRefundModal()}`;
+}
+
+function billingInvoicesPage() {
+  const guard = financePageState("Loading central invoice register…"); if (guard) return guard;
+  const invoices = state.billingSnapshot?.invoices || [];
+  const rows = invoices.map((item) => `<tr><td><strong>${escapeHtml(item.invoice_number)}</strong><br><small>${escapeHtml(item.document_environment)} · ${escapeHtml(formatDate(item.invoice_date))}</small></td><td>${escapeHtml(item.tenant_name)}<br><small>${escapeHtml(item.billing_gstin || "GSTIN not supplied")}</small></td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.taxable_base_paise, item.currency))}</td><td>${escapeHtml(adminBillingMoney(item.gst_paise, item.currency))}</td><td>${escapeHtml(adminBillingMoney(item.gateway_adjustment_paise, item.currency))}</td><td><strong>${escapeHtml(adminBillingMoney(item.total_paise, item.currency))}</strong></td><td>${escapeHtml(item.provider_invoice_id)}<br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(formatDate(item.issued_at))}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Central invoice register</h3><p>EMS invoice sequence, taxable value, GST, gateway adjustment and Razorpay references.</p></div>${status(`${invoices.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS invoice</th><th>Customer</th><th>Status</th><th>Taxable</th><th>GST</th><th>Gateway</th><th>Total</th><th>Razorpay references</th><th>Issued</th></tr></thead><tbody>${rows || '<tr><td colspan="9">No invoices issued.</td></tr>'}</tbody></table></div></section>`;
+}
+
+function billingRefundsPage() {
+  const guard = financePageState("Loading refund register…"); if (guard) return guard;
+  const refunds = state.billingSnapshot?.refunds || [];
+  const requests = state.billingSnapshot?.refundRequests || [];
+  const rows = refunds.map((item) => `<tr><td><strong>${escapeHtml(item.provider_refund_id)}</strong><br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</td><td>${escapeHtml(item.credit_note_number || (item.status === "processed" ? "Credit note pending" : "Issued after processing"))}</td><td>${escapeHtml(item.reason || "—")}</td><td>${escapeHtml(formatDate(item.processed_at || item.created_at))}</td></tr>`).join("");
+  const requestRows = requests.map((item) => `<tr><td><strong>${escapeHtml(item.id)}</strong><br><small>${escapeHtml(item.provider_refund_id || "Provider ID pending")}</small></td><td>${status(item.status)}</td><td>${escapeHtml(adminBillingMoney(item.amount_paise, item.currency))}</td><td>${escapeHtml(item.reason)}</td><td>${escapeHtml(item.provider_error || "—")}</td><td>${escapeHtml(formatDate(item.completed_at || item.submitted_at || item.created_at))}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Razorpay refund register</h3><p>Provider status, reason, amount and the linked central EMS credit note.</p></div>${status(`${refunds.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Refund / payment</th><th>Workspace</th><th>Status</th><th>Amount</th><th>Credit note</th><th>Reason</th><th>Updated</th></tr></thead><tbody>${rows || '<tr><td colspan="7">No refunds recorded.</td></tr>'}</tbody></table></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Refund command audit</h3><p>Every EMS refund reservation, provider submission and failure remains traceable.</p></div>${status(`${requests.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS request / provider refund</th><th>Status</th><th>Amount</th><th>Reason</th><th>Provider error</th><th>Updated</th></tr></thead><tbody>${requestRows || '<tr><td colspan="6">No refund commands recorded.</td></tr>'}</tbody></table></div></section>`;
+}
+
+function billingCreditNotesPage() {
+  const guard = financePageState("Loading central credit-note register…"); if (guard) return guard;
+  const notes = state.billingSnapshot?.creditNotes || [];
+  const rows = notes.map((item) => `<tr><td><strong>${escapeHtml(item.credit_note_number)}</strong><br><small>${escapeHtml(item.document_environment)} · ${escapeHtml(formatDate(item.credit_note_date))}</small></td><td>${escapeHtml(item.tenant_name)}</td><td>${status(item.status)}</td><td><strong>${escapeHtml(adminBillingMoney(item.total_paise, item.currency))}</strong></td><td>${escapeHtml(item.provider_refund_id)}</td><td>${escapeHtml(item.provider_invoice_id)}<br><small>${escapeHtml(item.provider_payment_id)}</small></td><td>${escapeHtml(item.reason || "—")}</td><td>${escapeHtml(formatDate(item.issued_at))}</td></tr>`).join("");
+  return `<section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Central credit-note register</h3><p>EMS-wide credit-note sequence linked to the original Razorpay invoice, payment and refund.</p></div>${status(`${notes.length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>EMS credit note</th><th>Customer</th><th>Status</th><th>Total</th><th>Razorpay refund</th><th>Invoice / payment</th><th>Reason</th><th>Issued</th></tr></thead><tbody>${rows || '<tr><td colspan="8">No credit notes issued.</td></tr>'}</tbody></table></div></section>`;
+}
+
+function billingReconciliationPage() {
+  const guard = financePageState("Running finance reconciliation…"); if (guard) return guard;
+  const reconciliation = state.billingSnapshot?.reconciliation || {};
+  const total = Number(state.billingSnapshot?.totals?.reconciliationAlerts || 0);
+  const webhookRows = (reconciliation.webhookErrors || []).map((item) => `<tr><td>${escapeHtml(item.event_type)}</td><td>${escapeHtml(item.provider_event_id)}</td><td>${escapeHtml(item.processing_error)}</td><td>${escapeHtml(formatDate(item.received_at))}</td></tr>`).join("");
+  return `<section class="wa-admin-card wa-finance-reconciliation ${total ? "attention" : "healthy"}"><div class="wa-admin-secret-heading"><div><h3>Finance reconciliation status</h3><p>Cross-check captured payments, EMS documents, Razorpay refunds and webhook processing.</p></div>${status(`${total}_alerts`)}</div><div class="wa-finance-checks"><div><span>Captured payments missing invoice</span><strong>${Number(reconciliation.missingInvoices || 0)}</strong></div><div><span>Processed refunds missing credit note</span><strong>${Number(reconciliation.missingCredits || 0)}</strong></div><div><span>Failed webhook events</span><strong>${Number((reconciliation.webhookErrors || []).length)}</strong></div><div><span>Expired refund reservations</span><strong>${Number(reconciliation.staleRefundRequests || 0)}</strong></div></div></section><section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><h3>Webhook processing exceptions</h3><p>Failures remain visible until the underlying event is reconciled.</p></div>${status(`${(reconciliation.webhookErrors || []).length}_records`)}</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Event</th><th>Provider event ID</th><th>Error</th><th>Received</th></tr></thead><tbody>${webhookRows || '<tr><td colspan="4">No webhook processing exceptions.</td></tr>'}</tbody></table></div></section>`;
+}
+
 function providerSecretEndpoint() {
   return `${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-admin-secrets`;
 }
@@ -346,6 +603,73 @@ async function providerSecretRequest(action, payload = {}) {
   return data;
 }
 
+async function customerSupportRequest(action, payload = {}) {
+  const token = await getSupabaseAccessToken();
+  if (!token) throw new Error("Your EMS session has expired.");
+  const response = await fetch(`${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-support`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || "", "Content-Type": "application/json" },
+    credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Customer support request failed.");
+  return data;
+}
+
+async function customerBillingAdminRequest(action, payload = {}) {
+  const token = await getSupabaseAccessToken();
+  if (!token) throw new Error("Your EMS session has expired.");
+  const response = await fetch(`${window.EMS_RUNTIME_CONFIG?.supabaseUrl || ""}/functions/v1/whatsapp-platform-billing`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, apikey: window.EMS_RUNTIME_CONFIG?.supabaseAnonKey || "", "Content-Type": "application/json" },
+    credentials: "omit", cache: "no-store", referrerPolicy: "no-referrer",
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.error || "Customer billing request failed.");
+  return data;
+}
+
+async function loadCustomerSupport(ticketId = new URLSearchParams(location.search).get("ticket")) {
+  try {
+    const listed = await customerSupportRequest("staff_list");
+    state.support = { tickets: listed?.tickets || [], assignees: listed?.assignees || [], customers: listed?.customers || [], thread: null, error: "" };
+    if (ticketId && state.support.tickets.some((ticket) => ticket.id === ticketId)) state.support.thread = await customerSupportRequest("staff_thread", { ticketId });
+  } catch (error) { state.support = { tickets: [], assignees: [], customers: [], thread: null, error: error?.message || "Customer support could not be loaded." }; }
+}
+
+function customerSupportSignature(value = state.support) {
+  return JSON.stringify({
+    tickets: (value.tickets || []).map((ticket) => [ticket.id, ticket.status, ticket.priority, ticket.lastActivityAt]),
+    ticket: value.thread?.ticket ? [value.thread.ticket.id, value.thread.ticket.status, value.thread.ticket.priority, value.thread.ticket.lastActivityAt] : null,
+    messages: (value.thread?.messages || []).map((message) => [message.id, message.created_at]),
+  });
+}
+
+async function refreshCustomerSupportLive() {
+  if (state.view !== "customer-support" || document.visibilityState !== "visible" || customerSupportRefreshBusy) return;
+  customerSupportRefreshBusy = true;
+  const previous = state.support;
+  const before = customerSupportSignature(previous);
+  try {
+    await loadCustomerSupport();
+    if (state.support.error) state.support = previous;
+    else if (customerSupportSignature() !== before) render();
+  } catch { state.support = previous; }
+  finally { customerSupportRefreshBusy = false; }
+}
+
+function scheduleCustomerSupportRefresh() {
+  if (customerSupportRefreshTimer) window.clearTimeout(customerSupportRefreshTimer);
+  customerSupportRefreshTimer = null;
+  if (state.view !== "customer-support") return;
+  customerSupportRefreshTimer = window.setTimeout(async () => {
+    await refreshCustomerSupportLive();
+    scheduleCustomerSupportRefresh();
+  }, 4_000);
+}
+
 async function loadProviderSecretStatus() {
   if (!state.hasFullAuthority || state.providerSecretLoading) return;
   state.providerSecretLoading = true;
@@ -367,6 +691,8 @@ async function saveProviderSecret(event) {
   try {
     state.providerSecretStatus = await providerSecretRequest("set", { secret });
     form.reset();
+    const locationStatus = form.querySelector("[data-delete-location-status]");
+    if (locationStatus) locationStatus.textContent = "Location not captured";
     input.type = "password";
     showToast("Meta App Secret encrypted and saved.", TOAST_TYPES.SUCCESS);
     render();
@@ -374,6 +700,29 @@ async function saveProviderSecret(event) {
     input.value = "";
     showToast(error?.message || "Could not save the Meta App Secret.", TOAST_TYPES.ERROR);
     button.disabled = false; button.textContent = "Encrypt & save";
+  }
+}
+
+async function saveRazorpaySecrets(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const keyId = String(form.elements.razorpay_key_id.value || "").trim();
+  const keySecret = String(form.elements.razorpay_key_secret.value || "").trim();
+  const webhookSecret = String(form.elements.razorpay_webhook_secret.value || "").trim();
+  if (!/^rzp_live_[A-Za-z0-9]{8,64}$/.test(keyId)) { showToast("Enter a valid Razorpay Live Key ID.", TOAST_TYPES.ERROR); return; }
+  if (keySecret.length < 16 || webhookSecret.length < 16) { showToast("Both secrets must contain at least 16 characters.", TOAST_TYPES.ERROR); return; }
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true; button.textContent = "Encrypting…";
+  try {
+    state.providerSecretStatus = { ...(state.providerSecretStatus || {}), ...(await providerSecretRequest("set_razorpay", { keyId, keySecret, webhookSecret })) };
+    form.reset();
+    showToast("Razorpay credentials encrypted and saved.", TOAST_TYPES.SUCCESS);
+    render();
+  } catch (error) {
+    form.elements.razorpay_key_secret.value = "";
+    form.elements.razorpay_webhook_secret.value = "";
+    showToast(error?.message || "Could not save Razorpay credentials.", TOAST_TYPES.ERROR);
+    button.disabled = false; button.textContent = "Encrypt & save credentials";
   }
 }
 
@@ -394,6 +743,13 @@ async function loadPackageMaster() {
 function masterValue(record, key) { return escapeHtml(record?.[key] ?? ""); }
 function masterLimit(record, key) { return record?.[key] == null ? "" : escapeHtml(record[key]); }
 function masterOption(value, current, label = value) { return `<option value="${escapeHtml(value)}" ${String(current) === value ? "selected" : ""}>${escapeHtml(label)}</option>`; }
+function masterDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return escapeHtml(local.toISOString().slice(0, 16));
+}
 
 function masterPackageForm(pkg) {
   const p = pkg || {};
@@ -412,8 +768,8 @@ function masterPackageForm(pkg) {
       <label>Billing model<select name="billingModel">${masterOption("subscription",p.billing_model,"Subscription")}${masterOption("contact_sales",p.billing_model,"Contact sales")}${masterOption("free",p.billing_model,"Free")}</select></label>
       <label>Currency<input name="currency" maxlength="3" pattern="[A-Z]{3}" value="${masterValue(p,"currency") || "INR"}"/></label>
       <label>Trial days<input name="trialDays" type="number" min="0" max="365" value="${masterValue(p,"trial_days") || 0}"/></label>
-      <label>Monthly amount<input name="monthlyAmount" type="number" min="0" step="0.01" value="${masterValue(p,"monthly_amount") || 0}"/></label>
-      <label>Annual amount<input name="annualAmount" type="number" min="0" step="0.01" value="${masterValue(p,"annual_amount") || 0}"/></label>
+      <label>Monthly base price — excluding GST/taxes<input name="monthlyAmount" type="number" min="0" step="0.01" value="${masterValue(p,"monthly_amount") || 0}"/><small>Authoritative customer price before GST and checkout adjustments.</small></label>
+      <label>Annual base price — excluding GST/taxes<input name="annualAmount" type="number" min="0" step="0.01" value="${masterValue(p,"annual_amount") || 0}"/><small>A price edit creates an immutable revision for the next renewal.</small></label>
       <label>Sort order<input name="sortOrder" type="number" value="${masterValue(p,"sort_order") || 0}"/></label>
     </div></div>
     <div class="wa-master-section"><h4>Enforced resource limits</h4><p class="wa-master-help">Blank means unlimited. Zero disables a metered capability.</p><div class="wa-master-limits">
@@ -429,7 +785,7 @@ function masterPackageForm(pkg) {
       <label>Storage (MB)<input name="storageLimitMb" type="number" min="0" value="${masterLimit(p,"storage_limit_mb")}" placeholder="Unlimited"/></label>
     </div></div>
     <div class="wa-master-section"><h4>Feature access</h4><div class="wa-master-toggles">${accessToggle("team_inbox","Team inbox")}${accessToggle("contacts","Contacts")}${accessToggle("templates","Message templates")}${accessToggle("campaigns","Campaigns")}${accessToggle("flows","Flows")}${accessToggle("automations","Automations")}${accessToggle("api_access","API access")}${accessToggle("priority_support","Priority support")}</div></div>
-    <footer><span>Last updated ${escapeHtml(formatDate(p.updated_at))}</span><button class="wa-admin-button primary" type="submit">${isNew ? "Create package" : "Save master package"}</button></footer>
+    <footer><span>${p.current_price_version_id ? "Versioned financial price · " : "New financial price · "}Last updated ${escapeHtml(formatDate(p.updated_at))}</span><button class="wa-admin-button primary" type="submit">${isNew ? "Create package" : "Save master package"}</button></footer>
   </form>`;
 }
 
@@ -447,17 +803,55 @@ function masterAddonForm(addon, packages) {
       <label>Billing model<select name="billingModel">${masterOption("recurring",a.billing_model,"Recurring")}${masterOption("one_time",a.billing_model,"One-time")}${masterOption("usage",a.billing_model,"Usage")}${masterOption("contact_sales",a.billing_model,"Contact sales")}</select></label>
       <label>Interval<select name="billingInterval">${masterOption("month",a.billing_interval,"Monthly")}${masterOption("year",a.billing_interval,"Annual")}${masterOption("one_time",a.billing_interval,"One-time")}${masterOption("usage",a.billing_interval,"Usage")}${masterOption("custom",a.billing_interval,"Custom")}</select></label>
       <label>Currency<input name="currency" maxlength="3" value="${masterValue(a,"currency") || "INR"}"/></label>
-      <label>Unit amount<input name="unitAmount" type="number" min="0" step="0.01" value="${masterValue(a,"unit_amount") || 0}"/></label>
+      <label>Unit base price — excluding GST/taxes<input name="unitAmount" type="number" min="0" step="0.01" value="${masterValue(a,"unit_amount") || 0}"/><small>Authoritative price per billing unit.</small></label>
       <label>Billing unit<input name="unitName" value="${masterValue(a,"unit_name") || "unit"}"/></label>
-      <label>Quantity step<input name="quantityStep" type="number" min="1" value="${masterValue(a,"quantity_step") || 1}"/></label>
-      <label>Minimum quantity<input name="minimumQuantity" type="number" min="0" value="${masterValue(a,"minimum_quantity") || 1}"/></label>
-      <label>Maximum quantity<input name="maximumQuantity" type="number" min="1" value="${masterLimit(a,"maximum_quantity")}" placeholder="Unlimited"/></label>
+      <label data-addon-quantity-field>Quantity step<input name="quantityStep" type="number" min="1" value="${masterValue(a,"quantity_step") || 1}"/></label>
+      <label data-addon-quantity-field>Minimum quantity<input name="minimumQuantity" type="number" min="1" value="${masterValue(a,"minimum_quantity") || 1}"/></label>
+      <label data-addon-quantity-field>Maximum quantity<input name="maximumQuantity" type="number" min="1" value="${masterLimit(a,"maximum_quantity")}" placeholder="Unlimited"/></label>
       <label>Sort order<input name="sortOrder" type="number" value="${masterValue(a,"sort_order") || 0}"/></label>
       <label class="wa-pkg-full">Description<textarea name="description" rows="2">${masterValue(a,"description")}</textarea></label>
     </div>
-    <div class="wa-master-section"><h4>Eligible packages</h4><div class="wa-master-toggles">${packages.map((p) => `<label class="wa-master-toggle"><input type="checkbox" name="eligible_${escapeHtml(p.code)}" ${eligible.includes(p.code) ? "checked" : ""}/><span>${escapeHtml(p.name)}</span></label>`).join("") || "<span>Create a package first.</span>"}</div></div>
+    <div class="wa-master-section"><h4>Customer quantity control</h4><p class="wa-master-help">Enable this for add-ons customers can buy in multiple units, such as seats, WhatsApp numbers and integrations. Fixed add-ons are always purchased once.</p><div class="wa-master-toggles"><label class="wa-master-toggle"><input type="checkbox" name="quantityEnabled" data-addon-quantity-toggle ${a.quantity_enabled !== false ? "checked" : ""}/><span>Show quantity selector to customer</span></label></div></div>
+    <input type="hidden" name="preservedEligiblePlanCodes" value="${escapeHtml(JSON.stringify(eligible))}"/>
     <div class="wa-master-section"><h4>Entitlement effect per unit</h4><div class="wa-master-limits"><label>Extra seats<input name="effect_team_member_limit" type="number" min="0" value="${escapeHtml(effects.team_member_limit ?? 0)}"/></label><label>Extra numbers<input name="effect_whatsapp_number_limit" type="number" min="0" value="${escapeHtml(effects.whatsapp_number_limit ?? 0)}"/></label><label>Extra integrations<input name="effect_integration_limit" type="number" min="0" value="${escapeHtml(effects.integration_limit ?? 0)}"/></label><label class="wa-master-toggle"><input name="effect_priority_support" type="checkbox" ${effects.priority_support ? "checked" : ""}/><span>Enable priority support</span></label></div></div>
     <footer><label class="wa-master-toggle"><input name="isSelfService" type="checkbox" ${a.is_self_service ? "checked" : ""}/><span>Customer can purchase</span></label><button class="wa-admin-button primary" type="submit">${isNew ? "Create add-on" : "Save master add-on"}</button></footer>
+  </form>`;
+}
+
+function masterCouponForm(coupon, packages, addons) {
+  const c = coupon || {};
+  const isNew = !c.id;
+  const packageCodes = Array.isArray(c.applies_to_package_codes) ? c.applies_to_package_codes : [];
+  const addonCodes = Array.isArray(c.applies_to_addon_codes) ? c.applies_to_addon_codes : [];
+  const intervals = Array.isArray(c.billing_intervals) ? c.billing_intervals : [];
+  const percentage = c.percentage_bps == null ? "" : Number(c.percentage_bps) / 100;
+  const fixedAmount = c.fixed_amount_paise == null ? "" : Number(c.fixed_amount_paise) / 100;
+  const maximumDiscount = c.max_discount_paise == null ? "" : Number(c.max_discount_paise) / 100;
+  const minimumSubtotal = c.minimum_subtotal_paise == null ? 0 : Number(c.minimum_subtotal_paise) / 100;
+  return `<form class="wa-master-record compact" data-master-coupon-form="${escapeHtml(c.id || "")}">
+    <header><div><span class="wa-admin-kicker">${isNew ? "New wallet coupon" : `Wallet coupon · ${escapeHtml(c.code)}`}</span><h3>${escapeHtml(c.name || "Create wallet coupon")}</h3><p>Discounts are validated server-side against prepaid service credit before GST and recorded only after a captured recharge.</p></div><span class="wa-master-state ${escapeHtml(c.status || "draft")}">${escapeHtml(c.status || "draft")}</span></header>
+    <div class="wa-pkg-grid">
+      <label>Coupon code<input name="code" required minlength="3" maxlength="40" pattern="[A-Za-z0-9][A-Za-z0-9_-]{2,39}" value="${masterValue(c,"code")}" placeholder="WELCOME20"/><small>Customer enters this code at checkout.</small></label>
+      <label>Internal name<input name="name" required maxlength="120" value="${masterValue(c,"name")}" placeholder="Launch offer"/></label>
+      <label>Status<select name="status">${masterOption("draft",c.status,"Draft")}${masterOption("active",c.status,"Active")}${masterOption("disabled",c.status,"Disabled")}</select></label>
+      <label>Discount type<select name="discountType">${masterOption("percentage",c.discount_type || "percentage","Percentage")}${masterOption("fixed",c.discount_type,"Fixed amount")}</select></label>
+      <label>Percentage discount<input name="percentage" type="number" min="0.01" max="100" step="0.01" value="${escapeHtml(percentage)}" placeholder="20"/><small>Used only for percentage coupons.</small></label>
+      <label>Fixed discount — excluding GST<input name="fixedAmount" type="number" min="0.01" step="0.01" value="${escapeHtml(fixedAmount)}" placeholder="500"/><small>Used only for fixed coupons.</small></label>
+      <label>Maximum discount<input name="maximumDiscount" type="number" min="0.01" step="0.01" value="${escapeHtml(maximumDiscount)}" placeholder="No cap"/></label>
+      <label>Minimum base subtotal<input name="minimumSubtotal" type="number" min="0" step="0.01" value="${escapeHtml(minimumSubtotal)}"/></label>
+      <label>Currency<input name="currency" maxlength="3" pattern="[A-Z]{3}" value="${masterValue(c,"currency") || "INR"}"/></label>
+      <label>Valid from<input name="validFrom" type="datetime-local" value="${masterDateTime(c.valid_from || new Date())}" required/></label>
+      <label>Valid until<input name="validUntil" type="datetime-local" value="${masterDateTime(c.valid_until)}"/><small>Blank means no scheduled expiry.</small></label>
+      <label>Total redemption limit<input name="maximumRedemptions" type="number" min="1" value="${masterLimit(c,"maximum_redemptions")}" placeholder="Unlimited"/></label>
+      <label>Limit per customer<input name="maximumRedemptionsPerTenant" type="number" min="1" value="${masterValue(c,"maximum_redemptions_per_tenant") || 1}" required/></label>
+      <input type="hidden" name="providerOfferId" value="${masterValue(c,"provider_offer_id")}"/>
+      <label class="wa-pkg-full">Description<textarea name="description" rows="2">${masterValue(c,"description")}</textarea></label>
+    </div>
+    <div class="wa-master-section"><h4>Wallet eligibility</h4><div class="wa-master-toggles"><label class="wa-master-toggle"><input type="checkbox" name="appliesToWallet" ${isNew || c.applies_to_wallet ? "checked" : ""}/><span>Prepaid wallet recharges</span></label><label class="wa-master-toggle"><input type="checkbox" name="firstPaymentOnly" ${c.first_payment_only ? "checked" : ""}/><span>First successful wallet payment only</span></label></div></div>
+    <input type="hidden" name="preservedPackageCodes" value="${escapeHtml(JSON.stringify(packageCodes))}"/>
+    <input type="hidden" name="preservedBillingIntervals" value="${escapeHtml(JSON.stringify(intervals))}"/>
+    <div class="wa-master-section"><h4>Eligible add-ons</h4><p class="wa-master-help">Selected add-ons are included in the coupon discount. Leave all unchecked to include every eligible selected add-on.</p><div class="wa-master-toggles">${addons.map((a) => `<label class="wa-master-toggle"><input type="checkbox" name="addon_${escapeHtml(a.code)}" ${addonCodes.includes(a.code) ? "checked" : ""}/><span>${escapeHtml(a.name)}</span></label>`).join("") || "<span>No add-ons configured.</span>"}</div></div>
+    <footer><span>Coupon values reduce the base subtotal before GST. Redemption is recorded only by verified checkout.</span><button class="wa-admin-button primary" type="submit">${isNew ? "Create coupon" : "Save coupon"}</button></footer>
   </form>`;
 }
 
@@ -465,25 +859,91 @@ function masterAssignments(tenants, addons, assignments) {
   const addonMap = new Map(addons.map((addon) => [addon.code, addon]));
   const assignmentRows = assignments.map((item) => {
     const addon = addonMap.get(item.addonCode);
-    return `<form class="wa-master-assignment" data-master-assignment><input type="hidden" name="tenantId" value="${escapeHtml(item.tenantId)}"/><input type="hidden" name="addonCode" value="${escapeHtml(item.addonCode)}"/><div><strong>${escapeHtml(item.tenantName)}</strong><small>${escapeHtml(item.planCode)}</small></div><div><strong>${escapeHtml(addon?.name || item.addonCode)}</strong><small>${escapeHtml(item.addonCode)}</small></div><label>Quantity<input name="quantity" type="number" min="0" max="10000" value="${Number(item.quantity || 0)}"/></label><label>Status<select name="status">${masterOption("active",item.status,"Active")}${masterOption("pending",item.status,"Pending")}${masterOption("paused",item.status,"Paused")}${masterOption("cancelled",item.status,"Cancelled")}</select></label><button class="wa-admin-button" type="submit">Update</button></form>`;
+    return `<form class="wa-master-assignment" data-master-assignment><input type="hidden" name="tenantId" value="${escapeHtml(item.tenantId)}"/><input type="hidden" name="addonCode" value="${escapeHtml(item.addonCode)}"/><div><strong>${escapeHtml(item.tenantName)}</strong><small>PAYG workspace</small></div><div><strong>${escapeHtml(addon?.name || item.addonCode)}</strong><small>${escapeHtml(item.addonCode)}</small></div><label>Quantity<input name="quantity" type="number" min="0" max="10000" value="${Number(item.quantity || 0)}"/></label><label>Status<select name="status">${masterOption("active",item.status,"Active")}${masterOption("pending",item.status,"Pending")}${masterOption("paused",item.status,"Paused")}${masterOption("cancelled",item.status,"Cancelled")}</select></label><button class="wa-admin-button" type="submit">Update</button></form>`;
   }).join("");
-  const tenantOptions = tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}">${escapeHtml(tenant.name)} · ${escapeHtml(tenant.planCode)}</option>`).join("");
+  const tenantOptions = tenants.map((tenant) => `<option value="${escapeHtml(tenant.id)}">${escapeHtml(tenant.name)}</option>`).join("");
   const addonOptions = addons.filter((addon) => addon.status === "active").map((addon) => `<option value="${escapeHtml(addon.code)}">${escapeHtml(addon.name)}</option>`).join("");
-  return `<section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Customer add-on assignments</h3><p>This ledger is the billing and entitlement source used by customer workspaces.</p></div></div><div class="wa-master-assignment-list">${assignmentRows || '<div class="wa-admin-empty">No customer add-ons assigned.</div>'}</div>${state.canManage ? `<form class="wa-master-assignment create" data-master-assignment><div><strong>Assign an add-on</strong><small>Eligibility is checked against the customer package.</small></div><label>Customer<select name="tenantId" required><option value="">Select customer</option>${tenantOptions}</select></label><label>Add-on<select name="addonCode" required><option value="">Select add-on</option>${addonOptions}</select></label><label>Quantity<input name="quantity" type="number" min="1" max="10000" value="1" required/></label><label>Status<select name="status"><option value="active">Active</option><option value="pending">Pending</option></select></label><button class="wa-admin-button primary" type="submit">Assign add-on</button></form>` : ""}</section>`;
+  return `<section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Customer capacity assignments</h3><p>This ledger is the billing and entitlement source for paid seats, numbers and integrations.</p></div></div><div class="wa-master-assignment-list">${assignmentRows || '<div class="wa-admin-empty">No paid capacity assigned.</div>'}</div>${state.canManage ? `<form class="wa-master-assignment create" data-master-assignment><div><strong>Assign paid capacity</strong><small>Applies to the selected PAYG workspace.</small></div><label>Customer<select name="tenantId" required><option value="">Select customer</option>${tenantOptions}</select></label><label>Capacity item<select name="addonCode" required><option value="">Select add-on</option>${addonOptions}</select></label><label>Quantity<input name="quantity" type="number" min="1" max="10000" value="1" required/></label><label>Status<select name="status"><option value="active">Active</option><option value="pending">Pending</option></select></label><button class="wa-admin-button primary" type="submit">Assign capacity</button></form>` : ""}</section>`;
+}
+
+function masterCurrency(amount, currency = "INR") {
+  const value = Number(amount || 0);
+  try { return new Intl.NumberFormat("en-IN", { style: "currency", currency: String(currency || "INR").toUpperCase(), maximumFractionDigits: 2 }).format(value); }
+  catch { return `${escapeHtml(currency || "INR")} ${value.toFixed(2)}`; }
+}
+
+function masterModal(kind, id, title, subtitle, form) {
+  const key = `${kind}:${id || "new"}`;
+  return `<section class="wa-master-modal" data-master-modal="${escapeHtml(key)}" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}" hidden>
+    <div class="wa-master-modal-shell">
+      <header class="wa-master-modal-head"><div><span>${escapeHtml(subtitle)}</span><strong>${escapeHtml(title)}</strong></div><button type="button" data-master-modal-close aria-label="Close editor">&times;</button></header>
+      <main>${form}</main>
+    </div>
+  </section>`;
+}
+
+function masterPackageCard(pkg) {
+  const p = pkg || {};
+  const activeFeatures = Object.values(p.entitlements || {}).filter(Boolean).length;
+  const limits = [p.team_member_limit, p.whatsapp_number_limit, p.contact_limit, p.monthly_message_limit].filter((value) => value != null).length;
+  return `<button class="wa-master-card package" type="button" data-master-open="package:${escapeHtml(p.id)}">
+    <span class="wa-master-card-top"><span class="wa-master-card-icon">${escapeHtml(String(p.name || p.code || "P").slice(0, 2).toUpperCase())}</span><span class="wa-master-state ${escapeHtml(p.status || "draft")}">${escapeHtml(p.status || "draft")}</span></span>
+    <span class="wa-master-card-copy"><small>Package · ${escapeHtml(p.code)}</small><strong>${escapeHtml(p.name)}</strong><em>${escapeHtml(p.description || "No internal description")}</em></span>
+    <span class="wa-master-card-price"><strong>${masterCurrency(p.monthly_amount, p.currency)}</strong><small>/ month + GST</small></span>
+    <span class="wa-master-card-meta"><span>${Number(p.trial_days || 0)}-day trial</span><span>${limits} metered limits</span><span>${activeFeatures} features</span></span>
+    <span class="wa-master-card-action">Open package editor <b aria-hidden="true">&rarr;</b></span>
+  </button>`;
+}
+
+function masterAddonCard(addon) {
+  const a = addon || {};
+  return `<button class="wa-master-card addon" type="button" data-master-open="addon:${escapeHtml(a.id)}">
+    <span class="wa-master-card-top"><span class="wa-master-card-icon">${escapeHtml(String(a.name || a.code || "A").slice(0, 2).toUpperCase())}</span><span class="wa-master-state ${escapeHtml(a.status || "draft")}">${escapeHtml(a.status || "draft")}</span></span>
+    <span class="wa-master-card-copy"><small>Add-on · ${escapeHtml(a.code)}</small><strong>${escapeHtml(a.name)}</strong><em>${escapeHtml(a.description || "No description")}</em></span>
+    <span class="wa-master-card-price"><strong>${masterCurrency(a.unit_amount, a.currency)}</strong><small>/ ${escapeHtml(a.unit_name || "unit")} · ${escapeHtml(a.billing_interval || "custom")}</small></span>
+    <span class="wa-master-card-meta"><span>PAYG capacity</span><span>${a.is_self_service ? "Self-service" : "Admin assigned"}</span><span>${a.quantity_enabled === false ? "Single purchase" : "Customer quantity"}</span></span>
+    <span class="wa-master-card-action">Open add-on editor <b aria-hidden="true">&rarr;</b></span>
+  </button>`;
+}
+
+function masterCouponCard(coupon) {
+  const c = coupon || {};
+  const discount = c.discount_type === "fixed" ? masterCurrency(Number(c.fixed_amount_paise || 0) / 100, c.currency) : `${Number(c.percentage_bps || 0) / 100}%`;
+  return `<button class="wa-master-card coupon" type="button" data-master-open="coupon:${escapeHtml(c.id)}">
+    <span class="wa-master-card-top"><span class="wa-master-card-icon">%</span><span class="wa-master-state ${escapeHtml(c.status || "draft")}">${escapeHtml(c.status || "draft")}</span></span>
+    <span class="wa-master-card-copy"><small>Coupon · ${escapeHtml(c.code)}</small><strong>${escapeHtml(c.name)}</strong><em>${escapeHtml(c.description || "Controlled checkout discount")}</em></span>
+    <span class="wa-master-card-price"><strong>${escapeHtml(discount)}</strong><small>${c.first_payment_only ? "first payment only" : "eligible payments"}</small></span>
+    <span class="wa-master-card-meta"><span>${Number(c.redemption_count || 0)} redeemed</span><span>${c.valid_until ? `Ends ${escapeHtml(formatDate(c.valid_until))}` : "No expiry"}</span></span>
+    <span class="wa-master-card-action">Open coupon editor <b aria-hidden="true">&rarr;</b></span>
+  </button>`;
+}
+
+function masterCreateCard(kind, title, copy) {
+  return `<button class="wa-master-card create" type="button" data-master-open="${escapeHtml(kind)}:new"><span class="wa-master-create-icon">+</span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(copy)}</small><span class="wa-master-card-action">Open new record <b aria-hidden="true">&rarr;</b></span></button>`;
+}
+
+function masterDirectory(title, description, kind, records, cardRenderer, formRenderer, createTitle, createCopy) {
+  const cards = records.map(cardRenderer).join("");
+  const modals = records.map((record) => masterModal(kind, record.id, record.name || record.code, `Edit ${kind}`, formRenderer(record))).join("");
+  const create = state.canManage ? masterCreateCard(kind, createTitle, createCopy) : "";
+  const createModal = state.canManage ? masterModal(kind, "new", createTitle, `New ${kind}`, formRenderer(null)) : "";
+  return `<section class="wa-master-stack"><div class="wa-master-heading"><div><h3>${escapeHtml(title)}</h3><p>${escapeHtml(description)}</p></div><span>${records.length} record${records.length === 1 ? "" : "s"}</span></div><div class="wa-master-card-grid">${cards}${create || (!records.length ? '<div class="wa-admin-empty">No records configured.</div>' : "")}</div>${modals}${createModal}</section>`;
 }
 
 function packageMaster() {
-  if (!state.packageMaster && !state.packageMasterError) { if (!state.packageMasterLoading) loadPackageMaster(); return '<div class="wa-admin-empty">Loading Package Master…</div>'; }
-  if (state.packageMasterError) return `<div class="wa-admin-notice"><strong>Package Master is not active yet.</strong><br>${escapeHtml(state.packageMasterError)}</div>`;
+  if (!state.packageMaster && !state.packageMasterError) { if (!state.packageMasterLoading) loadPackageMaster(); return '<div class="wa-admin-empty">Loading commercial controls…</div>'; }
+  if (state.packageMasterError) return `<div class="wa-admin-notice"><strong>Commercial controls are not active yet.</strong><br>${escapeHtml(state.packageMasterError)}</div>`;
   const packages = state.packageMaster?.packages || [];
-  const addons = state.packageMaster?.addons || [];
+  const addons = (state.packageMaster?.addons || []).filter((item) => CURRENT_CAPACITY_ADDON_CODES.has(item.code));
+  const coupons = state.packageMaster?.coupons || [];
   const tenants = state.packageMaster?.tenants || [];
-  const assignments = state.packageMaster?.assignments || [];
-  const active = packages.filter((item) => item.status === "active").length;
-  return `<section class="wa-master-intro"><div><span class="wa-admin-kicker">Central source of truth</span><h3>Package Master</h3><p>Customer portal access and billing are resolved from these operational records. Public Packages &amp; Offers are maintained separately.</p></div><div class="wa-master-summary"><span><strong>${packages.length}</strong> packages</span><span><strong>${active}</strong> active</span><span><strong>${addons.length}</strong> add-ons</span></div></section>
-    ${!state.canManage ? '<div class="wa-admin-notice">You have view-only access to Package Master.</div>' : ""}
-    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Customer packages</h3><p>Entitlements, hard limits, trials and subscription amounts.</p></div></div>${packages.map(masterPackageForm).join("")}${state.canManage ? masterPackageForm(null) : ""}</section>
-    <section class="wa-master-stack"><div class="wa-master-heading"><div><h3>Add-on master</h3><p>Billable capacity and feature extensions eligible for each package.</p></div></div>${addons.map((addon) => masterAddonForm(addon,packages)).join("")}${state.canManage ? masterAddonForm(null,packages) : ""}</section>${masterAssignments(tenants,addons,assignments)}`;
+  const assignments = (state.packageMaster?.assignments || []).filter((item) => CURRENT_CAPACITY_ADDON_CODES.has(item.addonCode));
+  return `<section class="wa-master-intro"><div><span class="wa-admin-kicker">PAYG source of truth</span><h3>Pricing, coupons and capacity</h3><p>All core platform features are included. Customers fund a prepaid service wallet and pay the verified per-message rate; only extra seats, numbers and integrations remain separate.</p></div><div class="wa-master-summary"><span><strong>$0</strong> base fee</span><span><strong>${addons.length}</strong> capacity add-ons</span><span><strong>${coupons.length}</strong> coupons</span><span><strong>${tenants.length}</strong> customers</span></div></section>
+    ${!state.canManage ? '<div class="wa-admin-notice">You have view-only access to PAYG commercial controls.</div>' : ""}
+    <section class="wa-admin-card" data-commercial-message-pricing></section>
+    <section class="wa-admin-notice"><strong>Historical records are protected.</strong><br>Previous subscription records remain stored for invoices and reconciliation, but are no longer offered or editable as current commercial products.<div class="wa-admin-actions"><a class="wa-admin-button" href="?view=packages">Preview public PAYG offer</a><a class="wa-admin-button" href="?view=subscriptions">View legacy billing records</a></div></section>
+    ${masterDirectory("Paid capacity add-ons","The only separately billed capacity: extra agent seats, WhatsApp numbers and integrations.","addon",addons,masterAddonCard,(addon) => masterAddonForm(addon,packages),"Add capacity add-on","Create an additional seat, number or integration capacity item.")}
+    ${masterDirectory("Wallet coupon codes","Server-enforced discounts applied to prepaid service credit before GST.","coupon",coupons,masterCouponCard,(coupon) => masterCouponForm(coupon,packages,addons),"Add wallet coupon","Create a prepaid wallet recharge discount code.")}${masterAssignments(tenants,addons,assignments)}`;
 }
 
 function nullableNumber(formData, name) {
@@ -511,7 +971,7 @@ async function saveMasterPackage(event, form) {
   try {
     const { error } = await db.rpc("whatsapp_platform_admin_save_master_package", { p_id: form.dataset.masterPackageForm || null, p_payload: payload });
     if (error) throw error;
-    showToast("Package Master updated. Customer access will use this definition.", TOAST_TYPES.SUCCESS);
+    showToast("Package Master updated. Financial price revisions and renewal notices were created where required.", TOAST_TYPES.SUCCESS);
     state.packageMaster = null; await loadPackageMaster();
   } catch (error) { showToast(error?.message || "Could not save master package.", TOAST_TYPES.ERROR); button.disabled = false; }
 }
@@ -523,22 +983,74 @@ async function saveMasterAddon(event, form) {
   button.disabled = true;
   const values = new FormData(form);
   const packages = state.packageMaster?.packages || [];
-  const eligiblePlanCodes = packages.filter((p) => values.get(`eligible_${p.code}`) === "on").map((p) => p.code);
+  const selectedEligiblePlanCodes = packages.filter((p) => values.get(`eligible_${p.code}`) === "on").map((p) => p.code);
+  let preservedEligiblePlanCodes = [];
+  try { preservedEligiblePlanCodes = JSON.parse(String(values.get("preservedEligiblePlanCodes") || "[]")); } catch { preservedEligiblePlanCodes = []; }
+  const eligiblePlanCodes = selectedEligiblePlanCodes.length ? selectedEligiblePlanCodes : preservedEligiblePlanCodes;
   const entitlementEffects = {};
   [["team_member_limit","effect_team_member_limit"],["whatsapp_number_limit","effect_whatsapp_number_limit"],["integration_limit","effect_integration_limit"]].forEach(([key,name]) => { const number = Number(values.get(name) || 0); if (number) entitlementEffects[key] = number; });
   if (values.get("effect_priority_support") === "on") entitlementEffects.priority_support = true;
+  const quantityEnabled = values.get("quantityEnabled") === "on";
   const payload = {
     code: values.get("code"), name: values.get("name"), description: values.get("description"), status: values.get("status"), billingModel: values.get("billingModel"),
     billingInterval: values.get("billingInterval"), currency: String(values.get("currency") || "INR").toUpperCase(), unitAmount: Number(values.get("unitAmount") || 0),
-    unitName: values.get("unitName"), minimumQuantity: Number(values.get("minimumQuantity") || 1), maximumQuantity: nullableNumber(values,"maximumQuantity"), quantityStep: Number(values.get("quantityStep") || 1),
+    unitName: values.get("unitName"), quantityEnabled, minimumQuantity: quantityEnabled ? Number(values.get("minimumQuantity") || 1) : 1, maximumQuantity: quantityEnabled ? nullableNumber(values,"maximumQuantity") : 1, quantityStep: quantityEnabled ? Number(values.get("quantityStep") || 1) : 1,
     eligiblePlanCodes, entitlementEffects, isSelfService: values.get("isSelfService") === "on", sortOrder: Number(values.get("sortOrder") || 0),
   };
   try {
     const { error } = await db.rpc("whatsapp_platform_admin_save_master_addon", { p_id: form.dataset.masterAddonForm || null, p_payload: payload });
     if (error) throw error;
-    showToast("Add-on Master updated.", TOAST_TYPES.SUCCESS);
+    showToast("Add-on Master updated. The tax-exclusive price revision is now authoritative.", TOAST_TYPES.SUCCESS);
     state.packageMaster = null; await loadPackageMaster();
   } catch (error) { showToast(error?.message || "Could not save master add-on.", TOAST_TYPES.ERROR); button.disabled = false; }
+}
+
+function bindMasterAddonQuantityControl(form) {
+  const toggle = form.querySelector("[data-addon-quantity-toggle]");
+  if (!toggle) return;
+  const sync = () => form.querySelectorAll("[data-addon-quantity-field]").forEach((field) => {
+    field.hidden = !toggle.checked;
+    field.querySelectorAll("input").forEach((input) => { input.disabled = !toggle.checked; });
+  });
+  toggle.addEventListener("change", sync);
+  sync();
+}
+
+async function saveMasterCoupon(event, form) {
+  event.preventDefault();
+  if (!form.reportValidity()) return;
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  const values = new FormData(form);
+  const packages = state.packageMaster?.packages || [];
+  const addons = state.packageMaster?.addons || [];
+  let preservedPackageCodes = [];
+  let preservedBillingIntervals = [];
+  try { preservedPackageCodes = JSON.parse(String(values.get("preservedPackageCodes") || "[]")); } catch { preservedPackageCodes = []; }
+  try { preservedBillingIntervals = JSON.parse(String(values.get("preservedBillingIntervals") || "[]")); } catch { preservedBillingIntervals = []; }
+  const payload = {
+    code: String(values.get("code") || "").trim().toUpperCase(), name: values.get("name"), description: values.get("description"), status: values.get("status"),
+    discountType: values.get("discountType"), percentage: values.get("percentage"), fixedAmount: values.get("fixedAmount"), maximumDiscount: values.get("maximumDiscount"),
+    minimumSubtotal: Number(values.get("minimumSubtotal") || 0), currency: String(values.get("currency") || "INR").toUpperCase(),
+    validFrom: values.get("validFrom") ? new Date(String(values.get("validFrom"))).toISOString() : new Date().toISOString(),
+    validUntil: values.get("validUntil") ? new Date(String(values.get("validUntil"))).toISOString() : "",
+    maximumRedemptions: values.get("maximumRedemptions"), maximumRedemptionsPerTenant: Number(values.get("maximumRedemptionsPerTenant") || 1),
+    firstPaymentOnly: values.get("firstPaymentOnly") === "on",
+    appliesToWallet: values.get("appliesToWallet") === "on",
+    providerOfferId: String(values.get("providerOfferId") || "").trim(),
+    billingIntervals: preservedBillingIntervals,
+    packageCodes: preservedPackageCodes,
+    addonCodes: addons.filter((item) => values.get(`addon_${item.code}`) === "on").map((item) => item.code),
+  };
+  if (!payload.billingIntervals.length && !payload.appliesToWallet) { showToast("Select prepaid wallet recharges or at least one legacy billing interval.", TOAST_TYPES.ERROR); button.disabled = false; return; }
+  if (payload.discountType === "percentage" && !(Number(payload.percentage) > 0)) { showToast("Enter the percentage discount.", TOAST_TYPES.ERROR); button.disabled = false; return; }
+  if (payload.discountType === "fixed" && !(Number(payload.fixedAmount) > 0)) { showToast("Enter the fixed discount amount.", TOAST_TYPES.ERROR); button.disabled = false; return; }
+  try {
+    const { error } = await db.rpc("whatsapp_platform_admin_save_billing_coupon", { p_id: form.dataset.masterCouponForm || null, p_payload: payload });
+    if (error) throw error;
+    showToast("Coupon saved. Checkout will validate its dates, eligibility and redemption limits server-side.", TOAST_TYPES.SUCCESS);
+    state.packageMaster = null; await loadPackageMaster();
+  } catch (error) { showToast(error?.message || "Could not save coupon.", TOAST_TYPES.ERROR); button.disabled = false; }
 }
 
 async function saveMasterAssignment(event, form) {
@@ -636,14 +1148,9 @@ function ratesForm(rates) {
 }
 
 function packages() {
-  if (!state.canManage) return '<section class="wa-admin-card"><h3>Packages &amp; Offers</h3><div class="wa-admin-empty">You have view-only access. A manage permission is required to edit packages and pricing.</div></section>';
-  if (!state.catalog && !state.catalogError) { if (!state.catalogLoading) loadCatalog(); return '<div class="wa-admin-empty">Loading packages…</div>'; }
-  if (state.catalogError) return `<div class="wa-admin-notice"><strong>Packages data is not active yet.</strong><br>${escapeHtml(state.catalogError)}<br><br>Apply the pending WhatsApp Platform packages migration to activate management.</div>`;
-  const plans = state.catalog.plans || [];
-  const addons = state.catalog.addons || [];
-  return `<section class="wa-admin-notice"><strong>Public website content only.</strong><br>Changes here control public pricing cards and calculator presentation. Customer access, limits and billing are controlled exclusively in Package Master.</section><section class="wa-admin-card"><h3>Plans</h3><p>These render on the public pricing page. Price is monthly; the calculator uses each plan's monthly price as the subscription line.</p><div class="wa-pkg-list">${plans.map(planForm).join("")}${planForm(null)}</div></section>
-    <section class="wa-admin-card"><h3>Add-ons</h3><p>Shown in the “Extend any plan” grid, each with an info tooltip. Price display is free text (e.g. ₹400) plus a unit (e.g. /number/mo or one-time).</p><div class="wa-pkg-list">${addons.map(addonForm).join("")}${addonForm(null)}</div></section>
-    ${ratesForm(state.catalog.rates || {})}`;
+  return `<section class="wa-master-intro"><div><span class="wa-admin-kicker">Public website</span><h3>One PAYG offer, no packages</h3><p>The public pricing page shows the verified global per-message service rate, prepaid-wallet policy and the three separately billed capacity add-ons. It no longer reads or presents monthly subscription plans.</p></div><div class="wa-master-summary"><span><strong>$0</strong> monthly base</span><span><strong>1</strong> PAYG offer</span><span><strong>3</strong> capacity add-ons</span><span><strong>Live</strong> verified rate</span></div></section>
+    <section class="wa-admin-card"><div class="wa-admin-secret-heading"><div><span class="wa-admin-kicker">Live presentation</span><h3>Customer-facing pricing</h3><p>The public page resolves the current verified USD rate directly from the pricing service. Individual customer overrides remain private to their signed-in wallet.</p></div><a class="wa-admin-button primary" href="${ROUTES.WHATSAPP_PLATFORM_PORTAL.replace(/\/$/, "")}/pricing/" target="_blank" rel="noopener">Open public pricing</a></div></section>
+    <section class="wa-admin-grid"><article class="wa-admin-card"><h3>Manage commercial terms</h3><p>Publish the global message price or a customer-specific version, with effective dates and an immutable audit trail.</p><a class="wa-admin-button primary" href="?view=billing">Open PAYG pricing</a></article><article class="wa-admin-card"><h3>Manage add-ons and coupons</h3><p>Edit the three paid capacity items and prepaid-wallet coupon rules without exposing historical packages.</p><a class="wa-admin-button" href="?view=package-master">Open commercial controls</a></article></section>`;
 }
 
 async function savePlan(event, form) {
@@ -722,11 +1229,88 @@ async function saveRates(event) {
   } catch (error) { showToast(error?.message || "Could not save rates.", TOAST_TYPES.ERROR); btn.disabled = false; }
 }
 
+function customerSupportPage() {
+  const tickets = state.support.tickets || [], detail = state.support.thread;
+  const assignees = state.support.assignees || [];
+  const customers = state.support.customers || [];
+  const open = tickets.filter((ticket) => !["resolved", "closed"].includes(ticket.status)).length;
+  const urgent = tickets.filter((ticket) => ticket.priority === "urgent" && !["resolved", "closed"].includes(ticket.status)).length;
+  const overdue = tickets.filter((ticket) => !ticket.firstRespondedAt && new Date(ticket.firstResponseDueAt).getTime() < Date.now()).length;
+  const replyOwner = (ticket) => ticket.status === "waiting_on_customer" ? "customer" : ["resolved", "closed"].includes(ticket.status) ? "none" : "support";
+  const query = supportQueueFilters.query.trim().toLocaleLowerCase();
+  const priorityRank = { urgent: 4, high: 3, normal: 2, low: 1 };
+  const filteredTickets = tickets.filter((ticket) => {
+    const searchable = [ticket.ticketNumber, ticket.subject, ticket.tenant?.name, ticket.requester?.display_name, ticket.requester?.email].filter(Boolean).join(" ").toLocaleLowerCase();
+    return (!query || searchable.includes(query))
+      && (supportQueueFilters.status === "all" || (supportQueueFilters.status === "active" ? !["resolved", "closed"].includes(ticket.status) : ticket.status === supportQueueFilters.status))
+      && (supportQueueFilters.reply === "all" || replyOwner(ticket) === supportQueueFilters.reply)
+      && (supportQueueFilters.assignee === "all" || (supportQueueFilters.assignee === "unassigned" ? !ticket.assignedToAppUserId : ticket.assignedToAppUserId === supportQueueFilters.assignee));
+  }).sort((a, b) => {
+    if (supportQueueFilters.sort === "oldest") return new Date(a.lastActivityAt) - new Date(b.lastActivityAt);
+    if (supportQueueFilters.sort === "priority") return (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0) || new Date(b.lastActivityAt) - new Date(a.lastActivityAt);
+    if (supportQueueFilters.sort === "sla") return new Date(a.firstResponseDueAt) - new Date(b.firstResponseDueAt);
+    if (supportQueueFilters.sort === "status") return String(a.status).localeCompare(String(b.status));
+    return new Date(b.lastActivityAt) - new Date(a.lastActivityAt);
+  });
+  const rows = filteredTickets.map((ticket) => {
+    const owner = replyOwner(ticket);
+    const assignee = ticket.assignee?.display_name || ticket.assignee?.email || "Unassigned";
+    const waitingLabel = owner === "customer" ? "Customer reply" : owner === "support" ? "Support reply" : "No reply needed";
+    const deadline = owner === "customer" && ticket.autoCloseAt ? `Closes ${formatDate(ticket.autoCloseAt)}` : !ticket.firstRespondedAt ? `First response ${formatDate(ticket.firstResponseDueAt)}` : "—";
+    return `<button class="wa-support-queue-row" type="button" data-admin-support-ticket="${escapeHtml(ticket.id)}"><span class="wa-support-ticket-main"><strong>${escapeHtml(ticket.subject)}</strong><small>${escapeHtml(ticket.ticketNumber)} · ${escapeHtml(ticket.tenant?.name || "Customer workspace")}</small></span><span>${status(ticket.status)}</span><span class="wa-support-priority is-${escapeHtml(ticket.priority)}">${escapeHtml(ticket.priority)}</span><span><strong>${escapeHtml(waitingLabel)}</strong><small>${escapeHtml(deadline)}</small></span><span><strong>${escapeHtml(assignee)}</strong><small>${escapeHtml(formatDate(ticket.lastActivityAt))}</small></span><span class="wa-support-open-icon" aria-hidden="true">→</span></button>`;
+  }).join("");
+  const messages = (detail?.messages || []).map((message) => `<article class="wa-support-message ${message.authorKind === "support" ? "staff" : "customer"} ${message.is_internal ? "internal" : ""}"><header><strong>${escapeHtml(message.is_internal ? "Internal note" : message.authorKind === "support" ? message.author?.display_name || "Support" : message.author?.display_name || "Customer")}</strong><span>${escapeHtml(formatDate(message.created_at))}</span></header><p>${escapeHtml(message.body)}</p></article>`).join("");
+  const assigneeOptions = [`<option value="">Unassigned</option>`, ...assignees.map((user) => `<option value="${escapeHtml(user.id)}" ${detail?.ticket?.assignedToAppUserId === user.id ? "selected" : ""}>${escapeHtml(user.display_name || user.email)}</option>`)].join("");
+  const customer = detail?.customer || (state.snapshot?.tenants || []).find((tenant) => String(tenant.id || tenant.tenantId || "").toLowerCase() === String(detail?.ticket?.tenantId || "").toLowerCase());
+  const customerTickets = tickets.filter((ticket) => ticket.tenantId === detail?.ticket?.tenantId);
+  const customerConnections = customer?.connections || [];
+  const customerMembers = customer?.users || [];
+  const customerUserRows = customerMembers.map((user) => {
+    const owner = user.roleCode === "owner";
+    const roleOptions = ["admin", "agent", "viewer"].map((role) => `<option value="${role}" ${user.roleCode === role ? "selected" : ""}>${role}</option>`).join("");
+    const statusOptions = ["active", "invited", "disabled"].map((value) => `<option value="${value}" ${user.status === value ? "selected" : ""}>${value}</option>`).join("");
+    return `<form class="wa-support-user-editor" data-support-user-form="${escapeHtml(user.id)}"><label><span>Name</span><input name="displayName" value="${escapeHtml(user.displayName || "")}" minlength="2" maxlength="100" required></label><label><span>Email</span><input name="email" type="email" value="${escapeHtml(user.email || "")}" maxlength="254" required></label><label><span>Role</span>${owner ? `<input value="Owner" disabled><input name="roleCode" type="hidden" value="owner">` : `<select name="roleCode">${roleOptions}</select>`}</label><label><span>Status</span>${owner ? `<input value="Active" disabled><input name="status" type="hidden" value="active">` : `<select name="status">${statusOptions}</select>`}</label><div class="wa-support-user-meta"><small>Last sign-in: ${escapeHtml(user.lastLoginAt ? formatDate(user.lastLoginAt) : "Never")}</small><div><button class="wa-admin-button" type="submit">Save user</button>${owner ? "" : `<button class="wa-admin-button danger" type="button" data-support-user-delete="${escapeHtml(user.id)}" data-support-user-name="${escapeHtml(user.displayName || user.email)}">Delete</button>`}</div></div></form>`;
+  }).join("");
+  const customerConnectionRows = customerConnections.map((connection) => `<article class="wa-connection-detail"><header><div><span>${escapeHtml(connection.provider || "Meta")}</span><strong>${escapeHtml(connection.verifiedName || connection.displayPhoneNumber || "WhatsApp number")}</strong><small>${escapeHtml(connection.displayPhoneNumber || "Number not assigned")}</small></div>${status(connection.status || "unknown")}</header><dl><div><dt>WABA ID</dt><dd class="wa-admin-code">${escapeHtml(connection.whatsappBusinessAccountId || "Not assigned")}</dd></div><div><dt>Phone number ID</dt><dd class="wa-admin-code">${escapeHtml(connection.phoneNumberId || "Not assigned")}</dd></div><div><dt>Meta business ID</dt><dd class="wa-admin-code">${escapeHtml(connection.metaBusinessId || "Not assigned")}</dd></div><div><dt>Connected</dt><dd>${escapeHtml(connection.connectedAt ? formatDate(connection.connectedAt) : "—")}</dd></div></dl></article>`).join("");
+  const customerInvoiceRows = (customer?.invoices || []).map((invoice) => `<tr><td><strong>${escapeHtml(invoice.invoice_number)}</strong><small>${escapeHtml(invoice.invoice_date || "—")}</small></td><td>${status(invoice.status)}</td><td>${escapeHtml(invoice.package_code || "—")}</td><td>₹${(Number(invoice.total_paise || 0) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td><td>${state.canManage ? `<button class="wa-admin-button" type="button" data-support-invoice-email="${escapeHtml(invoice.id)}">Send email</button>` : ""}</td></tr>`).join("");
+  const currentPlan = customer?.planCode || "launch";
+  const seatAssignment = (state.packageMaster?.assignments || []).find((entry) => entry.tenantId === customer?.id && entry.addonCode === "extra_agent_seat" && entry.status === "active");
+  const extraSeats = seatAssignment ? Number(seatAssignment.quantity || 0) : Number(customer?.additionalTeamSeats || 0);
+  const customerModal = detail?.ticket ? `<section class="wa-customer-modal" data-customer-modal="support-customer" hidden role="dialog" aria-modal="true" aria-labelledby="waSupportCustomerTitle"><div class="wa-customer-modal-shell"><header><div><span>Customer account</span><strong id="waSupportCustomerTitle">${escapeHtml(customer?.name || detail.ticket.tenant?.name || "Customer workspace")}</strong><small>${escapeHtml(customer?.ownerEmail || detail.ticket.requester?.email || "")}</small></div><div>${status(customer?.status || "active")}<button type="button" data-customer-modal-close aria-label="Close customer details">×</button></div></header><main>
+    <section class="wa-customer-detail-grid"><article><span>Access model</span><strong>PAYG wallet</strong></article><article><span>Billing access</span><strong>${escapeHtml(customer?.billingAccess?.allowed === true ? "Active" : customer?.billingAccess?.allowed === false ? "Blocked" : "Unavailable")}</strong></article><article><span>Team members</span><strong>${Number(customer?.userCount ?? customerMembers.length)}</strong></article><article><span>Active sessions</span><strong>${Number(customer?.activeSessionCount || 0)}</strong></article><article><span>Connected numbers</span><strong>${customerConnections.length}</strong></article><article><span>Support history</span><strong>${customerTickets.length} tickets</strong></article></section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Customer profile</span><h3>Workspace and requester</h3></div></div><div class="wa-customer-detail-grid"><article><span>Requester</span><strong>${escapeHtml(detail.ticket.requester?.display_name || "—")}</strong></article><article><span>Email</span><strong>${escapeHtml(detail.ticket.requester?.email || customer?.ownerEmail || "—")}</strong></article><article><span>Workspace ID</span><strong class="wa-admin-code">${escapeHtml(detail.ticket.tenantId)}</strong></article><article><span>Workspace slug</span><strong>${escapeHtml(customer?.slug || "—")}</strong></article><article><span>Created</span><strong>${escapeHtml(customer?.createdAt ? formatDate(customer.createdAt) : "—")}</strong></article><article><span>Last updated</span><strong>${escapeHtml(customer?.updatedAt ? formatDate(customer.updatedAt) : "—")}</strong></article></div></section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>People &amp; access</span><h3>Users and roles</h3></div><small>${customerMembers.length} record${customerMembers.length === 1 ? "" : "s"}</small></div><div class="wa-support-user-list">${customerUserRows || '<div class="wa-admin-empty">No users found.</div>'}</div>${state.canManage ? `<form class="wa-support-invite-user" data-support-invite-user><div><strong>Invite another user</strong><small>A secure seven-day invitation is emailed automatically.</small></div><label><span>Full name</span><input name="displayName" minlength="2" maxlength="100" required></label><label><span>Work email</span><input name="email" type="email" maxlength="254" required></label><label><span>Role</span><select name="roleCode"><option value="agent">Agent</option><option value="admin">Administrator</option><option value="viewer">Viewer</option></select></label><button class="wa-admin-button primary" type="submit">Send invitation</button></form>` : ""}</section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Connected assets</span><h3>WhatsApp Business accounts</h3></div><small>${customerConnections.length} connections</small></div><div class="wa-company-connections">${customerConnectionRows || '<div class="wa-admin-empty">No Meta connection has been created.</div>'}</div></section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Verification</span><h3>Business record</h3></div>${status(customer?.verification?.status || customer?.verificationStatus || "not_started")}</div><div class="wa-customer-detail-grid"><article><span>Entity type</span><strong>${escapeHtml(customer?.verification?.entityType || "—")}</strong></article><article><span>Registration</span><strong>${escapeHtml(customer?.verification?.registrationNumber || "—")}</strong></article><article><span>GSTIN</span><strong>${escapeHtml(customer?.verification?.gstin || "—")}</strong></article><article><span>Representative</span><strong>${escapeHtml(customer?.verification?.representativeName || "—")}</strong></article><article><span>Submitted</span><strong>${escapeHtml(customer?.verification?.submittedAt ? formatDate(customer.verification.submittedAt) : "—")}</strong></article><article><span>Reviewed</span><strong>${escapeHtml(customer?.verification?.reviewedAt ? formatDate(customer.verification.reviewedAt) : "—")}</strong></article></div></section>
+    <section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Historical finance</span><h3>Legacy billing records and invoices</h3></div><small>₹${(Number(customer?.capturedPaymentTotalPaise || 0) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })} captured</small></div><div class="wa-admin-notice">These subscription fields are read-only historical evidence. Current billing uses the prepaid wallet.</div><div class="wa-admin-table-wrap"><table class="wa-admin-table"><thead><tr><th>Invoice</th><th>Status</th><th>Historical reference</th><th>Total</th><th>Email</th></tr></thead><tbody>${customerInvoiceRows || '<tr><td colspan="5">No invoices found.</td></tr>'}</tbody></table></div></section>
+    ${state.canManage && customer?.id ? `<section class="wa-customer-modal-section"><div class="wa-customer-section-head"><div><span>Account controls</span><h3>Company, contact and PAYG access</h3></div><small>Protected EMS changes</small></div><form class="wa-customer-account-form wa-support-contact-form" data-support-customer-form="${escapeHtml(customer.id)}"><label><span>Company name</span><input name="name" value="${escapeHtml(customer.name || "")}" minlength="2" maxlength="120" required></label><label><span>Owner email</span><input name="ownerEmail" type="email" value="${escapeHtml(customer.ownerEmail || "")}" maxlength="254" required></label><label><span>Contact mobile</span><input name="contactMobile" type="tel" value="${escapeHtml(customer.contactMobile || "")}" placeholder="+91 98765 43210" required></label><button class="wa-admin-button primary" type="submit">Save contact details</button></form><form class="wa-customer-account-form" data-tenant-form="${escapeHtml(customer.id)}"><input type="hidden" name="plan" value="${escapeHtml(currentPlan)}"><label><span>Extra agent seats</span><input name="additionalSeats" type="number" min="0" max="10000" step="1" value="${extraSeats}"></label><label><span>Account status</span><select name="status"><option value="active" ${customer.status === "active" ? "selected" : ""}>Active</option><option value="suspended" ${customer.status === "suspended" ? "selected" : ""}>Suspended</option><option value="closed" ${customer.status === "closed" ? "selected" : ""}>Closed</option></select></label><button class="wa-admin-button primary" type="submit">Save PAYG access</button></form></section>` : ""}
+    ${state.hasFullAuthority && customer?.id ? `<section class="wa-customer-modal-section" data-customer-message-pricing="${escapeHtml(customer.id)}" data-customer-name="${escapeHtml(customer.name || "Customer")}"></section>` : ""}
+  </main></div></section>` : "";
+  const waitDeadline = detail?.ticket?.status === "waiting_on_customer" && detail.ticket.autoCloseAt ? `<span>Auto-close <strong>${escapeHtml(formatDate(detail.ticket.autoCloseAt))}</strong></span>` : "";
+  const panel = detail?.ticket ? `<section class="wa-admin-card wa-support-detail"><header><div><span class="wa-admin-kicker">${escapeHtml(detail.ticket.ticketNumber)} · ${escapeHtml(detail.ticket.tenant?.name || "Customer")}</span><h3>${escapeHtml(detail.ticket.subject)}</h3><p>${escapeHtml(detail.ticket.description)}</p></div>${status(detail.ticket.status)}</header><form class="wa-support-controls" id="waSupportControlsForm" data-status="${escapeHtml(detail.ticket.status)}" data-priority="${escapeHtml(detail.ticket.priority)}" data-assignee="${escapeHtml(detail.ticket.assignedToAppUserId || "")}"><label>Status<select name="status">${["open","acknowledged","in_progress","waiting_on_customer","resolved","closed","reopened"].map((value) => `<option value="${value}" ${detail.ticket.status === value ? "selected" : ""}>${value.replaceAll("_", " ")}</option>`).join("")}</select></label><label>Priority<select name="priority">${["low","normal","high","urgent"].map((value) => `<option value="${value}" ${detail.ticket.priority === value ? "selected" : ""}>${value}</option>`).join("")}</select></label><label>Assignee<select name="assignee">${assigneeOptions}</select></label><button class="wa-admin-button" type="submit" disabled>Save controls</button></form><div class="wa-support-sla"><span>First response due <strong>${escapeHtml(formatDate(detail.ticket.firstResponseDueAt))}</strong></span><span>Resolution due <strong>${escapeHtml(formatDate(detail.ticket.resolutionDueAt))}</strong></span>${waitDeadline}</div><div class="wa-support-thread">${messages || '<div class="wa-admin-empty">No conversation messages yet.</div>'}</div>${state.canManage && detail.ticket.status !== "closed" ? `<form class="wa-support-reply" id="waSupportReplyForm"><textarea name="message" rows="5" maxlength="5000" required placeholder="Write a response or internal note"></textarea><div class="wa-support-reply-actions"><button class="wa-admin-button" type="submit" data-support-send="note">Add internal note</button><button class="wa-admin-button primary" type="submit" data-support-send="response">Send response</button></div><small>Internal notes are always visible only to EMS staff.</small></form>` : ""}</section>` : '<section class="wa-admin-card wa-admin-empty">Select a customer ticket to review and respond.</section>';
+  const customerOptions = customers.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.tenant?.name || "Customer")} · ${escapeHtml(user.display_name || user.email)} · ${escapeHtml(user.email)}</option>`).join("");
+  state.support.customerModalHtml = customerModal;
+  const createModal = `<section class="wa-customer-modal" data-support-create-modal hidden role="dialog" aria-modal="true" aria-labelledby="waSupportCreateTitle"><div class="wa-customer-modal-shell"><header><div><span>Customer support</span><strong id="waSupportCreateTitle">Open a ticket on behalf of a customer</strong><small>The customer receives the ticket, message, notification and email.</small></div><div><button type="button" data-support-create-close aria-label="Close">×</button></div></header><main><form class="wa-support-create-form" id="waSupportCreateForm"><label><span>Customer</span><select name="customerUserId" required><option value="">Select customer</option>${customerOptions}</select></label><div class="wa-support-create-row"><label><span>Issue area</span><select name="category"><option value="technical">Technical issue</option><option value="billing">Billing &amp; payment</option><option value="onboarding">Onboarding &amp; verification</option><option value="templates">Message templates</option><option value="flows">Flows</option><option value="api_webhooks">API &amp; webhooks</option><option value="account_access">Account access</option><option value="other">Other</option></select></label><label><span>Priority</span><select name="priority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent</option></select></label></div><label><span>Subject</span><input name="subject" minlength="5" maxlength="180" required></label><label><span>Opening message</span><textarea name="description" minlength="10" maxlength="5000" rows="6" required></textarea></label><div class="wa-support-reply-actions"><button class="wa-admin-button" type="button" data-support-create-close>Cancel</button><button class="wa-admin-button primary" type="submit">Open ticket</button></div></form></main></div></section>`;
+  if (detail?.ticket) return `<section class="wa-support-detail-page"><button class="wa-admin-button wa-support-back" type="button" data-support-back>← Back to customer tickets</button>${panel}</section>`;
+  const statusOptions = [["all","All statuses"],["active","Active"],["open","Open"],["acknowledged","Acknowledged"],["in_progress","In progress"],["waiting_on_customer","Waiting on customer"],["reopened","Reopened"],["resolved","Resolved"],["closed","Closed"]].map(([value,label]) => `<option value="${value}" ${supportQueueFilters.status === value ? "selected" : ""}>${label}</option>`).join("");
+  const assigneeFilterOptions = [`<option value="all" ${supportQueueFilters.assignee === "all" ? "selected" : ""}>All assignees</option>`,`<option value="unassigned" ${supportQueueFilters.assignee === "unassigned" ? "selected" : ""}>Unassigned</option>`,...assignees.map((user) => `<option value="${escapeHtml(user.id)}" ${supportQueueFilters.assignee === user.id ? "selected" : ""}>${escapeHtml(user.display_name || user.email)}</option>`)].join("");
+  return `<section class="wa-admin-stats"><article class="wa-admin-stat"><span>Total customer tickets</span><strong>${tickets.length}</strong></article><article class="wa-admin-stat"><span>Open queue</span><strong>${open}</strong></article><article class="wa-admin-stat"><span>Urgent</span><strong>${urgent}</strong></article><article class="wa-admin-stat"><span>First response overdue</span><strong>${overdue}</strong></article></section>${state.support.error ? `<div class="wa-admin-notice">${escapeHtml(state.support.error)}</div>` : ""}<section class="wa-admin-card wa-support-queue"><header><div><span class="wa-admin-kicker">Customer operations</span><h3>Customer ticket queue</h3><p>Reply ownership and inactivity deadlines update automatically.</p></div>${state.canManage ? '<button class="wa-admin-button primary" type="button" data-support-create-open>Open ticket</button>' : ""}</header><div class="wa-support-queue-tools"><label class="wa-support-search"><span>Search</span><input type="search" data-support-filter="query" value="${escapeHtml(supportQueueFilters.query)}" placeholder="Ticket, customer, subject or email"></label><label><span>Status</span><select data-support-filter="status">${statusOptions}</select></label><label><span>Waiting for</span><select data-support-filter="reply"><option value="all" ${supportQueueFilters.reply === "all" ? "selected" : ""}>Anyone</option><option value="support" ${supportQueueFilters.reply === "support" ? "selected" : ""}>Support reply</option><option value="customer" ${supportQueueFilters.reply === "customer" ? "selected" : ""}>Customer reply</option><option value="none" ${supportQueueFilters.reply === "none" ? "selected" : ""}>No reply needed</option></select></label><label><span>Assignee</span><select data-support-filter="assignee">${assigneeFilterOptions}</select></label><label><span>Sort</span><select data-support-filter="sort"><option value="newest" ${supportQueueFilters.sort === "newest" ? "selected" : ""}>Newest activity</option><option value="oldest" ${supportQueueFilters.sort === "oldest" ? "selected" : ""}>Oldest activity</option><option value="priority" ${supportQueueFilters.sort === "priority" ? "selected" : ""}>Priority</option><option value="sla" ${supportQueueFilters.sort === "sla" ? "selected" : ""}>Response deadline</option><option value="status" ${supportQueueFilters.sort === "status" ? "selected" : ""}>Status</option></select></label><button class="wa-admin-button" type="button" data-support-clear-filters>Clear</button></div><div class="wa-support-queue-summary"><strong>${filteredTickets.length}</strong><span>of ${tickets.length} tickets</span></div><div class="wa-support-queue-table"><div class="wa-support-queue-head"><span>Ticket</span><span>Status</span><span>Priority</span><span>Waiting for</span><span>Assignee / updated</span><span></span></div>${rows || '<div class="wa-admin-empty">No tickets match these filters.</div>'}</div></section>${createModal}`;
+}
+
 function content() {
+  if (state.view === "customer-support") return customerSupportPage();
   if (state.view === "package-master") return packageMaster();
   if (state.view === "packages") return packages();
+  if (state.view === "billing") return billingOverview();
+  if (state.view === "subscriptions") return billingSubscriptionsPage();
+  if (state.view === "payments") return billingPaymentsPage();
+  if (state.view === "invoices") return billingInvoicesPage();
+  if (state.view === "refunds") return billingRefundsPage();
+  if (state.view === "credit-notes") return billingCreditNotesPage();
+  if (state.view === "reconciliation") return billingReconciliationPage();
+  if (state.view === "razorpay") return razorpaySetup();
   if (state.loading) return '<div class="wa-admin-empty">Loading platform operations…</div>';
-  if (state.error) return `<div class="wa-admin-notice"><strong>Management data is not active yet.</strong><br>${escapeHtml(state.error)}<br><br>The internal console is ready; apply the pending WhatsApp Platform database migrations to activate live customer data.</div>${state.view === "meta" ? metaSetup() : state.view === "security" ? security() : overview()}`;
+  if (state.error) return `<div class="wa-admin-notice"><strong>Management data could not be loaded.</strong><br>${escapeHtml(state.error)}<br><br>Refresh the page. If the issue continues, contact the EMS administrator.</div>${state.view === "meta" ? metaSetup() : state.view === "security" ? security() : overview()}`;
   if (state.view === "customers") return customers();
   if (state.view === "verification") return verification();
   if (state.view === "connections") return connections();
@@ -736,10 +1320,10 @@ function content() {
 }
 
 function render() {
-  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal]").forEach((modal) => modal.remove());
+  document.querySelectorAll("body > [data-document-review-modal],body > [data-document-request-modal],body > [data-verification-case-modal],body > [data-master-modal],body > [data-finance-refund-modal],body > [data-customer-modal],body > [data-support-create-modal]").forEach((modal) => modal.remove());
   if (verificationPreviewUrl) URL.revokeObjectURL(verificationPreviewUrl);
   verificationPreviewUrl = "";
-  document.body.classList.remove("wa-document-review-open", "wa-verification-case-open");
+  document.body.classList.remove("wa-document-review-open", "wa-verification-case-open", "wa-master-modal-open", "wa-finance-modal-open", "wa-customer-modal-open");
   const meta = VIEW_META[state.view] || VIEW_META.overview;
   const pageHead = document.querySelector(".page-head");
   if (pageHead) {
@@ -753,15 +1337,328 @@ function render() {
   document.title = `${meta.title} | WhatsApp Business Platform | Varada Nexus`;
   renderModuleContent(`<div class="wa-admin-shell" data-admin-view="${escapeHtml(state.view)}"><section class="wa-admin-commandbar"><div class="wa-admin-command-context"><span class="wa-admin-command-marker" aria-hidden="true">${escapeHtml(meta.marker)}</span><div><span class="wa-admin-kicker">${escapeHtml(meta.section)}</span><strong>${escapeHtml(meta.title)}</strong></div></div><div class="wa-admin-actions"><a class="wa-admin-button" href="${ROUTES.WHATSAPP_PLATFORM_PORTAL}" target="_blank" rel="noopener">View public portal</a><button class="wa-admin-button primary" id="waRefresh" type="button">Refresh data</button></div></section><main class="wa-admin-view" id="waAdminContent">${content()}</main></div>`);
   bind();
+  if (state.view === "package-master" && state.hasFullAuthority) {
+    const priceHost = document.querySelector("[data-commercial-message-pricing]");
+    if (priceHost) mountMessagePriceAdmin(priceHost, customerBillingAdminRequest, state.packageMaster?.tenants || [], { allowGlobal: true });
+  }
+  // Staff must be able to prepare and audit PAYG configuration before the
+  // runtime gate is enabled. Saving policy/configuration never activates use.
+  if (BILLING_VIEWS.has(state.view) && state.hasFullAuthority && state.billingSnapshot) {
+    const walletHost=document.createElement("section");walletHost.className="wa-admin-card";
+    document.querySelector("#waAdminContent")?.prepend(walletHost);
+    mountWalletAdmin(walletHost,customerBillingAdminRequest,state.billingSnapshot.walletTenants || [],state.billingSnapshot.paygReadiness || null);
+  }
+  scheduleCustomerSupportRefresh();
 }
 
 function bind() {
+  document.querySelectorAll("#waAdminContent [data-support-create-modal]").forEach((modal) => document.body.appendChild(modal));
+  if (state.view === "customer-support" && state.support.customerModalHtml) {
+    const host = document.createElement("div");
+    host.innerHTML = state.support.customerModalHtml;
+    if (host.firstElementChild) document.body.appendChild(host.firstElementChild);
+    const customerButton = document.createElement("button");
+    customerButton.type = "button";
+    customerButton.className = "wa-admin-button";
+    customerButton.dataset.openCustomer = "support-customer";
+    customerButton.textContent = "View customer details";
+    document.querySelector(".wa-support-detail > header > div")?.appendChild(customerButton);
+  }
+  const refreshSupportCustomer = async () => {
+    const ticketId = state.support.thread?.ticket?.id;
+    if (ticketId) { await loadCustomerSupport(ticketId); render(); }
+  };
+  document.querySelector("[data-support-customer-form]")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); const values = new FormData(form);
+    try { button.disabled = true; await customerSupportRequest("staff_update_customer", { tenantId: form.dataset.supportCustomerForm, name: values.get("name"), ownerEmail: values.get("ownerEmail"), contactMobile: values.get("contactMobile") }); showToast("Customer contact details updated.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "Customer details could not be updated.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
+  document.querySelector("[data-support-invite-user]")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); const values = new FormData(form); const tenantId = state.support.thread?.ticket?.tenantId;
+    try { button.disabled = true; await customerSupportRequest("staff_invite_customer_user", { tenantId, displayName: values.get("displayName"), email: values.get("email"), roleCode: values.get("roleCode") }); showToast("Invitation emailed to the new user.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "User invitation could not be sent.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
+  document.querySelectorAll("[data-support-user-form]").forEach((form) => form.addEventListener("submit", async (event) => {
+    event.preventDefault(); const button = form.querySelector("button[type=submit]"); const values = new FormData(form); const tenantId = state.support.thread?.ticket?.tenantId;
+    try { button.disabled = true; await customerSupportRequest("staff_update_customer_user", { tenantId, userId: form.dataset.supportUserForm, displayName: values.get("displayName"), email: values.get("email"), roleCode: values.get("roleCode"), status: values.get("status") }); showToast("Customer user updated.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "Customer user could not be updated.", TOAST_TYPES.ERROR); button.disabled = false; }
+  }));
+  document.querySelectorAll("[data-support-user-delete]").forEach((button) => button.addEventListener("click", async () => {
+    if (!window.confirm(`Delete ${button.dataset.supportUserName}? This removes their workspace access and active sessions.`)) return;
+    button.disabled = true;
+    try { await customerSupportRequest("staff_delete_customer_user", { tenantId: state.support.thread?.ticket?.tenantId, userId: button.dataset.supportUserDelete }); showToast("Customer user deleted.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "Customer user could not be deleted.", TOAST_TYPES.ERROR); button.disabled = false; }
+  }));
+  document.querySelectorAll("[data-support-invoice-email]").forEach((button) => button.addEventListener("click", async () => {
+    button.disabled = true; const original = button.textContent; button.textContent = "Sending…";
+    try { const result = await customerBillingAdminRequest("staff_resend_invoice", { tenantId: state.support.thread?.ticket?.tenantId, invoiceId: button.dataset.supportInvoiceEmail }); showToast(`Invoice emailed to ${result.recipient}.`, TOAST_TYPES.SUCCESS); }
+    catch (error) { showToast(error?.message || "Invoice email could not be sent.", TOAST_TYPES.ERROR); }
+    finally { button.disabled = false; button.textContent = original; }
+  }));
+  document.querySelector("[data-support-cancel-subscription]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (!window.confirm("Schedule this subscription to cancel at the end of its current paid cycle? The customer's WhatsApp connection will remain preserved.")) return;
+    button.disabled = true;
+    try { await customerBillingAdminRequest("staff_cancel_subscription", { tenantId: state.support.thread?.ticket?.tenantId, subscriptionId: button.dataset.supportCancelSubscription, cancelAtCycleEnd: true }); showToast("Subscription scheduled to cancel at cycle end.", TOAST_TYPES.SUCCESS); await refreshSupportCustomer(); }
+    catch (error) { showToast(error?.message || "Subscription could not be cancelled.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
+  document.querySelectorAll("#waAdminContent [data-customer-modal]").forEach((modal) => document.body.appendChild(modal));
+  document.querySelectorAll("[data-customer-message-pricing]").forEach((host) => mountMessagePriceAdmin(host, customerBillingAdminRequest, [], {
+    tenantId: host.dataset.customerMessagePricing,
+    tenantName: host.dataset.customerName,
+    allowGlobal: false,
+  }));
   document.querySelectorAll("#waAdminContent [data-verification-case-modal]").forEach((modal) => document.body.appendChild(modal));
+  document.querySelectorAll("#waAdminContent [data-master-modal]").forEach((modal) => document.body.appendChild(modal));
   const reviewModal = document.querySelector("#waAdminContent [data-document-review-modal]");
   if (reviewModal) document.body.appendChild(reviewModal);
   const requestModal = document.querySelector("#waAdminContent [data-document-request-modal]");
   if (requestModal) document.body.appendChild(requestModal);
-  document.querySelector("#waRefresh")?.addEventListener("click", () => loadSnapshot());
+  const refundModal = document.querySelector("#waAdminContent [data-finance-refund-modal]");
+  if (refundModal) document.body.appendChild(refundModal);
+  document.querySelector("#waRefresh")?.addEventListener("click", async () => {
+    if (state.view === "customer-support") { await loadCustomerSupport(); render(); }
+    else if (BILLING_VIEWS.has(state.view)) await loadBillingSnapshot();
+    else await loadSnapshot();
+  });
+  document.querySelectorAll("[data-support-filter]").forEach((control) => {
+    const eventName = control.dataset.supportFilter === "query" ? "input" : "change";
+    control.addEventListener(eventName, () => {
+      supportQueueFilters[control.dataset.supportFilter] = control.value;
+      if (eventName === "input") {
+        window.clearTimeout(control._supportFilterTimer);
+        control._supportFilterTimer = window.setTimeout(() => render(), 180);
+      } else render();
+    });
+  });
+  document.querySelector("[data-support-clear-filters]")?.addEventListener("click", () => {
+    Object.assign(supportQueueFilters, { query: "", status: "all", reply: "all", assignee: "all", sort: "newest" }); render();
+  });
+  document.querySelectorAll("[data-admin-support-ticket]").forEach((button) => button.addEventListener("click", async () => {
+    const query = new URLSearchParams(location.search); query.set("view", "customer-support"); query.set("ticket", button.dataset.adminSupportTicket); history.replaceState({}, "", `${location.pathname}?${query}`); await loadCustomerSupport(button.dataset.adminSupportTicket); render();
+  }));
+  document.querySelector("[data-support-back]")?.addEventListener("click", async () => {
+    const query = new URLSearchParams(location.search); query.set("view", "customer-support"); query.delete("ticket"); history.replaceState({}, "", `${location.pathname}?${query}`); await loadCustomerSupport(null); render();
+  });
+  document.querySelector("#waSupportControlsForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button"); const values = new FormData(form); const ticketId = state.support.thread?.ticket?.id;
+    try { button.disabled = true; await customerSupportRequest("staff_update", { ticketId, status: values.get("status"), priority: values.get("priority"), assignedToAppUserId: values.get("assignee") }); showToast("Customer ticket updated.", TOAST_TYPES.SUCCESS); await loadCustomerSupport(ticketId); render(); }
+    catch (error) { showToast(error?.message || "Ticket could not be updated.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
+  const controlsForm = document.querySelector("#waSupportControlsForm");
+  const updateControlsButton = () => {
+    if (!controlsForm) return;
+    const values = new FormData(controlsForm);
+    const changed = values.get("status") !== controlsForm.dataset.status || values.get("priority") !== controlsForm.dataset.priority || values.get("assignee") !== controlsForm.dataset.assignee;
+    controlsForm.querySelector("button[type=submit]").disabled = !state.canManage || !changed;
+  };
+  controlsForm?.querySelectorAll("select").forEach((select) => select.addEventListener("change", updateControlsButton));
+  const supportCreateModal = document.querySelector("[data-support-create-modal]");
+  const closeSupportCreate = () => { if (supportCreateModal) supportCreateModal.hidden = true; };
+  document.querySelector("[data-support-create-open]")?.addEventListener("click", () => { if (supportCreateModal) { supportCreateModal.hidden = false; supportCreateModal.querySelector("select")?.focus(); } });
+  document.querySelectorAll("[data-support-create-close]").forEach((button) => button.addEventListener("click", closeSupportCreate));
+  supportCreateModal?.addEventListener("click", (event) => { if (event.target === supportCreateModal) closeSupportCreate(); });
+  document.querySelector("#waSupportCreateForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector("button[type=submit]"); const values = new FormData(form);
+    try {
+      button.disabled = true;
+      const result = await customerSupportRequest("staff_create", { customerUserId: values.get("customerUserId"), category: values.get("category"), priority: values.get("priority"), subject: values.get("subject"), description: values.get("description") });
+      showToast(`Ticket ${result.ticket.ticketNumber} opened.`, TOAST_TYPES.SUCCESS);
+      const query = new URLSearchParams(location.search); query.set("view", "customer-support"); query.set("ticket", result.ticket.id); history.replaceState({}, "", `${location.pathname}?${query}`);
+      await loadCustomerSupport(result.ticket.id); render();
+    } catch (error) { showToast(error?.message || "Ticket could not be opened.", TOAST_TYPES.ERROR); button.disabled = false; }
+  });
+  document.querySelector("#waSupportReplyForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = event.submitter;
+    const internal = button?.dataset.supportSend === "note";
+    const message = String(new FormData(form).get("message") || "").trim();
+    const ticketId = state.support.thread?.ticket?.id;
+    const previous = JSON.parse(JSON.stringify(state.support));
+    const now = new Date().toISOString();
+    if (state.support.thread) {
+      state.support.thread.messages = [...(state.support.thread.messages || []), { id: `pending-${Date.now()}`, body: message, is_internal: internal, created_at: now, authorKind: "support", author: { display_name: "Support" } }];
+      if (!internal) {
+        state.support.thread.ticket = { ...state.support.thread.ticket, status: "waiting_on_customer", lastActivityAt: now };
+        state.support.tickets = state.support.tickets.map((ticket) => ticket.id === ticketId ? { ...ticket, status: "waiting_on_customer", lastActivityAt: now } : ticket);
+      }
+    }
+    render();
+    try {
+      await customerSupportRequest("staff_reply", { ticketId, message, internal });
+      showToast(internal ? "Internal note saved." : "Response sent.", TOAST_TYPES.SUCCESS);
+      await loadCustomerSupport(ticketId);
+      render();
+    } catch (error) {
+      state.support = previous;
+      showToast(error?.message || "Response could not be sent.", TOAST_TYPES.ERROR);
+      render();
+    }
+  });
+  const closeCustomerModal = (modal) => {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.classList.remove("wa-customer-modal-open");
+  };
+  document.querySelectorAll("[data-open-customer]").forEach((button) => button.addEventListener("click", () => {
+    const modal = [...document.querySelectorAll("[data-customer-modal]")].find((item) => item.dataset.customerModal === button.dataset.openCustomer);
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add("wa-customer-modal-open");
+    modal.querySelector("button, input, select")?.focus();
+  }));
+  document.querySelectorAll("[data-customer-modal-close]").forEach((button) => button.addEventListener("click", () => closeCustomerModal(button.closest("[data-customer-modal]"))));
+  document.querySelectorAll("[data-customer-modal]").forEach((modal) => {
+    modal.addEventListener("click", (event) => { if (event.target === modal) closeCustomerModal(modal); });
+    modal.addEventListener("keydown", (event) => { if (event.key === "Escape") closeCustomerModal(modal); });
+  });
+  document.querySelector("[data-connection-search-input]")?.addEventListener("input", (event) => {
+    const query = String(event.currentTarget.value || "").trim().toLocaleLowerCase();
+    let visible = 0;
+    document.querySelectorAll("[data-connection-company-card]").forEach((card) => {
+      const matches = !query || String(card.dataset.connectionSearch || "").includes(query);
+      card.hidden = !matches;
+      if (matches) visible += 1;
+    });
+    const empty = document.querySelector("[data-connection-search-empty]");
+    if (empty) empty.hidden = visible !== 0;
+  });
+  document.querySelectorAll("[data-disconnect-open]").forEach((button) => button.addEventListener("click", () => {
+    const form = button.parentElement?.querySelector(`[data-connection-disconnect-form="${CSS.escape(button.dataset.disconnectOpen)}"]`);
+    if (!form) return;
+    form.hidden = false;
+    button.hidden = true;
+    form.elements.confirmation?.focus();
+  }));
+  document.querySelectorAll("[data-disconnect-cancel]").forEach((button) => button.addEventListener("click", () => {
+    const form = button.closest("[data-connection-disconnect-form]");
+    if (!form) return;
+    form.reset();
+    form.hidden = true;
+    const opener = form.parentElement?.querySelector("[data-disconnect-open]");
+    if (opener) opener.hidden = false;
+  }));
+  document.querySelectorAll("[data-connection-disconnect-form]").forEach((form) => form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const submit = event.submitter || form.querySelector('[type="submit"]');
+    const original = submit.textContent;
+    try {
+      submit.disabled = true;
+      submit.textContent = "Disconnecting at Meta…";
+      await providerSecretRequest("disconnect_connection", { connectionId: form.dataset.connectionDisconnectForm, confirmation: form.elements.confirmation.value });
+      closeCustomerModal(form.closest("[data-customer-modal]"));
+      showToast(`${form.dataset.connectionLabel || "The number"} was deregistered from Meta and disconnected.`, TOAST_TYPES.SUCCESS);
+      await loadSnapshot();
+    } catch (error) {
+      showToast(error?.message || "The number could not be disconnected.", TOAST_TYPES.ERROR);
+      submit.disabled = false;
+      submit.textContent = original;
+    }
+  }));
+  document.querySelectorAll("[data-customer-delete-open]").forEach((button) => button.addEventListener("click", () => {
+    const modal = button.closest("[data-customer-modal]");
+    const form = modal?.querySelector(`[data-customer-delete-form="${CSS.escape(button.dataset.customerDeleteOpen)}"]`);
+    if (!form) return;
+    form.hidden = false;
+    button.hidden = true;
+    form.elements.requestedBy?.focus();
+  }));
+  document.querySelectorAll("[data-customer-delete-cancel]").forEach((button) => button.addEventListener("click", () => {
+    const form = button.closest("[data-customer-delete-form]");
+    const modal = button.closest("[data-customer-modal]");
+    const opener = modal?.querySelector(`[data-customer-delete-open="${CSS.escape(form?.dataset.customerDeleteForm || "")}"]`);
+    if (!form) return;
+    form.reset();
+    form.hidden = true;
+    if (opener) { opener.hidden = false; opener.focus(); }
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+  }));
+  document.querySelectorAll("[data-customer-delete-form]").forEach((form) => {
+    const input = form.elements.confirmationName;
+    const requestedBy = form.elements.requestedBy;
+    const internalNote = form.elements.internalNote;
+    const check = form.elements.confirmed;
+    const photo = form.elements.evidencePhoto;
+    const locationStatus = form.querySelector("[data-delete-location-status]");
+    const button = form.querySelector('button[type="submit"]');
+    const validate = () => { button.disabled = input.value !== form.dataset.customerName || requestedBy.value.trim().length < 2 || internalNote.value.trim().length < 10 || !photo.files?.[0] || !form.elements.latitude.value || !form.elements.longitude.value || !check.checked; };
+    input.addEventListener("input", validate);
+    requestedBy.addEventListener("input", validate);
+    internalNote.addEventListener("input", validate);
+    photo.addEventListener("change", validate);
+    check.addEventListener("change", validate);
+    form.querySelector("[data-capture-delete-location]")?.addEventListener("click", () => {
+      if (!navigator.geolocation) { showToast("Location capture is not available on this device.", TOAST_TYPES.ERROR); return; }
+      locationStatus.textContent = "Requesting consent and location…";
+      navigator.geolocation.getCurrentPosition((position) => {
+        form.elements.latitude.value = String(position.coords.latitude);
+        form.elements.longitude.value = String(position.coords.longitude);
+        form.elements.locationAccuracy.value = String(position.coords.accuracy || "");
+        form.elements.locationCapturedAt.value = new Date(position.timestamp || Date.now()).toISOString();
+        locationStatus.textContent = `Captured to ±${Math.round(position.coords.accuracy || 0)} m`;
+        validate();
+      }, (error) => { locationStatus.textContent = "Location permission was not granted"; showToast(error.message || "Location could not be captured.", TOAST_TYPES.ERROR); validate(); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault(); validate(); if (button.disabled) return;
+      button.disabled = true; button.textContent = "Archiving evidence…";
+      try {
+        const evidenceFile = photo.files[0];
+        const result = await providerSecretRequest("schedule_tenant_deletion", { tenantId: form.dataset.customerDeleteForm, confirmationName: input.value, requestedBy: requestedBy.value.trim(), internalNote: internalNote.value.trim(), confirmed: true, evidenceConsent: true, photo: { fileName: evidenceFile.name, mimeType: evidenceFile.type, base64: await fileAsBase64(evidenceFile) }, location: { latitude: Number(form.elements.latitude.value), longitude: Number(form.elements.longitude.value), accuracy: Number(form.elements.locationAccuracy.value || 0), capturedAt: form.elements.locationCapturedAt.value } });
+        closeCustomerModal(form.closest("[data-customer-modal]"));
+        showToast(`Deletion scheduled. It can be reversed until ${formatDate(result.reversibleUntil)}.`, TOAST_TYPES.SUCCESS);
+        state.packageMaster = null;
+        await loadSnapshot();
+      } catch (error) {
+        showToast(error?.message || "Customer account could not be deleted.", TOAST_TYPES.ERROR);
+        button.textContent = "Schedule deletion"; validate();
+      }
+    });
+  });
+  const closeMasterModal = (modal) => {
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.classList.remove("wa-master-modal-open");
+  };
+  document.querySelectorAll("[data-master-open]").forEach((button) => button.addEventListener("click", () => {
+    const modal = [...document.querySelectorAll("[data-master-modal]")].find((item) => item.dataset.masterModal === button.dataset.masterOpen);
+    if (!modal) return;
+    modal.hidden = false;
+    document.body.classList.add("wa-master-modal-open");
+    modal.querySelector("input:not([type=hidden]), select, textarea, button")?.focus();
+  }));
+  document.querySelectorAll("[data-master-modal-close]").forEach((button) => button.addEventListener("click", () => closeMasterModal(button.closest("[data-master-modal]"))));
+  document.querySelectorAll("[data-master-modal]").forEach((modal) => {
+    modal.addEventListener("click", (event) => { if (event.target === modal) closeMasterModal(modal); });
+    modal.addEventListener("keydown", (event) => { if (event.key === "Escape") closeMasterModal(modal); });
+  });
+  const closeRefundModal = () => {
+    const modal = document.querySelector("[data-finance-refund-modal]");
+    if (modal) modal.hidden = true;
+    document.body.classList.remove("wa-finance-modal-open");
+  };
+  document.querySelectorAll("[data-billing-refund-open]").forEach((button) => button.addEventListener("click", () => {
+    const modal = document.querySelector("[data-finance-refund-modal]");
+    const form = modal?.querySelector("[data-finance-refund-form]");
+    if (!modal || !form) return;
+    const balance = Number(button.dataset.refundBalance || 0);
+    form.reset();
+    form.elements.paymentId.value = button.dataset.billingRefundOpen || "";
+    form.elements.maxPaise.value = String(balance);
+    form.elements.amount.value = (balance / 100).toFixed(2);
+    form.elements.amount.max = (balance / 100).toFixed(2);
+    modal.querySelector("[data-refund-summary]").textContent = `${button.dataset.refundWorkspace || "Customer"} · ${button.dataset.refundPayment || "Payment"}`;
+    modal.querySelector("[data-refund-balance-label]").textContent = adminBillingMoney(balance, button.dataset.refundCurrency || "INR");
+    modal.hidden = false;
+    document.body.classList.add("wa-finance-modal-open");
+    form.elements.amount.focus(); form.elements.amount.select();
+  }));
+  document.querySelectorAll("[data-finance-refund-close]").forEach((button) => button.addEventListener("click", closeRefundModal));
+  document.querySelector("[data-finance-refund-modal]")?.addEventListener("click", (event) => { if (event.target === event.currentTarget) closeRefundModal(); });
+  document.querySelector("[data-finance-refund-form]")?.addEventListener("submit", submitBillingRefund);
   document.querySelectorAll("[data-open-verification-case]").forEach((button) => button.addEventListener("click", () => {
     const modal = [...document.querySelectorAll("[data-verification-case-modal]")].find((item) => item.dataset.verificationCaseModal === button.dataset.openVerificationCase);
     if (!modal) return;
@@ -817,6 +1714,7 @@ function bind() {
       state.packageMaster = null;
       await loadPackageMaster();
       await loadSnapshot();
+      if (state.view === "customer-support" && state.support.thread?.ticket?.id) await loadCustomerSupport(state.support.thread.ticket.id);
     } catch (error) { showToast(error?.message || "Could not update workspace.", TOAST_TYPES.ERROR); button.disabled = false; }
   }));
   document.querySelectorAll("[data-verification-review]").forEach((form) => form.addEventListener("submit", async (event) => {
@@ -893,9 +1791,19 @@ function bind() {
   document.querySelectorAll("[data-addon-delete]").forEach((btn) => btn.addEventListener("click", () => deleteAddon(btn.dataset.addonDelete)));
   document.querySelector("[data-rates-form]")?.addEventListener("submit", (event) => saveRates(event));
   document.querySelectorAll("[data-master-package-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterPackage(event, form)));
-  document.querySelectorAll("[data-master-addon-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAddon(event, form)));
+  document.querySelectorAll("[data-master-addon-form]").forEach((form) => { bindMasterAddonQuantityControl(form); form.addEventListener("submit", (event) => saveMasterAddon(event, form)); });
+  document.querySelectorAll("[data-master-coupon-form]").forEach((form) => form.addEventListener("submit", (event) => saveMasterCoupon(event, form)));
   document.querySelectorAll("[data-master-assignment]").forEach((form) => form.addEventListener("submit", (event) => saveMasterAssignment(event, form)));
   document.querySelector("[data-meta-secret-form]")?.addEventListener("submit", saveProviderSecret);
+  document.querySelector("[data-razorpay-secret-form]")?.addEventListener("submit", saveRazorpaySecrets);
+  document.querySelectorAll("[data-secret-toggle]").forEach((button) => button.addEventListener("click", () => {
+    const input = document.querySelector(`[name="${button.dataset.secretToggle}"]`);
+    if (!input) return;
+    const showing = input.type === "text";
+    input.type = showing ? "password" : "text";
+    button.textContent = showing ? "Show" : "Hide";
+    button.setAttribute("aria-pressed", String(!showing));
+  }));
   document.querySelector("[data-meta-secret-toggle]")?.addEventListener("click", (event) => {
     const input = document.querySelector('[name="meta_app_secret"]');
     if (!input) return;
@@ -930,9 +1838,23 @@ function bind() {
 async function loadSnapshot() {
   state.loading = true; state.error = ""; render();
   const { data, error } = await db.rpc("whatsapp_platform_admin_snapshot");
-  if (error) { state.error = error.message || "Database setup is pending."; state.snapshot = null; }
+  if (error) { state.error = error.message || "Management data could not be loaded."; state.snapshot = null; }
   else {
     state.snapshot = data || {};
+    if (["customers", "connections", "customer-support"].includes(state.view)) {
+      const { data: directory, error: directoryError } = await db.rpc("whatsapp_platform_admin_customer_directory");
+      if (!directoryError && Array.isArray(directory)) state.snapshot.tenants = directory;
+    }
+    if (state.view === "connections" && state.hasFullAuthority) {
+      try {
+        const access = await providerSecretRequest("connection_access_snapshot");
+        (state.snapshot.tenants || []).forEach((tenant) => {
+          if (access?.accessByTenant?.[tenant.id]) tenant.billingAccess = access.accessByTenant[tenant.id];
+        });
+      } catch (accessError) {
+        console.warn("Connection billing-access snapshot unavailable", accessError);
+      }
+    }
     const [{ data: reviews, error: reviewError }, { data: requests, error: requestError }] = await Promise.all([
       db.rpc("whatsapp_platform_admin_document_reviews"),
       db.rpc("whatsapp_platform_admin_document_requests"),
@@ -965,7 +1887,9 @@ async function init() {
   state.canManage = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && ["edit", "approve"].includes(permission.action_code));
   state.canApprove = state.hasFullAuthority || boot.permissions.some((permission) => permission.module_code === MODULES.WHATSAPP_PLATFORM && permission.action_code === "approve");
   await loadSnapshot();
-  if (state.view === "meta" && state.hasFullAuthority) await loadProviderSecretStatus();
+  if (state.view === "customer-support") { await loadPackageMaster(); await loadCustomerSupport(); render(); }
+  if (["meta", "razorpay"].includes(state.view) && state.hasFullAuthority) await loadProviderSecretStatus();
+  if (BILLING_VIEWS.has(state.view) && state.hasFullAuthority) await loadBillingSnapshot();
 }
 
 init().catch((error) => { state.loading = false; state.error = error?.message || "The management console could not start."; render(); });

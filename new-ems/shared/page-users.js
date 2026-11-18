@@ -12,6 +12,8 @@ import { sendWhatsAppWorkspaceMessage } from "./whatsapp-api.js";
 import { getSupabaseClient } from "../config/supabase.js";
 
 const client = getSupabaseClient();
+const verificationProfiles = new Map();
+const verificationLoaded = new Set();
 
 let allUsers = [];
 let allRoles = [];
@@ -365,6 +367,50 @@ function startPasswordRevealCountdown() {
   }, 1000);
 }
 
+async function renderVerificationQr(userId) {
+  const profile = verificationProfiles.get(String(userId));
+  const holder = document.querySelector(`[data-verify-qr="${userId}"]`);
+  if (!profile?.employee_code || !holder || holder.dataset.ready === "true") return;
+  holder.dataset.ready = "true";
+  try {
+    const { default: QRCode } = await import("https://esm.sh/qrcode@1.5.4");
+    const canvas = document.createElement("canvas");
+    canvas.width = 220; canvas.height = 220;
+    canvas.dataset.verifyCanvas = String(userId);
+    await QRCode.toCanvas(canvas, `${location.origin}/new-ems/employee-verification.html?employeeId=${encodeURIComponent(profile.employee_code)}`, {
+      width: 220, margin: 2, color: { dark: "#10151e", light: "#ffffff" }
+    });
+    holder.replaceChildren(canvas);
+  } catch {
+    holder.textContent = "QR code could not be generated. Check the network connection and reopen this employee.";
+    holder.dataset.ready = "false";
+  }
+}
+
+async function uploadEmployeePortrait(userId, file) {
+  const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+  if (!allowedTypes.has(file.type)) throw new Error("Choose a JPG, PNG, or WebP image");
+  if (file.size > 5 * 1024 * 1024) throw new Error("Portrait images must be 5 MB or smaller");
+  const extension = file.type === "image/jpeg" ? "jpg" : file.type === "image/png" ? "png" : "webp";
+  const path = `${userId}/${crypto.randomUUID()}.${extension}`;
+  const bucket = client.storage.from("employee-verification-photos");
+  const { error } = await bucket.upload(path, file, { contentType: file.type, cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return { path, publicUrl: bucket.getPublicUrl(path).data.publicUrl };
+}
+
+async function removeEmployeePortraitByUrl(url) {
+  if (!url) return;
+  try {
+    const parsed = new URL(url);
+    const marker = "/storage/v1/object/public/employee-verification-photos/";
+    const index = parsed.pathname.indexOf(marker);
+    if (index < 0) return;
+    const path = decodeURIComponent(parsed.pathname.slice(index + marker.length));
+    if (path) await client.storage.from("employee-verification-photos").remove([path]);
+  } catch {}
+}
+
 function renderUserModal(user) {
   const role = (user.user_roles || []).map((x) => x.roles?.name || x.roles?.code).filter(Boolean).join(", ") || "Assigned role";
   const hasAllScope = (user.user_divisions || []).some((x) => String(x.scope || "").toLowerCase() === "all");
@@ -411,6 +457,23 @@ function renderUserModal(user) {
               <input data-edit-phone="${escAttr(user.id)}" placeholder="Phone" value="${escAttr(user.phone)}" ${user.auth_provider === "supabase" ? "disabled" : ""} />
               <div class="eu-action-grid"><button class="btn" data-edit-save="${escAttr(user.id)}">Save details</button><button class="btn" data-edit-cancel="${escAttr(user.id)}">Cancel</button></div>
             </div>
+          </div>
+
+          <div class="eu-action-section">
+            <h4>Employee ID verification</h4>
+            <p class="muted" style="margin:0 0 .8rem">Enter the details that should appear when this employee’s ID QR is scanned. Saving creates the QR automatically.</p>
+            <div class="eu-mapping-grid">
+              <label><span class="muted">Employee ID *</span><input data-verify-code="${escAttr(user.id)}" maxlength="40" placeholder="e.g. VN-EMP-104" value="${escAttr(verificationProfiles.get(String(user.id))?.employee_code || "")}"></label>
+              <label><span class="muted">Job title *</span><input data-verify-title="${escAttr(user.id)}" maxlength="120" placeholder="e.g. Project Manager" value="${escAttr(verificationProfiles.get(String(user.id))?.job_title || "")}"></label>
+              <label><span class="muted">Department</span><input data-verify-department="${escAttr(user.id)}" maxlength="120" placeholder="Department" value="${escAttr(verificationProfiles.get(String(user.id))?.department || "")}"></label>
+              <label><span class="muted">Company / division</span><input data-verify-company="${escAttr(user.id)}" maxlength="160" placeholder="Varada Nexus · Division" value="${escAttr(verificationProfiles.get(String(user.id))?.company_division || "")}"></label>
+              <label><span class="muted">Office address</span><input data-verify-address="${escAttr(user.id)}" maxlength="240" placeholder="Office / work address" value="${escAttr(verificationProfiles.get(String(user.id))?.work_address || "")}"></label>
+              <label><span class="muted">Active status</span><select data-verify-status="${escAttr(user.id)}"><option value="active" ${verificationProfiles.get(String(user.id))?.employment_status !== "inactive" ? "selected" : ""}>Active</option><option value="inactive" ${verificationProfiles.get(String(user.id))?.employment_status === "inactive" ? "selected" : ""}>Inactive</option></select></label>
+              <label><span class="muted">ID valid through (optional)</span><input data-verify-valid="${escAttr(user.id)}" type="date" value="${escAttr(verificationProfiles.get(String(user.id))?.valid_until || "")}"></label>
+            </div>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 84px;gap:.8rem;align-items:center;margin-top:.7rem"><label><span class="muted">Upload portrait (optional)</span><input data-verify-photo="${escAttr(user.id)}" type="file" accept="image/jpeg,image/png,image/webp" style="display:block;width:100%;margin-top:.35rem"><small class="muted">JPG, PNG or WebP · up to 5 MB</small></label><img data-verify-photo-preview="${escAttr(user.id)}" src="${escAttr(verificationProfiles.get(String(user.id))?.photo_url || "")}" alt="Employee portrait preview" ${verificationProfiles.get(String(user.id))?.photo_url ? "" : "hidden"} style="width:84px;height:84px;object-fit:cover;border-radius:14px;border:1px solid rgba(230,200,126,.3)"></div>
+            <div class="eu-action-grid" style="margin-top:.7rem"><button class="btn" data-save-verification="${escAttr(user.id)}">Save details &amp; generate QR</button><a class="btn" data-verify-open="${escAttr(user.id)}" href="#" target="_blank" rel="noopener" ${verificationProfiles.get(String(user.id))?.employee_code ? "" : "hidden"}>Open verification page</a><button class="btn" data-verify-download="${escAttr(user.id)}" ${verificationProfiles.get(String(user.id))?.employee_code ? "" : "hidden"}>Download QR</button></div>
+            <div data-verify-qr="${escAttr(user.id)}" style="margin-top:.8rem"></div>
           </div>
 
           <div class="eu-action-section">
@@ -474,6 +537,27 @@ function renderUsers() {
   }).join("");
   const selected = allUsers.find((u) => String(u.id) === String(selectedUserId));
   body.innerHTML = cards + (selected ? renderUserModal(selected) : "") + renderStaffTermsModal() + renderPasswordRevealModal();
+
+  if (selected && !verificationLoaded.has(String(selected.id))) {
+    verificationLoaded.add(String(selected.id));
+    client.from("employee_verification_profiles").select("*").eq("user_id", selected.id).maybeSingle().then(({ data }) => {
+      verificationProfiles.set(String(selected.id), data || {});
+      if (String(selectedUserId) === String(selected.id)) renderUsers();
+    }).catch(() => {});
+  }
+  if (selected && verificationProfiles.get(String(selected.id))?.employee_code) renderVerificationQr(selected.id);
+
+  body.querySelectorAll("input[data-verify-photo]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const userId = input.getAttribute("data-verify-photo");
+      const preview = body.querySelector(`img[data-verify-photo-preview="${userId}"]`);
+      const file = input.files?.[0];
+      if (!preview || !file) return;
+      if (!file.type.startsWith("image/")) return showToast("Choose an image file", "error");
+      preview.src = URL.createObjectURL(file);
+      preview.hidden = false;
+    });
+  });
 
   body.querySelectorAll("button[data-open-user-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -683,6 +767,60 @@ function renderUsers() {
       } catch (error) {
         showToast(error?.message || "Failed to update details", "error");
       }
+    });
+  });
+
+  body.querySelectorAll("button[data-save-verification]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const userId = btn.getAttribute("data-save-verification");
+      const field = (name) => body.querySelector(`[data-verify-${name}="${userId}"]`)?.value?.trim() || "";
+      const employeeCode = field("code");
+      const jobTitle = field("title");
+      if (!employeeCode || !jobTitle) return showToast("Employee ID and job title are required", "error");
+      btn.disabled = true;
+      try {
+        const photoFile = body.querySelector(`input[data-verify-photo="${userId}"]`)?.files?.[0] || null;
+        const uploadedPhoto = photoFile ? await uploadEmployeePortrait(userId, photoFile) : null;
+        const { data, error } = await client.from("employee_verification_profiles").upsert({
+          user_id: userId,
+          employee_code: employeeCode,
+          job_title: jobTitle,
+          department: field("department") || null,
+          company_division: field("company") || null,
+          work_address: field("address") || null,
+          valid_until: field("valid") || null,
+          photo_url: uploadedPhoto?.publicUrl || current.photo_url || null,
+          employment_status: field("status") || "active",
+          updated_at: new Date().toISOString()
+        }, { onConflict: "user_id" }).select("*").single();
+        if (error) {
+          if (uploadedPhoto) await client.storage.from("employee-verification-photos").remove([uploadedPhoto.path]);
+          throw error;
+        }
+        if (uploadedPhoto && current.photo_url && current.photo_url !== uploadedPhoto.publicUrl) await removeEmployeePortraitByUrl(current.photo_url);
+        verificationProfiles.set(String(userId), data);
+        showToast("Employee details saved and QR generated", "success");
+        renderUsers();
+      } catch (error) {
+        showToast(error?.message || "Could not save employee verification details", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  body.querySelectorAll("a[data-verify-open]").forEach((link) => {
+    const profile = verificationProfiles.get(String(link.getAttribute("data-verify-open")));
+    if (profile?.employee_code) link.href = `/new-ems/employee-verification.html?employeeId=${encodeURIComponent(profile.employee_code)}`;
+  });
+  body.querySelectorAll("button[data-verify-download]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const canvas = body.querySelector(`canvas[data-verify-canvas="${btn.getAttribute("data-verify-download")}"]`);
+      if (!canvas) return;
+      const link = document.createElement("a");
+      link.download = "employee-verification-qr.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
     });
   });
 

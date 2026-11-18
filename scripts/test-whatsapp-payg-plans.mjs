@@ -1,0 +1,61 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync(new URL('../new-ems/shared/whatsapp-payg-plans.js',import.meta.url),'utf8');
+const {renderPaygBillingOverview,renderPaygCapacityAddons,renderPaygPaymentLedger,renderWalletManagementPage}=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+for(const status of ['active','cancelled','completed']) {
+  const html=renderWalletManagementPage({subscription:{status,package_code:'<script>bad</script>'}});
+  assert.match(html,/data-wallet-page-rate>Loading/);
+  assert.match(html,/activation pending/i);
+  assert.match(html,/Wallet &amp; payments/);
+  assert.match(html,/data-wallet-management-host/);
+  assert.match(html,/Recharge breakdown/);
+  assert.match(html,/Auto top-up with consent/);
+  assert.match(html,new RegExp(`Status: ${status}`));
+  assert.ok(!html.includes('<script>'));
+  assert.ok(!html.includes('data-billing-subscribe'));
+}
+assert.match(renderWalletManagementPage({entitlement:{state:'pay_per_use'}}),/Pay-per-use access enabled/);
+const pendingOverview=renderPaygBillingOverview({mode:'test',subscription:{status:'cancelled',package_code:'Launch'},invoices:[{}],payments:[{}],creditNotes:[{}]});
+assert.match(pendingOverview,/Pay-per-use billing/);
+assert.match(pendingOverview,/Setup pending/);
+assert.match(pendingOverview,/Previous billing record/);
+assert.ok(!pendingOverview.includes('No Paid Subscription'));
+assert.ok(!pendingOverview.includes('Choose a plan'));
+assert.ok(!pendingOverview.includes('Trial completed'));
+const addonHtml=renderPaygCapacityAddons({checkoutAddons:[{code:'extra_agent_seat',name:'Extra seat',unit_amount:100,currency:'INR'}]});
+assert.match(addonHtml,/Capacity add-ons/);
+assert.match(addonHtml,/Core platform features stay included/);
+assert.match(addonHtml,/Available after wallet activation/);
+assert.ok(!addonHtml.includes('subscription plan'));
+const ledgerHtml=renderPaygPaymentLedger({entitlement:{state:'pay_per_use'}});
+assert.match(ledgerHtml,/Payment ledger/);
+assert.match(ledgerHtml,/data-wallet-ledger-host/);
+assert.match(ledgerHtml,/Recharge value and charges remain separate/);
+assert.ok(!ledgerHtml.includes('Trial completed'));
+assert.ok(!ledgerHtml.includes('No payments yet'));
+const portal=fs.readFileSync(new URL('../new-ems/shared/page-whatsapp-platform-portal.js',import.meta.url),'utf8');
+const portalHtml=fs.readFileSync(new URL('../new-ems/modules/whatsapp-platform-portal/index.html',import.meta.url),'utf8');
+const publicRouteRoot=fs.realpathSync(new URL('../whatsapp-platform/',import.meta.url));
+const publicRouteHtml=[];
+for(const entry of fs.readdirSync(publicRouteRoot,{recursive:true,withFileTypes:true})) {
+  if(entry.isFile() && entry.name==='index.html') {
+    const candidate=fs.readFileSync(`${entry.parentPath}/${entry.name}`,'utf8');
+    if(candidate.includes('/new-ems/shared/page-whatsapp-platform-portal.js?v=')) publicRouteHtml.push(candidate);
+  }
+}
+assert.match(portal,/if \(view === "billing-plans"\) return renderWalletManagementPage/);
+assert.match(portal,/if \(view === "billing"\) return renderPaygBillingOverview/);
+assert.match(portal,/if \(view === "billing-addons"\) return renderPaygCapacityAddons/);
+assert.match(portal,/if \(view === "billing-ledger"\) return renderPaygPaymentLedger/);
+assert.match(portal,/"billing-plans": "Wallet & payments"/);
+assert.match(portal,/"billing-addons": "Capacity add-ons"/);
+assert.match(portal,/Billing model<\/span><strong>Pay per use/);
+assert.match(portal,/return renderWalletManagementPage\(workspaceBilling \|\| \{\}\);/);
+assert.match(portal,/initialRegister: "recharges"/);
+assert.match(portal,/if \(view === "checkout"\) \{[\s\S]*?workspacePath\("billing-plans"\)/);
+assert.doesNotMatch(portal,/workspacePath\("billing-plans"\)\}\$\{location\.search\}/);
+assert.match(portal,/\$\{escapeHtml\(operationalPackageName\)\} billing/);
+assert.match(portalHtml,/page-whatsapp-platform-portal\.js\?v=177/);
+assert.equal(publicRouteHtml.length,29);
+assert.ok(publicRouteHtml.every(html=>html.includes('/new-ems/shared/page-whatsapp-platform-portal.js?v=177')));
+console.log('PASS: billing, wallet management, payment ledger and capacity routes use PAYG presentation without enabling payments');

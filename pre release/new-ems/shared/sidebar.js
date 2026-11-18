@@ -193,8 +193,21 @@ const MENU_BY_WORKSPACE = {
     {
       title: "Commercial Control",
       items: [
-        { module: MODULES.WHATSAPP_PLATFORM, label: "Package Master", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=package-master` },
-        { module: MODULES.WHATSAPP_PLATFORM, label: "Packages & Offers", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=packages` }
+        { module: MODULES.WHATSAPP_PLATFORM, label: "PAYG pricing & coupons", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=package-master` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Public pricing preview", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=packages` }
+      ]
+    },
+    {
+      title: "Billing",
+      items: [
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Billing Overview", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=billing` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Legacy billing records", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=subscriptions` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Payment Ledger", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=payments` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Invoices", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=invoices` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Refunds", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=refunds` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Credit Notes", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=credit-notes` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Reconciliation", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=reconciliation` },
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Razorpay Settings", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=razorpay` }
       ]
     },
     {
@@ -203,6 +216,19 @@ const MENU_BY_WORKSPACE = {
         { module: MODULES.WHATSAPP_PLATFORM, label: "Meta App Setup", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=meta` },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Security", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=security` },
         { module: MODULES.WHATSAPP_PLATFORM, label: "Public Customer Portal", href: ROUTES.WHATSAPP_PLATFORM_PORTAL }
+      ]
+    },
+    {
+      title: "Help & Support",
+      items: [
+        { module: MODULES.WHATSAPP_PLATFORM, label: "Customer Support", href: `${ROUTES.WHATSAPP_PLATFORM_ADMIN}?view=customer-support` },
+        { module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }
+      ]
+    },
+    {
+      title: "Developer Tools",
+      items: [
+        { module: MODULES.WHATSAPP_PLATFORM, label: "API Testing", href: ROUTES.WHATSAPP_PLATFORM_API_TESTING }
       ]
     }
   ],
@@ -295,10 +321,16 @@ const MENU_BY_WORKSPACE = {
       ]
     },
     {
+      title: "Ads",
+      items: [
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ads Campaigns", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=campaigns` },
+        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ad Analytics", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=ads-analytics` }
+      ]
+    },
+    {
       title: "Connections",
       items: [
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Social Accounts", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=accounts` },
-        { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Ads Campaigns", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=campaigns` },
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Settings", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=settings` },
         { module: MODULES.SOCIAL_MEDIA_MANAGER, label: "Audit History", href: `${ROUTES.SOCIAL_MEDIA_MANAGER}?view=audit` }
       ]
@@ -481,13 +513,21 @@ export function renderSidebar(allowedModules, currentPath, workspace = WORKSPACE
   const isCurrentItem = (href) => {
     const itemUrl = new URL(href, window.location.origin);
     if (itemUrl.pathname !== currentUrl.pathname) return false;
-    if (workspace === WORKSPACES.WHATSAPP_PLATFORM) return itemUrl.search === currentUrl.search;
+    const querySensitivePaths = new Set([
+      ROUTES.SOCIAL_MEDIA_MANAGER,
+      ROUTES.WHATSAPP_PLATFORM_ADMIN,
+      ROUTES.SUPPORT_TICKETS,
+      ROUTES.DIGITAL_SERVICES_BILLING,
+    ]);
+    if (workspace === WORKSPACES.WHATSAPP_PLATFORM || querySensitivePaths.has(itemUrl.pathname)) {
+      return itemUrl.search === currentUrl.search;
+    }
     return itemUrl.search ? itemUrl.search === currentUrl.search : true;
   };
   const contextualSections = Array.isArray(context?.sections) ? context.sections : null;
   const sectionsForWorkspace = [
     ...(contextualSections || MENU_BY_WORKSPACE[workspace] || MENU_BY_WORKSPACE[WORKSPACES.ADMIN]),
-    ...([WORKSPACES.SUPPORT, WORKSPACES.HOSPITAL_PROJECTS].includes(workspace) ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
+    ...([WORKSPACES.SUPPORT, WORKSPACES.HOSPITAL_PROJECTS, WORKSPACES.WHATSAPP_PLATFORM].includes(workspace) ? [] : [{ title: "Help & Support", items: [{ module: MODULES.SUPPORT_TICKETS, label: "Support Desk", href: ROUTES.SUPPORT_TICKETS }] }])
   ];
   const sections = sectionsForWorkspace.map((section) => {
     const visibleItems = section.items.filter((item) => item.disabled || (allowedModules || []).includes(item.module));

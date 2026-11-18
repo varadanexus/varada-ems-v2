@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {stripTypeScriptTypes} from 'node:module';
+const source=await readFile(new URL('../new-ems/supabase/functions/_shared/whatsapp-wallet-recharge-quote.ts',import.meta.url),'utf8');
+const {walletRechargeQuote}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+// Synthetic rates only: these fixtures do not establish tax applicability or tariffs.
+const policy={id:'fixture-v1',currency:'INR',serviceGstBps:1800,gatewayBps:200,gatewayGstBps:1800,gatewayFixedMinor:0,gatewayBasis:'subtotal'};
+const q=walletRechargeQuote(100000,policy);
+assert.deepEqual([q.creditMinor,q.serviceGstMinor,q.gatewayFeeMinor,q.gatewayGstMinor,q.totalMinor],[100000,18000,2360,425,120785]);
+assert.deepEqual([q.discountMinor,q.taxableMinor],[0,100000]);
+const discounted=walletRechargeQuote(100000,policy,10000);
+assert.deepEqual([discounted.creditMinor,discounted.discountMinor,discounted.taxableMinor,discounted.serviceGstMinor,discounted.totalMinor],[100000,10000,90000,16200,108706]);
+const gross=walletRechargeQuote(100000,{...policy,gatewayBasis:'collected_total'});
+assert.equal(gross.totalMinor,gross.creditMinor+gross.serviceGstMinor+gross.gatewayFeeMinor+gross.gatewayGstMinor);
+assert.equal(gross.gatewayFeeMinor,Math.round(gross.totalMinor*0.02));
+assert.equal(gross.creditMinor,100000,'taxes and fees must never reduce spendable credit');
+assert.equal(walletRechargeQuote(123,{...policy,serviceGstBps:0,gatewayBps:0,gatewayGstBps:0}).totalMinor,123);
+for(const amount of [-1,0,1.1,NaN,1000000001]) assert.throws(()=>walletRechargeQuote(amount,policy));
+assert.throws(()=>walletRechargeQuote(100, {...policy,serviceGstBps:undefined}),/GST/);
+assert.throws(()=>walletRechargeQuote(100, {...policy,gatewayBasis:undefined}),/basis/);
+assert.throws(()=>walletRechargeQuote(1000000000,policy),/exceeds/);
+console.log('PASS: full spendable recharge credit, coupon discount before GST, separate gateway lines, exact quote totals and invalid-policy rejection');

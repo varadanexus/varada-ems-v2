@@ -72,7 +72,7 @@ jobs:
       - name: Resolve Android version
         run: echo "ANDROID_VERSION_NAME=${GITHUB_REF_NAME#android-v}" >> "$GITHUB_ENV"
 
-      - name: Build signed release APK
+      - name: Build signed direct APK and Play App Bundle
         working-directory: android
         env:
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/varada-ems-release.p12
@@ -81,20 +81,24 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_VERSION_NAME: ${{ env.ANDROID_VERSION_NAME }}
           ANDROID_VERSION_CODE: ${{ github.run_number }}
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleDirectRelease bundlePlayRelease --no-daemon
 
       - name: Verify APK signature
         run: |
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/direct/release/app-direct-release.apk
 
       - name: Prepare public APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk Varada-EMS.apk
+        run: |
+          cp android/app/build/outputs/apk/direct/release/app-direct-release.apk Varada-EMS.apk
+          cp android/app/build/outputs/bundle/playRelease/app-play-release.aab Varada-Nexus-Play.aab
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: Varada-EMS-signed-${{ github.ref_name }}
-          path: Varada-EMS.apk
+          path: |
+            Varada-EMS.apk
+            Varada-Nexus-Play.aab
           if-no-files-found: error
           retention-days: 90
 
@@ -106,5 +110,7 @@ jobs:
             Signed Varada Nexus Android release.
 
             Download `Varada-EMS.apk` on an Android device and install it. This release supports secure in-app downloads for future mandatory updates. Android will still show its required installation confirmation.
-          files: Varada-EMS.apk
+          files: |
+            Varada-EMS.apk
+            Varada-Nexus-Play.aab
           make_latest: true

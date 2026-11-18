@@ -757,6 +757,11 @@ function showGate(status) {
 }
 
 export async function enforceTermsAcceptance() {
+  // Store-review accounts are non-operational, read-only identities. They do
+  // not represent a person accepting employment or company-use terms.
+  if (String(getLocalSession()?.email || "").toLowerCase() === "googleplay-review@varadanexus.com") {
+    return true;
+  }
   // If the acceptance status can't be resolved (null / transient error), don't
   // block or blank the app — fall through to the gate so the user can accept
   // the terms and continue the login. showGate() renders sensible defaults when

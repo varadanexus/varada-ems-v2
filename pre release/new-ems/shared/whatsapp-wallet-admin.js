@@ -1,0 +1,190 @@
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export function usdMicros(value) {
+  const match=String(value).trim().match(/^(\d{1,6})(?:\.(\d{1,6}))?$/);
+  if (!match) throw new Error('Enter a USD amount with at most six decimal places.');
+  return Number(BigInt(match[1])*1000000n+BigInt((match[2]||'').padEnd(6,'0')));
+}
+
+const localDateTime=value=>{
+  const date=new Date(value);
+  const offset=date.getTimezoneOffset()*60000;
+  return new Date(date.getTime()-offset).toISOString().slice(0,16);
+};
+
+export function mountMessagePriceAdmin(host,request,tenants=[],options={}) {
+  const fixedTenantId=options.tenantId || '';
+  const fixedTenantName=options.tenantName || 'Selected customer';
+  const allowGlobal=options.allowGlobal !== false;
+  const now=new Date();
+  const until=new Date(now);until.setUTCFullYear(until.getUTCFullYear()+10);
+  host.classList.add('wa-message-price-card');
+  host.innerHTML=`<div class="wa-price-card-head"><div class="wa-price-card-icon">$</div><div><span class="wa-admin-kicker">Versioned pricing</span><h3>${fixedTenantId?'Customer message price':'PAYG message pricing'}</h3><p>${fixedTenantId?`Publish a private rate for ${esc(fixedTenantName)}. It overrides the global rate only for this workspace.`:'Publish the public global USD rate or an individual customer override. Prior usage and price versions remain unchanged.'}</p></div><span class="wa-price-audit-badge">Immutable audit</span></div>
+    <form data-message-price-admin class="wa-price-form">
+      ${fixedTenantId?`<input type="hidden" name="scope" value="customer"><input type="hidden" name="tenantId" value="${esc(fixedTenantId)}">`:`<div class="wa-price-form-grid scope"><label><span>Price scope</span><select name="scope" required>${allowGlobal?'<option value="global">Global public price</option>':''}<option value="customer">Individual customer override</option></select><small>Choose whether this appears publicly or applies privately.</small></label><label><span>Customer workspace</span><select name="tenantId"><option value="">Select customer</option>${tenants.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select><small>Required only for an individual override.</small></label></div>`}
+      <div class="wa-price-form-grid rates"><label class="wa-price-field featured"><span>Standard message fee</span><span class="wa-price-input"><b>USD</b><input name="rate" inputmode="decimal" value="0.0035" required></span><small>Every incoming or outgoing message · up to six decimals</small></label><label class="wa-price-field"><span>Terminal failed-message fee</span><span class="wa-price-input"><b>USD</b><input name="failedRate" inputmode="decimal" value="0.0007" required></span><small>Applied only after terminal delivery failure processing</small></label></div>
+      <div class="wa-price-form-grid window"><label><span>Effective from</span><input name="from" type="datetime-local" value="${localDateTime(now)}" required><small>New usage from this moment uses the version.</small></label><label><span>Valid until</span><input name="until" type="datetime-local" value="${localDateTime(until)}" required><small>A later version can replace this window safely.</small></label></div>
+      <label class="wa-price-reason"><span>Commercial reason and reference</span><textarea name="reason" minlength="10" maxlength="1000" placeholder="Example: approved standard rate for FY 2026–27" required></textarea></label>
+      <footer class="wa-price-form-footer"><label class="wa-price-confirm"><input name="confirmed" type="checkbox" required><span><strong>Confirm price publication</strong><small>I confirm the scope, prices and effective window. Publishing appends immutable audit evidence.</small></span></label><button class="wa-admin-button primary" type="submit">Publish message price <span aria-hidden="true">→</span></button></footer>
+    </form><p data-message-price-status class="wa-price-status" role="status"></p>`;
+  const form=host.querySelector('form');
+  const scope=form.elements.scope;
+  const tenant=form.elements.tenantId;
+  const sync=()=>{if(!fixedTenantId && tenant){tenant.closest('label').hidden=scope.value==='global';tenant.required=scope.value==='customer';}};
+  scope?.addEventListener('change',sync);sync();
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();const message=host.querySelector('[data-message-price-status]'),button=form.querySelector('button[type="submit"]');
+    if(!form.reportValidity())return;
+    const tenantId=fixedTenantId || tenant?.value || '';
+    if(scope.value==='customer' && !tenantId){message.textContent='Select a customer workspace.';return;}
+    button.disabled=true;message.textContent='Publishing verified price…';
+    try{
+      await request('staff_wallet_publish_message_price',{scope:scope.value,tenantId,
+        rateMicros:usdMicros(form.elements.rate.value),failedRateMicros:usdMicros(form.elements.failedRate.value),
+        validFrom:new Date(form.elements.from.value).toISOString(),validUntil:new Date(form.elements.until.value).toISOString(),reason:form.elements.reason.value.trim(),confirmed:form.elements.confirmed.checked});
+      message.textContent='Message price published. Existing usage and prior versions were not changed.';
+      form.elements.reason.value='';form.elements.confirmed.checked=false;
+    }catch(error){message.textContent=error.message || 'Message price could not be published.';}
+    finally{button.disabled=false;}
+  });
+}
+export function mountWalletAdmin(host,request,tenants,readiness=null) {
+  let selected=null,busy=false,loadRevision=0;
+  const readinessCopy=readiness ? `<div class="wa-admin-notice"><strong>PAYG readiness · ${readiness.gateEnabled ? 'gate enabled' : 'gate disabled'}</strong><p>Mode: ${esc(readiness.billingMode)} · Gateway keys: ${readiness.razorpayKeyConfigured ? 'configured' : 'missing'} · Webhook secret: ${readiness.webhookSecretConfigured ? 'configured' : 'missing'} · Public webhook URL: ${readiness.publicWebhookConfigured ? 'configured' : 'missing'} · Wallet checkout: ${readiness.walletCheckoutEnabled ? 'enabled' : 'disabled'}. Configuration is preparatory until every prerequisite is verified.</p></div>` : '';
+  host.innerHTML=`<h3>Wallet configuration</h3>${readinessCopy}<p>Configure native-currency wallets and USD balance thresholds. Saving does not activate charging or change balances. Currency locks after activation or financial activity.</p>
+    <label>Customer <select data-wallet-tenant><option value="">Select a workspace</option>${tenants.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>
+    <form data-wallet-config><fieldset disabled><label>Wallet currency <input name="currency" pattern="[A-Z]{3}" maxlength="3" required></label>
+    <label>Minimum available after sending (USD) <input name="minimum" inputmode="decimal" required></label>
+    <label>Low-balance alert threshold (USD) <input name="low" inputmode="decimal" required></label>
+    <label>Minimum recharge (USD equivalent) <input name="topup" inputmode="decimal" required></label>
+    <label>Reason for change <textarea name="reason" minlength="10" maxlength="1000" required></textarea></label>
+    <button type="submit" class="wa-admin-button">Save configuration</button></fieldset></form>
+    <p data-wallet-status role="status"></p><div data-wallet-audit></div>`;
+  const selector=host.querySelector('select'),form=host.querySelector('form'),fieldset=host.querySelector('fieldset'),status=host.querySelector('[data-wallet-status]');
+  const load=async()=>{
+    const revision=++loadRevision;
+    selected=null;fieldset.disabled=true;form.reset();
+    host.querySelector('[data-wallet-audit]').replaceChildren();
+    status.textContent='Select a workspace to view billing records.';
+    if (!selector.value) return;
+    const tenantId=selector.value;status.textContent='Loading wallet…';
+    try {
+      const data=await request('staff_wallet_snapshot',{tenantId});
+      if (!host.isConnected || selector.value!==tenantId || revision!==loadRevision) return;
+      selected=tenantId;
+      const w=data.wallet || {};
+      form.elements.currency.value=w.currency || 'INR';
+      form.elements.currency.readOnly=Boolean(w.enabled || Number(w.balance_micros) || Number(w.reserved_micros));
+      form.elements.minimum.value=String((w.minimum_available_usd_micros ?? 350000)/1000000);
+      form.elements.low.value=String((w.low_balance_usd_micros ?? 2000000)/1000000);
+      form.elements.topup.value=String((w.minimum_topup_usd_micros ?? 10000000)/1000000);
+      form.elements.reason.value='';fieldset.disabled=false;
+      status.textContent=`${data.mode} · ${w.enabled?'Active':'Inactive'} · ${data.pendingEvents?.length || 0} pending billing events shown (up to 100)`;
+      host.querySelector('[data-wallet-audit]').innerHTML=`<h4>Subscription transition review</h4><p>${esc(data.transition?.note || 'Transition review unavailable.')}</p>
+        <ul>${(data.transition?.blockers || []).map(b=>`<li><strong>${esc(b.code)}</strong> · ${esc(b.providerSubscriptionId || b.addonCode || b.subscriptionId)} · ${esc(b.detail)}</li>`).join('') || '<li>No blockers found in the stored records. This is not activation approval.</li>'}</ul>
+        <h4>Paid capacity to preserve</h4><ul>${(data.transition?.retainedCapacity || []).map(a=>`<li>${esc(a.addonCode)} · ${esc(a.quantity)} units</li>`).join('') || '<li>No active paid capacity assignments found.</li>'}</ul>
+        <h4>Configuration history</h4><ul>${(data.configurationAudit||[]).map(a=>`<li>${esc(a.created_at)} · ${esc(a.actor_id)} · ${esc(a.reason)}</li>`).join('') || '<li>No configuration changes.</li>'}</ul>
+        <h4>Recharge charge-policy history</h4><p>Latest 100 records. Dates are UTC; policy validity is not checkout activation.</p>
+        <ul>${(data.chargePolicies||[]).map(p=>`<li><strong>${esc(p.id)}</strong> · ${esc(p.currency)} · ${esc(p.valid_from)} to ${esc(p.valid_until)}
+          <p>Service GST: ${esc(p.policy?.serviceGstBps)} bps · Gateway: ${esc(p.policy?.gatewayBps)} bps · Gateway GST: ${esc(p.policy?.gatewayGstBps)} bps · Fixed fee: ${esc(p.policy?.gatewayFixedMinor)} subunits · Basis: ${esc(p.policy?.gatewayBasis)}</p>
+          <p>Reviewer: ${esc(p.verified_by)} · Evidence: ${esc(p.evidence_reference)} · Reason: ${esc(p.recorded_reason)}</p></li>`).join('') || '<li>No verified charge policies recorded.</li>'}</ul>
+        <h4>Message price history</h4><p>Customer-specific versions take priority while valid; otherwise the newest valid global price applies.</p>
+        <ul>${(data.messagePrices||[]).map(p=>`<li><strong>${p.tenant_id?'Customer override':'Global price'}</strong> · USD ${(Number(p.usd_rate_micros)/1000000).toFixed(6).replace(/0+$/,'')} per message · failed USD ${(Number(p.usd_failed_rate_micros)/1000000).toFixed(6).replace(/0+$/,'')}<p>${esc(p.valid_from)} to ${esc(p.valid_until)} · ${esc(p.reason)}</p></li>`).join('') || '<li>No message price versions recorded.</li>'}</ul>
+        <h4>Auto top-up preference history</h4><p>Latest 100 changes. Preferences are not proof of an approved mandate or completed debit.</p>
+        <ul>${(data.autoTopupAudit||[]).map(a=>`<li>Revision ${esc(a.revision)} · ${esc(a.created_at)} · Actor ${esc(a.actor_id)} · ${esc(a.settings?.state)}
+          <p>${esc(a.settings?.currency)} subunits — trigger ${esc(a.settings?.threshold_minor)}, credit ${esc(a.settings?.credit_minor)}, gross debit cap ${esc(a.settings?.max_debit_minor)}, monthly gross cap ${esc(a.settings?.monthly_cap_minor)} · Consent ${esc(a.settings?.consent_version)}</p></li>`).join('') || '<li>No auto top-up preference changes.</li>'}</ul>`;
+    } catch(error) {if(host.isConnected && revision===loadRevision)status.textContent=error.message || 'Wallet could not be loaded.';}
+  };
+  selector.addEventListener('change',()=>{
+    charge.querySelector('form').reset();charge.querySelector('[role="status"]').textContent='';
+    void load();
+  });
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();if (!selected || busy) return;
+    busy=true;fieldset.disabled=true;selector.disabled=true;
+    try {
+      await request('staff_wallet_configure',{tenantId:selected,currency:form.elements.currency.value.trim().toUpperCase(),
+        minimumAvailableUsdMicros:usdMicros(form.elements.minimum.value),lowBalanceUsdMicros:usdMicros(form.elements.low.value),
+        minimumTopupUsdMicros:usdMicros(form.elements.topup.value),reason:form.elements.reason.value.trim()});
+      await load();status.textContent+=' · Configuration saved; charging status unchanged.';
+    } catch(error) {status.textContent=error.message || 'Configuration could not be saved.';fieldset.disabled=false;}
+    finally {busy=false;selector.disabled=false;}
+  });
+  const fx=document.createElement('section');
+  const charge=document.createElement('section');
+  charge.innerHTML=`<h3>Recharge tax and gateway policy</h3><p>Applies to the selected customer and configured billing mode. Verify tax applicability, gateway tariffs and whether passing fees to customers is permitted. No rates are prefilled. Publishing does not enable payments.</p>
+    <form><label>Policy currency <select name="currency" required><option value="INR">INR</option><option value="USD">USD</option></select></label>
+    <label>Service GST (basis points; 100 = 1%) <input name="serviceGstBps" type="number" min="0" max="10000" step="1" required></label>
+    <label>Gateway fee (basis points) <input name="gatewayBps" type="number" min="0" max="9999" step="1" required></label>
+    <label>GST on gateway fee (basis points) <input name="gatewayGstBps" type="number" min="0" max="10000" step="1" required></label>
+    <label>Fixed gateway fee (currency subunits) <input name="gatewayFixedMinor" type="number" min="0" max="1000000000" step="1" required></label>
+    <label>Gateway calculation basis <select name="gatewayBasis" required><option value="">Select verified basis</option><option value="subtotal">Credit plus service GST</option><option value="collected_total">Full collected total</option></select></label>
+    <label>Policy valid from (UTC) <input name="from" type="datetime-local" required></label>
+    <label>Policy valid until (UTC) <input name="until" type="datetime-local" required></label>
+    <label>Tax and tariff evidence reference <textarea name="reference" minlength="5" maxlength="1000" required></textarea></label>
+    <label>Policy reason <textarea name="reason" minlength="10" maxlength="1000" required></textarea></label>
+    <label><input name="confirmed" type="checkbox" required> I verified the tax treatment and permitted gateway charges for this customer and checkout configuration.</label>
+    <button type="submit">Publish verified charge policy</button></form><p role="status"></p>`;
+  host.append(charge);
+  charge.querySelector('form').addEventListener('submit',async event=>{
+    event.preventDefault();const form=event.currentTarget,message=charge.querySelector('[role="status"]');
+    if(!form.reportValidity())return;
+    if(!selected || busy){message.textContent='Select and load a customer first.';return;}
+    const tenantId=selected,button=form.querySelector('button');busy=true;button.disabled=true;selector.disabled=true;
+    try {
+      const policy={gatewayBasis:form.elements.gatewayBasis.value};
+      for(const field of ['serviceGstBps','gatewayBps','gatewayGstBps','gatewayFixedMinor'])policy[field]=Number(form.elements[field].value);
+      await request('staff_wallet_publish_charge_policy',{tenantId,currency:form.elements.currency.value,policy,confirmed:form.elements.confirmed.checked,
+        validFrom:`${form.elements.from.value}:00Z`,validUntil:`${form.elements.until.value}:00Z`,sourceReference:form.elements.reference.value.trim(),reason:form.elements.reason.value.trim()});
+      message.textContent='Verified charge policy recorded. Checkout activation is unchanged.';form.reset();
+    }catch(error){message.textContent=error.message || 'Charge policy could not be recorded.';}
+    finally{busy=false;button.disabled=false;selector.disabled=false;}
+  });
+  const pricing=document.createElement('section');
+  pricing.innerHTML=`<h3>PAYG message pricing</h3><p>Publish the public global USD rate or an individual customer workspace override. Existing usage keeps its original price-version evidence.</p>
+    <form><label>Price scope <select name="scope" required><option value="customer">Selected customer override</option><option value="global">Global public price</option></select></label>
+    <label>Incoming or outgoing message (USD) <input name="rate" inputmode="decimal" value="0.0035" required></label>
+    <label>Terminal failed-message processing (USD) <input name="failedRate" inputmode="decimal" value="0.0007" required></label>
+    <label>Effective from (UTC) <input name="from" type="datetime-local" required></label>
+    <label>Valid until (UTC) <input name="until" type="datetime-local" required></label>
+    <label>Reason for this price <textarea name="reason" minlength="10" maxlength="1000" required></textarea></label>
+    <label><input name="confirmed" type="checkbox" required> I confirm this scope, price and effective window. Publishing appends immutable evidence.</label>
+    <button class="wa-admin-button" type="submit">Publish message price</button></form><p role="status"></p>`;
+  host.append(pricing);
+  pricing.querySelector('form').addEventListener('submit',async event=>{
+    event.preventDefault();const form=event.currentTarget,button=form.querySelector('button'),message=pricing.querySelector('[role="status"]');
+    if(!form.reportValidity() || busy)return;
+    if(form.elements.scope.value==='customer' && !selected){message.textContent='Select and load a customer before publishing an override.';return;}
+    busy=true;button.disabled=true;selector.disabled=true;
+    try{
+      await request('staff_wallet_publish_message_price',{scope:form.elements.scope.value,tenantId:selected,
+        rateMicros:usdMicros(form.elements.rate.value),failedRateMicros:usdMicros(form.elements.failedRate.value),
+        validFrom:`${form.elements.from.value}:00Z`,validUntil:`${form.elements.until.value}:00Z`,reason:form.elements.reason.value.trim(),confirmed:form.elements.confirmed.checked});
+      message.textContent='Message price published. Existing usage and prior versions were not changed.';
+      if(selected)await load();
+    }catch(error){message.textContent=error.message || 'Message price could not be published.';}
+    finally{busy=false;button.disabled=false;selector.disabled=false;}
+  });
+  fx.innerHTML=`<h3>Exchange-rate evidence</h3><p>Rates apply to all wallets using that currency, including test wallets. Enter verified rates only. Publishing appends immutable evidence; it does not convert existing balances.</p>
+    <form><label>Currency (not USD) <input name="currency" pattern="[A-Z]{3}" maxlength="3" required></label>
+    <label>Currency units per USD <input name="rate" inputmode="decimal" pattern="[0-9]+([.][0-9]{1,8})?" required></label>
+    <label>Valid from (UTC) <input name="from" type="datetime-local" required></label>
+    <label>Valid until (UTC, maximum seven days) <input name="until" type="datetime-local" required></label>
+    <label>Source <input name="source" minlength="3" maxlength="200" required></label>
+    <label>Source URL or document reference <input name="reference" minlength="5" maxlength="1000" required></label>
+    <label>Reason <textarea name="reason" minlength="10" maxlength="1000" required></textarea></label>
+    <label><input name="confirmed" type="checkbox" required> I verified this rate and understand it affects subsequent charges in this currency.</label>
+    <button class="wa-admin-button" type="submit">Publish verified rate</button></form><p role="status"></p>`;
+  host.append(fx);
+  fx.querySelector('form').addEventListener('submit',async event=>{
+    event.preventDefault();const form=event.currentTarget,button=form.querySelector('button'),message=fx.querySelector('[role="status"]');
+    if(button.disabled) return;
+    button.disabled=true;
+    try{
+      await request('staff_wallet_publish_fx',{currency:form.elements.currency.value.trim().toUpperCase(),unitsPerUsd:form.elements.rate.value.trim(),
+        validFrom:`${form.elements.from.value}:00Z`,validUntil:`${form.elements.until.value}:00Z`,
+        source:form.elements.source.value.trim(),sourceReference:form.elements.reference.value.trim(),reason:form.elements.reason.value.trim()});
+      message.textContent='Verified rate published. Historical evidence and balances were not overwritten.';form.reset();
+    }catch(error){message.textContent=error.message || 'Rate publication failed.';}
+    finally{button.disabled=false;}
+  });
+}

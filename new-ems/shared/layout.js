@@ -4,16 +4,18 @@ import { logout, requireAuth, getCurrentAppUser, validateActiveUnlockedUser } fr
 import { isCooRestrictedModuleCode, isFinanceRestrictedEmail, isUltimateAuthorityEmail, PERMISSIONS, ROLES } from "../config/roles.js";
 import { renderNavbar } from "./navbar.js";
 import { getAccessibleModules, getUserDivisionAccessContext, hasAnyRolePermission, setDbPermissionSet } from "./permissions.js";
-import { getSearchIndex, renderSidebar } from "./sidebar.js";
+import { getSearchIndex, renderSidebar } from "./sidebar.js?whatsappBillingNav=4";
 import { initTheme } from "./theme.js";
 import { enforceTermsAcceptance } from "./terms-gate.js?v=terms-face-handoff-2";
-import { initNotificationShell } from "./notification-ui.js?v=notifications-1";
+import { setGooglePlayReviewerMode } from "../config/supabase.js";
+import { initNotificationShell } from "./notification-ui.js?v=notifications-2";
 import { qs, showToast } from "./utils.js";
 import { initLiveChat } from "./live-chat.js?v=sprint15-chat-22";
 import { allowDeviceInternalNavigation, enforceDeviceUnlock, enforceMandatorySecuritySetup, installDeviceRelock, isMobileSecurityDevice } from "./device-security.js";
 import { offerWebPushSetup } from "./push-notifications.js";
 import { enforceNativeAppUpdate } from "./native-app-update.js";
 import { initSupportDesk } from "./support-desk.js?v=support-1";
+import { rememberNativeAuthorizedRoute } from "./native-navigation.js";
 
 const NAV_TRANSITION_KEY = "ems_nav_pending";
 const FINANCIAL_TEXT_PATTERN = /\b(amount|rate|billing|bill(?:s|ing)?|invoice|payment|receipt|credit\s*note|receivable|payable|revenue|cost|margin|gst|tax|debit|credit|balance|outstanding|price|budget|expense|freight\s*charge|commission|penalty|settlement|quotation|quote|estimate|boq)\b/i;
@@ -207,6 +209,8 @@ async function resolveAuthorizedDivisionContext({ appUser, roleCodes, workspace 
           ? "Legal"
           : workspace === WORKSPACES.SUPPORT
             ? "Support"
+          : workspace === WORKSPACES.CAREERS
+            ? "Careers & Recruitment"
           : workspace === WORKSPACES.WHATSAPP_PLATFORM
             ? "WhatsApp Business Platform"
           : (workspace === WORKSPACES.WHATSAPP || workspace === WORKSPACES.EMAIL || workspace === WORKSPACES.MEETINGS || workspace === WORKSPACES.NOTIFICATIONS || workspace === WORKSPACES.ONBOARDING)
@@ -373,6 +377,9 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   const app = qs("#app");
   if (!app) return;
 
+  const isGooglePlayReviewer = roleCodes.includes("google_play_reviewer");
+  setGooglePlayReviewerMode(isGooglePlayReviewer);
+
   app.innerHTML = `
     <div class="app-shell ${sidebarless ? "sidebarless" : ""}">
       ${sidebarless ? "" : `${renderSidebar(accessibleModules, `${window.location.pathname}${window.location.search}`, workspace, sidebarContext)}<div class="app-sidebar-scrim" id="appSidebarScrim" aria-hidden="true"></div>`}
@@ -382,6 +389,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
           <h1>${pageTitle}</h1>
           <p>${pageDescription}</p>
           <span class="meta-pill">Division Scope: ${divisionContext?.scopeLabel || resolveUserDivisionScope()}</span>
+          ${isGooglePlayReviewer ? '<span class="meta-pill">Google Play review mode: read-only sample workspace</span>' : ""}
         </section>
         <section id="pageContent" class="page-content"></section>
       </div>
@@ -398,6 +406,7 @@ export async function bootstrapProtectedPage({ moduleCode, pageTitle, pageDescri
   initNotificationShell().catch(() => {});
   initLiveChat().catch(() => {});
   initSupportDesk({ appUser, roleCodes, divisionId: divisionContext?.divisionId || null });
+  rememberNativeAuthorizedRoute();
   requestAnimationFrame(() => {
     app.classList.add("page-enter-active");
     finishNavigationTransition();

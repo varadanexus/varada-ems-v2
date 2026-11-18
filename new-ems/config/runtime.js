@@ -29,6 +29,7 @@ window.EMS_RUNTIME_CONFIG = window.EMS_RUNTIME_CONFIG || {
     document.head.appendChild(appleIcon);
   }
   [
+    ["mobile-web-app-capable", "yes"],
     ["apple-mobile-web-app-capable", "yes"],
     ["apple-mobile-web-app-status-bar-style", "black-translucent"],
     ["apple-mobile-web-app-title", "Varada Nexus"]

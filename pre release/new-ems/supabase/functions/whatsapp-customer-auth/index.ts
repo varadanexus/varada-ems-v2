@@ -4,6 +4,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const JWT_TTL_SECONDS = 60 * 60;
 const MAX_BODY_BYTES = 16 * 1024;
@@ -189,6 +190,7 @@ function publicSession(row: any) {
     displayName: row.display_name,
     email: row.email,
     companyName: row.company_name,
+    roleCode: row.role_code,
     expiresAt: row.expires_at,
   };
 }
@@ -209,6 +211,61 @@ Deno.serve(async (req) => {
     const action = String(body?.action || "");
     const admin = adminClient();
 
+    if (action === "inspect_invite") {
+      const inviteToken = String(body.inviteToken || "").trim().toLowerCase();
+      if (!/^[a-f0-9]{64}$/.test(inviteToken)) throw new Error("This invitation is invalid or has expired.");
+      await enforceRateLimit(admin, req, "mint", await sha256(inviteToken));
+      const inviteTokenHash = await sha256(inviteToken);
+      const { data: invite, error: inviteError } = await admin
+        .from("whatsapp_platform_users")
+        .select("id,tenant_id,display_name,email,role_code,invited_by_user_id,invite_expires_at")
+        .eq("invite_token_hash", inviteTokenHash)
+        .eq("status", "invited")
+        .gt("invite_expires_at", new Date().toISOString())
+        .maybeSingle();
+      if (inviteError || !invite) throw new Error("This invitation is invalid or has expired.");
+
+      const [{ data: tenant }, { data: inviter }, { count: existingAccountCount }] = await Promise.all([
+        admin.from("whatsapp_platform_tenants").select("name").eq("id", invite.tenant_id).eq("status", "active").maybeSingle(),
+        invite.invited_by_user_id
+          ? admin.from("whatsapp_platform_users").select("display_name,email").eq("id", invite.invited_by_user_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        admin.from("whatsapp_platform_users")
+          .select("id", { count: "exact", head: true })
+          .eq("email", normalizeEmail(invite.email))
+          .eq("status", "active"),
+      ]);
+      if (!tenant?.name) throw new Error("This workspace is not available.");
+
+      return json(req, {
+        invitation: {
+          inviteeName: cleanText(invite.display_name, 100),
+          invitedEmail: normalizeEmail(invite.email),
+          roleCode: cleanText(invite.role_code, 30),
+          inviterName: cleanText(inviter?.display_name || inviter?.email || tenant.name, 120),
+          organisationName: cleanText(tenant.name, 120),
+          expiresAt: invite.invite_expires_at,
+          existingAccount: Number(existingAccountCount || 0) > 0,
+        },
+      });
+    }
+
+    if (action === "accept_existing_invite") {
+      const inviteToken = String(body.inviteToken || "").trim().toLowerCase();
+      if (!/^[a-f0-9]{64}$/.test(inviteToken)) throw new Error("This invitation is invalid or has expired.");
+      await enforceRateLimit(admin, req, "login", await sha256(inviteToken));
+      const { data, error } = await admin.rpc("whatsapp_platform_accept_existing_invite", {
+        p_invite_token_hash: await sha256(inviteToken),
+        p_password: String(body.password || "").slice(0, 128),
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.session_token) return json(req, { error: "Invalid email or password." }, 401);
+      await sendWhatsAppMilestoneEmail(admin, row.tenant_id, "team_member_joined")
+        .catch((emailError) => console.error("Team-joined email could not be queued", emailError));
+      return json(req, { session: publicSession(row) });
+    }
+
     if (action === "accept_invite") {
       const inviteToken = String(body.inviteToken || "").trim().toLowerCase();
       if (!/^[a-f0-9]{64}$/.test(inviteToken)) throw new Error("This invitation is invalid or has expired.");
@@ -222,6 +279,8 @@ Deno.serve(async (req) => {
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row?.session_token) throw new Error("This invitation is invalid or has expired.");
+      await sendWhatsAppMilestoneEmail(admin, row.tenant_id, "team_member_joined")
+        .catch((emailError) => console.error("Team-joined email could not be queued", emailError));
       return json(req, { session: publicSession(row) });
     }
 
@@ -255,6 +314,11 @@ Deno.serve(async (req) => {
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
       if (!row?.session_token) throw new Error("Account could not be created.");
+      await sendWhatsAppMilestoneEmail(admin, row.tenant_id, "workspace_created", {
+        email: row.email,
+        name: row.display_name,
+        companyName: row.company_name,
+      }).catch((emailError) => console.error("Workspace-created email could not be queued", emailError));
       return json(req, { session: publicSession(row) }, 201);
     }
 

@@ -2,6 +2,7 @@ import { APP_NAME } from "./constants.js";
 
 let clientInstance = null;
 let clientMode = null;
+let reviewerMode = false;
 const LOCAL_SESSION_KEY = "ems_local_staff_session";
 // Sprint 13F: for LOCAL staff (auth_provider='local') we bind a minted,
 // Supabase-compatible JWT as the Authorization header on the client instead of
@@ -9,6 +10,69 @@ const LOCAL_SESSION_KEY = "ems_local_staff_session";
 // (auth.uid() = the token's sub), so RLS works exactly as for Supabase-Auth users.
 // Supabase-Auth accounts leave this null and continue to use GoTrue normally.
 let localAuthToken = null;
+
+const REVIEWER_BOOTSTRAP_RPCS = new Set([
+  "get_my_role_codes",
+  "get_my_allowed_modules",
+  "get_my_permissions"
+]);
+
+function emptyReviewerResponse(status = 200) {
+  return new Response("[]", {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Range": "*/0"
+    }
+  });
+}
+
+async function reviewerSafeFetch(input, init = {}) {
+  // Page modules can obtain the shared client before LOCAL session restoration
+  // finishes. Always inject the current minted token at request time so those
+  // cached client references cannot remain anonymous or keep an expired JWT.
+  const requestInit = localAuthToken
+    ? (() => {
+        const headers = new Headers(
+          init?.headers || (typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined)
+        );
+        headers.set("Authorization", `Bearer ${localAuthToken}`);
+        return { ...init, headers };
+      })()
+    : init;
+
+  if (!reviewerMode) return fetch(input, requestInit);
+
+  const url = new URL(typeof input === "string" ? input : input.url, window.location.origin);
+  const method = String(requestInit?.method || (typeof input === "string" ? "GET" : input.method) || "GET").toUpperCase();
+  const rpcMarker = "/rest/v1/rpc/";
+  const rpcIndex = url.pathname.indexOf(rpcMarker);
+
+  if (rpcIndex >= 0) {
+    const rpcName = decodeURIComponent(url.pathname.slice(rpcIndex + rpcMarker.length)).split("/")[0];
+    if (REVIEWER_BOOTSTRAP_RPCS.has(rpcName)) return fetch(input, requestInit);
+    return emptyReviewerResponse();
+  }
+
+  if (url.pathname.includes("/rest/v1/")) {
+    if (method === "GET" || method === "HEAD") return emptyReviewerResponse();
+    return new Response(JSON.stringify({ message: "Google Play reviewer mode is read-only." }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  if (url.pathname.includes("/functions/v1/") || url.pathname.includes("/storage/v1/")) {
+    return emptyReviewerResponse(method === "GET" || method === "HEAD" ? 200 : 403);
+  }
+
+  return fetch(input, requestInit);
+}
+
+export function setGooglePlayReviewerMode(enabled) {
+  reviewerMode = Boolean(enabled);
+  window.EMS_GOOGLE_PLAY_REVIEWER = reviewerMode;
+}
 
 function getRuntimeConfig() {
   const runtime = window.EMS_RUNTIME_CONFIG || {};
@@ -28,9 +92,9 @@ function hasStoredLocalSession() {
   return false;
 }
 
-// Bind (or rebind) the local staff JWT. The bearer header is immutable on a
-// client instance, so both a fresh login and a timed JWT refresh discard the
-// previous client before the next authenticated request.
+// Bind (or rebind) the local staff JWT. New clients receive the token as a
+// default header, while reviewerSafeFetch also injects the current token at
+// request time so already-cached clients survive login restoration and refresh.
 export function setLocalAuthToken(token) {
   const nextToken = token || null;
   const tokenChanged = nextToken !== localAuthToken;
@@ -70,10 +134,10 @@ export function getSupabaseClient() {
         // Newer supabase-js versions replace client.auth with a throwing proxy
         // when the top-level accessToken option is used; several shared EMS
         // services legitimately need client.auth even during a local session.
-        global: { headers: { Authorization: `Bearer ${localAuthToken}` } },
+        global: { headers: { Authorization: `Bearer ${localAuthToken}` }, fetch: reviewerSafeFetch },
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       }
-    : {};
+    : { global: { fetch: reviewerSafeFetch } };
 
   clientInstance = window.supabase.createClient(supabaseUrl, supabaseAnonKey, options);
   clientMode = useLocalSession ? "local" : "supabase";

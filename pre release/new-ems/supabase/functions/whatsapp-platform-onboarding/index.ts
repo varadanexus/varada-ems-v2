@@ -3,6 +3,7 @@
 // Provider credentials are encrypted server-side and are never returned.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const MAX_BODY_BYTES = 24 * 1024;
 const ALLOWED_ORIGINS = new Set([
@@ -87,6 +88,11 @@ async function customerSession(admin: any, tokenValue: unknown) {
   if (!row?.tenant_id || !row?.user_id) throw new Error("Unauthorized");
   return row;
 }
+async function billingEntitlement(admin: any, customer: any) {
+  const { data, error } = await admin.rpc("whatsapp_platform_billing_entitlement", { p_tenant_id: customer.tenant_id });
+  if (error) throw error;
+  return data || { allowed: false, state: "payment_required", reason: "Billing access could not be verified." };
+}
 
 function base64Url(bytes: Uint8Array) {
   let binary = "";
@@ -115,6 +121,17 @@ async function encryptCredential(value: string) {
     new TextEncoder().encode(value),
   );
   return `v1.${base64Url(iv)}.${base64Url(new Uint8Array(encrypted))}`;
+}
+
+async function decryptCredential(ciphertext: string) {
+  const [version, ivValue, encryptedValue] = String(ciphertext || "").split(".");
+  if (version !== "v1" || !ivValue || !encryptedValue) throw new Error("The stored Meta credential is invalid.");
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: decodeBase64Url(ivValue) },
+    await encryptionKey(),
+    decodeBase64Url(encryptedValue),
+  );
+  return new TextDecoder().decode(decrypted);
 }
 
 async function decryptProviderSecret(ciphertext: string) {
@@ -167,25 +184,141 @@ async function graphRequest(path: string, accessToken: string, appSecret: string
   return payload;
 }
 
+const READY_PHONE_STATUSES = new Set(["CONNECTED", "ACTIVE", "READY"]);
+
+function isPhoneRegistered(phone: any) {
+  return READY_PHONE_STATUSES.has(String(phone?.status || "").trim().toUpperCase());
+}
+
+function createRegistrationPin() {
+  const random = new Uint32Array(1);
+  crypto.getRandomValues(random);
+  return String(random[0] % 1_000_000).padStart(6, "0");
+}
+
+async function fetchPhoneDetails(phoneNumberId: string, accessToken: string, appSecret: string) {
+  return graphRequest(
+    `${phoneNumberId}?fields=id,display_phone_number,verified_name,quality_rating,status,code_verification_status`,
+    accessToken,
+    appSecret,
+  );
+}
+
+async function fetchMetaBillingStatus(wabaId: string, accessToken: string, appSecret: string) {
+  const checkedAt = new Date().toISOString();
+  if (!wabaId) return { status: "unavailable", checkedAt, reason: "missing_waba_id" };
+  try {
+    // Meta exposes only the presence of the WABA's primary funding source here. Never
+    // return or persist its identifier; the portal only needs a safe yes/no signal.
+    const waba = await graphRequest(`${wabaId}?fields=id,primary_funding_id`, accessToken, appSecret);
+    return {
+      status: String(waba?.primary_funding_id || "").trim() ? "configured" : "not_detected",
+      checkedAt,
+      reason: null,
+    };
+  } catch (error) {
+    const message = String(error instanceof Error ? error.message : error || "").toLowerCase();
+    const restricted = message.includes("primary_funding_id") ||
+      message.includes("nonexisting field") ||
+      message.includes("unknown field") ||
+      message.includes("unsupported get request") ||
+      message.includes("permissions error") ||
+      message.includes("permission");
+    if (restricted) {
+      // Direct/self-pay WABAs do not consistently expose their funding source to
+      // connected apps. This is an API visibility limitation, not a failed payment.
+      return { status: "verification_limited", checkedAt, reason: "meta_api_restricted" };
+    }
+    return { status: "unavailable", checkedAt, reason: "meta_request_failed" };
+  }
+}
+
+async function ensurePhoneRegistered(
+  phoneNumberId: string,
+  accessToken: string,
+  appSecret: string,
+  storedPin = "",
+) {
+  let phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+  if (isPhoneRegistered(phone)) return { phone, registrationPin: storedPin || null, alreadyRegistered: true };
+
+  const registrationPin = /^\d{6}$/.test(storedPin) ? storedPin : createRegistrationPin();
+  try {
+    await graphRequest(`${phoneNumberId}/register`, accessToken, appSecret, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", pin: registrationPin }),
+    });
+  } catch (error) {
+    // Registration is idempotent from the portal's perspective. Meta may report that
+    // a number is already registered after a retry, so verify the authoritative state.
+    phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+    if (!isPhoneRegistered(phone)) throw error;
+  }
+
+  for (const delay of [0, 750, 1500, 2500]) {
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+    phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+    if (isPhoneRegistered(phone)) break;
+  }
+  if (!isPhoneRegistered(phone)) {
+    const status = String(phone?.status || "pending").replaceAll("_", " ").toLowerCase();
+    throw new Error(`Meta accepted the registration request but the phone number is still ${status}. Try again shortly.`);
+  }
+  return { phone, registrationPin, alreadyRegistered: false };
+}
+
 async function configurationStatus(admin: any, customer: any) {
   const appId = env("WHATSAPP_PLATFORM_META_APP_ID");
   const appSecret = await providerAppSecret(admin);
   const configurationId = env("WHATSAPP_PLATFORM_META_CONFIG_ID");
   const version = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
-  const { data: connections, error } = await admin
-    .from("whatsapp_platform_connections")
-    .select("id,status,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at")
-    .eq("tenant_id", customer.tenant_id)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const entitlement = await billingEntitlement(admin, customer);
+  let numberCapacity: any = null;
+  let connections: any[] = [];
+  if (entitlement.allowed) {
+    numberCapacity = await reconcileNumberCapacity(admin, customer);
+    const { data, error } = await admin
+      .from("whatsapp_platform_connections")
+      .select("id,status,meta_business_id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
+      .eq("tenant_id", customer.tenant_id)
+      .neq("status", "disconnected")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    connections = data || [];
+  }
   return {
     configured: Boolean(appId && appSecret && configurationId && /^v\d{1,3}\.0$/.test(version)),
     publicAppId: appId || null,
     publicConfigurationId: configurationId || null,
     publicGraphVersion: /^v\d{1,3}\.0$/.test(version) ? version : null,
     environment: env("WHATSAPP_PLATFORM_META_PRODUCTION_READY") === "true" ? "production" : "testing",
-    connections: connections || [],
+    connections,
+    entitlement,
+    numberCapacity,
   };
+}
+
+async function reconcileNumberCapacity(admin: any, customer: any) {
+  const { data, error } = await admin.rpc("whatsapp_platform_reconcile_number_capacity", {
+    p_tenant_id: customer.tenant_id,
+  });
+  if (error) throw error;
+  return data || null;
+}
+
+async function requireAvailableNumberCapacity(admin: any, customer: any) {
+  const capacity = await reconcileNumberCapacity(admin, customer);
+  if (capacity?.allowedLimit !== null && Number(capacity?.available || 0) <= 0) {
+    const included = Number(capacity?.baseLimit || 0);
+    const paidExtra = Number(capacity?.additionalLimit || 0);
+    const allowed = Number(capacity?.allowedLimit || 0);
+    const detail = paidExtra > 0
+      ? `${included} package and ${paidExtra} paid add-on slot${paidExtra === 1 ? "" : "s"}`
+      : `${included} package slot${included === 1 ? "" : "s"}`;
+    throw new Error(`All ${allowed} WhatsApp number slots are in use (${detail}). Purchase the Extra WhatsApp number add-on before connecting another production number.`);
+  }
+  return capacity;
 }
 
 async function recordEvent(admin: any, customer: any, eventCode: string, metadata: Record<string, unknown> = {}, connectionId: string | null = null) {
@@ -196,6 +329,223 @@ async function recordEvent(admin: any, customer: any, eventCode: string, metadat
     event_code: eventCode,
     safe_metadata: metadata,
   });
+}
+
+async function removeConnection(admin: any, customer: any, body: any) {
+  const connectionId = String(body.connectionId || "").trim();
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(connectionId)) throw new Error("Select a valid WhatsApp business number.");
+  const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
+    .select("id,status,meta_business_id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,onboarding_metadata")
+    .eq("id", connectionId)
+    .eq("tenant_id", customer.tenant_id)
+    .neq("status", "disconnected")
+    .single();
+  if (connectionError || !connection) throw new Error("This WhatsApp business number has already been removed.");
+
+  const phoneNumberId = cleanId(connection.phone_number_id, "phone number ID");
+  const { data: stored, error: storedError } = await admin.from("whatsapp_platform_provider_credentials")
+    .select("credential_ciphertext,expires_at")
+    .eq("connection_id", connection.id)
+    .eq("tenant_id", customer.tenant_id)
+    .maybeSingle();
+  if (storedError) throw storedError;
+  if (!stored?.credential_ciphertext) {
+    throw new Error("The Meta authorization for this number is unavailable. Reconnect the number before removing it from WhatsApp.");
+  }
+  if (stored.expires_at && new Date(stored.expires_at).getTime() <= Date.now()) {
+    throw new Error("The Meta authorization has expired. Reconnect the number before removing it from WhatsApp.");
+  }
+  let credentials: any;
+  try {
+    credentials = JSON.parse(await decryptCredential(stored.credential_ciphertext));
+  } catch {
+    throw new Error("The secure Meta authorization could not be opened. Reconnect the number before removing it from WhatsApp.");
+  }
+  const accessToken = cleanMetaAccessToken(credentials?.accessToken);
+  const appSecret = await providerAppSecret(admin);
+  if (!appSecret) throw new Error("Meta onboarding is not configured.");
+
+  let phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+  if (isPhoneRegistered(phone)) {
+    await graphRequest(`${phoneNumberId}/deregister`, accessToken, appSecret, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp" }),
+    });
+    for (const delay of [750, 1500, 3000, 5000]) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+      if (!isPhoneRegistered(phone)) break;
+    }
+    if (isPhoneRegistered(phone)) {
+      throw new Error("Meta accepted the deregistration request but the number is still connected. Nothing was removed locally; try again shortly.");
+    }
+  }
+
+  const now = new Date().toISOString();
+  const { error: updateError } = await admin.from("whatsapp_platform_connections").update({
+    status: "disconnected",
+    updated_at: now,
+    onboarding_metadata: {
+      ...(connection.onboarding_metadata || {}),
+      phone_status: String(phone?.status || "DEREGISTERED").toUpperCase(),
+      removed_from_workspace_at: now,
+      deregistered_from_meta_at: now,
+      removal_source: "customer_workspace",
+    },
+  }).eq("id", connection.id).eq("tenant_id", customer.tenant_id);
+  if (updateError) throw updateError;
+
+  const { error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+    .delete()
+    .eq("connection_id", connection.id)
+    .eq("tenant_id", customer.tenant_id);
+  if (credentialError) {
+    await admin.from("whatsapp_platform_connections").update({
+      status: connection.status,
+      onboarding_metadata: connection.onboarding_metadata || {},
+      updated_at: new Date().toISOString(),
+    }).eq("id", connection.id).eq("tenant_id", customer.tenant_id);
+    throw credentialError;
+  }
+
+  const { data: remaining, error: remainingError } = await admin.from("whatsapp_platform_connections")
+    .select("status")
+    .eq("tenant_id", customer.tenant_id)
+    .in("status", ["connected", "pending"]);
+  if (remainingError) throw remainingError;
+  const onboardingStatus = (remaining || []).some((item: any) => item.status === "connected")
+    ? "meta_connected"
+    : (remaining || []).some((item: any) => item.status === "pending") ? "meta_pending" : "profile_complete";
+  const { error: tenantError } = await admin.from("whatsapp_platform_tenants")
+    .update({ onboarding_status: onboardingStatus, updated_at: now })
+    .eq("id", customer.tenant_id);
+  if (tenantError) throw tenantError;
+
+  await recordEvent(admin, customer, "connection_disconnected", {
+    displayPhoneNumber: connection.display_phone_number || null,
+    verifiedName: connection.verified_name || null,
+    phoneNumberId,
+    whatsappBusinessAccountId: connection.whatsapp_business_account_id || null,
+    deregisteredFromMeta: true,
+    source: "customer_workspace",
+  }, connection.id);
+  const numberCapacity = await reconcileNumberCapacity(admin, customer);
+  return { ok: true, removedConnectionId: connection.id, numberCapacity };
+}
+
+function cleanMetaAccessToken(value: unknown) {
+  const token = String(value || "").trim();
+  if (token.length < 20 || token.length > 4096 || /[\s\u0000-\u001f\u007f]/.test(token)) throw new Error("Enter a valid Meta access token.");
+  return token;
+}
+
+async function inspectMetaAccessToken(appId: string, appSecret: string, accessToken: string) {
+  const url = new URL(`https://graph.facebook.com/${graphVersion()}/debug_token`);
+  url.searchParams.set("input_token", accessToken);
+  url.searchParams.set("access_token", `${appId}|${appSecret}`);
+  const response = await fetch(url);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.data?.is_valid) throw new Error(payload?.error?.message || "Meta says this access token is invalid or expired.");
+  const permissions = new Set<string>([
+    ...(Array.isArray(payload.data.scopes) ? payload.data.scopes : []),
+    ...(Array.isArray(payload.data.granular_scopes) ? payload.data.granular_scopes.flatMap((scope: any) => Array.isArray(scope?.scopes) ? scope.scopes : [scope?.scope]).filter(Boolean) : []),
+  ].map((scope) => String(scope)));
+  const required = ["whatsapp_business_management", "whatsapp_business_messaging"];
+  const missing = required.filter((permission) => !permissions.has(permission));
+  if (missing.length) {
+    throw new Error(`This token is missing ${missing.join(" and ")}. Generate a System User access token with WhatsApp management and messaging permissions.`);
+  }
+  return payload.data;
+}
+
+async function connectDeveloperTestNumber(admin: any, customer: any, body: any) {
+  const wabaId = cleanId(body.wabaId, "WhatsApp Business Account ID");
+  const requestedPhoneNumberId = body.phoneNumberId ? cleanId(body.phoneNumberId, "phone number ID") : "";
+  const accessToken = cleanMetaAccessToken(body.accessToken);
+  const appId = env("WHATSAPP_PLATFORM_META_APP_ID");
+  const appSecret = await providerAppSecret(admin);
+  if (!appId || !appSecret) throw new Error("Meta onboarding is not configured.");
+
+  const [tokenDetails, waba, phoneNumbers] = await Promise.all([
+    inspectMetaAccessToken(appId, appSecret, accessToken),
+    graphRequest(`${wabaId}?fields=id,name,owner_business_info`, accessToken, appSecret),
+    graphRequest(`${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,quality_rating,status&limit=100`, accessToken, appSecret),
+  ]);
+  const available = Array.isArray(phoneNumbers?.data) ? phoneNumbers.data : [];
+  const phone = requestedPhoneNumberId
+    ? available.find((item: any) => String(item.id) === requestedPhoneNumberId)
+    : available.length === 1 ? available[0] : null;
+  if (!phone) {
+    if (!available.length) throw new Error("Meta did not return a test phone number for this WABA and token.");
+    throw new Error("This WABA has multiple phone numbers. Enter the Phone Number ID from Meta API Setup.");
+  }
+  const phoneNumberId = cleanId(phone.id, "phone number ID");
+  await graphRequest(`${wabaId}/subscribed_apps`, accessToken, appSecret, { method: "POST" });
+
+  const now = new Date().toISOString();
+  const connectionPayload = {
+    tenant_id: customer.tenant_id,
+    provider: "meta",
+    meta_business_id: waba?.owner_business_info?.id || null,
+    whatsapp_business_account_id: wabaId,
+    phone_number_id: phoneNumberId,
+    display_phone_number: phone.display_phone_number || null,
+    verified_name: phone.verified_name || waba?.name || "Meta developer test number",
+    status: "connected",
+    onboarding_metadata: {
+      source: "developer_api_setup",
+      test_number: true,
+      quality_rating: phone.quality_rating || null,
+      phone_status: phone.status || null,
+      token_notice: Number(tokenDetails?.expires_at || 0) > 0 ? "expiring_access_token" : "system_user_access_token",
+      token_permissions_verified: true,
+    },
+    connected_at: now,
+    updated_at: now,
+  };
+  const { data: existing, error: existingError } = await admin.from("whatsapp_platform_connections")
+    .select("id")
+    .eq("tenant_id", customer.tenant_id)
+    .eq("whatsapp_business_account_id", wabaId)
+    .eq("phone_number_id", phoneNumberId)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  const connectionQuery = existing?.id
+    ? admin.from("whatsapp_platform_connections").update(connectionPayload).eq("id", existing.id)
+    : admin.from("whatsapp_platform_connections").insert(connectionPayload);
+  const { data: connection, error: connectionError } = await connectionQuery
+    .select("id,status,phone_number_id,display_phone_number,verified_name,connected_at,onboarding_metadata")
+    .single();
+  if (connectionError) throw connectionError;
+
+  const tokenExpiresAt = Number(tokenDetails?.expires_at || 0);
+  const expiresAt = tokenExpiresAt > 0 ? new Date(tokenExpiresAt * 1000).toISOString() : null;
+  const credentialCiphertext = await encryptCredential(JSON.stringify({
+    accessToken,
+    tokenType: expiresAt ? "expiring_meta_access_token" : "system_user_access_token",
+    permissions: ["whatsapp_business_management", "whatsapp_business_messaging"],
+    wabaId,
+    phoneNumberId,
+  }));
+  const { error: credentialError } = await admin.from("whatsapp_platform_provider_credentials").upsert({
+    connection_id: connection.id,
+    tenant_id: customer.tenant_id,
+    credential_ciphertext: credentialCiphertext,
+    token_type: expiresAt ? "expiring_meta_access_token" : "system_user_access_token",
+    expires_at: expiresAt,
+    last_rotated_at: now,
+    updated_at: now,
+  }, { onConflict: "connection_id" });
+  if (credentialError) throw credentialError;
+
+  await admin.from("whatsapp_platform_tenants").update({ onboarding_status: "meta_connected", updated_at: now }).eq("id", customer.tenant_id);
+  await recordEvent(admin, customer, "onboarding_completed", { wabaId, phoneNumberId, source: "developer_api_setup", testNumber: true }, connection.id);
+  await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "meta_connected")
+    .catch((emailError) => console.error("Meta-connected email could not be queued", emailError));
+  await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "number_confirmed")
+    .catch((emailError) => console.error("Number-confirmed email could not be queued", emailError));
+  return { connection, expiresAt, temporaryCredential: true };
 }
 
 async function enforceVerificationGate(admin: any, customer: any) {
@@ -250,6 +600,16 @@ async function completeOnboarding(admin: any, customer: any, body: any) {
   }
   await graphRequest(`${wabaId}/subscribed_apps`, accessToken, appSecret, { method: "POST" });
 
+  let registrationPin: string | null = null;
+  if (phoneNumberId) {
+    const registration = await ensurePhoneRegistered(phoneNumberId, accessToken, appSecret);
+    phone = registration.phone;
+    registrationPin = registration.registrationPin;
+  }
+
+  const now = new Date().toISOString();
+  const phoneReady = phoneNumberId ? isPhoneRegistered(phone) : false;
+
   const connectionPayload = {
       tenant_id: customer.tenant_id,
       provider: "meta",
@@ -258,23 +618,54 @@ async function completeOnboarding(admin: any, customer: any, body: any) {
       phone_number_id: phoneNumberId,
       display_phone_number: phone?.display_phone_number || null,
       verified_name: phone?.verified_name || waba?.name || null,
-      status: phoneNumberId ? "connected" : "pending",
+      status: phoneReady ? "connected" : "pending",
       onboarding_metadata: {
         source: "embedded_signup",
         quality_rating: phone?.quality_rating || null,
         phone_status: phone?.status || null,
-        configuration_version: 1,
+        code_verification_status: phone?.code_verification_status || null,
+        registration_completed_at: phoneReady ? now : null,
+        configuration_version: 2,
       },
-      connected_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      connected_at: phoneReady ? now : null,
+      updated_at: now,
   };
-  const { data: existingConnection } = await admin
-    .from("whatsapp_platform_connections")
-    .select("id")
-    .eq("tenant_id", customer.tenant_id)
-    .eq("whatsapp_business_account_id", wabaId)
-    .limit(1)
-    .maybeSingle();
+  let existingConnection: any = null;
+  if (phoneNumberId) {
+    const exact = await admin
+      .from("whatsapp_platform_connections")
+      .select("id")
+      .eq("tenant_id", customer.tenant_id)
+      .eq("whatsapp_business_account_id", wabaId)
+      .eq("phone_number_id", phoneNumberId)
+      .maybeSingle();
+    if (exact.error) throw exact.error;
+    existingConnection = exact.data;
+    if (!existingConnection) {
+      const pending = await admin
+        .from("whatsapp_platform_connections")
+        .select("id")
+        .eq("tenant_id", customer.tenant_id)
+        .eq("whatsapp_business_account_id", wabaId)
+        .is("phone_number_id", null)
+        .limit(1)
+        .maybeSingle();
+      if (pending.error) throw pending.error;
+      existingConnection = pending.data;
+    }
+  } else {
+    const pending = await admin
+      .from("whatsapp_platform_connections")
+      .select("id")
+      .eq("tenant_id", customer.tenant_id)
+      .eq("whatsapp_business_account_id", wabaId)
+      .is("phone_number_id", null)
+      .limit(1)
+      .maybeSingle();
+    if (pending.error) throw pending.error;
+    existingConnection = pending.data;
+  }
+  if (!existingConnection?.id) await requireAvailableNumberCapacity(admin, customer);
   const connectionQuery = existingConnection?.id
     ? admin.from("whatsapp_platform_connections").update(connectionPayload).eq("id", existingConnection.id)
     : admin.from("whatsapp_platform_connections").insert(connectionPayload);
@@ -290,6 +681,7 @@ async function completeOnboarding(admin: any, customer: any, body: any) {
     tokenType: exchange.token_type || "system_user",
     wabaId,
     phoneNumberId: phoneNumberId || null,
+    registrationPin,
   }));
   const { error: credentialError } = await admin
     .from("whatsapp_platform_provider_credentials")
@@ -299,16 +691,187 @@ async function completeOnboarding(admin: any, customer: any, body: any) {
       credential_ciphertext: credentialCiphertext,
       token_type: "system_user",
       expires_at: expiresAt,
-      last_rotated_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      last_rotated_at: now,
+      updated_at: now,
     }, { onConflict: "connection_id" });
   if (credentialError) throw credentialError;
 
   await admin.from("whatsapp_platform_tenants")
-    .update({ onboarding_status: phoneNumberId ? "meta_connected" : "meta_pending", updated_at: new Date().toISOString() })
+    .update({ onboarding_status: phoneReady ? "meta_connected" : "meta_pending", updated_at: now })
     .eq("id", customer.tenant_id);
   await recordEvent(admin, customer, "onboarding_completed", { wabaId, phoneNumberId: phoneNumberId || null }, connection.id);
-  return { connection };
+  await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "meta_connected")
+    .catch((emailError) => console.error("Meta-connected email could not be queued", emailError));
+  if (phoneReady) {
+    await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "number_confirmed")
+      .catch((emailError) => console.error("Number-confirmed email could not be queued", emailError));
+  }
+  const numberCapacity = await reconcileNumberCapacity(admin, customer);
+  return { connection, numberCapacity };
+}
+
+async function registerPendingPhone(admin: any, customer: any, body: any) {
+  const connectionId = String(body.connectionId || "").trim();
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(connectionId)) {
+    throw new Error("Select a valid WhatsApp business number.");
+  }
+  const appSecret = await providerAppSecret(admin);
+  if (!appSecret) throw new Error("Meta onboarding is not configured.");
+
+  const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
+    .select("id,status,phone_number_id,display_phone_number,verified_name,onboarding_metadata")
+    .eq("id", connectionId)
+    .eq("tenant_id", customer.tenant_id)
+    .neq("status", "disconnected")
+    .single();
+  if (connectionError || !connection) throw new Error("This WhatsApp business number is no longer available.");
+  if (connection.onboarding_metadata?.test_number === true) throw new Error("Developer test numbers do not require this registration step.");
+  const phoneNumberId = cleanId(connection.phone_number_id, "phone number ID");
+
+  const { data: stored, error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+    .select("credential_ciphertext,token_type,expires_at")
+    .eq("connection_id", connection.id)
+    .eq("tenant_id", customer.tenant_id)
+    .single();
+  if (credentialError || !stored?.credential_ciphertext) {
+    throw new Error("The secure Meta authorization is unavailable. Reconnect this number through Meta onboarding.");
+  }
+  if (stored.expires_at && new Date(stored.expires_at).getTime() <= Date.now()) {
+    throw new Error("The Meta authorization has expired. Reconnect this number through Meta onboarding.");
+  }
+
+  let credentials: any;
+  try {
+    credentials = JSON.parse(await decryptCredential(stored.credential_ciphertext));
+  } catch {
+    throw new Error("The secure Meta authorization could not be opened. Reconnect this number through Meta onboarding.");
+  }
+  const accessToken = cleanMetaAccessToken(credentials?.accessToken);
+  const registration = await ensurePhoneRegistered(
+    phoneNumberId,
+    accessToken,
+    appSecret,
+    String(credentials?.registrationPin || ""),
+  );
+  const phone = registration.phone;
+  const now = new Date().toISOString();
+  const metadata = {
+    ...(connection.onboarding_metadata || {}),
+    phone_status: phone.status || "CONNECTED",
+    code_verification_status: phone.code_verification_status || null,
+    quality_rating: phone.quality_rating || connection.onboarding_metadata?.quality_rating || null,
+    registration_completed_at: now,
+    registration_source: "workspace_repair",
+    configuration_version: 2,
+  };
+  const credentialCiphertext = await encryptCredential(JSON.stringify({
+    ...credentials,
+    phoneNumberId,
+    registrationPin: registration.registrationPin || credentials?.registrationPin || null,
+  }));
+  const { error: credentialUpdateError } = await admin.from("whatsapp_platform_provider_credentials").update({
+    credential_ciphertext: credentialCiphertext,
+    last_rotated_at: now,
+    updated_at: now,
+  }).eq("connection_id", connection.id).eq("tenant_id", customer.tenant_id);
+  if (credentialUpdateError) throw credentialUpdateError;
+
+  const { data: updatedConnection, error: updateError } = await admin.from("whatsapp_platform_connections").update({
+    status: "connected",
+    display_phone_number: phone.display_phone_number || connection.display_phone_number || null,
+    verified_name: phone.verified_name || connection.verified_name || null,
+    onboarding_metadata: metadata,
+    connected_at: now,
+    updated_at: now,
+  }).eq("id", connection.id).eq("tenant_id", customer.tenant_id)
+    .select("id,status,phone_number_id,display_phone_number,verified_name,connected_at,onboarding_metadata")
+    .single();
+  if (updateError) throw updateError;
+
+  const { error: tenantError } = await admin.from("whatsapp_platform_tenants")
+    .update({ onboarding_status: "meta_connected", updated_at: now })
+    .eq("id", customer.tenant_id);
+  if (tenantError) throw tenantError;
+  await recordEvent(admin, customer, "phone_registration_completed", { phoneNumberId, source: "workspace_repair" }, connection.id);
+  await sendWhatsAppMilestoneEmail(admin, customer.tenant_id, "number_confirmed")
+    .catch((emailError) => console.error("Number-confirmed email could not be queued", emailError));
+  return { connection: updatedConnection, numberCapacity: await reconcileNumberCapacity(admin, customer) };
+}
+
+async function refreshPhoneStatus(admin: any, customer: any, body: any) {
+  const connectionId = String(body.connectionId || "").trim();
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(connectionId)) {
+    throw new Error("Select a valid WhatsApp business number.");
+  }
+  const appSecret = await providerAppSecret(admin);
+  if (!appSecret) throw new Error("Meta onboarding is not configured.");
+
+  const { data: connection, error: connectionError } = await admin.from("whatsapp_platform_connections")
+    .select("id,status,meta_business_id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,onboarding_metadata")
+    .eq("id", connectionId)
+    .eq("tenant_id", customer.tenant_id)
+    .neq("status", "disconnected")
+    .single();
+  if (connectionError || !connection) throw new Error("This WhatsApp business number is no longer available.");
+  const phoneNumberId = cleanId(connection.phone_number_id, "phone number ID");
+
+  const { data: stored, error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+    .select("credential_ciphertext,expires_at")
+    .eq("connection_id", connection.id)
+    .eq("tenant_id", customer.tenant_id)
+    .single();
+  if (credentialError || !stored?.credential_ciphertext) {
+    throw new Error("The secure Meta authorization is unavailable. Reconnect this number through Meta onboarding.");
+  }
+  if (stored.expires_at && new Date(stored.expires_at).getTime() <= Date.now()) {
+    throw new Error("The Meta authorization has expired. Reconnect this number through Meta onboarding.");
+  }
+
+  let credentials: any;
+  try {
+    credentials = JSON.parse(await decryptCredential(stored.credential_ciphertext));
+  } catch {
+    throw new Error("The secure Meta authorization could not be opened. Reconnect this number through Meta onboarding.");
+  }
+  const accessToken = cleanMetaAccessToken(credentials?.accessToken);
+  const phone = await fetchPhoneDetails(phoneNumberId, accessToken, appSecret);
+  const wabaId = connection.whatsapp_business_account_id
+    ? cleanId(connection.whatsapp_business_account_id, "WhatsApp Business Account ID")
+    : "";
+  const metaBilling = connection.onboarding_metadata?.test_number === true
+    ? { status: "not_applicable", checkedAt: new Date().toISOString() }
+    : await fetchMetaBillingStatus(wabaId, accessToken, appSecret);
+  let metaBusinessId = String(connection.meta_business_id || connection.onboarding_metadata?.meta_business_id || "").trim();
+  if (!metaBusinessId && connection.whatsapp_business_account_id) {
+    const waba = await graphRequest(`${wabaId}?fields=owner_business_info`, accessToken, appSecret);
+    metaBusinessId = String(waba?.owner_business_info?.id || "").trim();
+  }
+  const now = new Date().toISOString();
+  const registered = isPhoneRegistered(phone);
+  const metadata = {
+    ...(connection.onboarding_metadata || {}),
+    phone_status: phone.status || (registered ? "CONNECTED" : "PENDING"),
+    code_verification_status: phone.code_verification_status || null,
+    quality_rating: phone.quality_rating || null,
+    meta_business_id: metaBusinessId || null,
+    meta_billing_status: metaBilling.status,
+    meta_billing_checked_at: metaBilling.checkedAt,
+    meta_billing_verification: metaBilling.reason || null,
+    last_meta_sync_at: now,
+  };
+  const { data: updatedConnection, error: updateError } = await admin.from("whatsapp_platform_connections").update({
+    status: registered ? "connected" : "pending",
+    display_phone_number: phone.display_phone_number || connection.display_phone_number || null,
+    verified_name: phone.verified_name || connection.verified_name || null,
+    meta_business_id: metaBusinessId || connection.meta_business_id || null,
+    connected_at: registered ? (connection.connected_at || now) : connection.connected_at,
+    onboarding_metadata: metadata,
+    updated_at: now,
+  }).eq("id", connection.id).eq("tenant_id", customer.tenant_id)
+    .select("id,status,meta_business_id,whatsapp_business_account_id,phone_number_id,display_phone_number,verified_name,connected_at,created_at,onboarding_metadata")
+    .single();
+  if (updateError) throw updateError;
+  return { connection: updatedConnection, numberCapacity: await reconcileNumberCapacity(admin, customer) };
 }
 
 Deno.serve(async (req) => {
@@ -335,9 +898,17 @@ Deno.serve(async (req) => {
     const body = rawBody ? JSON.parse(rawBody) : {};
     customer = await customerSession(admin, body.sessionToken);
     const action = String(body.action || "status");
+    if (customer.role_code === "agent") {
+      return json(req, { error: "Your agent role cannot access business onboarding." }, 403);
+    }
     if (action === "status") return json(req, await configurationStatus(admin, customer));
+    if (action === "refresh_phone_status") return json(req, await refreshPhoneStatus(admin, customer, body));
+    if (!["owner", "admin"].includes(customer.role_code)) {
+      return json(req, { error: "Only workspace owners and administrators can add business numbers." }, 403);
+    }
     if (action === "begin") {
       await enforceVerificationGate(admin, customer);
+      await requireAvailableNumberCapacity(admin, customer);
       await recordEvent(admin, customer, "onboarding_started", { source: "customer_workspace" });
       return json(req, { ok: true });
     }
@@ -345,6 +916,12 @@ Deno.serve(async (req) => {
       await enforceVerificationGate(admin, customer);
       return json(req, await completeOnboarding(admin, customer, body));
     }
+    if (action === "connect_test_number") {
+      await enforceVerificationGate(admin, customer);
+      return json(req, await connectDeveloperTestNumber(admin, customer, body));
+    }
+    if (action === "register_phone") return json(req, await registerPendingPhone(admin, customer, body));
+    if (action === "remove_connection") return json(req, await removeConnection(admin, customer, body));
     return json(req, { error: "Unsupported action" }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";

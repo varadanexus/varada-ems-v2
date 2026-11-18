@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Protected EMS reviewer access to customer verification documents.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
 const env = (name: string) => Deno.env.get(name) || "";
@@ -53,6 +54,27 @@ Deno.serve(async (req) => {
     const hasFullAuthority = (roleRows || []).some((row: any) => row.roles?.is_active !== false && ["super_admin", "chairman_managing_director"].includes(String(row.roles?.code || "")));
     if (appUser?.status !== "active" || appUser?.deleted_at || ((permissionError || permitted !== true) && !hasFullAuthority)) throw new Error("Forbidden");
     const body = await req.json();
+    const action = String(body.action || "open_document");
+    if (action === "review_verification") {
+      const tenantId = String(body.tenantId || "");
+      const decision = String(body.decision || "");
+      const notes = String(body.notes || "").trim().slice(0, 2000);
+      if (!/^[0-9a-f-]{36}$/i.test(tenantId)) throw new Error("Invalid verification request");
+      if (!["in_review", "changes_requested", "rejected", "verified"].includes(decision)) throw new Error("Invalid verification decision");
+      if (["changes_requested", "rejected"].includes(decision) && notes.length < 10) throw new Error("Add clear reviewer notes before this decision.");
+      const { error: reviewError } = await userClient.rpc("whatsapp_platform_admin_review_verification", {
+        p_tenant_id: tenantId,
+        p_decision: decision,
+        p_notes: notes || null,
+      });
+      if (reviewError) throw reviewError;
+      let notification = null;
+      if (decision === "verified") {
+        notification = await sendWhatsAppMilestoneEmail(admin, tenantId, "verification_verified")
+          .catch((emailError) => ({ sent: false, error: emailError instanceof Error ? emailError.message : "Verification email failed." }));
+      }
+      return json(req, { ok: true, decision, notification });
+    }
     const documentId = String(body.documentId || "");
     if (!/^[0-9a-f-]{36}$/i.test(documentId)) throw new Error("Invalid document request");
     const { data: document, error } = await admin.from("whatsapp_platform_verification_documents").select("tenant_id,document_type,drive_file_id,original_file_name,mime_type,file_size,status").eq("id", documentId).eq("status", "active").single();

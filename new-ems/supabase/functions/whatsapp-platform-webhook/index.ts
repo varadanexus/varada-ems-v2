@@ -3,6 +3,9 @@
 // This endpoint never writes to the EMS internal-company WhatsApp tables.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { recordWalletWebhook } from "../_shared/whatsapp-wallet-webhook.ts";
+import { walletSend } from "../_shared/whatsapp-wallet-messaging.ts";
+import { platformEntitlement } from "../_shared/whatsapp-payg-access.ts";
 
 const MAX_BODY_BYTES = 1024 * 1024;
 const encoder = new TextEncoder();
@@ -17,10 +20,44 @@ function response(body: string, status = 200, contentType = "text/plain") {
   return new Response(body, { status, headers: { "Content-Type": contentType, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
 }
 function json(body: unknown, status = 200) { return response(JSON.stringify(body), status, "application/json"); }
+function kickDeveloperWebhookDispatcher() {
+  const base = env("SUPABASE_URL").replace(/\/+$/, "");
+  const roleKey = env("SUPABASE_SERVICE_ROLE_KEY");
+  if (!base || !roleKey) return;
+  const task = fetch(`${base}/functions/v1/whatsapp-platform-webhook-dispatcher`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${roleKey}`, "Content-Type": "application/json" },
+    body: "{}",
+  }).catch((error) => console.warn("Developer webhook dispatcher could not be started", error instanceof Error ? error.message : "unknown_error"));
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime?.waitUntil) runtime.waitUntil(task);
+}
 function base64UrlDecode(value: string) {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
   const binary = atob(base64);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+async function credentialKey() {
+  const material = env("WHATSAPP_PLATFORM_TOKEN_ENCRYPTION_KEY");
+  if (material.length < 32) throw new Error("messaging_configuration_missing");
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(material));
+  return crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["decrypt"]);
+}
+async function decryptCredential(ciphertext: string) {
+  const [version, iv, encrypted] = String(ciphertext || "").split(".");
+  if (version !== "v1" || !iv || !encrypted) throw new Error("messaging_credential_invalid");
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: base64UrlDecode(iv) },
+    await credentialKey(), base64UrlDecode(encrypted),
+  );
+  const payload = JSON.parse(new TextDecoder().decode(decrypted));
+  if (!payload?.accessToken) throw new Error("messaging_credential_invalid");
+  return payload;
+}
+function graphVersion() {
+  const version = env("WHATSAPP_PLATFORM_META_GRAPH_VERSION");
+  if (!/^v\d{1,3}\.0$/.test(version)) throw new Error("messaging_configuration_missing");
+  return version;
 }
 async function encryptionKey() {
   const material = env("WHATSAPP_PLATFORM_TOKEN_ENCRYPTION_KEY");
@@ -90,6 +127,17 @@ function messageBody(message: any) {
   const media = message?.[message?.type] || {};
   return String(media.caption || media.filename || `[${message?.type || "unsupported"} message]`).slice(0, 10000);
 }
+function marketingConsentKeyword(message: any) {
+  if (!["text", "button", "interactive"].includes(String(message?.type || ""))) return "";
+  const normalized = messageBody(message).normalize("NFKC").trim().replace(/\s+/g, " ").replace(/[.!]+$/g, "").toLocaleUpperCase();
+  return ["STOP", "START"].includes(normalized) ? normalized : "";
+}
+async function automaticMarketingOptOutEnabled(admin: any, tenantId: string) {
+  const { data, error } = await admin.from("whatsapp_platform_tenants")
+    .select("stop_marketing_opt_out_enabled").eq("id", tenantId).single();
+  if (error) throw error;
+  return data?.stop_marketing_opt_out_enabled !== false;
+}
 function safeMessageType(value: unknown) {
   const allowed = new Set(["text","image","video","audio","document","sticker","location","contacts","interactive","button","reaction"]);
   const type = String(value || "unsupported");
@@ -97,10 +145,294 @@ function safeMessageType(value: unknown) {
 }
 async function connectionForPhone(admin: any, phoneNumberId: string) {
   const { data, error } = await admin.from("whatsapp_platform_connections")
-    .select("id,tenant_id,phone_number_id").eq("phone_number_id", phoneNumberId)
-    .in("status", ["connected", "pending"]).limit(1);
+    .select("id,tenant_id,phone_number_id,status").eq("phone_number_id", phoneNumberId)
+    .in("status", ["connected", "pending"]).limit(2);
   if (error) throw error;
+  if (data?.length > 1) throw new Error("Ambiguous WhatsApp number ownership; routing paused");
   return data?.[0] || null;
+}
+
+async function flowAutomationCapacity(admin: any, tenantId: string) {
+  const { data: entitlement, error: entitlementError } = await platformEntitlement(admin,tenantId,env("WHATSAPP_PAYG_ENABLED")==="true",env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase());
+  if (entitlementError || entitlement?.allowed !== true) return { allowed: false, monthlyMessageLimit: 0 };
+  if (entitlement.state==="pay_per_use") return {allowed:true,monthlyMessageLimit:null};
+  const { data: tenant, error: tenantError } = await admin.from("whatsapp_platform_tenants")
+    .select("plan_code,status").eq("id", tenantId).single();
+  if (tenantError || tenant?.status !== "active") return { allowed: false, monthlyMessageLimit: 0 };
+  const planCode = tenant.plan_code === "starter" ? "launch" : tenant.plan_code;
+  const { data: plan, error: planError } = await admin.from("whatsapp_platform_package_master")
+    .select("status,entitlements,flow_limit,automation_limit,monthly_message_limit").eq("code", planCode).single();
+  if (planError || plan?.status !== "active") return { allowed: false, monthlyMessageLimit: 0 };
+  const { data: assignments, error: assignmentError } = await admin.from("whatsapp_platform_tenant_addons")
+    .select("addon_code,quantity").eq("tenant_id", tenantId).eq("status", "active");
+  if (assignmentError) return { allowed: false, monthlyMessageLimit: 0 };
+  const addonCodes = (assignments || []).map((item: any) => item.addon_code);
+  let addonMap = new Map<string, any>();
+  if (addonCodes.length) {
+    const { data: addons, error: addonError } = await admin.from("whatsapp_platform_addon_master")
+      .select("code,entitlement_effects").in("code", addonCodes).eq("status", "active");
+    if (addonError) return { allowed: false, monthlyMessageLimit: 0 };
+    addonMap = new Map((addons || []).map((item: any) => [item.code, item.entitlement_effects || {}]));
+  }
+  const additional = (key: string) => (assignments || []).reduce((total: number, item: any) => total + Number(addonMap.get(item.addon_code)?.[key] || 0) * Number(item.quantity || 0), 0);
+  const flowAddonEnabled = (assignments || []).some((item: any) => {
+    if (Number(item.quantity || 0) <= 0) return false;
+    const effects = addonMap.get(item.addon_code) || {};
+    return effects.flows === true || Number(effects.flow_limit || 0) > 0 || /(^|[-_])flow$/.test(String(item.addon_code || "").toLowerCase());
+  });
+  const flowLimit = plan.flow_limit === null ? null : Number(plan.flow_limit || 0) + additional("flow_limit");
+  const automationLimit = plan.automation_limit === null ? null : Number(plan.automation_limit || 0) + additional("automation_limit");
+  const messageLimit = plan.monthly_message_limit === null ? null : Number(plan.monthly_message_limit || 0) + additional("monthly_message_limit");
+  return {
+    allowed: (plan.entitlements?.flows === true || flowAddonEnabled) && flowLimit !== 0 && automationLimit !== 0,
+    monthlyMessageLimit: messageLimit,
+  };
+}
+async function assertFlowMessageCapacity(admin: any, tenantId: string, limit: number | null) {
+  if (limit === null) return;
+  const start = new Date(); start.setUTCDate(1); start.setUTCHours(0, 0, 0, 0);
+  const { count, error } = await admin.from("whatsapp_platform_messages").select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId).eq("direction", "outbound").gte("created_at", start.toISOString());
+  if (error) throw error;
+  if (Number(count || 0) >= limit) throw new Error("flow_monthly_message_limit_reached");
+}
+
+function flowMatches(flow: any, inboundBody: string) {
+  if (flow.trigger_type === "any_message") return true;
+  if (flow.trigger_type !== "keyword") return false;
+  const configKeywords = Array.isArray(flow.trigger_config?.keywords) ? flow.trigger_config.keywords : [];
+  const start = (Array.isArray(flow.nodes) ? flow.nodes : []).find((node: any) => node?.type === "start");
+  const nodeKeywords = String(start?.config?.keywords || "").split(",");
+  const keywords = [...configKeywords, ...nodeKeywords].map((item) => String(item || "").trim()).filter(Boolean);
+  if (!keywords.length) return false;
+  const caseSensitive = start?.config?.caseSensitive === true;
+  const normalize = (value: string) => value.trim().replace(/\s+/g, " ");
+  const source = normalize(caseSensitive ? inboundBody : inboundBody.toLocaleLowerCase());
+  return keywords.some((keyword) => source === normalize(caseSensitive ? keyword : keyword.toLocaleLowerCase()));
+}
+
+function nextFlowNode(flow: any, nodeId: string) {
+  const edge = (Array.isArray(flow.edges) ? flow.edges : []).find((item: any) => item?.from === nodeId && Number.isInteger(item?.fromButton) === false);
+  return edge?.to || null;
+}
+
+function buttonFlowNode(flow: any, nodeId: string, buttonIndex: number) {
+  const edge = (Array.isArray(flow.edges) ? flow.edges : []).find((item: any) => item?.from === nodeId && Number(item?.fromButton) === buttonIndex);
+  return edge?.to || null;
+}
+
+async function sendFlowText(admin: any, connection: any, contact: any, conversation: any, execution: any, node: any, accessToken: string, monthlyMessageLimit: number | null) {
+  const text = String(node?.body || node?.config?.target || "").trim().slice(0, 4096);
+  if (!text) return null;
+  await assertFlowMessageCapacity(admin, connection.tenant_id, monthlyMessageLimit);
+  const buttons = (Array.isArray(node?.config?.buttons) ? node.config.buttons : [])
+    .map((button: any, index: number) => ({ index, label: String(button?.label || "").trim().slice(0, 20), next: String(button?.next || "") }))
+    .filter((button: any) => button.label && button.next)
+    .slice(0, 3);
+  const requestBody = buttons.length
+    ? {
+      messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text },
+        action: { buttons: buttons.map((button: any) => ({ type: "reply", reply: { id: `vnf|${execution.id}|${node.id}|${button.index}`, title: button.label } })) },
+      },
+    }
+    : { messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } };
+  const { graph, replayed } = await walletSend({admin,enabled:env("WHATSAPP_PAYG_ENABLED")==="true",
+    mode:env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(),tenantId:connection.tenant_id,connectionId:connection.id,
+    requestKey:`flow:${execution.id}:${await sha256(String(node.id))}`,source:"flow",payload:requestBody,
+    send:(meteredPayload: any)=>fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(meteredPayload), signal:AbortSignal.timeout(20000),
+  })});
+  if (replayed) {
+    const {data:prior,error:priorError}=await admin.from("whatsapp_platform_messages").select("id")
+      .eq("tenant_id",connection.tenant_id).eq("connection_id",connection.id).eq("meta_message_id",String(graph.messages[0].id)).maybeSingle();
+    if (priorError) throw priorError;
+    if (prior) return {id:prior.id,waitingForButton:buttons.length>0};
+  }
+  const now = new Date().toISOString();
+  const { data: outbound, error } = await admin.from("whatsapp_platform_messages").insert({
+    tenant_id: connection.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
+    meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: buttons.length ? "interactive" : "text", body: text,
+    status: "accepted", provider_timestamp: now,
+    safe_metadata: { automation: true, flow_id: execution.flow_id, flow_execution_id: execution.id, flow_node_id: node.id },
+  }).select("id").single();
+  if (error || !outbound) throw error || new Error("flow_message_audit_failed");
+  await Promise.all([
+    admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: text.replace(/\s+/g, " ").slice(0, 300), last_outbound_at: now, updated_at: now }).eq("id", conversation.id).eq("tenant_id", connection.tenant_id),
+    admin.from("whatsapp_platform_contacts").update({ last_outbound_at: now, updated_at: now }).eq("id", contact.id).eq("tenant_id", connection.tenant_id),
+  ]);
+  return { id: outbound.id, waitingForButton: buttons.length > 0 };
+}
+
+async function sendConsentConfirmation(admin: any, connection: any, contact: any, conversation: any, eventType: "opt_out" | "opt_in", inboundMessageId: string) {
+  const text = eventType === "opt_out"
+    ? "You have been unsubscribed from marketing messages. You can still contact us for service and support. Reply START to subscribe again."
+    : "You are subscribed to marketing messages again. Reply STOP at any time to unsubscribe.";
+  const { data: credential, error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+    .select("credential_ciphertext,expires_at").eq("connection_id", connection.id).eq("tenant_id", connection.tenant_id).single();
+  if (credentialError || !credential) throw new Error("consent_confirmation_credential_unavailable");
+  if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("consent_confirmation_credential_expired");
+  const { accessToken } = await decryptCredential(credential.credential_ciphertext);
+  const requestBody = { messaging_product: "whatsapp", recipient_type: "individual", to: contact.wa_id, type: "text", text: { preview_url: false, body: text } };
+  const {graph,replayed}=await walletSend({admin,enabled:env("WHATSAPP_PAYG_ENABLED")==="true",
+    mode:env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(),tenantId:connection.tenant_id,connectionId:connection.id,
+    requestKey:`consent:${inboundMessageId}:${eventType}`,source:"consent",payload:requestBody,
+    send:(meteredPayload: any)=>fetch(`https://graph.facebook.com/${graphVersion()}/${encodeURIComponent(connection.phone_number_id)}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(meteredPayload), signal:AbortSignal.timeout(20000),
+  })});
+  if (replayed) {
+    const {data:prior,error:priorError}=await admin.from("whatsapp_platform_messages").select("id")
+      .eq("tenant_id",connection.tenant_id).eq("connection_id",connection.id).eq("meta_message_id",String(graph.messages[0].id)).maybeSingle();
+    if (priorError) throw priorError;
+    if (prior) return prior.id;
+  }
+  const now = new Date().toISOString();
+  const { data: outbound, error } = await admin.from("whatsapp_platform_messages").insert({
+    tenant_id: connection.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
+    meta_message_id: String(graph.messages[0].id), direction: "outbound", message_type: "text", body: text,
+    status: "accepted", provider_timestamp: now,
+    safe_metadata: { automation: true, consent_confirmation: true, consent_event_type: eventType },
+  }).select("id").single();
+  if (error || !outbound) throw error || new Error("consent_confirmation_audit_failed");
+  await Promise.all([
+    admin.from("whatsapp_platform_conversations").update({ status: "open", last_message_at: now, last_message_preview: text.slice(0, 300), last_outbound_at: now, updated_at: now }).eq("id", conversation.id).eq("tenant_id", connection.tenant_id),
+    admin.from("whatsapp_platform_contacts").update({ last_outbound_at: now, updated_at: now }).eq("id", contact.id).eq("tenant_id", connection.tenant_id),
+  ]);
+  return outbound.id;
+}
+
+async function executeFlow(admin: any, connection: any, contact: any, conversation: any, inboundMessage: any, flow: any, monthlyMessageLimit: number | null, resume: any = null) {
+  let execution = resume?.execution || null;
+  if (!execution) {
+    const inserted = await admin.from("whatsapp_platform_flow_executions").insert({
+      tenant_id: connection.tenant_id, connection_id: connection.id, flow_id: flow.id,
+      conversation_id: conversation.id, contact_id: contact.id, inbound_message_id: inboundMessage.id,
+    }).select("id,flow_id,visited_node_ids,output_message_ids").single();
+    if (inserted.error?.code === "23505") return;
+    if (inserted.error || !inserted.data) throw inserted.error || new Error("flow_execution_create_failed");
+    execution = inserted.data;
+  }
+  const visited: string[] = Array.isArray(execution.visited_node_ids) ? execution.visited_node_ids : [];
+  const outputIds: string[] = Array.isArray(execution.output_message_ids) ? execution.output_message_ids : [];
+  try {
+    const { data: credential, error: credentialError } = await admin.from("whatsapp_platform_provider_credentials")
+      .select("credential_ciphertext,expires_at").eq("connection_id", connection.id).eq("tenant_id", connection.tenant_id).single();
+    if (credentialError || !credential) throw new Error("flow_connection_credential_unavailable");
+    if (credential.expires_at && new Date(credential.expires_at).getTime() <= Date.now()) throw new Error("flow_connection_credential_expired");
+    const { accessToken } = await decryptCredential(credential.credential_ciphertext);
+    const nodes = Array.isArray(flow.nodes) ? flow.nodes : [];
+    const nodeMap = new Map(nodes.map((node: any) => [node.id, node]));
+    const start = nodes.find((node: any) => node.type === "start");
+    let nodeId = resume?.startNodeId || (start ? nextFlowNode(flow, start.id) : null);
+    for (let step = 0; nodeId && step < 25; step += 1) {
+      if (visited.includes(nodeId)) throw new Error("flow_cycle_detected");
+      const node: any = nodeMap.get(nodeId);
+      if (!node) throw new Error("flow_node_missing");
+      visited.push(nodeId);
+      await admin.from("whatsapp_platform_flow_executions").update({ current_node_id: nodeId, visited_node_ids: visited, updated_at: new Date().toISOString() }).eq("id", execution.id);
+      if (["message","question","address","location","ask_media","handoff"].includes(node.type)) {
+        const output = await sendFlowText(admin, connection, contact, conversation, execution, node, accessToken, monthlyMessageLimit);
+        if (output?.id) outputIds.push(output.id);
+        if (output?.waitingForButton) {
+          await admin.from("whatsapp_platform_flow_executions").update({ status: "processing", current_node_id: nodeId, visited_node_ids: visited, output_message_ids: outputIds, updated_at: new Date().toISOString() }).eq("id", execution.id);
+          return;
+        }
+        if (node.type === "handoff") {
+          const { error: handoffError } = await admin.from("whatsapp_platform_conversations").update({
+            status: "open",
+            priority: "high",
+            assigned_user_id: null,
+            updated_at: new Date().toISOString(),
+          }).eq("id", conversation.id).eq("tenant_id", connection.tenant_id);
+          if (handoffError) throw handoffError;
+        }
+      } else if (node.type === "tag") {
+        const tag = String(node?.config?.target || "").trim().slice(0, 80);
+        if (tag) {
+          const { data: current } = await admin.from("whatsapp_platform_contacts").select("tags").eq("id", contact.id).single();
+          const tags = [...new Set([...(Array.isArray(current?.tags) ? current.tags : []), tag])].slice(0, 100);
+          await admin.from("whatsapp_platform_contacts").update({ tags, updated_at: new Date().toISOString() }).eq("id", contact.id).eq("tenant_id", connection.tenant_id);
+        }
+      } else if (node.type === "attribute") {
+        const key = String(node?.config?.target || "").trim().replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80);
+        if (key) {
+          const { data: current } = await admin.from("whatsapp_platform_contacts").select("attributes").eq("id", contact.id).single();
+          await admin.from("whatsapp_platform_contacts").update({ attributes: { ...(current?.attributes || {}), [key]: String(node.body || "true").slice(0, 500) }, updated_at: new Date().toISOString() }).eq("id", contact.id).eq("tenant_id", connection.tenant_id);
+        }
+      } else if (["end","delay","api","connect","condition","template","media","list","catalog","single_product","multi_product"].includes(node.type)) {
+        if (node.type !== "end") throw new Error(`flow_node_${node.type}_requires_worker`);
+        nodeId = null;
+        break;
+      }
+      nodeId = nextFlowNode(flow, nodeId);
+    }
+    if (nodeId) throw new Error("flow_step_limit_reached");
+    await admin.from("whatsapp_platform_flow_executions").update({ status: "completed", current_node_id: null, visited_node_ids: visited, output_message_ids: outputIds, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", execution.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "flow_execution_failed";
+    await admin.from("whatsapp_platform_flow_executions").update({ status: "failed", visited_node_ids: visited, output_message_ids: outputIds, error_code: message.slice(0, 120), error_message: message.slice(0, 1000), completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", execution.id);
+    console.error("WhatsApp flow execution failed", flow.id, message);
+  }
+}
+
+async function executeMatchingFlow(admin: any, connection: any, contact: any, conversation: any, inboundMessage: any) {
+  const capacity = await flowAutomationCapacity(admin, connection.tenant_id);
+  if (!capacity.allowed) return;
+  const replyId = String(inboundMessage?.safe_metadata?.button_payload || inboundMessage?.safe_metadata?.interactive_reply_id || "");
+  if (replyId.startsWith("vnft|")) {
+    const [, flowId, rawIndex, ...unexpected] = replyId.split("|");
+    const buttonIndex = Number(rawIndex);
+    const replyToMetaMessageId = String(inboundMessage?.reply_to_meta_message_id || "");
+    if (/^[a-f0-9-]{36}$/i.test(flowId || "") && Number.isInteger(buttonIndex) && buttonIndex >= 0 && buttonIndex <= 2 && !unexpected.length && replyToMetaMessageId) {
+      const { data: sourceMessage } = await admin.from("whatsapp_platform_messages")
+        .select("id,safe_metadata")
+        .eq("tenant_id", connection.tenant_id).eq("conversation_id", conversation.id).eq("connection_id", connection.id)
+        .eq("direction", "outbound").eq("message_type", "template").eq("meta_message_id", replyToMetaMessageId).maybeSingle();
+      if (sourceMessage && String(sourceMessage.safe_metadata?.flow_id || "") === flowId && sourceMessage.safe_metadata?.flow_start === true) {
+        const { data: flow } = await admin.from("whatsapp_platform_flows")
+          .select("id,trigger_type,trigger_config,nodes,edges")
+          .eq("id", flowId).eq("tenant_id", connection.tenant_id).eq("connection_id", connection.id)
+          .eq("status", "active").eq("trigger_type", "template_reply").maybeSingle();
+        const route = (Array.isArray(flow?.trigger_config?.templateReplies) ? flow.trigger_config.templateReplies : [])
+          .find((item: any) => Number(item?.index) === buttonIndex);
+        const startNodeId = String(route?.next || "");
+        const validNode = Array.isArray(flow?.nodes) && flow.nodes.some((node: any) => String(node?.id || "") === startNodeId);
+        if (flow && startNodeId && validNode) {
+          await executeFlow(admin, connection, contact, conversation, inboundMessage, flow, capacity.monthlyMessageLimit, { startNodeId });
+          return;
+        }
+      }
+    }
+  }
+  if (replyId.startsWith("vnf|")) {
+    const [, executionId, nodeId, rawIndex] = replyId.split("|");
+    const buttonIndex = Number(rawIndex);
+    const { data: execution } = await admin.from("whatsapp_platform_flow_executions")
+      .select("id,flow_id,conversation_id,contact_id,connection_id,status,current_node_id,visited_node_ids,output_message_ids")
+      .eq("id", executionId).eq("conversation_id", conversation.id).eq("contact_id", contact.id).eq("connection_id", connection.id)
+      .eq("status", "processing").maybeSingle();
+    if (execution && execution.current_node_id === nodeId && Number.isInteger(buttonIndex)) {
+      const { data: flow } = await admin.from("whatsapp_platform_flows").select("id,trigger_type,trigger_config,nodes,edges")
+        .eq("id", execution.flow_id).eq("tenant_id", connection.tenant_id).eq("connection_id", connection.id).eq("status", "active").maybeSingle();
+      const startNodeId = flow ? buttonFlowNode(flow, nodeId, buttonIndex) : null;
+      if (flow && startNodeId) {
+        await executeFlow(admin, connection, contact, conversation, inboundMessage, flow, capacity.monthlyMessageLimit, { execution, startNodeId });
+        return;
+      }
+    }
+  }
+  const { data: flows, error } = await admin.from("whatsapp_platform_flows")
+    .select("id,trigger_type,trigger_config,nodes,edges").eq("tenant_id", connection.tenant_id)
+    .eq("connection_id", connection.id).eq("status", "active").order("updated_at", { ascending: false }).limit(25);
+  if (error) throw error;
+  const flow = (flows || []).find((item: any) => flowMatches(item, String(inboundMessage.body || "")));
+  if (flow) await executeFlow(admin, connection, contact, conversation, inboundMessage, flow, capacity.monthlyMessageLimit);
 }
 async function contactForMessage(admin: any, tenantId: string, contactPayload: any, message: any) {
   const waId = String(message?.from || contactPayload?.wa_id || "").replace(/\D/g, "");
@@ -139,14 +471,24 @@ async function processInbound(admin: any, connection: any, value: any, message: 
   const contact = await contactForMessage(admin, connection.tenant_id, contactPayload, message);
   const conversation = await conversationForContact(admin, connection, contact, message);
   const type = safeMessageType(message?.type);
+  const body = messageBody(message);
+  const detectedConsentKeyword = marketingConsentKeyword(message);
+  const consentKeyword = detectedConsentKeyword && await automaticMarketingOptOutEnabled(admin, connection.tenant_id)
+    ? detectedConsentKeyword
+    : "";
   const media = message?.[message?.type] || {};
-  const { error } = await admin.from("whatsapp_platform_messages").insert({
+  const { data: inboundMessage, error } = await admin.from("whatsapp_platform_messages").insert({
     tenant_id: connection.tenant_id, conversation_id: conversation.id, connection_id: connection.id, contact_id: contact.id,
-    meta_message_id: metaMessageId, direction: "inbound", message_type: type, body: messageBody(message),
+    meta_message_id: metaMessageId, direction: "inbound", message_type: type, body,
     media_id: media?.id || null, media_mime_type: media?.mime_type || null, media_file_name: media?.filename || null,
     reply_to_meta_message_id: message?.context?.id || null, status: "received", provider_timestamp: conversation.receivedAt,
-    safe_metadata: type === "interactive" ? { interactive_type: message.interactive?.type || null } : {},
-  });
+    safe_metadata: {
+      ...(type === "interactive" ? { interactive_type: message.interactive?.type || null, interactive_reply_id: message.interactive?.button_reply?.id || message.interactive?.list_reply?.id || null } : {}),
+      ...(type === "button" ? { button_payload: message.button?.payload || null } : {}),
+      ...(consentKeyword === "STOP" ? { marketing_opt_out: true, marketing_consent_keyword: consentKeyword } : {}),
+      ...(consentKeyword === "START" ? { marketing_opt_in: true, marketing_consent_keyword: consentKeyword } : {}),
+    },
+  }).select("id,body,safe_metadata,reply_to_meta_message_id").single();
   if (error) throw error;
   await admin.from("whatsapp_platform_conversations").update({
     status: conversation.status === "resolved" ? "open" : conversation.status,
@@ -154,8 +496,66 @@ async function processInbound(admin: any, connection: any, value: any, message: 
     last_message_preview: conversation.preview, last_inbound_at: conversation.receivedAt,
     service_window_expires_at: new Date(new Date(conversation.receivedAt).getTime() + 24 * 60 * 60 * 1000).toISOString(), updated_at: new Date().toISOString(),
   }).eq("id", conversation.id).eq("tenant_id", connection.tenant_id);
+  if (consentKeyword && inboundMessage?.id) {
+    const eventType = consentKeyword === "STOP" ? "opt_out" : "opt_in";
+    const consentAt = conversation.receivedAt;
+    const contactUpdates = eventType === "opt_out"
+      ? { marketing_opt_out_at: consentAt, updated_at: new Date().toISOString() }
+      : { marketing_opt_in_at: consentAt, marketing_opt_in_source: "keyword", marketing_opt_out_at: null, ...(contact.status === "opted_out" ? { status: "active" } : {}), updated_at: new Date().toISOString() };
+    const { error: consentError } = await admin.from("whatsapp_platform_contacts").update(contactUpdates)
+      .eq("id", contact.id).eq("tenant_id", connection.tenant_id);
+    if (consentError) throw consentError;
+    if (eventType === "opt_out") {
+      const { error: queuedError } = await admin.from("whatsapp_platform_campaign_deliveries").update({
+        status: "skipped",
+        last_error_code: "marketing_opt_out",
+        last_error_message: "Customer opted out by sending STOP before campaign delivery.",
+        updated_at: new Date().toISOString(),
+      }).eq("tenant_id", connection.tenant_id).eq("contact_id", contact.id).in("status", ["queued", "failed"]);
+      if (queuedError) throw queuedError;
+    }
+    let confirmationMessageId: string | null = null;
+    let confirmationStatus = "sent";
+    let confirmationError: string | null = null;
+    try {
+      confirmationMessageId = await sendConsentConfirmation(admin, connection, contact, conversation, eventType, inboundMessage.id);
+    } catch (confirmationFailure) {
+      confirmationStatus = "failed";
+      confirmationError = (confirmationFailure instanceof Error ? confirmationFailure.message : "consent_confirmation_failed").slice(0, 1000);
+      console.error("WhatsApp consent confirmation failed", connection.id, contact.id, confirmationError);
+    }
+    const { error: auditError } = await admin.from("whatsapp_platform_marketing_consent_events").insert({
+      tenant_id: connection.tenant_id, connection_id: connection.id, contact_id: contact.id,
+      inbound_message_id: inboundMessage.id, confirmation_message_id: confirmationMessageId,
+      event_type: eventType, source: "keyword", keyword: consentKeyword,
+      confirmation_status: confirmationStatus, confirmation_error: confirmationError, occurred_at: consentAt,
+    });
+    if (auditError) throw auditError;
+  }
+  if (inboundMessage?.id && !consentKeyword) await executeMatchingFlow(admin, connection, contact, conversation, inboundMessage);
 }
 const STATUS_RANK: Record<string, number> = { queued: 0, accepted: 1, sent: 2, delivered: 3, read: 4, failed: 5, deleted: 6 };
+async function refreshCampaignCounts(admin: any, campaignId: string) {
+  const statuses = ["accepted","sent","delivered","read","failed"];
+  const counts: Record<string, number> = {};
+  await Promise.all(statuses.map(async (status) => {
+    const { count } = await admin.from("whatsapp_platform_campaign_deliveries").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("status", status);
+    counts[status] = Number(count || 0);
+  }));
+  const { count: recipients } = await admin.from("whatsapp_platform_campaign_deliveries").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId);
+  const accepted = counts.accepted + counts.sent + counts.delivered + counts.read;
+  const finalised = counts.delivered + counts.read + counts.failed;
+  const updates: any = {
+    recipient_count: Number(recipients || 0), accepted_count: accepted,
+    delivered_count: counts.delivered + counts.read, read_count: counts.read,
+    failed_count: counts.failed, updated_at: new Date().toISOString(),
+  };
+  if (Number(recipients || 0) > 0 && finalised >= Number(recipients || 0)) {
+    updates.status = accepted > 0 ? "completed" : "failed";
+    updates.completed_at = new Date().toISOString();
+  }
+  await admin.from("whatsapp_platform_campaigns").update(updates).eq("id", campaignId);
+}
 async function processStatus(admin: any, connection: any, statusPayload: any) {
   const metaMessageId = String(statusPayload?.id || "");
   const nextStatus = String(statusPayload?.status || "");
@@ -170,6 +570,19 @@ async function processStatus(admin: any, connection: any, statusPayload: any) {
     error_title: providerError?.title ? String(providerError.title).slice(0, 500) : null,
     updated_at: new Date().toISOString(),
   }).eq("id", current.id).eq("connection_id", connection.id);
+  const deliveryStatus = nextStatus === "deleted" ? "failed" : nextStatus;
+  const deliveryUpdates: any = { status: deliveryStatus, updated_at: new Date().toISOString() };
+  if (deliveryStatus === "accepted") deliveryUpdates.accepted_at = timestamp(statusPayload?.timestamp);
+  if (deliveryStatus === "delivered") deliveryUpdates.delivered_at = timestamp(statusPayload?.timestamp);
+  if (deliveryStatus === "read") deliveryUpdates.read_at = timestamp(statusPayload?.timestamp);
+  if (deliveryStatus === "failed") {
+    deliveryUpdates.failed_at = timestamp(statusPayload?.timestamp);
+    deliveryUpdates.last_error_code = providerError?.code ? String(providerError.code).slice(0, 120) : "provider_failed";
+    deliveryUpdates.last_error_message = providerError?.title ? String(providerError.title).slice(0, 1000) : "Meta reported a failed delivery.";
+  }
+  const { data: delivery } = await admin.from("whatsapp_platform_campaign_deliveries").update(deliveryUpdates)
+    .eq("connection_id", connection.id).eq("meta_message_id", metaMessageId).select("campaign_id").maybeSingle();
+  if (delivery?.campaign_id) await refreshCampaignCounts(admin, delivery.campaign_id);
 }
 async function processPayload(admin: any, payload: any) {
   if (payload?.object !== "whatsapp_business_account") return { status: "ignored", processed: 0 };
@@ -214,6 +627,9 @@ Deno.serve(async (req) => {
     if (!constantTimeEqual(signature.toLowerCase(), expectedSignature.toLowerCase())) return json({ error: "Invalid signature" }, 401);
     const eventHash = await sha256(raw);
     const payload = JSON.parse(raw || "{}");
+    if (env("WHATSAPP_PAYG_ENABLED") === "true") {
+      await recordWalletWebhook({admin,payload,mode:env("WHATSAPP_PLATFORM_BILLING_MODE").toLowerCase(),connectionForPhone});
+    }
     const { data: event, error: eventError } = await admin.from("whatsapp_platform_webhook_events").insert({
       event_hash: eventHash, object_type: String(payload?.object || "").slice(0, 100) || null,
       entry_count: Array.isArray(payload?.entry) ? payload.entry.length : 0,
@@ -223,6 +639,7 @@ Deno.serve(async (req) => {
     eventId = event.id;
     const result = await processPayload(admin, payload);
     await admin.from("whatsapp_platform_webhook_events").update({ processing_status: result.status, processed_at: new Date().toISOString() }).eq("id", eventId);
+    kickDeveloperWebhookDispatcher();
     return json({ received: true });
   } catch (error) {
     console.error("WhatsApp platform webhook failed", error);

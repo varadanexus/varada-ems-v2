@@ -1,0 +1,9 @@
+create index if not exists whatsapp_platform_billing_upgrade_intents_from_package_idx
+  on public.whatsapp_platform_billing_upgrade_intents(from_package_code);
+
+create index if not exists whatsapp_platform_billing_upgrade_intents_target_package_idx
+  on public.whatsapp_platform_billing_upgrade_intents(target_package_code);
+
+create index if not exists whatsapp_platform_billing_upgrade_intents_creator_idx
+  on public.whatsapp_platform_billing_upgrade_intents(created_by_user_id)
+  where created_by_user_id is not null;

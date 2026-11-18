@@ -73,7 +73,7 @@ function renderPage(data = {}) {
 
     <section class="mcd-hero">
       <h3>Communications Meeting Command Center</h3>
-      <p>This workspace is now organized around the real meeting lifecycle: session planning, participant registration, invite rollout, OTP verification, waiting-room moderation, and live room control. Use the dashboard as a launch surface, and the studio as your working console.</p>
+      <p>This workspace is organized around the complete meeting lifecycle: session planning, private OTP invitations or shareable-link registration, waiting-room control, and live video conferencing. Use the dashboard as a launch surface, and the studio as your working console.</p>
       <div class="mcd-kpis">
         <div class="mcd-kpi"><span>Total Meetings</span><strong>${stats.totalMeetings || 0}</strong></div>
         <div class="mcd-kpi"><span>Live Now</span><strong>${stats.liveMeetings || 0}</strong></div>
@@ -85,7 +85,7 @@ function renderPage(data = {}) {
       <div class="mcd-flow">
         <div class="mcd-step"><span>Step 1</span><strong>Plan</strong><small>Create the meeting, define host, timing, agenda, and room configuration.</small></div>
         <div class="mcd-step"><span>Step 2</span><strong>Register</strong><small>Capture attendee identity, mobile, email, role, company, and notes.</small></div>
-        <div class="mcd-step"><span>Step 3</span><strong>Invite</strong><small>Send WhatsApp and email with branded meeting login and OTP join flow.</small></div>
+        <div class="mcd-step"><span>Step 3</span><strong>Invite</strong><small>Send private OTP invitations or copy one secure, no-OTP meeting link.</small></div>
         <div class="mcd-step"><span>Step 4</span><strong>Moderate</strong><small>Admit verified people, monitor presence, and run the live session cleanly.</small></div>
       </div>
     </section>
@@ -96,7 +96,7 @@ function renderPage(data = {}) {
         <div class="mcd-bands" style="margin-top:1rem;">
           ${actionBand({ code: "ST", title: "Meeting Studio", detail: "Full planning, participant intake, invite dispatch, and live-control workspace.", href: ROUTES.MEETINGS_SCHEDULER })}
           ${actionBand({ code: "JS", title: "Jitsi / JaaS Settings", detail: "Public origin, room prefix, domain, default lobby note, and communications defaults.", href: ROUTES.MEETINGS_SETTINGS })}
-          ${actionBand({ code: "WG", title: "Waiting Room + Guest Flow", detail: "Branded public meeting login, OTP verification, and approval-based room entry.", href: ROUTES.MEETINGS_SCHEDULER })}
+          ${actionBand({ code: "WG", title: "Waiting Room + Guest Flow", detail: "Private OTP access or shareable-link registration, with host-controlled video start.", href: ROUTES.MEETINGS_SCHEDULER })}
         </div>
       </section>
 
@@ -125,7 +125,7 @@ async function init() {
   const boot = await bootstrapProtectedPage({
     moduleCode: MODULES.MEETINGS_COMMAND_CENTER,
     pageTitle: "Meetings Dashboard",
-    pageDescription: "Communications scheduling, guest approval, OTP join, and live room control",
+    pageDescription: "Communications scheduling, private or shareable guest access, waiting-room control, and live video",
     workspace: WORKSPACES.MEETINGS
   });
   if (!boot) return;

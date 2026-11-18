@@ -4,6 +4,7 @@ import { getAllowedModulesForRoles, getAppUserByAuthId, getUserRoleCodes, getMyA
 import { logAuthEvent } from "./audit.js";
 import { getLocalSession, restoreLocalSession, emsLocalLogout, clearLocalAuthState } from "./ems-local-auth.js";
 import { disablePushNotifications } from "./push-notifications.js";
+import { clearNativeResumeRoute, getNativeResumeRoute } from "./native-navigation.js";
 
 const SUPABASE_SESSION_HANDOFF_KEY = "ems_supabase_session_handoff";
 const observedAuthClients = new WeakSet();
@@ -199,6 +200,11 @@ function resolveInternalPortal(allowedModules = []) {
   };
 }
 
+function resumeRouteForPortal(portal) {
+  if (portal?.type !== PORTAL_TYPES.EMS_ADMIN) return portal?.route;
+  return getNativeResumeRoute() || portal.route;
+}
+
 async function tryGetInternalPortal(appUserId) {
   if (!appUserId) return null;
   try {
@@ -232,8 +238,9 @@ export async function redirectToResolvedPortal() {
     throw new Error("No portal access is assigned to this account. Contact administrator.");
   }
   if (portals.length === 1) {
-    debugLog("redirect reason", { reason: "single_portal", to: portals[0].route, portalType: portals[0].type });
-    window.location.replace(portals[0].route);
+    const route = resumeRouteForPortal(portals[0]);
+    debugLog("redirect reason", { reason: "single_portal", to: route, portalType: portals[0].type });
+    window.location.replace(route);
     return true;
   }
   debugLog("redirect reason", { reason: "multiple_portals", to: ROUTES.PORTAL_SELECTOR, portals: portals.map((portal) => portal.type) });
@@ -249,7 +256,7 @@ export async function redirectIfAuthenticated() {
     if (ok) {
       const localPortals = await resolveAvailablePortals();
       if (localPortals.length === 1) {
-        window.location.replace(localPortals[0].route);
+        window.location.replace(resumeRouteForPortal(localPortals[0]));
         return true;
       }
       if (localPortals.length > 1) {
@@ -278,8 +285,9 @@ export async function redirectIfAuthenticated() {
     }
 
     if (portals.length === 1) {
-      debugLog("redirect reason", { reason: "already_authenticated_single_portal", to: portals[0].route, portalType: portals[0].type });
-      window.location.replace(portals[0].route);
+      const route = resumeRouteForPortal(portals[0]);
+      debugLog("redirect reason", { reason: "already_authenticated_single_portal", to: route, portalType: portals[0].type });
+      window.location.replace(route);
       return true;
     }
 
@@ -326,6 +334,7 @@ export async function logout() {
   const isLoginPage = window.location.pathname.endsWith("/new-ems/login.html") || window.location.pathname.endsWith("login.html");
   sessionStorage.removeItem("ems_terms_owner_bypass_session");
   clearSupabaseSessionHandoff();
+  clearNativeResumeRoute();
   await disablePushNotifications().catch(() => {});
 
   // Clear BOTH session types so no stale session can hijack the next login.
@@ -349,6 +358,7 @@ export async function logout() {
 export async function signOutSessionOnly() {
   sessionStorage.removeItem("ems_terms_owner_bypass_session");
   clearSupabaseSessionHandoff();
+  clearNativeResumeRoute();
   await disablePushNotifications().catch(() => {});
   const local = getLocalSession();
   if (local?.authUserId) {

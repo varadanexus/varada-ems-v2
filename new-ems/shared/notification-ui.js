@@ -167,7 +167,7 @@ async function refreshNotifications(silent = false) {
   renderUnreadBadge();
   renderList();
   if (silent) return;
-  if (previousUnread && unreadCount > previousUnread) {
+  if (unreadCount > previousUnread) {
     showToast(`You have ${unreadCount} unread notifications.`, TOAST_TYPES.INFO);
   }
 }
@@ -204,6 +204,14 @@ function bindGlobalHandlers() {
     if (isOpen) positionPopover();
   });
 
+  window.addEventListener("ems:native-push-received", async (event) => {
+    try { await refreshNotifications(true); } catch {}
+    const notification = event?.detail || {};
+    const title = String(notification.title || notification.data?.title || "Varada Nexus").trim();
+    const body = String(notification.body || notification.data?.body || "New notification received.").trim();
+    showToast(`${title}: ${body}`, TOAST_TYPES.INFO);
+  });
+
   document.addEventListener("visibilitychange", async () => {
     if (document.visibilityState !== "visible") return;
     try {
@@ -226,5 +234,5 @@ export async function initNotificationShell() {
     try {
       await refreshNotifications();
     } catch {}
-  }, 45000);
+  }, 5000);
 }

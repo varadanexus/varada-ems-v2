@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {stripTypeScriptTypes} from 'node:module';
+const source=await readFile(new URL('../new-ems/supabase/functions/_shared/whatsapp-payg-addons.ts',import.meta.url),'utf8');
+const {paygAddonQuote}=await import(`data:text/javascript;base64,${Buffer.from(stripTypeScriptTypes(source)).toString('base64')}`);
+const addon={code:'extra_agent_seat',name:'Seat',status:'active',is_self_service:true,billing_model:'recurring',billing_interval:'month',minimum_quantity:1,maximum_quantity:10,quantity_step:1,unit_amount:'237.25',currency:'INR',current_price_version_id:'price-fixture'};
+let quoted;
+const gross=base=>{quoted=base;return {packageGstPaise:0,gatewayAdjustmentPaise:0,checkoutAmountPaise:base};};
+const result=paygAddonQuote(addon,3,gross);
+assert.equal(quoted,71175);assert.equal(result.recurringBaseMinor,71175);assert.equal(result.baseSubscriptionRequired,false);
+assert.equal(result.priceVersionId,'price-fixture');
+for(const change of [{code:'priority_support'},{unit_amount:'1.001'},{status:'retired'},{current_price_version_id:null},{currency:'ZZZ'}]) assert.throws(()=>paygAddonQuote({...addon,...change},1,gross));
+for(const quantity of [0,-1,1.5,11,'2']) assert.throws(()=>paygAddonQuote(addon,quantity,gross));
+console.log('PASS: catalog-price snapshot, exact additional-capacity math, included-feature rejection and quantity validation');

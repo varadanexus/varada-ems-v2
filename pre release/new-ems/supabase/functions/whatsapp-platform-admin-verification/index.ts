@@ -1,6 +1,7 @@
 // @ts-nocheck
 // Protected EMS reviewer access to customer verification documents.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendWhatsAppMilestoneEmail } from "../_shared/whatsapp-platform-milestone-email.ts";
 
 const ALLOWED_ORIGINS = new Set(["https://www.varadanexus.com", "https://varadanexus.com"]);
 const env = (name: string) => Deno.env.get(name) || "";
@@ -44,20 +45,69 @@ Deno.serve(async (req) => {
     const userClient = createClient(env("SUPABASE_URL"), env("SUPABASE_ANON_KEY"), { global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false } });
     const { data: userData, error: userError } = await userClient.auth.getUser(jwt);
     if (userError || !userData.user) throw new Error("Unauthorized");
-    const { data: permitted, error: permissionError } = await userClient.rpc("has_permission", { p_module_code: "whatsapp-platform", p_action_code: "view" });
-    if (permissionError || permitted !== true) throw new Error("Forbidden");
+    const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
+    const { data: permitted, error: permissionError } = await userClient.rpc("has_permission", { module_code: "whatsapp-platform", action_code: "view" });
+    const { data: appUser } = await admin.from("app_users").select("id,email,display_name,status,deleted_at").eq("auth_user_id", userData.user.id).maybeSingle();
+    const { data: roleRows } = appUser?.id
+      ? await admin.from("user_roles").select("roles(code,is_active)").eq("user_id", appUser.id)
+      : { data: [] };
+    const hasFullAuthority = (roleRows || []).some((row: any) => row.roles?.is_active !== false && ["super_admin", "chairman_managing_director"].includes(String(row.roles?.code || "")));
+    if (appUser?.status !== "active" || appUser?.deleted_at || ((permissionError || permitted !== true) && !hasFullAuthority)) throw new Error("Forbidden");
     const body = await req.json();
+    const action = String(body.action || "open_document");
+    if (action === "review_verification") {
+      const tenantId = String(body.tenantId || "");
+      const decision = String(body.decision || "");
+      const notes = String(body.notes || "").trim().slice(0, 2000);
+      if (!/^[0-9a-f-]{36}$/i.test(tenantId)) throw new Error("Invalid verification request");
+      if (!["in_review", "changes_requested", "rejected", "verified"].includes(decision)) throw new Error("Invalid verification decision");
+      if (["changes_requested", "rejected"].includes(decision) && notes.length < 10) throw new Error("Add clear reviewer notes before this decision.");
+      const { error: reviewError } = await userClient.rpc("whatsapp_platform_admin_review_verification", {
+        p_tenant_id: tenantId,
+        p_decision: decision,
+        p_notes: notes || null,
+      });
+      if (reviewError) throw reviewError;
+      let notification = null;
+      if (decision === "verified") {
+        notification = await sendWhatsAppMilestoneEmail(admin, tenantId, "verification_verified")
+          .catch((emailError) => ({ sent: false, error: emailError instanceof Error ? emailError.message : "Verification email failed." }));
+      }
+      return json(req, { ok: true, decision, notification });
+    }
     const documentId = String(body.documentId || "");
     if (!/^[0-9a-f-]{36}$/i.test(documentId)) throw new Error("Invalid document request");
-    const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false } });
-    const { data: document, error } = await admin.from("whatsapp_platform_verification_documents").select("drive_file_id,original_file_name,mime_type,file_size,status").eq("id", documentId).eq("status", "active").single();
+    const { data: document, error } = await admin.from("whatsapp_platform_verification_documents").select("tenant_id,document_type,drive_file_id,original_file_name,mime_type,file_size,status").eq("id", documentId).eq("status", "active").single();
     if (error || !document) throw new Error("Document not found");
     if (Number(document.file_size) > 5 * 1024 * 1024) throw new Error("Document is too large");
     const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(document.drive_file_id)}?alt=media&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${await driveToken()}` } });
     if (!response.ok) throw new Error("Document could not be loaded");
     const bytes = await response.arrayBuffer();
+    const forwardedFor = String(req.headers.get("x-forwarded-for") || "").split(",")[0].trim().slice(0, 80) || null;
+    const { error: auditError } = await admin.from("audit_logs").insert({
+      event_type: "whatsapp_verification_document_accessed",
+      module_code: "whatsapp-platform",
+      actor_auth_user_id: userData.user.id,
+      actor_app_user_id: appUser.id,
+      entity_type: "whatsapp_platform_verification_document",
+      entity_id: documentId,
+      action: "view",
+      details: {
+        tenant_id: document.tenant_id,
+        document_type: document.document_type,
+        file_name: document.original_file_name,
+        mime_type: document.mime_type,
+        file_size: document.file_size,
+        actor_name: appUser.display_name || null,
+        actor_email: appUser.email || userData.user.email || null,
+        access_channel: "ems_protected_document_viewer",
+      },
+      user_agent: String(req.headers.get("user-agent") || "").slice(0, 500) || null,
+      ip_address: forwardedFor,
+    });
+    if (auditError) throw new Error("Document access audit could not be recorded");
     const safeName = String(document.original_file_name || "verification-document").replace(/[\r\n"\\]/g, "-").slice(0, 120);
-    return new Response(bytes, { status: 200, headers: { ...headers(req, document.mime_type), "Content-Disposition": `attachment; filename="${safeName}"`, "Content-Length": String(bytes.byteLength) } });
+    return new Response(bytes, { status: 200, headers: { ...headers(req, document.mime_type), "Content-Disposition": `inline; filename="${safeName}"`, "Content-Length": String(bytes.byteLength) } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Request failed";
     return json(req, { error: message }, /unauthorized/i.test(message) ? 401 : /forbidden/i.test(message) ? 403 : 400);
