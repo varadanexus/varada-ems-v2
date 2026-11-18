@@ -600,7 +600,7 @@ async function downloadBillPdf(billId, details = null) {
     const amounts = invoiceTripAmounts(resolved, lines);
     y = addTable(doc, {
       startY: y + 8,
-      head: ["Trip No", "Truck No", "Qty MT", "Gross less deductions & service charge", "Service Charge", "GST"],
+      head: ["Trip No", "Truck No", "Qty MT", "Freight Charge", "Service Charge", "GST"],
       body: lines.map((line, index) => [
         line.trip_no || "-",
         tripPdfMeta.get(String(line.trip_id))?.truckNo || "N/A",
