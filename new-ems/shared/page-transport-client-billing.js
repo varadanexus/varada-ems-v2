@@ -523,6 +523,37 @@ async function openBillDetailsModal(billId) {
   qs("#clientBillDetailsModal")?.removeAttribute("hidden");
 }
 
+function invoiceTripAmounts(bill, lines) {
+  const paise = value => Math.round(Number(value ?? 0) * 100);
+  const net = lines.map(line => paise(line.client_net_receivable));
+  const isGst = bill.billing_type === "GST";
+  const inclusive = isGst && bill.gst_mode === "INCLUSIVE";
+  const gst = isGst ? paise(bill.gst_amount) : 0;
+  const margin = paise(bill.margin_amount ?? (bill.transporter_cost == null ? 0 : bill.net_receivable - bill.transporter_cost));
+  let service = margin;
+  if (isGst && bill.gst_base === "MARGIN_ONLY") service = paise(bill.taxable_value);
+  else if (inclusive) service = Math.round(margin / (1 + Number(bill.gst_percentage || 0) / 100));
+
+  // Approved bills store the service charge and GST at bill level. Allocate
+  // cumulative paise so individual rows round to the exact approved totals.
+  const weights = net.map(value => Math.max(0, value));
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  let usedWeight = 0;
+  let allocatedService = 0;
+  let allocatedGst = 0;
+  return net.map((receivable, index) => {
+    usedWeight += weights[index];
+    const share = totalWeight ? usedWeight / totalWeight : (index + 1) / net.length;
+    const nextService = Math.round(service * share);
+    const nextGst = Math.round(gst * share);
+    const lineService = nextService - allocatedService;
+    const lineGst = nextGst - allocatedGst;
+    allocatedService = nextService;
+    allocatedGst = nextGst;
+    return [receivable - lineService - (inclusive ? lineGst : 0), lineService, lineGst];
+  });
+}
+
 async function downloadBillPdf(billId, details = null) {
   const resolved = details || await getTransportClientBillDetails(billId);
   if (!resolved || resolved.status !== "approved") return showToast("PDF is available only for approved bills.", TOAST_TYPES.WARNING);
@@ -566,23 +597,25 @@ async function downloadBillPdf(billId, details = null) {
       startY: 40
     });
     const lines = resolved.trip_lines || [];
+    const amounts = invoiceTripAmounts(resolved, lines);
     y = addTable(doc, {
       startY: y + 8,
-      head: ["Trip No", "Truck No", "Date", "Qty MT", "Rate / MT", "Gross", "Support Deduction", "Net Receivable"],
-      body: lines.map(line => [
+      head: ["Trip No", "Truck No", "Qty MT", "Freight Charge", "Service Charge", "GST"],
+      body: lines.map((line, index) => [
         line.trip_no || "-",
         tripPdfMeta.get(String(line.trip_id))?.truckNo || "N/A",
-        formatPdfDate(line.trip_date),
         formatPdfQuantity(line.quantity_mt),
-        Number(line.client_rate_per_mt).toFixed(3),
-        formatPdfCurrency(line.client_gross_amount),
-        formatPdfCurrency(line.support_deduction_amount),
-        formatPdfCurrency(line.client_net_receivable)
+        ...amounts[index].map(paise => formatPdfCurrency(paise / 100))
       ]),
-      foot: ["TOTAL", "", "", formatPdfQuantity(lines.reduce((sum, line) => sum + Number(line.quantity_mt), 0)), "",
-        formatPdfCurrency(resolved.gross_total), formatPdfCurrency(resolved.support_deduction_total), formatPdfCurrency(resolved.net_receivable)],
+      foot: ["TOTAL", "", formatPdfQuantity(lines.reduce((sum, line) => sum + Number(line.quantity_mt), 0)),
+        ...[0, 1, 2].map(column => formatPdfCurrency(amounts.reduce((sum, row) => sum + row[column], 0) / 100))],
       options: { headFillColor: [0, 102, 204] }
     });
+    if (lines.length > 1) {
+      doc.setFontSize(8);
+      doc.text("Bill-level charges and GST are allocated by trip net receivable.", 15, y + 4);
+      y += 6;
+    }
     const summaryStartY = y + 5;
     if (resolved.billing_type === "GST") {
       const invoiceTotal = resolveInvoiceTotal(resolved);
