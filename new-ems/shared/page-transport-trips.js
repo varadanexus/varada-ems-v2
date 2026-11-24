@@ -189,18 +189,16 @@ async function init() {
     }
   }
 
-  // Build the "Agent (Auto)" label: outside agents (with split %) plus internal
-  // profit-share partners (residual %) when enabled for the truck.
   async function agentAutoLabel(truckId, tripDate) {
     const agents = await getAgentsByTruck(truckId, tripDate || null);
     let partners = [];
     try {
       if (await getTruckProfitShareEnabled(truckId)) partners = await listProfitSharePartners();
     } catch { partners = []; }
-    const multi = agents.length > 1 || agents.some((a) => Number(a.commission_share_percentage) !== 100);
-    const parts = [];
-    agents.forEach((a) => parts.push(multi ? `${a.transport_agent_name || "Agent"} (${Number(a.commission_share_percentage)}%)` : (a.transport_agent_name || "Agent")));
-    partners.forEach((p) => parts.push(`${p.transport_agent_name || "Partner"} (${Number(p.share_percentage)}% residual)`));
+    const parts = [...agents, ...partners].map(person => {
+      const name = person.transport_agent_name?.trim() || "Agent";
+      return /^jaswanth\s+boddu$/i.test(name) ? "BODDU JASWANTH" : name;
+    });
     return { label: parts.join(", "), firstAgentId: agents[0]?.transport_agent_id || partners[0]?.transport_agent_id || "" };
   }
 
