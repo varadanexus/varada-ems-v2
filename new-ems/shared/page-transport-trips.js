@@ -1,5 +1,6 @@
 import { MODULES, TOAST_TYPES, WORKSPACES } from "../config/constants.js";
 import { addTripTimeline, approveTripDocument, createTrip, createTripDocument, deleteTripDocument, findTransportRateForTrip, getActiveAgentByTruck, getAgentsByTruck, getTransporterByTruck, getTripById, getTruckProfitShareEnabled, listActiveOptions, listProfitSharePartners, listRateRoutesForCommodity, listTripDocuments, listTripExpenses, listTripTimeline, listTrips, rejectTripDocument, resolveWorkspaceDivision, softDeleteTrip, TRIP_STATUS_FLOW, updateTrip, updateTripDocument } from "./admin-api.js";
+import { getSupabaseClient } from "../config/supabase.js";
 import { uploadDocumentToDrive } from "./drive-api.js";
 import { logAuditEvent } from "./audit.js";
 import { getCurrentAppUser } from "./auth.js";
@@ -377,19 +378,51 @@ async function init() {
     const trip = await getTripById(id);
     const timeline = await listTripTimeline(id);
     const docs = await listTripDocuments(id);
-    const { rows: supportRows } = await listTripExpenses({ tripId: id, divisionId: fixedDivisionId, page: 1, pageSize: 1000 });
-    const supportTotal = (supportRows || []).reduce((sum, r) => sum + Number(r.amount || 0), 0);
-    const clientGross = Number(trip?.client_gross_amount || 0);
-    const transporterGross = Number(trip?.transporter_gross_amount || 0);
-    const margin = Number(trip?.company_margin || (clientGross - transporterGross));
-    const clientNetReceivable = clientGross - supportTotal;
-    const transporterNetPayable = transporterGross - supportTotal;
-    const marginState = margin > 0 ? "positive" : margin < 0 ? "negative" : "zero";
-    const marginBadge = marginState === "positive"
-      ? "<span class='meta-pill' style='background:#dcfce7;color:#166534;'>Margin Positive</span>"
-      : marginState === "negative"
-        ? "<span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Margin Negative</span>"
-        : "<span class='meta-pill' style='background:#fef3c7;color:#92400e;'>Margin Zero</span>";
+    const db = getSupabaseClient();
+    const [billLine, statementLine] = await Promise.all([
+      db.from("transport_client_bill_trips")
+        .select("client_rate_per_mt,client_gross_amount,support_deduction_amount,client_net_receivable,transport_client_bills!inner(status,deleted_at)")
+        .eq("trip_id", id).is("deleted_at", null).is("transport_client_bills.deleted_at", null)
+        .neq("transport_client_bills.status", "cancelled").maybeSingle().throwOnError(),
+      db.from("transport_transporter_statement_trips")
+        .select("transporter_rate_per_mt,transporter_gross_payable,support_deduction_amount,transporter_net_payable,transport_transporter_statements!inner(status,deleted_at)")
+        .eq("trip_id", id).is("deleted_at", null).is("transport_transporter_statements.deleted_at", null)
+        .neq("transport_transporter_statements.status", "cancelled").maybeSingle().throwOnError()
+    ]);
+    const bill = billLine.data;
+    const statement = statementLine.data;
+    let clientRate = bill?.client_rate_per_mt ?? trip.client_rate_per_mt;
+    let transporterRate = statement?.transporter_rate_per_mt ?? trip.transporter_rate_per_mt;
+    if (clientRate == null || transporterRate == null) {
+      const rate = await findTransportRateForTrip({
+        divisionId: fixedDivisionId, tripDate: trip.trip_date, transportClientId: trip.transport_client_id,
+        transportTransporterId: trip.transport_transporter_id, routeId: trip.route_id,
+        transportCommodityId: trip.transport_commodity_id, truckId: trip.truck_id
+      });
+      clientRate ??= rate?.client_rate_per_mt;
+      transporterRate ??= rate?.transporter_rate_per_mt;
+    }
+    let currentSupport = 0;
+    if (!bill || !statement) {
+      for (let page = 1; ; page++) {
+        const { rows, count } = await listTripExpenses({ tripId: id, divisionId: fixedDivisionId, page, pageSize: 500 });
+        currentSupport += rows.reduce((sum, row) => sum + (row.is_active === false ? 0 : Number(row.amount)), 0);
+        if (page * 500 >= count || rows.length < 500) break;
+      }
+    }
+    const clientSupport = Number(bill?.support_deduction_amount ?? currentSupport);
+    const transporterSupport = Number(statement?.support_deduction_amount ?? currentSupport);
+    const gross = rate => rate == null ? null : Number((Number(trip.quantity_mt) * rate).toFixed(2));
+    const clientGross = bill?.client_gross_amount ?? gross(clientRate);
+    const transporterGross = statement?.transporter_gross_payable ?? gross(transporterRate);
+    const margin = clientGross == null || transporterGross == null ? null : clientGross - transporterGross;
+    const clientNetReceivable = bill?.client_net_receivable ?? (clientGross == null ? null : clientGross - clientSupport);
+    const transporterNetPayable = statement?.transporter_net_payable ?? (transporterGross == null ? null : transporterGross - transporterSupport);
+    const money = (value, digits = 2) => value == null ? "Unavailable" : "₹" + Number(value).toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    const marginBadge = margin == null ? '<span class="meta-pill">Rate unavailable</span>'
+      : margin > 0 ? "<span class='meta-pill' style='background:#dcfce7;color:#166534;'>Margin Positive</span>"
+      : margin < 0 ? "<span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Margin Negative</span>"
+      : "<span class='meta-pill' style='background:#fef3c7;color:#92400e;'>Margin Zero</span>";
     const hasWeightBill = docs.some((d) => d.document_type === "WEIGHT_BILL" && d.deleted_at == null && d.is_active !== false);
     const hasTripSheet = docs.some((d) => d.document_type === "TRIP_SHEET" && d.deleted_at == null && d.is_active !== false);
     const completeness = Math.min(100, (hasWeightBill ? 70 : 0) + (hasTripSheet ? 30 : 0));
@@ -424,14 +457,15 @@ async function init() {
           <tr><th style="text-align:left;">Trip No</th><td>${trip?.trip_no || "-"}</td></tr>
           <tr><th style="text-align:left;">Quantity KG</th><td>${Number(trip?.quantity_kg || 0).toFixed(3)}</td></tr>
           <tr><th style="text-align:left;">Quantity MT</th><td>${Number(trip?.quantity_mt || 0).toFixed(3)}</td></tr>
-          <tr><th style="text-align:left;">Client Rate / MT</th><td>₹${Number(trip?.client_rate_per_mt || 0).toFixed(3)}</td></tr>
-          <tr><th style="text-align:left;">Transporter Rate / MT</th><td>₹${Number(trip?.transporter_rate_per_mt || 0).toFixed(3)}</td></tr>
-          <tr><th style="text-align:left;">Client Gross</th><td>₹${clientGross.toFixed(2)}</td></tr>
-          <tr><th style="text-align:left;">Transporter Gross</th><td>₹${transporterGross.toFixed(2)}</td></tr>
-          <tr><th style="text-align:left;">Company Margin</th><td>₹${margin.toFixed(2)}</td></tr>
-          <tr><th style="text-align:left;">Support Deductions</th><td>₹${supportTotal.toFixed(2)}</td></tr>
-          <tr><th style="text-align:left;">Client Net Receivable</th><td>₹${clientNetReceivable.toFixed(2)}</td></tr>
-          <tr><th style="text-align:left;">Transporter Net Payable</th><td>₹${transporterNetPayable.toFixed(2)}</td></tr>
+          <tr><th style="text-align:left;">Client Rate / MT</th><td>${money(clientRate, 3)}</td></tr>
+          <tr><th style="text-align:left;">Transporter Rate / MT</th><td>${money(transporterRate, 3)}</td></tr>
+          <tr><th style="text-align:left;">Client Gross</th><td>${money(clientGross)}</td></tr>
+          <tr><th style="text-align:left;">Transporter Gross</th><td>${money(transporterGross)}</td></tr>
+          <tr><th style="text-align:left;">Company Margin</th><td>${money(margin)}</td></tr>
+          <tr><th style="text-align:left;">${clientSupport === transporterSupport ? "Support Deductions" : "Client Support Deductions"}</th><td>${money(clientSupport)}</td></tr>
+          ${clientSupport === transporterSupport ? "" : `<tr><th style="text-align:left;">Transporter Support Deductions</th><td>${money(transporterSupport)}</td></tr>`}
+          <tr><th style="text-align:left;">Client Net Receivable</th><td>${money(clientNetReceivable)}</td></tr>
+          <tr><th style="text-align:left;">Transporter Net Payable</th><td>${money(transporterNetPayable)}</td></tr>
         </tbody></table></div>
       </div>
       <h4 style="margin:.5rem 0;">Documents ${weightMissing ? "<span class='meta-pill' style='background:#fee2e2;color:#991b1b;'>Weight Bill Missing</span>" : ""}</h4>
