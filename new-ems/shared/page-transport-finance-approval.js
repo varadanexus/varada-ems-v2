@@ -44,21 +44,26 @@ async function initTransportFinanceApprovalPage() {
 function renderShell(divisionLabel) {
   return `
     <style>
-      .approval-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}.approval-card{padding:1rem;border:1px solid #e5e7eb;border-radius:16px;background:#fff;box-shadow:0 8px 20px rgba(15,23,42,.04)}
-      .approval-card h4{margin:0 0 .75rem;font-size:1rem;color:#111827}.approval-card div{display:flex;justify-content:space-between;gap:1rem;margin-bottom:.45rem}.approval-card strong{color:#111827}
-      .approval-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}
-      .approval-table th,.approval-table td{padding:.65rem .5rem;text-align:left;border-bottom:1px solid rgba(148,163,184,.16)}
-      /* This modal panel is light; override the app's global dark table theme so
-         cells don't render as dark text on a dark table background (invisible). */
-      .approval-modal-panel .table-shell{background:#fff;border:1px solid #e5e7eb;box-shadow:none;border-radius:14px}
-      .approval-modal-panel .approval-table{min-width:0;background:#fff}
-      .approval-modal-panel .approval-table td{color:#111827;background:#fff}
-      .approval-modal-panel .approval-table th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;background:#f8fafc}
-      .approval-modal-panel .approval-table tr:hover td{background:#f8fafc}
-      .approval-modal[hidden]{display:none}.approval-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.68)}
-      .approval-modal-panel{width:min(1000px,95vw);max-height:85vh;overflow:auto;background:#fff;color:#111827;border-radius:18px;box-shadow:0 24px 60px rgba(15,23,42,.28);padding:1rem}.approval-modal-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem;margin-bottom:1rem}
-      .approval-box{padding:.85rem 1rem;border-radius:14px;background:#f8fafc;border:1px solid #e5e7eb}.approval-box label{display:block;font-size:.78rem;color:#6b7280;text-transform:uppercase;margin-bottom:.35rem}.approval-box strong{font-size:1.05rem;color:#111827}
-      @media(max-width:980px){.approval-modal-summary{grid-template-columns:1fr}}
+      .approval-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:1rem}
+      .approval-card,.approval-box,.approval-modal-panel{background:#14151a;color:#f5f1e8;border:1px solid #444039;border-radius:14px;padding:1rem}
+      .approval-card{display:flex;flex-direction:column;gap:.6rem}
+      .approval-card h4{margin:0 0 .25rem;color:#f5f1e8;font-size:1rem;min-height:2.6em}
+      .approval-card>div{display:flex;justify-content:space-between;gap:.6rem}
+      .approval-card span,.approval-box label,.approval-modal-panel .muted{color:#c9c5bd}
+      .approval-card strong,.approval-box strong{color:#fff;font-variant-numeric:tabular-nums}
+      .approval-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.75rem 0}
+      .approval-card .approval-actions{margin:auto 0 0;padding-top:.45rem}
+      .approval-card .btn,.approval-modal-panel .btn{background:#ead091;color:#211b10;border:1px solid #ead091}
+      .approval-card .btn:focus-visible,.approval-modal-panel .btn:focus-visible{outline:2px solid white;outline-offset:3px}
+      .approval-modal[hidden]{display:none}
+      .approval-modal{position:fixed;inset:0;z-index:3000;padding:1rem;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7)}
+      .approval-modal-panel{width:min(1000px,95vw);max-height:85vh;overflow:auto}
+      .approval-modal-panel .table-shell{overflow-x:auto}
+      .approval-table th,.approval-table td{padding:.65rem .5rem;text-align:left;border-bottom:1px solid #444039;background:#14151a;color:#f5f1e8}
+      .approval-table th{color:#ead091}
+      .approval-modal-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem}
+      .approval-box label{display:block;margin-bottom:.35rem}
+      @media(max-width:640px){.approval-modal-summary{grid-template-columns:1fr}.approval-card h4{min-height:0}}
     </style>
     <section class="card" style="margin-bottom:1rem;"><h3>Finance Approval Center</h3><p class="muted">Transportation Division: ${divisionLabel}</p><div id="financeApprovalCards" class="approval-grid"></div></section>
     <div id="financeApprovalModal" class="approval-modal" hidden><div class="approval-modal-panel"><div style="display:flex;justify-content:space-between;gap:1rem;margin-bottom:1rem;"><div><h3 style="margin:0;">Finance Approval</h3><p class="muted" style="margin:.25rem 0 0;">Review documents waiting to be posted to ledger.</p></div><button class="btn" type="button" id="financeApprovalClose">Close</button></div><div class="approval-modal-summary"><div class="approval-box"><label>Source Type</label><strong id="financeApprovalSourceType">—</strong></div><div class="approval-box"><label>Count</label><strong id="financeApprovalCount">0</strong></div><div class="approval-box"><label>Total Amount</label><strong id="financeApprovalTotal">₹0.00</strong></div></div><div class="approval-actions">${PAGE_STATE.canPost ? '<button class="btn" type="button" id="financeApprovalPostAll">Approve All Visible</button>' : '<span class="muted">Posting access required to approve and post visible documents.</span>'}</div><div class="table-shell"><table class="approval-table"><thead><tr><th>Source No</th><th>Date</th><th>Party</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody id="financeApprovalBody"><tr><td colspan="6">No pending events.</td></tr></tbody></table></div></div></div>
