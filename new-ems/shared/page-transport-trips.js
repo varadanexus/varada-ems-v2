@@ -58,7 +58,7 @@ async function init() {
     <input type="hidden" data-f="transport_agent_id" />
     <label>Driver *</label><select data-f="driver_id"></select>
     <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 4: Trip Details</h4>
-    <label>Trip No</label><input disabled placeholder="Auto-generated (TRYYMM###)" />
+    <label for="tripCreateNumber">Trip No *</label><input id="tripCreateNumber" data-f="trip_no" required pattern="TR[0-9]{4}[0-9]{3,9}" title="Use TR followed by YYMM and a sequence of at least three digits" />
     <label>Trip Date *</label><input data-f="trip_date" type="date" required />
     <label>Quantity (KG) *</label><input data-f="quantity_kg" type="number" min="1" step="1" />
     <label>Quantity (MT)</label><input data-f="quantity_mt" type="number" step="0.001" readonly />
@@ -71,6 +71,35 @@ async function init() {
     <h4 style="grid-column:1/-1;margin:.25rem 0;">Section 6: Documents</h4>
     <details class="pm-collapse pm-collapse--sub" style="grid-column:1/-1;margin-top:.5rem;"><summary>Trip Documents</summary><div id="tripDocCreateRows" style="margin-top:.6rem;"></div></details>
     <button class="btn" type="submit">Create Trip</button>`;
+
+  async function setCreateTripDefaults() {
+    if (!form) return;
+    const dateField = form.querySelector("[data-f='trip_date']");
+    const numberField = form.querySelector("[data-f='trip_no']");
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit"
+    }).format(new Date());
+    dateField.value = today;
+    const prefix = "TR" + today.slice(2, 4) + today.slice(5, 7);
+    try {
+      let largest = 0;
+      for (let offset = 0; ; offset += 250) {
+        const { data, error } = await getSupabaseClient().from("transport_trips")
+          .select("trip_no").eq("division_id", fixedDivisionId).is("deleted_at", null)
+          .like("trip_no", prefix + "%").order("trip_no").range(offset, offset + 249);
+        if (error) throw error;
+        for (const { trip_no } of data) {
+          const suffix = trip_no.slice(prefix.length);
+          if (/^\d+$/.test(suffix)) largest = Math.max(largest, Number(suffix));
+        }
+        if (data.length < 250) break;
+      }
+      if (!numberField.value) numberField.value = prefix + String(largest + 1).padStart(3, "0");
+    } catch {
+      showToast("Could not load the next trip number. Enter a trip number to continue.", TOAST_TYPES.WARNING);
+    }
+  }
+  void setCreateTripDefaults();
 
   function renderCreateDocRows() {
     const host = qs("#tripDocCreateRows");
@@ -208,6 +237,7 @@ async function init() {
     const payload = { status: "draft", is_active: true };
     ["division_id","trip_date","transport_client_id","transport_transporter_id","truck_id","driver_id","route_id","transport_commodity_id","quantity_kg","quantity_mt","client_rate_per_mt","transporter_rate_per_mt","notes"].forEach((k)=>{ const v = qs(`[data-f='${k}']`)?.value?.trim(); if (v) payload[k]=v; });
     if (!fixedDivisionId) return showToast("Canonical Transportation division not found", TOAST_TYPES.ERROR);
+    payload.trip_no = form.querySelector("[data-f='trip_no']").value.trim();
     payload.division_id = fixedDivisionId;
     delete payload.client_id;
     delete payload.transporter_id;
@@ -271,7 +301,7 @@ async function init() {
         });
       } catch {}
       const meta = qs("#tripCreateMeta");
-      if (meta) meta.textContent = `Generated Trip No: ${created.trip_no || "(pending)"}`;
+      if (meta) meta.textContent = `Trip No: ${created.trip_no || "(pending)"}`;
       showToast(`Trip created: ${created.trip_no}`, TOAST_TYPES.SUCCESS);
       if (documentUploadFailures.length) {
         showToast(`Trip created, but ${documentUploadFailures.length} document upload(s) remain pending. Open Details to retry.`, TOAST_TYPES.WARNING);
@@ -287,6 +317,7 @@ async function init() {
         showToast(`Trip created, but WhatsApp failed: ${notifyError?.message || "Unknown error"}`, TOAST_TYPES.WARNING);
       }
       form.reset();
+      void setCreateTripDefaults();
       pendingCreateDocs.forEach((d) => {
         if (d.pickedFile?.previewUrl) URL.revokeObjectURL(d.pickedFile.previewUrl);
       });
@@ -295,7 +326,8 @@ async function init() {
       await load();
     } catch (err) {
       const detail = [err?.code, err?.message, err?.details, err?.hint].filter(Boolean).join(" | ");
-      showToast(detail || "Create failed", TOAST_TYPES.ERROR);
+      const numberTaken = err?.code === "23505" && /trip_no/i.test(detail);
+      showToast(numberTaken ? "That trip number is already in use. Enter another number and save again." : (detail || "Create failed"), TOAST_TYPES.ERROR);
     } finally {
       form.dataset.busy = "";
       const sBtn = form.querySelector("button[type='submit']");
