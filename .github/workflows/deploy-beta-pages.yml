@@ -125,9 +125,9 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const deploymentId = context.sha;
+            const buildVersion = context.sha;
             const artifactId = Number(process.env.PAGES_ARTIFACT_ID);
-            const terminalFailures = new Set(["failed", "failure", "errored", "error", "canceled", "cancelled"]);
+            const terminalFailures = new Set(["failed", "failure", "errored", "error", "canceled", "cancelled", "deployment_failed", "deployment_content_failed", "deployment_cancelled", "deployment_lost"]);
             const deadline = Date.now() + (20 * 60 * 1000);
 
             if (!Number.isSafeInteger(artifactId) || artifactId <= 0) {
@@ -139,11 +139,12 @@ jobs:
               owner,
               repo,
               artifact_id: artifactId,
-              pages_build_version: deploymentId,
+              pages_build_version: buildVersion,
               oidc_token: idToken,
               headers: { "X-GitHub-Api-Version": "2026-03-10" }
             });
 
+            const deploymentId = created.data.id || created.data.status_url?.split("/").pop() || buildVersion;
             core.setOutput("page_url", created.data.page_url || "https://www.varadanexus.com");
 
             try {
