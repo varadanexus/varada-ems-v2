@@ -927,6 +927,7 @@ async function init() {
       if (cs) cs.value = "RATE_MASTER"; if (ts) ts.value = "RATE_MASTER";
       setCreateRateSourceBadges("RATE_MASTER", "RATE_MASTER");
       setCreateRateStatus("Rate loaded from Rate Master", "success");
+      renderCreatePreview();
     } else {
       const cs = qs("[data-f='client_rate_source']"); const ts = qs("[data-f='transporter_rate_source']");
       if (cs) cs.value = "MANUAL_OVERRIDE"; if (ts) ts.value = "MANUAL_OVERRIDE";
@@ -938,7 +939,7 @@ async function init() {
   ["trip_date","transport_client_id","transport_transporter_id","route_id","transport_commodity_id","truck_id"].forEach((k)=>qs(`[data-f='${k}']`)?.addEventListener("change", loadCreateRate));
   qs("[data-f='truck_id']")?.addEventListener("change", async () => { await derivePartiesFromTruckCreate(); await loadCreateRate(); });
   qs("[data-f='trip_date']")?.addEventListener("change", async () => { await derivePartiesFromTruckCreate(); await loadCreateRate(); });
-  qs("[data-f='quantity_kg']")?.addEventListener("input", () => {
+  function renderCreatePreview() {
     const kg = Number(qs("[data-f='quantity_kg']")?.value || 0);
     const mtField = qs("[data-f='quantity_mt']");
     if (mtField) mtField.value = kg > 0 ? (kg / 1000).toFixed(3) : "";
@@ -954,42 +955,19 @@ async function init() {
       host.style.background = margin > 0 ? "#dcfce7" : (margin < 0 ? "#fee2e2" : "#fef3c7");
       host.style.color = margin > 0 ? "#166534" : (margin < 0 ? "#991b1b" : "#92400e");
     }
-  });
+  }
+  qs("[data-f='quantity_kg']")?.addEventListener("input", renderCreatePreview);
   qs("[data-f='client_rate_per_mt']")?.addEventListener("input", () => {
     const s = qs("[data-f='client_rate_source']"); if (s) s.value = "MANUAL_OVERRIDE";
     setCreateRateSourceBadges("MANUAL_OVERRIDE", qs("[data-f='transporter_rate_source']")?.value || "MANUAL_OVERRIDE");
     setCreateRateStatus("Manual Override", "warn");
-    const kg = Number(qs("[data-f='quantity_kg']")?.value || 0);
-    const mt = kg > 0 ? (kg / 1000) : 0;
-    const clientRate = Number(qs("[data-f='client_rate_per_mt']")?.value || 0);
-    const transporterRate = Number(qs("[data-f='transporter_rate_per_mt']")?.value || 0);
-    const clientGross = mt * clientRate;
-    const transporterGross = mt * transporterRate;
-    const margin = clientGross - transporterGross;
-    const host = qs("#tripCreateFinancialPreview");
-    if (host) {
-      host.textContent = `Preview: Qty MT ${mt.toFixed(3)} | Client Gross ₹${clientGross.toFixed(2)} | Transporter Gross ₹${transporterGross.toFixed(2)} | Estimated Margin ₹${margin.toFixed(2)}`;
-      host.style.background = margin > 0 ? "#dcfce7" : (margin < 0 ? "#fee2e2" : "#fef3c7");
-      host.style.color = margin > 0 ? "#166534" : (margin < 0 ? "#991b1b" : "#92400e");
-    }
+    renderCreatePreview();
   });
   qs("[data-f='transporter_rate_per_mt']")?.addEventListener("input", () => {
     const s = qs("[data-f='transporter_rate_source']"); if (s) s.value = "MANUAL_OVERRIDE";
     setCreateRateSourceBadges(qs("[data-f='client_rate_source']")?.value || "MANUAL_OVERRIDE", "MANUAL_OVERRIDE");
     setCreateRateStatus("Manual Override", "warn");
-    const kg = Number(qs("[data-f='quantity_kg']")?.value || 0);
-    const mt = kg > 0 ? (kg / 1000) : 0;
-    const clientRate = Number(qs("[data-f='client_rate_per_mt']")?.value || 0);
-    const transporterRate = Number(qs("[data-f='transporter_rate_per_mt']")?.value || 0);
-    const clientGross = mt * clientRate;
-    const transporterGross = mt * transporterRate;
-    const margin = clientGross - transporterGross;
-    const host = qs("#tripCreateFinancialPreview");
-    if (host) {
-      host.textContent = `Preview: Qty MT ${mt.toFixed(3)} | Client Gross ₹${clientGross.toFixed(2)} | Transporter Gross ₹${transporterGross.toFixed(2)} | Estimated Margin ₹${margin.toFixed(2)}`;
-      host.style.background = margin > 0 ? "#dcfce7" : (margin < 0 ? "#fee2e2" : "#fef3c7");
-      host.style.color = margin > 0 ? "#166534" : (margin < 0 ? "#991b1b" : "#92400e");
-    }
+    renderCreatePreview();
   });
   qs("#tripPrev")?.addEventListener("click", async ()=>{ if (page > 1) { page -= 1; await load(); } });
   qs("#tripNext")?.addEventListener("click", async ()=>{ page += 1; await load(); });
