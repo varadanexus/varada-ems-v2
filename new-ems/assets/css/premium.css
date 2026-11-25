@@ -1892,3 +1892,70 @@ select:-webkit-autofill:focus {
   border-color: rgba(230, 200, 126, .22) !important;
   transition: background-color 9999s ease-out 0s;
 }
+
+/* Transport finance previews and detail dialogs share the same dark surfaces. */
+#app :is(.billing-modal-panel, .cn-modal-panel, .pay-modal-panel, .stmt-modal-panel) {
+  background: #0b0c10 !important;
+  color: #f7f4ec;
+  border: 1px solid #454039;
+  box-sizing: border-box;
+  max-height: min(90dvh, calc(100vh - 2rem));
+  overscroll-behavior: contain;
+}
+
+#app :is(.billing-modal-panel, .cn-modal-panel, .pay-modal-panel, .stmt-modal-panel) h3 {
+  color: #f7f4ec !important;
+}
+
+#app :is(.billing-modal-panel, .cn-modal-panel, .pay-modal-panel, .stmt-modal-panel) .muted {
+  color: #c6bfaf !important;
+}
+
+#app :is(.billing-detail-grid, .cn-detail-grid, .pay-detail-grid, .stmt-detail-grid) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+}
+
+#app :is(.billing-detail-box, .cn-detail-box, .pay-detail-box, .stmt-detail-box,
+         .billing-kpi, .cn-kpi, .pay-kpi, .stmt-kpi) {
+  min-width: 0;
+  background: #151519 !important;
+  border-color: #454039 !important;
+}
+
+#app :is(.billing-detail-box, .cn-detail-box, .pay-detail-box, .stmt-detail-box,
+         .billing-kpi, .cn-kpi, .pay-kpi, .stmt-kpi) label {
+  color: #c6bfaf !important;
+}
+
+#app :is(.billing-detail-box, .cn-detail-box, .pay-detail-box, .stmt-detail-box,
+         .billing-kpi, .cn-kpi, .pay-kpi, .stmt-kpi) strong {
+  display: block;
+  color: #f7f4ec !important;
+  overflow-wrap: anywhere;
+}
+
+#app :is(.billing-modal-panel, .cn-modal-panel, .pay-modal-panel, .stmt-modal-panel) .btn {
+  background: #26231c !important;
+  border-color: #80704e !important;
+  color: #fff2cd !important;
+}
+
+#app :is(.billing-modal-panel, .cn-modal-panel, .pay-modal-panel, .stmt-modal-panel) .btn:focus-visible {
+  outline: 2px solid #edcd81;
+  outline-offset: 2px;
+}
+
+#app :is(.billing-modal-panel, .cn-modal-panel, .pay-modal-panel, .stmt-modal-panel) .table-shell {
+  background: #101115 !important;
+  overflow: auto;
+}
+
+#app :is(.billing-modal-panel, .cn-modal-panel, .pay-modal-panel, .stmt-modal-panel) :is(td, th) {
+  background: #101115 !important;
+  color: #f7f4ec !important;
+}
+
+#app :is(.billing-modal-panel, .cn-modal-panel, .pay-modal-panel, .stmt-modal-panel) :is(thead, tfoot) :is(td, th) {
+  background: #201e1b !important;
+  color: #edcd81 !important;
+}
